@@ -1,0 +1,19 @@
+{
+    "compilerOptions": {
+      "skipLibCheck": true
+    },
+    "excludeExternals": true,
+    "externalPattern": [
+        "**/node_modules/**"
+    ],
+    "plugin": ["typedoc-plugin-markdown"],
+    "out": "../../app/pages/docs/libs/nodejs",
+    "publicPath": "/docs/libs/nodejs/",
+    "githubPages": false,
+    "disableSources": true,
+    "hideInPageTOC": true,
+    "excludePrivate": true,
+    "hideBreadcrumbs": true,
+    "theme": "markdown",
+    "groupOrder": ["Functions", "*"]
+}

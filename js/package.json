@@ -1,0 +1,60 @@
+{
+  "name": "braintrust",
+  "version": "0.0.0",
+  "description": "SDK for integrating Braintrust",
+  "main": "./dist/index.js",
+  "browser": {
+    "./dist/index.js": "./dist/browser.js",
+    "./dist/index.d.ts": "./dist/browser.d.ts"
+  },
+  "bin": {
+    "braintrust": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "run-p build:*",
+    "build:node": "esbuild --platform=node --bundle src/index.ts --outfile=dist/index.js",
+    "build:cli": "esbuild --platform=node --bundle src/cli.ts --outfile=dist/cli.js --external:esbuild",
+    "build:browser": "esbuild --minify  --bundle src/browser.ts --outfile=dist/browser.js --format=esm",
+    "build:declarations": "tsc --declaration  --emitDeclarationOnly --outDir dist",
+    "clean": "rm -r dist/*",
+    "watch": "run-p watch:*",
+    "watch:node": "esbuild --platform=node --bundle src/index.ts --outfile=dist/index.js --watch=forever",
+    "watch:cli": "esbuild --platform=node --bundle src/cli.ts --outfile=dist/cli.js --watch=forever --external:esbuild",
+    "watch:browser": "esbuild --minify --bundle src/browser.ts --outfile=dist/browser.js --watch=forever --format=esm",
+    "watch:declarations": "tsc --declaration  --emitDeclarationOnly --outDir dist --watch",
+    "docs": "npx typedoc --options typedoc.json src/index.ts",
+    "test": "jest",
+    "prepublishOnly": "../../scripts/node_prepublish.py",
+    "postpublish": "../../scripts/node_postpublish.py"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@nodelib/fs.walk": "^1.2.8",
+    "@types/argparse": "^2.0.10",
+    "@types/axios": "^0.14.0",
+    "@types/cli-progress": "^3.11.0",
+    "@types/graceful-fs": "^4.1.6",
+    "@types/node": "^20.4.1",
+    "@types/pluralize": "^0.0.30",
+    "@types/uuid": "^9.0.2",
+    "npm-run-all": "^4.1.5",
+    "typedoc": "^0.24.8",
+    "typedoc-plugin-markdown": "^3.15.3",
+    "typescript": "^5.1.6"
+  },
+  "dependencies": {
+    "argparse": "^2.0.1",
+    "autoevals": "file:../autoevals",
+    "axios": "^1.4.0",
+    "chalk": "^4.1.2",
+    "cli-progress": "^3.12.0",
+    "esbuild": "^0.18.19",
+    "graceful-fs": "^4.2.11",
+    "minimatch": "^9.0.3",
+    "openai": "^3.3.0",
+    "pluralize": "^8.0.0",
+    "simple-git": "^3.19.1",
+    "uuid": "^9.0.0"
+  }
+}

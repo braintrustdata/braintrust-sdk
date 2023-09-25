@@ -1,0 +1,9 @@
+*.pyc
+*.swp
+*.swo
+venv
+.env
+.direnv
+.DS_STORE
+.idea
+node_modules

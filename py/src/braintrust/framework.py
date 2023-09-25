@@ -1,0 +1,409 @@
+import abc
+import asyncio
+import dataclasses
+import inspect
+import json
+import re
+import traceback
+from collections import defaultdict
+from contextlib import contextmanager
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List, Optional, TypeVar, Union
+
+from autoevals import Score, Scorer
+from tqdm.asyncio import tqdm as async_tqdm
+from tqdm.auto import tqdm as std_tqdm
+
+from .logger import init as _init_experiment
+from .util import SerializableDataClass
+
+Metadata = Dict[str, Any]
+Input = TypeVar("Input")
+Output = TypeVar("Output")
+
+
+# https://stackoverflow.com/questions/287871/how-do-i-print-colored-text-to-the-terminal
+class bcolors:
+    HEADER = "\033[95m"
+    OKBLUE = "\033[94m"
+    OKCYAN = "\033[96m"
+    OKGREEN = "\033[92m"
+    WARNING = "\033[93m"
+    FAIL = "\033[91m"
+    ENDC = "\033[0m"
+    BOLD = "\033[1m"
+    UNDERLINE = "\033[4m"
+
+
+@dataclasses.dataclass
+class EvalCase(SerializableDataClass):
+    """
+    An evaluation case. This is a single input to the evaluation task, along with an optional expected
+    output and metadata.
+    """
+
+    input: Input
+    expected: Optional[Output] = None
+    metadata: Optional[Metadata] = None
+
+
+class EvalHooks(abc.ABC):
+    """
+    An object that can be used to add metadata to an evaluation. This is passed to the `task` function.
+    """
+
+    @abc.abstractmethod
+    def meta(self, **info) -> None:
+        """
+        Adds metadata to the evaluation. This metadata will be logged to the Braintrust. You can pass in metadaa
+        as keyword arguments, e.g. `hooks.meta(foo="bar")`.
+        """
+        ...
+
+
+class EvalScorerArgs(SerializableDataClass):
+    """
+    Arguments passed to an evaluator scorer. This includes the input, expected output, actual output, and metadata.
+    """
+
+    input: Input
+    output: Output
+    expected: Optional[Output] = None
+    metadata: Optional[Metadata] = None
+
+
+EvalScorer = Union[
+    Scorer,
+    Callable[[Input, Output, Output], Score],
+    Callable[[Input, Output, Output], Awaitable[Score]],
+]
+
+
+@dataclasses.dataclass
+class Evaluator:
+    """
+    An evaluator is an abstraction that defines an evaluation dataset, a task to run on the dataset, and a set of
+    scorers to evaluate the results of the task. Each method attribute can be synchronous or asynchronous (for
+    optimal performance, it is recommended to provide asynchronous implementations).
+
+    You should not create Evaluators directly if you plan to use the Braintrust eval framework. Instead, you should
+    create them using the `Eval()` method, which will register them so that `braintrust eval ...` can find them.
+    """
+
+    """
+    The name of the evaluator. This corresponds to a project name in Braintrust.
+    """
+    name: str
+
+    """
+    Returns an iterator over the evaluation dataset. Each element of the iterator should be an `EvalCase` or a dict
+    with the same fields as an `EvalCase` (`input`, `expected`, `metadata`).
+    """
+    data: Union[
+        Iterator[EvalCase],
+        Awaitable[Iterator[EvalCase]],
+        Callable[[], Union[Iterator[EvalCase], Awaitable[Iterator[EvalCase]]]],
+    ]
+
+    """
+    Runs the evaluation task on a single input. The `hooks` object can be used to add metadata to the evaluation.
+    """
+    task: Union[
+        Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
+        Callable[[Input], Union[Output, Awaitable[Output]]],
+    ]
+
+    """
+    A list of scorers to evaluate the results of the task. Each scorer can be a Scorer object or a function
+    that takes `input`, `output`, and `expected` arguments and returns a `Score` object. The function can be async.
+    """
+    scores: List[EvalScorer]
+
+
+_evals = {}
+_lazy_load = False
+
+
+@contextmanager
+def _set_lazy_load(lazy_load: bool):
+    global _lazy_load
+    current = _lazy_load
+    try:
+        _lazy_load = lazy_load
+        yield
+    finally:
+        _lazy_load = current
+
+
+def pluralize(n, singular, plural):
+    if n == 1:
+        return singular
+    else:
+        return plural
+
+
+def report_evaluator_result(eval_name, results, summary, verbose):
+    failing_results = [x for x in results if x.error]
+    if len(failing_results) > 0:
+        print(
+            f"{bcolors.WARNING}Evaluator {eval_name} failed with {len(failing_results)} {pluralize(len(failing_results), 'error', 'errors')}{bcolors.ENDC}"
+        )
+
+        for result in failing_results:
+            info = "".join(
+                ["\n"] + traceback.format_exception(result.error)
+                if verbose
+                else traceback.format_exception_only(type(result.error), result.error)
+            ).rstrip()
+            print(f"{bcolors.WARNING}{info}{bcolors.ENDC}")
+    if summary:
+        print(f"{summary}")
+    else:
+        scores_by_name = defaultdict(lambda: (0, 0))
+        for result in results:
+            for name, score in result.scores.items():
+                curr = scores_by_name[name]
+                scores_by_name[name] = (curr[0] + score, curr[1] + 1)
+
+        print(f"Average scores for {eval_name}:")
+        for name, (total, count) in scores_by_name.items():
+            print(f"  {name}: {total / count}")
+
+
+def Eval(
+    name: str,
+    data: Callable[[], Union[Iterator[EvalCase], AsyncIterator[EvalCase]]],
+    task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
+    scores: List[EvalScorer],
+):
+    """
+    A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
+
+    Example:
+    ```python
+    Eval(
+        name="my-evaluator",
+        data=lambda: [
+            EvalCase(input=1, expected=2),
+            EvalCase(input=2, expected=4),
+        ],
+        task=lambda input, hooks: input * 2,
+        scores=[
+            NumericDiff,
+        ],
+    )
+    ```
+
+    :param name: The name of the evaluator. This corresponds to a project name in Braintrust.
+    :param data: Returns an iterator over the evaluation dataset. Each element of the iterator should be a `EvalCase`.
+    :param task: Runs the evaluation task on a single input. The `hooks` object can be used to add metadata to the evaluation.
+    :param scores: A list of scorers to evaluate the results of the task. Each scorer can be a Scorer object or a function
+    that takes an `EvalScorerArgs` object and returns a `Score` object.
+    :return: An `Evaluator` object.
+    """
+    global _evals
+    if name in _evals:
+        raise ValueError(f"An evaluator with name {name} already exists")
+
+    evaluator = Evaluator(name=name, data=data, task=task, scores=scores)
+
+    if _lazy_load:
+        _evals[name] = evaluator
+    else:
+        experiment = init_experiment(name)
+
+        # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  # 'RuntimeError: There is no current event loop...'
+            loop = None
+
+        async def run_to_completion():
+            results, summary = await run_evaluator(experiment, evaluator, 0, [])
+            report_evaluator_result(name, results, summary, True)
+
+        if loop:
+            return loop.create_task(run_to_completion())
+        else:
+            asyncio.run(run_to_completion())
+
+
+@dataclasses.dataclass
+class Filter:
+    path: List[str]
+    pattern: re.Pattern
+
+
+def serialize_json_with_plain_string(v: Any) -> str:
+    if isinstance(v, str):
+        return v
+    else:
+        return json.dumps(v)
+
+
+def deserialize_plain_string_as_json(s: str) -> Any:
+    try:
+        return {"value": json.loads(s)}
+    except json.JSONDecodeError as e:
+        return {"value": s, "error": e}
+
+
+def parse_filters(filters: List[str]) -> List[Filter]:
+    result = []
+    for f in filters:
+        equals_idx = f.index("=")
+        if equals_idx == -1:
+            raise ValueError(f"Invalid filter {f}")
+        path, value = f[:equals_idx], f[equals_idx + 1 :]
+        deserialized_value = deserialize_plain_string_as_json(value)["value"]
+        if not isinstance(deserialized_value, str):
+            deserialized_value = value
+        result.append(
+            Filter(
+                path=path.split("."),
+                pattern=re.compile(deserialized_value),
+            )
+        )
+
+    return result
+
+
+def evaluate_filter(object, filter: Filter):
+    key = object
+    for p in filter.path:
+        key = key.get(p)
+        if key is None:
+            return False
+    return filter.pattern.match(serialize_json_with_plain_string(key)) is not None
+
+
+@dataclasses.dataclass
+class EvalResult:
+    output: Output
+    metadata: Metadata
+    scores: Dict[str, Score]
+    error: Optional[Exception] = None
+
+
+class DictEvalHooks(EvalHooks):
+    def __init__(self, metadata):
+        self.metadata = metadata
+
+    def meta(self, **info):
+        self.metadata.update(info)
+
+
+def init_experiment(project_name):
+    ret = _init_experiment(project_name)
+    summary = ret.summarize(summarize_scores=False)
+    print(f"Experiment {ret.name} is running at {summary.experiment_url}")
+    return ret
+
+
+async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int], filters: List[Filter]):
+    #   if (typeof evaluator.data === "string") {
+    #     throw new Error("Unimplemented: string data paths");
+    #   }
+    #   const dataResult = evaluator.data();
+    #   let data = null;
+    #   if (dataResult instanceof Promise) {
+    #     data = await dataResult;
+    #   } else {
+    #     data = dataResult;
+    #   }
+
+    async def await_or_run(f, *args, **kwargs):
+        if inspect.iscoroutinefunction(f):
+            return await f(*args, **kwargs)
+        else:
+            return f(*args, **kwargs)
+
+    async def run_evaluator_task(datum):
+        if isinstance(datum, dict):
+            datum = EvalCase(**datum)
+
+        metadata = {**(datum.metadata or {})}
+        output = None
+        error = None
+        scores = {}
+
+        try:
+            hooks = DictEvalHooks(metadata)
+
+            # Check if the task takes a hooks argument
+            task_args = [datum.input]
+            if len(inspect.signature(evaluator.task).parameters) == 2:
+                task_args.append(hooks)
+
+            output = await await_or_run(evaluator.task, *task_args)
+
+            scorers = [
+                scorer().eval_async if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer
+                for scorer in evaluator.scores
+            ]
+            score_promises = [
+                asyncio.create_task(await_or_run(score, input=datum.input, expected=datum.expected, output=output))
+                for score in scorers
+            ]
+            score_results = [await p for p in score_promises]
+            score_metadata = {}
+            for scorer, score_result in zip(scorers, score_results):
+                if not isinstance(score_result, Score):
+                    score_result = Score(name=scorer.__name__, score=score_result)
+                scores[score_result.name] = score_result.score
+                m = {**(score_result.metadata or {})}
+                if score_result.error is not None:
+                    m["error"] = str(score_result.error)
+                if len(m) > 0:
+                    score_metadata[score_result.name] = m
+
+            if len(score_metadata) > 0:
+                hooks.meta(scores=score_metadata)
+        except Exception as e:
+            error = e
+
+        if experiment and not error:
+            experiment.log(
+                input=datum.input,
+                metadata=metadata,
+                expected=datum.expected,
+                output=output,
+                scores=scores,
+            )
+        return EvalResult(output=output, metadata=metadata, scores=scores, error=error)
+
+    data_iterator = evaluator.data
+    if inspect.isfunction(data_iterator):
+        data_iterator = data_iterator()
+
+    if not inspect.isasyncgen(data_iterator):
+
+        async def to_async(it):
+            for d in it:
+                yield d
+
+        data_iterator = to_async(data_iterator)
+
+    async def filtered_iterator(it):
+        async for datum in it:
+            if all(evaluate_filter(datum, f) for f in filters):
+                yield datum
+
+    tasks = []
+    with async_tqdm(
+        filtered_iterator(data_iterator),
+        desc=f"{evaluator.name} (data)",
+        position=position,
+        disable=position is None,
+    ) as pbar:
+        async for datum in pbar:
+            tasks.append(asyncio.create_task(run_evaluator_task(datum)))
+
+    results = []
+    for task in std_tqdm(tasks, desc=f"{evaluator.name} (tasks)", position=position, disable=position is None):
+        results.append(await task)
+
+    summary = experiment.summarize() if experiment else None
+    return results, summary
+
+
+__all__ = ["Evaluator", "Eval", "Score", "EvalCase", "EvalHooks"]
