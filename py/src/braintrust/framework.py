@@ -9,9 +9,10 @@ from collections import defaultdict
 from contextlib import contextmanager
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List, Optional, TypeVar, Union
 
-from autoevals import Score, Scorer
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
+
+from autoevals import Score, Scorer
 
 from .logger import init as _init_experiment
 from .util import SerializableDataClass
