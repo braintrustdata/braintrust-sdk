@@ -725,7 +725,7 @@ export class Experiment {
         throw new Error("score names must be strings");
       }
 
-      if (typeof score !== "boolean") {
+      if (typeof score === "boolean") {
         score = score ? 1 : 0;
         scores[name] = score;
       }
