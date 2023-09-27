@@ -3,24 +3,7 @@ import logging
 import sys
 import textwrap
 
-_module_not_found_error = None
-try:
-    from . import eval, install
-except ModuleNotFoundError as e:
-    _module_not_found_error = e
-
-if _module_not_found_error is not None:
-    raise ModuleNotFoundError(
-        textwrap.dedent(
-            f"""\
-            At least one dependency not found: {str(_module_not_found_error)!r}
-            It is possible that braintrust was installed without the CLI dependencies. Run:
-
-              pip install 'braintrust[cli]'
-
-            to install braintrust with the CLI dependencies (make sure to quote 'braintrust[cli]')."""
-        )
-    )
+from . import eval, install
 
 
 def main(args=None):
