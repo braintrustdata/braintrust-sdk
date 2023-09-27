@@ -146,7 +146,7 @@ def report_evaluator_result(eval_name, results, summary, verbose):
     failing_results = [x for x in results if x.error]
     if len(failing_results) > 0:
         print(
-            f"{bcolors.WARNING}Evaluator {eval_name} failed with {len(failing_results)} {pluralize(len(failing_results), 'error', 'errors')}{bcolors.ENDC}"
+            f"{bcolors.FAIL}Evaluator {eval_name} failed with {len(failing_results)} {pluralize(len(failing_results), 'error', 'errors')}{bcolors.ENDC}"
         )
 
         for result in failing_results:
@@ -155,7 +155,7 @@ def report_evaluator_result(eval_name, results, summary, verbose):
                 if verbose
                 else traceback.format_exception_only(type(result.error), result.error)
             ).rstrip()
-            print(f"{bcolors.WARNING}{info}{bcolors.ENDC}")
+            print(f"{bcolors.FAIL}{info}{bcolors.ENDC}")
     if summary:
         print(f"{summary}")
     else:
