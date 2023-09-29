@@ -995,7 +995,6 @@ class ExperimentSummary(SerializableDataClass):
             + ("\n\n" if self.scores else "")
             + textwrap.dedent(
                 f"""\
-        See results for all experiments in {self.project_name} at {self.project_url}
         See results for {self.experiment_name} at {self.experiment_url}"""
             )
         )
