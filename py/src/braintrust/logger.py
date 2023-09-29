@@ -32,6 +32,7 @@ _state = BraintrustState()
 _logger = logging.getLogger("braintrust")
 
 API_URL = None
+LOGIN_TOKEN = None
 ORG_ID = None
 ORG_NAME = None
 LOG_URL = None
@@ -58,8 +59,12 @@ class HTTPConnection:
         # Following a suggestion in https://stackoverflow.com/questions/23013220/max-retries-exceeded-with-url-in-requests
         self._reset(connect=10, backoff_factor=0.5)
 
+    @staticmethod
+    def sanitize_token(token):
+        return token.rstrip("\n")
+
     def set_token(self, token):
-        token = token.rstrip("\n")
+        token = HTTPConnection.sanitize_token(token)
         self.token = token
         self._set_session_token()
 
@@ -113,17 +118,23 @@ def log_conn():
     return HTTPConnection(LOG_URL)
 
 
+@_cache
+def user_info():
+    return log_conn().get_json("ping")
+
+
+def _clear_cached_globals():
+    api_conn.cache_clear()
+    log_conn.cache_clear()
+    user_info.cache_clear()
+
+
 class ModelWrapper:
     def __init__(self, data):
         self.data = data
 
     def __getattr__(self, name: str) -> Any:
         return self.data[name]
-
-
-@_cache
-def user_info():
-    return log_conn().get_json("ping")
 
 
 class _LogThread:
@@ -363,19 +374,30 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
     :param force_login: Login again, even if you have already logged in (by default, this function will exit quickly if you have already logged in)
     """
 
-    global API_URL, ORG_ID, ORG_NAME, LOG_URL, LOGGED_IN
+    global API_URL, LOGIN_TOKEN, ORG_ID, ORG_NAME, LOG_URL, LOGGED_IN
 
     # Only permit one thread to login at a time
     with login_lock:
-        if not force_login and LOGGED_IN:
-            # We have already logged in
-            return
 
         if api_url is None:
             api_url = os.environ.get("BRAINTRUST_API_URL", "https://www.braintrustdata.com")
 
         if api_key is None:
             api_key = os.environ.get("BRAINTRUST_API_KEY")
+
+        # If any provided login inputs disagree with our existing settings,
+        # force login.
+        if (
+            api_url != API_URL
+            or (api_key is not None and HTTPConnection.sanitize_token(api_key) != LOGIN_TOKEN)
+            or (org_name is not None and org_name != ORG_NAME)
+        ):
+            force_login = True
+
+        if not force_login and LOGGED_IN:
+            # We have already logged in
+            return
+        _clear_cached_globals()
 
         API_URL = api_url
 
@@ -466,7 +488,7 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
 
         # Set the same token in the API
         api_conn().set_token(conn.token)
-
+        LOGIN_TOKEN = conn.token
         LOGGED_IN = True
 
 

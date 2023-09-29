@@ -14,6 +14,7 @@ let _state: BraintrustState = {
 };
 
 let API_URL: string | null = null;
+let LOGIN_TOKEN: string | null = null;
 let ORG_ID: string | null = null;
 let ORG_NAME: string | null = null;
 let LOG_URL: string | null = null;
@@ -51,8 +52,12 @@ class HTTPConnection {
     this._reset();
   }
 
+  static sanitize_token(token: string) {
+    return token.trim();
+  }
+
   set_token(token: string) {
-    token = token.trim();
+    token = HTTPConnection.sanitize_token(token);
     this.token = token;
     this._reset();
   }
@@ -130,6 +135,12 @@ async function _user_info(): Promise<UserInfo> {
     _var_user_info = await log_conn().get_json("ping");
   }
   return _var_user_info!;
+}
+
+function clear_cached_globals() {
+  _api_conn = null;
+  _log_conn = null;
+  _var_user_info = null;
 }
 
 export class Project {
@@ -405,12 +416,26 @@ export async function login(
     apiKey = iso.getEnv("BRAINTRUST_API_KEY"),
     orgName: orgName = undefined,
     disableCache = false,
-    forceLogin = false,
   } = options || {};
+
+  let { forceLogin = false } = options || {};
+
+  // If any provided login inputs disagree with our existing settings, force
+  // login.
+  if (
+    apiUrl != API_URL ||
+    (apiKey !== undefined &&
+      HTTPConnection.sanitize_token(apiKey) != LOGIN_TOKEN) ||
+    (orgName !== undefined && orgName != ORG_NAME)
+  ) {
+    forceLogin = true;
+  }
 
   if (LOGGED_IN && !forceLogin) {
     return;
   }
+
+  clear_cached_globals();
 
   API_URL = apiUrl;
 
@@ -449,6 +474,7 @@ export async function login(
 
   // Set the same token in the API
   api_conn().set_token(apiKey);
+  LOGIN_TOKEN = conn.token;
   LOGGED_IN = true;
 }
 
