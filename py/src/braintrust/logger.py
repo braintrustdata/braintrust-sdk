@@ -7,6 +7,7 @@ import os
 import queue
 import textwrap
 import threading
+import time
 import traceback
 import uuid
 from functools import cache as _cache
@@ -19,7 +20,7 @@ from urllib3.util.retry import Retry
 
 from .cache import CACHE_PATH, EXPERIMENTS_PATH, LOGIN_INFO_PATH
 from .gitutil import get_past_n_ancestors, get_repo_status
-from .util import SerializableDataClass, encode_uri_component, response_raise_for_status
+from .util import SerializableDataClass, encode_uri_component, get_caller_location, response_raise_for_status
 
 
 class BraintrustState:
@@ -311,7 +312,9 @@ def log(
     expected=None,
     scores=None,
     metadata=None,
+    metrics=None,
     id=None,
+    dataset_record_id=None,
     inputs=None,
 ):
     """
@@ -339,7 +342,13 @@ def log(
     about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
     `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
     JSON-serializable type, but its keys must be strings.
-    :param id: (Optional) a unique identifier for the event. If you don't provide one, Braintrust will generate one for you.
+    :param metrics: (Optional) a dictionary of metrics to log. The following
+    keys are populated automatically and should not be specified: "start",
+    "end", "caller_filename", "caller_lineno".
+    :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
+    :param dataset_record_id: (Optional) the id of the dataset record that this
+    event is associated with. This field is required if and only if the
+    experiment is associated with a dataset.
     :param inputs: (Deprecated) the same as `input` (will be removed in a future version)
     :returns: The `id` of the logged event.
     """
@@ -353,7 +362,9 @@ def log(
         expected=expected,
         scores=scores,
         metadata=metadata,
+        metrics=metrics,
         id=id,
+        dataset_record_id=dataset_record_id,
         inputs=inputs,
     )
 
@@ -546,6 +557,81 @@ def _populate_args(d, **kwargs):
     return d
 
 
+def _validate_and_sanitize_experiment_log_partial_args(event):
+    # Make sure only certain keys are specified.
+    forbidden_keys = set(event.keys()) - {
+        "input",
+        "output",
+        "expected",
+        "scores",
+        "metadata",
+        "metrics",
+        "dataset_record_id",
+        "inputs",
+    }
+    if forbidden_keys:
+        raise ValueError(f"The following keys may are not permitted: {forbidden_keys}")
+
+    scores = event.get("scores")
+    if scores:
+        for name, score in scores.items():
+            if not isinstance(name, str):
+                raise ValueError("score names must be strings")
+            if score is not None:
+                if not isinstance(score, (int, float)):
+                    raise ValueError("score values must be numbers")
+                if score < 0 or score > 1:
+                    raise ValueError("score values must be between 0 and 1")
+
+    metadata = event.get("metadata")
+    if metadata:
+        if not isinstance(metadata, dict):
+            raise ValueError("metadata must be a dictionary")
+        for key in metadata.keys():
+            if not isinstance(key, str):
+                raise ValueError("metadata keys must be strings")
+
+    metrics = event.get("metrics")
+    if metrics:
+        if not isinstance(metrics, dict):
+            raise ValueError("metrics must be a dictionary")
+        for key in metrics.keys():
+            if not isinstance(key, str):
+                raise ValueError("metric keys must be strings")
+        for forbidden_key in ["start", "end", "caller_filename", "caller_lineno"]:
+            if forbidden_key in metrics:
+                raise ValueError(f"Key {forbidden_key} may not be specified in metrics")
+
+    input = event.get("input")
+    inputs = event.get("inputs")
+    if input is not None and inputs is not None:
+        raise ValueError("Only one of input or inputs (deprecated) can be specified. Prefer input.")
+    out = event.copy()
+    out["input"] = input if input is not None else inputs
+    if inputs is not None:
+        del out["inputs"]
+    return out
+
+
+def _validate_and_sanitize_experiment_log_full_args(event, has_dataset):
+    event = _validate_and_sanitize_experiment_log_partial_args(event)
+
+    if event.get("input") is None:
+        raise ValueError("input must be specified")
+
+    if event.get("scores") is None:
+        raise ValueError("scores must be specified")
+    elif not isinstance(event["scores"], dict):
+        raise ValueError("scores must be a dictionary of names with scores")
+
+    if has_dataset and event.get("dataset_record_id") is None:
+        raise ValueError("dataset_record_id must be specified when using a dataset")
+    elif not has_dataset and event.get("dataset_record_id") is not None:
+        raise ValueError("dataset_record_id cannot be specified when not using a dataset")
+
+    return event
+
+
 class Experiment(ModelWrapper):
     """
     An experiment is a collection of logged events, such as model inputs and outputs, which represent
@@ -590,8 +676,7 @@ class Experiment(ModelWrapper):
         else:
             args["ancestor_commits"] = list(get_past_n_ancestors())
 
-        self.dataset = dataset
-        if self.dataset is not None:
+        if dataset is not None:
             args["dataset_id"] = dataset.id
             args["dataset_version"] = dataset.version
 
@@ -601,105 +686,48 @@ class Experiment(ModelWrapper):
         response = api_conn().post_json("api/experiment/register", args)
         self.project = ModelWrapper(response["project"])
         super().__init__(response["experiment"])
-
+        self.dataset = dataset
         self.logger = _LogThread(name=experiment_name)
+        self.last_start_time = time.time()
 
-    def log(
-        self,
-        input=None,
-        output=None,
-        expected=None,
-        scores=None,
-        metadata=None,
-        id=None,
-        dataset_record_id=None,
-        inputs=None,
-    ):
+    def log(self, **event):
         """
-        Log a single event to the experiment. The event will be batched and uploaded behind the scenes.
+        Log a single event to the experiment. The event will be batched and
+        uploaded behind the scenes.
 
-        :param input: The arguments that uniquely define a test case (an arbitrary, JSON serializable object). Later on,
-        Braintrust will use the `input` to know whether two test cases are the same between experiments, so they should
-        not contain experiment-specific state. A simple rule of thumb is that if you run the same experiment twice, the
-        `input` should be identical.
-        :param output: The output of your application, including post-processing (an arbitrary, JSON serializable object),
-        that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries,
-        the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may
-        be multiple valid queries that answer a single question.
-        :param expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to
-        determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for
-        you, since there are so many different ways to do that correctly. Instead, these values are just used to help you
-        navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or
-        fine-tune your models.
-        :param scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals
-        that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a
-        summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity
-        between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was
-        covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments.
-        :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just
-        about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
-        `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
-        JSON-serializable type, but its keys must be strings.
-        :param id: (Optional) a unique identifier for the event. If you don't provide one, Braintrust will generate one for you.
-        :param dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the
-        experiment is associated with a dataset.
-        :param inputs: (Deprecated) the same as `input` (will be removed in a future version)
+        :param **event: Data to be logged. See `braintrust.log` for full details.
         :returns: The `id` of the logged event.
         """
 
-        user_id = user_info()["id"]
+        event = _validate_and_sanitize_experiment_log_full_args(event, self.dataset is not None)
+        span = self.create_span(start=self.last_start_time, **event)
+        self.last_start_time = span.end()
+        return span.id
 
-        if input is None and inputs is None:
-            raise ValueError("Either input or inputs (deprecated) must be specified. Prefer input.")
-        elif input is not None and inputs is not None:
-            raise ValueError("Only one of input or inputs (deprecated) can be specified. Prefer input.")
+    def create_span(self, name="root", span_attrs={}, start=None, **event):
+        """
+        Create a new toplevel span. This is useful if you want to log more
+        detailed trace information beyond the scope of a single log event. We
+        recommend using spans within the python ContextManager framework (`with
+        experiment.create_span() as span`) to ensure they are terminated upon
+        completion.
 
-        if not isinstance(scores, dict):
-            raise ValueError("scores must be a dictionary of names with scores")
-        for name, score in scores.items():
-            if not isinstance(name, str):
-                raise ValueError("score names must be strings")
+        :param name: The name of the span.
+        :param span_attrs: Optional additional attributes to attach to the span,
+        such as a type name.
+        :param start: Optional start time of the span, as a timestamp in seconds.
+        :param **event: Data to be logged. See `braintrust.log` for full details.
+        :returns: `ExperimentSpan`
+        """
 
-            if isinstance(score, bool):
-                score = 1 if score else 0
-                scores[name] = score
-
-            if score is not None:
-                if not isinstance(score, (int, float)):
-                    raise ValueError("score values must be numbers")
-                if score < 0 or score > 1:
-                    raise ValueError(f"score ({score}) values must be between 0 and 1")
-
-        if metadata:
-            if not isinstance(metadata, dict):
-                raise ValueError("metadata must be a dictionary")
-            for key in metadata.keys():
-                if not isinstance(key, str):
-                    raise ValueError("metadata keys must be strings")
-
-        if self.dataset is not None and dataset_record_id is None:
-            raise ValueError("dataset_record_id must be specified when using a dataset")
-        elif self.dataset is None and dataset_record_id is not None:
-            raise ValueError("dataset_record_id cannot be specified when not using a dataset")
-
-        args = {
-            "id": id or str(uuid.uuid4()),
-            "inputs": input if input is not None else inputs,
-            "output": output,
-            "expected": expected,
-            "scores": scores,
-            "project_id": self.project.id,
-            "experiment_id": self.id,
-            "user_id": user_id,
-            "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "dataset_record_id": dataset_record_id,
-        }
-
-        if metadata:
-            args["metadata"] = metadata
-
-        self.logger.log(args)
-        return args["id"]
+        return ExperimentSpan(
+            experiment_logger=self.logger,
+            name=name,
+            span_attrs=span_attrs,
+            start=start,
+            root_experiment=self,
+            event=event,
+        )
 
     def summarize(self, summarize_scores=True, comparison_experiment_id=None):
         """
@@ -752,6 +780,135 @@ class Experiment(ModelWrapper):
             comparison_experiment_name=comparison_experiment_name,
             scores=score_summary,
         )
+
+
+class ExperimentSpan:
+    """
+    An ExperimentSpan encapsulates logged data and metrics for a unit of work.
+    Data logged over several calls to `ExperimentSpan.log` will be merged into
+    one logical row.
+
+    We suggest not creating ExperimentSpans directly, but instead using
+    `Experiment.create_span` or `ExperimentSpan.subspan`.
+    """
+
+    # root_experiment should only be specified for a root span. parent_span
+    # should only be specified for non-root spans.
+    def __init__(
+        self, experiment_logger, name, span_attrs={}, start=None, root_experiment=None, parent_span=None, event={}
+    ):
+        self._check_not_finished()
+        self.finished = False
+
+        self.experiment_logger = experiment_logger
+
+        if (root_experiment is None) == (parent_span is None):
+            raise ValueError("Must specify exactly one of `root_experiment` and `parent_span`")
+
+        # `internal_data` contains fields that are not part of the
+        # "user-sanitized" set of fields which we want to log in just one of the
+        # span rows.
+        self.internal_data = dict(
+            metrics=dict(
+                start=start or time.time(),
+                **get_caller_location(),
+            ),
+            span_attrs=dict(**span_attrs, name=name),
+        )
+
+        # Fields that are logged to every span row.
+        try:
+            self.id = event.pop("id")
+        except KeyError:
+            self.id = str(uuid.uuid4())
+        self.span_id = str(uuid.uuid4())
+        if root_experiment is not None:
+            self.root_span_id = self.span_id
+            self.project_id = root_experiment.project.id
+            self.experiment_id = root_experiment.id
+            self.internal_data.update(
+                user_id=root_experiment.user_id,  # TODO: Hopefully we can remove this
+                created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            )
+        else:
+            assert parent_span is not None
+            self.root_span_id = parent_span.root_span_id
+            self.project_id = parent_span.project_id
+            self.experiment_id = parent_span.experiment_id
+            self.internal_data.update(
+                span_parents=[dict(parent_id=parent_span.id, parent_span_id=parent_span.span_id)],
+            )
+        self.log(**event)
+
+    def log(self, **event):
+        """
+        Incrementally update the current span with new data. The event will be
+        batched and uploaded behind the scenes.
+
+        :param **event: Data to be logged. See `braintrust.log` for full details.
+        """
+        self._check_not_finished()
+
+        sanitized = {
+            k: v for k, v in _validate_and_sanitize_experiment_log_partial_args(event).items() if v is not None
+        }
+        # There should be no overlap between the dictionaries being merged.
+        record = dict(
+            **sanitized,
+            **self.internal_data,
+            id=self.id,
+            span_id=self.span_id,
+            root_span_id=self.root_span_id,
+            project_id=self.project_id,
+            experiment_id=self.experiment_id,
+        )
+        self.internal_data = {}
+        self.experiment_logger.log(record)
+
+    def subspan(self, name, span_attrs={}, **event):
+        """
+        Create a span whose parent is the calling span.
+
+        We recommend using spans within the python ContextManager framework
+        (`with parent_span.subspan("my subspan") as span`) to ensure they are
+        terminated upon completion.
+
+        :param name: The name of the span.
+        :param span_attrs: See `Experiment.create_span` for full details.
+        :param **event: Data to be logged. See `braintrust.log` for full details.
+        """
+        self._check_not_finished()
+
+        return ExperimentSpan(
+            experiment_logger=self.experiment_logger, name=name, span_attrs=span_attrs, parent_span=self, event=event
+        )
+
+    def end(self):
+        """
+        Terminate the span. Returns the end time logged to the row's metrics.
+        After calling end, one may not invoke any further methods on the span
+        object.
+
+        :returns: The end time logged to the span metrics.
+        """
+        self._check_not_finished()
+
+        end_time = time.time()
+        self.internal_data = dict(metrics=dict(end=end_time))
+        self.log()
+        self.finished = True
+        return end_time
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, callback):
+        del type, value, callback
+        self.end()
+
+    def _check_not_finished(self):
+        if getattr(self, "finished", False):
+            raise RuntimeError("Cannot invoke method on finished span")
 
 
 class Dataset(ModelWrapper):
