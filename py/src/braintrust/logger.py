@@ -835,9 +835,7 @@ class ExperimentSpan:
             self.root_span_id = parent_span.root_span_id
             self.project_id = parent_span.project_id
             self.experiment_id = parent_span.experiment_id
-            self.internal_data.update(
-                span_parents=[dict(parent_id=parent_span.id, parent_span_id=parent_span.span_id)],
-            )
+            self.internal_data.update(span_parents=[parent_span.id])
         self.log(**event)
 
     def log(self, **event):
