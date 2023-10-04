@@ -226,6 +226,9 @@ export interface DatasetRecord {
   metadata: any;
 }
 
+// 10 MB (https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html)
+const MaxRequestSize = 10 * 1024 * 1024;
+
 class LogThread {
   private items: LogEvent[] = [];
   private active_flush: Promise<string[]> = Promise.resolve([]);
@@ -250,6 +253,26 @@ class LogThread {
     if (items.length > 0) {
       const resp = await log_conn().post_json("logs", items);
       ret = resp.data;
+
+      const curr = [];
+      let curr_len = 0;
+      for (const item of items) {
+        const item_len = JSON.stringify(item).length;
+        if (curr_len + item_len > MaxRequestSize / 2 && curr.length > 0) {
+          const resp = await log_conn().post_json("logs", curr);
+          ret = resp.data;
+          curr.length = 0;
+          curr_len = 0;
+        }
+
+        curr.push(item);
+        curr_len += item_len;
+      }
+
+      if (curr.length > 0) {
+        const resp = await log_conn().post_json("logs", curr);
+        ret = resp.data;
+      }
     }
 
     // If more items were added while we were flushing, flush again

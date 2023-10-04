@@ -137,6 +137,10 @@ class ModelWrapper:
         return self.data[name]
 
 
+# 10 MB (https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html)
+MAX_REQUEST_SIZE = 10 * 1024 * 1024
+
+
 class _LogThread:
     def __init__(self, name=None):
         self.thread = threading.Thread(target=self._publisher, daemon=True)
@@ -197,7 +201,21 @@ class _LogThread:
                     break
 
             if len(items) > 0:
-                conn.post_json("logs", items)
+                # Construct batches of items that do not exceed the max request size divided by 2
+                curr = []
+                curr_len = 0
+                for item in items:
+                    item_len = len(json.dumps(item))
+                    if curr_len + item_len > MAX_REQUEST_SIZE / 2 and len(curr) > 0:
+                        conn.post_json("logs", curr)
+                        curr = []
+                        curr_len = 0
+
+                    curr.append(item)
+                    curr_len += item_len
+
+                if len(curr) > 0:
+                    conn.post_json("logs", curr)
 
             if len(items) < batch_size:
                 break
@@ -378,7 +396,6 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
 
     # Only permit one thread to login at a time
     with login_lock:
-
         if api_url is None:
             api_url = os.environ.get("BRAINTRUST_API_URL", "https://www.braintrustdata.com")
 
