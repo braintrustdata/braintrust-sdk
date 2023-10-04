@@ -76,8 +76,16 @@ class HTTPConnection {
     return await this.session!.get(_urljoin(this.base_url, path), { params });
   }
 
-  async post(path: string, params: unknown | undefined = undefined) {
-    return await this.session!.post(_urljoin(this.base_url, path), params);
+  async post(
+    path: string,
+    params: unknown | undefined = undefined,
+    config: any = undefined
+  ) {
+    return await this.session!.post(
+      _urljoin(this.base_url, path),
+      params,
+      config
+    );
   }
 
   async get_json(
@@ -105,7 +113,10 @@ class HTTPConnection {
   }
 
   async post_json(object_type: string, args: unknown | undefined = undefined) {
-    const resp = await this.post(`${object_type}`, args);
+    const resp = await this.post(`${object_type}`, args, {
+      // https://masteringjs.io/tutorials/axios/post-json
+      headers: { "Content-Type": "application/json" },
+    });
     return resp.data;
   }
 }
@@ -229,6 +240,10 @@ export interface DatasetRecord {
 // 10 MB (https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html)
 const MaxRequestSize = 10 * 1024 * 1024;
 
+function constructJsonArray(items: string[]) {
+  return `[${items.join(",")}]`;
+}
+
 class LogThread {
   private items: LogEvent[] = [];
   private active_flush: Promise<string[]> = Promise.resolve([]);
@@ -251,26 +266,30 @@ class LogThread {
 
     let ret = [];
     if (items.length > 0) {
-      const resp = await log_conn().post_json("logs", items);
-      ret = resp.data;
-
       const curr = [];
       let curr_len = 0;
       for (const item of items) {
-        const item_len = JSON.stringify(item).length;
-        if (curr_len + item_len > MaxRequestSize / 2 && curr.length > 0) {
-          const resp = await log_conn().post_json("logs", curr);
+        const itemS = JSON.stringify(item);
+        const itemLen = itemS.length;
+        if (curr_len + itemLen > MaxRequestSize / 2 && curr.length > 0) {
+          const resp = await log_conn().post_json(
+            "logs",
+            constructJsonArray(curr)
+          );
           ret = resp.data;
           curr.length = 0;
           curr_len = 0;
         }
 
-        curr.push(item);
-        curr_len += item_len;
+        curr.push(itemS);
+        curr_len += itemLen;
       }
 
       if (curr.length > 0) {
-        const resp = await log_conn().post_json("logs", curr);
+        const resp = await log_conn().post_json(
+          "logs",
+          constructJsonArray(curr)
+        );
         ret = resp.data;
       }
     }

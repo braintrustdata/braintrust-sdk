@@ -205,22 +205,27 @@ class _LogThread:
                 curr = []
                 curr_len = 0
                 for item in items:
-                    item_len = len(json.dumps(item))
+                    item_s = json.dumps(item)
+                    item_len = len(item_s)
                     if curr_len + item_len > MAX_REQUEST_SIZE / 2 and len(curr) > 0:
-                        conn.post_json("logs", curr)
+                        response_raise_for_status(conn.post("/logs", data=construct_json_array(curr)))
                         curr = []
                         curr_len = 0
 
-                    curr.append(item)
+                    curr.append(item_s)
                     curr_len += item_len
 
                 if len(curr) > 0:
-                    conn.post_json("logs", curr)
+                    response_raise_for_status(conn.post("/logs", data=construct_json_array(curr)))
 
             if len(items) < batch_size:
                 break
 
             items.clear()
+
+
+def construct_json_array(items):
+    return "[" + ",".join(items) + "]"
 
 
 def _ensure_object(object_type, object_id, force=False):
