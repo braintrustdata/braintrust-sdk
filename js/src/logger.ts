@@ -76,8 +76,16 @@ class HTTPConnection {
     return await this.session!.get(_urljoin(this.base_url, path), { params });
   }
 
-  async post(path: string, params: unknown | undefined = undefined) {
-    return await this.session!.post(_urljoin(this.base_url, path), params);
+  async post(
+    path: string,
+    params: unknown | undefined = undefined,
+    config: any = undefined
+  ) {
+    return await this.session!.post(
+      _urljoin(this.base_url, path),
+      params,
+      config
+    );
   }
 
   async get_json(
@@ -105,7 +113,10 @@ class HTTPConnection {
   }
 
   async post_json(object_type: string, args: unknown | undefined = undefined) {
-    const resp = await this.post(`${object_type}`, args);
+    const resp = await this.post(`${object_type}`, args, {
+      // https://masteringjs.io/tutorials/axios/post-json
+      headers: { "Content-Type": "application/json" },
+    });
     return resp.data;
   }
 }
@@ -226,6 +237,13 @@ export interface DatasetRecord {
   metadata: any;
 }
 
+// 10 MB (https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html)
+const MaxRequestSize = 10 * 1024 * 1024;
+
+function constructJsonArray(items: string[]) {
+  return `[${items.join(",")}]`;
+}
+
 class LogThread {
   private items: LogEvent[] = [];
   private active_flush: Promise<string[]> = Promise.resolve([]);
@@ -240,16 +258,38 @@ class LogThread {
     }
   }
 
-  async flush_once(): Promise<string[]> {
+  async flush_once(batchSize: number = 100): Promise<string[]> {
     this.active_flush_resolved = false;
 
-    const items = this.items;
+    const initialItems = (this.items || []).reverse();
     this.items = [];
 
     let ret = [];
-    if (items.length > 0) {
-      const resp = await log_conn().post_json("logs", items);
-      ret = resp.data;
+    while (true) {
+      const items = [];
+      let itemsLen = 0;
+      while (items.length < batchSize && itemsLen < MaxRequestSize / 2) {
+        let item = null;
+        if (initialItems.length > 0) {
+          item = initialItems.pop();
+        } else {
+          break;
+        }
+
+        const itemS = JSON.stringify(item);
+        items.push(itemS);
+        itemsLen += itemS.length;
+      }
+
+      if (items.length > 0) {
+        const resp = await log_conn().post_json(
+          "logs",
+          constructJsonArray(items)
+        );
+        ret = resp.data;
+      } else {
+        break;
+      }
     }
 
     // If more items were added while we were flushing, flush again
