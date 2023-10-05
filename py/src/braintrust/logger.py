@@ -141,6 +141,10 @@ class ModelWrapper:
 MAX_REQUEST_SIZE = 10 * 1024 * 1024
 
 
+def construct_json_array(items):
+    return "[" + ",".join(items) + "]"
+
+
 class _LogThread:
     def __init__(self, name=None):
         self.thread = threading.Thread(target=self._publisher, daemon=True)
@@ -192,40 +196,27 @@ class _LogThread:
 
     def flush(self, initial_items=None, batch_size=100):
         conn = log_conn()
-        items = initial_items or []
+        initial_items = list(reversed(initial_items)) if initial_items else []
         while True:
-            while len(items) < batch_size:
-                try:
-                    items.append(self.queue.get_nowait())
-                except queue.Empty:
-                    break
+            items = []
+            items_len = 0
+            while len(items) < batch_size and items_len < MAX_REQUEST_SIZE / 2:
+                if len(initial_items) > 0:
+                    item = initial_items.pop()
+                else:
+                    try:
+                        item = self.queue.get_nowait()
+                    except queue.Empty:
+                        break
+
+                item_s = json.dumps(item)
+                items.append(item_s)
+                items_len += len(item_s)
 
             if len(items) > 0:
-                # Construct batches of items that do not exceed the max request size divided by 2
-                curr = []
-                curr_len = 0
-                for item in items:
-                    item_s = json.dumps(item)
-                    item_len = len(item_s)
-                    if curr_len + item_len > MAX_REQUEST_SIZE / 2 and len(curr) > 0:
-                        response_raise_for_status(conn.post("/logs", data=construct_json_array(curr)))
-                        curr = []
-                        curr_len = 0
-
-                    curr.append(item_s)
-                    curr_len += item_len
-
-                if len(curr) > 0:
-                    response_raise_for_status(conn.post("/logs", data=construct_json_array(curr)))
-
-            if len(items) < batch_size:
+                response_raise_for_status(conn.post("/logs", data=construct_json_array(items)))
+            else:
                 break
-
-            items.clear()
-
-
-def construct_json_array(items):
-    return "[" + ",".join(items) + "]"
 
 
 def _ensure_object(object_type, object_id, force=False):

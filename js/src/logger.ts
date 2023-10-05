@@ -258,39 +258,37 @@ class LogThread {
     }
   }
 
-  async flush_once(): Promise<string[]> {
+  async flush_once(batchSize: number = 100): Promise<string[]> {
     this.active_flush_resolved = false;
 
-    const items = this.items;
+    const initialItems = (this.items || []).reverse();
     this.items = [];
 
     let ret = [];
-    if (items.length > 0) {
-      const curr = [];
-      let curr_len = 0;
-      for (const item of items) {
-        const itemS = JSON.stringify(item);
-        const itemLen = itemS.length;
-        if (curr_len + itemLen > MaxRequestSize / 2 && curr.length > 0) {
-          const resp = await log_conn().post_json(
-            "logs",
-            constructJsonArray(curr)
-          );
-          ret = resp.data;
-          curr.length = 0;
-          curr_len = 0;
+    while (true) {
+      const items = [];
+      let itemsLen = 0;
+      while (items.length < batchSize && itemsLen < MaxRequestSize / 2) {
+        let item = null;
+        if (initialItems.length > 0) {
+          item = initialItems.pop();
+        } else {
+          break;
         }
 
-        curr.push(itemS);
-        curr_len += itemLen;
+        const itemS = JSON.stringify(item);
+        items.push(itemS);
+        itemsLen += itemS.length;
       }
 
-      if (curr.length > 0) {
+      if (items.length > 0) {
         const resp = await log_conn().post_json(
           "logs",
-          constructJsonArray(curr)
+          constructJsonArray(items)
         );
         ret = resp.data;
+      } else {
+        break;
       }
     }
 
