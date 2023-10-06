@@ -629,9 +629,10 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
     return out
 
 
+# Note that this only checks properties that are expected of a complete event.
+# _validate_and_sanitize_experiment_log_partial_args should still be invoked
+# (after handling special fields like 'id').
 def _validate_and_sanitize_experiment_log_full_args(event, has_dataset):
-    event = _validate_and_sanitize_experiment_log_partial_args(event)
-
     if event.get("input") is None:
         raise ValueError("input must be specified")
 
@@ -747,7 +748,7 @@ class Experiment(ModelWrapper):
             ),
             self.dataset is not None,
         )
-        span = self.start_span(start=self.last_start_time, **event)
+        span = self.start_span(start_time=self.last_start_time, **event)
         self.last_start_time = span.end()
         return span.id
 
@@ -867,9 +868,8 @@ class ExperimentSpan:
         )
 
         # Fields that are logged to every span row.
-        try:
-            self.id = event.pop("id")
-        except KeyError:
+        self.id = event.pop("id", None)
+        if self.id is None:
             self.id = str(uuid.uuid4())
         self.span_id = str(uuid.uuid4())
         if root_experiment is not None:
