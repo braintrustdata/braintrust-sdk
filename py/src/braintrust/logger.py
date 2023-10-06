@@ -504,19 +504,11 @@ def current_span():
 
 
 def start_span(f=None, **span_kwargs):
-    """Decorator to trace the wrapped function as a span. Can either be applied
-    bare (`@start_span`) or by providing arguments
-    (`@start_span(**span_kwargs)`), which will be forwarded to the created span.
-    See `Experiment.start_span` for full details on `**span_kwargs`.
+    """Decorator to trace the wrapped function as a span. Can either be applied bare (`@start_span`) or by providing arguments (`@start_span(**span_kwargs)`), which will be forwarded to the created span. See `Experiment.start_span` for full details on `**span_kwargs`.
 
-    At the time the decorated function is invoked, if there is a
-    currently-active span, the new span is created as a subspan. Otherwise, if
-    there is a global current experiment, the new span is created as a toplevel
-    span. The new span is then set as the currently-active span. Otherwise, it
-    is a no-op.
+    At the time the decorated function is invoked, if there is a currently-active span, the new span is created as a subspan. Otherwise, if there is a global current experiment, the new span is created as a toplevel span. The new span is then set as the currently-active span. Otherwise, it is a no-op.
 
-    Unless a name is explicitly provided in `span_kwargs`, the name of the span
-    will be the name of the decorated function.
+    Unless a name is explicitly provided in `span_kwargs`, the name of the span will be the name of the decorated function.
     """
 
     def decorator(f):
@@ -761,17 +753,11 @@ class Experiment(ModelWrapper):
 
     def start_span(self, name="root", span_attrs={}, start_time=None, **event):
         """
-        Create a new toplevel span. This is useful if you want to log more
-        detailed trace information beyond the scope of a single log event. Data
-        logged over several calls to `ExperimentSpan.log` will be merged into
-        one logical row.
+        Create a new toplevel span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `ExperimentSpan.log` will be merged into one logical row.
 
-        We recommend using spans within the python ContextManager framework
-        (`with experiment.start_span() as span`), or as a function decorator
-        (`@start_span`) to ensure they are terminated upon completion.
+        We recommend using spans within the python ContextManager framework (`with experiment.start_span() as span`), or as a function decorator (`@start_span`) to ensure they are terminated upon completion.
 
-        `start_span` will also set the currently-active span, which can be
-        obtained through `braintrust.current_span`.
+        `start_span` will also set the currently-active span, which can be obtained through `braintrust.current_span`.
 
         :param name: The name of the span.
         :param span_attrs: Optional additional attributes to attach to the span, such as a type name.
@@ -846,9 +832,7 @@ class ExperimentSpan:
     """
     An ExperimentSpan encapsulates logged data and metrics for a unit of work.
 
-    We suggest using one of the various `start_span` methods, instead of
-    creating ExperimentSpans directly. See `Experiment.start_span` for full
-    details.
+    We suggest using one of the various `start_span` methods, instead of creating ExperimentSpans directly. See `Experiment.start_span` for full details.
     """
 
     # root_experiment should only be specified for a root span. parent_span
@@ -911,8 +895,7 @@ class ExperimentSpan:
 
     def log(self, **event):
         """
-        Incrementally update the current span with new data. The event will be
-        batched and uploaded behind the scenes.
+        Incrementally update the current span with new data. The event will be batched and uploaded behind the scenes.
 
         :param **event: Data to be logged. See `Experiment.log` for full details.
         """
@@ -935,9 +918,7 @@ class ExperimentSpan:
         self.experiment_logger.log(record)
 
     def start_span(self, name, span_attrs={}, start_time=None, **event):
-        """Create a subspan of the calling span. See `Experiment.start_span` for
-        full details.
-        """
+        """Create a subspan of the calling span. See `Experiment.start_span` for full details."""
         self._check_not_finished()
 
         return ExperimentSpan(
@@ -951,9 +932,7 @@ class ExperimentSpan:
 
     def end(self, end_time=None):
         """
-        Terminate the span. Returns the end time logged to the row's metrics.
-        After calling end, one may not invoke any further methods on the span
-        object.
+        Terminate the span. Returns the end time logged to the row's metrics. After calling end, one may not invoke any further methods on the span object.
 
         Will be invoked automatically if the span is bound as a context manager.
 
