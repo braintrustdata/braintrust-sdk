@@ -773,7 +773,7 @@ class Experiment(ModelWrapper):
         self.last_start_time = span.end()
         return span.id
 
-    def start_span(self, name="root", span_attrs={}, start_time=None, **event):
+    def start_span(self, name="root", span_attributes={}, start_time=None, **event):
         """
         Create a new toplevel span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `ExperimentSpan.log` will be merged into one logical row.
 
@@ -782,7 +782,7 @@ class Experiment(ModelWrapper):
         `start_span` will also set the currently-active span, which can be obtained through `braintrust.current_span`.
 
         :param name: The name of the span.
-        :param span_attrs: Optional additional attributes to attach to the span, such as a type name.
+        :param span_attributes: Optional additional attributes to attach to the span, such as a type name.
         :param start_time: Optional start time of the span, as a timestamp in seconds.
         :param **event: Data to be logged. See `Experiment.log` for full details.
         :returns: `ExperimentSpan`
@@ -791,7 +791,7 @@ class Experiment(ModelWrapper):
         return ExperimentSpan(
             experiment_logger=self.logger,
             name=name,
-            span_attrs=span_attrs,
+            span_attributes=span_attributes,
             start_time=start_time,
             root_experiment=self,
             event=event,
@@ -863,7 +863,7 @@ class ExperimentSpan:
         self,
         experiment_logger,
         name,
-        span_attrs={},
+        span_attributes={},
         start_time=None,
         root_experiment=None,
         parent_span=None,
@@ -885,7 +885,7 @@ class ExperimentSpan:
                 start=start_time or time.time(),
                 **get_caller_location(),
             ),
-            span_attrs=dict(**span_attrs, name=name),
+            span_attributes=dict(**span_attributes, name=name),
         )
 
         # Fields that are logged to every span row.
@@ -938,14 +938,14 @@ class ExperimentSpan:
         self.internal_data = {}
         self.experiment_logger.log(record)
 
-    def start_span(self, name, span_attrs={}, start_time=None, **event):
+    def start_span(self, name, span_attributes={}, start_time=None, **event):
         """Create a subspan of the calling span. See `Experiment.start_span` for full details."""
         self._check_not_finished()
 
         return ExperimentSpan(
             experiment_logger=self.experiment_logger,
             name=name,
-            span_attrs=span_attrs,
+            span_attributes=span_attributes,
             start_time=start_time,
             parent_span=self,
             event=event,
