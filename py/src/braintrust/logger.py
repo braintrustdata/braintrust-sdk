@@ -2,6 +2,7 @@ import atexit
 import contextvars
 import dataclasses
 import datetime
+import inspect
 import json
 import logging
 import os
@@ -514,23 +515,40 @@ def start_span(f=None, **span_kwargs):
     Unless a name is explicitly provided in `span_kwargs`, the name of the span will be the name of the decorated function.
     """
 
+    def get_span(span_kwargs):
+        if parent_span := current_span():
+            return parent_span.start_span(**span_kwargs)
+        elif experiment := current_experiment():
+            return experiment.start_span(**span_kwargs)
+        else:
+            return None
+
     def decorator(f):
         if span_kwargs.get("name") is None:
             span_kwargs.update(name=f.__name__)
 
         @wraps(f)
-        def wrapper(*f_args, **f_kwargs):
-            # Obtain the span.
-            if parent_span := current_span():
-                span = parent_span.start_span(**span_kwargs)
-            elif experiment := current_experiment():
-                span = experiment.start_span(**span_kwargs)
+        def wrapper_sync(*f_args, **f_kwargs):
+            span = get_span(span_kwargs)
+            if span:
+                with span:
+                    return f(*f_args, **f_kwargs)
             else:
                 return f(*f_args, **f_kwargs)
-            with span:
-                return f(*f_args, **f_kwargs)
 
-        return wrapper
+        @wraps(f)
+        async def wrapper_async(*f_args, **f_kwargs):
+            span = get_span(span_kwargs)
+            if span:
+                with span:
+                    return await f(*f_args, **f_kwargs)
+            else:
+                return await f(*f_args, **f_kwargs)
+
+        if inspect.iscoroutinefunction(f):
+            return wrapper_async
+        else:
+            return wrapper_sync
 
     if f is not None:
         assert not span_kwargs, "Cannot provide function argument `f` explicitly"
@@ -888,7 +906,7 @@ class ExperimentSpan:
             self.root_span_id = parent_span.root_span_id
             self.project_id = parent_span.project_id
             self.experiment_id = parent_span.experiment_id
-            self.internal_data.update(span_parents=[parent_span.id])
+            self.internal_data.update(span_parents=[parent_span.span_id])
 
         # Set this span as the currently-active span.
         global _state
