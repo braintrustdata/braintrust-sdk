@@ -327,7 +327,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
         error = None
         scores = {}
 
-        with experiment.start_span("task", input=datum.input, expected=datum.expected) as span:
+        with experiment.start_span("eval", input=datum.input, expected=datum.expected) as span:
             try:
                 hooks = DictEvalHooks(metadata)
 
@@ -336,7 +336,9 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 if len(inspect.signature(evaluator.task).parameters) == 2:
                     task_args.append(hooks)
 
-                output = await await_or_run(evaluator.task, *task_args)
+                with span.start_span(f"{evaluator.task.__name__} (task)") as task_span:
+                    output = await await_or_run(evaluator.task, *task_args)
+                    task_span.log(input=task_args[0], output=output)
                 span.log(output=output)
 
                 scorers = [
