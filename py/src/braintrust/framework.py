@@ -327,49 +327,46 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
         error = None
         scores = {}
 
-        try:
-            hooks = DictEvalHooks(metadata)
+        with experiment.start_span("task", input=datum.input, expected=datum.expected) as span:
+            try:
+                hooks = DictEvalHooks(metadata)
 
-            # Check if the task takes a hooks argument
-            task_args = [datum.input]
-            if len(inspect.signature(evaluator.task).parameters) == 2:
-                task_args.append(hooks)
+                # Check if the task takes a hooks argument
+                task_args = [datum.input]
+                if len(inspect.signature(evaluator.task).parameters) == 2:
+                    task_args.append(hooks)
 
-            output = await await_or_run(evaluator.task, *task_args)
+                output = await await_or_run(evaluator.task, *task_args)
+                span.log(output=output)
 
-            scorers = [
-                scorer().eval_async if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer
-                for scorer in evaluator.scores
-            ]
-            score_promises = [
-                asyncio.create_task(await_or_run(score, input=datum.input, expected=datum.expected, output=output))
-                for score in scorers
-            ]
-            score_results = [await p for p in score_promises]
-            score_metadata = {}
-            for scorer, score_result in zip(scorers, score_results):
-                if not isinstance(score_result, Score):
-                    score_result = Score(name=scorer.__name__, score=score_result)
-                scores[score_result.name] = score_result.score
-                m = {**(score_result.metadata or {})}
-                if score_result.error is not None:
-                    m["error"] = str(score_result.error)
-                if len(m) > 0:
-                    score_metadata[score_result.name] = m
+                scorers = [
+                    scorer().eval_async if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer
+                    for scorer in evaluator.scores
+                ]
+                score_promises = [
+                    asyncio.create_task(await_or_run(score, input=datum.input, expected=datum.expected, output=output))
+                    for score in scorers
+                ]
+                score_results = [await p for p in score_promises]
+                score_metadata = {}
+                for scorer, score_result in zip(scorers, score_results):
+                    if not isinstance(score_result, Score):
+                        score_result = Score(name=scorer.__name__, score=score_result)
+                    scores[score_result.name] = score_result.score
+                    m = {**(score_result.metadata or {})}
+                    if score_result.error is not None:
+                        m["error"] = str(score_result.error)
+                    if len(m) > 0:
+                        score_metadata[score_result.name] = m
 
-            if len(score_metadata) > 0:
-                hooks.meta(scores=score_metadata)
-        except Exception as e:
-            error = e
+                if len(score_metadata) > 0:
+                    hooks.meta(scores=score_metadata)
 
-        if experiment and not error:
-            experiment.log(
-                input=datum.input,
-                metadata=metadata,
-                expected=datum.expected,
-                output=output,
-                scores=scores,
-            )
+                # XXX: We could probably log these as they are being produced
+                span.log(metadata=metadata, scores=scores)
+            except Exception as e:
+                error = e
+
         return EvalResult(output=output, metadata=metadata, scores=scores, error=error)
 
     data_iterator = evaluator.data
