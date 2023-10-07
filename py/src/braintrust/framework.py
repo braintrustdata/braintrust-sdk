@@ -341,10 +341,14 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                     task_span.log(input=task_args[0], output=output)
                 span.log(output=output)
 
+                # First, resolve the scorers if they are classes
                 scorers = [
-                    scorer().eval_async if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer
+                    scorer() if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer
                     for scorer in evaluator.scores
                 ]
+                # Then, use the eval_async method if it exists
+                scorers = [scorer.eval_async if isinstance(scorer, Scorer) else scorer for scorer in scorers]
+
                 score_promises = [
                     asyncio.create_task(await_or_run(score, input=datum.input, expected=datum.expected, output=output))
                     for score in scorers
