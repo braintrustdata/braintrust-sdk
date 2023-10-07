@@ -508,7 +508,7 @@ def current_span():
 
 
 def traced(f=None, **span_kwargs):
-    """Decorator to trace the wrapped function as a span. Can either be applied bare (`@start_span`) or by providing arguments (`@start_span(**span_kwargs)`), which will be forwarded to the created span. See `Experiment.start_span` for full details on `**span_kwargs`.
+    """Decorator to trace the wrapped function as a span. Can either be applied bare (`@traced`) or by providing arguments (`@traced(**span_kwargs)`), which will be forwarded to the created span. See `Experiment.start_span` for full details on `**span_kwargs`.
 
     At the time the decorated function is invoked, if there is a currently-active span, the new span is created as a subspan. Otherwise, if there is a global current experiment, the new span is created as a toplevel span. The new span is then set as the currently-active span. Otherwise, it is a no-op.
 
@@ -777,7 +777,7 @@ class Experiment(ModelWrapper):
         """
         Create a new toplevel span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `ExperimentSpan.log` will be merged into one logical row.
 
-        We recommend using spans within the python ContextManager framework (`with experiment.start_span() as span`), or as a function decorator (`@start_span`) to ensure they are terminated upon completion.
+        We recommend using spans within the python ContextManager framework (`with experiment.start_span() as span`), or as a function decorator (`@traced`) to ensure they are terminated upon completion.
 
         `start_span` will also set the currently-active span, which can be obtained through `braintrust.current_span`.
 
