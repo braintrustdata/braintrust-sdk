@@ -507,7 +507,7 @@ def current_span():
     return _state.current_span.get()
 
 
-def start_span(f=None, **span_kwargs):
+def traced(f=None, **span_kwargs):
     """Decorator to trace the wrapped function as a span. Can either be applied bare (`@start_span`) or by providing arguments (`@start_span(**span_kwargs)`), which will be forwarded to the created span. See `Experiment.start_span` for full details on `**span_kwargs`.
 
     At the time the decorated function is invoked, if there is a currently-active span, the new span is created as a subspan. Otherwise, if there is a global current experiment, the new span is created as a toplevel span. The new span is then set as the currently-active span. Otherwise, it is a no-op.
