@@ -336,7 +336,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 if len(inspect.signature(evaluator.task).parameters) == 2:
                     task_args.append(hooks)
 
-                with span.start_span(f"{evaluator.task.__name__} (task)") as task_span:
+                with span.start_span("task") as task_span:
                     output = await await_or_run(evaluator.task, *task_args)
                     task_span.log(input=task_args[0], output=output)
                 span.log(output=output)
