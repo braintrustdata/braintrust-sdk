@@ -13,7 +13,7 @@ import time
 import traceback
 import uuid
 from functools import cache as _cache
-from functools import wraps
+from functools import partial, wraps
 from getpass import getpass
 from typing import Any, Dict, NewType, Optional, Union
 
@@ -507,29 +507,30 @@ def current_span():
     return _state.current_span.get()
 
 
-def traced(f=None, **span_kwargs):
-    """Decorator to trace the wrapped function as a span. Can either be applied bare (`@traced`) or by providing arguments (`@traced(**span_kwargs)`), which will be forwarded to the created span. See `Experiment.start_span` for full details on `**span_kwargs`.
+def traced(*span_args, **span_kwargs):
+    """Decorator to trace the wrapped function as a span. Can either be applied bare (`@traced`) or by providing arguments (`@traced(*span_args, **span_kwargs)`), which will be forwarded to the created span. See `Experiment.start_span` for full details on `**span_kwargs`.
 
     At the time the decorated function is invoked, if there is a currently-active span, the new span is created as a subspan. Otherwise, if there is a global current experiment, the new span is created as a toplevel span. The new span is then set as the currently-active span. Otherwise, it is a no-op.
 
-    Unless a name is explicitly provided in `span_kwargs`, the name of the span will be the name of the decorated function.
+    Unless a name is explicitly provided in `span_args` or `span_kwargs`, the name of the span will be the name of the decorated function.
     """
 
-    def get_span(span_kwargs):
+    def get_span(span_args, span_kwargs):
         if parent_span := current_span():
-            return parent_span.start_span(**span_kwargs)
+            return parent_span.start_span(*span_args, **span_kwargs)
         elif experiment := current_experiment():
-            return experiment.start_span(**span_kwargs)
+            return experiment.start_span(*span_args, **span_kwargs)
         else:
             return None
 
-    def decorator(f):
-        if span_kwargs.get("name") is None:
-            span_kwargs.update(name=f.__name__)
+    def decorator(span_args, span_kwargs, f):
+        # We assume 'name' is the first positional argument in `start_span`.
+        if len(span_args) == 0 and span_kwargs.get("name") is None:
+            span_args += (f.__name__,)
 
         @wraps(f)
         def wrapper_sync(*f_args, **f_kwargs):
-            span = get_span(span_kwargs)
+            span = get_span(span_args, span_kwargs)
             if span:
                 with span:
                     return f(*f_args, **f_kwargs)
@@ -538,7 +539,7 @@ def traced(f=None, **span_kwargs):
 
         @wraps(f)
         async def wrapper_async(*f_args, **f_kwargs):
-            span = get_span(span_kwargs)
+            span = get_span(span_args, span_kwargs)
             if span:
                 with span:
                     return await f(*f_args, **f_kwargs)
@@ -550,11 +551,12 @@ def traced(f=None, **span_kwargs):
         else:
             return wrapper_sync
 
-    if f is not None:
-        assert not span_kwargs, "Cannot provide function argument `f` explicitly"
-        return decorator(f)
+    # We determine if the decorator is invoked bare or with arguments by
+    # checking if the first positional argument to the decorator is a callable.
+    if len(span_args) == 1 and len(span_kwargs) == 0 and callable(span_args[0]):
+        return decorator(span_args[1:], span_kwargs, span_args[0])
     else:
-        return decorator
+        return partial(decorator, span_args, span_kwargs)
 
 
 def _check_org_info(org_info, org_name):
