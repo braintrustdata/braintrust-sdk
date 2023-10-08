@@ -936,6 +936,10 @@ class ExperimentSpan:
             root_span_id=self.root_span_id,
             project_id=self.project_id,
             experiment_id=self.experiment_id,
+            # It should be fine to log even the very first row of this span as a
+            # merge because the span_id should be globally unique, meaning there
+            # is nothing to merge with.
+            _is_merge=True,
         )
         self.internal_data = {}
         self.experiment_logger.log(record)
