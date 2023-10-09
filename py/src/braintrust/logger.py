@@ -15,6 +15,7 @@ import uuid
 from functools import cache as _cache
 from functools import partial, wraps
 from getpass import getpass
+from types import SimpleNamespace
 from typing import Any, Dict, NewType, Optional, Union
 
 import requests
@@ -1275,3 +1276,20 @@ class DatasetSummary(SerializableDataClass):
              See results for all datasets in {self.project_name} at {self.project_url}
              See results for {self.dataset_name} at {self.dataset_url}"""
         )
+
+
+# Initialize the global state's current span as a no-op span. We fake the
+# members based on their usage by ExperimentSpan.
+_state.current_span.set(
+    ExperimentSpan(
+        experiment_logger=SimpleNamespace(
+            log=lambda *args, **kwargs: None,
+        ),
+        name="noop_span",
+        root_experiment=SimpleNamespace(
+            project=SimpleNamespace(id=""),
+            id="",
+            user_id="",
+        ),
+    )
+)
