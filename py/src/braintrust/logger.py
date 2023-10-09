@@ -15,7 +15,6 @@ import uuid
 from functools import cache as _cache
 from functools import partial, wraps
 from getpass import getpass
-from types import SimpleNamespace
 from typing import Any, Dict, NewType, Optional, Union
 
 import requests
@@ -27,10 +26,37 @@ from .gitutil import get_past_n_ancestors, get_repo_status
 from .util import SerializableDataClass, encode_uri_component, get_caller_location, response_raise_for_status
 
 
+class _NoopExperimentSpan:
+    """A fake implementation of the ExperimentSpan api which does nothing. This
+    can be used as the default span.
+    """
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def log(self, *args, **kwargs):
+        pass
+
+    def start_span(self, *args, **kwargs):
+        return self
+
+    def end(self, *args, **kwargs):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, callback):
+        del type, value, callback
+
+
+NOOP_EXPERIMENT_SPAN = _NoopExperimentSpan()
+
+
 class BraintrustState:
     def __init__(self):
         self.current_experiment = None
-        self.current_span = contextvars.ContextVar("braintrust_current_span", default=None)
+        self.current_span = contextvars.ContextVar("braintrust_current_span", default=NOOP_EXPERIMENT_SPAN)
 
 
 _state = BraintrustState()
@@ -499,6 +525,13 @@ def current_experiment():
     return _state.current_experiment
 
 
+def clear_current_experiment():
+    """Reset the global current experiment (set by `braintrust.init`) back to None. This can be useful if you are running braintrust code after your experiment is over and want to ensure it doesn't accidentally log to your finished experiment."""
+
+    global _state
+    _state.current_experiment = None
+
+
 def current_span():
     """Return the currently-active span for logging. See `Experiment.start_span`
     for full details on spans. Returns None if there is no currently-active
@@ -517,12 +550,13 @@ def traced(*span_args, **span_kwargs):
     """
 
     def get_span(span_args, span_kwargs):
-        if parent_span := current_span():
+        parent_span = current_span()
+        if parent_span != NOOP_EXPERIMENT_SPAN:
             return parent_span.start_span(*span_args, **span_kwargs)
         elif experiment := current_experiment():
             return experiment.start_span(*span_args, **span_kwargs)
         else:
-            return None
+            return NOOP_EXPERIMENT_SPAN
 
     def decorator(span_args, span_kwargs, f):
         # We assume 'name' is the first positional argument in `start_span`.
@@ -532,19 +566,13 @@ def traced(*span_args, **span_kwargs):
         @wraps(f)
         def wrapper_sync(*f_args, **f_kwargs):
             span = get_span(span_args, span_kwargs)
-            if span:
-                with span:
-                    return f(*f_args, **f_kwargs)
-            else:
+            with span:
                 return f(*f_args, **f_kwargs)
 
         @wraps(f)
         async def wrapper_async(*f_args, **f_kwargs):
             span = get_span(span_args, span_kwargs)
-            if span:
-                with span:
-                    return await f(*f_args, **f_kwargs)
-            else:
+            with span:
                 return await f(*f_args, **f_kwargs)
 
         if inspect.iscoroutinefunction(f):
@@ -782,7 +810,7 @@ class Experiment(ModelWrapper):
 
         We recommend using spans within the python ContextManager framework (`with experiment.start_span() as span`), or as a function decorator (`@traced`) to ensure they are terminated upon completion.
 
-        `start_span` will also set the currently-active span, which can be obtained through `braintrust.current_span`.
+        If started within a context manager or decorator, `start_span` will also set the currently-active span, which can be obtained through `braintrust.current_span`.
 
         :param name: The name of the span.
         :param span_attributes: Optional additional attributes to attach to the span, such as a type name.
@@ -911,10 +939,6 @@ class ExperimentSpan:
             self.experiment_id = parent_span.experiment_id
             self.internal_data.update(span_parents=[parent_span.span_id])
 
-        # Set this span as the currently-active span.
-        global _state
-        self._context_token = _state.current_span.set(self)
-
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.
         self._is_merge = False
@@ -974,18 +998,23 @@ class ExperimentSpan:
         self.internal_data = dict(metrics=dict(end=end_time))
         self.log()
 
-        # Unset this span as the currently-active span.
-        global _state
-        _state.current_span.reset(self._context_token)
-
         self.finished = True
         return end_time
 
     def __enter__(self):
+        # Set this span as the currently-active span.
+        global _state
+        self._context_token = _state.current_span.set(self)
+
         return self
 
     def __exit__(self, type, value, callback):
         del type, value, callback
+
+        # Unset this span as the currently-active span.
+        global _state
+        _state.current_span.reset(self._context_token)
+
         self.end()
 
     def _check_not_finished(self):
@@ -1276,20 +1305,3 @@ class DatasetSummary(SerializableDataClass):
              See results for all datasets in {self.project_name} at {self.project_url}
              See results for {self.dataset_name} at {self.dataset_url}"""
         )
-
-
-# Initialize the global state's current span as a no-op span. We fake the
-# members based on their usage by ExperimentSpan.
-_state.current_span.set(
-    ExperimentSpan(
-        experiment_logger=SimpleNamespace(
-            log=lambda *args, **kwargs: None,
-        ),
-        name="noop_span",
-        root_experiment=SimpleNamespace(
-            project=SimpleNamespace(id=""),
-            id="",
-            user_id="",
-        ),
-    )
-)
