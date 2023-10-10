@@ -219,8 +219,11 @@ def Eval(
             loop = None
 
         async def run_to_completion():
-            results, summary = await run_evaluator(experiment, evaluator, 0, [])
-            report_evaluator_result(name, results, summary, True)
+            try:
+                results, summary = await run_evaluator(experiment, evaluator, 0, [])
+                report_evaluator_result(name, results, summary, True)
+            finally:
+                experiment.end()
 
         if loop:
             return loop.create_task(run_to_completion())

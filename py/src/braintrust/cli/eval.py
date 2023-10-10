@@ -99,7 +99,13 @@ async def run_evaluator_task(evaluator, position, opts: EvaluatorOpts):
     if not opts.no_send_logs:
         experiment = init_experiment(evaluator.name)
 
-    return await run_evaluator(experiment, evaluator, position if not opts.no_progress_bars else None, opts.filters)
+    try:
+        return await run_evaluator(
+            experiment, evaluator, position if not opts.no_progress_bars else None, opts.filters
+        )
+    finally:
+        if experiment:
+            experiment.end()
 
 
 async def run_once(handles, evaluator_opts):

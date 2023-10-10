@@ -23,6 +23,7 @@ from urllib3.util.retry import Retry
 
 from .cache import CACHE_PATH, EXPERIMENTS_PATH, LOGIN_INFO_PATH
 from .gitutil import get_past_n_ancestors, get_repo_status
+from .resource_manager import ResourceManager
 from .util import SerializableDataClass, encode_uri_component, get_caller_location, response_raise_for_status
 
 
@@ -55,12 +56,46 @@ NOOP_EXPERIMENT_SPAN = _NoopExperimentSpan()
 
 class BraintrustState:
     def __init__(self):
-        self.current_experiment = None
+        # Wrapped in a list for mutability.
+        self.current_experiment = ResourceManager([None])
         self.current_span = contextvars.ContextVar("braintrust_current_span", default=NOOP_EXPERIMENT_SPAN)
 
 
 _state = BraintrustState()
 _logger = logging.getLogger("braintrust")
+
+
+class _UnterminatedObjectsHandler:
+    """A utility to keep track of objects that should be cleaned up before
+    program exit. At the end of the program, the _UnterminatedObjectsHandler
+    will print out all un-terminated objects as a warning.
+    """
+
+    def __init__(self):
+        self._unterminated_objects = ResourceManager({})
+        atexit.register(self._warn_unterminated)
+
+    def add_unterminated(self, obj, created_location=None):
+        with self._unterminated_objects.get() as unterminated_objects:
+            unterminated_objects[obj] = created_location
+
+    def remove_unterminated(self, obj):
+        with self._unterminated_objects.get() as unterminated_objects:
+            del unterminated_objects[obj]
+
+    def _warn_unterminated(self):
+        with self._unterminated_objects.get() as unterminated_objects:
+            if not unterminated_objects:
+                return
+            print("WARNING: Did not terminate the following braintrust objects")
+            for obj, created_location in unterminated_objects.items():
+                msg = f"{obj}"
+                if created_location:
+                    msg += f" created at {created_location}"
+                print(f"\t{msg}")
+
+
+_unterminated_objects = _UnterminatedObjectsHandler()
 
 API_URL = None
 LOGIN_TOKEN = None
@@ -289,6 +324,8 @@ def init(
     """
     Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
 
+    Remember to end your experiment when it is finished by calling `Experiment.end`. You may also wrap the experiment in a with block (`with braintrust.init(...) as experiment`) to ensure it is terminated at the end of the block.
+
     :param project: The name of the project to create the experiment in.
     :param experiment: The name of the experiment to create. If not specified, a name will be generated automatically.
     :param description: (Optional) An optional description of the experiment.
@@ -315,7 +352,8 @@ def init(
         base_experiment=base_experiment,
         is_public=is_public,
     )
-    _state.current_experiment = ret
+    with _state.current_experiment.get() as current_experiment_list:
+        current_experiment_list[0] = ret
     return ret
 
 
@@ -331,6 +369,8 @@ def init_dataset(
 ):
     """
     Create a new dataset in a specified project. If the project does not exist, it will be created.
+
+    Remember to end your dataset when it is finished by calling `Dataset.end`. You may also wrap the dataset in a with block (`with braintrust.init_dataset(...) as dataset`) to ensure it is terminated at the end of the block.
 
     :param project: The name of the project to create the dataset in.
     :param name: The name of the dataset to create. If not specified, a name will be generated automatically.
@@ -361,10 +401,13 @@ def log(**event):
     :returns: The `id` of the logged event.
     """
 
-    if not _state.current_experiment:
+    with _state.current_experiment.get() as current_experiment_list:
+        current_experiment = current_experiment_list[0]
+
+    if not current_experiment:
         raise Exception("Not initialized. Please call init() or login() first")
 
-    return _state.current_experiment.log(**event)
+    return current_experiment.log(**event)
 
 
 login_lock = threading.RLock()
@@ -508,10 +551,13 @@ def summarize(summarize_scores=True, comparison_experiment_id=None):
     :param comparison_experiment_id: The experiment to compare against. If None, the most recent experiment on the comparison_commit will be used.
     :returns: `ExperimentSummary`
     """
-    if not _state.current_experiment:
+    with _state.current_experiment.get() as current_experiment_list:
+        current_experiment = current_experiment_list[0]
+
+    if not current_experiment:
         raise Exception("Not initialized. Please call init() first")
 
-    return _state.current_experiment.summarize(
+    return current_experiment.summarize(
         summarize_scores=summarize_scores,
         comparison_experiment_id=comparison_experiment_id,
     )
@@ -522,14 +568,8 @@ def current_experiment():
     None if no experiment has been initialized.
     """
 
-    return _state.current_experiment
-
-
-def clear_current_experiment():
-    """Reset the global current experiment (set by `braintrust.init`) back to None. This can be useful if you are running braintrust code after your experiment is over and want to ensure it doesn't accidentally log to your finished experiment."""
-
-    global _state
-    _state.current_experiment = None
+    with _state.current_experiment.get() as current_experiment_list:
+        return current_experiment_list[0]
 
 
 def current_span():
@@ -725,6 +765,8 @@ class Experiment(ModelWrapper):
         base_experiment: str = None,
         is_public: bool = False,
     ):
+        self.finished = False
+
         args = {"project_name": project_name, "org_id": ORG_ID}
 
         if experiment_name is not None:
@@ -759,6 +801,8 @@ class Experiment(ModelWrapper):
         self.logger = _LogThread(name=experiment_name)
         self.last_start_time = time.time()
 
+        _unterminated_objects.add_unterminated(self, get_caller_location())
+
     def log(
         self,
         input=None,
@@ -785,6 +829,7 @@ class Experiment(ModelWrapper):
         :param inputs: (Deprecated) the same as `input` (will be removed in a future version)
         :returns: The `id` of the logged event.
         """
+        self._check_not_finished()
 
         event = _validate_and_sanitize_experiment_log_full_args(
             dict(
@@ -804,20 +849,22 @@ class Experiment(ModelWrapper):
         self.last_start_time = span.end()
         return span.id
 
-    def start_span(self, name="root", span_attributes={}, start_time=None, **event):
+    def start_span(self, name="root", span_attributes={}, start_time=None, set_current=False, **event):
         """
         Create a new toplevel span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `ExperimentSpan.log` will be merged into one logical row.
 
         We recommend using spans within the python ContextManager framework (`with experiment.start_span() as span`), or as a function decorator (`@traced`) to ensure they are terminated upon completion.
 
-        If started within a context manager or decorator, `start_span` will also set the currently-active span, which can be obtained through `braintrust.current_span`.
+        If started within a context manager or decorator, `start_span` will also set the currently-active span, which can be obtained through `braintrust.current_span`. If you want to set the currently-active span without using a context manager, pass `set_current=True`. In this case, be sure to end the span with `span.end()` to unset it.
 
         :param name: The name of the span.
         :param span_attributes: Optional additional attributes to attach to the span, such as a type name.
         :param start_time: Optional start time of the span, as a timestamp in seconds.
+        :param set_current: Optionally mark the span as the currently active one. Unnecessary if the span is bound as a context manager.
         :param **event: Data to be logged. See `Experiment.log` for full details.
         :returns: `ExperimentSpan`
         """
+        self._check_not_finished()
 
         return ExperimentSpan(
             experiment_logger=self.logger,
@@ -825,6 +872,7 @@ class Experiment(ModelWrapper):
             span_attributes=span_attributes,
             start_time=start_time,
             root_experiment=self,
+            set_current=set_current,
             event=event,
         )
 
@@ -836,6 +884,7 @@ class Experiment(ModelWrapper):
         :param comparison_experiment_id: The experiment to compare against. If None, the most recent experiment on the origin's main branch will be used.
         :returns: `ExperimentSummary`
         """
+        self._check_not_finished()
 
         # Flush our events to the API, and to the data warehouse, to ensure that the link we print
         # includes the new experiment.
@@ -880,6 +929,37 @@ class Experiment(ModelWrapper):
             scores=score_summary,
         )
 
+    def end(self):
+        """Terminate the experiment. Returns the id of the experiment. After calling end, one may not invoke any further methods on the experiment object.
+
+        Will be invoked automatically if the experiment is bound as a context manager.
+
+        :returns: The experiment id.
+        """
+        self._check_not_finished()
+
+        self.logger.flush()
+
+        self.finished = True
+        _unterminated_objects.remove_unterminated(self)
+        # Set the global current experiment to None if it is currently set to
+        # this object.
+        with _state.current_experiment.get() as current_experiment_list:
+            if current_experiment_list[0] == self:
+                current_experiment_list[0] = None
+        return self.id
+
+    def _check_not_finished(self):
+        if self.finished:
+            raise RuntimeError("Cannot invoke method on finished experiment")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, callback):
+        del type, value, callback
+        self.end()
+
 
 class ExperimentSpan:
     """
@@ -898,9 +978,10 @@ class ExperimentSpan:
         start_time=None,
         root_experiment=None,
         parent_span=None,
+        set_current=False,
         event={},
     ):
-        self._check_not_finished()
+        self._context_token = None
         self.finished = False
 
         self.experiment_logger = experiment_logger
@@ -911,10 +992,11 @@ class ExperimentSpan:
         # `internal_data` contains fields that are not part of the
         # "user-sanitized" set of fields which we want to log in just one of the
         # span rows.
+        caller_location = get_caller_location()
         self.internal_data = dict(
             metrics=dict(
                 start=start_time or time.time(),
-                **get_caller_location(),
+                **caller_location,
             ),
             span_attributes=dict(**span_attributes, name=name),
         )
@@ -945,6 +1027,11 @@ class ExperimentSpan:
         self.log(**event)
         self._is_merge = True
 
+        if set_current:
+            self._set_as_current_span()
+
+        _unterminated_objects.add_unterminated(self, caller_location)
+
     def log(self, **event):
         """
         Incrementally update the current span with new data. The event will be batched and uploaded behind the scenes.
@@ -970,7 +1057,7 @@ class ExperimentSpan:
         self.internal_data = {}
         self.experiment_logger.log(record)
 
-    def start_span(self, name, span_attributes={}, start_time=None, **event):
+    def start_span(self, name, span_attributes={}, start_time=None, set_current=False, **event):
         """Create a subspan of the calling span. See `Experiment.start_span` for full details."""
         self._check_not_finished()
 
@@ -980,6 +1067,7 @@ class ExperimentSpan:
             span_attributes=span_attributes,
             start_time=start_time,
             parent_span=self,
+            set_current=set_current,
             event=event,
         )
 
@@ -999,27 +1087,30 @@ class ExperimentSpan:
         self.log()
 
         self.finished = True
+        _unterminated_objects.remove_unterminated(self)
         return end_time
 
-    def __enter__(self):
-        # Set this span as the currently-active span.
-        global _state
-        self._context_token = _state.current_span.set(self)
+    def _set_as_current_span(self):
+        # Set this span as the currently-active span if not already set.
+        if not self._context_token:
+            self._context_token = _state.current_span.set(self)
 
+    def _check_not_finished(self):
+        if self.finished:
+            raise RuntimeError("Cannot invoke method on finished span")
+
+    def __enter__(self):
+        self._set_as_current_span()
         return self
 
     def __exit__(self, type, value, callback):
         del type, value, callback
 
-        # Unset this span as the currently-active span.
-        global _state
-        _state.current_span.reset(self._context_token)
+        # Unset this span as the currently-active span if set.
+        if self._context_token:
+            _state.current_span.reset(self._context_token)
 
         self.end()
-
-    def _check_not_finished(self):
-        if getattr(self, "finished", False):
-            raise RuntimeError("Cannot invoke method on finished span")
 
 
 class Dataset(ModelWrapper):
@@ -1032,6 +1123,8 @@ class Dataset(ModelWrapper):
     """
 
     def __init__(self, project_name: str, name: str = None, description: str = None, version: "str | int" = None):
+        self.finished = False
+
         args = _populate_args(
             {"project_name": project_name, "org_id": ORG_ID},
             dataset_name=name,
@@ -1055,6 +1148,8 @@ class Dataset(ModelWrapper):
         super().__init__(response["dataset"])
         self.logger = _LogThread(name=self.name)
 
+        _unterminated_objects.add_unterminated(self, get_caller_location())
+
     def insert(self, input, output, metadata=None, id=None):
         """
         Insert a single record to the dataset. The record will be batched and uploaded behind the scenes. If you pass in an `id`,
@@ -1069,6 +1164,7 @@ class Dataset(ModelWrapper):
         :param id: (Optional) a unique identifier for the event. If you don't provide one, Braintrust will generate one for you.
         :returns: The `id` of the logged record.
         """
+        self._check_not_finished()
 
         user_id = user_info()["id"]
 
@@ -1103,6 +1199,7 @@ class Dataset(ModelWrapper):
 
         :param id: The `id` of the record to delete.
         """
+        self._check_not_finished()
 
         user_id = user_info()["id"]
         args = _populate_args(
@@ -1126,6 +1223,7 @@ class Dataset(ModelWrapper):
         :param summarize_data: Whether to summarize the data. If False, only the metadata will be returned.
         :returns: `DatasetSummary`
         """
+        self._check_not_finished()
 
         # Flush our events to the API, and to the data warehouse, to ensure that the link we print
         # includes the new experiment.
@@ -1168,6 +1266,7 @@ class Dataset(ModelWrapper):
 
         :returns: An iterator over the records in the dataset.
         """
+        self._check_not_finished()
 
         for record in self.fetched_data:
             yield {
@@ -1180,10 +1279,12 @@ class Dataset(ModelWrapper):
         self._clear_cache()
 
     def __iter__(self):
+        self._check_not_finished()
         return self.fetch()
 
     @property
     def fetched_data(self):
+        self._check_not_finished()
         if not self._fetched_data:
             resp = log_conn().get(
                 "object/dataset", params={"id": self.id, "fmt": "json", "version": self._pinned_version}
@@ -1194,14 +1295,41 @@ class Dataset(ModelWrapper):
         return self._fetched_data
 
     def _clear_cache(self):
+        self._check_not_finished()
         self._fetched_data = None
 
     @property
     def version(self):
+        self._check_not_finished()
         if self._pinned_version is not None:
             return self._pinned_version
         else:
             return max([int(record.get(TRANSACTION_ID_FIELD, 0)) for record in self.fetched_data] or [0])
+
+    def end(self):
+        """Terminate the dataset. Returns the id of the dataset. After calling end, one may not invoke any further methods on the dataset object.
+
+        Will be invoked automatically if the dataset is bound as a context manager.
+
+        :returns: The dataset id.
+        """
+        self._check_not_finished()
+
+        self.logger.flush()
+
+        self.finished = True
+        _unterminated_objects.remove_unterminated(self)
+
+    def _check_not_finished(self):
+        if self.finished:
+            raise RuntimeError("Cannot invoke method on finished dataset")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, callback):
+        del type, value, callback
+        self.end()
 
 
 @dataclasses.dataclass
