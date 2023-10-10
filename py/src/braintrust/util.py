@@ -47,5 +47,9 @@ def get_caller_location():
         if this_dir is None:
             this_dir = os.path.dirname(caller.filename)
         if os.path.dirname(caller.filename) != this_dir:
-            return dict(caller_filename=caller.filename, caller_lineno=caller.lineno)
-    return {}
+            return dict(
+                caller_function_name=caller.function,
+                caller_file_name=caller.filename,
+                caller_line_num=caller.lineno,
+            )
+    return None

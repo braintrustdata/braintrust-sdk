@@ -11,11 +11,37 @@ export interface RepoStatus {
   commit_time?: string;
 }
 
+export interface CallerLocation {
+  caller_function_name: string;
+  caller_file_name: string;
+  caller_line_num: number;
+}
+
+export interface IsoAsyncLocalStorage<T> {
+  enterWith(store: T): void;
+  run<R>(store: T | undefined, callback: () => R): R;
+  getStore(): T | undefined;
+}
+
+class DefaultAsyncLocalStorage<T> implements IsoAsyncLocalStorage<T> {
+  constructor() {}
+
+  enterWith(_: T): void {}
+  run<R>(_: T | undefined, callback: () => R): R {
+    return callback();
+  }
+  getStore(): T | undefined {
+    return undefined;
+  }
+}
+
 export interface Common {
   makeAxios: (conf: CreateAxiosDefaults) => AxiosInstance;
   getRepoStatus: () => Promise<RepoStatus | undefined>;
   getPastNAncestors: () => Promise<string[]>;
   getEnv: (name: string) => string | undefined;
+  getCallerLocation: () => CallerLocation | undefined;
+  newAsyncLocalStorage: <T>() => IsoAsyncLocalStorage<T>;
 }
 
 const iso: Common = {
@@ -26,5 +52,7 @@ const iso: Common = {
   getRepoStatus: async () => undefined,
   getPastNAncestors: async () => [],
   getEnv: (_name) => undefined,
+  getCallerLocation: () => undefined,
+  newAsyncLocalStorage: <T>() => new DefaultAsyncLocalStorage<T>(),
 };
 export default iso;

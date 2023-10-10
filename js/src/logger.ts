@@ -1,17 +1,171 @@
 import axios, { AxiosInstance } from "axios";
 import { v4 as uuidv4 } from "uuid";
 
-import iso from "./isomorph";
+import iso, { IsoAsyncLocalStorage, CallerLocation } from "./isomorph";
+import { runFinally } from "./util";
 
-interface BraintrustState {
-  current_project: Project | null;
-  current_experiment: Experiment | null;
+export type SetCurrentArg = { setCurrent?: boolean };
+
+export type StartSpanArgs = {
+  name: string;
+  spanAttributes?: Record<any, any>;
+  startTime?: number;
+  event?: ExperimentLogPartialArgs & Partial<IdField>;
+};
+
+export type StartSpanOptionalNameArgs = Omit<StartSpanArgs, "name"> &
+  Partial<Pick<StartSpanArgs, "name">>;
+
+/**
+ * A Span encapsulates logged data and metrics for a unit of work. This interface is shared by all span implementations.
+ *
+ * We suggest using one of the various `startSpan` methods, instead of creating Spans directly. See `Span.startSpan` for full details.
+ */
+export interface Span {
+  // Row ID of the span.
+  id: string;
+
+  // Span ID of the span. This is used to link spans together.
+  span_id: string;
+
+  // Span ID of the root span in the full trace.
+  root_span_id: string;
+
+  /**
+   * Incrementally update the current span with new data. The event will be batched and uploaded behind the scenes.
+   *
+   * @param event: Data to be logged. See `Experiment.log` for full details.
+   */
+  log(event: ExperimentLogPartialArgs): void;
+
+  /**
+   * Create a new span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `Span.log` will be merged into one logical row.
+   *
+   * We recommend running spans within a callback (using `startSpanWithinCallback`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a callback, be sure to terminate it with `span.end()`.
+   *
+   * @param args.name The name of the span.
+   * @param args.span_attributes Optional additional attributes to attach to the span, such as a type name.
+   * @param args.start_time Optional start time of the span, as a timestamp in seconds.
+   * @param args.event Data to be logged. See `Experiment.log` for full details.
+   * @returns The newly-created `Span`
+   */
+  startSpan(args: StartSpanArgs): Span;
+
+  /**
+   * Wrapper over `Span.startSpan`, which passes the initialized `Span` it to the given callback and ends it afterwards. See `Span.startSpan` for full details.
+   *
+   * @param args.setCurrent If true (the default), the span will be marked as the currently-active span for the duration of the callback. Equivalent to calling `braintrust.withCurrent(span, callback)`.
+   */
+  startSpanWithCallback<R>(
+    args: StartSpanArgs & SetCurrentArg,
+    callback: (span: Span) => R
+  ): R;
+
+  /**
+   * Terminate the span. Returns the end time logged to the row's metrics. After calling end, you may not invoke any further methods on the span object, except for the property accessors.
+   *
+   * Will be invoked automatically if the span is constructed with startSpanWithCallback.
+   *
+   * @param args.endTime Optional end time of the span, as a timestamp in seconds.
+   * @returns The end time logged to the span metrics.
+   */
+  end(args?: { endTime?: number }): number;
+
+  /**
+   * Alias for `end`.
+   */
+  close(args?: { endTime?: number }): number;
 }
 
-let _state: BraintrustState = {
-  current_project: null,
-  current_experiment: null,
-};
+/**
+ * A fake implementation of the Span API which does nothing. This can be used as the default span.
+ */
+export class NoopSpan implements Span {
+  public id: string;
+  public span_id: string;
+  public root_span_id: string;
+
+  constructor() {
+    this.id = "";
+    this.span_id = "";
+    this.root_span_id = "";
+  }
+
+  public log(_: ExperimentLogPartialArgs) {}
+
+  public startSpan(_: StartSpanArgs) {
+    return this;
+  }
+
+  public startSpanWithCallback<R>(
+    _: StartSpanArgs & SetCurrentArg,
+    callback: (span: Span) => R
+  ): R {
+    return callback(this);
+  }
+
+  public end(args?: { endTime?: number }): number {
+    return args?.endTime ?? getCurrentUnixTimestamp();
+  }
+
+  public close(args?: { endTime?: number }): number {
+    return this.end(args);
+  }
+}
+
+const noopSpan = new NoopSpan();
+
+class BraintrustState {
+  public currentExperiment: IsoAsyncLocalStorage<Experiment | undefined>;
+  public currentSpan: IsoAsyncLocalStorage<Span>;
+
+  constructor() {
+    this.currentExperiment = iso.newAsyncLocalStorage();
+    this.currentSpan = iso.newAsyncLocalStorage();
+  }
+}
+
+let _state = new BraintrustState();
+
+// A utility to keep track of objects that should be cleaned up before
+// program exit. At the end of the program, the UnterminatedObjectsHandler
+// will print out all un-terminated objects as a warning.
+class UnterminatedObjectsHandler {
+  private unterminatedObjects: Map<any, CallerLocation | undefined>;
+
+  constructor() {
+    this.unterminatedObjects = new Map();
+    process.on("exit", () => {
+      this.warnUnterminated();
+    });
+  }
+
+  addUnterminated(obj: any, createdLocation: CallerLocation | undefined) {
+    this.unterminatedObjects.set(obj, createdLocation);
+  }
+
+  removeUnterminated(obj: any) {
+    this.unterminatedObjects.delete(obj);
+  }
+
+  private warnUnterminated() {
+    if (this.unterminatedObjects.size === 0) {
+      return;
+    }
+    let warningMessage =
+      "WARNING: Did not close the following braintrust objects. We recommend running `.close` on the listed objects, or by running them inside a callback so they are closed automatically:";
+    this.unterminatedObjects.forEach((createdLocation, obj) => {
+      let msg = `\n\tObject of type ${typeof obj}`;
+      if (createdLocation) {
+        msg += ` created at ${JSON.stringify(createdLocation)}`;
+      }
+      warningMessage += msg;
+    });
+    console.warn(warningMessage);
+  }
+}
+
+let unterminatedObjects = new UnterminatedObjectsHandler();
 
 let API_URL: string | null = null;
 let LOGIN_TOKEN: string | null = null;
@@ -152,6 +306,7 @@ function clear_cached_globals() {
   _api_conn = null;
   _log_conn = null;
   _var_user_info = null;
+  _state = new BraintrustState();
 }
 
 export class Project {
@@ -166,69 +321,58 @@ export class Project {
   }
 }
 
-// NOTE: This is because we do not have async constructors
-const _PROJECTS_ENDPOINT = "projects";
-async function _initProject(name: string): Promise<Project> {
-  const unique_key = { name, org_id: ORG_ID };
-
-  // Can we have an upsert (or insert if not exists) method instead?
-  let existing = [];
-  for (let i = 0; i < 2; i++) {
-    existing = await log_conn().get_json(_PROJECTS_ENDPOINT, unique_key);
-
-    if (existing.length > 0) {
-      break;
-    } else {
-      try {
-        existing = await log_conn().post_json(_PROJECTS_ENDPOINT, unique_key);
-      } catch (e) {
-        // This may have been created by another process
-        continue;
-      }
-    }
-  }
-
-  if (existing) {
-    return existing[0];
-  } else {
-    throw new Error(`Unable to find record in ${_PROJECTS_ENDPOINT}`);
-  }
-}
-
-interface ExperimentEvent {
-  id: string;
-  inputs: unknown;
+export type IdField = { id: string };
+export type InputField = { input: unknown };
+export type InputsField = { inputs: unknown };
+export type OtherExperimentLogFields = {
   output: unknown;
   expected: unknown;
   scores: Record<string, number>;
-  project_id: string;
-  experiment_id: string;
-  user_id: string;
-  created: string;
-  metadata: unknown | undefined;
-}
+  metadata: Record<string, unknown>;
+  metrics: Record<string, unknown>;
+  datasetRecordId: string;
+};
+
+export type ExperimentLogPartialArgs = Partial<OtherExperimentLogFields> &
+  Partial<InputField | InputsField>;
+
+export type ExperimentLogFullArgs = Partial<
+  Omit<OtherExperimentLogFields, "scores">
+> &
+  Required<Pick<OtherExperimentLogFields, "scores">> &
+  Partial<InputField | InputsField> &
+  Partial<IdField>;
+
+type SanitizedExperimentLogPartialArgs = Partial<OtherExperimentLogFields> &
+  Partial<InputField>;
+
+type ExperimentEvent = Partial<InputField> &
+  Partial<OtherExperimentLogFields> & {
+    id: string;
+    span_id: string;
+    root_span_id: string;
+    project_id: string;
+    experiment_id: string;
+    _is_merge: boolean;
+  } & Partial<{
+    user_id: string;
+    created: string;
+    span_parents: string[];
+    span_attributes: Record<string, unknown>;
+  }>;
 
 interface DatasetEvent {
-  id: string;
-  inputs: unknown;
-  output: unknown;
-  project_id: string;
-  dataset_id: string;
-  user_id: string;
-  created: string;
-  metadata: unknown | undefined;
-}
-
-interface DatasetDeleteEvent {
+  inputs?: unknown;
+  output?: unknown;
+  metadata?: unknown;
   id: string;
   project_id: string;
   dataset_id: string;
   user_id: string;
   created: string;
-  _object_delete: boolean;
 }
 
-type LogEvent = ExperimentEvent | DatasetEvent | DatasetDeleteEvent;
+type LogEvent = ExperimentEvent | DatasetEvent;
 
 export interface DatasetRecord {
   id: string;
@@ -312,8 +456,23 @@ class LogThread {
   }
 }
 
+export type InitOptions = {
+  experiment?: string;
+  description?: string;
+  dataset?: Dataset;
+  update?: boolean;
+  baseExperiment?: string;
+  isPublic?: boolean;
+  apiUrl?: string;
+  apiKey?: string;
+  orgName?: string;
+  disableCache?: boolean;
+};
+
 /**
  * Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
+ *
+ * Remember to close your experiment when it is finished by calling `Experiment.close`. We recommend initializing the experiment within a callback (using `braintrust.initWithCallback`) to automatically mark it as active and ensure it is terminated.
  *
  * @param project The name of the project to create the experiment in.
  * @param options Additional options for configuring init().
@@ -334,19 +493,8 @@ class LogThread {
  */
 export async function init(
   project: string,
-  options: {
-    readonly experiment?: string;
-    readonly description?: string;
-    readonly dataset?: Dataset;
-    readonly update?: boolean;
-    readonly baseExperiment?: string;
-    readonly isPublic?: boolean;
-    readonly apiUrl?: string;
-    readonly apiKey?: string;
-    readonly orgName?: string;
-    readonly disableCache?: boolean;
-  } = {}
-) {
+  options: Readonly<InitOptions> = {}
+): Promise<Experiment> {
   const {
     experiment,
     description,
@@ -367,7 +515,7 @@ export async function init(
     apiUrl,
   });
 
-  const ret = await _initExperiment(project, {
+  return await _initExperiment(project, {
     experimentName: experiment,
     description,
     dataset,
@@ -375,12 +523,45 @@ export async function init(
     baseExperiment,
     isPublic,
   });
-  _state.current_experiment = ret;
-  return ret;
 }
 
 /**
+ * Wrapper over `braintrust.init`, which passes the initialized `Experiment` it to the given callback and closes it afterwards. See `braintrust.init` for full details.
+ *
+ * @param options.setCurrent If true (default), set the currently-active experiment to the newly-created one. Equivalent to calling `braintrust.withCurrent(experiment, callback)`.
+ */
+export async function initWithCallback<R>(
+  project: string,
+  options: Readonly<InitOptions & SetCurrentArg> = {},
+  callback: (experiment: Experiment) => R
+): Promise<R> {
+  const experiment = await init(project, options);
+  return runFinally(
+    () => {
+      if (options.setCurrent ?? true) {
+        return withCurrent(experiment, () => callback(experiment));
+      } else {
+        return callback(experiment);
+      }
+    },
+    () => experiment.close()
+  );
+}
+
+type InitDatasetOptions = {
+  dataset?: string;
+  description?: string;
+  version?: string;
+  apiUrl?: string;
+  apiKey?: string;
+  orgName?: string;
+  disableCache?: boolean;
+};
+
+/**
  * Create a new dataset in a specified project. If the project does not exist, it will be created.
+ *
+ * Remember to close your dataset when it is finished by calling `Dataset.close`. We recommend initializing the dataset within a callback (using `braintrust.initDatasetWithCallback`) to ensure it is terminated.
  *
  * @param project The name of the project to create the dataset in.
  * @param options Additional options for configuring init().
@@ -395,15 +576,7 @@ export async function init(
  */
 export async function initDataset(
   project: string,
-  options: {
-    readonly dataset?: string;
-    readonly description?: string;
-    readonly version?: string;
-    readonly apiUrl?: string;
-    readonly apiKey?: string;
-    readonly orgName?: string;
-    readonly disableCache?: boolean;
-  } = {}
+  options: Readonly<InitDatasetOptions> = {}
 ) {
   const {
     dataset,
@@ -427,6 +600,21 @@ export async function initDataset(
     description,
     version,
   });
+}
+
+/**
+ * Wrapper over `braintrust.initDataset`, which passes the initialized `Dataset` it to the given callback and closes it afterwards. See `braintrust.initDataset` for full details.
+ */
+export async function initDatasetWithCallback<R>(
+  project: string,
+  options: Readonly<InitDatasetOptions> = {},
+  callback: (dataset: Dataset) => R
+): Promise<R> {
+  const dataset = await initDataset(project, options);
+  return runFinally(
+    () => callback(dataset),
+    () => dataset.close()
+  );
 }
 
 /**
@@ -521,48 +709,16 @@ export async function login(
 /**
  * Log a single event to the current experiment. The event will be batched and uploaded behind the scenes.
  *
- * @param event The event to log.
- * @param event.input The arguments that uniquely define a test case (an arbitrary, JSON serializable object). Later on,
- * Braintrust will use the `input` to know whether two test cases are the same between experiments, so they should
- * not contain experiment-specific state. A simple rule of thumb is that if you run the same experiment twice, the
- * `input` should be identical.
- * @param event.output The output of your application, including post-processing (an arbitrary, JSON serializable object),
- * that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries,
- * the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may
- * be multiple valid queries that answer a single question.
- * @param event.expected The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to
- * determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for
- * you, since there are so many different ways to do that correctly. Instead, these values are just used to help you
- * navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or
- * fine-tune your models.
- * @param event.scores A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals
- * that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a
- * summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity
- * between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was
- * covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments.
- * @param event.metadata (Optional) a dictionary with additional data about the test example, model outputs, or just
- * about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
- * `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
- * JSON-serializable type, but its keys must be strings.
- * @param event.id (Optional) a unique identifier for the event. If you don't provide one, Braintrust will generate one for you.
- * @param event.inputs (Deprecated) the same as `input` (will be removed in a future version)
+ * @param event The event to log. See `Experiment.log` for full details.
  * @returns The `id` of the logged event.
  */
-
-export function log(options: {
-  readonly input?: unknown;
-  readonly output: unknown;
-  readonly expected?: unknown;
-  readonly scores: Record<string, number>;
-  readonly metadata?: Record<string, unknown>;
-  readonly id?: string;
-  readonly inputs?: unknown;
-}): string {
-  if (!_state.current_experiment) {
+export function log(event: ExperimentLogFullArgs): string {
+  const currentExperiment = _state.currentExperiment.getStore();
+  if (!currentExperiment) {
     throw new Error("Not initialized. Please call init() first");
   }
 
-  return _state.current_experiment.log(options);
+  return currentExperiment.log(event);
 }
 
 /**
@@ -579,11 +735,94 @@ export async function summarize(
     readonly comparisonExperimentId?: string;
   } = {}
 ): Promise<ExperimentSummary> {
-  if (!_state.current_experiment) {
+  const currentExperiment = _state.currentExperiment.getStore();
+  if (!currentExperiment) {
     throw new Error("Not initialized. Please call init() first");
   }
 
-  return await _state.current_experiment.summarize(options);
+  return await currentExperiment.summarize(options);
+}
+
+/**
+ * Returns the currently-active experiment (set by `braintrust.initWithCallback` or `braintrust.withCurrent`). Returns undefined if no current experiment has been set.
+ */
+export function currentExperiment(): Experiment | undefined {
+  return _state.currentExperiment.getStore();
+}
+
+/**
+ * Return the currently-active span for logging (set by `startSpanWithCallback` or `braintrust.withCurrent`). If there is no active span, returns a no-op span object, which supports the same interface as spans but does no logging.
+ *
+ * See `Span` for full details.
+ */
+export function currentSpan(): Span {
+  return _state.currentSpan.getStore()!;
+}
+
+/**
+ * Toplevel function for starting a span. If there is a currently-active span, the new span is created as a subspan. Otherwise, if there is a currently-active experiment, the new span is created as a toplevel span. Otherwise, it returns a no-op span object.
+ *
+ * Unless a name is explicitly provided, the name of the span will be the name of the calling function, or "root" if no meaningful name can be determined.
+ *
+ * We recommend running spans within a callback (using `startSpanWithinCallback`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a callback, be sure to terminate it with `span.end()`.
+ *
+ * See `Span.startSpan` for full details.
+ */
+export function startSpan(args: StartSpanOptionalNameArgs): Span {
+  const { name: nameOpt, ...argsRest } = args;
+  const name =
+    (nameOpt ?? iso.getCallerLocation()?.caller_function_name) || "root";
+  const newSpanArgs = { name, ...argsRest };
+  const parentSpan = currentSpan();
+  if (!Object.is(parentSpan, noopSpan)) {
+    return parentSpan.startSpan(newSpanArgs);
+  }
+
+  const experiment = currentExperiment();
+  if (experiment) {
+    return experiment.startSpan(newSpanArgs);
+  }
+
+  return noopSpan;
+}
+
+/**
+ * Wrapper over `braintrust.startSpan`, which passes the initialized `Span` it to the given callback and ends it afterwards. See `Span.startSpanWithCallback` for full details.
+ */
+export function startSpanWithCallback<R>(
+  args: StartSpanOptionalNameArgs & SetCurrentArg,
+  callback: (span: Span) => R
+): R {
+  const span = startSpan(args);
+  return runFinally(
+    () => {
+      if (args.setCurrent ?? true) {
+        return withCurrent(span, () => callback(span));
+      } else {
+        return callback(span);
+      }
+    },
+    () => span.end()
+  );
+}
+
+/**
+ * Set the given experiment or span as current within the given callback and any asynchronous operations created within the callback. The current experiment can be accessed with `braintrust.currentExperiment`, and the current span with `braintrust.currentSpan`.
+ *
+ * @param object: The experiment or span to be marked as current.
+ * @param callback: The callback to be run under the scope of the current object.
+ */
+export function withCurrent<R>(
+  object: Experiment | SpanImpl | NoopSpan,
+  callback: () => R
+): R {
+  if (object instanceof Experiment) {
+    return _state.currentExperiment.run(object, callback);
+  } else if (object instanceof SpanImpl || object instanceof NoopSpan) {
+    return _state.currentSpan.run(object, callback);
+  } else {
+    throw new Error(`Invalid object of type ${typeof object}`);
+  }
 }
 
 function _check_org_info(org_info: any, org_name: string | undefined) {
@@ -611,6 +850,105 @@ function _check_org_info(org_info: any, org_name: string | undefined) {
 
 function _urljoin(...parts: string[]): string {
   return parts.map((x) => x.replace(/^\//, "")).join("/");
+}
+
+function getCurrentUnixTimestamp(): number {
+  return new Date().getTime() / 1000;
+}
+
+function validateAndSanitizeExperimentLogPartialArgs(
+  event: ExperimentLogPartialArgs
+): SanitizedExperimentLogPartialArgs {
+  if (event.scores) {
+    for (let [name, score] of Object.entries(event.scores)) {
+      if (typeof name !== "string") {
+        throw new Error("score names must be strings");
+      }
+
+      if (typeof score === "boolean") {
+        score = score ? 1 : 0;
+        event.scores[name] = score;
+      }
+
+      if (typeof score !== "number") {
+        throw new Error("score values must be numbers");
+      }
+      if (score < 0 || score > 1) {
+        throw new Error("score values must be between 0 and 1");
+      }
+    }
+  }
+
+  if (event.metadata) {
+    for (const key of Object.keys(event.metadata)) {
+      if (typeof key !== "string") {
+        throw new Error("metadata keys must be strings");
+      }
+    }
+  }
+
+  if (event.metrics) {
+    for (const key of Object.keys(event.metrics)) {
+      if (typeof key !== "string") {
+        throw new Error("metric keys must be strings");
+      }
+    }
+    for (const forbiddenKey of [
+      "start",
+      "end",
+      "caller_function_name",
+      "caller_file_name",
+      "caller_line_num",
+    ]) {
+      if (forbiddenKey in event.metrics) {
+        throw new Error(`Key ${forbiddenKey} may not be specified in metrics`);
+      }
+    }
+  }
+
+  if ("input" in event && event.input && "inputs" in event && event.inputs) {
+    throw new Error(
+      "Only one of input or inputs (deprecated) can be specified. Prefer input."
+    );
+  }
+
+  if ("inputs" in event) {
+    const { inputs, ...rest } = event;
+    return { input: inputs, ...rest };
+  } else {
+    return { ...event };
+  }
+}
+
+// Note that this only checks properties that are expected of a complete event.
+// validateAndSanitizeExperimentLogPartialArgs should still be invoked (after
+// handling special fields like 'id').
+function validateAndSanitizeExperimentLogFullArgs(
+  event: ExperimentLogFullArgs,
+  hasDataset: boolean
+): ExperimentLogFullArgs {
+  if (
+    ("input" in event && event.input && "inputs" in event && event.inputs) ||
+    (!("input" in event) && !("inputs" in event))
+  ) {
+    throw new Error(
+      "Exactly one of input or inputs (deprecated) must be specified. Prefer input."
+    );
+  }
+
+  if (!event.scores) {
+    throw new Error("scores must be specified");
+  }
+
+  if (hasDataset && event.datasetRecordId === undefined) {
+    throw new Error("datasetRecordId must be specified when using a dataset");
+  } else if (!hasDataset && event.datasetRecordId !== undefined) {
+    throw new Error(
+      "datasetRecordId cannot be specified when not using a dataset"
+    );
+  }
+
+  return event;
 }
 
 async function _initExperiment(
@@ -711,6 +1049,8 @@ export class Experiment {
   public readonly user_id: string;
   public readonly dataset?: Dataset;
   private logger: LogThread;
+  private lastStartTime: number;
+  private finished: boolean;
 
   constructor(
     project: Project,
@@ -719,123 +1059,79 @@ export class Experiment {
     user_id: string,
     dataset?: Dataset
   ) {
+    this.finished = false;
+
     this.project = project;
     this.id = id;
     this.name = name;
     this.user_id = user_id;
     this.dataset = dataset;
     this.logger = new LogThread();
+    this.lastStartTime = getCurrentUnixTimestamp();
+
+    unterminatedObjects.addUnterminated(this, iso.getCallerLocation());
   }
 
   /**
    * Log a single event to the experiment. The event will be batched and uploaded behind the scenes.
    *
    * @param event The event to log.
-   * @param event.input The arguments that uniquely define a test case (an arbitrary, JSON serializable object). Later on,
-   * Braintrust will use the `input` to know whether two test cases are the same between experiments, so they should
-   * not contain experiment-specific state. A simple rule of thumb is that if you run the same experiment twice, the
-   * `input` should be identical.
-   * @param event.output The output of your application, including post-processing (an arbitrary, JSON serializable object),
-   * that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries,
-   * the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may
-   * be multiple valid queries that answer a single question.
-   * @param event.expected The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to
-   * determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for
-   * you, since there are so many different ways to do that correctly. Instead, these values are just used to help you
-   * navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or
-   * fine-tune your models.
-   * @param event.scores A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals
-   * that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a
-   * summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity
-   * between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was
-   * covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments.
-   * @param event.metadata (Optional) a dictionary with additional data about the test example, model outputs, or just
-   * about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
-   * `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
-   * JSON-serializable type, but its keys must be strings.
-   * @param event.id (Optional) a unique identifier for the event. If you don't provide one, Braintrust will generate one for you.
-   * @param event.inputs (Deprecated) the same as `input` (will be removed in a future version)
-   * @returns The `id` of the logged event.
+   * @param event.input: The arguments that uniquely define a test case (an arbitrary, JSON serializable object). Later on, Braintrust will use the `input` to know whether two test cases are the same between experiments, so they should not contain experiment-specific state. A simple rule of thumb is that if you run the same experiment twice, the `input` should be identical.
+   * @param event.output: The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
+   * @param event.expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
+   * @param event.scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments.
+   * @param event.metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
+   * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically and should not be specified: "start", "end", "caller_function_name", "caller_file_name", "caller_line_num".
+   * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
+   * @param event.dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
+   * @param event.inputs: (Deprecated) the same as `input` (will be removed in a future version).
+   * :returns: The `id` of the logged event.
    */
-  public log({
-    input,
-    output,
-    expected,
-    scores,
-    metadata,
-    id,
-    datasetRecordId,
-    inputs,
-  }: {
-    readonly input?: unknown;
-    readonly output: unknown;
-    readonly expected?: unknown;
-    readonly scores: Record<string, number>;
-    readonly metadata?: Record<string, unknown>;
-    readonly id?: string;
-    readonly datasetRecordId?: string;
-    readonly inputs?: unknown;
-  }): string {
-    if (input === undefined && inputs === undefined) {
-      throw new Error(
-        "Either input or inputs (deprecated) must be specified. Prefer input."
-      );
-    } else if (input !== undefined && inputs !== undefined) {
-      throw new Error(
-        "Only one of input or inputs (deprecated) can be specified. Prefer input."
-      );
-    }
+  public log(event: Readonly<ExperimentLogFullArgs>): string {
+    this.checkNotFinished();
 
-    for (let [name, score] of Object.entries(scores)) {
-      if (typeof name !== "string") {
-        throw new Error("score names must be strings");
-      }
+    event = validateAndSanitizeExperimentLogFullArgs(event, !!this.dataset);
+    const span = this.startSpan({ startTime: this.lastStartTime, event });
+    this.lastStartTime = span.end();
+    return span.id;
+  }
 
-      if (typeof score === "boolean") {
-        score = score ? 1 : 0;
-        scores[name] = score;
-      }
+  /**
+   * Create a new toplevel span. The name parameter is optional and defaults to "root".
+   *
+   * See `Span.startSpan` for full details.
+   */
+  public startSpan(args: StartSpanOptionalNameArgs): Span {
+    this.checkNotFinished();
 
-      if (typeof score !== "number") {
-        throw new Error("score values must be numbers");
-      }
-      if (score < 0 || score > 1) {
-        throw new Error("score values must be between 0 and 1");
-      }
-    }
+    const { name, ...argsRest } = args;
+    return new SpanImpl({
+      experimentLogger: this.logger,
+      name: name ?? "root",
+      ...argsRest,
+      rootExperiment: this,
+    });
+  }
 
-    if (metadata !== undefined) {
-      for (const key of Object.keys(metadata)) {
-        if (typeof key !== "string") {
-          throw new Error("metadata keys must be strings");
+  /**
+   * Wrapper over `Experiment.startSpan`, which passes the initialized `Span` it to the given callback and ends it afterwards. See `Span.startSpanWithCallback` for full details.
+   */
+  public startSpanWithCallback<R>(
+    args: StartSpanOptionalNameArgs & SetCurrentArg,
+    callback: (span: Span) => R
+  ): R {
+    const { setCurrent, ...argsRest } = args;
+    const span = this.startSpan(argsRest);
+    return runFinally(
+      () => {
+        if (setCurrent ?? true) {
+          return withCurrent(span, () => callback(span));
+        } else {
+          return callback(span);
         }
-      }
-    }
-
-    if (this.dataset && datasetRecordId === undefined) {
-      throw new Error("datasetRecordId must be specified when using a dataset");
-    } else if (!this.dataset && datasetRecordId !== undefined) {
-      throw new Error(
-        "datasetRecordId cannot be specified when not using a dataset"
-      );
-    }
-
-    const args = {
-      id: id || uuidv4(),
-      inputs: input ?? inputs,
-      output,
-      expected,
-      scores,
-      project_id: this.project.id,
-      experiment_id: this.id,
-      user_id: this.user_id,
-      created: new Date().toISOString(),
-      dataset_record_id: datasetRecordId,
-      metadata,
-    };
-
-    this.logger.log([args]);
-    return args.id;
+      },
+      () => span.end()
+    );
   }
 
   /**
@@ -897,6 +1193,175 @@ export class Experiment {
       scores,
     };
   }
+
+  /**
+   * Finish the experiment and return its id. After calling close, you may not invoke any further methods on the experiment object.
+   *
+   * Will be invoked automatically if the experiment is wrapped in a callback passed to `braintrust.initWithCallback`.
+   *
+   * @returns The experiment id.
+   */
+  public async close(): Promise<string> {
+    this.checkNotFinished();
+
+    await this.logger.flush();
+
+    this.finished = true;
+    unterminatedObjects.removeUnterminated(this);
+    return this.id;
+  }
+
+  private checkNotFinished() {
+    if (this.finished) {
+      throw new Error("Cannot invoke method on finished experiment");
+    }
+  }
+}
+
+/**
+ * Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
+ *
+ * We suggest using one of the various `startSpan` methods, instead of creating Spans directly. See `Span.startSpan` for full details.
+ */
+export class SpanImpl implements Span {
+  private finished: boolean;
+  private experimentLogger: LogThread;
+  // `internalData` contains fields that are not part of the "user-sanitized"
+  // set of fields which we want to log in just one of the span rows.
+  private internalData: Partial<ExperimentEvent>;
+  private isMerge: boolean;
+
+  // Fields that are logged to every row.
+  public id: string;
+  public span_id: string;
+  public root_span_id: string;
+  private _project_id: string;
+  private _experiment_id: string;
+
+  // root_experiment should only be specified for a root span. parent_span
+  // should only be specified for non-root spans.
+  constructor(
+    args: {
+      experimentLogger: LogThread;
+      name: string;
+      spanAttributes?: Record<any, any>;
+      startTime?: number;
+      setCurrent?: boolean;
+      event?: ExperimentLogPartialArgs & Partial<IdField>;
+    } & ({ rootExperiment: Experiment } | { parentSpan: SpanImpl })
+  ) {
+    this.finished = false;
+
+    this.experimentLogger = args.experimentLogger;
+
+    const callerLocation = iso.getCallerLocation();
+    this.internalData = {
+      metrics: {
+        start: args.startTime ?? getCurrentUnixTimestamp(),
+        ...callerLocation,
+      },
+      span_attributes: { ...args.spanAttributes, name: args.name },
+    };
+
+    this.id = args.event?.id ?? uuidv4();
+    this.span_id = uuidv4();
+    if ("rootExperiment" in args) {
+      this.root_span_id = this.span_id;
+      this._project_id = args.rootExperiment.project.id;
+      this._experiment_id = args.rootExperiment.id;
+      this.internalData = Object.assign(this.internalData, {
+        // TODO: Hopefully we can remove this.
+        user_id: args.rootExperiment.user_id,
+        created: new Date().toISOString(),
+      });
+    } else if ("parentSpan" in args) {
+      this.root_span_id = args.parentSpan.root_span_id;
+      this._project_id = args.parentSpan._project_id;
+      this._experiment_id = args.parentSpan._experiment_id;
+      this.internalData.span_parents = [args.parentSpan.span_id];
+    } else {
+      throw new Error("Must provide either 'rootExperiment' or 'parentSpan'");
+    }
+
+    // The first log is a replacement, but subsequent logs to the same span
+    // object will be merges.
+    this.isMerge = false;
+    if (args.event) {
+      const { id: id, ...eventRest } = args.event;
+      this.log(eventRest);
+    }
+    this.isMerge = true;
+
+    unterminatedObjects.addUnterminated(this, callerLocation);
+  }
+
+  public log(event: ExperimentLogPartialArgs): void {
+    this.checkNotFinished();
+
+    const sanitized = validateAndSanitizeExperimentLogPartialArgs(event);
+    // There should be no overlap between the dictionaries being merged.
+    const record: ExperimentEvent = {
+      ...sanitized,
+      ...this.internalData,
+      id: this.id,
+      span_id: this.span_id,
+      root_span_id: this.root_span_id,
+      project_id: this._project_id,
+      experiment_id: this._experiment_id,
+      _is_merge: this.isMerge,
+    };
+    this.internalData = {};
+    this.experimentLogger.log([record]);
+  }
+
+  public startSpan(args: StartSpanArgs): Span {
+    this.checkNotFinished();
+
+    return new SpanImpl({
+      experimentLogger: this.experimentLogger,
+      ...args,
+      parentSpan: this,
+    });
+  }
+
+  public startSpanWithCallback<R>(
+    args: StartSpanArgs & SetCurrentArg,
+    callback: (span: Span) => R
+  ): R {
+    const span = this.startSpan(args);
+    return runFinally(
+      () => {
+        if (args.setCurrent ?? true) {
+          return withCurrent(span, () => callback(span));
+        } else {
+          return callback(span);
+        }
+      },
+      () => span.end()
+    );
+  }
+
+  public end(args?: { endTime?: number }): number {
+    this.checkNotFinished();
+
+    const endTime = args?.endTime ?? getCurrentUnixTimestamp();
+    this.internalData = { metrics: { end: endTime } };
+    this.log({});
+
+    this.finished = true;
+    unterminatedObjects.removeUnterminated(this);
+    return endTime;
+  }
+
+  public close(args?: { endTime?: number }): number {
+    return this.end(args);
+  }
+
+  private checkNotFinished() {
+    if (this.finished) {
+      throw new Error("Cannot invoke method on finished span");
+    }
+  }
 }
 
 async function _initDataset(
@@ -945,6 +1410,7 @@ export class Dataset {
   private pinnedVersion?: string;
   private _fetchedData?: any[] = undefined;
   private logger: LogThread;
+  private finished: boolean;
 
   constructor(
     project: Project,
@@ -953,12 +1419,16 @@ export class Dataset {
     user_id: string,
     pinnedVersion?: string
   ) {
+    this.finished = false;
+
     this.project = project;
     this.id = id;
     this.name = name;
     this.user_id = user_id;
     this.pinnedVersion = pinnedVersion;
     this.logger = new LogThread();
+
+    unterminatedObjects.addUnterminated(this, iso.getCallerLocation());
   }
 
   /**
@@ -986,6 +1456,8 @@ export class Dataset {
     readonly metadata?: Record<string, unknown>;
     readonly id?: string;
   }): string {
+    this.checkNotFinished();
+
     if (metadata !== undefined) {
       for (const key of Object.keys(metadata)) {
         if (typeof key !== "string") {
@@ -1010,6 +1482,8 @@ export class Dataset {
   }
 
   public delete(id: string): string {
+    this.checkNotFinished();
+
     const user_id = this.user_id;
     const args = {
       id,
@@ -1033,6 +1507,8 @@ export class Dataset {
   public async summarize(
     options: { readonly summarizeData?: boolean } = {}
   ): Promise<DatasetSummary> {
+    this.checkNotFinished();
+
     let { summarizeData = true } = options || {};
 
     await this.logger.flush();
@@ -1080,6 +1556,8 @@ export class Dataset {
    * @returns An iterator over the dataset's records.
    */
   async *fetch(): AsyncGenerator<DatasetRecord> {
+    this.checkNotFinished();
+
     const records = await this.fetchedData();
     for (const record of records) {
       yield {
@@ -1104,10 +1582,14 @@ export class Dataset {
    * ```
    */
   [Symbol.asyncIterator]() {
+    this.checkNotFinished();
+
     return this.fetch();
   }
 
   async fetchedData() {
+    this.checkNotFinished();
+
     if (this._fetchedData === undefined) {
       const resp = await log_conn().get("object/dataset", {
         id: this.id,
@@ -1126,10 +1608,14 @@ export class Dataset {
   }
 
   clearCache() {
+    this.checkNotFinished();
+
     this._fetchedData = undefined;
   }
 
   async version() {
+    this.checkNotFinished();
+
     if (this.pinnedVersion !== undefined) {
       return this.pinnedVersion;
     } else {
@@ -1142,6 +1628,28 @@ export class Dataset {
         }
       }
       return maxVersion;
+    }
+  }
+
+  /**
+   * Terminate connection to the dataset and return its id. After calling close, you may not invoke any further methods on the dataset object.
+   *
+   * Will be invoked automatically if the dataset is bound as a context manager.
+   *
+   * @returns The dataset id.
+   */
+  public async close(): Promise<string> {
+    this.checkNotFinished();
+
+    await this.logger.flush();
+    this.finished = true;
+    unterminatedObjects.removeUnterminated(this);
+    return this.id;
+  }
+
+  private checkNotFinished() {
+    if (this.finished) {
+      throw new Error("Cannot invoke method on finished dataset");
     }
   }
 }
