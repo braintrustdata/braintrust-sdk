@@ -850,7 +850,7 @@ class Experiment(ModelWrapper):
             self.dataset is not None,
         )
         span = self.start_span(start_time=self.last_start_time, **event)
-        self.last_start_time = span.close()
+        self.last_start_time = span.end()
         return span.id
 
     def start_span(self, name="root", span_attributes={}, start_time=None, set_current=True, **event):
@@ -859,7 +859,7 @@ class Experiment(ModelWrapper):
 
         We recommend using spans within the python ContextManager framework (`with experiment.start_span() as span`), or as a function decorator (`@traced`) to ensure they are terminated upon completion.
 
-        If started within a context manager or decorator, `start_span` will also set the currently-active span, which can be obtained through `braintrust.current_span`. If you want to set the currently-active span without using a context manager, pass `set_current=True`. In this case, be sure to close the span with `span.close()` to unset it.
+        If started within a context manager or decorator, `start_span` will also set the currently-active span, which can be obtained through `braintrust.current_span`. If you want to set the currently-active span without using a context manager, pass `set_current=True`. In this case, be sure to close the span with `span.end()` to unset it.
 
         :param name: The name of the span.
         :param span_attributes: Optional additional attributes to attach to the span, such as a type name.
@@ -1114,7 +1114,7 @@ class ExperimentSpan:
     def __exit__(self, type, value, callback):
         del type, value, callback
 
-        self.close()
+        self.end()
 
 
 class Dataset(ModelWrapper):

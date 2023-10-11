@@ -374,7 +374,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
             error = e
         finally:
             if experiment:
-                span.close()
+                span.end()
 
         return EvalResult(output=output, metadata=metadata, scores=scores, error=error)
 
