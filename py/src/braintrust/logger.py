@@ -35,13 +35,13 @@ class _NoopExperimentSpan:
     def __init__(self, *args, **kwargs):
         pass
 
-    def log(self, *args, **kwargs):
+    def log(self, **event):
         pass
 
-    def start_span(self, *args, **kwargs):
+    def start_span(self, name, span_attributes={}, start_time=None, set_current=True, **event):
         return self
 
-    def end(self, *args, **kwargs):
+    def close(self, end_time=None):
         pass
 
     def __enter__(self):
@@ -56,8 +56,9 @@ NOOP_EXPERIMENT_SPAN = _NoopExperimentSpan()
 
 class BraintrustState:
     def __init__(self):
-        # Wrapped in a list for mutability.
-        self.current_experiment = ResourceManager([None])
+        self.current_experiment = ResourceManager(
+            contextvars.ContextVar("braintrust_current_experiment", default=None)
+        )
         self.current_span = contextvars.ContextVar("braintrust_current_span", default=NOOP_EXPERIMENT_SPAN)
 
 
@@ -87,7 +88,9 @@ class _UnterminatedObjectsHandler:
         with self._unterminated_objects.get() as unterminated_objects:
             if not unterminated_objects:
                 return
-            print("WARNING: Did not terminate the following braintrust objects")
+            print(
+                "WARNING: Did not close the following braintrust objects. We recommend running `.close` on the listed objects, or wrapping them in a context manager so they are closed automatically:"
+            )
             for obj, created_location in unterminated_objects.items():
                 msg = f"{obj}"
                 if created_location:
@@ -239,8 +242,7 @@ class _LogThread:
         self._start()
         for event in args:
             self.queue.put(event)
-        if self.queue.qsize() >= DEFAULT_BATCH_SIZE:
-            self.queue_filled_event.set()
+        self.queue_filled_event.set()
 
     def _start(self):
         if not self.started:
@@ -324,7 +326,7 @@ def init(
     """
     Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
 
-    Remember to end your experiment when it is finished by calling `Experiment.end`. You may also wrap the experiment in a with block (`with braintrust.init(...) as experiment`) to ensure it is terminated at the end of the block.
+    Remember to close your experiment when it is finished by calling `Experiment.close`. You may also wrap the experiment in a with block (`with braintrust.init(...) as experiment`) to ensure it is terminated at the end of the block.
 
     :param project: The name of the project to create the experiment in.
     :param experiment: The name of the experiment to create. If not specified, a name will be generated automatically.
@@ -352,8 +354,8 @@ def init(
         base_experiment=base_experiment,
         is_public=is_public,
     )
-    with _state.current_experiment.get() as current_experiment_list:
-        current_experiment_list[0] = ret
+    with _state.current_experiment.get() as current_experiment:
+        current_experiment.set(ret)
     return ret
 
 
@@ -370,7 +372,7 @@ def init_dataset(
     """
     Create a new dataset in a specified project. If the project does not exist, it will be created.
 
-    Remember to end your dataset when it is finished by calling `Dataset.end`. You may also wrap the dataset in a with block (`with braintrust.init_dataset(...) as dataset`) to ensure it is terminated at the end of the block.
+    Remember to close your dataset when it is finished by calling `Dataset.close`. You may also wrap the dataset in a with block (`with braintrust.init_dataset(...) as dataset`) to ensure it is terminated at the end of the block.
 
     :param project: The name of the project to create the dataset in.
     :param name: The name of the dataset to create. If not specified, a name will be generated automatically.
@@ -401,8 +403,8 @@ def log(**event):
     :returns: The `id` of the logged event.
     """
 
-    with _state.current_experiment.get() as current_experiment_list:
-        current_experiment = current_experiment_list[0]
+    with _state.current_experiment.get() as cvar:
+        current_experiment = cvar.get()
 
     if not current_experiment:
         raise Exception("Not initialized. Please call init() or login() first")
@@ -551,8 +553,8 @@ def summarize(summarize_scores=True, comparison_experiment_id=None):
     :param comparison_experiment_id: The experiment to compare against. If None, the most recent experiment on the comparison_commit will be used.
     :returns: `ExperimentSummary`
     """
-    with _state.current_experiment.get() as current_experiment_list:
-        current_experiment = current_experiment_list[0]
+    with _state.current_experiment.get() as cvar:
+        current_experiment = cvar.get()
 
     if not current_experiment:
         raise Exception("Not initialized. Please call init() first")
@@ -568,14 +570,14 @@ def current_experiment():
     None if no experiment has been initialized.
     """
 
-    with _state.current_experiment.get() as current_experiment_list:
-        return current_experiment_list[0]
+    with _state.current_experiment.get() as cvar:
+        return cvar.get()
 
 
-def current_span():
-    """Return the currently-active span for logging. See `Experiment.start_span`
-    for full details on spans. Returns None if there is no currently-active
-    span.
+def current_span() -> Union["ExperimentSpan", _NoopExperimentSpan]:
+    """Return the currently-active span for logging. If there is no active span, returns a no-op span object, which supports the same interface as spans but does no logging.
+
+    See `Experiment.start_span` for full details on spans.
     """
 
     return _state.current_span.get()
@@ -725,8 +727,10 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
 # _validate_and_sanitize_experiment_log_partial_args should still be invoked
 # (after handling special fields like 'id').
 def _validate_and_sanitize_experiment_log_full_args(event, has_dataset):
-    if event.get("input") is None:
-        raise ValueError("input must be specified")
+    input = event.get("input")
+    inputs = event.get("inputs")
+    if (input is not None and inputs is not None) or (input is None and inputs is None):
+        raise ValueError("Exactly one of input or inputs (deprecated) must be specified. Prefer input.")
 
     if event.get("scores") is None:
         raise ValueError("scores must be specified")
@@ -846,21 +850,21 @@ class Experiment(ModelWrapper):
             self.dataset is not None,
         )
         span = self.start_span(start_time=self.last_start_time, **event)
-        self.last_start_time = span.end()
+        self.last_start_time = span.close()
         return span.id
 
-    def start_span(self, name="root", span_attributes={}, start_time=None, set_current=False, **event):
+    def start_span(self, name="root", span_attributes={}, start_time=None, set_current=True, **event):
         """
         Create a new toplevel span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `ExperimentSpan.log` will be merged into one logical row.
 
         We recommend using spans within the python ContextManager framework (`with experiment.start_span() as span`), or as a function decorator (`@traced`) to ensure they are terminated upon completion.
 
-        If started within a context manager or decorator, `start_span` will also set the currently-active span, which can be obtained through `braintrust.current_span`. If you want to set the currently-active span without using a context manager, pass `set_current=True`. In this case, be sure to end the span with `span.end()` to unset it.
+        If started within a context manager or decorator, `start_span` will also set the currently-active span, which can be obtained through `braintrust.current_span`. If you want to set the currently-active span without using a context manager, pass `set_current=True`. In this case, be sure to close the span with `span.close()` to unset it.
 
         :param name: The name of the span.
         :param span_attributes: Optional additional attributes to attach to the span, such as a type name.
         :param start_time: Optional start time of the span, as a timestamp in seconds.
-        :param set_current: Optionally mark the span as the currently active one. Unnecessary if the span is bound as a context manager.
+        :param set_current: Mark the span as the currently active one (defaults to True).
         :param **event: Data to be logged. See `Experiment.log` for full details.
         :returns: `ExperimentSpan`
         """
@@ -929,8 +933,8 @@ class Experiment(ModelWrapper):
             scores=score_summary,
         )
 
-    def end(self):
-        """Terminate the experiment. Returns the id of the experiment. After calling end, one may not invoke any further methods on the experiment object.
+    def close(self):
+        """Terminate the experiment. Returns the id of the experiment. After calling close, one may not invoke any further methods on the experiment object.
 
         Will be invoked automatically if the experiment is bound as a context manager.
 
@@ -944,9 +948,9 @@ class Experiment(ModelWrapper):
         _unterminated_objects.remove_unterminated(self)
         # Set the global current experiment to None if it is currently set to
         # this object.
-        with _state.current_experiment.get() as current_experiment_list:
-            if current_experiment_list[0] == self:
-                current_experiment_list[0] = None
+        with _state.current_experiment.get() as current_experiment:
+            if current_experiment.get() == self:
+                current_experiment.set(None)
         return self.id
 
     def _check_not_finished(self):
@@ -958,7 +962,7 @@ class Experiment(ModelWrapper):
 
     def __exit__(self, type, value, callback):
         del type, value, callback
-        self.end()
+        self.close()
 
 
 class ExperimentSpan:
@@ -978,7 +982,7 @@ class ExperimentSpan:
         start_time=None,
         root_experiment=None,
         parent_span=None,
-        set_current=False,
+        set_current=True,
         event={},
     ):
         self._context_token = None
@@ -1057,7 +1061,7 @@ class ExperimentSpan:
         self.internal_data = {}
         self.experiment_logger.log(record)
 
-    def start_span(self, name, span_attributes={}, start_time=None, set_current=False, **event):
+    def start_span(self, name, span_attributes={}, start_time=None, set_current=True, **event):
         """Create a subspan of the calling span. See `Experiment.start_span` for full details."""
         self._check_not_finished()
 
@@ -1071,9 +1075,9 @@ class ExperimentSpan:
             event=event,
         )
 
-    def end(self, end_time=None):
+    def close(self, end_time=None):
         """
-        Terminate the span. Returns the end time logged to the row's metrics. After calling end, one may not invoke any further methods on the span object.
+        Terminate the span. Returns the end time logged to the row's metrics. After calling close, one may not invoke any further methods on the span object.
 
         Will be invoked automatically if the span is bound as a context manager.
 
@@ -1087,6 +1091,10 @@ class ExperimentSpan:
         self.log()
 
         self.finished = True
+        # Unset this span as the currently-active span if set.
+        if self._context_token:
+            _state.current_span.reset(self._context_token)
+            self._context_token = None
         _unterminated_objects.remove_unterminated(self)
         return end_time
 
@@ -1106,11 +1114,7 @@ class ExperimentSpan:
     def __exit__(self, type, value, callback):
         del type, value, callback
 
-        # Unset this span as the currently-active span if set.
-        if self._context_token:
-            _state.current_span.reset(self._context_token)
-
-        self.end()
+        self.close()
 
 
 class Dataset(ModelWrapper):
@@ -1306,8 +1310,8 @@ class Dataset(ModelWrapper):
         else:
             return max([int(record.get(TRANSACTION_ID_FIELD, 0)) for record in self.fetched_data] or [0])
 
-    def end(self):
-        """Terminate the dataset. Returns the id of the dataset. After calling end, one may not invoke any further methods on the dataset object.
+    def close(self):
+        """Terminate the dataset. Returns the id of the dataset. After calling close, one may not invoke any further methods on the dataset object.
 
         Will be invoked automatically if the dataset is bound as a context manager.
 
@@ -1329,7 +1333,7 @@ class Dataset(ModelWrapper):
 
     def __exit__(self, type, value, callback):
         del type, value, callback
-        self.end()
+        self.close()
 
 
 @dataclasses.dataclass
