@@ -41,7 +41,7 @@ class _NoopExperimentSpan:
     def start_span(self, name, span_attributes={}, start_time=None, set_current=True, **event):
         return self
 
-    def close(self, end_time=None):
+    def end(self, end_time=None):
         pass
 
     def __enter__(self):
@@ -934,7 +934,7 @@ class Experiment(ModelWrapper):
         )
 
     def close(self):
-        """Terminate the experiment. Returns the id of the experiment. After calling close, one may not invoke any further methods on the experiment object.
+        """Finish the experiment and return its id. After calling close, one may not invoke any further methods on the experiment object.
 
         Will be invoked automatically if the experiment is bound as a context manager.
 
@@ -1075,9 +1075,9 @@ class ExperimentSpan:
             event=event,
         )
 
-    def close(self, end_time=None):
+    def end(self, end_time=None):
         """
-        Terminate the span. Returns the end time logged to the row's metrics. After calling close, one may not invoke any further methods on the span object.
+        Terminate the span. Returns the end time logged to the row's metrics. After calling end, one may not invoke any further methods on the span object.
 
         Will be invoked automatically if the span is bound as a context manager.
 
@@ -1311,7 +1311,7 @@ class Dataset(ModelWrapper):
             return max([int(record.get(TRANSACTION_ID_FIELD, 0)) for record in self.fetched_data] or [0])
 
     def close(self):
-        """Terminate the dataset. Returns the id of the dataset. After calling close, one may not invoke any further methods on the dataset object.
+        """Terminate connection to the dataset and return its id. After calling close, one may not invoke any further methods on the dataset object.
 
         Will be invoked automatically if the dataset is bound as a context manager.
 
