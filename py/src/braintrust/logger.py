@@ -857,9 +857,9 @@ class Experiment(ModelWrapper):
         """
         Create a new toplevel span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `ExperimentSpan.log` will be merged into one logical row.
 
-        We recommend using spans within the python ContextManager framework (`with experiment.start_span() as span`), or as a function decorator (`@traced`) to ensure they are terminated upon completion.
+        We recommend using spans within the python ContextManager framework (`with experiment.start_span() as span`), or as a function decorator (`@traced`) to ensure they are terminated upon completion. If you wish to start a span outside a context manager, be sure to terminate it with `span.end()`.
 
-        If started within a context manager or decorator, `start_span` will also set the currently-active span, which can be obtained through `braintrust.current_span`. If you want to set the currently-active span without using a context manager, pass `set_current=True`. In this case, be sure to close the span with `span.end()` to unset it.
+        If `set_current` is True (the default), `start_span` will also set the currently-active span, which can be obtained through `braintrust.current_span`.
 
         :param name: The name of the span.
         :param span_attributes: Optional additional attributes to attach to the span, such as a type name.
