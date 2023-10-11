@@ -880,7 +880,7 @@ class Experiment(ModelWrapper):
             event=event,
         )
 
-    def base_experiment_dataset(self, output_field="auto"):
+    def fetch_base_experiment(self, output_field="auto"):
         """
         Get the base experiment's dataset.
 
@@ -888,13 +888,26 @@ class Experiment(ModelWrapper):
 
         :returns: `ExperimentDataset`
         """
-        if self.base_exp_id is None:
-            return None
+        base_exp_id = self.base_exp_id
+        if base_exp_id is None:
+            base_exp = self._fetch_base_exp_id()
+            if base_exp:
+                base_exp_id = base_exp["base_exp_id"]
+
+        if base_exp_id is None:
+            raise ValueError("No base experiment found")
 
         return ExperimentDataset(
-            experiment_id=self.base_exp_id,
+            experiment_id=base_exp_id,
             output_field=output_field,
         )
+
+    def _fetch_base_exp_id(self):
+        conn = log_conn()
+        resp = conn.get("/crud/base_experiments", params={"id": self.id})
+        response_raise_for_status(resp)
+        base_experiments = resp.json()
+        return base_experiments[0] if base_experiments else None
 
     def summarize(self, summarize_scores=True, comparison_experiment_id=None):
         """
@@ -918,13 +931,10 @@ class Experiment(ModelWrapper):
         if summarize_scores:
             # Get the comparison experiment
             if comparison_experiment_id is None:
-                conn = log_conn()
-                resp = conn.get("/crud/base_experiments", params={"id": self.id})
-                response_raise_for_status(resp)
-                base_experiments = resp.json()
-                if base_experiments:
-                    comparison_experiment_id = base_experiments[0]["base_exp_id"]
-                    comparison_experiment_name = base_experiments[0]["base_exp_name"]
+                base_experiment = self._fetch_base_exp_id()
+                if base_experiment:
+                    comparison_experiment_id = base_experiment["base_exp_id"]
+                    comparison_experiment_name = base_experiment["base_exp_name"]
 
             if comparison_experiment_id is not None:
                 summary_items = log_conn().get_json(
@@ -1417,7 +1427,7 @@ class ExperimentDataset:
     fields as the `output` field of the dataset. This is useful for evaluating the performance of your application
     against a prior experiment, instead of a ground truth value.
 
-    Do not create ExperimentDataset objects directly. Instead, use the `base_experiment_dataset()` method of `Experiment`.
+    Do not create ExperimentDataset objects directly. Instead, use the `fetch_base_experiment()` method of `Experiment`.
     """
 
     def __init__(self, experiment_id: str, output_field: str):
