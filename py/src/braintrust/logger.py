@@ -1098,6 +1098,10 @@ class ExperimentSpan:
         _unterminated_objects.remove_unterminated(self)
         return end_time
 
+    def close(self, *args, **kwargs):
+        """Alias for `end`."""
+        return self.end(*args, **kwargs)
+
     def _set_as_current_span(self):
         # Set this span as the currently-active span if not already set.
         if not self._context_token:
