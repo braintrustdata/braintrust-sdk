@@ -880,6 +880,22 @@ class Experiment(ModelWrapper):
             event=event,
         )
 
+    def base_experiment_dataset(self, output_field="auto"):
+        """
+        Get the base experiment's dataset.
+
+        :param output_field: The field to use as the output. If "auto" (the default), will use the expected field if it exists, otherwise the output field.
+
+        :returns: `ExperimentDataset`
+        """
+        if self.base_exp_id is None:
+            return None
+
+        return ExperimentDataset(
+            experiment_id=self.base_exp_id,
+            output_field=output_field,
+        )
+
     def summarize(self, summarize_scores=True, comparison_experiment_id=None):
         """
         Summarize the experiment, including the scores (compared to the closest reference experiment) and metadata.
@@ -1121,6 +1137,65 @@ class ExperimentSpan:
         self.end()
 
 
+class _ObjectLoader:
+    def __init__(self, object_type: str, object_id: id, version: "str | int" = None):
+        self.finished = False
+        self.object_type = object_type
+        self.object_id = object_id
+
+        self._fetched_data = None
+
+        self._pinned_version = None
+        if version is not None:
+            try:
+                self._pinned_version = int(version)
+                assert self._pinned_version >= 0
+            except (ValueError, AssertionError):
+                raise ValueError(f"version ({version}) must be a positive integer")
+
+    def fetch(self):
+        self._check_not_finished()
+
+        for record in self.fetched_data:
+            yield {
+                "id": record.get("id"),
+                "input": json.loads(record.get("input") or "null"),
+                "output": json.loads(record.get("output") or "null"),
+                "metadata": json.loads(record.get("metadata") or "null"),
+            }
+
+        self._clear_cache()
+
+    @property
+    def fetched_data(self):
+        self._check_not_finished()
+        if not self._fetched_data:
+            resp = log_conn().get(
+                f"object/{self.object_type}",
+                params={"id": self.object_id, "fmt": "json", "version": self._pinned_version},
+            )
+            response_raise_for_status(resp)
+
+            self._fetched_data = [json.loads(line) for line in resp.content.split(b"\n") if line.strip()]
+        return self._fetched_data
+
+    def _clear_cache(self):
+        self._check_not_finished()
+        self._fetched_data = None
+
+    @property
+    def version(self):
+        self._check_not_finished()
+        if self._pinned_version is not None:
+            return self._pinned_version
+        else:
+            return max([int(record.get(TRANSACTION_ID_FIELD, 0)) for record in self.fetched_data] or [0])
+
+    def _check_not_finished(self):
+        if self.finished:
+            raise RuntimeError(f"Cannot invoke method on finished {self.object_type}")
+
+
 class Dataset(ModelWrapper):
     """
     A dataset is a collection of records, such as model inputs and outputs, which represent
@@ -1143,18 +1218,9 @@ class Dataset(ModelWrapper):
 
         self.new_records = 0
 
-        self._fetched_data = None
-
-        self._pinned_version = None
-        if version is not None:
-            try:
-                self._pinned_version = int(version)
-                assert self._pinned_version >= 0
-            except (ValueError, AssertionError):
-                raise ValueError(f"version ({version}) must be a positive integer")
-
         super().__init__(response["dataset"])
         self.logger = _LogThread(name=self.name)
+        self.fetcher = _ObjectLoader("dataset", self.id, version=version)
 
         _unterminated_objects.add_unterminated(self, get_caller_location())
 
@@ -1274,45 +1340,18 @@ class Dataset(ModelWrapper):
 
         :returns: An iterator over the records in the dataset.
         """
-        self._check_not_finished()
-
-        for record in self.fetched_data:
-            yield {
-                "id": record.get("id"),
-                "input": json.loads(record.get("input") or "null"),
-                "output": json.loads(record.get("output") or "null"),
-                "metadata": json.loads(record.get("metadata") or "null"),
-            }
-
-        self._clear_cache()
+        return self.fetcher.fetch()
 
     def __iter__(self):
-        self._check_not_finished()
         return self.fetch()
 
     @property
     def fetched_data(self):
-        self._check_not_finished()
-        if not self._fetched_data:
-            resp = log_conn().get(
-                "object/dataset", params={"id": self.id, "fmt": "json", "version": self._pinned_version}
-            )
-            response_raise_for_status(resp)
-
-            self._fetched_data = [json.loads(line) for line in resp.content.split(b"\n") if line.strip()]
-        return self._fetched_data
-
-    def _clear_cache(self):
-        self._check_not_finished()
-        self._fetched_data = None
+        return self.fetcher.fetched_data
 
     @property
     def version(self):
-        self._check_not_finished()
-        if self._pinned_version is not None:
-            return self._pinned_version
-        else:
-            return max([int(record.get(TRANSACTION_ID_FIELD, 0)) for record in self.fetched_data] or [0])
+        return self.fetcher.version
 
     def close(self):
         """Terminate connection to the dataset and return its id. After calling close, one may not invoke any further methods on the dataset object.
@@ -1370,6 +1409,58 @@ class ScoreSummary(SerializableDataClass):
         return textwrap.dedent(
             f"""{score_pct} ({diff_score}) {score_name} score\t({self.improvements} improvements, {self.regressions} regressions)"""
         )
+
+
+class ExperimentDataset:
+    """
+    An `ExperimentDataset` is a dataset that maps to an experiment, and uses its `output` or `expected`
+    fields as the `output` field of the dataset. This is useful for evaluating the performance of your application
+    against a prior experiment, instead of a ground truth value.
+
+    Do not create ExperimentDataset objects directly. Instead, use the `base_experiment_dataset()` method of `Experiment`.
+    """
+
+    def __init__(self, experiment_id: str, output_field: str):
+        self.fetcher = _ObjectLoader("experiment", experiment_id)
+        self.output_field = output_field
+
+    def fetch(self):
+        """
+        Fetch all records in the experiment.
+
+        ```python
+        for record in dataset.fetch():
+            print(record)
+
+        # You can also iterate over the dataset directly.
+        for record in dataset:
+            print(record)
+        ```
+
+        :returns: An iterator over the records in the dataset.
+        """
+        for record in self.fetcher.fetch():
+            if self.output_field == "auto":
+                output = record.get("expected") or record.get("output")
+            else:
+                output = record[self.output_field]
+            yield {
+                "id": record["id"],
+                "input": record["input"],
+                "output": output,
+                "metadata": record["metadata"],
+            }
+
+    def __iter__(self):
+        return self.fetch()
+
+    @property
+    def fetched_data(self):
+        return self.fetcher.fetched_data
+
+    @property
+    def version(self):
+        return self.fetcher.version
 
 
 @dataclasses.dataclass
