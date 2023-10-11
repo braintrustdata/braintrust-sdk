@@ -210,8 +210,6 @@ def Eval(
     if _lazy_load:
         _evals[name] = evaluator
     else:
-        experiment = init_experiment(name)
-
         # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
         try:
             loop = asyncio.get_running_loop()
@@ -219,8 +217,9 @@ def Eval(
             loop = None
 
         async def run_to_completion():
-            results, summary = await run_evaluator(experiment, evaluator, 0, [])
-            report_evaluator_result(name, results, summary, True)
+            with init_experiment(name) as experiment:
+                results, summary = await run_evaluator(experiment, evaluator, 0, [])
+                report_evaluator_result(name, results, summary, True)
 
         if loop:
             return loop.create_task(run_to_completion())
@@ -327,6 +326,8 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
         error = None
         scores = {}
 
+        if experiment:
+            span = experiment.start_span("eval", input=datum.input, expected=datum.expected)
         try:
             hooks = DictEvalHooks(metadata)
 
@@ -335,12 +336,19 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
             if len(inspect.signature(evaluator.task).parameters) == 2:
                 task_args.append(hooks)
 
-            output = await await_or_run(evaluator.task, *task_args)
+            with span.start_span("task") as task_span:
+                output = await await_or_run(evaluator.task, *task_args)
+                task_span.log(input=task_args[0], output=output)
+            span.log(output=output)
 
+            # First, resolve the scorers if they are classes
             scorers = [
-                scorer().eval_async if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer
+                scorer() if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer
                 for scorer in evaluator.scores
             ]
+            # Then, use the eval_async method if it exists
+            scorers = [scorer.eval_async if isinstance(scorer, Scorer) else scorer for scorer in scorers]
+
             score_promises = [
                 asyncio.create_task(await_or_run(score, input=datum.input, expected=datum.expected, output=output))
                 for score in scorers
@@ -359,17 +367,15 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
 
             if len(score_metadata) > 0:
                 hooks.meta(scores=score_metadata)
+
+            # XXX: We could probably log these as they are being produced
+            span.log(metadata=metadata, scores=scores)
         except Exception as e:
             error = e
+        finally:
+            if experiment:
+                span.close()
 
-        if experiment and not error:
-            experiment.log(
-                input=datum.input,
-                metadata=metadata,
-                expected=datum.expected,
-                output=output,
-                scores=scores,
-            )
         return EvalResult(output=output, metadata=metadata, scores=scores, error=error)
 
     data_iterator = evaluator.data
