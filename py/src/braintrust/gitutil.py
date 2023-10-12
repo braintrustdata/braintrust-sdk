@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import subprocess
 import threading
@@ -6,9 +7,11 @@ from dataclasses import dataclass
 from functools import cache as _cache
 from typing import Optional
 
-import git
-
 from .util import SerializableDataClass
+
+# https://stackoverflow.com/questions/48399498/git-executable-not-found-in-python
+os.environ["GIT_PYTHON_REFRESH"] = "quiet"
+import git
 
 _logger = logging.getLogger("braintrust.gitutil")
 _gitlock = threading.RLock()

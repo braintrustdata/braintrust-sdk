@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import queue
+import sys
 import textwrap
 import threading
 import time
@@ -490,7 +491,7 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
 
             ping_ok = conn.ping()
 
-        if not ping_ok or ORG_ID is None or ORG_NAME is None or LOG_URL is None:
+        if (not ping_ok or ORG_ID is None or ORG_NAME is None or LOG_URL is None) and sys.stdout.isatty():
             print(
                 textwrap.dedent(
                     f"""\
@@ -525,7 +526,10 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
 
             ping_ok = conn.ping()
 
-        assert conn, "Conn should be set at this point (a bug)"
+        if not conn:
+            raise ValueError(
+                "Could not login to Braintrust. You may need to set BRAINTRUST_API_KEY in your environment."
+            )
 
         # Do not use the "ping" method here, because we'd like to `raise_for_status()` in case
         # of any remaining errors.
