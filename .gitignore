@@ -7,3 +7,5 @@ venv
 .DS_STORE
 .idea
 node_modules
+*.egg-info
+scratch-output/
