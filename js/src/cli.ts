@@ -12,6 +12,11 @@ import { ArgumentParser } from "argparse";
 import { v4 as uuidv4 } from "uuid";
 import pluralize from "pluralize";
 import {
+  login,
+  init as initExperiment,
+  _internalGetGlobalState,
+} from "./logger";
+import {
   BarProgressReporter,
   SimpleProgressReporter,
   ProgressReporter,
@@ -19,18 +24,6 @@ import {
 
 // Re-use the module resolution logic from Jest
 import nodeModulesPaths from "./jest/nodeModulesPaths";
-
-// We have to run configureNode() before importing other code, so that
-// global state is initialized correctly.
-import { configureNode } from "./node";
-configureNode();
-
-import {
-  login,
-  init as initExperiment,
-  _internalGetGlobalState,
-} from "./logger";
-
 import {
   EvaluatorDef,
   EvaluatorFile,
@@ -38,6 +31,7 @@ import {
   parseFilters,
   runEvaluator,
 } from "./framework";
+import { configureNode } from "./node";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript
@@ -55,6 +49,8 @@ const OUT_EXT = "js";
 
 const error = chalk.bold.red;
 const warning = chalk.hex("#FFA500"); // Orange color
+
+configureNode();
 
 interface BuildSuccess {
   type: "success";

@@ -3,7 +3,6 @@ import { v4 as uuidv4 } from "uuid";
 
 import iso, { IsoAsyncLocalStorage, CallerLocation } from "./isomorph";
 import { runFinally } from "./util";
-import { configureNode } from "./node";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -133,11 +132,7 @@ declare global {
 }
 
 let _state = globalThis.__inherited_state || new BraintrustState();
-
 export const _internalGetGlobalState = () => _state;
-export function _internalSetGlobalState(state: BraintrustState) {
-  _state = state;
-}
 
 // A utility to keep track of objects that should be cleaned up before
 // program exit. At the end of the program, the UnterminatedObjectsHandler

@@ -2,10 +2,7 @@ import {
   Experiment,
   NoopSpan,
   Span,
-  _internalGetGlobalState,
-  _internalSetGlobalState,
-  currentSpan,
-} from ".";
+} from "./logger";
 import { Score } from "autoevals";
 import { ProgressReporter } from "./progress";
 
