@@ -164,10 +164,6 @@ export async function runEvaluator(
           (metadata = { ...metadata, ...o });
 
         await evalSpan.startSpanWithCallback({ name: "task" }, async (span) => {
-          console.log(
-            "CURRENT SPAN FROM FRAMEOWKR",
-            _internalGetGlobalState().id
-          );
           const outputResult = evaluator.task(datum.input, {
             meta,
             span,

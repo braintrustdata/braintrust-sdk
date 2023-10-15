@@ -122,9 +122,7 @@ class BraintrustState {
   public id: string;
 
   constructor() {
-    configureNode();
-    this.id = uuidv4();
-    console.log("CREATING BRAINTRUST STATE", this.id);
+    this.id = uuidv4(); // This is for debugging
     this.currentExperiment = iso.newAsyncLocalStorage();
     this.currentSpan = iso.newAsyncLocalStorage();
   }
@@ -133,13 +131,6 @@ class BraintrustState {
 let _state = new BraintrustState();
 export const _internalGetGlobalState = () => _state;
 export function _internalSetGlobalState(state: BraintrustState) {
-  console.log(
-    "_internalSetGlobalState",
-    "CURRENT",
-    _state?.id,
-    "NEW",
-    state.id
-  );
   _state = state;
 }
 

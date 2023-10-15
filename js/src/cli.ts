@@ -12,11 +12,6 @@ import { ArgumentParser } from "argparse";
 import { v4 as uuidv4 } from "uuid";
 import pluralize from "pluralize";
 import {
-  login,
-  init as initExperiment,
-  _internalGetGlobalState,
-} from "./logger";
-import {
   BarProgressReporter,
   SimpleProgressReporter,
   ProgressReporter,
@@ -25,8 +20,16 @@ import {
 // Re-use the module resolution logic from Jest
 import nodeModulesPaths from "./jest/nodeModulesPaths";
 
+// We have to run configureNode() before importing other code, so that
+// global state is initialized correctly.
 import { configureNode } from "./node";
 configureNode();
+
+import {
+  login,
+  init as initExperiment,
+  _internalGetGlobalState,
+} from "./logger";
 
 import {
   EvaluatorDef,
@@ -106,7 +109,6 @@ function evaluateBuildResults(
   return evalWithModuleContext(inFile, () => {
     globalThis._evals = {};
     globalThis._loggerState = _internalGetGlobalState();
-    console.log("INITIALIZING MODULE WITH ID", _internalGetGlobalState().id);
     const __filename = inFile;
     const __dirname = dirname(__filename);
     new Function("require", "__filename", "__dirname", moduleText)(
