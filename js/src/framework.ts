@@ -146,29 +146,26 @@ export async function runEvaluator(
 
   const evals = data.map(async (datum) => {
     let metadata: Metadata = { ...datum.metadata };
-    let output = undefined;
-    let error = undefined;
+    let output: any = undefined;
+    let error: unknown | undefined = undefined;
     let scores: Record<string, number> = {};
     const callback = async (evalSpan: Span) => {
       try {
         const meta = (o: Record<string, unknown>) =>
           (metadata = { ...metadata, ...o });
 
-        const taskSpan = evalSpan.startSpan({ name: "task" });
-        try {
+        await evalSpan.startSpanWithCallback({ name: "task" }, async (span) => {
           const outputResult = evaluator.task(datum.input, {
             meta,
-            span: taskSpan,
+            span,
           });
           if (outputResult instanceof Promise) {
             output = await outputResult;
           } else {
             output = outputResult;
           }
-          taskSpan.log({ input: datum.input, output });
-        } finally {
-          taskSpan.end();
-        }
+          span.log({ input: datum.input, output });
+        });
         evalSpan.log({ output });
 
         const scoringArgs = { ...datum, metadata, output };
@@ -207,10 +204,18 @@ export async function runEvaluator(
       } finally {
         progressReporter.increment(evaluator.name);
       }
+
+      return {
+        output,
+        metadata,
+        scores,
+        error,
+      };
     };
 
+    let p = null;
     if (experiment) {
-      experiment.startSpanWithCallback(
+      p = experiment.startSpanWithCallback(
         {
           name: "eval",
           event: {
@@ -222,15 +227,10 @@ export async function runEvaluator(
       );
     } else {
       const span = new NoopSpan();
-      await callback(span);
+      p = callback(span);
     }
 
-    return {
-      output,
-      metadata,
-      scores,
-      error,
-    };
+    return await p;
   });
   const results = await Promise.all(evals);
   const summary = experiment ? await experiment.summarize() : null;
