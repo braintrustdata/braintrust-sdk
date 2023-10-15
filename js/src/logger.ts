@@ -128,7 +128,12 @@ class BraintrustState {
   }
 }
 
-let _state = new BraintrustState();
+declare global {
+  var __inherited_state: BraintrustState;
+}
+
+let _state = globalThis.__inherited_state || new BraintrustState();
+
 export const _internalGetGlobalState = () => _state;
 export function _internalSetGlobalState(state: BraintrustState) {
   _state = state;

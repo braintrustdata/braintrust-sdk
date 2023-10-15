@@ -62,7 +62,6 @@ export type EvaluatorFile = {
 
 declare global {
   var _evals: EvaluatorFile;
-  var _loggerState: any;
 }
 
 globalThis._evals = {};
@@ -74,7 +73,6 @@ export function Eval<Input, Output>(
   if (_evals[name]) {
     throw new Error(`Evaluator ${name} already exists`);
   }
-  _internalSetGlobalState(globalThis._loggerState);
   _evals[name] = { name, ...evaluator };
 }
 

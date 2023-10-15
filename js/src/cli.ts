@@ -108,7 +108,7 @@ function evaluateBuildResults(
   const moduleText = buildResult.outputFiles[0].text;
   return evalWithModuleContext(inFile, () => {
     globalThis._evals = {};
-    globalThis._loggerState = _internalGetGlobalState();
+    globalThis.__inherited_state = _internalGetGlobalState();
     const __filename = inFile;
     const __dirname = dirname(__filename);
     new Function("require", "__filename", "__dirname", moduleText)(
