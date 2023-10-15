@@ -115,6 +115,10 @@ export class NoopSpan implements Span {
 
 const noopSpan = new NoopSpan();
 
+declare global {
+  var __inherited_braintrust_state: BraintrustState;
+}
+
 class BraintrustState {
   public currentExperiment: IsoAsyncLocalStorage<Experiment | undefined>;
   public currentSpan: IsoAsyncLocalStorage<Span>;
@@ -124,14 +128,11 @@ class BraintrustState {
     this.id = uuidv4(); // This is for debugging
     this.currentExperiment = iso.newAsyncLocalStorage();
     this.currentSpan = iso.newAsyncLocalStorage();
+    globalThis.__inherited_braintrust_state = this;
   }
 }
 
-declare global {
-  var __inherited_state: BraintrustState;
-}
-
-let _state = globalThis.__inherited_state || new BraintrustState();
+let _state = globalThis.__inherited_braintrust_state || new BraintrustState();
 export const _internalGetGlobalState = () => _state;
 
 // A utility to keep track of objects that should be cleaned up before
