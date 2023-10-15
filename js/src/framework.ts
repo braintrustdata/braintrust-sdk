@@ -1,4 +1,11 @@
-import { Experiment, NoopSpan, Span } from "./logger";
+import {
+  Experiment,
+  NoopSpan,
+  Span,
+  _internalGetGlobalState,
+  _internalSetGlobalState,
+  currentSpan,
+} from ".";
 import { Score } from "autoevals";
 import { ProgressReporter } from "./progress";
 
@@ -55,6 +62,7 @@ export type EvaluatorFile = {
 
 declare global {
   var _evals: EvaluatorFile;
+  var _loggerState: any;
 }
 
 globalThis._evals = {};
@@ -66,6 +74,7 @@ export function Eval<Input, Output>(
   if (_evals[name]) {
     throw new Error(`Evaluator ${name} already exists`);
   }
+  _internalSetGlobalState(globalThis._loggerState);
   _evals[name] = { name, ...evaluator };
 }
 
@@ -155,6 +164,10 @@ export async function runEvaluator(
           (metadata = { ...metadata, ...o });
 
         await evalSpan.startSpanWithCallback({ name: "task" }, async (span) => {
+          console.log(
+            "CURRENT SPAN FROM FRAMEOWKR",
+            _internalGetGlobalState().id
+          );
           const outputResult = evaluator.task(datum.input, {
             meta,
             span,

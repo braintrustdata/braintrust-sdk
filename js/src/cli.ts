@@ -11,7 +11,11 @@ import { minimatch } from "minimatch";
 import { ArgumentParser } from "argparse";
 import { v4 as uuidv4 } from "uuid";
 import pluralize from "pluralize";
-import { login, init as initExperiment } from "./logger";
+import {
+  login,
+  init as initExperiment,
+  _internalGetGlobalState,
+} from "./logger";
 import {
   BarProgressReporter,
   SimpleProgressReporter,
@@ -20,6 +24,10 @@ import {
 
 // Re-use the module resolution logic from Jest
 import nodeModulesPaths from "./jest/nodeModulesPaths";
+
+import { configureNode } from "./node";
+configureNode();
+
 import {
   EvaluatorDef,
   EvaluatorFile,
@@ -27,7 +35,6 @@ import {
   parseFilters,
   runEvaluator,
 } from "./framework";
-import { configureNode } from "./node";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript
@@ -45,8 +52,6 @@ const OUT_EXT = "js";
 
 const error = chalk.bold.red;
 const warning = chalk.hex("#FFA500"); // Orange color
-
-configureNode();
 
 interface BuildSuccess {
   type: "success";
@@ -100,6 +105,8 @@ function evaluateBuildResults(
   const moduleText = buildResult.outputFiles[0].text;
   return evalWithModuleContext(inFile, () => {
     globalThis._evals = {};
+    globalThis._loggerState = _internalGetGlobalState();
+    console.log("INITIALIZING MODULE WITH ID", _internalGetGlobalState().id);
     const __filename = inFile;
     const __dirname = dirname(__filename);
     new Function("require", "__filename", "__dirname", moduleText)(

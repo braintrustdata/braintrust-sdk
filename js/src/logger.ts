@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 
 import iso, { IsoAsyncLocalStorage, CallerLocation } from "./isomorph";
 import { runFinally } from "./util";
+import { configureNode } from "./node";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -118,14 +119,29 @@ const noopSpan = new NoopSpan();
 class BraintrustState {
   public currentExperiment: IsoAsyncLocalStorage<Experiment | undefined>;
   public currentSpan: IsoAsyncLocalStorage<Span>;
+  public id: string;
 
   constructor() {
+    configureNode();
+    this.id = uuidv4();
+    console.log("CREATING BRAINTRUST STATE", this.id);
     this.currentExperiment = iso.newAsyncLocalStorage();
     this.currentSpan = iso.newAsyncLocalStorage();
   }
 }
 
 let _state = new BraintrustState();
+export const _internalGetGlobalState = () => _state;
+export function _internalSetGlobalState(state: BraintrustState) {
+  console.log(
+    "_internalSetGlobalState",
+    "CURRENT",
+    _state?.id,
+    "NEW",
+    state.id
+  );
+  _state = state;
+}
 
 // A utility to keep track of objects that should be cleaned up before
 // program exit. At the end of the program, the UnterminatedObjectsHandler
