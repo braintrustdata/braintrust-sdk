@@ -357,12 +357,18 @@ async function runOnce(
     const logger = opts.noSendLogs
       ? null
       : await initLogger(evaluator.evaluator.name);
-    return await runEvaluator(
-      logger,
-      evaluator.evaluator,
-      opts.progressReporter,
-      opts.filters
-    );
+    try {
+      return await runEvaluator(
+        logger,
+        evaluator.evaluator,
+        opts.progressReporter,
+        opts.filters
+      );
+    } finally {
+      if (logger) {
+        await logger.close();
+      }
+    }
   });
 
   console.log(`Processing ${resultPromises.length} evaluators...`);

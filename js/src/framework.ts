@@ -1,4 +1,4 @@
-import { Experiment } from "./logger";
+import { Experiment, NoopSpan, Span } from "./logger";
 import { Score } from "autoevals";
 import { ProgressReporter } from "./progress";
 
@@ -20,6 +20,7 @@ export type EvalTask<Input, Output> =
 
 export interface EvalHooks {
   meta: (info: Record<string, unknown>) => void;
+  span: Span;
 }
 
 // This happens to be compatible with ScorerArgs defined in autoevals
@@ -148,65 +149,82 @@ export async function runEvaluator(
     let output = undefined;
     let error = undefined;
     let scores: Record<string, number> = {};
-    try {
-      const meta = (o: Record<string, unknown>) =>
-        (metadata = { ...metadata, ...o });
+    const callback = async (evalSpan: Span) => {
+      try {
+        const meta = (o: Record<string, unknown>) =>
+          (metadata = { ...metadata, ...o });
 
-      const outputResult = evaluator.task(datum.input, {
-        meta,
-      });
-      if (outputResult instanceof Promise) {
-        output = await outputResult;
-      } else {
-        output = outputResult;
-      }
-
-      const scoringArgs = { ...datum, metadata, output };
-      const scoreResults = await Promise.all(
-        evaluator.scores.map(async (score) => {
-          const scoreResult = score(scoringArgs);
-          if (scoreResult instanceof Promise) {
-            return await scoreResult;
+        const taskSpan = evalSpan.startSpan({ name: "task" });
+        try {
+          const outputResult = evaluator.task(datum.input, {
+            meta,
+            span: taskSpan,
+          });
+          if (outputResult instanceof Promise) {
+            output = await outputResult;
           } else {
-            return scoreResult;
+            output = outputResult;
           }
-        })
+          taskSpan.log({ input: datum.input, output });
+        } finally {
+          taskSpan.end();
+        }
+        evalSpan.log({ output });
+
+        const scoringArgs = { ...datum, metadata, output };
+        const scoreResults = await Promise.all(
+          evaluator.scores.map(async (score) => {
+            const scoreResult = score(scoringArgs);
+            if (scoreResult instanceof Promise) {
+              return await scoreResult;
+            } else {
+              return scoreResult;
+            }
+          })
+        );
+
+        const scoreMetadata: Record<string, unknown> = {};
+        for (const scoreResult of scoreResults) {
+          scores[scoreResult.name] = scoreResult.score;
+          const metadata = {
+            ...scoreResult.metadata,
+          };
+          if (scoreResult.error !== undefined) {
+            metadata.error = scoreResult.error;
+          }
+          if (Object.keys(metadata).length > 0) {
+            scoreMetadata[scoreResult.name] = metadata;
+          }
+        }
+
+        if (Object.keys(scoreMetadata).length > 0) {
+          meta({ scores: scoreMetadata });
+        }
+
+        evalSpan.log({ scores, metadata });
+      } catch (e) {
+        error = e;
+      } finally {
+        progressReporter.increment(evaluator.name);
+      }
+    };
+
+    if (experiment) {
+      experiment.startSpanWithCallback(
+        {
+          name: "eval",
+          event: {
+            input: datum.input,
+            expected: datum.expected,
+          },
+        },
+        callback
       );
-
-      const scoreMetadata: Record<string, unknown> = {};
-      for (const scoreResult of scoreResults) {
-        scores[scoreResult.name] = scoreResult.score;
-        const metadata = {
-          ...scoreResult.metadata,
-        };
-        if (scoreResult.error !== undefined) {
-          metadata.error = scoreResult.error;
-        }
-        if (Object.keys(metadata).length > 0) {
-          scoreMetadata[scoreResult.name] = metadata;
-        }
-      }
-
-      if (Object.keys(scoreMetadata).length > 0) {
-        meta({ scores: scoreMetadata });
-      }
-    } catch (e) {
-      error = e;
-    } finally {
-      progressReporter.increment(evaluator.name);
+    } else {
+      const span = new NoopSpan();
+      await callback(span);
     }
 
-    if (experiment && !error) {
-      experiment.log({
-        // TODO We should rename this from inputs -> input in the logger, etc.
-        // https://github.com/braintrustdata/braintrust/issues/217
-        input: datum.input,
-        metadata: metadata,
-        expected: datum.expected,
-        output,
-        scores,
-      });
-    }
     return {
       output,
       metadata,
