@@ -1286,10 +1286,8 @@ export class SpanImpl implements Span {
     // The first log is a replacement, but subsequent logs to the same span
     // object will be merges.
     this.isMerge = false;
-    if (args.event) {
-      const { id: id, ...eventRest } = args.event;
-      this.log(eventRest);
-    }
+    const { id: id, ...eventRest } = args.event ?? {};
+    this.log(eventRest);
     this.isMerge = true;
 
     unterminatedObjects.addUnterminated(this, callerLocation);
