@@ -44,9 +44,9 @@ export function getCallerLocation(): CallerLocation | undefined {
     }
     if (path.dirname(frame.fileName) !== thisDir) {
       return {
-        caller_function_name: frame.functionName,
-        caller_file_name: frame.fileName,
-        caller_line_num: frame.lineNo,
+        caller_functionname: frame.functionName,
+        caller_filename: frame.fileName,
+        caller_lineno: frame.lineNo,
       };
     }
   }

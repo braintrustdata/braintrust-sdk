@@ -5,17 +5,7 @@ export function runFinally<R>(f: () => R, finallyF: () => void): R {
   let runSyncCleanup = true;
   try {
     const ret = f();
-    // There's no "blessed" way to detect whether an object is a
-    // Promise-like object in javascript. So we use duck typing.
-    if (
-      ret instanceof Object &&
-      "then" in ret &&
-      ret.then instanceof Function &&
-      "catch" in ret &&
-      ret.catch instanceof Function &&
-      "finally" in ret &&
-      ret.finally instanceof Function
-    ) {
+    if (ret instanceof Promise) {
       runSyncCleanup = false;
       return (ret as any).finally(finallyF) as R;
     } else {

@@ -12,9 +12,9 @@ export interface RepoStatus {
 }
 
 export interface CallerLocation {
-  caller_function_name: string;
-  caller_file_name: string;
-  caller_line_num: number;
+  caller_functionname: string;
+  caller_filename: string;
+  caller_lineno: number;
 }
 
 export interface IsoAsyncLocalStorage<T> {
