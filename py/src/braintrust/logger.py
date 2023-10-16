@@ -14,7 +14,6 @@ import time
 import traceback
 import uuid
 from abc import ABC, abstractmethod
-from functools import cache as _cache
 from functools import partial, wraps
 from getpass import getpass
 from typing import Any, Dict, Optional, Union
@@ -137,8 +136,43 @@ NOOP_SPAN = _NoopSpan()
 
 class BraintrustState:
     def __init__(self):
+        self.id = str(uuid.uuid4())
         self.current_experiment = contextvars.ContextVar("braintrust_current_experiment", default=None)
         self.current_span = contextvars.ContextVar("braintrust_current_span", default=NOOP_SPAN)
+
+        self.api_url = None
+        self.login_token = None
+        self.org_id = None
+        self.org_name = None
+        self.log_url = None
+        self.logged_in = False
+
+        self._api_conn = None
+        self._log_conn = None
+        self._user_info = None
+
+    def api_conn(self):
+        if not self._api_conn:
+            if not self.api_url:
+                raise RuntimeError("Must initialize api_url before requesting api_conn")
+            self._api_conn = HTTPConnection(self.api_url)
+        return self._api_conn
+
+    def log_conn(self):
+        if not self._log_conn:
+            if not self.log_url:
+                raise RuntimeError("Must initialize log_url before requesting log_conn")
+            self._log_conn = HTTPConnection(self.log_url)
+        return self._log_conn
+
+    def user_info(self):
+        if not self._user_info:
+            self._user_info = self.log_conn().get_json("ping")
+        return self._user_info
+
+    def set_user_info_if_null(self, info):
+        if not self._user_info:
+            self._user_info = info
 
 
 _state = BraintrustState()
@@ -175,13 +209,6 @@ class _UnterminatedObjectsHandler:
 
 _unterminated_objects = _UnterminatedObjectsHandler()
 
-API_URL = None
-LOGIN_TOKEN = None
-ORG_ID = None
-ORG_NAME = None
-LOG_URL = None
-LOGGED_IN = False
-
 TRANSACTION_ID_FIELD = "_xact_id"
 
 
@@ -195,6 +222,7 @@ class HTTPConnection:
     def ping(self):
         try:
             resp = self.get("ping")
+            _state.set_user_info_if_null(resp.json())
             return resp.ok
         except requests.exceptions.ConnectionError:
             return False
@@ -252,26 +280,20 @@ class HTTPConnection:
         return resp.json()
 
 
-@_cache
-def api_conn():
-    return HTTPConnection(API_URL)
-
-
-@_cache
 def log_conn():
-    return HTTPConnection(LOG_URL)
+    return _state.log_conn()
 
 
-@_cache
+def api_conn():
+    return _state.api_conn()
+
+
 def user_info():
-    return log_conn().get_json("ping")
+    return _state.user_info()
 
 
-def _clear_cached_globals():
-    api_conn.cache_clear()
-    log_conn.cache_clear()
-    user_info.cache_clear()
-    _state = BraintrustState()
+def org_id():
+    return _state.org_id
 
 
 class ModelWrapper:
@@ -345,7 +367,7 @@ class _LogThread:
         # We cannot have multiple threads flushing in parallel, because the
         # order of published elements would be undefined.
         with self.flush_lock:
-            conn = log_conn()
+            conn = _state.log_conn()
             while True:
                 items = []
                 items_len = 0
@@ -371,7 +393,7 @@ def _ensure_object(object_type, object_id, force=False):
 
     if force or not experiment_path.exists():
         os.makedirs(EXPERIMENTS_PATH, exist_ok=True)
-        conn = log_conn()
+        conn = _state.log_conn()
         resp = conn.get(
             f"object/{object_type}",
             params={"id": object_id},
@@ -403,7 +425,7 @@ def init(
     """
     Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
 
-    Remember to close your experiment when it is finished by calling `Experiment.close`. We recommend binding the experiment to a context manager (`with braintrust.init(...) as experiment`) to automatically mark it as active and ensure it is terminated.
+    Remember to close your experiment when it is finished by calling `Experiment.close`. We recommend binding the experiment to a context manager (`with braintrust.init(...) as experiment`) to automatically mark it as current and ensure it is terminated.
 
     :param project: The name of the project to create the experiment in.
     :param experiment: The name of the experiment to create. If not specified, a name will be generated automatically.
@@ -487,7 +509,7 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
     :param force_login: Login again, even if you have already logged in (by default, this function will exit quickly if you have already logged in)
     """
 
-    global API_URL, LOGIN_TOKEN, ORG_ID, ORG_NAME, LOG_URL, LOGGED_IN
+    global _state
 
     # Only permit one thread to login at a time
     with login_lock:
@@ -500,18 +522,19 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
         # If any provided login inputs disagree with our existing settings,
         # force login.
         if (
-            api_url != API_URL
-            or (api_key is not None and HTTPConnection.sanitize_token(api_key) != LOGIN_TOKEN)
-            or (org_name is not None and org_name != ORG_NAME)
+            api_url != _state.api_url
+            or (api_key is not None and HTTPConnection.sanitize_token(api_key) != _state.login_token)
+            or (org_name is not None and org_name != _state.org_name)
         ):
             force_login = True
 
-        if not force_login and LOGGED_IN:
+        if not force_login and _state.logged_in:
             # We have already logged in
             return
-        _clear_cached_globals()
 
-        API_URL = api_url
+        _state = BraintrustState()
+
+        _state.api_url = api_url
 
         login_key_info = None
         ping_ok = False
@@ -519,7 +542,7 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
         os.makedirs(CACHE_PATH, exist_ok=True)
 
         if api_key is not None:
-            resp = requests.post(_urljoin(API_URL, "/api/apikey/login"), json={"token": api_key})
+            resp = requests.post(_urljoin(_state.api_url, "/api/apikey/login"), json={"token": api_key})
             if not resp.ok:
                 api_key_prefix = (
                     (" (" + api_key[:2] + "*" * (len(api_key) - 4) + api_key[-2:] + ")") if len(api_key) > 4 else ""
@@ -529,7 +552,7 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
 
             _check_org_info(info["org_info"], org_name)
 
-            conn = log_conn()
+            conn = _state.log_conn()
             conn.set_token(api_key)
 
             ping_ok = conn.ping()
@@ -538,10 +561,10 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
             with open(LOGIN_INFO_PATH) as f:
                 login_key_info = json.load(f)
 
-            LOG_URL = login_key_info.get("log_url")
-            ORG_ID = login_key_info.get("org_id")
-            ORG_NAME = login_key_info.get("org_name")
-            conn = log_conn()
+            _state.log_url = login_key_info.get("log_url")
+            _state.org_id = login_key_info.get("org_id")
+            _state.org_name = login_key_info.get("org_name")
+            conn = _state.log_conn()
 
             token = login_key_info.get("token")
             if token is not None:
@@ -549,20 +572,22 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
 
             ping_ok = conn.ping()
 
-        if (not ping_ok or ORG_ID is None or ORG_NAME is None or LOG_URL is None) and sys.stdout.isatty():
+        if (
+            not ping_ok or _state.org_id is None or _state.org_name is None or _state.log_url is None
+        ) and sys.stdout.isatty():
             print(
                 textwrap.dedent(
                     f"""\
-                The recommended way to login is to generate an API token at {API_URL}/app/settings.
+                The recommended way to login is to generate an API token at {_state.api_url}/app/settings.
                 However, Braintrust also supports generating a temporary token for the SDK. This token
                 will expire after about an hour, so it is not recommended for long-term use.
 
-                Please copy your temporary token from {API_URL}/app/token."""
+                Please copy your temporary token from {_state.api_url}/app/token."""
                 )
             )
             temp_token = getpass("Token: ")
 
-            resp = requests.post(_urljoin(API_URL, "/api/id-token"), json={"token": temp_token})
+            resp = requests.post(_urljoin(_state.api_url, "/api/id-token"), json={"token": temp_token})
             response_raise_for_status(resp)
             info = resp.json()
             token = info["token"]
@@ -573,13 +598,13 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
                 _save_api_info(
                     {
                         "token": token,
-                        "org_id": ORG_ID,
-                        "log_url": LOG_URL,
-                        "org_name": ORG_NAME,
+                        "org_id": _state.org_id,
+                        "log_url": _state.log_url,
+                        "org_name": _state.org_name,
                     }
                 )
 
-            conn = log_conn()
+            conn = _state.log_conn()
             conn.set_token(token)
 
             ping_ok = conn.ping()
@@ -602,9 +627,9 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
         conn.make_long_lived()
 
         # Set the same token in the API
-        api_conn().set_token(conn.token)
-        LOGIN_TOKEN = conn.token
-        LOGGED_IN = True
+        _state.api_conn().set_token(conn.token)
+        _state.login_token = conn.token
+        _state.logged_in = True
 
 
 def log(**event):
@@ -643,7 +668,7 @@ def summarize(summarize_scores=True, comparison_experiment_id=None):
 
 
 def current_experiment() -> Optional["Experiment"]:
-    """Returns the global current experiment (set by `with braintrust.init` or `with braintrust.with_current`). Returns None if no current experiment has been set."""
+    """Returns the currently-active experiment (set by `with braintrust.init(...)` or `with braintrust.with_current(experiment)`). Returns undefined if no current experiment has been set."""
 
     return _state.current_experiment.get()
 
@@ -667,7 +692,7 @@ def start_span(name, span_attributes={}, start_time=None, set_current=None, **ev
     See `Span.startSpan` for full details.
     """
 
-    name = name or get_caller_location().caller_function_name or "root"
+    name = name or get_caller_location().caller_functionname or "root"
     kwargs = dict(name=name, span_attributes=span_attributes, start_time=start_time, set_current=set_current, **event)
     parent_span = current_span()
     if parent_span != NOOP_SPAN:
@@ -722,14 +747,12 @@ def traced(*span_args, **span_kwargs):
 
         @wraps(f)
         def wrapper_sync(*f_args, **f_kwargs):
-            span = start_span(*span_args, **span_kwargs)
-            with span:
+            with start_span(*span_args, **span_kwargs):
                 return f(*f_args, **f_kwargs)
 
         @wraps(f)
         async def wrapper_async(*f_args, **f_kwargs):
-            span = start_span(*span_args, **span_kwargs)
-            with span:
+            with start_span(*span_args, **span_kwargs):
                 return await f(*f_args, **f_kwargs)
 
         if inspect.iscoroutinefunction(f):
@@ -746,19 +769,19 @@ def traced(*span_args, **span_kwargs):
 
 
 def _check_org_info(org_info, org_name):
-    global ORG_ID, ORG_NAME, LOG_URL
+    global _state
 
     if len(org_info) == 0:
         raise ValueError("This user is not part of any organizations.")
 
     for orgs in org_info:
         if org_name is None or orgs["name"] == org_name:
-            ORG_ID = orgs["id"]
-            ORG_NAME = orgs["name"]
-            LOG_URL = orgs["api_url"]
+            _state.org_id = orgs["id"]
+            _state.org_name = orgs["name"]
+            _state.log_url = orgs["api_url"]
             break
 
-    if ORG_ID is None:
+    if _state.org_id is None:
         raise ValueError(
             f"Organization {org_name} not found. Must be one of {', '.join([x['name'] for x in org_info])}"
         )
@@ -827,7 +850,7 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
         for key in metrics.keys():
             if not isinstance(key, str):
                 raise ValueError("metric keys must be strings")
-        for forbidden_key in ["start", "end", "caller_function_name", "caller_file_name", "caller_line_num"]:
+        for forbidden_key in ["start", "end", "caller_functionname", "caller_filename", "caller_lineno"]:
             if forbidden_key in metrics:
                 raise ValueError(f"Key {forbidden_key} may not be specified in metrics")
 
@@ -891,7 +914,7 @@ class Experiment(ModelWrapper):
         self.finished = False
         self.set_current = True if set_current is None else set_current
 
-        args = {"project_name": project_name, "org_id": ORG_ID}
+        args = {"project_name": project_name, "org_id": _state.org_id}
 
         if experiment_name is not None:
             args["experiment_name"] = experiment_name
@@ -918,7 +941,7 @@ class Experiment(ModelWrapper):
         if is_public is not None:
             args["public"] = is_public
 
-        response = api_conn().post_json("api/experiment/register", args)
+        response = _state.api_conn().post_json("api/experiment/register", args)
         self.project = ModelWrapper(response["project"])
         super().__init__(response["experiment"])
         self.dataset = dataset
@@ -947,7 +970,7 @@ class Experiment(ModelWrapper):
         :param expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
         :param scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments.
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
-        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically and should not be specified: "start", "end", "caller_function_name", "caller_file_name", "caller_line_num".
+        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically and should not be specified: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
         :param dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
         :param inputs: (Deprecated) the same as `input` (will be removed in a future version).
@@ -1004,7 +1027,9 @@ class Experiment(ModelWrapper):
         # includes the new experiment.
         self.logger.flush()
 
-        project_url = f"{API_URL}/app/{encode_uri_component(ORG_NAME)}/p/{encode_uri_component(self.project.name)}"
+        project_url = (
+            f"{_state.api_url}/app/{encode_uri_component(_state.org_name)}/p/{encode_uri_component(self.project.name)}"
+        )
         experiment_url = f"{project_url}/{encode_uri_component(self.name)}"
 
         score_summary = {}
@@ -1012,7 +1037,7 @@ class Experiment(ModelWrapper):
         if summarize_scores:
             # Get the comparison experiment
             if comparison_experiment_id is None:
-                conn = log_conn()
+                conn = _state.log_conn()
                 resp = conn.get("/crud/base_experiments", params={"id": self.id})
                 response_raise_for_status(resp)
                 base_experiments = resp.json()
@@ -1021,7 +1046,7 @@ class Experiment(ModelWrapper):
                     comparison_experiment_name = base_experiments[0]["base_exp_name"]
 
             if comparison_experiment_id is not None:
-                summary_items = log_conn().get_json(
+                summary_items = _state.log_conn().get_json(
                     "experiment-comparison",
                     args={
                         "experiment_id": self.id,
@@ -1235,11 +1260,11 @@ class Dataset(ModelWrapper):
         self.finished = False
 
         args = _populate_args(
-            {"project_name": project_name, "org_id": ORG_ID},
+            {"project_name": project_name, "org_id": _state.org_id},
             dataset_name=name,
             description=description,
         )
-        response = api_conn().post_json("api/dataset/register", args)
+        response = _state.api_conn().post_json("api/dataset/register", args)
         self.project = ModelWrapper(response["project"])
 
         self.new_records = 0
@@ -1275,7 +1300,7 @@ class Dataset(ModelWrapper):
         """
         self._check_not_finished()
 
-        user_id = user_info()["id"]
+        user_id = _state.user_info()["id"]
 
         if metadata:
             if not isinstance(metadata, dict):
@@ -1310,7 +1335,7 @@ class Dataset(ModelWrapper):
         """
         self._check_not_finished()
 
-        user_id = user_info()["id"]
+        user_id = _state.user_info()["id"]
         args = _populate_args(
             {
                 "id": id,
@@ -1338,12 +1363,14 @@ class Dataset(ModelWrapper):
         # includes the new experiment.
         self.logger.flush()
 
-        project_url = f"{API_URL}/app/{encode_uri_component(ORG_NAME)}/p/{encode_uri_component(self.project.name)}"
+        project_url = (
+            f"{_state.api_url}/app/{encode_uri_component(_state.org_name)}/p/{encode_uri_component(self.project.name)}"
+        )
         dataset_url = f"{project_url}/d/{encode_uri_component(self.name)}"
 
         data_summary = None
         if summarize_data:
-            data_summary_d = log_conn().get_json(
+            data_summary_d = _state.log_conn().get_json(
                 "dataset-summary",
                 args={
                     "dataset_id": self.id,
@@ -1395,7 +1422,7 @@ class Dataset(ModelWrapper):
     def fetched_data(self):
         self._check_not_finished()
         if not self._fetched_data:
-            resp = log_conn().get(
+            resp = _state.log_conn().get(
                 "object/dataset", params={"id": self.id, "fmt": "json", "version": self._pinned_version}
             )
             response_raise_for_status(resp)

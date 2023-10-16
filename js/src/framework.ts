@@ -1,7 +1,10 @@
 import {
   Experiment,
-  NoopSpan,
   Span,
+  currentSpan,
+  noopSpan,
+  traced,
+  withCurrent,
 } from "./logger";
 import { Score } from "autoevals";
 import { ProgressReporter } from "./progress";
@@ -24,7 +27,6 @@ export type EvalTask<Input, Output> =
 
 export interface EvalHooks {
   meta: (info: Record<string, unknown>) => void;
-  span: Span;
 }
 
 // This happens to be compatible with ScorerArgs defined in autoevals
@@ -153,34 +155,51 @@ export async function runEvaluator(
     let output: any = undefined;
     let error: unknown | undefined = undefined;
     let scores: Record<string, number> = {};
-    const callback = async (evalSpan: Span) => {
+    const callback = async () => {
       try {
         const meta = (o: Record<string, unknown>) =>
           (metadata = { ...metadata, ...o });
 
-        await evalSpan.startSpanWithCallback({ name: "task" }, async (span) => {
-          const outputResult = evaluator.task(datum.input, {
-            meta,
-            span,
-          });
-          if (outputResult instanceof Promise) {
-            output = await outputResult;
-          } else {
-            output = outputResult;
-          }
-          span.log({ input: datum.input, output });
-        });
-        evalSpan.log({ output });
+        await traced(
+          async () => {
+            const outputResult = evaluator.task(datum.input, { meta });
+            if (outputResult instanceof Promise) {
+              output = await outputResult;
+            } else {
+              output = outputResult;
+            }
+            currentSpan().log({ input: datum.input, output });
+          },
+          { name: "task" }
+        );
+        currentSpan().log({ output });
 
         const scoringArgs = { ...datum, metadata, output };
         const scoreResults = await Promise.all(
           evaluator.scores.map(async (score) => {
-            const scoreResult = score(scoringArgs);
-            if (scoreResult instanceof Promise) {
-              return await scoreResult;
-            } else {
-              return scoreResult;
-            }
+            return traced(
+              async () => {
+                const scoreResult = score(scoringArgs);
+                const result =
+                  scoreResult instanceof Promise
+                    ? await scoreResult
+                    : scoreResult;
+                const {
+                  metadata: resultMetadata,
+                  name: _,
+                  ...resultRest
+                } = result;
+                currentSpan().log({
+                  output: resultRest,
+                  metadata: resultMetadata,
+                });
+                return result;
+              },
+              {
+                name: score.name || "<anonymous>",
+                event: { input: scoringArgs },
+              }
+            );
           })
         );
 
@@ -202,7 +221,7 @@ export async function runEvaluator(
           meta({ scores: scoreMetadata });
         }
 
-        evalSpan.log({ scores, metadata });
+        currentSpan().log({ scores, metadata });
       } catch (e) {
         error = e;
       } finally {
@@ -217,24 +236,20 @@ export async function runEvaluator(
       };
     };
 
-    let p = null;
-    if (experiment) {
-      p = experiment.startSpanWithCallback(
-        {
+    const rootSpan: Span = experiment
+      ? experiment.startSpan({
           name: "eval",
           event: {
             input: datum.input,
             expected: datum.expected,
           },
-        },
-        callback
-      );
-    } else {
-      const span = new NoopSpan();
-      p = callback(span);
+        })
+      : noopSpan;
+    try {
+      return await withCurrent(rootSpan, callback);
+    } finally {
+      rootSpan.end();
     }
-
-    return await p;
   });
   const results = await Promise.all(evals);
   const summary = experiment ? await experiment.summarize() : null;
