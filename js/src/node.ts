@@ -1,9 +1,11 @@
 import * as http from "http";
 import * as https from "https";
 import axios from "axios";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 import iso from "./isomorph";
 import { getRepoStatus, getPastNAncestors } from "./gitutil";
+import { getCallerLocation } from "./stackutil";
 
 export function configureNode() {
   iso.makeAxios = (options) => {
@@ -20,4 +22,6 @@ export function configureNode() {
   iso.getRepoStatus = getRepoStatus;
   iso.getPastNAncestors = getPastNAncestors;
   iso.getEnv = (name) => process.env[name];
+  iso.getCallerLocation = getCallerLocation;
+  iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
 }

@@ -11,7 +11,11 @@ import { minimatch } from "minimatch";
 import { ArgumentParser } from "argparse";
 import { v4 as uuidv4 } from "uuid";
 import pluralize from "pluralize";
-import { login, init as initExperiment } from "./logger";
+import {
+  login,
+  init as initExperiment,
+  _internalGetGlobalState,
+} from "./logger";
 import {
   BarProgressReporter,
   SimpleProgressReporter,
@@ -100,6 +104,7 @@ function evaluateBuildResults(
   const moduleText = buildResult.outputFiles[0].text;
   return evalWithModuleContext(inFile, () => {
     globalThis._evals = {};
+    globalThis.__inherited_braintrust_state = _internalGetGlobalState();
     const __filename = inFile;
     const __dirname = dirname(__filename);
     new Function("require", "__filename", "__dirname", moduleText)(
@@ -357,12 +362,18 @@ async function runOnce(
     const logger = opts.noSendLogs
       ? null
       : await initLogger(evaluator.evaluator.name);
-    return await runEvaluator(
-      logger,
-      evaluator.evaluator,
-      opts.progressReporter,
-      opts.filters
-    );
+    try {
+      return await runEvaluator(
+        logger,
+        evaluator.evaluator,
+        opts.progressReporter,
+        opts.filters
+      );
+    } finally {
+      if (logger) {
+        await logger.close();
+      }
+    }
   });
 
   console.log(`Processing ${resultPromises.length} evaluators...`);

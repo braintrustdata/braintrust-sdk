@@ -14,6 +14,7 @@ from tqdm.auto import tqdm as std_tqdm
 
 from autoevals import Score, Scorer
 
+from .logger import NOOP_SPAN, Span, current_span, start_span
 from .logger import init as _init_experiment
 from .util import SerializableDataClass
 
@@ -51,6 +52,13 @@ class EvalHooks(abc.ABC):
     """
     An object that can be used to add metadata to an evaluation. This is passed to the `task` function.
     """
+
+    @property
+    @abc.abstractmethod
+    def span(self) -> Span:
+        """
+        Access the span under which the task is run. Also accessible via braintrust.current_span()
+        """
 
     @abc.abstractmethod
     def meta(self, **info) -> None:
@@ -287,6 +295,14 @@ class EvalResult:
 class DictEvalHooks(EvalHooks):
     def __init__(self, metadata):
         self.metadata = metadata
+        self._span = None
+
+    @property
+    def span(self):
+        return self._span
+
+    def set_span(self, span):
+        self._span = span
 
     def meta(self, **info):
         self.metadata.update(info)
@@ -317,6 +333,18 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
         else:
             return f(*args, **kwargs)
 
+    async def await_or_run_scorer(scorer, scorer_idx, **kwargs):
+        name = scorer._name() if hasattr(scorer, "_name") else scorer.__name__
+        if name == "<lambda>":
+            name = f"scorer_{scorer_idx}"
+        with start_span(name=name, input=dict(**kwargs)):
+            score = scorer.eval_async if isinstance(scorer, Scorer) else scorer
+            result = await await_or_run(score, **kwargs)
+            result_rest = result.as_dict()
+            result_metadata = result_rest.pop("metadata", {})
+            current_span().log(output=result_rest, metadata=result_metadata)
+            return result
+
     async def run_evaluator_task(datum):
         if isinstance(datum, dict):
             datum = EvalCase(**datum)
@@ -327,54 +355,52 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
         scores = {}
 
         if experiment:
-            span = experiment.start_span("eval", input=datum.input, expected=datum.expected)
-        try:
-            hooks = DictEvalHooks(metadata)
+            root_span = experiment.start_span("eval", input=datum.input, expected=datum.expected)
+        else:
+            root_span = NOOP_SPAN
+        with root_span:
+            try:
+                hooks = DictEvalHooks(metadata)
 
-            # Check if the task takes a hooks argument
-            task_args = [datum.input]
-            if len(inspect.signature(evaluator.task).parameters) == 2:
-                task_args.append(hooks)
+                # Check if the task takes a hooks argument
+                task_args = [datum.input]
+                if len(inspect.signature(evaluator.task).parameters) == 2:
+                    task_args.append(hooks)
 
-            with span.start_span("task") as task_span:
-                output = await await_or_run(evaluator.task, *task_args)
-                task_span.log(input=task_args[0], output=output)
-            span.log(output=output)
+                with current_span().start_span("task") as task_span:
+                    hooks.set_span(task_span)
+                    output = await await_or_run(evaluator.task, *task_args)
+                    task_span.log(input=task_args[0], output=output)
+                current_span().log(output=output)
 
-            # First, resolve the scorers if they are classes
-            scorers = [
-                scorer() if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer
-                for scorer in evaluator.scores
-            ]
-            # Then, use the eval_async method if it exists
-            scorers = [scorer.eval_async if isinstance(scorer, Scorer) else scorer for scorer in scorers]
+                # First, resolve the scorers if they are classes
+                scorers = [
+                    scorer() if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer
+                    for scorer in evaluator.scores
+                ]
+                score_promises = [
+                    asyncio.create_task(await_or_run_scorer(score, idx, **datum.as_dict(), output=output))
+                    for idx, score in enumerate(scorers)
+                ]
+                score_results = [await p for p in score_promises]
+                score_metadata = {}
+                for scorer, score_result in zip(scorers, score_results):
+                    if not isinstance(score_result, Score):
+                        score_result = Score(name=scorer.__name__, score=score_result)
+                    scores[score_result.name] = score_result.score
+                    m = {**(score_result.metadata or {})}
+                    if score_result.error is not None:
+                        m["error"] = str(score_result.error)
+                    if len(m) > 0:
+                        score_metadata[score_result.name] = m
 
-            score_promises = [
-                asyncio.create_task(await_or_run(score, input=datum.input, expected=datum.expected, output=output))
-                for score in scorers
-            ]
-            score_results = [await p for p in score_promises]
-            score_metadata = {}
-            for scorer, score_result in zip(scorers, score_results):
-                if not isinstance(score_result, Score):
-                    score_result = Score(name=scorer.__name__, score=score_result)
-                scores[score_result.name] = score_result.score
-                m = {**(score_result.metadata or {})}
-                if score_result.error is not None:
-                    m["error"] = str(score_result.error)
-                if len(m) > 0:
-                    score_metadata[score_result.name] = m
+                if len(score_metadata) > 0:
+                    hooks.meta(scores=score_metadata)
 
-            if len(score_metadata) > 0:
-                hooks.meta(scores=score_metadata)
-
-            # XXX: We could probably log these as they are being produced
-            span.log(metadata=metadata, scores=scores)
-        except Exception as e:
-            error = e
-        finally:
-            if experiment:
-                span.end()
+                # XXX: We could probably log these as they are being produced
+                current_span().log(metadata=metadata, scores=scores)
+            except Exception as e:
+                error = e
 
         return EvalResult(output=output, metadata=metadata, scores=scores, error=error)
 
