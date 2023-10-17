@@ -392,6 +392,8 @@ class _LogThread:
                     _logger.warning(
                         f"log request failed with status code {resp.status_code}: {resp.text}.{retrying_text}"
                     )
+                if not resp.ok:
+                    _logger.warning(f"log request failed after {NUM_RETRIES} retries. Dropping batch")
             self.queue_filled_event.clear()
 
 

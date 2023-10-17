@@ -2,7 +2,8 @@ import axios, { AxiosInstance } from "axios";
 import { v4 as uuidv4 } from "uuid";
 
 import iso, { IsoAsyncLocalStorage, CallerLocation } from "./isomorph";
-import { runFinally } from "./util";
+import { runFinally, TRANSACTION_ID_FIELD, IS_MERGE_FIELD } from "./util";
+import { mergeRowBatch } from "./merge_row_batch";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -248,8 +249,6 @@ class UnterminatedObjectsHandler {
 
 let unterminatedObjects = new UnterminatedObjectsHandler();
 
-const TRANSACTION_ID_FIELD = "_xact_id";
-
 class HTTPConnection {
   base_url: string;
   token: string | null;
@@ -395,7 +394,7 @@ type ExperimentEvent = Partial<InputField> &
     root_span_id: string;
     project_id: string;
     experiment_id: string;
-    _is_merge: boolean;
+    [IS_MERGE_FIELD]: boolean;
   } & Partial<{
     user_id: string;
     created: string;
@@ -450,10 +449,13 @@ class LogThread {
   async flush_once(batchSize: number = DefaultBatchSize): Promise<string[]> {
     this.active_flush_resolved = false;
 
-    const initialItems = (this.items || []).reverse();
+    // Since the merged rows are guaranteed to refer to independent rows,
+    // publish order does not matter and we can flush all item batches
+    // concurrently.
+    const initialItems = mergeRowBatch(this.items || []).reverse();
     this.items = [];
 
-    let ret = [];
+    let postPromises = [];
     while (true) {
       const items = [];
       let itemsLen = 0;
@@ -474,22 +476,30 @@ class LogThread {
         break;
       }
 
-      for (let i = 0; i < NumRetries; i++) {
-        try {
-          ret.push(
-            ...(
+      postPromises.push(
+        (async () => {
+          for (let i = 0; i < NumRetries; i++) {
+            try {
+              return (
                 await _state
-                    .logConn()
-                    .post_json("logs", constructJsonArray(items))
-            ).map((res: any) => res.id)
+                  .logConn()
+                  .post_json("logs", constructJsonArray(items))
+              ).map((res: any) => res.id);
+            } catch (e) {
+              const retryingText = i + 1 === NumRetries ? "" : " Retrying";
+              console.warn(
+                `log request failed with error ${e}.${retryingText}`
+              );
+            }
+          }
+          console.warn(
+            `log request failed after ${NumRetries} retries. Dropping batch`
           );
-          break;
-        } catch (e) {
-          const retryingText = i + 1 === NumRetries ? "" : " Retrying";
-          console.warn(`log request failed with error ${e}.${retryingText}`);
-        }
-      }
+          return [];
+        })()
+      );
     }
+    let ret = await Promise.all(postPromises);
 
     // If more items were added while we were flushing, flush again
     if (this.items.length > 0) {
@@ -1372,7 +1382,7 @@ export class SpanImpl implements Span {
       root_span_id: this.root_span_id,
       project_id: this._project_id,
       experiment_id: this._experiment_id,
-      _is_merge: this.isMerge,
+      [IS_MERGE_FIELD]: this.isMerge,
     };
     this.internalData = {};
     this.experimentLogger.log([record]);
