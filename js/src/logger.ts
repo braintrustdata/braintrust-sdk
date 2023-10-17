@@ -282,9 +282,20 @@ class LogThread {
       }
 
       if (items.length > 0) {
+        console.log("FLUSHING", items.length, "items", itemsLen / 1024, "KB");
+        const start = performance.now();
         const resp = await log_conn().post_json(
           "logs",
           constructJsonArray(items)
+        );
+        console.log(
+          "DONE FLUSHING",
+          items.length,
+          "items",
+          itemsLen / 1024,
+          "KB",
+          performance.now() - start,
+          "ms"
         );
         ret = resp.data;
       } else {
