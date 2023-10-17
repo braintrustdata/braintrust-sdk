@@ -27,6 +27,7 @@ export type EvalTask<Input, Output> =
 
 export interface EvalHooks {
   meta: (info: Record<string, unknown>) => void;
+  span: Span;
 }
 
 // This happens to be compatible with ScorerArgs defined in autoevals
@@ -162,7 +163,10 @@ export async function runEvaluator(
 
         await traced(
           async () => {
-            const outputResult = evaluator.task(datum.input, { meta });
+            const outputResult = evaluator.task(datum.input, {
+              meta,
+              span: currentSpan(),
+            });
             if (outputResult instanceof Promise) {
               output = await outputResult;
             } else {
@@ -176,7 +180,7 @@ export async function runEvaluator(
 
         const scoringArgs = { ...datum, metadata, output };
         const scoreResults = await Promise.all(
-          evaluator.scores.map(async (score) => {
+          evaluator.scores.map(async (score, score_idx) => {
             return traced(
               async () => {
                 const scoreResult = score(scoringArgs);
@@ -196,7 +200,7 @@ export async function runEvaluator(
                 return result;
               },
               {
-                name: score.name || "<anonymous>",
+                name: score.name || `scorer_${score_idx}`,
                 event: { input: scoringArgs },
               }
             );

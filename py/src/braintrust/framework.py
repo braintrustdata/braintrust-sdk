@@ -14,7 +14,7 @@ from tqdm.auto import tqdm as std_tqdm
 
 from autoevals import Score, Scorer
 
-from .logger import NOOP_SPAN, current_span, start_span
+from .logger import NOOP_SPAN, Span, current_span, start_span
 from .logger import init as _init_experiment
 from .util import SerializableDataClass
 
@@ -52,6 +52,13 @@ class EvalHooks(abc.ABC):
     """
     An object that can be used to add metadata to an evaluation. This is passed to the `task` function.
     """
+
+    @property
+    @abc.abstractmethod
+    def span(self) -> Span:
+        """
+        Access the span under which the task is run. Also accessible via braintrust.current_span()
+        """
 
     @abc.abstractmethod
     def meta(self, **info) -> None:
@@ -288,6 +295,14 @@ class EvalResult:
 class DictEvalHooks(EvalHooks):
     def __init__(self, metadata):
         self.metadata = metadata
+        self._span = None
+
+    @property
+    def span(self):
+        return self._span
+
+    def set_span(self, span):
+        self._span = span
 
     def meta(self, **info):
         self.metadata.update(info)
@@ -318,8 +333,10 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
         else:
             return f(*args, **kwargs)
 
-    async def await_or_run_scorer(scorer, **kwargs):
+    async def await_or_run_scorer(scorer, scorer_idx, **kwargs):
         name = scorer._name() if hasattr(scorer, "_name") else scorer.__name__
+        if name == "<lambda>":
+            name = f"scorer_{scorer_idx}"
         with start_span(name=name, input=dict(**kwargs)):
             score = scorer.eval_async if isinstance(scorer, Scorer) else scorer
             result = await await_or_run(score, **kwargs)
@@ -351,6 +368,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                     task_args.append(hooks)
 
                 with current_span().start_span("task") as task_span:
+                    hooks.set_span(task_span)
                     output = await await_or_run(evaluator.task, *task_args)
                     task_span.log(input=task_args[0], output=output)
                 current_span().log(output=output)
@@ -361,8 +379,8 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                     for scorer in evaluator.scores
                 ]
                 score_promises = [
-                    asyncio.create_task(await_or_run_scorer(score, **datum.as_dict(), output=output))
-                    for score in scorers
+                    asyncio.create_task(await_or_run_scorer(score, idx, **datum.as_dict(), output=output))
+                    for idx, score in enumerate(scorers)
                 ]
                 score_results = [await p for p in score_promises]
                 score_metadata = {}
