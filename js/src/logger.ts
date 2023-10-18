@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from "axios";
+import axios, { AxiosInstance, AxiosError } from "axios";
 import { v4 as uuidv4 } from "uuid";
 
 import iso, { IsoAsyncLocalStorage, CallerLocation } from "./isomorph";
@@ -478,17 +478,30 @@ class LogThread {
 
       postPromises.push(
         (async () => {
+          const itemsS = constructJsonArray(items);
           for (let i = 0; i < NumRetries; i++) {
+            const startTime = performance.now();
             try {
-              return (
-                await _state
-                  .logConn()
-                  .post_json("logs", constructJsonArray(items))
-              ).map((res: any) => res.id);
+              return (await _state.logConn().post_json("logs", itemsS)).map(
+                (res: any) => res.id
+              );
             } catch (e) {
               const retryingText = i + 1 === NumRetries ? "" : " Retrying";
+              const errMsg = (() => {
+                if (e instanceof AxiosError && e.response) {
+                  return `${e.response.status}: ${JSON.stringify(
+                    e.response.data
+                  )}`;
+                } else {
+                  return `${e}`;
+                }
+              })();
               console.warn(
-                `log request failed with error ${e}.${retryingText}`
+                `log request failed. Elapsed time: ${
+                  (performance.now() - startTime) / 1000
+                } seconds. Payload size: ${
+                  itemsS.length
+                }. Error: ${errMsg}.${retryingText}`
               );
             }
           }
