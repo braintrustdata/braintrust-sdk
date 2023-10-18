@@ -384,14 +384,18 @@ class _LogThread:
 
                 if len(items) == 0:
                     break
+                items_s = construct_json_array(items)
                 for i in range(NUM_RETRIES):
-                    resp = conn.post("/logs", data=construct_json_array(items))
+                    start_time = time.time()
+                    resp = conn.post("/logs", data=items_s)
                     if resp.ok:
                         break
                     retrying_text = "" if i + 1 == NUM_RETRIES else " Retrying"
                     _logger.warning(
-                        f"log request failed with status code {resp.status_code}: {resp.text}.{retrying_text}"
+                        f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(item_s)}. Error: {resp.status_code}: {resp.text}.{retrying_text}"
                     )
+                if not resp.ok:
+                    _logger.warning(f"log request failed after {NUM_RETRIES} retries. Dropping batch")
             self.queue_filled_event.clear()
 
 
