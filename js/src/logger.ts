@@ -430,6 +430,9 @@ function constructJsonArray(items: string[]) {
   return `[${items.join(",")}]`;
 }
 
+const DefaultBatchSize = 100;
+const NumRetries = 3;
+
 class LogThread {
   private items: LogEvent[] = [];
   private active_flush: Promise<string[]> = Promise.resolve([]);
@@ -444,7 +447,7 @@ class LogThread {
     }
   }
 
-  async flush_once(batchSize: number = 100): Promise<string[]> {
+  async flush_once(batchSize: number = DefaultBatchSize): Promise<string[]> {
     this.active_flush_resolved = false;
 
     const initialItems = (this.items || []).reverse();
@@ -467,13 +470,24 @@ class LogThread {
         itemsLen += itemS.length;
       }
 
-      if (items.length > 0) {
-        const resp = await _state
-          .logConn()
-          .post_json("logs", constructJsonArray(items));
-        ret = resp.data;
-      } else {
+      if (items.length === 0) {
         break;
+      }
+
+      for (let i = 0; i < NumRetries; i++) {
+        try {
+          ret.push(
+            ...(
+                await _state
+                    .logConn()
+                    .post_json("logs", constructJsonArray(items))
+            ).map((res: any) => res.id)
+          );
+          break;
+        } catch (e) {
+          const retryingText = i + 1 === NumRetries ? "" : " Retrying";
+          console.warn(`log request failed with error ${e}.${retryingText}`);
+        }
       }
     }
 

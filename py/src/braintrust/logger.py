@@ -313,6 +313,7 @@ def construct_json_array(items):
 
 
 DEFAULT_BATCH_SIZE = 100
+NUM_RETRIES = 3
 
 
 class _LogThread:
@@ -381,10 +382,16 @@ class _LogThread:
                     items.append(item_s)
                     items_len += len(item_s)
 
-                if len(items) > 0:
-                    response_raise_for_status(conn.post("/logs", data=construct_json_array(items)))
-                else:
+                if len(items) == 0:
                     break
+                for i in range(NUM_RETRIES):
+                    resp = conn.post("/logs", data=construct_json_array(items))
+                    if resp.ok:
+                        break
+                    retrying_text = "" if i + 1 == NUM_RETRIES else " Retrying"
+                    _logger.warning(
+                        f"log request failed with status code {resp.status_code}: {resp.text}.{retrying_text}"
+                    )
             self.queue_filled_event.clear()
 
 
