@@ -35,17 +35,25 @@ def main(args):
 
     start_time = int(time.time() - 3600 * args.hours) * 1000
 
-    streams = [
-        s
-        for s in logs.describe_log_streams(
-            logGroupName=log_group_name,
-            descending=True,
-        )["logStreams"]
-        if s["firstEventTimestamp"] >= start_time
-    ]
-    streams.sort(key=lambda x: x["firstEventTimestamp"])
+    all_streams = []
+    first_start_time = None
+    nextToken = None
 
-    _logger.debug(streams)
+    while first_start_time is None or first_start_time >= start_time:
+        kwargs = {}
+        if nextToken is not None:
+            kwargs["nextToken"] = nextToken
+
+        stream_resp = logs.describe_log_streams(logGroupName=log_group_name, descending=True, **kwargs)
+
+        first_start_time = min(s["firstEventTimestamp"] for s in stream_resp["logStreams"])
+        nextToken = stream_resp.get("nextToken")
+
+        streams = [s for s in stream_resp["logStreams"] if s["firstEventTimestamp"] >= start_time]
+        streams.sort(key=lambda x: x["firstEventTimestamp"])
+        all_streams = streams + all_streams
+
+    _logger.debug(all_streams)
 
     def get_events(stream):
         return logs.get_log_events(
@@ -56,10 +64,10 @@ def main(args):
         )
 
     with ThreadPoolExecutor(8) as executor:
-        events = executor.map(get_events, streams)
+        events = executor.map(get_events, all_streams)
 
     last_ts = None
-    for stream, log in zip(streams, events):
+    for stream, log in zip(all_streams, events):
         print(f"---- {stream['logStreamName']}")
         for event in log["events"]:
             print(event)
