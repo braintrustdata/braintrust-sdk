@@ -304,8 +304,8 @@ class ModelWrapper:
         return self.data[name]
 
 
-# 10 MB (https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html)
-MAX_REQUEST_SIZE = 10 * 1024 * 1024
+# 6 MB (from our own testing).
+MAX_REQUEST_SIZE = 6 * 1024 * 1024
 
 
 def construct_json_array(items):

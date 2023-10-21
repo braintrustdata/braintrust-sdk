@@ -1,6 +1,6 @@
 import logging
-from concurrent.futures import ThreadPoolExecutor
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from ...aws import cloudformation, logs
 
