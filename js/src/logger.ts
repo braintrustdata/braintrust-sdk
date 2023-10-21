@@ -422,8 +422,8 @@ export interface DatasetRecord {
   metadata: any;
 }
 
-// 10 MB (https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html)
-const MaxRequestSize = 10 * 1024 * 1024;
+// 6 MB (from our own testing).
+const MaxRequestSize = 6 * 1024 * 1024;
 
 function constructJsonArray(items: string[]) {
   return `[${items.join(",")}]`;
