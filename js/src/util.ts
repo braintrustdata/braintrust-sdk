@@ -1,5 +1,6 @@
 export const TRANSACTION_ID_FIELD = "_xact_id";
 export const IS_MERGE_FIELD = "_is_merge";
+export const GLOBAL_PROJECT = "Global";
 
 // Given a callback, runs the callback as a "finally" component. If
 // `callback` returns a Promise, `finallyF` is chained to the promise. Otherwise,
