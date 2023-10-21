@@ -80,12 +80,12 @@ export interface Span {
    * @param args.endTime Optional end time of the span, as a timestamp in seconds.
    * @returns The end time logged to the span metrics.
    */
-  end(args?: EndSpanArgs): number;
+  end(args?: EndSpanArgs): Promise<number>;
 
   /**
    * Alias for `end`.
    */
-  close(args?: EndSpanArgs): number;
+  close(args?: EndSpanArgs): Promise<number>;
 
   // For type identification.
   kind: "span";
@@ -120,11 +120,11 @@ export class NoopSpan implements Span {
     return callback(this);
   }
 
-  public end(args?: EndSpanArgs): number {
+  public async end(args?: EndSpanArgs): Promise<number> {
     return args?.endTime ?? getCurrentUnixTimestamp();
   }
 
-  public close(args?: EndSpanArgs): number {
+  public async close(args?: EndSpanArgs): Promise<number> {
     return this.end(args);
   }
 }
@@ -406,17 +406,44 @@ interface UserInfo {
   id: string;
 }
 
-export class Project {
-  name: string;
+interface RegisteredProject {
   id: string;
-  org_id: string;
+  name: string;
+}
 
-  constructor(name: string, id: string, org_id: string) {
+export class Project {
+  name?: string;
+  id?: string;
+
+  constructor({ name, id }: { name?: string; id?: string }) {
+    if (!name && !id) {
+      throw new Error("Must provide either project name or id");
+    }
     this.name = name;
     this.id = id;
-    this.org_id = org_id;
+  }
+
+  async lazyInit(): Promise<RegisteredProject> {
+    if (this.id === undefined) {
+      const response = await _state
+        .apiConn()
+        .post_json("api/project/register", {
+          project_name: this.name,
+          org_id: _state.orgId,
+        });
+      this.id = response.project.id;
+    } else if (this.name === undefined) {
+      const response = await _state.apiConn().get_json("api/project", {
+        id: this.id,
+      });
+      this.name = response.project.name;
+    }
+
+    return { id: this.id!, name: this.name! };
   }
 }
+
+export class Logger {}
 
 export type IdField = { id: string };
 export type InputField = { input: unknown };
@@ -855,6 +882,7 @@ export async function login(
   _state.loggedIn = true;
 }
 
+// XXX We should remove these global functions now
 /**
  * Log a single event to the current experiment. The event will be batched and uploaded behind the scenes.
  *
@@ -1195,7 +1223,7 @@ async function _initExperiment(
  * You should not create `Experiment` objects directly. Instead, use the `braintrust.init()` method.
  */
 export class Experiment {
-  public readonly project: Project;
+  public readonly project: RegisteredProject;
   public readonly id: string;
   public readonly name: string;
   public readonly user_id: string;
@@ -1208,7 +1236,7 @@ export class Experiment {
   public kind: "experiment" = "experiment";
 
   constructor(
-    project: Project,
+    project: RegisteredProject,
     id: string,
     name: string,
     user_id: string,
@@ -1499,7 +1527,7 @@ export class SpanImpl implements Span {
     );
   }
 
-  public end(args?: EndSpanArgs): number {
+  public async end(args?: EndSpanArgs): Promise<number> {
     this.checkNotFinished();
 
     const endTime = args?.endTime ?? getCurrentUnixTimestamp();
@@ -1511,7 +1539,7 @@ export class SpanImpl implements Span {
     return endTime;
   }
 
-  public close(args?: EndSpanArgs): number {
+  public async close(args?: EndSpanArgs): Promise<number> {
     return this.end(args);
   }
 
@@ -1563,7 +1591,7 @@ async function _initDataset(
  * You should not create `Dataset` objects directly. Instead, use the `braintrust.initDataset()` method.
  */
 export class Dataset {
-  public readonly project: Project;
+  public readonly project: RegisteredProject;
   public readonly id: string;
   public readonly name: string;
   public readonly user_id: string;
@@ -1573,7 +1601,7 @@ export class Dataset {
   private finished: boolean;
 
   constructor(
-    project: Project,
+    project: RegisteredProject,
     id: string,
     name: string,
     user_id: string,
