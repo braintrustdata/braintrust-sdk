@@ -80,12 +80,12 @@ export interface Span {
    * @param args.endTime Optional end time of the span, as a timestamp in seconds.
    * @returns The end time logged to the span metrics.
    */
-  end(args?: EndSpanArgs): Promise<number>;
+  end(args?: EndSpanArgs): number;
 
   /**
    * Alias for `end`.
    */
-  close(args?: EndSpanArgs): Promise<number>;
+  close(args?: EndSpanArgs): number;
 
   // For type identification.
   kind: "span";
@@ -120,11 +120,11 @@ export class NoopSpan implements Span {
     return callback(this);
   }
 
-  public async end(args?: EndSpanArgs): Promise<number> {
+  public end(args?: EndSpanArgs): number {
     return args?.endTime ?? getCurrentUnixTimestamp();
   }
 
-  public async close(args?: EndSpanArgs): Promise<number> {
+  public close(args?: EndSpanArgs): number {
     return this.end(args);
   }
 }
@@ -712,9 +712,7 @@ export async function withExperiment<R>(
         return callback(experiment);
       }
     },
-    async () => {
-      await experiment.close();
-    }
+    () => experiment.close()
   );
 }
 
@@ -783,9 +781,7 @@ export async function withDataset<R>(
   const dataset = await initDataset(project, options);
   return runFinally(
     () => callback(dataset),
-    async () => {
-      await dataset.close();
-    }
+    () => dataset.close()
   );
 }
 
@@ -974,7 +970,7 @@ export function traced<R>(
   args?: StartSpanOptionalNameArgs & SetCurrentArg
 ): R {
   const span = startSpan(args);
-  return await runFinally(
+  return runFinally(
     () => {
       if (args?.setCurrent ?? true) {
         return withCurrent(span, () => callback(span));
@@ -982,9 +978,7 @@ export function traced<R>(
         return callback(span);
       }
     },
-    async () => {
-      await span.end();
-    }
+    () => span.end()
   );
 }
 
@@ -1276,12 +1270,12 @@ export class Experiment {
    * @param event.inputs: (Deprecated) the same as `input` (will be removed in a future version).
    * :returns: The `id` of the logged event.
    */
-  public async log(event: Readonly<ExperimentLogFullArgs>): Promise<string> {
+  public log(event: Readonly<ExperimentLogFullArgs>): string {
     this.checkNotFinished();
 
     event = validateAndSanitizeExperimentLogFullArgs(event, !!this.dataset);
     const span = this.startSpan({ startTime: this.lastStartTime, event });
-    this.lastStartTime = await span.end();
+    this.lastStartTime = span.end();
     return span.id;
   }
 
@@ -1533,7 +1527,7 @@ export class SpanImpl implements Span {
     );
   }
 
-  public async end(args?: EndSpanArgs): Promise<number> {
+  public end(args?: EndSpanArgs): number {
     this.checkNotFinished();
 
     const endTime = args?.endTime ?? getCurrentUnixTimestamp();
@@ -1545,7 +1539,7 @@ export class SpanImpl implements Span {
     return endTime;
   }
 
-  public async close(args?: EndSpanArgs): Promise<number> {
+  public close(args?: EndSpanArgs): number {
     return this.end(args);
   }
 

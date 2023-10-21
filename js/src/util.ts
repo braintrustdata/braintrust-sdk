@@ -4,21 +4,19 @@ export const IS_MERGE_FIELD = "_is_merge";
 // Given a callback, runs the callback as a "finally" component. If
 // `callback` returns a Promise, `finallyF` is chained to the promise. Otherwise,
 // it is run afterwards synchronously.
-export async function runFinally<R>(
-  f: () => R | Promise<R>,
-  finallyF: () => void | Promise<void>
-): Promise<R> {
+export function runFinally<R>(f: () => R, finallyF: () => void): R {
+  let runSyncCleanup = true;
   try {
-    let ret = f();
+    const ret = f();
     if (ret instanceof Promise) {
-      return await ret;
+      runSyncCleanup = false;
+      return (ret as any).finally(finallyF) as R;
     } else {
       return ret;
     }
   } finally {
-    const f = finallyF();
-    if (f instanceof Promise) {
-      await f;
+    if (runSyncCleanup) {
+      finallyF();
     }
   }
 }
