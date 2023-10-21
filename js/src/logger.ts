@@ -712,7 +712,9 @@ export async function withExperiment<R>(
         return callback(experiment);
       }
     },
-    () => experiment.close()
+    async () => {
+      await experiment.close();
+    }
   );
 }
 
@@ -781,7 +783,9 @@ export async function withDataset<R>(
   const dataset = await initDataset(project, options);
   return runFinally(
     () => callback(dataset),
-    () => dataset.close()
+    async () => {
+      await dataset.close();
+    }
   );
 }
 
@@ -970,7 +974,7 @@ export function traced<R>(
   args?: StartSpanOptionalNameArgs & SetCurrentArg
 ): R {
   const span = startSpan(args);
-  return runFinally(
+  return await runFinally(
     () => {
       if (args?.setCurrent ?? true) {
         return withCurrent(span, () => callback(span));
@@ -978,7 +982,9 @@ export function traced<R>(
         return callback(span);
       }
     },
-    () => span.end()
+    async () => {
+      await span.end();
+    }
   );
 }
 
@@ -1270,12 +1276,12 @@ export class Experiment {
    * @param event.inputs: (Deprecated) the same as `input` (will be removed in a future version).
    * :returns: The `id` of the logged event.
    */
-  public log(event: Readonly<ExperimentLogFullArgs>): string {
+  public async log(event: Readonly<ExperimentLogFullArgs>): Promise<string> {
     this.checkNotFinished();
 
     event = validateAndSanitizeExperimentLogFullArgs(event, !!this.dataset);
     const span = this.startSpan({ startTime: this.lastStartTime, event });
-    this.lastStartTime = span.end();
+    this.lastStartTime = await span.end();
     return span.id;
   }
 
