@@ -438,7 +438,7 @@ export class Project {
       const response = await _state.apiConn().get_json("api/project", {
         id: this.id,
       });
-      this.name = response.project.name;
+      this.name = response.name;
     }
 
     return { id: this.id!, name: this.name! };
@@ -483,7 +483,7 @@ export class Logger {
    * :returns: The `id` of the logged event.
    */
   public async log(
-    event: Readonly<ExperimentLogFullArgs>,
+    event: Readonly<ExperimentLogPartialArgs>,
     options: LogOptions = {}
   ): Promise<string> {
     const span = await this.startSpan({ startTime: this.lastStartTime, event });
@@ -603,6 +603,7 @@ interface DatasetEvent {
 
 type MonitoringEvent = Omit<ExperimentEvent, "experiment_id"> & {
   org_id: string;
+  log_id: string;
 };
 
 type LogEvent = ExperimentEvent | DatasetEvent | MonitoringEvent;
@@ -919,7 +920,7 @@ type InitLoggerOptions = {
  * @param options.disableCache Do not use cached login information.
  * @returns The newly created Dataset.
  */
-export async function initLogger(options: Readonly<InitLoggerOptions> = {}) {
+export function initLogger(options: Readonly<InitLoggerOptions> = {}) {
   const { projectName, projectId, apiUrl, apiKey, orgName, disableCache } =
     options || {};
 
@@ -1624,7 +1625,7 @@ export class SpanImpl implements Span {
       this.root_span_id = this.span_id;
       this._object_info = {
         org_id: _state.orgId,
-        project_id: args.rootProject.id,
+        log_id: args.rootProject.id,
       };
     } else if ("parentSpan" in args) {
       this.root_span_id = args.parentSpan.root_span_id;
