@@ -603,7 +603,8 @@ interface DatasetEvent {
 
 type MonitoringEvent = Omit<ExperimentEvent, "experiment_id"> & {
   org_id: string;
-  log_id: string;
+  project_id: string;
+  log_id: "g";
 };
 
 type LogEvent = ExperimentEvent | DatasetEvent | MonitoringEvent;
@@ -1625,7 +1626,8 @@ export class SpanImpl implements Span {
       this.root_span_id = this.span_id;
       this._object_info = {
         org_id: _state.orgId,
-        log_id: args.rootProject.id,
+        project_id: args.rootProject.id,
+        log_id: "g",
       };
     } else if ("parentSpan" in args) {
       this.root_span_id = args.parentSpan.root_span_id;
