@@ -1,5 +1,3 @@
-import axios, { AxiosInstance, CreateAxiosDefaults } from "axios";
-
 export interface RepoStatus {
   commit?: string;
   branch?: string;
@@ -36,7 +34,6 @@ class DefaultAsyncLocalStorage<T> implements IsoAsyncLocalStorage<T> {
 }
 
 export interface Common {
-  makeAxios: (conf: CreateAxiosDefaults) => AxiosInstance;
   getRepoStatus: () => Promise<RepoStatus | undefined>;
   getPastNAncestors: () => Promise<string[]>;
   getEnv: (name: string) => string | undefined;
@@ -45,10 +42,6 @@ export interface Common {
 }
 
 const iso: Common = {
-  makeAxios: (conf) =>
-    axios.create({
-      ...conf,
-    }),
   getRepoStatus: async () => undefined,
   getPastNAncestors: async () => [],
   getEnv: (_name) => undefined,
