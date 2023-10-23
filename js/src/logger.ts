@@ -626,6 +626,10 @@ function constructJsonArray(items: string[]) {
 const DefaultBatchSize = 100;
 const NumRetries = 3;
 
+function now() {
+  return new Date().getTime();
+}
+
 class LogThread {
   private items: LogEvent[] = [];
   private active_flush: Promise<string[]> = Promise.resolve([]);
@@ -683,7 +687,7 @@ class LogThread {
         (async () => {
           const itemsS = constructJsonArray(items);
           for (let i = 0; i < NumRetries; i++) {
-            const startTime = performance.now();
+            const startTime = now();
             try {
               return (await _state.logConn().post_json("logs", itemsS)).map(
                 (res: any) => res.id
@@ -699,7 +703,7 @@ class LogThread {
               })();
               console.warn(
                 `log request failed. Elapsed time: ${
-                  (performance.now() - startTime) / 1000
+                  (now() - startTime) / 1000
                 } seconds. Payload size: ${
                   itemsS.length
                 }. Error: ${errMsg}.${retryingText}`
