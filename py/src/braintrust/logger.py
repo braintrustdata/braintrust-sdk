@@ -16,7 +16,7 @@ import uuid
 from abc import ABC, abstractmethod
 from functools import partial, wraps
 from getpass import getpass
-from typing import Any, Dict, Optional, Union
+from typing import Any, Callable, Dict, Optional, Union
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -138,6 +138,7 @@ class BraintrustState:
     def __init__(self):
         self.id = str(uuid.uuid4())
         self.current_experiment = contextvars.ContextVar("braintrust_current_experiment", default=None)
+        self.current_logger = contextvars.ContextVar("braintrust_current_logger", default=None)
         self.current_span = contextvars.ContextVar("braintrust_current_span", default=NOOP_SPAN)
 
         self.api_url = None
@@ -210,6 +211,7 @@ class _UnterminatedObjectsHandler:
 _unterminated_objects = _UnterminatedObjectsHandler()
 
 TRANSACTION_ID_FIELD = "_xact_id"
+GLOBAL_PROJECT = "Global"
 
 
 class HTTPConnection:
@@ -504,6 +506,42 @@ def init_dataset(
     )
 
 
+def init_logger(
+    project_name: str = None,
+    project_id: str = None,
+    is_async: bool = True,
+    set_current: bool = True,
+    api_url: str = None,
+    api_key: str = None,
+    org_name: str = None,
+    disable_cache: bool = False,
+):
+    """
+    Create a new logger in a specified project. If the project does not exist, it will be created.
+
+    :param project_name: The name of the project to log into. If unspecified, will default to the Global project.
+    :param project_id: The id of the project to log into. This takes precedence over projectName if specified.
+    :param is_async: If true (the default), log events will be batched and sent asynchronously in a background thread. If false, log events will be sent synchronously. Set to false in serverless environments.
+    :param set_current: If true (default), set the currently-active logger to the newly-created one. Unless the logger is bound to a context manager, it will not be marked as current. Equivalent to calling `with braintrust.with_current(logger)`.
+    :param api_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+    :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
+    key is specified, will prompt the user to login.
+    :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+    :param disable_cache: Do not use cached login information.
+    :returns: The newly created Logger.
+    """
+
+    def lazy_login():
+        login(org_name=org_name, disable_cache=disable_cache, api_key=api_key, api_url=api_url)
+
+    return Logger(
+        lazy_login=lazy_login,
+        project=Project(name=project_name, id=project_id),
+        is_async=is_async,
+        set_current=set_current,
+    )
+
+
 login_lock = threading.RLock()
 
 
@@ -684,6 +722,12 @@ def current_experiment() -> Optional["Experiment"]:
     return _state.current_experiment.get()
 
 
+def current_logger() -> Optional["Logger"]:
+    """Returns the currently-active logger (set by `with braintrust.init_logger(...)` or `with braintrust.with_current(logger)`). Returns undefined if no current experiment has been set."""
+
+    return _state.current_logger.get()
+
+
 def current_span() -> Span:
     """Return the currently-active span for logging (set by `with *.start_span` or `braintrust.with_current`). If there is no active span, returns a no-op span object, which supports the same interface as spans but does no logging.
 
@@ -732,14 +776,16 @@ class _CurrentObjectWrapper:
         self.object_cvar.reset(self.context_token)
 
 
-def with_current(object: Union["Experiment", "SpanImpl", _NoopSpan]):
+def with_current(object: Union["Experiment", "Logger", "SpanImpl", _NoopSpan]):
     """Set the given experiment or span as current within the bound context manager (`with braintrust.with_current(object)`) and any asynchronous operations created within the block. The current experiment can be accessed with `braintrust.current_experiment`, and the current span with `braintrust.current_span`.
 
     :param object: The experiment or span to be marked as current.
     """
     if type(object) == Experiment:
         return _CurrentObjectWrapper(_state.current_experiment, object)
-    elif type(object) == SpanImpl or type(object) == NoopSpan:
+    elif type(object) == Logger:
+        return _CurrentObjectWrapper(_state.current_logger, object)
+    elif type(object) == SpanImpl or type(object) == _NoopSpan:
         return _CurrentObjectWrapper(_state.current_span, object)
     else:
         raise RuntimeError(f"Invalid object of type {type(object)}")
@@ -1015,7 +1061,7 @@ class Experiment(ModelWrapper):
         self._check_not_finished()
 
         return SpanImpl(
-            experiment_logger=self.logger,
+            bg_logger=self.logger,
             name=name,
             span_attributes=span_attributes,
             start_time=start_time,
@@ -1122,22 +1168,25 @@ class SpanImpl(Span):
     # should only be specified for non-root spans.
     def __init__(
         self,
-        experiment_logger,
+        bg_logger,
         name,
         span_attributes={},
         start_time=None,
         set_current=None,
         event={},
         root_experiment=None,
+        root_project=None,
         parent_span=None,
     ):
-        if (root_experiment is None) == (parent_span is None):
-            raise ValueError("Must specify exactly one of `root_experiment` and `parent_span`")
+        if all(x is None for x in [root_experiment, root_project, parent_span]) or all(
+            x is not None for x in [root_experiment, root_project, parent_span]
+        ):
+            raise ValueError("Must specify exactly one of `root_experiment`, `root_project`, and `parent_span`")
 
         self.finished = False
         self.set_current = True if set_current is None else set_current
 
-        self.experiment_logger = experiment_logger
+        self.bg_logger = bg_logger
 
         # `internal_data` contains fields that are not part of the
         # "user-sanitized" set of fields which we want to log in just one of the
@@ -1158,17 +1207,29 @@ class SpanImpl(Span):
         self._span_id = str(uuid.uuid4())
         if root_experiment is not None:
             self._root_span_id = self._span_id
-            self._project_id = root_experiment.project.id
-            self._experiment_id = root_experiment.id
+            self._object_info = {
+                "project_id": root_experiment.project.id,
+                "experiment_id": root_experiment.id,
+            }
             self.internal_data.update(
                 # TODO: Hopefully we can remove this.
                 user_id=root_experiment.user_id,
                 created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
             )
+        elif root_project is not None:
+            self._root_span_id = self._span_id
+            self._object_info = {
+                "org_id": _state.org_id,
+                "project_id": root_project.id,
+                "log_id": "g",
+            }
+            self.internal_data.update(
+                # TODO: Hopefully we can remove this.
+                created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            )
         elif parent_span is not None:
             self._root_span_id = parent_span._root_span_id
-            self._project_id = parent_span._project_id
-            self._experiment_id = parent_span._experiment_id
+            self._object_info = {**parent_span._object_info}
             self.internal_data.update(span_parents=[parent_span._span_id])
         else:
             raise RuntimeError("Must provide either 'root_experiment' or 'parent_span'")
@@ -1206,18 +1267,17 @@ class SpanImpl(Span):
             id=self._id,
             span_id=self._span_id,
             root_span_id=self._root_span_id,
-            project_id=self._project_id,
-            experiment_id=self._experiment_id,
+            **self._object_info,
             _is_merge=self._is_merge,
         )
         self.internal_data = {}
-        self.experiment_logger.log(record)
+        self.bg_logger.log(record)
 
     def start_span(self, name, span_attributes={}, start_time=None, set_current=None, **event):
         self._check_not_finished()
 
         return SpanImpl(
-            experiment_logger=self.experiment_logger,
+            bg_logger=self.bg_logger,
             name=name,
             span_attributes=span_attributes,
             start_time=start_time,
@@ -1478,6 +1538,165 @@ class Dataset(ModelWrapper):
     def __exit__(self, type, value, callback):
         del type, value, callback
         self.close()
+
+
+class Project:
+    def __init__(self, name=None, id=None):
+        self._name = name
+        self._id = id
+        self.init_lock = threading.RLock()
+
+    def lazy_init(self):
+        if self._id is None or self._name is None:
+            with self.init_lock:
+                if self._id is None:
+                    response = _state.api_conn().post_json(
+                        "api/project/register",
+                        {
+                            "project_name": self._name or GLOBAL_PROJECT,
+                            "org_id": _state.org_id,
+                        },
+                    )
+                    self._id = response["project"]["id"]
+                    if self._name is None:
+                        self._name = response["project"]["name"]
+                elif self._name is None:
+                    response = _state.api_conn().get_json("api/project", {"id": self._id})
+                    self._name = response["name"]
+
+        return self
+
+    @property
+    def id(self):
+        self.lazy_init()
+        return self._id
+
+    @property
+    def name(self):
+        self.lazy_init()
+        return self._name
+
+
+@dataclasses.dataclass
+class LoggerOptions:
+    """
+    Options that control behavior for the production logger.
+    """
+
+    # XXX MOVE TO INIT FUNCTION
+    """Whether to log asynchronously (default: True in Python. Switch to False in serverless environments)"""
+    is_async: bool = True
+
+    set_current: bool = True
+
+
+class Logger:
+    def __init__(self, lazy_login: Callable, project: Project, is_async: bool = True, set_current: bool = None):
+        self.lazy_login = lazy_login
+        self.project = project
+        self.is_async = is_async
+        self.set_current = True if set_current is None else set_current
+
+        self.logger = _LogThread()
+        self.last_start_time = time.time()
+
+    #   /**
+    #    * Log a single event. The event will be batched and uploaded behind the scenes.
+    #    *
+    #    * @param event The event to log.
+    #    * @param event.input: The arguments that uniquely define a test case (an arbitrary, JSON serializable object).
+    #    * @param event.output: The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
+    #    * @param event.expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
+    #    * @param event.scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
+    #    * @param event.metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
+    #    * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically and should not be specified: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
+    #    * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
+    #    * :returns: The `id` of the logged event.
+    #    */
+    #   public async log(
+    #     event: Readonly<ExperimentLogPartialArgs>,
+    #     options: LogOptions = {}
+    #   ): Promise<string> {
+    #     const span = await this.startSpan({ startTime: this.lastStartTime, event });
+    #     this.lastStartTime = span.end();
+
+    #     const opts = { ...this.logOptions, ...options };
+    #     if (!options.async) {
+    #       await this.flush();
+    #     }
+
+    #     return span.id;
+    #   }
+
+    def log(
+        self,
+        input=None,
+        output=None,
+        expected=None,
+        scores=None,
+        metadata=None,
+        metrics=None,
+        id=None,
+    ):
+        """
+        Log a single event. The event will be batched and uploaded behind the scenes.
+
+        :param input: The arguments that uniquely define a user input(an arbitrary, JSON serializable object).
+        :param output: The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
+        :param expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
+        :param scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
+        :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
+        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically and should not be specified: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
+        :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
+        """
+        span = self.start_span(
+            start_time=self.last_start_time,
+            input=input,
+            output=output,
+            expected=expected,
+            scores=scores,
+            metadata=metadata,
+            metrics=metrics,
+            id=id,
+        )
+        self.last_start_time = span.end()
+
+        if not self.is_async:
+            self.logger.flush()
+
+        return span.id
+
+    def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, **event):
+        """Create a new toplevel span. The name parameter is optional and defaults to "root".
+
+        See `Span.start_span` for full details
+        """
+        return SpanImpl(
+            bg_logger=self.logger,
+            name=name,
+            span_attributes=span_attributes,
+            start_time=start_time,
+            set_current=set_current,
+            event=event,
+            root_project=self.project,
+        )
+
+    def __enter__(self):
+        if self.set_current:
+            self._context_token = _state.current_logger.set(self)
+        return self
+
+    def __exit__(self, type, value, callback):
+        del type, value, callback
+
+        if self.set_current:
+            _state.current_logger.reset(self._context_token)
+
+    def flush(self):
+        """
+        Flush any pending logs to the server.
+        """
+        self.logger.flush()
 
 
 @dataclasses.dataclass
