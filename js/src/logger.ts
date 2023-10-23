@@ -1633,6 +1633,9 @@ export class SpanImpl implements Span {
         project_id: args.rootProject.id,
         log_id: "g",
       };
+      this.internalData = Object.assign(this.internalData, {
+        created: new Date().toISOString(),
+      });
     } else if ("parentSpan" in args) {
       this.root_span_id = args.parentSpan.root_span_id;
       this._object_info = args.parentSpan._object_info;
