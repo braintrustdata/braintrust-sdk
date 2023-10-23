@@ -651,7 +651,7 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
             with open(LOGIN_INFO_PATH) as f:
                 login_key_info = json.load(f)
 
-            _state.log_url = login_key_info.get("log_url")
+            _state.log_url = os.environ.get("BRAINTRUST_LOG_URL", login_key_info.get("log_url"))
             _state.org_id = login_key_info.get("org_id")
             _state.org_name = login_key_info.get("org_name")
             conn = _state.log_conn()
@@ -885,7 +885,7 @@ def _check_org_info(org_info, org_name):
         if org_name is None or orgs["name"] == org_name:
             _state.org_id = orgs["id"]
             _state.org_name = orgs["name"]
-            _state.log_url = orgs["api_url"]
+            _state.log_url = os.environ.get("BRAINTRUST_LOG_URL", orgs["api_url"])
             break
 
     if _state.org_id is None:
