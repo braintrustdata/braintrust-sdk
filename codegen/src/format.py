@@ -4,7 +4,8 @@ import dataclasses
 import typing
 from typing import List
 
-from globals import get_lang
+PY_LANG = "py"
+TS_LANG = "ts"
 
 
 def escape(s: str) -> str:
@@ -15,19 +16,16 @@ def indent(block: str, num_tabs: int) -> str:
     return "\n".join(("    " * num_tabs) + line for line in block.split("\n"))
 
 
-def ts_ident(s: str) -> str:
-    words = s.split("_")
+def ident(lang: str, s: str) -> str:
+    def ts(s):
+        words = s.split("_")
+        return "".join([words[0]] + [w.title() for w in words[1:]])
 
-    return "".join([words[0]] + [w.title() for w in words[1:]])
+    def py(s):
+        return s
 
-
-def py_ident(s: str) -> str:
-    return s
-
-
-def ident(s: str) -> str:
-    LANG_IDENT = dict(py=py_ident, ts=ts_ident)
-    return LANG_IDENT[get_lang()](s)
+    SWITCH = {PY_LANG: py, TS_LANG: ts}
+    return SWITCH[lang](s)
 
 
 class DocFmt:
@@ -42,44 +40,38 @@ class DocFmt:
         return self.format_str.format(*ident_args)
 
 
-def py_paramline(argname: str, description: str) -> str:
-    return f":param {argname}: {description}"
+def paramline(lang: str, argname: str, description: str) -> str:
+    def py(argname, description):
+        return f":param {argname}: {description}"
+
+    def ts(argname, description):
+        return f"@param {argname} {description}"
+
+    SWITCH = {PY_LANG: py, TS_LANG: ts}
+    return SWITCH[lang](argname, description)
 
 
-def ts_paramline(argname: str, description: str) -> str:
-    return f"@param {argname} {description}"
+def retline(lang: str, description: str) -> str:
+    def py(description):
+        return f":returns: {description}"
+
+    def ts(description):
+        return f"@returns {description}"
+
+    SWITCH = {PY_LANG: py, TS_LANG: ts}
+    return SWITCH[lang](description)
 
 
-def paramline(argname: str, description: str) -> str:
-    LANG_PARAMLINE = dict(py=py_paramline, ts=ts_paramline)
-    return LANG_PARAMLINE[get_lang()](argname, description)
+def docstring(lang: str, lines: List[str]) -> str:
+    def py(lines):
+        return "\n".join(['"""'] + lines + ['"""'])
 
+    def ts(lines):
+        prefixed_lines = [" * " + l for l in lines]
+        return "\n".join(["/**"] + prefixed_lines + [" */"])
 
-def py_retline(description: str) -> str:
-    return f":returns: {description}"
-
-
-def ts_retline(description: str) -> str:
-    return f"@returns {description}"
-
-
-def retline(description: str) -> str:
-    LANG_RETLINE = dict(py=py_retline, ts=ts_retline)
-    return LANG_RETLINE[get_lang()](description)
-
-
-def py_docstring(lines: List[str], num_tabs: int) -> str:
-    return indent("\n".join(['"""'] + lines + ['"""']), num_tabs)
-
-
-def ts_docstring(lines: List[str], num_tabs: int) -> str:
-    prefixed_lines = [" * " + l for l in lines]
-    return indent("\n".join(["/**"] + prefixed_lines + [" */"]), num_tabs)
-
-
-def docstring(lines: List[str], num_tabs: int = 0) -> str:
-    LANG_DOCSTRING = dict(py=py_docstring, ts=ts_docstring)
-    return LANG_DOCSTRING[get_lang()](lines, num_tabs)
+    SWITCH = {PY_LANG: py, TS_LANG: ts}
+    return SWITCH[lang](lines)
 
 
 SCALAR_TYPES_TO_PY_STR = {
@@ -118,56 +110,52 @@ def is_dict_type(pytype) -> bool:
     return typing.get_origin(pytype) == dict
 
 
-def py_typespec(pytype) -> str:
-    if is_optional_type(pytype):
-        return f"Optional[{py_typespec(get_optional_underlying(pytype))}]"
-    elif is_dict_type(pytype):
-        ktype, vtype = typing.get_args(pytype)
-        return f"Dict[{py_typespec(ktype)}, {py_typespec(vtype)}]"
-    elif dataclasses.is_dataclass(pytype):
-        return f"{pytype.__name__}"
-    else:
-        return SCALAR_TYPES_TO_PY_STR[pytype]
+def typespec(lang: str, pytype) -> str:
+    def py(pytype):
+        if is_optional_type(pytype):
+            return f"Optional[{typespec(lang, get_optional_underlying(pytype))}]"
+        elif is_dict_type(pytype):
+            ktype, vtype = typing.get_args(pytype)
+            return f"Dict[{typespec(lang, ktype)}, {typespec(lang, vtype)}]"
+        elif dataclasses.is_dataclass(pytype):
+            return f"{pytype.__name__}"
+        else:
+            return SCALAR_TYPES_TO_PY_STR[pytype]
+
+    def ts(pytype):
+        if is_optional_type(pytype):
+            return f"{typespec(lang, get_optional_underlying(pytype))} | undefined"
+        elif is_dict_type(pytype):
+            ktype, vtype = typing.get_args(pytype)
+            return f"Record<{typespec(lang, ktype)}, {typespec(lang, vtype)}>"
+        elif dataclasses.is_dataclass(pytype):
+            fields = dataclasses.fields(pytype)
+            obj_args = [argspec(lang, f.name, f.type) for f in fields]
+            return f"{{ {'; '.join(obj_args)} }}"
+        else:
+            return SCALAR_TYPES_TO_JS_STR[pytype]
+
+    SWITCH = {PY_LANG: py, TS_LANG: ts}
+    return SWITCH[lang](pytype)
 
 
-def py_argspec(argname: str, pytype) -> str:
-    typespec = py_typespec(pytype)
-    ret = f"{py_ident(argname)}: {typespec}"
-    if is_optional_type(pytype):
-        ret += " = None"
-    return ret
+def argspec(lang: str, argname: str, pytype) -> str:
+    def py(argname, pytype):
+        typespec = typespec(lang, pytype)
+        ret = f"{ident(lang, argname)}: {typespec}"
+        if is_optional_type(pytype):
+            ret += " = None"
+        return ret
 
+    def ts(argname, pytype):
+        typespec = typespec(lang, pytype)
+        ret = f"{ident(lang, argname)}"
+        if is_optional_type(pytype):
+            ret += "?:"
+        else:
+            ret += ":"
+        ret += f" {typespec}"
+        return ret
 
-def ts_typespec(pytype) -> str:
-    if is_optional_type(pytype):
-        return f"{ts_typespec(get_optional_underlying(pytype))} | undefined"
-    elif is_dict_type(pytype):
-        ktype, vtype = typing.get_args(pytype)
-        return f"Record<{ts_typespec(ktype)}, {ts_typespec(vtype)}>"
-    elif dataclasses.is_dataclass(pytype):
-        fields = dataclasses.fields(pytype)
-        obj_args = [ts_argspec(f.name, f.type) for f in fields]
-        return f"{{ {'; '.join(obj_args)} }}"
-    else:
-        return SCALAR_TYPES_TO_JS_STR[pytype]
-
-
-def ts_argspec(argname: str, pytype) -> str:
-    typespec = ts_typespec(pytype)
-    ret = f"{ts_ident(argname)}"
-    if is_optional_type(pytype):
-        ret += "?:"
-    else:
-        ret += ":"
-    ret += f" {typespec}"
-    return ret
-
-
-def typespec(pytype) -> str:
-    LANG_TYPESPEC = dict(py=py_typespec, ts=ts_typespec)
-    return LANG_TYPESPEC[get_lang()](pytype)
-
-
-def argspec(argname: str, pytype) -> str:
-    LANG_ARGSPEC = dict(py=py_argspec, ts=ts_argspec)
-    return LANG_ARGSPEC[get_lang()](argname, pytype)
+    SWITCH = {PY_LANG: py, TS_LANG: ts}
+    return SWITCH[lang](argname, pytype)

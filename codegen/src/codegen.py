@@ -8,11 +8,6 @@ import globals
 from dataclass_util import *
 from format import *
 
-
-def log(*args):
-    print(*args, file=sys.stderr)
-
-
 DEFAULT_DIR = os.path.join(os.path.dirname(__file__), "scratch-output")
 
 
@@ -88,12 +83,12 @@ def main():
     )
     args = parser.parse_args()
 
-    log(f"Writing python files to {args.py_directory}")
+    print(f"Writing python files to {args.py_directory}")
     os.makedirs(args.py_directory, exist_ok=True)
     with open(os.path.join(args.py_directory, "logger.py"), "w") as f:
         f.write(LOGGER_PY.strip())
 
-    log(f"Writing typescript files to {args.ts_directory}")
+    print(f"Writing typescript files to {args.ts_directory}")
     os.makedirs(args.ts_directory, exist_ok=True)
     with open(os.path.join(args.ts_directory, "logger.ts"), "w") as f:
         f.write(LOGGER_TS.strip())
