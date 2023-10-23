@@ -1,13 +1,17 @@
+import chalk from "chalk";
 import {
   Experiment,
+  ExperimentSummary,
   Span,
   currentSpan,
   noopSpan,
   traced,
   withCurrent,
+  withExperiment,
 } from "./logger";
 import { Score } from "autoevals";
-import { ProgressReporter } from "./progress";
+import { BarProgressReporter, ProgressReporter } from "./progress";
+import pluralize from "pluralize";
 
 export type Metadata = Record<string, unknown>;
 
@@ -62,18 +66,38 @@ export type EvaluatorFile = {
 
 declare global {
   var _evals: EvaluatorFile;
+  var _lazy_load: boolean;
 }
 
 globalThis._evals = {};
 
-export function Eval<Input, Output>(
+export async function Eval<Input, Output>(
   name: string,
   evaluator: Evaluator<Input, Output>
-) {
+): Promise<void | ExperimentSummary> {
   if (_evals[name]) {
     throw new Error(`Evaluator ${name} already exists`);
   }
-  _evals[name] = { name, ...evaluator };
+  if (globalThis._lazy_load) {
+    _evals[name] = { name, ...evaluator };
+    return;
+  }
+
+  const progressReporter = new BarProgressReporter();
+  try {
+    return await withExperiment(name, async (experiment) => {
+      const ret = await runEvaluator(
+        experiment,
+        { name, ...(evaluator as Evaluator<unknown, unknown>) },
+        progressReporter,
+        []
+      );
+      reportEvaluatorResult(name, ret, true);
+      return ret.summary!;
+    });
+  } finally {
+    progressReporter.stop();
+  }
 }
 
 export function getLoadedEvals() {
@@ -261,4 +285,74 @@ export async function runEvaluator(
     results,
     summary,
   };
+}
+
+export const error = chalk.bold.red;
+export const warning = chalk.hex("#FFA500"); // Orange color
+
+export function logError(e: unknown, verbose: boolean) {
+  if (!verbose) {
+    console.error(`${e}`);
+  } else {
+    console.error(e);
+  }
+}
+
+export function reportEvaluatorResult(
+  evaluatorName: string | number,
+  evaluatorResult: {
+    results: { scores: Record<string, number>; error: unknown }[];
+    summary: unknown;
+  },
+  verbose: boolean
+) {
+  const { results, summary } = evaluatorResult;
+  const failingResults = results.filter(
+    (r: { error: unknown }) => r.error !== undefined
+  );
+
+  if (failingResults.length > 0) {
+    // TODO: We may want to support a non-strict mode (and make this the "strict" behavior), so that
+    // users can still log imperfect evaluations. In the meantime, they should handle these cases inside
+    // of their tasks.
+    console.warn(
+      warning(
+        `Evaluator ${evaluatorName} failed with ${pluralize(
+          "error",
+          failingResults.length,
+          true
+        )}${
+          !verbose ? " (add --verbose to see the full error)" : ""
+        }. This evaluation ("${evaluatorName}") will not be fully logged.`
+      )
+    );
+    for (const result of failingResults) {
+      logError(result.error, verbose);
+    }
+  } else if (summary) {
+    console.log(summary);
+  } else {
+    const scoresByName: { [name: string]: { total: number; count: number } } =
+      {};
+    for (const result of results) {
+      for (const [name, score] of Object.entries(result.scores)) {
+        const { total, count } = scoresByName[name] || { total: 0, count: 0 };
+        scoresByName[name] = { total: total + score, count: count + 1 };
+      }
+    }
+
+    const summary = {
+      scores: Object.fromEntries(
+        Object.entries(scoresByName).map(([name, { total, count }]) => [
+          name,
+          {
+            name,
+            score: total / count,
+          },
+        ])
+      ),
+    };
+
+    console.log(summary);
+  }
 }
