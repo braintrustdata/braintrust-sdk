@@ -4,3 +4,10 @@ version = "0.0.1"
 
 [project.scripts]
 codegen = 'codegen:main'
+
+[tool.pyright]
+include = ["src"]
+exclude = [
+    "**/__pycache__",
+    "src/scratch-output",
+]
