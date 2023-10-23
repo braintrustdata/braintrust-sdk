@@ -157,6 +157,7 @@ class BraintrustState {
     this.id = uuidv4(); // This is for debugging
     this.currentExperiment = iso.newAsyncLocalStorage();
     this.currentSpan = iso.newAsyncLocalStorage();
+    this.currentSpan.enterWith(noopSpan);
 
     this.apiUrl = null;
     this.loginToken = null;
