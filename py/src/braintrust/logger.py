@@ -1584,7 +1584,7 @@ class Project:
 class Logger:
     def __init__(self, lazy_login: Callable, project: Project, is_async: bool = True, set_current: bool = None):
         self._lazy_login = lazy_login
-        self.logged_in = False
+        self._logged_in = False
 
         self.project = project
         self.is_async = is_async
@@ -1632,9 +1632,9 @@ class Logger:
         return span.id
 
     def lazy_login(self):
-        if not self.logged_in:
-            self.lazy_login()
-            self.logged_in = True
+        if not self._logged_in:
+            self._lazy_login()
+            self._logged_in = True
 
     def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, **event):
         """Create a new toplevel span. The name parameter is optional and defaults to "root".
