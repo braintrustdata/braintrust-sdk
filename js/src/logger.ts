@@ -324,22 +324,19 @@ class HTTPConnection {
     path: string,
     params: Record<string, string | undefined> | undefined = undefined
   ) {
-    const url = _urljoin(this.base_url, path);
-    const urlParams = new URLSearchParams(
+    const url = new URL(_urljoin(this.base_url, path));
+    url.search = new URLSearchParams(
       params
         ? (Object.fromEntries(
             Object.entries(params).filter(([_, v]) => v !== undefined)
           ) as Record<string, string>)
         : {}
-    );
+    ).toString();
     return await checkResponse(
-      await fetch(
-        url + (urlParams.toString() ? `?${urlParams.toString()}` : ""),
-        {
-          headers: this.headers,
-          keepalive: true,
-        }
-      )
+      await fetch(url, {
+        headers: this.headers,
+        keepalive: true,
+      })
     );
   }
 
