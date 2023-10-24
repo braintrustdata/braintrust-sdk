@@ -15,15 +15,15 @@ import pluralize from "pluralize";
 
 export type Metadata = Record<string, unknown>;
 
-export interface EvalCase<Input, Output> {
+export interface EvalCase<Input, Output, Expected> {
   input: Input;
-  expected?: Output;
+  expected?: Expected;
   metadata?: Metadata;
 }
 
-export type EvalData<Input, Output> =
-  | (() => EvalCase<Input, Output>[])
-  | (() => Promise<EvalCase<Input, Output>[]>);
+export type EvalData<Input, Output, Expected> =
+  | (() => EvalCase<Input, Output, Expected>[])
+  | (() => Promise<EvalCase<Input, Output, Expected>[]>);
 
 export type EvalTask<Input, Output> =
   | ((input: Input, hooks: EvalHooks) => Promise<Output>)
@@ -35,13 +35,17 @@ export interface EvalHooks {
 }
 
 // This happens to be compatible with ScorerArgs defined in autoevals
-export type EvalScorerArgs<Input, Output> = EvalCase<Input, Output> & {
+export type EvalScorerArgs<Input, Output, Expected> = EvalCase<
+  Input,
+  Output,
+  Expected
+> & {
   output: Output;
 };
 
-export type EvalScorer<Input, Output> =
-  | ((args: EvalScorerArgs<Input, Output>) => Score)
-  | ((args: EvalScorerArgs<Input, Output>) => Promise<Score>);
+export type EvalScorer<Input, Output, Expected> =
+  | ((args: EvalScorerArgs<Input, Output, Expected>) => Score)
+  | ((args: EvalScorerArgs<Input, Output, Expected>) => Promise<Score>);
 
 /**
  * An evaluator is a collection of functions that can be used to evaluate a model.
@@ -50,18 +54,18 @@ export type EvalScorer<Input, Output> =
  * - `task`, a function that takes an input and returns an output
  * - `scores`, a set of functions that take an input, output, and expected value and return a score
  */
-export interface Evaluator<Input, Output> {
-  data: EvalData<Input, Output>;
+export interface Evaluator<Input, Output, Expected> {
+  data: EvalData<Input, Output, Expected>;
   task: EvalTask<Input, Output>;
-  scores: EvalScorer<Input, Output>[];
+  scores: EvalScorer<Input, Output, Expected>[];
 }
 
-export type EvaluatorDef<Input, Output> = {
+export type EvaluatorDef<Input, Output, Expected> = {
   name: string;
-} & Evaluator<Input, Output>;
+} & Evaluator<Input, Output, Expected>;
 
 export type EvaluatorFile = {
-  [evaluator: string]: EvaluatorDef<any, any>;
+  [evaluator: string]: EvaluatorDef<any, any, any>;
 };
 
 declare global {
@@ -71,9 +75,9 @@ declare global {
 
 globalThis._evals = {};
 
-export async function Eval<Input, Output>(
+export async function Eval<Input, Output, Expected>(
   name: string,
-  evaluator: Evaluator<Input, Output>
+  evaluator: Evaluator<Input, Output, Expected>
 ): Promise<void | ExperimentSummary> {
   if (_evals[name]) {
     throw new Error(`Evaluator ${name} already exists`);
@@ -88,7 +92,7 @@ export async function Eval<Input, Output>(
     return await withExperiment(name, async (experiment) => {
       const ret = await runEvaluator(
         experiment,
-        { name, ...(evaluator as Evaluator<unknown, unknown>) },
+        { name, ...(evaluator as Evaluator<unknown, unknown, unknown>) },
         progressReporter,
         []
       );
@@ -156,7 +160,7 @@ function evaluateFilter(object: any, filter: Filter) {
 
 export async function runEvaluator(
   experiment: Experiment | null,
-  evaluator: EvaluatorDef<unknown, unknown>,
+  evaluator: EvaluatorDef<unknown, unknown, unknown>,
   progressReporter: ProgressReporter,
   filters: Filter[]
 ) {
