@@ -1,4 +1,5 @@
-import axios, { AxiosInstance, AxiosError } from "axios";
+/// <reference lib="dom" />
+
 import { v4 as uuidv4 } from "uuid";
 
 import iso, { IsoAsyncLocalStorage, CallerLocation } from "./isomorph";
@@ -250,15 +251,39 @@ class UnterminatedObjectsHandler {
 
 let unterminatedObjects = new UnterminatedObjectsHandler();
 
+class FailedHTTPResponse extends Error {
+  public status: number;
+  public text: string;
+  public data: any;
+
+  constructor(status: number, text: string, data: any = null) {
+    super(`${status}: ${text}`);
+    this.status = status;
+    this.text = text;
+    this.data = data;
+  }
+}
+async function checkResponse(resp: Response) {
+  if (resp.ok) {
+    return resp;
+  } else {
+    throw new FailedHTTPResponse(
+      resp.status,
+      resp.statusText,
+      await resp.text()
+    );
+  }
+}
+
 class HTTPConnection {
   base_url: string;
   token: string | null;
-  session: AxiosInstance | null;
+  headers: Record<string, string>;
 
   constructor(base_url: string) {
     this.base_url = base_url;
     this.token = null;
-    this.session = null;
+    this.headers = {};
 
     this._reset();
   }
@@ -266,7 +291,7 @@ class HTTPConnection {
   async ping() {
     try {
       const resp = await this.get("ping");
-      _state.setUserInfoIfNull(resp.data);
+      _state.setUserInfoIfNull(await resp.json());
       return resp.status === 200;
     } catch (e) {
       return false;
@@ -290,40 +315,68 @@ class HTTPConnection {
 
   // As far as I can tell, you cannot set the retry/backoff factor here
   _reset() {
-    let headers: Record<string, string> = {};
+    this.headers = {};
     if (this.token) {
-      headers["Authorization"] = `Bearer ${this.token}`;
+      this.headers["Authorization"] = `Bearer ${this.token}`;
     }
-
-    this.session = iso.makeAxios({ headers });
   }
 
-  async get(path: string, params: unknown | undefined = undefined) {
-    return await this.session!.get(_urljoin(this.base_url, path), { params });
+  async get(
+    path: string,
+    params: Record<string, string | undefined> | undefined = undefined
+  ) {
+    const url = new URL(_urljoin(this.base_url, path));
+    url.search = new URLSearchParams(
+      params
+        ? (Object.fromEntries(
+            Object.entries(params).filter(([_, v]) => v !== undefined)
+          ) as Record<string, string>)
+        : {}
+    ).toString();
+    return await checkResponse(
+      await fetch(url, {
+        headers: this.headers,
+        keepalive: true,
+      })
+    );
   }
 
   async post(
     path: string,
-    params: unknown | undefined = undefined,
-    config: any = undefined
+    params?: Record<string, unknown> | string,
+    config?: RequestInit
   ) {
-    return await this.session!.post(
-      _urljoin(this.base_url, path),
-      params,
-      config
+    const { headers, ...rest } = config || {};
+    return await checkResponse(
+      await fetch(_urljoin(this.base_url, path), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...this.headers,
+          ...headers,
+        },
+        body:
+          typeof params === "string"
+            ? params
+            : params
+            ? JSON.stringify(params)
+            : undefined,
+        keepalive: true,
+        ...rest,
+      })
     );
   }
 
   async get_json(
     object_type: string,
-    args: unknown | undefined = undefined,
+    args: Record<string, string> | undefined = undefined,
     retries: number = 0
   ) {
     const tries = retries + 1;
     for (let i = 0; i < tries; i++) {
       try {
         const resp = await this.get(`${object_type}`, args);
-        return resp.data;
+        return await resp.json();
       } catch (e) {
         if (i < tries - 1) {
           console.log(
@@ -338,12 +391,14 @@ class HTTPConnection {
     }
   }
 
-  async post_json(object_type: string, args: unknown | undefined = undefined) {
+  async post_json(
+    object_type: string,
+    args: Record<string, unknown> | string | undefined = undefined
+  ) {
     const resp = await this.post(`${object_type}`, args, {
-      // https://masteringjs.io/tutorials/axios/post-json
       headers: { "Content-Type": "application/json" },
     });
-    return resp.data;
+    return await resp.json();
   }
 }
 
@@ -489,10 +544,8 @@ class LogThread {
             } catch (e) {
               const retryingText = i + 1 === NumRetries ? "" : " Retrying";
               const errMsg = (() => {
-                if (e instanceof AxiosError && e.response) {
-                  return `${e.response.status}: ${JSON.stringify(
-                    e.response.data
-                  )}`;
+                if (e instanceof FailedHTTPResponse) {
+                  return `${e.status} (${e.text}): ${e.data}`;
                 } else {
                   return `${e}`;
                 }
@@ -751,13 +804,18 @@ export async function login(
   let conn = null;
 
   if (apiKey !== undefined) {
-    const resp = await axios.post(
-      _urljoin(_state.apiUrl, `/api/apikey/login`),
-      {
-        token: apiKey,
-      }
+    const resp = await checkResponse(
+      await fetch(_urljoin(_state.apiUrl, `/api/apikey/login`), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token: apiKey,
+        }),
+      })
     );
-    const info = resp.data;
+    const info = await resp.json();
 
     _check_org_info(info.org_info, orgName);
 
@@ -1253,7 +1311,7 @@ export class Experiment {
         const resp = await conn.get("/crud/base_experiments", {
           id: this.id,
         });
-        const base_experiments = resp.data;
+        const base_experiments = await resp.json();
         if (base_experiments.length > 0) {
           comparisonExperimentId = base_experiments[0]["base_exp_id"];
           comparisonExperimentName = base_experiments[0]["base_exp_name"];
@@ -1690,7 +1748,7 @@ export class Dataset {
         version: this.pinnedVersion,
       });
 
-      const text = await resp.data;
+      const text = await resp.text();
       this._fetchedData = text
         .split("\n")
         .filter((x: string) => x.trim() !== "")
