@@ -493,6 +493,15 @@ class LogThread {
   private active_flush: Promise<string[]> = Promise.resolve([]);
   private active_flush_resolved = true;
 
+  constructor() {
+    // Note that this will not run for explicit termination events, such as
+    // calls to `process.exit()` or uncaught exceptions. Thus it is a
+    // "best-effort" flush.
+    iso.processOn("beforeExit", async () => {
+      await this.flush();
+    });
+  }
+
   log(items: LogEvent[]) {
     this.items.push(...items);
 
