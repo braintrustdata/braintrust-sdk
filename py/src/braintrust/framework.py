@@ -114,9 +114,14 @@ class Evaluator:
     """
 
     """
-    The name of the evaluator. This corresponds to a project name in Braintrust.
+    A unique name for the eval.
     """
-    name: str
+    eval_name: str
+
+    """
+    The name of the project the eval falls under.
+    """
+    project_name: str
 
     """
     Returns an iterator over the evaluation dataset. Each element of the iterator should be an `EvalCase` or a dict
@@ -198,6 +203,13 @@ def report_evaluator_result(eval_name, results, summary, verbose):
             print(f"  {name}: {total / count}")
 
 
+def _make_eval_name(name: str, metadata: Optional[EvalMetadata]):
+    out = name
+    if metadata is not None and metadata.experiment_name is not None:
+        out += f" [experiment_name={metadata.experiment_name}]"
+    return out
+
+
 def Eval(
     name: str,
     data: Callable[[], Union[Iterator[EvalCase], AsyncIterator[EvalCase]]],
@@ -231,17 +243,21 @@ def Eval(
     :param metadata: Optional additional metadata for the eval definition, such as experiment name.
     :return: An `Evaluator` object.
     """
-    global _evals
-    if name in _evals:
-        raise ValueError(f"An evaluator with name {name} already exists")
-
     if isinstance(metadata, dict):
         metadata = EvalMetadata(**metadata)
 
-    evaluator = Evaluator(name=name, data=data, task=task, scores=scores, metadata=metadata)
+    eval_name = _make_eval_name(name, metadata)
+
+    global _evals
+    if eval_name in _evals:
+        raise ValueError(f"Evaluator {eval_name} already exists")
+
+    evaluator = Evaluator(
+        eval_name=eval_name, project_name=name, data=data, task=task, scores=scores, metadata=metadata
+    )
 
     if _lazy_load:
-        _evals[name] = evaluator
+        _evals[eval_name] = evaluator
     else:
         # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
         try:
@@ -250,9 +266,9 @@ def Eval(
             loop = None
 
         async def run_to_completion():
-            with init_experiment(name, evaluator.metadata) as experiment:
+            with init_experiment(evaluator.project_name, evaluator.metadata) as experiment:
                 results, summary = await run_evaluator(experiment, evaluator, 0, [])
-                report_evaluator_result(name, results, summary, True)
+                report_evaluator_result(evaluator.eval_name, results, summary, True)
 
         if loop:
             return loop.create_task(run_to_completion())
@@ -449,7 +465,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
     tasks = []
     with async_tqdm(
         filtered_iterator(data_iterator),
-        desc=f"{evaluator.name} (data)",
+        desc=f"{evaluator.eval_name} (data)",
         position=position,
         disable=position is None,
     ) as pbar:
@@ -457,7 +473,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
             tasks.append(asyncio.create_task(run_evaluator_task(datum)))
 
     results = []
-    for task in std_tqdm(tasks, desc=f"{evaluator.name} (tasks)", position=position, disable=position is None):
+    for task in std_tqdm(tasks, desc=f"{evaluator.eval_name} (tasks)", position=position, disable=position is None):
         results.append(await task)
 
     summary = experiment.summarize() if experiment else None

@@ -69,12 +69,21 @@ export interface Evaluator<Input, Output> {
   metadata?: EvalMetadata;
 }
 
+function makeEvalName(projectName: string, metadata: EvalMetadata | undefined) {
+  let out = projectName;
+  if (metadata?.experimentName) {
+    out += ` [experimentName=${metadata.experimentName}]`;
+  }
+  return out;
+}
+
 export type EvaluatorDef<Input, Output> = {
-  name: string;
+  evalName: string;
+  projectName: string;
 } & Evaluator<Input, Output>;
 
 export type EvaluatorFile = {
-  [evaluator: string]: EvaluatorDef<any, any>;
+  [evalName: string]: EvaluatorDef<any, any>;
 };
 
 declare global {
@@ -88,23 +97,28 @@ export async function Eval<Input, Output>(
   name: string,
   evaluator: Evaluator<Input, Output>
 ): Promise<void | ExperimentSummary> {
-  if (_evals[name]) {
-    throw new Error(`Evaluator ${name} already exists`);
+  const evalName = makeEvalName(name, evaluator.metadata);
+  if (_evals[evalName]) {
+    throw new Error(`Evaluator ${evalName} already exists`);
   }
   if (globalThis._lazy_load) {
-    _evals[name] = { name, ...evaluator };
+    _evals[evalName] = { evalName, projectName: name, ...evaluator };
     return;
   }
 
   const progressReporter = new BarProgressReporter();
   try {
-    const { metadata } = _evals[name];
+    const { metadata } = _evals[evalName];
     return await withExperiment(
       name,
       async (experiment) => {
         const ret = await runEvaluator(
           experiment,
-          { name, ...(evaluator as Evaluator<unknown, unknown>) },
+          {
+            evalName,
+            projectName: name,
+            ...(evaluator as Evaluator<unknown, unknown>),
+          },
           progressReporter,
           []
         );
@@ -191,7 +205,7 @@ export async function runEvaluator(
 
   data = data.filter((d) => filters.every((f) => evaluateFilter(d, f)));
 
-  progressReporter.start(evaluator.name, data.length);
+  progressReporter.start(evaluator.evalName, data.length);
 
   const evals = data.map(async (datum) => {
     let metadata: Metadata = { ...datum.metadata };
@@ -271,7 +285,7 @@ export async function runEvaluator(
       } catch (e) {
         error = e;
       } finally {
-        progressReporter.increment(evaluator.name);
+        progressReporter.increment(evaluator.evalName);
       }
 
       return {

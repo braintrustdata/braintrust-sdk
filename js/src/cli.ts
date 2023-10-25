@@ -111,9 +111,12 @@ function evaluateBuildResults(
   });
 }
 
-async function initLogger(name: string, metadata: EvalMetadata | undefined) {
+async function initLogger(
+  projectName: string,
+  metadata: EvalMetadata | undefined
+) {
   const logger = await initExperiment(
-    name,
+    projectName,
     evalMetadataToInitOptions(metadata)
   );
   const info = await logger.summarize({ summarizeScores: false });
@@ -146,17 +149,17 @@ function buildWatchPluginForEvaluator(
           return;
         }
 
-        for (const [name, evaluator] of Object.entries(evalResult)) {
+        for (const evaluator of Object.values(evalResult)) {
           const logger = opts.noSendLogs
             ? null
-            : await initLogger(name, evaluator.metadata);
+            : await initLogger(evaluator.projectName, evaluator.metadata);
           const evaluatorResult = await runEvaluator(
             logger,
             evaluator,
             opts.progressReporter,
             opts.filters
           );
-          reportEvaluatorResult(evaluator.name, evaluatorResult, true);
+          reportEvaluatorResult(evaluator.evalName, evaluatorResult, true);
         }
       });
     },
@@ -238,20 +241,20 @@ function updateEvaluators(
       continue;
     }
 
-    for (const [name, evaluator] of Object.entries(result.evaluator)) {
+    for (const [evalName, evaluator] of Object.entries(result.evaluator)) {
       if (
-        evaluators[name] &&
-        (evaluators[name].sourceFile !== result.sourceFile ||
-          evaluators[name].evaluator !== evaluator)
+        evaluators[evalName] &&
+        (evaluators[evalName].sourceFile !== result.sourceFile ||
+          evaluators[evalName].evaluator !== evaluator)
       ) {
         console.warn(
           warning(
-            `Evaluator ${name} already exists (in ${evaluators[name].sourceFile} and ${result.sourceFile}). Will skip ${name} in ${result.sourceFile}.`
+            `Evaluator ${evalName} already exists (in ${evaluators[evalName].sourceFile} and ${result.sourceFile}). Will skip ${evalName} in ${result.sourceFile}.`
           )
         );
         continue;
       }
-      evaluators[name] = {
+      evaluators[evalName] = {
         sourceFile: result.sourceFile,
         evaluator,
       };
@@ -303,7 +306,7 @@ async function runOnce(
     const logger = opts.noSendLogs
       ? null
       : await initLogger(
-          evaluator.evaluator.name,
+          evaluator.evaluator.projectName,
           evaluator.evaluator.metadata
         );
     try {
