@@ -870,7 +870,7 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
     if input is not None and inputs is not None:
         raise ValueError("Only one of input or inputs (deprecated) can be specified. Prefer input.")
     if inputs is not None:
-        return dict(**{k: v for k, v in event.items() if k != "inputs"}, input=inputs)
+        return dict(**{k: v for k, v in event.items() if k not in ["input", "inputs"]}, input=inputs)
     else:
         return {k: v for k, v in event.items()}
 
