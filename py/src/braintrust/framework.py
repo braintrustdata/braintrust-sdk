@@ -88,6 +88,21 @@ EvalScorer = Union[
 
 
 @dataclasses.dataclass
+class EvalMetadata(SerializableDataClass):
+    """
+    Additional metadata for the eval definition, such as experiment name.
+    """
+
+    experiment_name: Optional[str] = None
+
+
+def eval_metadata_to_init_options(metadata: Optional[EvalMetadata] = None) -> Dict:
+    if metadata is None:
+        return dict()
+    return dict(experiment=metadata.experiment_name)
+
+
+@dataclasses.dataclass
 class Evaluator:
     """
     An evaluator is an abstraction that defines an evaluation dataset, a task to run on the dataset, and a set of
@@ -126,6 +141,11 @@ class Evaluator:
     that takes `input`, `output`, and `expected` arguments and returns a `Score` object. The function can be async.
     """
     scores: List[EvalScorer]
+
+    """
+    Optional additional metadata for the eval definition, such as experiment name.
+    """
+    metadata: Optional[EvalMetadata]
 
 
 _evals = {}
@@ -183,6 +203,7 @@ def Eval(
     data: Callable[[], Union[Iterator[EvalCase], AsyncIterator[EvalCase]]],
     task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
     scores: List[EvalScorer],
+    metadata: Union[Optional[EvalMetadata], Dict] = None,
 ):
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -207,13 +228,17 @@ def Eval(
     :param task: Runs the evaluation task on a single input. The `hooks` object can be used to add metadata to the evaluation.
     :param scores: A list of scorers to evaluate the results of the task. Each scorer can be a Scorer object or a function
     that takes an `EvalScorerArgs` object and returns a `Score` object.
+    :param metadata: Optional additional metadata for the eval definition, such as experiment name.
     :return: An `Evaluator` object.
     """
     global _evals
     if name in _evals:
         raise ValueError(f"An evaluator with name {name} already exists")
 
-    evaluator = Evaluator(name=name, data=data, task=task, scores=scores)
+    if isinstance(metadata, dict):
+        metadata = EvalMetadata(**metadata)
+
+    evaluator = Evaluator(name=name, data=data, task=task, scores=scores, metadata=metadata)
 
     if _lazy_load:
         _evals[name] = evaluator
@@ -225,7 +250,7 @@ def Eval(
             loop = None
 
         async def run_to_completion():
-            with init_experiment(name) as experiment:
+            with init_experiment(name, evaluator.metadata) as experiment:
                 results, summary = await run_evaluator(experiment, evaluator, 0, [])
                 report_evaluator_result(name, results, summary, True)
 
@@ -308,8 +333,8 @@ class DictEvalHooks(EvalHooks):
         self.metadata.update(info)
 
 
-def init_experiment(project_name):
-    ret = _init_experiment(project_name)
+def init_experiment(project_name, metadata):
+    ret = _init_experiment(project_name, **eval_metadata_to_init_options(metadata))
     summary = ret.summarize(summarize_scores=False)
     print(f"Experiment {ret.name} is running at {summary.experiment_url}")
     return ret

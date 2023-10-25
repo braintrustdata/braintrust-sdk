@@ -2,6 +2,7 @@ import chalk from "chalk";
 import {
   Experiment,
   ExperimentSummary,
+  InitOptions,
   Span,
   currentSpan,
   noopSpan,
@@ -43,17 +44,29 @@ export type EvalScorer<Input, Output> =
   | ((args: EvalScorerArgs<Input, Output>) => Score)
   | ((args: EvalScorerArgs<Input, Output>) => Promise<Score>);
 
+export type EvalMetadata = {
+  experimentName?: string;
+};
+
+export function evalMetadataToInitOptions(
+  metadata: EvalMetadata | undefined
+): InitOptions {
+  return { experiment: metadata?.experimentName };
+}
+
 /**
  * An evaluator is a collection of functions that can be used to evaluate a model.
  * It consists of:
  * - `data`, a function that returns a list of inputs, expected outputs, and metadata
  * - `task`, a function that takes an input and returns an output
  * - `scores`, a set of functions that take an input, output, and expected value and return a score
+ * - `metadata`, optional additional metadata for the eval definition, such as experiment name.
  */
 export interface Evaluator<Input, Output> {
   data: EvalData<Input, Output>;
   task: EvalTask<Input, Output>;
   scores: EvalScorer<Input, Output>[];
+  metadata?: EvalMetadata;
 }
 
 export type EvaluatorDef<Input, Output> = {
@@ -85,16 +98,21 @@ export async function Eval<Input, Output>(
 
   const progressReporter = new BarProgressReporter();
   try {
-    return await withExperiment(name, async (experiment) => {
-      const ret = await runEvaluator(
-        experiment,
-        { name, ...(evaluator as Evaluator<unknown, unknown>) },
-        progressReporter,
-        []
-      );
-      reportEvaluatorResult(name, ret, true);
-      return ret.summary!;
-    });
+    const { metadata } = _evals[name];
+    return await withExperiment(
+      name,
+      async (experiment) => {
+        const ret = await runEvaluator(
+          experiment,
+          { name, ...(evaluator as Evaluator<unknown, unknown>) },
+          progressReporter,
+          []
+        );
+        reportEvaluatorResult(name, ret, true);
+        return ret.summary!;
+      },
+      evalMetadataToInitOptions(metadata)
+    );
   } finally {
     progressReporter.stop();
   }

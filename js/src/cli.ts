@@ -26,8 +26,10 @@ import nodeModulesPaths from "./jest/nodeModulesPaths";
 import {
   EvaluatorDef,
   EvaluatorFile,
+  EvalMetadata,
   Filter,
   error,
+  evalMetadataToInitOptions,
   logError,
   parseFilters,
   reportEvaluatorResult,
@@ -109,8 +111,11 @@ function evaluateBuildResults(
   });
 }
 
-async function initLogger(name: string) {
-  const logger = await initExperiment(name);
+async function initLogger(name: string, metadata: EvalMetadata | undefined) {
+  const logger = await initExperiment(
+    name,
+    evalMetadataToInitOptions(metadata)
+  );
   const info = await logger.summarize({ summarizeScores: false });
   console.log(`Experiment ${logger.name} is running at ${info.experimentUrl}`);
   return logger;
@@ -142,7 +147,9 @@ function buildWatchPluginForEvaluator(
         }
 
         for (const [name, evaluator] of Object.entries(evalResult)) {
-          const logger = opts.noSendLogs ? null : await initLogger(name);
+          const logger = opts.noSendLogs
+            ? null
+            : await initLogger(name, evaluator.metadata);
           const evaluatorResult = await runEvaluator(
             logger,
             evaluator,
@@ -295,7 +302,10 @@ async function runOnce(
     // can name the experiment/evaluation within the run the evaluator's name.
     const logger = opts.noSendLogs
       ? null
-      : await initLogger(evaluator.evaluator.name);
+      : await initLogger(
+          evaluator.evaluator.name,
+          evaluator.evaluator.metadata
+        );
     try {
       return await runEvaluator(
         logger,
