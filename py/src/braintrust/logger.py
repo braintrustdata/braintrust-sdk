@@ -693,7 +693,7 @@ def current_span() -> Span:
     return _state.current_span.get()
 
 
-def start_span(name, span_attributes={}, start_time=None, set_current=None, **event) -> Span:
+def start_span(name=None, span_attributes={}, start_time=None, set_current=None, **event) -> Span:
     """Toplevel function for starting a span. If there is a currently-active span, the new span is created as a subspan. Otherwise, if there is a currently-active experiment, the new span is created as a toplevel span. Otherwise, it returns a no-op span object.
 
     Unless a name is explicitly provided, the name of the span will be the name of the calling function, or "root" if no meaningful name can be determined.
@@ -703,7 +703,7 @@ def start_span(name, span_attributes={}, start_time=None, set_current=None, **ev
     See `Span.startSpan` for full details.
     """
 
-    name = name or get_caller_location().caller_functionname or "root"
+    name = name or get_caller_location()["caller_functionname"] or "root"
     kwargs = dict(name=name, span_attributes=span_attributes, start_time=start_time, set_current=set_current, **event)
     parent_span = current_span()
     if parent_span != NOOP_SPAN:
