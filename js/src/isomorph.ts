@@ -39,6 +39,7 @@ export interface Common {
   getEnv: (name: string) => string | undefined;
   getCallerLocation: () => CallerLocation | undefined;
   newAsyncLocalStorage: <T>() => IsoAsyncLocalStorage<T>;
+  processOn: (event: string, handler: (code: any) => void) => void;
 }
 
 const iso: Common = {
@@ -47,5 +48,6 @@ const iso: Common = {
   getEnv: (_name) => undefined,
   getCallerLocation: () => undefined,
   newAsyncLocalStorage: <T>() => new DefaultAsyncLocalStorage<T>(),
+  processOn: (_0, _1) => {},
 };
 export default iso;
