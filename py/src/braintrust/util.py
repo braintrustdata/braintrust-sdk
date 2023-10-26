@@ -58,7 +58,6 @@ def get_caller_location():
     return None
 
 
-# TODO(manu): Share with chalicelib.
 def merge_dicts(merge_into: dict, merge_from: dict):
     """Merges merge_from into merge_into, destructively updating merge_into."""
 

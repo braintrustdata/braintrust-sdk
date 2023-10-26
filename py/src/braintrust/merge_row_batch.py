@@ -1,7 +1,3 @@
-# Mirrors the implementation of merge_row_batch in api/chalicelib/util.py.
-#
-# TODO(manu): Share common functionality between SDK and chalicelib.
-
 from .util import IS_MERGE_FIELD, merge_dicts
 
 
