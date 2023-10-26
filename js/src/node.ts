@@ -10,4 +10,7 @@ export function configureNode() {
   iso.getEnv = (name) => process.env[name];
   iso.getCallerLocation = getCallerLocation;
   iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
+  iso.processOn = (event: string, handler: (code: any) => void) => {
+    process.on(event, handler);
+  };
 }
