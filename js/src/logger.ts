@@ -51,7 +51,7 @@ export interface Span {
   /**
    * Create a new span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `Span.log` will be merged into one logical row.
    *
-   * We recommend running spans within a callback (using `startSpanWithinCallback`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a callback, be sure to terminate it with `span.end()`.
+   * We recommend running spans within a callback (using `traced`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a callback, be sure to terminate it with `span.end()`.
    *
    * @param name The name of the span.
    * @param args.span_attributes Optional additional attributes to attach to the span, such as a type name.
@@ -913,7 +913,7 @@ export function currentSpan(): Span {
  *
  * Unless a name is explicitly provided, the name of the span will be the name of the calling function, or "root" if no meaningful name can be determined.
  *
- * We recommend running spans within a callback (using `startSpanWithinCallback`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a callback, be sure to terminate it with `span.end()`.
+ * We recommend running spans within a callback (using `traced`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a callback, be sure to terminate it with `span.end()`.
  *
  * See `Span.startSpan` for full details.
  */
