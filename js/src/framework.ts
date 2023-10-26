@@ -44,7 +44,9 @@ export type EvalScorer<Input, Output> =
   | ((args: EvalScorerArgs<Input, Output>) => Score)
   | ((args: EvalScorerArgs<Input, Output>) => Promise<Score>);
 
+// Additional metadata for the eval definition, such as experiment name.
 export type EvalMetadata = {
+  // Specify a name for the experiment holding the eval results.
   experimentName?: string;
 };
 
@@ -78,8 +80,8 @@ function makeEvalName(projectName: string, metadata: EvalMetadata | undefined) {
 }
 
 export type EvaluatorDef<Input, Output> = {
-  evalName: string;
   projectName: string;
+  evalName: string;
 } & Evaluator<Input, Output>;
 
 export type EvaluatorFile = {

@@ -93,6 +93,9 @@ class EvalMetadata(SerializableDataClass):
     Additional metadata for the eval definition, such as experiment name.
     """
 
+    """
+    Specify a name for the experiment holding the eval results.
+    """
     experiment_name: Optional[str] = None
 
 
@@ -114,14 +117,14 @@ class Evaluator:
     """
 
     """
-    A unique name for the eval.
-    """
-    eval_name: str
-
-    """
     The name of the project the eval falls under.
     """
     project_name: str
+
+    """
+    A name that uniquely defines this type of experiment. You do not need to change it each time the experiment runs, but you should not have other experiments in your code with the same name.
+    """
+    eval_name: str
 
     """
     Returns an iterator over the evaluation dataset. Each element of the iterator should be an `EvalCase` or a dict
