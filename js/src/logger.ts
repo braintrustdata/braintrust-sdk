@@ -219,7 +219,7 @@ class UnterminatedObjectsHandler {
 
   constructor() {
     this.unterminatedObjects = new Map();
-    process.on("exit", () => {
+    iso.processOn("exit", () => {
       this.warnUnterminated();
     });
   }
