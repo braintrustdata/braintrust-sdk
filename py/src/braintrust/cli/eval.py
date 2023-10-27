@@ -81,23 +81,23 @@ def update_evaluators(evaluators, handles):
             print(f"Failed to import {handle.in_file}: {e}", file=sys.stderr)
             continue
 
-        for name, evaluator in module_evals.items():
+        for eval_name, evaluator in module_evals.items():
             if not isinstance(evaluator, Evaluator):
                 continue
 
-            if name in evaluators:
+            if eval_name in evaluators:
                 _logger.warning(
-                    f"Evaluator {name} already exists (in {evaluators[name].handle.in_file} and {handle.in_file}). Will skip {name} in {handle.in_file}."
+                    f"Evaluator {eval_name} already exists (in {evaluators[eval_name].handle.in_file} and {handle.in_file}). Will skip {eval_name} in {handle.in_file}."
                 )
                 continue
 
-            evaluators[name] = LoadedEvaluator(evaluator=evaluator, handle=handle)
+            evaluators[eval_name] = LoadedEvaluator(evaluator=evaluator, handle=handle)
 
 
 async def run_evaluator_task(evaluator, position, opts: EvaluatorOpts):
     experiment = None
     if not opts.no_send_logs:
-        experiment = init_experiment(evaluator.name)
+        experiment = init_experiment(evaluator.project_name, evaluator.metadata)
 
     try:
         return await run_evaluator(
@@ -118,8 +118,8 @@ async def run_once(handles, evaluator_opts):
     ]
     eval_results = [await p for p in eval_promises]
 
-    for name, (results, summary) in zip(evaluators.keys(), eval_results):
-        report_evaluator_result(name, results, summary, evaluator_opts.verbose)
+    for eval_name, (results, summary) in zip(evaluators.keys(), eval_results):
+        report_evaluator_result(eval_name, results, summary, evaluator_opts.verbose)
 
 
 def check_match(path_input, include_patterns, exclude_patterns):
