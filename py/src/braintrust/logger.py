@@ -356,14 +356,13 @@ class _LogThread:
     def log(self, *args):
         self._start()
         for event in args:
-            while True:
-                try:
-                    self.queue.put_nowait(event)
-                    break
-                except queue.Full:
-                    # Notify consumers to start draining the queue.
-                    with self.queue_filled_condition:
-                        self.queue_filled_condition.notify()
+            try:
+                self.queue.put_nowait(event)
+            except queue.Full:
+                # Notify consumers to start draining the queue.
+                with self.queue_filled_condition:
+                    self.queue_filled_condition.notify()
+                self.queue.put(event)
         with self.queue_filled_condition:
             self.queue_filled_condition.notify()
 
