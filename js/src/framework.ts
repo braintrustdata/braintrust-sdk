@@ -47,7 +47,7 @@ export type EvalScorer<Input, Output> =
 /**
  * Additional metadata for the eval definition, such as experiment name.
  */
-export type EvalMetadata = {
+export interface EvalMetadata {
   // Specify a name for the experiment holding the eval results.
   experimentName?: string;
 }
