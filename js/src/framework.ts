@@ -44,7 +44,9 @@ export type EvalScorer<Input, Output> =
   | ((args: EvalScorerArgs<Input, Output>) => Score)
   | ((args: EvalScorerArgs<Input, Output>) => Promise<Score>);
 
-// Additional metadata for the eval definition, such as experiment name.
+/**
+ * Additional metadata for the eval definition, such as experiment name.
+ */
 export type EvalMetadata = {
   // Specify a name for the experiment holding the eval results.
   experimentName?: string;
