@@ -50,7 +50,7 @@ export type EvalScorer<Input, Output> =
 export type EvalMetadata = {
   // Specify a name for the experiment holding the eval results.
   experimentName?: string;
-};
+}
 
 export function evalMetadataToInitOptions(
   metadata: EvalMetadata | undefined

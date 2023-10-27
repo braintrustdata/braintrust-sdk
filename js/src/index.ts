@@ -38,4 +38,4 @@ import { configureNode } from "./node";
 configureNode();
 
 export * from "./logger";
-export { Evaluator, EvalTask, Eval, EvalScorerArgs } from "./framework";
+export { Evaluator, EvalTask, Eval, EvalMetadata, EvalScorerArgs } from "./framework";
