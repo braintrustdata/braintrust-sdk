@@ -1187,7 +1187,7 @@ class SpanImpl(Span):
         root_project=None,
         parent_span=None,
     ):
-        if sum(x is None for x in [root_experiment, root_project, parent_span]) != 1:
+        if sum(x is not None for x in [root_experiment, root_project, parent_span]) != 1:
             raise ValueError("Must specify exactly one of `root_experiment`, `root_project`, and `parent_span`")
 
         self.finished = False

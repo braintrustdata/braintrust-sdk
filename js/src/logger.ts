@@ -536,17 +536,9 @@ export class Logger {
     const span = await this.startSpan(argsRest);
     try {
       let ret = null;
-      if (setCurrent ?? true) {
-        ret = withCurrent(span, () => callback(span));
-      } else {
-        ret = callback(span);
-      }
-      // We need to await here, so that we call the `finally` block after awaiting
-      if (ret instanceof Promise) {
-        return (await ret) as R;
-      } else {
-        return ret;
-      }
+      return await (setCurrent ?? true
+        ? withCurrent(span, () => callback(span))
+        : callback(span));
     } finally {
       span.end();
       if (!this.logOptions.asyncFlush) {
@@ -1127,7 +1119,12 @@ export function currentSpan(): Span {
 }
 
 /**
- * Toplevel function for starting a span. If there is a currently-active span, the new span is created as a subspan. Otherwise, if there is a currently-active experiment, the new span is created as a toplevel span. Otherwise, it returns a no-op span object.
+ * Toplevel function for starting a span. It checks the following (in precedence order):
+ *  * Currently-active span
+ *  * Currently-active experiment
+ *  * Currently-active logger
+ *
+ * and creates a span in the first one that is active. If none of these are active, it returns a no-op span object.
  *
  * Unless a name is explicitly provided, the name of the span will be the name of the calling function, or "root" if no meaningful name can be determined.
  *
@@ -1713,7 +1710,7 @@ export class SpanImpl implements Span {
       root_span_id: this.root_span_id,
       ...this._object_info,
       [IS_MERGE_FIELD]: this.isMerge,
-    } as BackgroundLogEvent; /* XXX This is an abuse of the typesystem */
+    };
     this.internalData = {};
     this.bgLogger.log([record]);
   }
