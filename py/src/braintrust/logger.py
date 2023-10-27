@@ -509,7 +509,7 @@ def init_dataset(
 def init_logger(
     project: str = None,
     project_id: str = None,
-    is_async: bool = True,
+    async_flush: bool = True,
     set_current: bool = True,
     api_url: str = None,
     api_key: str = None,
@@ -521,7 +521,7 @@ def init_logger(
 
     :param project: The name of the project to log into. If unspecified, will default to the Global project.
     :param project_id: The id of the project to log into. This takes precedence over project if specified.
-    :param is_async: If true (the default), log events will be batched and sent asynchronously in a background thread. If false, log events will be sent synchronously. Set to false in serverless environments.
+    :param async_flush: If true (the default), log events will be batched and sent asynchronously in a background thread. If false, log events will be sent synchronously. Set to false in serverless environments.
     :param set_current: If true (default), set the currently-active logger to the newly-created one. Unless the logger is bound to a context manager, it will not be marked as current. Equivalent to calling `with braintrust.with_current(logger)`.
     :param api_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
@@ -537,7 +537,7 @@ def init_logger(
     return Logger(
         lazy_login=lazy_login,
         project=Project(name=project, id=project_id),
-        is_async=is_async,
+        async_flush=async_flush,
         set_current=set_current,
     )
 
@@ -738,7 +738,12 @@ def current_span() -> Span:
 
 
 def start_span(name=None, span_attributes={}, start_time=None, set_current=None, **event) -> Span:
-    """Toplevel function for starting a span. If there is a currently-active span, the new span is created as a subspan. Otherwise, if there is a currently-active experiment, the new span is created as a toplevel span. Otherwise, it returns a no-op span object.
+    """Toplevel function for starting a span. It checks the following (in precedence order):
+    * Currently-active span
+    * Currently-active experiment
+    * Currently-active logger
+
+    and creates a span in the first one that is active. If none of these are active, it returns a no-op span object.
 
     Unless a name is explicitly provided, the name of the span will be the name of the calling function, or "root" if no meaningful name can be determined.
 
@@ -1182,9 +1187,7 @@ class SpanImpl(Span):
         root_project=None,
         parent_span=None,
     ):
-        if all(x is None for x in [root_experiment, root_project, parent_span]) or all(
-            x is not None for x in [root_experiment, root_project, parent_span]
-        ):
+        if sum(x is None for x in [root_experiment, root_project, parent_span]) != 1:
             raise ValueError("Must specify exactly one of `root_experiment`, `root_project`, and `parent_span`")
 
         self.finished = False
@@ -1562,8 +1565,7 @@ class Project:
                         },
                     )
                     self._id = response["project"]["id"]
-                    if self._name is None:
-                        self._name = response["project"]["name"]
+                    self._name = response["project"]["name"]
                 elif self._name is None:
                     response = _state.api_conn().get_json("api/project", {"id": self._id})
                     self._name = response["name"]
@@ -1582,12 +1584,12 @@ class Project:
 
 
 class Logger:
-    def __init__(self, lazy_login: Callable, project: Project, is_async: bool = True, set_current: bool = None):
+    def __init__(self, lazy_login: Callable, project: Project, async_flush: bool = True, set_current: bool = None):
         self._lazy_login = lazy_login
         self._logged_in = False
 
         self.project = project
-        self.is_async = is_async
+        self.async_flush = async_flush
         self.set_current = True if set_current is None else set_current
 
         self.logger = _LogThread()
@@ -1626,14 +1628,15 @@ class Logger:
         )
         self.last_start_time = span.end()
 
-        if not self.is_async:
+        if not self.async_flush:
             self.logger.flush()
 
         return span.id
 
-    def lazy_login(self):
+    def _perform_lazy_login(self):
         if not self._logged_in:
             self._lazy_login()
+            self.last_start_time = time.time()
             self._logged_in = True
 
     def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, **event):
@@ -1641,7 +1644,7 @@ class Logger:
 
         See `Span.start_span` for full details
         """
-        self.lazy_login()
+        self._perform_lazy_login()
         return SpanImpl(
             bg_logger=self.logger,
             name=name,
@@ -1653,7 +1656,7 @@ class Logger:
         )
 
     def __enter__(self):
-        self.lazy_login()
+        self._perform_lazy_login()
         if self.set_current:
             self._context_token = _state.current_logger.set(self)
         return self
@@ -1668,7 +1671,7 @@ class Logger:
         """
         Flush any pending logs to the server.
         """
-        self.lazy_login()
+        self._perform_lazy_login()
         self.logger.flush()
 
 

@@ -146,6 +146,7 @@ declare global {
 class BraintrustState {
   public id: string;
   public currentExperiment: IsoAsyncLocalStorage<Experiment | undefined>;
+  public currentLogger: IsoAsyncLocalStorage<Logger | undefined>;
   public currentSpan: IsoAsyncLocalStorage<Span>;
 
   public apiUrl: string | null;
@@ -162,6 +163,7 @@ class BraintrustState {
   constructor() {
     this.id = uuidv4(); // This is for debugging
     this.currentExperiment = iso.newAsyncLocalStorage();
+    this.currentLogger = iso.newAsyncLocalStorage();
     this.currentSpan = iso.newAsyncLocalStorage();
     this.currentSpan.enterWith(noopSpan);
 
@@ -434,9 +436,7 @@ export class Project {
           org_id: _state.orgId,
         });
       this.id = response.project.id;
-      if (this.name === undefined) {
-        this.name = response.project.name;
-      }
+      this.name = response.project.name;
     } else if (this.name === undefined) {
       const response = await _state.apiConn().get_json("api/project", {
         id: this.id,
@@ -449,31 +449,43 @@ export class Project {
 }
 
 export interface LogOptions {
-  is_async?: boolean;
+  asyncFlush?: boolean;
 }
 
 export class Logger {
-  lazyLogin: () => Promise<void>;
+  private _lazyLogin: () => Promise<void>;
+  private loggedIn: boolean = false;
   lazyProject: Project;
   logOptions: LogOptions;
-  private logger: LogThread;
+  private bgLogger: BackgroundLogger;
   private lastStartTime: number;
+
+  // For type identification.
+  public kind: "logger" = "logger";
 
   constructor(
     lazyLogin: () => Promise<void>,
     lazyProject: Project,
     logOptions: LogOptions = {}
   ) {
-    this.lazyLogin = lazyLogin;
+    this._lazyLogin = lazyLogin;
     this.lazyProject = lazyProject;
     this.logOptions = logOptions;
 
-    this.logger = new LogThread();
+    this.bgLogger = new BackgroundLogger();
     this.lastStartTime = getCurrentUnixTimestamp();
   }
 
+  private async lazyLogin() {
+    if (!this.loggedIn) {
+      await this._lazyLogin();
+      this.lastStartTime = getCurrentUnixTimestamp();
+      this.loggedIn = true;
+    }
+  }
+
   /**
-   * Log a single event. The event will be batched and uploaded behind the scenes.
+   * Log a single event. The event will be batched and uploaded behind the scenes if `logOptions.asyncFlush` is true.
    *
    * @param event The event to log.
    * @param event.input: The arguments that uniquely define a user input (an arbitrary, JSON serializable object).
@@ -489,7 +501,7 @@ export class Logger {
     const span = await this.startSpan({ startTime: this.lastStartTime, event });
     this.lastStartTime = span.end();
 
-    if (!this.logOptions.is_async) {
+    if (!this.logOptions.asyncFlush) {
       await this.flush();
     }
 
@@ -506,7 +518,7 @@ export class Logger {
     const project = await this.lazyProject.lazyInit();
     const { name, ...argsRest } = args ?? {};
     return new SpanImpl({
-      bgLogger: this.logger,
+      bgLogger: this.bgLogger,
       name: name ?? "root",
       ...argsRest,
       rootProject: project,
@@ -523,16 +535,12 @@ export class Logger {
     const { setCurrent, ...argsRest } = args ?? {};
     const span = await this.startSpan(argsRest);
     try {
-      const ret = runFinally(
-        () => {
-          if (setCurrent ?? true) {
-            return withCurrent(span, () => callback(span));
-          } else {
-            return callback(span);
-          }
-        },
-        () => span.end()
-      );
+      let ret = null;
+      if (setCurrent ?? true) {
+        ret = withCurrent(span, () => callback(span));
+      } else {
+        ret = callback(span);
+      }
       // We need to await here, so that we call the `finally` block after awaiting
       if (ret instanceof Promise) {
         return (await ret) as R;
@@ -540,7 +548,10 @@ export class Logger {
         return ret;
       }
     } finally {
-      await this.flush();
+      span.end();
+      if (!this.logOptions.asyncFlush) {
+        await this.flush();
+      }
     }
   }
 
@@ -548,7 +559,7 @@ export class Logger {
    * Flush any pending logs to the server.
    */
   async flush(): Promise<void> {
-    return await this.logger.flush();
+    return await this.bgLogger.flush();
   }
 }
 
@@ -603,13 +614,12 @@ interface DatasetEvent {
   created: string;
 }
 
-type MonitoringEvent = Omit<ExperimentEvent, "experiment_id"> & {
+type LoggingEvent = Omit<ExperimentEvent, "experiment_id"> & {
   org_id: string;
-  project_id: string;
   log_id: "g";
 };
 
-type LogEvent = ExperimentEvent | DatasetEvent | MonitoringEvent;
+type BackgroundLogEvent = ExperimentEvent | DatasetEvent | LoggingEvent;
 
 export interface DatasetRecord {
   id: string;
@@ -632,8 +642,8 @@ function now() {
   return new Date().getTime();
 }
 
-class LogThread {
-  private items: LogEvent[] = [];
+class BackgroundLogger {
+  private items: BackgroundLogEvent[] = [];
   private active_flush: Promise<string[]> = Promise.resolve([]);
   private active_flush_resolved = true;
 
@@ -646,7 +656,7 @@ class LogThread {
     });
   }
 
-  log(items: LogEvent[]) {
+  log(items: BackgroundLogEvent[]) {
     this.items.push(...items);
 
     if (this.active_flush_resolved) {
@@ -905,7 +915,7 @@ export async function withDataset<R>(
 type InitLoggerOptions = {
   projectName?: string;
   projectId?: string;
-  is_async?: boolean;
+  asyncFlush?: boolean;
   apiUrl?: string;
   apiKey?: string;
   orgName?: string;
@@ -918,7 +928,7 @@ type InitLoggerOptions = {
  * @param options Additional options for configuring init().
  * @param options.projectName The name of the project to log into. If unspecified, will default to the Global project.
  * @param options.projectId The id of the project to log into. This takes precedence over projectName if specified.
- * @param options.is_async If true, will log asynchronously in the background. Otherwise, will log synchronously. (false by default, to support serverless environments)
+ * @param options.asyncFlush If true, will log asynchronously in the background. Otherwise, will log synchronously. (false by default, to support serverless environments)
  * @param options.apiUrl The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
@@ -930,7 +940,7 @@ export function initLogger(options: Readonly<InitLoggerOptions> = {}) {
   const {
     projectName,
     projectId,
-    is_async,
+    asyncFlush,
     apiUrl,
     apiKey,
     orgName,
@@ -953,7 +963,7 @@ export function initLogger(options: Readonly<InitLoggerOptions> = {}) {
       id: projectId,
     }),
     {
-      is_async,
+      asyncFlush,
     }
   );
 }
@@ -1101,6 +1111,13 @@ export function currentExperiment(): Experiment | undefined {
 }
 
 /**
+ * Returns the currently-active logger (set by `braintrust.withLogger` or `braintrust.withCurrent`). Returns undefined if no current logger has been set.
+ */
+export function currentLogger(): Logger | undefined {
+  return _state.currentLogger.getStore();
+}
+
+/**
  * Return the currently-active span for logging (set by `traced` or `braintrust.withCurrent`). If there is no active span, returns a no-op span object, which supports the same interface as spans but does no logging.
  *
  * See `Span` for full details.
@@ -1130,6 +1147,13 @@ export function startSpan(args?: StartSpanOptionalNameArgs): Span {
   const experiment = currentExperiment();
   if (experiment) {
     return experiment.startSpan({ name, ...argsRest });
+  }
+
+  const logger = currentLogger();
+  if (logger) {
+    throw new Error(
+      "Cannot start a span within a logger from startSpan(). Use logger.startSpan() instead."
+    );
   }
 
   return noopSpan;
@@ -1162,11 +1186,13 @@ export function traced<R>(
  * @param callback: The callback to be run under the scope of the current object.
  */
 export function withCurrent<R>(
-  object: Experiment | Span,
+  object: Experiment | Logger | Span,
   callback: () => R
 ): R {
   if (object.kind === "experiment") {
     return _state.currentExperiment.run(object, callback);
+  } else if (object.kind === "logger") {
+    return _state.currentLogger.run(object, callback);
   } else if (object.kind === "span") {
     return _state.currentSpan.run(object, callback);
   } else {
@@ -1401,7 +1427,7 @@ export class Experiment {
   public readonly name: string;
   public readonly user_id: string;
   public readonly dataset?: Dataset;
-  private logger: LogThread;
+  private bgLogger: BackgroundLogger;
   private lastStartTime: number;
   private finished: boolean;
 
@@ -1422,7 +1448,7 @@ export class Experiment {
     this.name = name;
     this.user_id = user_id;
     this.dataset = dataset;
-    this.logger = new LogThread();
+    this.bgLogger = new BackgroundLogger();
     this.lastStartTime = getCurrentUnixTimestamp();
 
     unterminatedObjects.addUnterminated(this, iso.getCallerLocation());
@@ -1462,7 +1488,7 @@ export class Experiment {
 
     const { name, ...argsRest } = args ?? {};
     return new SpanImpl({
-      bgLogger: this.logger,
+      bgLogger: this.bgLogger,
       name: name ?? "root",
       ...argsRest,
       rootExperiment: this,
@@ -1507,7 +1533,7 @@ export class Experiment {
     let { summarizeScores = true, comparisonExperimentId = undefined } =
       options || {};
 
-    await this.logger.flush();
+    await this.bgLogger.flush();
     const projectUrl = `${_state.apiUrl}/app/${encodeURIComponent(
       _state.orgName!
     )}/p/${encodeURIComponent(this.project.name)}`;
@@ -1560,7 +1586,7 @@ export class Experiment {
   public async close(): Promise<string> {
     this.checkNotFinished();
 
-    await this.logger.flush();
+    await this.bgLogger.flush();
 
     this.finished = true;
     unterminatedObjects.removeUnterminated(this);
@@ -1581,7 +1607,7 @@ export class Experiment {
  */
 export class SpanImpl implements Span {
   private finished: boolean;
-  private bgLogger: LogThread;
+  private bgLogger: BackgroundLogger;
   // `internalData` contains fields that are not part of the "user-sanitized"
   // set of fields which we want to log in just one of the span rows.
   private internalData: Partial<ExperimentEvent>;
@@ -1591,7 +1617,16 @@ export class SpanImpl implements Span {
   public id: string;
   public span_id: string;
   public root_span_id: string;
-  private readonly _object_info: { [key: string]: any };
+  private readonly _object_info:
+    | {
+        project_id: string;
+        experiment_id: string;
+      }
+    | {
+        org_id: string;
+        project_id: string;
+        log_id: "g";
+      };
 
   public kind: "span" = "span";
 
@@ -1599,7 +1634,7 @@ export class SpanImpl implements Span {
   // should only be specified for non-root spans.
   constructor(
     args: {
-      bgLogger: LogThread;
+      bgLogger: BackgroundLogger;
       name: string;
       spanAttributes?: Record<any, any>;
       startTime?: number;
@@ -1640,7 +1675,7 @@ export class SpanImpl implements Span {
     } else if ("rootProject" in args) {
       this.root_span_id = this.span_id;
       this._object_info = {
-        org_id: _state.orgId,
+        org_id: _state.orgId!,
         project_id: args.rootProject.id,
         log_id: "g",
       };
@@ -1678,7 +1713,7 @@ export class SpanImpl implements Span {
       root_span_id: this.root_span_id,
       ...this._object_info,
       [IS_MERGE_FIELD]: this.isMerge,
-    } as LogEvent; /* XXX This is an abuse of the typesystem */
+    } as BackgroundLogEvent; /* XXX This is an abuse of the typesystem */
     this.internalData = {};
     this.bgLogger.log([record]);
   }
@@ -1783,7 +1818,7 @@ export class Dataset {
   public readonly user_id: string;
   private pinnedVersion?: string;
   private _fetchedData?: any[] = undefined;
-  private logger: LogThread;
+  private logger: BackgroundLogger;
   private finished: boolean;
 
   constructor(
@@ -1800,7 +1835,7 @@ export class Dataset {
     this.name = name;
     this.user_id = user_id;
     this.pinnedVersion = pinnedVersion;
-    this.logger = new LogThread();
+    this.logger = new BackgroundLogger();
 
     unterminatedObjects.addUnterminated(this, iso.getCallerLocation());
   }
