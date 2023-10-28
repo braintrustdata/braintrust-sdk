@@ -4,17 +4,18 @@
 
 import { IS_MERGE_FIELD, mergeDicts } from "./util";
 
+const DATA_OBJECT_KEYS = [
+  "org_id",
+  "project_id",
+  "experiment_id",
+  "dataset_id",
+  "prompt_session_id",
+  "log_id",
+];
+
 function generateUniqueRowKey(row: Record<string, any>) {
   const coalesceEmpty = (field: string) => row[field] ?? "";
-  return (
-    coalesceEmpty("experiment_id") +
-    ":" +
-    coalesceEmpty("dataset_id") +
-    ":" +
-    coalesceEmpty("prompt_session_id") +
-    ":" +
-    coalesceEmpty("id")
-  );
+  return DATA_OBJECT_KEYS.concat(["id"]).map(coalesceEmpty).join(":");
 }
 
 export function mergeRowBatch(
