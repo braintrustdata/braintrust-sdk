@@ -17,8 +17,8 @@ import uuid
 from abc import ABC, abstractmethod
 from functools import partial, wraps
 from getpass import getpass
-from typing import Any, Callable, Dict, Optional, Union
 from multiprocessing import cpu_count
+from typing import Any, Callable, Dict, Optional, Union
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -220,6 +220,7 @@ class _UnterminatedObjectsHandler:
 
 
 _unterminated_objects = _UnterminatedObjectsHandler()
+
 
 class HTTPConnection:
     def __init__(self, base_url):
@@ -1707,9 +1708,7 @@ class Logger:
         if self.set_current:
             _state.current_logger.reset(self._context_token)
 
-        if not self.async_flush:
-            self.logger.flush()
-
+        self.logger.flush()
 
     def flush(self):
         """
