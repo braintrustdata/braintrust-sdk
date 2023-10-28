@@ -6,6 +6,7 @@ import urllib.parse
 
 from requests import HTTPError
 
+GLOBAL_PROJECT = "Global"
 TRANSACTION_ID_FIELD = "_xact_id"
 IS_MERGE_FIELD = "_is_merge"
 

@@ -1,19 +1,20 @@
 from .util import IS_MERGE_FIELD, merge_dicts
 
+DATA_OBJECT_KEYS = [
+    "org_id",
+    "project_id",
+    "experiment_id",
+    "dataset_id",
+    "prompt_session_id",
+    "log_id",
+]
+
 
 def _generate_unique_row_key(row: dict):
     def coalesce_empty(field):
         return row.get(field, "")
 
-    return (
-        coalesce_empty("experiment_id")
-        + ":"
-        + coalesce_empty("dataset_id")
-        + ":"
-        + coalesce_empty("prompt_session_id")
-        + ":"
-        + coalesce_empty("id")
-    )
+    return ":".join([coalesce_empty(k) for k in DATA_OBJECT_KEYS + ["id"]])
 
 
 def merge_row_batch(rows: list[dict]) -> list[dict]:
