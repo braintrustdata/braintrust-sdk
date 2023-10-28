@@ -418,7 +418,7 @@ interface RegisteredProject {
   name: string;
 }
 
-export class Project {
+class Project {
   name?: string;
   id?: string;
 
@@ -455,8 +455,8 @@ export interface LogOptions {
 export class Logger {
   private _lazyLogin: () => Promise<void>;
   private loggedIn: boolean = false;
-  lazyProject: Project;
-  logOptions: LogOptions;
+  private lazyProject: Project;
+  private logOptions: LogOptions;
   private bgLogger: BackgroundLogger;
   private lastStartTime: number;
 
