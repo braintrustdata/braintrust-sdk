@@ -26,8 +26,10 @@ import nodeModulesPaths from "./jest/nodeModulesPaths";
 import {
   EvaluatorDef,
   EvaluatorFile,
+  EvalMetadata,
   Filter,
   error,
+  evalMetadataToInitOptions,
   logError,
   parseFilters,
   reportEvaluatorResult,
@@ -109,8 +111,14 @@ function evaluateBuildResults(
   });
 }
 
-async function initLogger(name: string) {
-  const logger = await initExperiment(name);
+async function initLogger(
+  projectName: string,
+  metadata: EvalMetadata | undefined
+) {
+  const logger = await initExperiment(
+    projectName,
+    evalMetadataToInitOptions(metadata)
+  );
   const info = await logger.summarize({ summarizeScores: false });
   console.log(`Experiment ${logger.name} is running at ${info.experimentUrl}`);
   return logger;
@@ -141,15 +149,17 @@ function buildWatchPluginForEvaluator(
           return;
         }
 
-        for (const [name, evaluator] of Object.entries(evalResult)) {
-          const logger = opts.noSendLogs ? null : await initLogger(name);
+        for (const evaluator of Object.values(evalResult)) {
+          const logger = opts.noSendLogs
+            ? null
+            : await initLogger(evaluator.projectName, evaluator.metadata);
           const evaluatorResult = await runEvaluator(
             logger,
             evaluator,
             opts.progressReporter,
             opts.filters
           );
-          reportEvaluatorResult(evaluator.name, evaluatorResult, true);
+          reportEvaluatorResult(evaluator.evalName, evaluatorResult, true);
         }
       });
     },
@@ -231,20 +241,20 @@ function updateEvaluators(
       continue;
     }
 
-    for (const [name, evaluator] of Object.entries(result.evaluator)) {
+    for (const [evalName, evaluator] of Object.entries(result.evaluator)) {
       if (
-        evaluators[name] &&
-        (evaluators[name].sourceFile !== result.sourceFile ||
-          evaluators[name].evaluator !== evaluator)
+        evaluators[evalName] &&
+        (evaluators[evalName].sourceFile !== result.sourceFile ||
+          evaluators[evalName].evaluator !== evaluator)
       ) {
         console.warn(
           warning(
-            `Evaluator ${name} already exists (in ${evaluators[name].sourceFile} and ${result.sourceFile}). Will skip ${name} in ${result.sourceFile}.`
+            `Evaluator ${evalName} already exists (in ${evaluators[evalName].sourceFile} and ${result.sourceFile}). Will skip ${evalName} in ${result.sourceFile}.`
           )
         );
         continue;
       }
-      evaluators[name] = {
+      evaluators[evalName] = {
         sourceFile: result.sourceFile,
         evaluator,
       };
@@ -295,7 +305,10 @@ async function runOnce(
     // can name the experiment/evaluation within the run the evaluator's name.
     const logger = opts.noSendLogs
       ? null
-      : await initLogger(evaluator.evaluator.name);
+      : await initLogger(
+          evaluator.evaluator.projectName,
+          evaluator.evaluator.metadata
+        );
     try {
       return await runEvaluator(
         logger,

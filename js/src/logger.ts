@@ -663,7 +663,7 @@ class BackgroundLogger {
     // Since the merged rows are guaranteed to refer to independent rows,
     // publish order does not matter and we can flush all item batches
     // concurrently.
-    const initialItems = mergeRowBatch(this.items || []).reverse();
+    const allItems = mergeRowBatch(this.items || []).reverse();
     this.items = [];
 
     let postPromises = [];
@@ -672,8 +672,8 @@ class BackgroundLogger {
       let itemsLen = 0;
       while (items.length < batchSize && itemsLen < MaxRequestSize / 2) {
         let item = null;
-        if (initialItems.length > 0) {
-          item = initialItems.pop();
+        if (allItems.length > 0) {
+          item = allItems.pop();
         } else {
           break;
         }

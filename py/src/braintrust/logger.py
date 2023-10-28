@@ -1,4 +1,5 @@
 import atexit
+import concurrent.futures
 import contextvars
 import dataclasses
 import datetime
@@ -17,6 +18,7 @@ from abc import ABC, abstractmethod
 from functools import partial, wraps
 from getpass import getpass
 from typing import Any, Callable, Dict, Optional, Union
+from multiprocessing import cpu_count
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -24,8 +26,17 @@ from urllib3.util.retry import Retry
 
 from .cache import CACHE_PATH, EXPERIMENTS_PATH, LOGIN_INFO_PATH
 from .gitutil import get_past_n_ancestors, get_repo_status
+from .merge_row_batch import merge_row_batch
 from .resource_manager import ResourceManager
-from .util import SerializableDataClass, encode_uri_component, get_caller_location, response_raise_for_status
+from .util import (
+    GLOBAL_PROJECT,
+    IS_MERGE_FIELD,
+    TRANSACTION_ID_FIELD,
+    SerializableDataClass,
+    encode_uri_component,
+    get_caller_location,
+    response_raise_for_status,
+)
 
 
 class Span(ABC):
@@ -210,10 +221,6 @@ class _UnterminatedObjectsHandler:
 
 _unterminated_objects = _UnterminatedObjectsHandler()
 
-TRANSACTION_ID_FIELD = "_xact_id"
-GLOBAL_PROJECT = "Global"
-
-
 class HTTPConnection:
     def __init__(self, base_url):
         self.base_url = base_url
@@ -282,6 +289,12 @@ class HTTPConnection:
         return resp.json()
 
 
+# Sometimes we'd like to launch network requests concurrently. We provide a
+# thread pool to accomplish this. Use a multiple of number of CPU cores to limit
+# concurrency.
+HTTP_REQUEST_THREAD_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count())
+
+
 def log_conn():
     return _state.log_conn()
 
@@ -322,7 +335,6 @@ class _LogThread:
     def __init__(self, name=None):
         self.flush_lock = threading.RLock()
         self.thread = threading.Thread(target=self._publisher, daemon=True)
-        self.queue_filled_event = threading.Event()
         self.started = False
 
         log_namespace = "braintrust"
@@ -336,14 +348,24 @@ class _LogThread:
         except Exception:
             queue_size = 1000
         self.queue = queue.Queue(maxsize=queue_size)
+        # Each time we put items in the queue, we notify any waiting consumer
+        # threads to attempt a flush.
+        self.queue_filled_condition = threading.Condition()
 
         atexit.register(self._finalize)
 
     def log(self, *args):
         self._start()
         for event in args:
-            self.queue.put(event)
-        self.queue_filled_event.set()
+            try:
+                self.queue.put_nowait(event)
+            except queue.Full:
+                # Notify consumers to start draining the queue.
+                with self.queue_filled_condition:
+                    self.queue_filled_condition.notify()
+                self.queue.put(event)
+        with self.queue_filled_condition:
+            self.queue_filled_condition.notify()
 
     def _start(self):
         if not self.started:
@@ -360,7 +382,9 @@ class _LogThread:
             kwargs["batch_size"] = batch_size
 
         while True:
-            self.queue_filled_event.wait()
+            # Wait for some data on the queue before trying to flush.
+            with self.queue_filled_condition:
+                self.queue_filled_condition.wait()
             try:
                 self.flush(**kwargs)
             except Exception:
@@ -370,14 +394,24 @@ class _LogThread:
         # We cannot have multiple threads flushing in parallel, because the
         # order of published elements would be undefined.
         with self.flush_lock:
+            # Drain the queue.
+            all_items = []
+            try:
+                for _ in range(self.queue.qsize()):
+                    all_items.append(self.queue.get_nowait())
+            except queue.Empty:
+                pass
+            all_items = list(reversed(merge_row_batch(all_items)))
+
             conn = _state.log_conn()
+            post_promises = []
             while True:
                 items = []
                 items_len = 0
                 while len(items) < batch_size and items_len < MAX_REQUEST_SIZE / 2:
-                    try:
-                        item = self.queue.get_nowait()
-                    except queue.Empty:
+                    if len(all_items) > 0:
+                        item = all_items.pop()
+                    else:
                         break
 
                     item_s = json.dumps(item)
@@ -386,19 +420,25 @@ class _LogThread:
 
                 if len(items) == 0:
                     break
-                items_s = construct_json_array(items)
-                for i in range(NUM_RETRIES):
-                    start_time = time.time()
-                    resp = conn.post("/logs", data=items_s)
-                    if resp.ok:
-                        break
-                    retrying_text = "" if i + 1 == NUM_RETRIES else " Retrying"
-                    _logger.warning(
-                        f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(item_s)}. Error: {resp.status_code}: {resp.text}.{retrying_text}"
-                    )
-                if not resp.ok:
-                    _logger.warning(f"log request failed after {NUM_RETRIES} retries. Dropping batch")
-            self.queue_filled_event.clear()
+
+                post_promises.append(HTTP_REQUEST_THREAD_POOL.submit(_LogThread._submit_logs_request, items, conn))
+
+            concurrent.futures.wait(post_promises)
+
+    @staticmethod
+    def _submit_logs_request(items, conn):
+        items_s = construct_json_array(items)
+        for i in range(NUM_RETRIES):
+            start_time = time.time()
+            resp = conn.post("/logs", data=items_s)
+            if resp.ok:
+                return
+            retrying_text = "" if i + 1 == NUM_RETRIES else " Retrying"
+            _logger.warning(
+                f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(items_s)}. Error: {resp.status_code}: {resp.text}.{retrying_text}"
+            )
+        if not resp.ok:
+            _logger.warning(f"log request failed after {NUM_RETRIES} retries. Dropping batch")
 
 
 def _ensure_object(object_type, object_id, force=False):
@@ -925,7 +965,7 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
     if input is not None and inputs is not None:
         raise ValueError("Only one of input or inputs (deprecated) can be specified. Prefer input.")
     if inputs is not None:
-        return dict(**{k: v for k, v in event.items() if k != "inputs"}, input=inputs)
+        return dict(**{k: v for k, v in event.items() if k not in ["input", "inputs"]}, input=inputs)
     else:
         return {k: v for k, v in event.items()}
 
@@ -1275,7 +1315,7 @@ class SpanImpl(Span):
             span_id=self._span_id,
             root_span_id=self._root_span_id,
             **self._object_info,
-            _is_merge=self._is_merge,
+            **{IS_MERGE_FIELD: self._is_merge},
         )
         self.internal_data = {}
         self.bg_logger.log(record)

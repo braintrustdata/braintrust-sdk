@@ -6,6 +6,10 @@ import urllib.parse
 
 from requests import HTTPError
 
+GLOBAL_PROJECT = "Global"
+TRANSACTION_ID_FIELD = "_xact_id"
+IS_MERGE_FIELD = "_is_merge"
+
 
 class SerializableDataClass:
     def as_dict(self):
@@ -53,3 +57,19 @@ def get_caller_location():
                 caller_lineno=caller.lineno,
             )
     return None
+
+
+def merge_dicts(merge_into: dict, merge_from: dict):
+    """Merges merge_from into merge_into, destructively updating merge_into."""
+
+    if not isinstance(merge_into, dict):
+        raise ValueError("merge_into must be a dictionary")
+    if not isinstance(merge_from, dict):
+        raise ValueError("merge_from must be a dictionary")
+
+    for k, merge_from_v in merge_from.items():
+        merge_into_v = merge_into.get(k)
+        if isinstance(merge_into_v, dict) and isinstance(merge_from_v, dict):
+            merge_dicts(merge_into_v, merge_from_v)
+        else:
+            merge_into[k] = merge_from_v
