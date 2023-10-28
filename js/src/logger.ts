@@ -835,6 +835,28 @@ export async function withExperiment<R>(
   );
 }
 
+/**
+ * Wrapper over `braintrust.initLogger`, which passes the initialized `Logger` it to the given callback and closes it afterwards. See `braintrust.initLogger` for full details.
+ *
+ * @param options.setCurrent If true (default), set the currently-active logger to the newly-created one. Equivalent to calling `braintrust.withCurrent(logger, callback)`.
+ */
+export async function withLogger<R>(
+  callback: (logger: Logger) => R,
+  options: Readonly<InitLoggerOptions & SetCurrentArg> = {}
+): Promise<R> {
+  const logger = initLogger(options);
+  return runFinally(
+    () => {
+      if (options.setCurrent ?? true) {
+        return withCurrent(logger, () => callback(logger));
+      } else {
+        return callback(logger);
+      }
+    },
+    () => logger.flush()
+  );
+}
+
 type InitDatasetOptions = {
   dataset?: string;
   description?: string;

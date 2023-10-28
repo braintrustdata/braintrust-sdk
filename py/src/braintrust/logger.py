@@ -1667,6 +1667,10 @@ class Logger:
         if self.set_current:
             _state.current_logger.reset(self._context_token)
 
+        if not self.async_flush:
+            self.logger.flush()
+
+
     def flush(self):
         """
         Flush any pending logs to the server.
