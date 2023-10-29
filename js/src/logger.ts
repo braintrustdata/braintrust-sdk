@@ -14,10 +14,12 @@ import { mergeRowBatch } from "./merge_row_batch";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
+type StartSpanEventArgs = ExperimentLogPartialArgs & Partial<IdField>;
+
 export type StartSpanArgs = {
   spanAttributes?: Record<any, any>;
   startTime?: number;
-  event?: ExperimentLogPartialArgs & Partial<IdField>;
+  event?: StartSpanEventArgs;
 };
 
 export type StartSpanOptionalNameArgs = StartSpanArgs & { name?: string };
@@ -491,7 +493,9 @@ export class Logger {
    * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
    * :returns: The `id` of the logged event.
    */
-  public async log(event: Readonly<ExperimentLogPartialArgs>): Promise<string> {
+  public async log(event: Readonly<StartSpanEventArgs>): Promise<string> {
+    // Do the lazy login before retrieving the last_start_time.
+    await this.lazyLogin();
     const span = await this.startSpan({ startTime: this.lastStartTime, event });
     this.lastStartTime = span.end();
 
