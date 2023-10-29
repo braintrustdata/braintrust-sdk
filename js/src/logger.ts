@@ -1230,7 +1230,7 @@ function _check_org_info(org_info: any, org_name: string | undefined) {
     if (org_name === undefined || org.name === org_name) {
       _state.orgId = org.id;
       _state.orgName = org.name;
-      _state.logUrl = org.api_url;
+      _state.logUrl = iso.getEnv("BRAINTRUST_LOG_URL") ?? org.api_url;
       break;
     }
   }
