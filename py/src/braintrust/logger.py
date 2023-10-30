@@ -623,9 +623,6 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
 
         _state.api_url = api_url
 
-        login_key_info = None
-        ping_ok = False
-
         os.makedirs(CACHE_PATH, exist_ok=True)
 
         if api_key is not None:
@@ -642,72 +639,10 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
             conn = _state.log_conn()
             conn.set_token(api_key)
 
-            ping_ok = conn.ping()
-
-        if not ping_ok and os.path.exists(LOGIN_INFO_PATH) and not disable_cache:
-            with open(LOGIN_INFO_PATH) as f:
-                login_key_info = json.load(f)
-
-            _state.log_url = os.environ.get("BRAINTRUST_LOG_URL", login_key_info.get("log_url"))
-            _state.org_id = login_key_info.get("org_id")
-            _state.org_name = login_key_info.get("org_name")
-            conn = _state.log_conn()
-
-            token = login_key_info.get("token")
-            if token is not None:
-                conn.set_token(token)
-
-            ping_ok = conn.ping()
-
-        if (
-            not ping_ok or _state.org_id is None or _state.org_name is None or _state.log_url is None
-        ) and sys.stdout.isatty():
-            print(
-                textwrap.dedent(
-                    f"""\
-                The recommended way to login is to generate an API token at {_state.api_url}/app/settings.
-                However, Braintrust also supports generating a temporary token for the SDK. This token
-                will expire after about an hour, so it is not recommended for long-term use.
-
-                Please copy your temporary token from {_state.api_url}/app/token."""
-                )
-            )
-            temp_token = getpass("Token: ")
-
-            resp = requests.post(_urljoin(_state.api_url, "/api/id-token"), json={"token": temp_token})
-            response_raise_for_status(resp)
-            info = resp.json()
-            token = info["token"]
-
-            _check_org_info(info["org_info"], org_name)
-
-            if not disable_cache:
-                _save_api_info(
-                    {
-                        "token": token,
-                        "org_id": _state.org_id,
-                        "log_url": _state.log_url,
-                        "org_name": _state.org_name,
-                    }
-                )
-
-            conn = _state.log_conn()
-            conn.set_token(token)
-
-            ping_ok = conn.ping()
-
         if not conn:
             raise ValueError(
                 "Could not login to Braintrust. You may need to set BRAINTRUST_API_KEY in your environment."
             )
-
-        # Do not use the "ping" method here, because we'd like to `raise_for_status()` in case
-        # of any remaining errors.
-        if not ping_ok:
-            # Try to produce a more informative error message. If we do somehow succeed here, then
-            # we can safely assume that the connection is working.
-            resp = conn.get("ping")
-            response_raise_for_status(resp)
 
         # make_long_lived() allows the connection to retry if it breaks, which we're okay with after
         # this point because we know the connection _can_ successfully ping.
@@ -1257,8 +1192,6 @@ class SpanImpl(Span):
                 "experiment_id": root_experiment.id,
             }
             self.internal_data.update(
-                # TODO: Hopefully we can remove this.
-                user_id=root_experiment.user_id,
                 created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
             )
         elif root_project is not None:
@@ -1416,8 +1349,6 @@ class Dataset(ModelWrapper):
         """
         self._check_not_finished()
 
-        user_id = _state.user_info()["id"]
-
         if metadata:
             if not isinstance(metadata, dict):
                 raise ValueError("metadata must be a dictionary")
@@ -1432,7 +1363,6 @@ class Dataset(ModelWrapper):
                 "output": output,
                 "project_id": self.project.id,
                 "dataset_id": self.id,
-                "user_id": user_id,
                 "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             },
             metadata=metadata,
@@ -1451,13 +1381,11 @@ class Dataset(ModelWrapper):
         """
         self._check_not_finished()
 
-        user_id = _state.user_info()["id"]
         args = _populate_args(
             {
                 "id": id,
                 "project_id": self.project.id,
                 "dataset_id": self.id,
-                "user_id": user_id,
                 "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "_object_delete": True,  # XXX potentially place this in the logging endpoint
             },
