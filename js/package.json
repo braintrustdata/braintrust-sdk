@@ -1,6 +1,6 @@
 {
   "name": "braintrust",
-  "version": "0.0.0",
+  "version": "0.0.63",
   "description": "SDK for integrating Braintrust",
   "main": "./dist/index.js",
   "browser": {
@@ -44,7 +44,7 @@
   },
   "dependencies": {
     "argparse": "^2.0.1",
-    "autoevals": "file:../autoevals",
+    "autoevals": "^0.0.26",
     "chalk": "^4.1.2",
     "cli-progress": "^3.12.0",
     "esbuild": "^0.18.19",
