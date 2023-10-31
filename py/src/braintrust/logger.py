@@ -133,7 +133,7 @@ class _NoopSpan(Span):
         return end_time or time.time()
 
     def close(self, end_time=None):
-        return end(end_time)
+        return self.end(end_time)
 
     def __enter__(self):
         return self
