@@ -158,7 +158,6 @@ class BraintrustState {
 
   private _apiConn: HTTPConnection | null;
   private _logConn: HTTPConnection | null;
-  private _userInfo: UserInfo | null;
 
   constructor() {
     this.id = uuidv4(); // This is for debugging
@@ -176,7 +175,6 @@ class BraintrustState {
 
     this._apiConn = null;
     this._logConn = null;
-    this._userInfo = null;
 
     globalThis.__inherited_braintrust_state = this;
   }
@@ -199,19 +197,6 @@ class BraintrustState {
       this._logConn = new HTTPConnection(this.logUrl);
     }
     return this._logConn!;
-  }
-
-  public async userInfo(): Promise<UserInfo> {
-    if (!this._userInfo) {
-      this._userInfo = await this.logConn().get_json("ping");
-    }
-    return this._userInfo!;
-  }
-
-  public setUserInfoIfNull(info: UserInfo) {
-    if (!this._userInfo) {
-      this._userInfo = info;
-    }
   }
 }
 
@@ -298,7 +283,6 @@ class HTTPConnection {
   async ping() {
     try {
       const resp = await this.get("ping");
-      _state.setUserInfoIfNull(await resp.json());
       return resp.status === 200;
     } catch (e) {
       return false;
@@ -589,7 +573,6 @@ type ExperimentEvent = Partial<InputField> &
     experiment_id: string;
     [IS_MERGE_FIELD]: boolean;
   } & Partial<{
-    user_id: string;
     created: string;
     span_parents: string[];
     span_attributes: Record<string, unknown>;
@@ -602,7 +585,6 @@ interface DatasetEvent {
   id: string;
   project_id: string;
   dataset_id: string;
-  user_id: string;
   created: string;
 }
 
@@ -1032,8 +1014,6 @@ export async function login(
 
   _state.apiUrl = apiUrl;
 
-  let login_key_info: any = null;
-  let ping_ok = false;
   let conn = null;
 
   if (apiKey !== undefined) {
@@ -1054,8 +1034,6 @@ export async function login(
 
     conn = _state.logConn();
     conn.set_token(apiKey);
-
-    ping_ok = await conn.ping();
   } else {
     // TODO: Implement token based login in the JS client
     throw new Error(
@@ -1065,10 +1043,6 @@ export async function login(
 
   if (!conn) {
     throw new Error("Conn should be set at this point (a bug)");
-  }
-
-  if (!ping_ok) {
-    await conn.get("ping");
   }
 
   conn.make_long_lived();
@@ -1414,18 +1388,7 @@ async function _initExperiment(
   const project = response.project;
   const experiment = response.experiment;
 
-  // NOTE: This is a deviation from the Python lib and allows the log() method
-  // to not be async.
-  //
-  const user_id = (await _state.userInfo())["id"];
-
-  return new Experiment(
-    project,
-    experiment.id,
-    experiment.name,
-    user_id,
-    dataset
-  );
+  return new Experiment(project, experiment.id, experiment.name, dataset);
 }
 
 /**
@@ -1444,7 +1407,6 @@ export class Experiment {
   public readonly project: RegisteredProject;
   public readonly id: string;
   public readonly name: string;
-  public readonly user_id: string;
   public readonly dataset?: Dataset;
   private bgLogger: BackgroundLogger;
   private lastStartTime: number;
@@ -1457,7 +1419,6 @@ export class Experiment {
     project: RegisteredProject,
     id: string,
     name: string,
-    user_id: string,
     dataset?: Dataset
   ) {
     this.finished = false;
@@ -1465,7 +1426,6 @@ export class Experiment {
     this.project = project;
     this.id = id;
     this.name = name;
-    this.user_id = user_id;
     this.dataset = dataset;
     this.bgLogger = new BackgroundLogger();
     this.lastStartTime = getCurrentUnixTimestamp();
@@ -1687,8 +1647,6 @@ export class SpanImpl implements Span {
         experiment_id: args.rootExperiment.id,
       };
       this.internalData = Object.assign(this.internalData, {
-        // TODO: Hopefully we can remove this.
-        user_id: args.rootExperiment.user_id,
         created: new Date().toISOString(),
       });
     } else if ("rootProject" in args) {
@@ -1815,12 +1773,7 @@ async function _initDataset(
   const project = response.project;
   const dataset = response.dataset;
 
-  // NOTE: This is a deviation from the Python lib and allows the log() method
-  // to not be async.
-  //
-  const user_id = (await _state.userInfo())["id"];
-
-  return new Dataset(project, dataset.id, dataset.name, user_id, version);
+  return new Dataset(project, dataset.id, dataset.name, version);
 }
 
 /**
@@ -1834,7 +1787,6 @@ export class Dataset {
   public readonly project: RegisteredProject;
   public readonly id: string;
   public readonly name: string;
-  public readonly user_id: string;
   private pinnedVersion?: string;
   private _fetchedData?: any[] = undefined;
   private logger: BackgroundLogger;
@@ -1844,7 +1796,6 @@ export class Dataset {
     project: RegisteredProject,
     id: string,
     name: string,
-    user_id: string,
     pinnedVersion?: string
   ) {
     this.finished = false;
@@ -1852,7 +1803,6 @@ export class Dataset {
     this.project = project;
     this.id = id;
     this.name = name;
-    this.user_id = user_id;
     this.pinnedVersion = pinnedVersion;
     this.logger = new BackgroundLogger();
 
@@ -1900,7 +1850,6 @@ export class Dataset {
       output,
       project_id: this.project.id,
       dataset_id: this.id,
-      user_id: this.user_id,
       created: new Date().toISOString(),
       metadata,
     };
@@ -1912,12 +1861,10 @@ export class Dataset {
   public delete(id: string): string {
     this.checkNotFinished();
 
-    const user_id = this.user_id;
     const args = {
       id,
       project_id: this.project.id,
       dataset_id: this.id,
-      user_id,
       created: new Date().toISOString(),
       _object_delete: true,
     };
