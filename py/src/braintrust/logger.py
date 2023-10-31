@@ -349,9 +349,9 @@ class _LogThread:
         except Exception:
             queue_size = 1000
         self.queue = queue.Queue(maxsize=queue_size)
-        # Each time we put items in the queue, we notify any waiting consumer
-        # threads to attempt a flush.
-        self.queue_filled_condition = threading.Condition()
+        # Each time we put items in the queue, we increment a semaphore to
+        # indicate to any consumer thread that it should attempt a flush.
+        self.queue_filled_semaphore = threading.Semaphore(value=0)
 
         atexit.register(self._finalize)
 
@@ -362,11 +362,9 @@ class _LogThread:
                 self.queue.put_nowait(event)
             except queue.Full:
                 # Notify consumers to start draining the queue.
-                with self.queue_filled_condition:
-                    self.queue_filled_condition.notify()
+                self.queue_filled_semaphore.release()
                 self.queue.put(event)
-        with self.queue_filled_condition:
-            self.queue_filled_condition.notify()
+        self.queue_filled_semaphore.release()
 
     def _start(self):
         if not self.started:
@@ -384,8 +382,7 @@ class _LogThread:
 
         while True:
             # Wait for some data on the queue before trying to flush.
-            with self.queue_filled_condition:
-                self.queue_filled_condition.wait()
+            self.queue_filled_semaphore.acquire()
             try:
                 self.flush(**kwargs)
             except Exception:
