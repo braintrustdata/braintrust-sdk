@@ -45,3 +45,5 @@ export {
   EvalMetadata,
   EvalScorerArgs,
 } from "./framework";
+
+export * from "./oai";

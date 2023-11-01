@@ -1,24 +1,136 @@
-// TODO REPLACE WITH autoevals version
-// https://github.com/braintrustdata/braintrust/issues/218
+import { currentSpan, getCurrentUnixTimestamp, Span } from "./logger";
 
-import { Configuration, OpenAIApi } from "openai";
-
-let _openai: OpenAIApi | null = null;
-export function openAI() {
-  if (_openai === null && process.env.OPENAI_API_KEY) {
-    const config = new Configuration({ apiKey: process.env.OPENAI_API_KEY });
-    _openai = new OpenAIApi(config);
-  }
-  return _openai;
+interface ChatLike {
+  completions: any;
+}
+interface OpenAILike {
+  chat: ChatLike;
 }
 
-export async function chatCompletion(args: any) {
-  const openai = openAI();
-  if (openai === null) {
-    throw new Error("OPENAI_API_KEY not set");
+export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
+  let completionProxy = new Proxy(openai.chat.completions, {
+    get(target, name, receiver) {
+      const baseVal = Reflect.get(target, name, receiver);
+      if (name === "create") {
+        return wrapChatCompletionNonStreaming(baseVal.bind(target));
+      }
+      return baseVal;
+    },
+  });
+  let chatProxy = new Proxy(openai.chat, {
+    get(target, name, receiver) {
+      if (name === "completions") {
+        return completionProxy;
+      }
+      return Reflect.get(target, name, receiver);
+    },
+  });
+  let proxy = new Proxy(openai, {
+    get(target, name, receiver) {
+      if (name === "chat") {
+        return chatProxy;
+      }
+      return Reflect.get(target, name, receiver);
+    },
+  });
+
+  return proxy;
+}
+
+type ChatParams = {
+  messages: unknown;
+  stream?: boolean | null;
+};
+
+interface NonStreamingChatResponse {
+  choices: any[];
+  usage:
+    | {
+        total_tokens: number;
+        prompt_tokens: number;
+        completion_tokens: number;
+      }
+    | undefined;
+}
+
+// TODO: Mock this up better
+type StreamingChatResponse = any;
+
+function wrapChatCompletionNonStreaming<
+  P extends ChatParams,
+  C extends NonStreamingChatResponse | StreamingChatResponse
+>(completion: (params: P) => Promise<C>): (params: P) => Promise<any> {
+  return async (params: P) => {
+    if (params.stream) {
+      const { messages, ...rest } = params;
+      const span = currentSpan().startSpan("OpenAI Completion", {
+        event: {
+          input: messages,
+          metadata: {
+            ...rest,
+          },
+        },
+      });
+
+      const startTime = getCurrentUnixTimestamp();
+      const ret = (await completion(params)) as StreamingChatResponse;
+      return new WrapperStream(span, startTime, ret);
+    } else {
+      return await currentSpan().traced(
+        "OpenAI Completion",
+        async (span: any) => {
+          const ret = (await completion(params)) as NonStreamingChatResponse;
+          const { messages, ...rest } = params;
+          span.log({
+            input: messages,
+            metadata: {
+              ...rest,
+            },
+            output: ret.choices[0],
+            metrics: {
+              tokens: ret.usage?.total_tokens,
+              prompt_tokens: ret.usage?.prompt_tokens,
+              completion_tokens: ret.usage?.completion_tokens,
+            },
+          });
+          return ret;
+        }
+      );
+    }
+  };
+}
+
+class WrapperStream<Item> implements AsyncIterable<Item> {
+  private span: Span;
+  private iter: AsyncIterable<Item>;
+  private startTime: number;
+
+  constructor(span: Span, startTime: number, iter: AsyncIterable<Item>) {
+    this.span = span;
+    this.iter = iter;
+    this.startTime = startTime;
   }
 
-  const completion = await openai.createChatCompletion(args);
-  const data = completion.data;
-  return data;
+  async *[Symbol.asyncIterator](): AsyncIterator<Item, any, undefined> {
+    let first = true;
+    let allResults = [];
+    for await (const item of this.iter) {
+      if (first) {
+        const now = getCurrentUnixTimestamp();
+        this.span.log({
+          metrics: {
+            time_to_first_token: now - this.startTime,
+          },
+        });
+        first = false;
+      }
+
+      allResults.push(item);
+      yield item;
+    }
+    this.span.log({
+      output: allResults,
+    });
+    this.span.end();
+  }
 }

@@ -50,7 +50,7 @@
     "esbuild": "^0.18.19",
     "graceful-fs": "^4.2.11",
     "minimatch": "^9.0.3",
-    "openai": "^3.3.0",
+    "openai": "^4.12.1",
     "pluralize": "^8.0.0",
     "simple-git": "^3.19.1",
     "uuid": "^9.0.0"

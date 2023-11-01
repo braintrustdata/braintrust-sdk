@@ -1120,7 +1120,7 @@ export function currentLogger(): Logger | undefined {
  * See `Span` for full details.
  */
 export function currentSpan(): Span {
-  return _state.currentSpan.getStore()!;
+  return _state.currentSpan.getStore() || noopSpan;
 }
 
 /**
@@ -1231,7 +1231,7 @@ function _urljoin(...parts: string[]): string {
   return parts.map((x) => x.replace(/^\//, "")).join("/");
 }
 
-function getCurrentUnixTimestamp(): number {
+export function getCurrentUnixTimestamp(): number {
   return new Date().getTime() / 1000;
 }
 
