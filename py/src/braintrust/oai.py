@@ -10,26 +10,33 @@ class ChatCompletionWrapper:
     def create(self, *args, **kwargs):
         params = self._parse_params(kwargs)
         stream = kwargs.get("stream", False)
-        with current_span().start_span(name="OpenAI Chat Completion", **params) as span:
+
+        span = current_span().start_span(name="OpenAI Chat Completion", **params)
+        should_end = True
+        try:
             start = time.time()
             response = self.chat.create(*args, **kwargs)
             if stream:
 
                 def gen():
-                    first = True
-                    all_results = []
-                    for item in response:
-                        if first:
-                            span.log(
-                                metrics={
-                                    "time_to_first_token": time.time() - start,
-                                }
-                            )
-                            first = False
-                        all_results.append(item)
-                        yield item
-                    span.log(output=all_results)
+                    try:
+                        first = True
+                        all_results = []
+                        for item in response:
+                            if first:
+                                span.log(
+                                    metrics={
+                                        "time_to_first_token": time.time() - start,
+                                    }
+                                )
+                                first = False
+                            all_results.append(item)
+                            yield item
+                        span.log(output=all_results)
+                    finally:
+                        span.end()
 
+                should_end = False
                 return (x for x in gen())
             else:
                 span.log(
@@ -41,30 +48,40 @@ class ChatCompletionWrapper:
                     output=response["choices"][0],
                 )
                 return response
+        finally:
+            if should_end:
+                span.end()
 
     async def acreate(self, *args, **kwargs):
         params = self._parse_params(kwargs)
         stream = kwargs.get("stream", False)
-        with current_span().start_span(name="OpenAI Chat Completion", **params) as span:
+
+        span = current_span().start_span(name="OpenAI Chat Completion", **params)
+        should_end = True
+        try:
             start = time.time()
-            response = await self.chat.create(*args, **kwargs)
+            response = await self.chat.acreate(*args, **kwargs)
             if stream:
 
                 async def gen():
-                    first = True
-                    all_results = []
-                    async for item in response:
-                        if first:
-                            span.log(
-                                metrics={
-                                    "time_to_first_token": time.time() - start,
-                                }
-                            )
-                            first = False
-                        all_results.append(item)
-                        yield item
-                    span.log(output=all_results)
+                    try:
+                        first = True
+                        all_results = []
+                        async for item in response:
+                            if first:
+                                span.log(
+                                    metrics={
+                                        "time_to_first_token": time.time() - start,
+                                    }
+                                )
+                                first = False
+                            all_results.append(item)
+                            yield item
+                        span.log(output=all_results)
+                    finally:
+                        span.end()
 
+                should_end = False
                 return (x async for x in gen())
             else:
                 span.log(
@@ -76,6 +93,9 @@ class ChatCompletionWrapper:
                     output=response["choices"][0],
                 )
                 return response
+        finally:
+            if should_end:
+                span.end()
 
     @classmethod
     def _parse_params(cls, params):
