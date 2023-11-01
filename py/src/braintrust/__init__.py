@@ -35,3 +35,4 @@ print(experiment.summarize())
 
 from .framework import *
 from .logger import *
+from .oai import wrap_openai

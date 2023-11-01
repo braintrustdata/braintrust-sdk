@@ -63,7 +63,7 @@ function wrapChatCompletionNonStreaming<
   return async (params: P) => {
     if (params.stream) {
       const { messages, ...rest } = params;
-      const span = currentSpan().startSpan("OpenAI Completion", {
+      const span = currentSpan().startSpan("OpenAI Chat Completion", {
         event: {
           input: messages,
           metadata: {
@@ -77,7 +77,7 @@ function wrapChatCompletionNonStreaming<
       return new WrapperStream(span, startTime, ret);
     } else {
       return await currentSpan().traced(
-        "OpenAI Completion",
+        "OpenAI Chat Completion",
         async (span: any) => {
           const ret = (await completion(params)) as NonStreamingChatResponse;
           const { messages, ...rest } = params;

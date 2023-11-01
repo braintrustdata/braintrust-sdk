@@ -1,41 +1,103 @@
-# TODO MOVE TO AUTOEVALS IMPORT
-# https://github.com/braintrustdata/braintrust/issues/218
+import time
 
-import json
-import sqlite3
-
-from .cache import CACHE_PATH
-
-OAI_CACHE = CACHE_PATH / "oai.sqlite"
-
-_CONN = None
+from .logger import current_span
 
 
-def open_cache():
-    global _CONN
-    if _CONN is None:
-        _CONN = sqlite3.connect(OAI_CACHE)
-        _CONN.execute("CREATE TABLE IF NOT EXISTS cache (params text, response text)")
-    return _CONN
+class ChatCompletionWrapper:
+    def __init__(self, chat):
+        self.chat = chat
+
+    def create(self, *args, **kwargs):
+        params = self._parse_params(kwargs)
+        stream = kwargs.get("stream", False)
+        with current_span().start_span(name="OpenAI Chat Completion", **params) as span:
+            start = time.time()
+            response = self.chat.create(*args, **kwargs)
+            if stream:
+
+                def gen():
+                    first = True
+                    all_results = []
+                    for item in response:
+                        if first:
+                            span.log(
+                                metrics={
+                                    "time_to_first_token": time.time() - start,
+                                }
+                            )
+                            first = False
+                        all_results.append(item)
+                        yield item
+                    span.log(output=all_results)
+
+                return (x for x in gen())
+            else:
+                span.log(
+                    metrics={
+                        "tokens": response["usage"]["total_tokens"],
+                        "prompt_tokens": response["usage"]["prompt_tokens"],
+                        "completion_tokens": response["usage"]["completion_tokens"],
+                    },
+                    output=response["choices"][0],
+                )
+                return response
+
+    async def acreate(self, *args, **kwargs):
+        params = self._parse_params(kwargs)
+        stream = kwargs.get("stream", False)
+        with current_span().start_span(name="OpenAI Chat Completion", **params) as span:
+            start = time.time()
+            response = await self.chat.create(*args, **kwargs)
+            if stream:
+
+                async def gen():
+                    first = True
+                    all_results = []
+                    async for item in response:
+                        if first:
+                            span.log(
+                                metrics={
+                                    "time_to_first_token": time.time() - start,
+                                }
+                            )
+                            first = False
+                        all_results.append(item)
+                        yield item
+                    span.log(output=all_results)
+
+                return (x async for x in gen())
+            else:
+                span.log(
+                    metrics={
+                        "tokens": response["usage"]["total_tokens"],
+                        "prompt_tokens": response["usage"]["prompt_tokens"],
+                        "completion_tokens": response["usage"]["completion_tokens"],
+                    },
+                    output=response["choices"][0],
+                )
+                return response
+
+    @classmethod
+    def _parse_params(cls, params):
+        params = {**params}
+        messages = params.pop("messages", None)
+        return {
+            "input": messages,
+            "metadata": params,
+        }
+
+    def __getattr__(self, name):
+        return getattr(self.chat, name)
 
 
-def run_cached_request(Completion=None, **kwargs):
-    if Completion is None:
-        # OpenAI is very slow to import, so we only do it if we need it
-        import openai
+class OpenAIWrapper:
+    def __init__(self, openai):
+        self.openai = openai
+        self.ChatCompletion = ChatCompletionWrapper(openai.ChatCompletion)
 
-        Completion = openai.Completion
+    def __getattr__(self, name):
+        return getattr(self.openai, name)
 
-    param_key = json.dumps(kwargs)
-    conn = open_cache()
-    cursor = conn.cursor()
-    resp = cursor.execute("""SELECT response FROM "cache" WHERE params=?""", [param_key]).fetchone()
-    if resp:
-        return json.loads(resp[0])
 
-    resp = Completion.create(**kwargs).to_dict()
-
-    cursor.execute("""INSERT INTO "cache" VALUES (?, ?)""", [param_key, json.dumps(resp)])
-    conn.commit()
-
-    return resp
+def wrap_openai(openai):
+    return OpenAIWrapper(openai)
