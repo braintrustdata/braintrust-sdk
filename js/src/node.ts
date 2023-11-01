@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import iso from "./isomorph";
 import { getRepoStatus, getPastNAncestors } from "./gitutil";
 import { getCallerLocation } from "./stackutil";
+import { _internalSetInitialState } from "./logger";
 
 export function configureNode() {
   iso.getRepoStatus = getRepoStatus;
@@ -13,4 +14,6 @@ export function configureNode() {
   iso.processOn = (event: string, handler: (code: any) => void) => {
     process.on(event, handler);
   };
+
+  _internalSetInitialState();
 }
