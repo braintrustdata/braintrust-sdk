@@ -200,7 +200,16 @@ class BraintrustState {
   }
 }
 
-let _state = globalThis.__inherited_braintrust_state || new BraintrustState();
+let _state: BraintrustState;
+
+// This function should be invoked exactly once after configuring the `iso`
+// object based on the platform. See js/src/node.ts for an example.
+export function _internalSetInitialState() {
+  if (_state) {
+    throw new Error("Cannot set initial state more than once");
+  }
+  _state = globalThis.__inherited_braintrust_state || new BraintrustState();
+}
 export const _internalGetGlobalState = () => _state;
 
 // A utility to keep track of objects that should be cleaned up before
