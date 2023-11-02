@@ -383,10 +383,15 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
             name = f"scorer_{scorer_idx}"
         with start_span(name=name, input=dict(**kwargs)):
             score = scorer.eval_async if isinstance(scorer, Scorer) else scorer
-            result = await await_or_run(score, **kwargs)
-            result_rest = result.as_dict()
-            result_metadata = result_rest.pop("metadata", {})
-            current_span().log(output=result_rest, metadata=result_metadata)
+
+            scorer_args = {k: v for k, v in kwargs.items() if k in inspect.signature(score).parameters}
+            result = await await_or_run(score, **scorer_args)
+            if isinstance(result, Score):
+                result_rest = result.as_dict()
+                result_metadata = result_rest.pop("metadata", {})
+                current_span().log(output=result_rest, metadata=result_metadata)
+            else:
+                current_span().log(output=result)
             return result
 
     async def run_evaluator_task(datum):
