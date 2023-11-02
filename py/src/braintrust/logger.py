@@ -419,7 +419,12 @@ class _LogThread:
                 if len(items) == 0:
                     break
 
-                post_promises.append(HTTP_REQUEST_THREAD_POOL.submit(_LogThread._submit_logs_request, items, conn))
+                try:
+                    post_promises.append(HTTP_REQUEST_THREAD_POOL.submit(_LogThread._submit_logs_request, items, conn))
+                except RuntimeError:
+                    # If the thread pool has shut down, e.g. because the process is terminating, run the request the
+                    # old fashioned way.
+                    _LogThread._submit_logs_request(items, conn)
 
             concurrent.futures.wait(post_promises)
 
