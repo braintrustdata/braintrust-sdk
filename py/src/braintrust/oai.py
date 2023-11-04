@@ -120,4 +120,9 @@ class OpenAIWrapper:
 
 
 def wrap_openai(openai):
+    """
+    Wrap the openai module to add tracing. If Braintrust is not configured, this is a no-op.
+
+    :param openai: The openai module
+    """
     return OpenAIWrapper(openai)

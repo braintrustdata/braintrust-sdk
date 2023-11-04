@@ -333,7 +333,7 @@ NUM_RETRIES = 3
 
 
 class _LogThread:
-    def __init__(self, name=None):
+    def __init__(self, name=None, lazy_login=None):
         self.flush_lock = threading.RLock()
         self.thread = threading.Thread(target=self._publisher, daemon=True)
         self.started = False
@@ -353,6 +353,7 @@ class _LogThread:
         # indicate to any consumer thread that it should attempt a flush.
         self.queue_filled_semaphore = threading.Semaphore(value=0)
 
+        self._lazy_login = lazy_login
         atexit.register(self._finalize)
 
     def log(self, *args):
@@ -372,6 +373,8 @@ class _LogThread:
             self.started = True
 
     def _finalize(self):
+        if self._lazy_login:
+            self._lazy_login()
         self.logger.info("Flushing final log events...")
         self.flush()
 
@@ -1563,7 +1566,7 @@ class Logger:
         self.async_flush = async_flush
         self.set_current = True if set_current is None else set_current
 
-        self.logger = _LogThread()
+        self.logger = _LogThread(lazy_login=self._perform_lazy_login)
         self.last_start_time = time.time()
 
     def log(

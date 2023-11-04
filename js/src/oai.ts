@@ -7,6 +7,24 @@ interface OpenAILike {
   chat: ChatLike;
 }
 
+/**
+ * Wrap an `OpenAI` object (created with `new OpenAI(...)`) to add tracing. If Braintrust is
+ * not configured, this is a no-op
+ *
+ * Currently, this only supports the `v4` API.
+ *
+ * @param openai
+ * @returns The wrapped `OpenAI` object.
+ */
+export function wrapOpenAI<T extends object>(openai: T): T {
+  if ((openai as any)?.chat?.completions?.create) {
+    return wrapOpenAIv4(openai as any) as T;
+  } else {
+    console.warn("Unsupported OpenAI library (potentially v3). Not wrapping.");
+    return openai;
+  }
+}
+
 export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
   let completionProxy = new Proxy(openai.chat.completions, {
     get(target, name, receiver) {
