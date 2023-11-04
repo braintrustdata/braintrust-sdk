@@ -16,15 +16,15 @@ import pluralize from "pluralize";
 
 export type Metadata = Record<string, unknown>;
 
-export interface EvalCase<Input, Output, Expected> {
+export interface EvalCase<Input, Expected> {
   input: Input;
   expected?: Expected;
   metadata?: Metadata;
 }
 
-export type EvalData<Input, Output, Expected> =
-  | (() => EvalCase<Input, Output, Expected>[])
-  | (() => Promise<EvalCase<Input, Output, Expected>[]>);
+export type EvalData<Input, Expected> =
+  | (() => EvalCase<Input, Expected>[])
+  | (() => Promise<EvalCase<Input, Expected>[]>);
 
 export type EvalTask<Input, Output> =
   | ((input: Input, hooks: EvalHooks) => Promise<Output>)
@@ -38,7 +38,6 @@ export interface EvalHooks {
 // This happens to be compatible with ScorerArgs defined in autoevals
 export type EvalScorerArgs<Input, Output, Expected> = EvalCase<
   Input,
-  Output,
   Expected
 > & {
   output: Output;
@@ -71,7 +70,7 @@ export function evalMetadataToInitOptions(
  * - `metadata`, optional additional metadata for the eval definition, such as experiment name.
  */
 export interface Evaluator<Input, Output, Expected> {
-  data: EvalData<Input, Output, Expected>;
+  data: EvalData<Input, Expected>;
   task: EvalTask<Input, Output>;
   scores: EvalScorer<Input, Output, Expected>[];
   metadata?: EvalMetadata;
