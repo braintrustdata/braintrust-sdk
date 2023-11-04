@@ -88,6 +88,24 @@ EvalScorer = Union[
 
 
 @dataclasses.dataclass
+class EvalMetadata(SerializableDataClass):
+    """
+    Additional metadata for the eval definition, such as experiment name.
+    """
+
+    """
+    Specify a name for the experiment holding the eval results.
+    """
+    experiment_name: Optional[str] = None
+
+
+def eval_metadata_to_init_options(metadata: Optional[EvalMetadata] = None) -> Dict:
+    if metadata is None:
+        return dict()
+    return dict(experiment=metadata.experiment_name)
+
+
+@dataclasses.dataclass
 class Evaluator:
     """
     An evaluator is an abstraction that defines an evaluation dataset, a task to run on the dataset, and a set of
@@ -99,9 +117,14 @@ class Evaluator:
     """
 
     """
-    The name of the evaluator. This corresponds to a project name in Braintrust.
+    The name of the project the eval falls under.
     """
-    name: str
+    project_name: str
+
+    """
+    A name that uniquely defines this type of experiment. You do not need to change it each time the experiment runs, but you should not have other experiments in your code with the same name.
+    """
+    eval_name: str
 
     """
     Returns an iterator over the evaluation dataset. Each element of the iterator should be an `EvalCase` or a dict
@@ -126,6 +149,11 @@ class Evaluator:
     that takes `input`, `output`, and `expected` arguments and returns a `Score` object. The function can be async.
     """
     scores: List[EvalScorer]
+
+    """
+    Optional additional metadata for the eval definition, such as experiment name.
+    """
+    metadata: Optional[EvalMetadata]
 
 
 _evals = {}
@@ -178,11 +206,19 @@ def report_evaluator_result(eval_name, results, summary, verbose):
             print(f"  {name}: {total / count}")
 
 
+def _make_eval_name(name: str, metadata: Optional[EvalMetadata]):
+    out = name
+    if metadata is not None and metadata.experiment_name is not None:
+        out += f" [experiment_name={metadata.experiment_name}]"
+    return out
+
+
 def Eval(
     name: str,
     data: Callable[[], Union[Iterator[EvalCase], AsyncIterator[EvalCase]]],
     task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
     scores: List[EvalScorer],
+    metadata: Union[Optional[EvalMetadata], Dict] = None,
 ):
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -207,16 +243,24 @@ def Eval(
     :param task: Runs the evaluation task on a single input. The `hooks` object can be used to add metadata to the evaluation.
     :param scores: A list of scorers to evaluate the results of the task. Each scorer can be a Scorer object or a function
     that takes an `EvalScorerArgs` object and returns a `Score` object.
+    :param metadata: Optional additional metadata for the eval definition, such as experiment name.
     :return: An `Evaluator` object.
     """
-    global _evals
-    if name in _evals:
-        raise ValueError(f"An evaluator with name {name} already exists")
+    if isinstance(metadata, dict):
+        metadata = EvalMetadata(**metadata)
 
-    evaluator = Evaluator(name=name, data=data, task=task, scores=scores)
+    eval_name = _make_eval_name(name, metadata)
+
+    global _evals
+    if eval_name in _evals:
+        raise ValueError(f"Evaluator {eval_name} already exists")
+
+    evaluator = Evaluator(
+        eval_name=eval_name, project_name=name, data=data, task=task, scores=scores, metadata=metadata
+    )
 
     if _lazy_load:
-        _evals[name] = evaluator
+        _evals[eval_name] = evaluator
     else:
         # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
         try:
@@ -225,9 +269,9 @@ def Eval(
             loop = None
 
         async def run_to_completion():
-            with init_experiment(name) as experiment:
+            with init_experiment(evaluator.project_name, evaluator.metadata) as experiment:
                 results, summary = await run_evaluator(experiment, evaluator, 0, [])
-                report_evaluator_result(name, results, summary, True)
+                report_evaluator_result(evaluator.eval_name, results, summary, True)
 
         if loop:
             return loop.create_task(run_to_completion())
@@ -308,8 +352,8 @@ class DictEvalHooks(EvalHooks):
         self.metadata.update(info)
 
 
-def init_experiment(project_name):
-    ret = _init_experiment(project_name)
+def init_experiment(project_name, metadata):
+    ret = _init_experiment(project_name, **eval_metadata_to_init_options(metadata))
     summary = ret.summarize(summarize_scores=False)
     print(f"Experiment {ret.name} is running at {summary.experiment_url}")
     return ret
@@ -339,10 +383,15 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
             name = f"scorer_{scorer_idx}"
         with start_span(name=name, input=dict(**kwargs)):
             score = scorer.eval_async if isinstance(scorer, Scorer) else scorer
-            result = await await_or_run(score, **kwargs)
-            result_rest = result.as_dict()
-            result_metadata = result_rest.pop("metadata", {})
-            current_span().log(output=result_rest, metadata=result_metadata)
+
+            scorer_args = {k: v for k, v in kwargs.items() if k in inspect.signature(score).parameters}
+            result = await await_or_run(score, **scorer_args)
+            if isinstance(result, Score):
+                result_rest = result.as_dict()
+                result_metadata = result_rest.pop("metadata", {})
+                current_span().log(output=result_rest, metadata=result_metadata)
+            else:
+                current_span().log(output=result)
             return result
 
     async def run_evaluator_task(datum):
@@ -424,7 +473,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
     tasks = []
     with async_tqdm(
         filtered_iterator(data_iterator),
-        desc=f"{evaluator.name} (data)",
+        desc=f"{evaluator.eval_name} (data)",
         position=position,
         disable=position is None,
     ) as pbar:
@@ -432,7 +481,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
             tasks.append(asyncio.create_task(run_evaluator_task(datum)))
 
     results = []
-    for task in std_tqdm(tasks, desc=f"{evaluator.name} (tasks)", position=position, disable=position is None):
+    for task in std_tqdm(tasks, desc=f"{evaluator.eval_name} (tasks)", position=position, disable=position is None):
         results.append(await task)
 
     summary = experiment.summarize() if experiment else None

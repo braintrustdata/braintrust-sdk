@@ -3,7 +3,12 @@
 import { v4 as uuidv4 } from "uuid";
 
 import iso, { IsoAsyncLocalStorage, CallerLocation } from "./isomorph";
-import { runFinally, TRANSACTION_ID_FIELD, IS_MERGE_FIELD } from "./util";
+import {
+  runFinally,
+  TRANSACTION_ID_FIELD,
+  IS_MERGE_FIELD,
+  GLOBAL_PROJECT,
+} from "./util";
 import { mergeRowBatch } from "./merge_row_batch";
 
 export type SetCurrentArg = { setCurrent?: boolean };
@@ -51,7 +56,7 @@ export interface Span {
   /**
    * Create a new span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `Span.log` will be merged into one logical row.
    *
-   * We recommend running spans within a callback (using `startSpanWithinCallback`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a callback, be sure to terminate it with `span.end()`.
+   * We recommend running spans within a callback (using `traced`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a callback, be sure to terminate it with `span.end()`.
    *
    * @param name The name of the span.
    * @param args.span_attributes Optional additional attributes to attach to the span, such as a type name.
@@ -141,6 +146,7 @@ declare global {
 class BraintrustState {
   public id: string;
   public currentExperiment: IsoAsyncLocalStorage<Experiment | undefined>;
+  public currentLogger: IsoAsyncLocalStorage<Logger | undefined>;
   public currentSpan: IsoAsyncLocalStorage<Span>;
 
   public apiUrl: string | null;
@@ -152,11 +158,11 @@ class BraintrustState {
 
   private _apiConn: HTTPConnection | null;
   private _logConn: HTTPConnection | null;
-  private _userInfo: UserInfo | null;
 
   constructor() {
     this.id = uuidv4(); // This is for debugging
     this.currentExperiment = iso.newAsyncLocalStorage();
+    this.currentLogger = iso.newAsyncLocalStorage();
     this.currentSpan = iso.newAsyncLocalStorage();
     this.currentSpan.enterWith(noopSpan);
 
@@ -169,7 +175,6 @@ class BraintrustState {
 
     this._apiConn = null;
     this._logConn = null;
-    this._userInfo = null;
 
     globalThis.__inherited_braintrust_state = this;
   }
@@ -193,22 +198,18 @@ class BraintrustState {
     }
     return this._logConn!;
   }
-
-  public async userInfo(): Promise<UserInfo> {
-    if (!this._userInfo) {
-      this._userInfo = await this.logConn().get_json("ping");
-    }
-    return this._userInfo!;
-  }
-
-  public setUserInfoIfNull(info: UserInfo) {
-    if (!this._userInfo) {
-      this._userInfo = info;
-    }
-  }
 }
 
-let _state = globalThis.__inherited_braintrust_state || new BraintrustState();
+let _state: BraintrustState;
+
+// This function should be invoked exactly once after configuring the `iso`
+// object based on the platform. See js/src/node.ts for an example.
+export function _internalSetInitialState() {
+  if (_state) {
+    throw new Error("Cannot set initial state more than once");
+  }
+  _state = globalThis.__inherited_braintrust_state || new BraintrustState();
+}
 export const _internalGetGlobalState = () => _state;
 
 // A utility to keep track of objects that should be cleaned up before
@@ -219,7 +220,7 @@ class UnterminatedObjectsHandler {
 
   constructor() {
     this.unterminatedObjects = new Map();
-    process.on("exit", () => {
+    iso.processOn("exit", () => {
       this.warnUnterminated();
     });
   }
@@ -291,7 +292,6 @@ class HTTPConnection {
   async ping() {
     try {
       const resp = await this.get("ping");
-      _state.setUserInfoIfNull(await resp.json());
       return resp.status === 200;
     } catch (e) {
       return false;
@@ -406,15 +406,145 @@ interface UserInfo {
   id: string;
 }
 
-export class Project {
-  name: string;
+interface RegisteredProject {
   id: string;
-  org_id: string;
+  name: string;
+}
 
-  constructor(name: string, id: string, org_id: string) {
+class Project {
+  name?: string;
+  id?: string;
+
+  constructor({ name, id }: { name?: string; id?: string }) {
     this.name = name;
     this.id = id;
-    this.org_id = org_id;
+  }
+
+  async lazyInit(): Promise<RegisteredProject> {
+    if (this.id === undefined) {
+      const response = await _state
+        .apiConn()
+        .post_json("api/project/register", {
+          project_name: this.name || GLOBAL_PROJECT,
+          org_id: _state.orgId,
+        });
+      this.id = response.project.id;
+      this.name = response.project.name;
+    } else if (this.name === undefined) {
+      const response = await _state.apiConn().get_json("api/project", {
+        id: this.id,
+      });
+      this.name = response.name;
+    }
+
+    return { id: this.id!, name: this.name! };
+  }
+}
+
+export interface LogOptions {
+  asyncFlush?: boolean;
+}
+
+export class Logger {
+  private _lazyLogin: () => Promise<void>;
+  private loggedIn: boolean = false;
+  private lazyProject: Project;
+  private logOptions: LogOptions;
+  private bgLogger: BackgroundLogger;
+  private lastStartTime: number;
+
+  // For type identification.
+  public kind: "logger" = "logger";
+
+  constructor(
+    lazyLogin: () => Promise<void>,
+    lazyProject: Project,
+    logOptions: LogOptions = {}
+  ) {
+    this._lazyLogin = lazyLogin;
+    this.lazyProject = lazyProject;
+    this.logOptions = logOptions;
+
+    this.bgLogger = new BackgroundLogger();
+    this.lastStartTime = getCurrentUnixTimestamp();
+  }
+
+  private async lazyLogin() {
+    if (!this.loggedIn) {
+      await this._lazyLogin();
+      this.lastStartTime = getCurrentUnixTimestamp();
+      this.loggedIn = true;
+    }
+  }
+
+  /**
+   * Log a single event. The event will be batched and uploaded behind the scenes if `logOptions.asyncFlush` is true.
+   *
+   * @param event The event to log.
+   * @param event.input: The arguments that uniquely define a user input (an arbitrary, JSON serializable object).
+   * @param event.output: The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
+   * @param event.expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
+   * @param event.scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
+   * @param event.metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
+   * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically and should not be specified: "start", "end".
+   * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
+   * :returns: The `id` of the logged event.
+   */
+  public async log(event: Readonly<ExperimentLogPartialArgs>): Promise<string> {
+    const span = await this.startSpan({ startTime: this.lastStartTime, event });
+    this.lastStartTime = span.end();
+
+    if (!this.logOptions.asyncFlush) {
+      await this.flush();
+    }
+
+    return span.id;
+  }
+
+  /**
+   * Create a new toplevel span. The name parameter is optional and defaults to "root".
+   *
+   * See `Span.startSpan` for full details.
+   */
+  public async startSpan(args?: StartSpanOptionalNameArgs): Promise<Span> {
+    await this.lazyLogin();
+    const project = await this.lazyProject.lazyInit();
+    const { name, ...argsRest } = args ?? {};
+    return new SpanImpl({
+      bgLogger: this.bgLogger,
+      name: name ?? "root",
+      ...argsRest,
+      rootProject: project,
+    });
+  }
+
+  /**
+   * Wrapper over `Logger.startSpan`, which passes the initialized `Span` it to the given callback and ends it afterwards. See `Span.traced` for full details.
+   */
+  public async traced<R>(
+    callback: (span: Span) => R,
+    args?: StartSpanOptionalNameArgs & SetCurrentArg
+  ): Promise<R> {
+    const { setCurrent, ...argsRest } = args ?? {};
+    const span = await this.startSpan(argsRest);
+    try {
+      let ret = null;
+      return await (setCurrent ?? true
+        ? withCurrent(span, () => callback(span))
+        : callback(span));
+    } finally {
+      span.end();
+      if (!this.logOptions.asyncFlush) {
+        await this.flush();
+      }
+    }
+  }
+
+  /*
+   * Flush any pending logs to the server.
+   */
+  async flush(): Promise<void> {
+    return await this.bgLogger.flush();
   }
 }
 
@@ -452,7 +582,6 @@ type ExperimentEvent = Partial<InputField> &
     experiment_id: string;
     [IS_MERGE_FIELD]: boolean;
   } & Partial<{
-    user_id: string;
     created: string;
     span_parents: string[];
     span_attributes: Record<string, unknown>;
@@ -465,11 +594,15 @@ interface DatasetEvent {
   id: string;
   project_id: string;
   dataset_id: string;
-  user_id: string;
   created: string;
 }
 
-type LogEvent = ExperimentEvent | DatasetEvent;
+type LoggingEvent = Omit<ExperimentEvent, "experiment_id"> & {
+  org_id: string;
+  log_id: "g";
+};
+
+type BackgroundLogEvent = ExperimentEvent | DatasetEvent | LoggingEvent;
 
 export interface DatasetRecord {
   id: string;
@@ -488,12 +621,25 @@ function constructJsonArray(items: string[]) {
 const DefaultBatchSize = 100;
 const NumRetries = 3;
 
-class LogThread {
-  private items: LogEvent[] = [];
+function now() {
+  return new Date().getTime();
+}
+
+class BackgroundLogger {
+  private items: BackgroundLogEvent[] = [];
   private active_flush: Promise<string[]> = Promise.resolve([]);
   private active_flush_resolved = true;
 
-  log(items: LogEvent[]) {
+  constructor() {
+    // Note that this will not run for explicit termination events, such as
+    // calls to `process.exit()` or uncaught exceptions. Thus it is a
+    // "best-effort" flush.
+    iso.processOn("beforeExit", async () => {
+      await this.flush();
+    });
+  }
+
+  log(items: BackgroundLogEvent[]) {
     this.items.push(...items);
 
     if (this.active_flush_resolved) {
@@ -508,7 +654,7 @@ class LogThread {
     // Since the merged rows are guaranteed to refer to independent rows,
     // publish order does not matter and we can flush all item batches
     // concurrently.
-    const initialItems = mergeRowBatch(this.items || []).reverse();
+    const allItems = mergeRowBatch(this.items || []).reverse();
     this.items = [];
 
     let postPromises = [];
@@ -517,8 +663,8 @@ class LogThread {
       let itemsLen = 0;
       while (items.length < batchSize && itemsLen < MaxRequestSize / 2) {
         let item = null;
-        if (initialItems.length > 0) {
-          item = initialItems.pop();
+        if (allItems.length > 0) {
+          item = allItems.pop();
         } else {
           break;
         }
@@ -536,7 +682,7 @@ class LogThread {
         (async () => {
           const itemsS = constructJsonArray(items);
           for (let i = 0; i < NumRetries; i++) {
-            const startTime = performance.now();
+            const startTime = now();
             try {
               return (await _state.logConn().post_json("logs", itemsS)).map(
                 (res: any) => res.id
@@ -552,7 +698,7 @@ class LogThread {
               })();
               console.warn(
                 `log request failed. Elapsed time: ${
-                  (performance.now() - startTime) / 1000
+                  (now() - startTime) / 1000
                 } seconds. Payload size: ${
                   itemsS.length
                 }. Error: ${errMsg}.${retryingText}`
@@ -680,6 +826,28 @@ export async function withExperiment<R>(
   );
 }
 
+/**
+ * Wrapper over `braintrust.initLogger`, which passes the initialized `Logger` it to the given callback and closes it afterwards. See `braintrust.initLogger` for full details.
+ *
+ * @param options.setCurrent If true (default), set the currently-active logger to the newly-created one. Equivalent to calling `braintrust.withCurrent(logger, callback)`.
+ */
+export async function withLogger<R>(
+  callback: (logger: Logger) => R,
+  options: Readonly<InitLoggerOptions & SetCurrentArg> = {}
+): Promise<R> {
+  const logger = initLogger(options);
+  return runFinally(
+    () => {
+      if (options.setCurrent ?? true) {
+        return withCurrent(logger, () => callback(logger));
+      } else {
+        return callback(logger);
+      }
+    },
+    () => logger.flush()
+  );
+}
+
 type InitDatasetOptions = {
   dataset?: string;
   description?: string;
@@ -749,6 +917,62 @@ export async function withDataset<R>(
   );
 }
 
+type InitLoggerOptions = {
+  projectName?: string;
+  projectId?: string;
+  asyncFlush?: boolean;
+  apiUrl?: string;
+  apiKey?: string;
+  orgName?: string;
+  disableCache?: boolean;
+};
+
+/**
+ * Create a new logger in a specified project. If the project does not exist, it will be created.
+ *
+ * @param options Additional options for configuring init().
+ * @param options.projectName The name of the project to log into. If unspecified, will default to the Global project.
+ * @param options.projectId The id of the project to log into. This takes precedence over projectName if specified.
+ * @param options.asyncFlush If true, will log asynchronously in the background. Otherwise, will log synchronously. (false by default, to support serverless environments)
+ * @param options.apiUrl The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+ * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
+ * key is specified, will prompt the user to login.
+ * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+ * @param options.disableCache Do not use cached login information.
+ * @returns The newly created Logger.
+ */
+export function initLogger(options: Readonly<InitLoggerOptions> = {}) {
+  const {
+    projectName,
+    projectId,
+    asyncFlush,
+    apiUrl,
+    apiKey,
+    orgName,
+    disableCache,
+  } = options || {};
+
+  const lazyLogin = async () => {
+    await login({
+      orgName: orgName,
+      disableCache,
+      apiKey,
+      apiUrl,
+    });
+  };
+
+  return new Logger(
+    lazyLogin,
+    new Project({
+      name: projectName,
+      id: projectId,
+    }),
+    {
+      asyncFlush,
+    }
+  );
+}
+
 /**
  * Log into Braintrust. This will prompt you for your API token, which you can find at
  * https://www.braintrustdata.com/app/token. This method is called automatically by `init()`.
@@ -799,8 +1023,6 @@ export async function login(
 
   _state.apiUrl = apiUrl;
 
-  let login_key_info: any = null;
-  let ping_ok = false;
   let conn = null;
 
   if (apiKey !== undefined) {
@@ -821,8 +1043,6 @@ export async function login(
 
     conn = _state.logConn();
     conn.set_token(apiKey);
-
-    ping_ok = await conn.ping();
   } else {
     // TODO: Implement token based login in the JS client
     throw new Error(
@@ -834,10 +1054,6 @@ export async function login(
     throw new Error("Conn should be set at this point (a bug)");
   }
 
-  if (!ping_ok) {
-    await conn.get("ping");
-  }
-
   conn.make_long_lived();
 
   // Set the same token in the API
@@ -846,6 +1062,7 @@ export async function login(
   _state.loggedIn = true;
 }
 
+// XXX We should remove these global functions now
 /**
  * Log a single event to the current experiment. The event will be batched and uploaded behind the scenes.
  *
@@ -891,6 +1108,13 @@ export function currentExperiment(): Experiment | undefined {
 }
 
 /**
+ * Returns the currently-active logger (set by `braintrust.withLogger` or `braintrust.withCurrent`). Returns undefined if no current logger has been set.
+ */
+export function currentLogger(): Logger | undefined {
+  return _state.currentLogger.getStore();
+}
+
+/**
  * Return the currently-active span for logging (set by `traced` or `braintrust.withCurrent`). If there is no active span, returns a no-op span object, which supports the same interface as spans but does no logging.
  *
  * See `Span` for full details.
@@ -900,11 +1124,16 @@ export function currentSpan(): Span {
 }
 
 /**
- * Toplevel function for starting a span. If there is a currently-active span, the new span is created as a subspan. Otherwise, if there is a currently-active experiment, the new span is created as a toplevel span. Otherwise, it returns a no-op span object.
+ * Toplevel function for starting a span. It checks the following (in precedence order):
+ *  * Currently-active span
+ *  * Currently-active experiment
+ *  * Currently-active logger
+ *
+ * and creates a span in the first one that is active. If none of these are active, it returns a no-op span object.
  *
  * Unless a name is explicitly provided, the name of the span will be the name of the calling function, or "root" if no meaningful name can be determined.
  *
- * We recommend running spans within a callback (using `startSpanWithinCallback`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a callback, be sure to terminate it with `span.end()`.
+ * We recommend running spans within a callback (using `traced`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a callback, be sure to terminate it with `span.end()`.
  *
  * See `Span.startSpan` for full details.
  */
@@ -920,6 +1149,13 @@ export function startSpan(args?: StartSpanOptionalNameArgs): Span {
   const experiment = currentExperiment();
   if (experiment) {
     return experiment.startSpan({ name, ...argsRest });
+  }
+
+  const logger = currentLogger();
+  if (logger) {
+    throw new Error(
+      "Cannot start a span within a logger from startSpan(). Use logger.startSpan() instead."
+    );
   }
 
   return noopSpan;
@@ -952,11 +1188,13 @@ export function traced<R>(
  * @param callback: The callback to be run under the scope of the current object.
  */
 export function withCurrent<R>(
-  object: Experiment | Span,
+  object: Experiment | Logger | Span,
   callback: () => R
 ): R {
   if (object.kind === "experiment") {
     return _state.currentExperiment.run(object, callback);
+  } else if (object.kind === "logger") {
+    return _state.currentLogger.run(object, callback);
   } else if (object.kind === "span") {
     return _state.currentSpan.run(object, callback);
   } else {
@@ -975,7 +1213,7 @@ function _check_org_info(org_info: any, org_name: string | undefined) {
     if (org_name === undefined || org.name === org_name) {
       _state.orgId = org.id;
       _state.orgName = org.name;
-      _state.logUrl = org.api_url;
+      _state.logUrl = iso.getEnv("BRAINTRUST_LOG_URL") ?? org.api_url;
       break;
     }
   }
@@ -1159,18 +1397,7 @@ async function _initExperiment(
   const project = response.project;
   const experiment = response.experiment;
 
-  // NOTE: This is a deviation from the Python lib and allows the log() method
-  // to not be async.
-  //
-  const user_id = (await _state.userInfo())["id"];
-
-  return new Experiment(
-    project,
-    experiment.id,
-    experiment.name,
-    user_id,
-    dataset
-  );
+  return new Experiment(project, experiment.id, experiment.name, dataset);
 }
 
 /**
@@ -1186,12 +1413,11 @@ async function _initExperiment(
  * You should not create `Experiment` objects directly. Instead, use the `braintrust.init()` method.
  */
 export class Experiment {
-  public readonly project: Project;
+  public readonly project: RegisteredProject;
   public readonly id: string;
   public readonly name: string;
-  public readonly user_id: string;
   public readonly dataset?: Dataset;
-  private logger: LogThread;
+  private bgLogger: BackgroundLogger;
   private lastStartTime: number;
   private finished: boolean;
 
@@ -1199,10 +1425,9 @@ export class Experiment {
   public kind: "experiment" = "experiment";
 
   constructor(
-    project: Project,
+    project: RegisteredProject,
     id: string,
     name: string,
-    user_id: string,
     dataset?: Dataset
   ) {
     this.finished = false;
@@ -1210,9 +1435,8 @@ export class Experiment {
     this.project = project;
     this.id = id;
     this.name = name;
-    this.user_id = user_id;
     this.dataset = dataset;
-    this.logger = new LogThread();
+    this.bgLogger = new BackgroundLogger();
     this.lastStartTime = getCurrentUnixTimestamp();
 
     unterminatedObjects.addUnterminated(this, iso.getCallerLocation());
@@ -1227,7 +1451,7 @@ export class Experiment {
    * @param event.expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
    * @param event.scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments.
    * @param event.metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
-   * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically and should not be specified: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
+   * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically and should not be specified: "start", "end".
    * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
    * @param event.dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
    * @param event.inputs: (Deprecated) the same as `input` (will be removed in a future version).
@@ -1252,7 +1476,7 @@ export class Experiment {
 
     const { name, ...argsRest } = args ?? {};
     return new SpanImpl({
-      experimentLogger: this.logger,
+      bgLogger: this.bgLogger,
       name: name ?? "root",
       ...argsRest,
       rootExperiment: this,
@@ -1297,7 +1521,7 @@ export class Experiment {
     let { summarizeScores = true, comparisonExperimentId = undefined } =
       options || {};
 
-    await this.logger.flush();
+    await this.bgLogger.flush();
     const projectUrl = `${_state.apiUrl}/app/${encodeURIComponent(
       _state.orgName!
     )}/p/${encodeURIComponent(this.project.name)}`;
@@ -1350,7 +1574,7 @@ export class Experiment {
   public async close(): Promise<string> {
     this.checkNotFinished();
 
-    await this.logger.flush();
+    await this.bgLogger.flush();
 
     this.finished = true;
     unterminatedObjects.removeUnterminated(this);
@@ -1371,7 +1595,7 @@ export class Experiment {
  */
 export class SpanImpl implements Span {
   private finished: boolean;
-  private experimentLogger: LogThread;
+  private bgLogger: BackgroundLogger;
   // `internalData` contains fields that are not part of the "user-sanitized"
   // set of fields which we want to log in just one of the span rows.
   private internalData: Partial<ExperimentEvent>;
@@ -1381,8 +1605,16 @@ export class SpanImpl implements Span {
   public id: string;
   public span_id: string;
   public root_span_id: string;
-  private _project_id: string;
-  private _experiment_id: string;
+  private readonly _object_info:
+    | {
+        project_id: string;
+        experiment_id: string;
+      }
+    | {
+        org_id: string;
+        project_id: string;
+        log_id: "g";
+      };
 
   public kind: "span" = "span";
 
@@ -1390,17 +1622,21 @@ export class SpanImpl implements Span {
   // should only be specified for non-root spans.
   constructor(
     args: {
-      experimentLogger: LogThread;
+      bgLogger: BackgroundLogger;
       name: string;
       spanAttributes?: Record<any, any>;
       startTime?: number;
       setCurrent?: boolean;
       event?: ExperimentLogPartialArgs & Partial<IdField>;
-    } & ({ rootExperiment: Experiment } | { parentSpan: SpanImpl })
+    } & (
+      | { rootExperiment: Experiment }
+      | { rootProject: RegisteredProject }
+      | { parentSpan: SpanImpl }
+    )
   ) {
     this.finished = false;
 
-    this.experimentLogger = args.experimentLogger;
+    this.bgLogger = args.bgLogger;
 
     const callerLocation = iso.getCallerLocation();
     this.internalData = {
@@ -1415,17 +1651,26 @@ export class SpanImpl implements Span {
     this.span_id = uuidv4();
     if ("rootExperiment" in args) {
       this.root_span_id = this.span_id;
-      this._project_id = args.rootExperiment.project.id;
-      this._experiment_id = args.rootExperiment.id;
+      this._object_info = {
+        project_id: args.rootExperiment.project.id,
+        experiment_id: args.rootExperiment.id,
+      };
       this.internalData = Object.assign(this.internalData, {
-        // TODO: Hopefully we can remove this.
-        user_id: args.rootExperiment.user_id,
+        created: new Date().toISOString(),
+      });
+    } else if ("rootProject" in args) {
+      this.root_span_id = this.span_id;
+      this._object_info = {
+        org_id: _state.orgId!,
+        project_id: args.rootProject.id,
+        log_id: "g",
+      };
+      this.internalData = Object.assign(this.internalData, {
         created: new Date().toISOString(),
       });
     } else if ("parentSpan" in args) {
       this.root_span_id = args.parentSpan.root_span_id;
-      this._project_id = args.parentSpan._project_id;
-      this._experiment_id = args.parentSpan._experiment_id;
+      this._object_info = args.parentSpan._object_info;
       this.internalData.span_parents = [args.parentSpan.span_id];
     } else {
       throw new Error("Must provide either 'rootExperiment' or 'parentSpan'");
@@ -1446,25 +1691,24 @@ export class SpanImpl implements Span {
 
     const sanitized = validateAndSanitizeExperimentLogPartialArgs(event);
     // There should be no overlap between the dictionaries being merged.
-    const record: ExperimentEvent = {
+    const record = {
       ...sanitized,
       ...this.internalData,
       id: this.id,
       span_id: this.span_id,
       root_span_id: this.root_span_id,
-      project_id: this._project_id,
-      experiment_id: this._experiment_id,
+      ...this._object_info,
       [IS_MERGE_FIELD]: this.isMerge,
     };
     this.internalData = {};
-    this.experimentLogger.log([record]);
+    this.bgLogger.log([record]);
   }
 
   public startSpan(name: string, args?: StartSpanArgs): Span {
     this.checkNotFinished();
 
     return new SpanImpl({
-      experimentLogger: this.experimentLogger,
+      bgLogger: this.bgLogger,
       name,
       ...args,
       parentSpan: this,
@@ -1538,12 +1782,7 @@ async function _initDataset(
   const project = response.project;
   const dataset = response.dataset;
 
-  // NOTE: This is a deviation from the Python lib and allows the log() method
-  // to not be async.
-  //
-  const user_id = (await _state.userInfo())["id"];
-
-  return new Dataset(project, dataset.id, dataset.name, user_id, version);
+  return new Dataset(project, dataset.id, dataset.name, version);
 }
 
 /**
@@ -1554,20 +1793,18 @@ async function _initDataset(
  * You should not create `Dataset` objects directly. Instead, use the `braintrust.initDataset()` method.
  */
 export class Dataset {
-  public readonly project: Project;
+  public readonly project: RegisteredProject;
   public readonly id: string;
   public readonly name: string;
-  public readonly user_id: string;
   private pinnedVersion?: string;
   private _fetchedData?: any[] = undefined;
-  private logger: LogThread;
+  private logger: BackgroundLogger;
   private finished: boolean;
 
   constructor(
-    project: Project,
+    project: RegisteredProject,
     id: string,
     name: string,
-    user_id: string,
     pinnedVersion?: string
   ) {
     this.finished = false;
@@ -1575,9 +1812,8 @@ export class Dataset {
     this.project = project;
     this.id = id;
     this.name = name;
-    this.user_id = user_id;
     this.pinnedVersion = pinnedVersion;
-    this.logger = new LogThread();
+    this.logger = new BackgroundLogger();
 
     unterminatedObjects.addUnterminated(this, iso.getCallerLocation());
   }
@@ -1623,7 +1859,6 @@ export class Dataset {
       output,
       project_id: this.project.id,
       dataset_id: this.id,
-      user_id: this.user_id,
       created: new Date().toISOString(),
       metadata,
     };
@@ -1635,12 +1870,10 @@ export class Dataset {
   public delete(id: string): string {
     this.checkNotFinished();
 
-    const user_id = this.user_id;
     const args = {
       id,
       project_id: this.project.id,
       dataset_id: this.id,
-      user_id,
       created: new Date().toISOString(),
       _object_delete: true,
     };
