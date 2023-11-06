@@ -70,7 +70,13 @@ def _get_base_branch(remote=None):
 
 
 def _get_base_branch_ancestor(remote=None):
-    remote_name, base_branch = _get_base_branch(remote)
+    try:
+        remote_name, base_branch = _get_base_branch(remote)
+    except Exception as e:
+        _logger.warning(
+            f"Skipping git metadata. This is likely because the repository has not been published to a remote yet. {e}"
+        )
+        return None
 
     head = "HEAD" if _current_repo().is_dirty() else "HEAD^"
     try:
