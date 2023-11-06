@@ -1,0 +1,6 @@
+[project]
+name = "codegen"
+version = "0.0.1"
+
+[project.scripts]
+codegen = 'codegen:main'
