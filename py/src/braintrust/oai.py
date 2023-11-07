@@ -176,9 +176,10 @@ class OpenAIV1Wrapper(NamedWrapper):
 
 def wrap_openai(openai):
     """
-    Wrap the openai module to add tracing. If Braintrust is not configured, this is a no-op.
+    Wrap the openai module (pre v1) or OpenAI instance (post v1) to add tracing.
+    If Braintrust is not configured, this is a no-op.
 
-    :param openai: The openai module
+    :param openai: The openai module or OpenAI object
     """
     if hasattr(openai, "chat") and hasattr(openai.chat, "completions"):
         return OpenAIV1Wrapper(openai)
