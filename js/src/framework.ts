@@ -16,15 +16,15 @@ import pluralize from "pluralize";
 
 export type Metadata = Record<string, unknown>;
 
-export interface EvalCase<Input, Output> {
+export interface EvalCase<Input, Expected> {
   input: Input;
-  expected?: Output;
+  expected?: Expected;
   metadata?: Metadata;
 }
 
-export type EvalData<Input, Output> =
-  | (() => EvalCase<Input, Output>[])
-  | (() => Promise<EvalCase<Input, Output>[]>);
+export type EvalData<Input, Expected> =
+  | (() => EvalCase<Input, Expected>[])
+  | (() => Promise<EvalCase<Input, Expected>[]>);
 
 export type EvalTask<Input, Output> =
   | ((input: Input, hooks: EvalHooks) => Promise<Output>)
@@ -36,13 +36,16 @@ export interface EvalHooks {
 }
 
 // This happens to be compatible with ScorerArgs defined in autoevals
-export type EvalScorerArgs<Input, Output> = EvalCase<Input, Output> & {
+export type EvalScorerArgs<Input, Output, Expected> = EvalCase<
+  Input,
+  Expected
+> & {
   output: Output;
 };
 
-export type EvalScorer<Input, Output> =
-  | ((args: EvalScorerArgs<Input, Output>) => Score)
-  | ((args: EvalScorerArgs<Input, Output>) => Promise<Score>);
+export type EvalScorer<Input, Output, Expected> =
+  | ((args: EvalScorerArgs<Input, Output, Expected>) => Score)
+  | ((args: EvalScorerArgs<Input, Output, Expected>) => Promise<Score>);
 
 /**
  * Additional metadata for the eval definition, such as experiment name.
@@ -66,10 +69,10 @@ export function evalMetadataToInitOptions(
  * - `scores`, a set of functions that take an input, output, and expected value and return a score
  * - `metadata`, optional additional metadata for the eval definition, such as experiment name.
  */
-export interface Evaluator<Input, Output> {
-  data: EvalData<Input, Output>;
+export interface Evaluator<Input, Output, Expected> {
+  data: EvalData<Input, Expected>;
   task: EvalTask<Input, Output>;
-  scores: EvalScorer<Input, Output>[];
+  scores: EvalScorer<Input, Output, Expected>[];
   metadata?: EvalMetadata;
 }
 
@@ -81,13 +84,13 @@ function makeEvalName(projectName: string, metadata: EvalMetadata | undefined) {
   return out;
 }
 
-export type EvaluatorDef<Input, Output> = {
+export type EvaluatorDef<Input, Output, Expected> = {
   projectName: string;
   evalName: string;
-} & Evaluator<Input, Output>;
+} & Evaluator<Input, Output, Expected>;
 
 export type EvaluatorFile = {
-  [evalName: string]: EvaluatorDef<any, any>;
+  [evalName: string]: EvaluatorDef<any, any, any>;
 };
 
 declare global {
@@ -97,9 +100,9 @@ declare global {
 
 globalThis._evals = {};
 
-export async function Eval<Input, Output>(
+export async function Eval<Input, Output, Expected>(
   name: string,
-  evaluator: Evaluator<Input, Output>
+  evaluator: Evaluator<Input, Output, Expected>
 ): Promise<void | ExperimentSummary> {
   const evalName = makeEvalName(name, evaluator.metadata);
   if (_evals[evalName]) {
@@ -121,7 +124,7 @@ export async function Eval<Input, Output>(
           {
             evalName,
             projectName: name,
-            ...(evaluator as Evaluator<unknown, unknown>),
+            ...(evaluator as Evaluator<unknown, unknown, unknown>),
           },
           progressReporter,
           []
@@ -192,7 +195,7 @@ function evaluateFilter(object: any, filter: Filter) {
 
 export async function runEvaluator(
   experiment: Experiment | null,
-  evaluator: EvaluatorDef<unknown, unknown>,
+  evaluator: EvaluatorDef<unknown, unknown, unknown>,
   progressReporter: ProgressReporter,
   filters: Filter[]
 ) {

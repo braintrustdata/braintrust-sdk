@@ -37,8 +37,6 @@ async function getBaseBranch(remote: string | undefined = undefined) {
 
     const remoteName = remote ?? (await git.getRemotes())[0]?.name;
     if (!remoteName) {
-      // TODO: We should fix this in the Python SDK too. If you have a repo with no remotes, it will
-      // fail with a cryptic error message.
       throw new Error("No remote found");
     }
 
@@ -103,7 +101,15 @@ export async function getPastNAncestors(
     return [];
   }
 
-  const ancestor = await getBaseBranchAncestor(remote);
+  let ancestor = undefined;
+  try {
+    ancestor = await getBaseBranchAncestor(remote);
+  } catch (e) {
+    console.warn(
+      "Skipping git metadata. This is likely because the repository has not been published to a remote yet.",
+      `${e}`
+    );
+  }
   const commits = await git.log({ from: ancestor, to: "HEAD" });
   return commits.all.map((c) => c.hash);
 }

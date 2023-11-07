@@ -384,7 +384,13 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
         with start_span(name=name, input=dict(**kwargs)):
             score = scorer.eval_async if isinstance(scorer, Scorer) else scorer
 
-            scorer_args = {k: v for k, v in kwargs.items() if k in inspect.signature(score).parameters}
+            scorer_args = kwargs
+
+            signature = inspect.signature(score)
+            scorer_accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values())
+            if not scorer_accepts_kwargs:
+                scorer_args = {k: v for k, v in scorer_args.items() if k in signature.parameters}
+
             result = await await_or_run(score, **scorer_args)
             if isinstance(result, Score):
                 result_rest = result.as_dict()
