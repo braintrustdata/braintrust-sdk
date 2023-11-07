@@ -187,9 +187,7 @@ def report_evaluator_result(eval_name, results, summary, verbose):
 
         for result in failing_results:
             info = "".join(
-                ["\n"] + traceback.format_exception(result.error)
-                if verbose
-                else traceback.format_exception_only(type(result.error), result.error)
+                result.exc_info if verbose else traceback.format_exception_only(type(result.error), result.error)
             ).rstrip()
             print(f"{bcolors.FAIL}{info}{bcolors.ENDC}")
     if summary:
@@ -334,6 +332,7 @@ class EvalResult:
     metadata: Metadata
     scores: Dict[str, Score]
     error: Optional[Exception] = None
+    exc_info: Optional[str] = None
 
 
 class DictEvalHooks(EvalHooks):
@@ -407,6 +406,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
         metadata = {**(datum.metadata or {})}
         output = None
         error = None
+        exc_info = None
         scores = {}
 
         if experiment:
@@ -456,8 +456,11 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 current_span().log(metadata=metadata, scores=scores)
             except Exception as e:
                 error = e
+                # Python3.10 has a different set of arguments to format_exception than earlier versions,
+                # so just capture the stack trace here.
+                exc_info = traceback.format_exc()
 
-        return EvalResult(output=output, metadata=metadata, scores=scores, error=error)
+        return EvalResult(output=output, metadata=metadata, scores=scores, error=error, exc_info=exc_info)
 
     data_iterator = evaluator.data
     if inspect.isfunction(data_iterator):
