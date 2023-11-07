@@ -401,6 +401,9 @@ class _LogThread:
                 pass
             all_items = list(reversed(merge_row_batch(all_items)))
 
+            if len(all_items) == 0:
+                return
+
             conn = _state.log_conn()
             post_promises = []
             while True:

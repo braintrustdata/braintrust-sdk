@@ -41,3 +41,7 @@ export function mergeDicts(
     }
   }
 }
+
+export function getCurrentUnixTimestamp(): number {
+  return new Date().getTime() / 1000;
+}
