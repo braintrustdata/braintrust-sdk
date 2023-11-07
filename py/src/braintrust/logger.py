@@ -794,17 +794,13 @@ def traced(*span_args, **span_kwargs):
 
         @wraps(f)
         def wrapper_sync(*f_args, **f_kwargs):
-            with start_span(*span_args, **span_kwargs) as span:
-                ret = f(*f_args, **f_kwargs)
-                span.log(input={"args": f_args, "kwargs": f_kwargs}, output=ret)
-                return ret
+            with start_span(*span_args, **span_kwargs):
+                return f(*f_args, **f_kwargs)
 
         @wraps(f)
         async def wrapper_async(*f_args, **f_kwargs):
-            with start_span(*span_args, **span_kwargs) as span:
-                ret = await f(*f_args, **f_kwargs)
-                span.log(input={"args": f_args, "kwargs": f_kwargs}, output=ret)
-                return ret
+            with start_span(*span_args, **span_kwargs):
+                return await f(*f_args, **f_kwargs)
 
         if inspect.iscoroutinefunction(f):
             return wrapper_async

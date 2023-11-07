@@ -8,6 +8,7 @@ import {
   TRANSACTION_ID_FIELD,
   IS_MERGE_FIELD,
   GLOBAL_PROJECT,
+  getCurrentUnixTimestamp,
 } from "./util";
 import { mergeRowBatch } from "./merge_row_batch";
 
@@ -1229,10 +1230,6 @@ function _check_org_info(org_info: any, org_name: string | undefined) {
 
 function _urljoin(...parts: string[]): string {
   return parts.map((x) => x.replace(/^\//, "")).join("/");
-}
-
-export function getCurrentUnixTimestamp(): number {
-  return new Date().getTime() / 1000;
 }
 
 function validateAndSanitizeExperimentLogPartialArgs(
