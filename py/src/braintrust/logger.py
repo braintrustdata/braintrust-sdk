@@ -333,7 +333,7 @@ NUM_RETRIES = 3
 
 
 class _LogThread:
-    def __init__(self, name=None, lazy_login=None):
+    def __init__(self, name=None):
         self.flush_lock = threading.RLock()
         self.thread = threading.Thread(target=self._publisher, daemon=True)
         self.started = False
@@ -353,7 +353,6 @@ class _LogThread:
         # indicate to any consumer thread that it should attempt a flush.
         self.queue_filled_semaphore = threading.Semaphore(value=0)
 
-        self._lazy_login = lazy_login
         atexit.register(self._finalize)
 
     def log(self, *args):
@@ -373,8 +372,6 @@ class _LogThread:
             self.started = True
 
     def _finalize(self):
-        if self._lazy_login:
-            self._lazy_login()
         self.logger.info("Flushing final log events...")
         self.flush()
 
@@ -403,6 +400,9 @@ class _LogThread:
             except queue.Empty:
                 pass
             all_items = list(reversed(merge_row_batch(all_items)))
+
+            if len(all_items) == 0:
+                return
 
             conn = _state.log_conn()
             post_promises = []
@@ -794,13 +794,17 @@ def traced(*span_args, **span_kwargs):
 
         @wraps(f)
         def wrapper_sync(*f_args, **f_kwargs):
-            with start_span(*span_args, **span_kwargs):
-                return f(*f_args, **f_kwargs)
+            with start_span(*span_args, **span_kwargs) as span:
+                ret = f(*f_args, **f_kwargs)
+                span.log(input={"args": f_args, "kwargs": f_kwargs}, output=ret)
+                return ret
 
         @wraps(f)
         async def wrapper_async(*f_args, **f_kwargs):
-            with start_span(*span_args, **span_kwargs):
-                return await f(*f_args, **f_kwargs)
+            with start_span(*span_args, **span_kwargs) as span:
+                ret = await f(*f_args, **f_kwargs)
+                span.log(input={"args": f_args, "kwargs": f_kwargs}, output=ret)
+                return ret
 
         if inspect.iscoroutinefunction(f):
             return wrapper_async
@@ -1566,7 +1570,7 @@ class Logger:
         self.async_flush = async_flush
         self.set_current = True if set_current is None else set_current
 
-        self.logger = _LogThread(lazy_login=self._perform_lazy_login)
+        self.logger = _LogThread()
         self.last_start_time = time.time()
 
     def log(
