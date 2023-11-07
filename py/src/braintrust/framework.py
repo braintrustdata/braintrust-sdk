@@ -456,6 +456,8 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 current_span().log(metadata=metadata, scores=scores)
             except Exception as e:
                 error = e
+                # Python3.10 has a different set of arguments to format_exception than earlier versions,
+                # so just capture the stack trace here.
                 exc_info = traceback.format_exc()
 
         return EvalResult(output=output, metadata=metadata, scores=scores, error=error, exc_info=exc_info)
