@@ -1590,6 +1590,8 @@ class Logger:
         :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically and should not be specified: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
         """
+        # Do the lazy login before retrieving the last_start_time.
+        self._perform_lazy_login()
         span = self.start_span(
             start_time=self.last_start_time,
             input=input,
