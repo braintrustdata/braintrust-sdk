@@ -615,6 +615,9 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
         if api_key is None:
             api_key = os.environ.get("BRAINTRUST_API_KEY")
 
+        if org_name is None:
+            org_name = os.environ.get("BRAINTRUST_ORG_NAME")
+
         # If any provided login inputs disagree with our existing settings,
         # force login.
         if (
