@@ -82,7 +82,7 @@ def _get_base_branch_ancestor(remote=None):
     try:
         return subprocess.check_output(["git", "merge-base", head, f"{remote_name}/{base_branch}"]).decode().strip()
     except subprocess.CalledProcessError as e:
-        _logger.warning(f"Could not find a common ancestor with {remote_name}/{base_branch}", e)
+        # _logger.warning(f"Could not find a common ancestor with {remote_name}/{base_branch}")
         return None
 
 
@@ -92,7 +92,10 @@ def get_past_n_ancestors(n=10, remote=None):
         if repo is None:
             return
 
-        ancestor = repo.commit(_get_base_branch_ancestor())
+        ancestor_output = _get_base_branch_ancestor()
+        if ancestor_output is None:
+            return
+        ancestor = repo.commit(ancestor_output)
         for _ in range(n):
             yield ancestor.hexsha
             if ancestor.parents:

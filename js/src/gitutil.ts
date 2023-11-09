@@ -110,6 +110,9 @@ export async function getPastNAncestors(
       `${e}`
     );
   }
+  if (!ancestor) {
+    return [];
+  }
   const commits = await git.log({ from: ancestor, to: "HEAD" });
   return commits.all.map((c) => c.hash);
 }
