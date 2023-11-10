@@ -105,6 +105,7 @@ class Span(ABC):
         pass
 
 
+# DEVNOTE: This is copied into autoevals/py/autoevals/util.py
 class _NoopSpan(Span):
     """A fake implementation of the Span API which does nothing. This can be used as the default span."""
 
