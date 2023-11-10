@@ -105,6 +105,7 @@ class Span(ABC):
         pass
 
 
+# DEVNOTE: This is copied into autoevals/py/autoevals/util.py
 class _NoopSpan(Span):
     """A fake implementation of the Span API which does nothing. This can be used as the default span."""
 
@@ -633,6 +634,7 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
 
         os.makedirs(CACHE_PATH, exist_ok=True)
 
+        conn = None
         if api_key is not None:
             resp = requests.post(_urljoin(_state.api_url, "/api/apikey/login"), json={"token": api_key})
             if not resp.ok:

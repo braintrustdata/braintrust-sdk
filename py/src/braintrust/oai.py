@@ -55,7 +55,7 @@ class ChatCompletionWrapper:
                         "prompt_tokens": log_response["usage"]["prompt_tokens"],
                         "completion_tokens": log_response["usage"]["completion_tokens"],
                     },
-                    output=log_response["choices"][0],
+                    output=log_response["choices"],
                 )
                 return raw_response
         finally:
@@ -101,7 +101,7 @@ class ChatCompletionWrapper:
                         "prompt_tokens": log_response["usage"]["prompt_tokens"],
                         "completion_tokens": log_response["usage"]["completion_tokens"],
                     },
-                    output=log_response["choices"][0],
+                    output=log_response["choices"],
                 )
                 return raw_response
         finally:
