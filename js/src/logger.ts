@@ -1003,7 +1003,7 @@ export async function login(
     apiUrl = iso.getEnv("BRAINTRUST_API_URL") ||
       "https://www.braintrustdata.com",
     apiKey = iso.getEnv("BRAINTRUST_API_KEY"),
-    orgName: orgName = undefined,
+    orgName = iso.getEnv("BRAINTRUST_ORG_NAME"),
     disableCache = false,
   } = options || {};
 
