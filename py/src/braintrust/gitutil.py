@@ -98,9 +98,15 @@ def get_past_n_ancestors(n=10, remote=None):
         ancestor = repo.commit(ancestor_output)
         for _ in range(n):
             yield ancestor.hexsha
-            if ancestor.parents:
-                ancestor = ancestor.parents[0]
-            else:
+            try:
+                if ancestor.parents:
+                    ancestor = ancestor.parents[0]
+                else:
+                    break
+            except ValueError:
+                # Since parents are fetched on-demand, this can happen if the
+                # downloaded repo does not have information for this commit's
+                # parent.
                 break
 
 
