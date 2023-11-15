@@ -1085,6 +1085,7 @@ class Experiment(ModelWrapper):
         experiment_url = f"{project_url}/{encode_uri_component(self.name)}"
 
         score_summary = {}
+        metric_summary = {}
         comparison_experiment_name = None
         if summarize_scores:
             # Get the comparison experiment
@@ -1099,16 +1100,24 @@ class Experiment(ModelWrapper):
 
             if comparison_experiment_id is not None:
                 summary_items = _state.log_conn().get_json(
-                    "experiment-comparison",
+                    "experiment-comparison2",
                     args={
                         "experiment_id": self.id,
                         "base_experiment_id": comparison_experiment_id,
                     },
                     retries=3,
                 )
-                longest_score_name = max(len(k) for k in summary_items.keys()) if summary_items else 0
+                score_items = summary_items.get("scores", {})
+                metric_items = summary_items.get("metrics", {})
+
+                longest_score_name = max(len(k) for k in score_items.keys()) if score_items else 0
                 score_summary = {
-                    k: ScoreSummary(_longest_score_name=longest_score_name, **v) for (k, v) in summary_items.items()
+                    k: ScoreSummary(_longest_score_name=longest_score_name, **v) for (k, v) in score_items.items()
+                }
+
+                longest_metric_name = max(len(k) for k in metric_items.keys()) if metric_items else 0
+                metric_summary = {
+                    k: MetricSummary(_longest_metric_name=longest_metric_name, **v) for (k, v) in metric_items.items()
                 }
 
         return ExperimentSummary(
@@ -1118,6 +1127,7 @@ class Experiment(ModelWrapper):
             experiment_url=experiment_url,
             comparison_experiment_name=comparison_experiment_name,
             scores=score_summary,
+            metrics=metric_summary,
         )
 
     def close(self):
@@ -1691,6 +1701,40 @@ class ScoreSummary(SerializableDataClass):
 
 
 @dataclasses.dataclass
+class MetricSummary(SerializableDataClass):
+    """Summary of a metric's performance."""
+
+    """Name of the score."""
+    name: str
+    """Average score across all examples."""
+    metric: float
+    """Unit label for the metric."""
+    unit: str
+    """Difference in score between the current and reference experiment."""
+    diff: float
+    """Number of improvements in the score."""
+    improvements: int
+    """Number of regressions in the score."""
+    regressions: int
+
+    # Used to help with formatting
+    _longest_metric_name: int
+
+    def __str__(self):
+        # format with 2 decimal points
+        metric = f"{self.metric:.2f}"
+        diff_pct = f"{abs(self.diff) * 100:05.2f}%"
+        diff_score = f"+{diff_pct}" if self.diff > 0 else f"-{diff_pct}" if self.diff < 0 else "-"
+
+        # pad the name with spaces so that its length is self._longest_score_name + 2
+        metric_name = f"'{self.name}'".ljust(self._longest_metric_name + 2)
+
+        return textwrap.dedent(
+            f"""{metric}{self.unit} ({diff_score}) {metric_name}\t({self.improvements} improvements, {self.regressions} regressions)"""
+        )
+
+
+@dataclasses.dataclass
 class ExperimentSummary(SerializableDataClass):
     """Summary of an experiment's scores and metadata."""
 
@@ -1706,6 +1750,8 @@ class ExperimentSummary(SerializableDataClass):
     comparison_experiment_name: Optional[str]
     """Summary of the experiment's scores."""
     scores: Dict[str, ScoreSummary]
+    """Summary of the experiment's metrics."""
+    metrics: Dict[str, ScoreSummary]
 
     def __str__(self):
         comparison_line = ""
@@ -1715,6 +1761,8 @@ class ExperimentSummary(SerializableDataClass):
             f"""\n=========================SUMMARY=========================\n{comparison_line}"""
             + "\n".join([str(score) for score in self.scores.values()])
             + ("\n\n" if self.scores else "")
+            + "\n".join([str(metric) for metric in self.metrics.values()])
+            + ("\n\n" if self.metrics else "")
             + textwrap.dedent(
                 f"""\
         See results for {self.experiment_name} at {self.experiment_url}"""
