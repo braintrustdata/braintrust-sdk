@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 import sys
 import textwrap
 
@@ -8,6 +9,11 @@ from . import eval, install
 
 def main(args=None):
     """The main routine."""
+
+    # Add the current working directory to sys.path, similar to python's
+    # unittesting frameworks.
+    sys.path.insert(0, os.getcwd())
+
     if args is None:
         args = sys.argv[1:]
 
