@@ -63,6 +63,7 @@ class EvaluatorOpts:
     verbose: bool
     no_send_logs: bool
     no_progress_bars: bool
+    terminate_on_failure: bool
     watch: bool
     filters: List[str]
 
@@ -73,13 +74,16 @@ class LoadedEvaluator:
     evaluator: Evaluator
 
 
-def update_evaluators(evaluators, handles):
+def update_evaluators(evaluators, handles, terminate_on_failure):
     for handle in handles:
         try:
             module_evals = handle.rebuild()
         except Exception as e:
-            print(f"Failed to import {handle.in_file}: {e}", file=sys.stderr)
-            continue
+            if terminate_on_failure:
+                raise
+            else:
+                print(f"Failed to import {handle.in_file}: {e}", file=sys.stderr)
+                continue
 
         for eval_name, evaluator in module_evals.items():
             if not isinstance(evaluator, Evaluator):
@@ -110,7 +114,7 @@ async def run_evaluator_task(evaluator, position, opts: EvaluatorOpts):
 
 async def run_once(handles, evaluator_opts):
     evaluators = {}
-    update_evaluators(evaluators, handles)
+    update_evaluators(evaluators, handles, terminate_on_failure=evaluator_opts.terminate_on_failure)
 
     eval_promises = [
         asyncio.create_task(run_evaluator_task(evaluator.evaluator, idx, evaluator_opts))
@@ -172,6 +176,7 @@ def run(args):
         verbose=args.verbose,
         no_send_logs=args.no_send_logs,
         no_progress_bars=args.no_progress_bars,
+        terminate_on_failure=args.terminate_on_failure,
         watch=args.watch,
         filters=parse_filters(args.filter) if args.filter else [],
     )
@@ -230,6 +235,11 @@ def build_parser(subparsers, parent_parser):
         "--no-progress-bars",
         action="store_true",
         help="Do not show progress bars when processing evaluators.",
+    )
+    parser.add_argument(
+        "--terminate-on-failure",
+        action="store_true",
+        help="If provided, terminates on a failing eval, instead of the default (moving onto the next one).",
     )
     parser.add_argument(
         "files",
