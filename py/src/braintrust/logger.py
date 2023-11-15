@@ -1704,17 +1704,17 @@ class ScoreSummary(SerializableDataClass):
 class MetricSummary(SerializableDataClass):
     """Summary of a metric's performance."""
 
-    """Name of the score."""
+    """Name of the metric."""
     name: str
-    """Average score across all examples."""
+    """Average metric across all examples."""
     metric: float
     """Unit label for the metric."""
     unit: str
-    """Difference in score between the current and reference experiment."""
+    """Difference in metric between the current and reference experiment."""
     diff: float
-    """Number of improvements in the score."""
+    """Number of improvements in the metric."""
     improvements: int
-    """Number of regressions in the score."""
+    """Number of regressions in the metric."""
     regressions: int
 
     # Used to help with formatting
