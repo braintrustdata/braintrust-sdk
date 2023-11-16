@@ -29,6 +29,7 @@ from .gitutil import get_past_n_ancestors, get_repo_status
 from .merge_row_batch import merge_row_batch
 from .resource_manager import ResourceManager
 from .util import (
+    AugmentedHTTPError,
     GLOBAL_PROJECT,
     IS_MERGE_FIELD,
     TRANSACTION_ID_FIELD,
@@ -993,7 +994,17 @@ class Experiment(ModelWrapper):
         if is_public is not None:
             args["public"] = is_public
 
-        response = _state.api_conn().post_json("api/experiment/register", args)
+        while True:
+            try:
+                response = _state.api_conn().post_json("api/experiment/register", args)
+                break
+            except AugmentedHTTPError as e:
+                if args.get("base_experiment") is not None and "base experiment" in str(e):
+                    _logger.warning(f"Base experiment {args['base_experiment']} not found.")
+                    args["base_experiment"] = None
+                else:
+                    raise
+
         self.project = ModelWrapper(response["project"])
         super().__init__(response["experiment"])
         self.dataset = dataset
