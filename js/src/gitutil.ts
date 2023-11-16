@@ -141,26 +141,22 @@ export async function getRepoStatus() {
 
   const dirty = (await git.diffSummary()).files.length > 0;
 
-  if (!dirty) {
-    commit = await attempt(async () => await git.revparse(["HEAD"]));
-    commit_message = await attempt(async () =>
-      (await git.raw(["log", "-1", "--pretty=%B"])).trim()
-    );
-    commit_time = await attempt(async () =>
-      (await git.raw(["log", "-1", "--pretty=%cI"])).trim()
-    );
-    author_name = await attempt(async () =>
-      (await git.raw(["log", "-1", "--pretty=%aN"])).trim()
-    );
-    author_email = await attempt(async () =>
-      (await git.raw(["log", "-1", "--pretty=%aE"])).trim()
-    );
-    tag = await attempt(async () =>
-      (
-        await git.raw(["describe", "--tags", "--exact-match", "--always"])
-      ).trim()
-    );
-  }
+  commit = await attempt(async () => await git.revparse(["HEAD"]));
+  commit_message = await attempt(async () =>
+    (await git.raw(["log", "-1", "--pretty=%B"])).trim()
+  );
+  commit_time = await attempt(async () =>
+    (await git.raw(["log", "-1", "--pretty=%cI"])).trim()
+  );
+  author_name = await attempt(async () =>
+    (await git.raw(["log", "-1", "--pretty=%aN"])).trim()
+  );
+  author_email = await attempt(async () =>
+    (await git.raw(["log", "-1", "--pretty=%aE"])).trim()
+  );
+  tag = await attempt(async () =>
+    (await git.raw(["describe", "--tags", "--exact-match", "--always"])).trim()
+  );
 
   branch = await attempt(async () =>
     (await git.raw(["rev-parse", "--abbrev-ref", "HEAD"])).trim()
