@@ -29,10 +29,10 @@ from .gitutil import get_past_n_ancestors, get_repo_status
 from .merge_row_batch import merge_row_batch
 from .resource_manager import ResourceManager
 from .util import (
-    AugmentedHTTPError,
     GLOBAL_PROJECT,
     IS_MERGE_FIELD,
     TRANSACTION_ID_FIELD,
+    AugmentedHTTPError,
     SerializableDataClass,
     encode_uri_component,
     get_caller_location,

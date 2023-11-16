@@ -1,5 +1,5 @@
 /**
- * An isomorphic JS library for logging data to Braintrust.
+ * An isomorphic JS library for logging data to Braintrust. `braintrust` is distributed as a [library on NPM](https://www.npmjs.com/package/braintrust).
  *
  * ### Quickstart
  *
