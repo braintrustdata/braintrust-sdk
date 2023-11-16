@@ -1398,9 +1398,25 @@ async function _initExperiment(
     args["public"] = isPublic;
   }
 
-  const response = await _state
-    .apiConn()
-    .post_json("api/experiment/register", args);
+  let response = null;
+  while (true) {
+    try {
+      response = await _state
+        .apiConn()
+        .post_json("api/experiment/register", args);
+      break;
+    } catch (e: any) {
+      if (
+        args["base_experiment"] &&
+        `${"data" in e && e.data}`.includes("base experiment")
+      ) {
+        console.warn(`Base experiment ${args["base_experiment"]} not found.`);
+        delete args["base_experiment"];
+      } else {
+        throw e;
+      }
+    }
+  }
 
   const project = response.project;
   const experiment = response.experiment;
