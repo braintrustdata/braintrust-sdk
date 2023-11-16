@@ -1147,6 +1147,13 @@ export function startSpan(args?: StartSpanOptionalNameArgs): Span {
   const name =
     (nameOpt ?? iso.getCallerLocation()?.caller_functionname) || "root";
   const parentSpan = currentSpan();
+
+  if (!parentSpan) {
+    throw new Error(
+      "Cannot call startSpan() from outside a trace. Please wrap this code in a traced() callback."
+    );
+  }
+
   if (!Object.is(parentSpan, noopSpan)) {
     return parentSpan.startSpan(name, argsRest);
   }
