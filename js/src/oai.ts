@@ -1,4 +1,4 @@
-import { currentSpan, Span, startSpan } from "./logger";
+import { Span, startSpan } from "./logger";
 import { getCurrentUnixTimestamp } from "./util";
 
 interface ChatLike {
