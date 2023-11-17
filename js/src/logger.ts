@@ -1663,6 +1663,7 @@ export class SpanImpl implements Span {
         ...callerLocation,
       },
       span_attributes: { ...args.spanAttributes, name: args.name },
+      created: new Date().toISOString(),
     };
 
     const id = args.event?.id ?? uuidv4();
@@ -1675,12 +1676,6 @@ export class SpanImpl implements Span {
         project_id: args.rootExperiment.project.id,
         experiment_id: args.rootExperiment.id,
       };
-      // TODO(manu): This can be pulled out to the initialization of
-      // `self.internal_data`, so that it's populated for every kind of
-      // span. Make this change separately to avoid affecting tests.
-      this.internalData = Object.assign(this.internalData, {
-        created: new Date().toISOString(),
-      });
     } else if ("rootProject" in args) {
       this._object_info = {
         id,
@@ -1690,9 +1685,6 @@ export class SpanImpl implements Span {
         project_id: args.rootProject.id,
         log_id: "g",
       };
-      this.internalData = Object.assign(this.internalData, {
-        created: new Date().toISOString(),
-      });
     } else if ("parentSpan" in args) {
       this._object_info = {
         ...args.parentSpan._object_info,
