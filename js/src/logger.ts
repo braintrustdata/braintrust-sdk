@@ -9,6 +9,7 @@ import {
   IS_MERGE_FIELD,
   GLOBAL_PROJECT,
   getCurrentUnixTimestamp,
+  mergeDicts,
 } from "./util";
 import { mergeRowBatch } from "./merge_row_batch";
 
@@ -489,7 +490,7 @@ export class Logger {
    * @param event.expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
    * @param event.scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
    * @param event.metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
-   * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically and should not be specified: "start", "end".
+   * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
    * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
    * :returns: The `id` of the logged event.
    */
@@ -1280,17 +1281,6 @@ function validateAndSanitizeExperimentLogPartialArgs(
         throw new Error("metric keys must be strings");
       }
     }
-    for (const forbiddenKey of [
-      "start",
-      "end",
-      "caller_functionname",
-      "caller_filename",
-      "caller_lineno",
-    ]) {
-      if (forbiddenKey in event.metrics) {
-        throw new Error(`Key ${forbiddenKey} may not be specified in metrics`);
-      }
-    }
   }
 
   if ("input" in event && event.input && "inputs" in event && event.inputs) {
@@ -1475,7 +1465,7 @@ export class Experiment {
    * @param event.expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
    * @param event.scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments.
    * @param event.metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
-   * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically and should not be specified: "start", "end".
+   * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
    * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
    * @param event.dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
    * @param event.inputs: (Deprecated) the same as `input` (will be removed in a future version).
@@ -1624,12 +1614,14 @@ export class SpanImpl implements Span {
   // set of fields which we want to log in just one of the span rows.
   private internalData: Partial<ExperimentEvent>;
   private isMerge: boolean;
+  private loggedEndTime: number | undefined;
 
-  // Fields that are logged to every row.
-  public id: string;
-  public span_id: string;
-  public root_span_id: string;
-  private readonly _object_info:
+  // `_object_info` contains fields that are logged to every span row.
+  private readonly _object_info: {
+    id: string;
+    span_id: string;
+    root_span_id: string;
+  } & (
     | {
         project_id: string;
         experiment_id: string;
@@ -1638,7 +1630,8 @@ export class SpanImpl implements Span {
         org_id: string;
         project_id: string;
         log_id: "g";
-      };
+      }
+  );
 
   public kind: "span" = "span";
 
@@ -1659,6 +1652,7 @@ export class SpanImpl implements Span {
     )
   ) {
     this.finished = false;
+    this.loggedEndTime = undefined;
 
     this.bgLogger = args.bgLogger;
 
@@ -1671,20 +1665,27 @@ export class SpanImpl implements Span {
       span_attributes: { ...args.spanAttributes, name: args.name },
     };
 
-    this.id = args.event?.id ?? uuidv4();
-    this.span_id = uuidv4();
+    const id = args.event?.id ?? uuidv4();
+    const span_id = uuidv4();
     if ("rootExperiment" in args) {
-      this.root_span_id = this.span_id;
       this._object_info = {
+        id,
+        span_id,
+        root_span_id: span_id,
         project_id: args.rootExperiment.project.id,
         experiment_id: args.rootExperiment.id,
       };
+      // TODO(manu): This can be pulled out to the initialization of
+      // `self.internal_data`, so that it's populated for every kind of
+      // span. Make this change separately to avoid affecting tests.
       this.internalData = Object.assign(this.internalData, {
         created: new Date().toISOString(),
       });
     } else if ("rootProject" in args) {
-      this.root_span_id = this.span_id;
       this._object_info = {
+        id,
+        span_id,
+        root_span_id: span_id,
         org_id: _state.orgId!,
         project_id: args.rootProject.id,
         log_id: "g",
@@ -1693,8 +1694,11 @@ export class SpanImpl implements Span {
         created: new Date().toISOString(),
       });
     } else if ("parentSpan" in args) {
-      this.root_span_id = args.parentSpan.root_span_id;
-      this._object_info = args.parentSpan._object_info;
+      this._object_info = {
+        ...args.parentSpan._object_info,
+        id,
+        span_id,
+      };
       this.internalData.span_parents = [args.parentSpan.span_id];
     } else {
       throw new Error("Must provide either 'rootExperiment' or 'parentSpan'");
@@ -1703,27 +1707,42 @@ export class SpanImpl implements Span {
     // The first log is a replacement, but subsequent logs to the same span
     // object will be merges.
     this.isMerge = false;
-    const { id: id, ...eventRest } = args.event ?? {};
+    const { id: _id, ...eventRest } = args.event ?? {};
     this.log(eventRest);
     this.isMerge = true;
 
     unterminatedObjects.addUnterminated(this, callerLocation);
   }
 
+  public get id(): string {
+    return this._object_info.id;
+  }
+
+  public get span_id(): string {
+    return this._object_info.span_id;
+  }
+
+  public get root_span_id(): string {
+    return this._object_info.root_span_id;
+  }
+
   public log(event: ExperimentLogPartialArgs): void {
     this.checkNotFinished();
 
     const sanitized = validateAndSanitizeExperimentLogPartialArgs(event);
-    // There should be no overlap between the dictionaries being merged.
+    // There should be no overlap between the dictionaries being merged,
+    // except for `sanitized` and `internal_data`, where the former overrides
+    // the latter.
+    const sanitizedAndInternalData = { ...this.internalData };
+    mergeDicts(sanitizedAndInternalData, sanitized);
     const record = {
-      ...sanitized,
-      ...this.internalData,
-      id: this.id,
-      span_id: this.span_id,
-      root_span_id: this.root_span_id,
+      ...sanitizedAndInternalData,
       ...this._object_info,
       [IS_MERGE_FIELD]: this.isMerge,
     };
+    if (record.metrics?.end) {
+      this.loggedEndTime = record.metrics?.end as number;
+    }
     this.internalData = {};
     this.bgLogger.log([record]);
   }
@@ -1761,8 +1780,13 @@ export class SpanImpl implements Span {
   public end(args?: EndSpanArgs): number {
     this.checkNotFinished();
 
-    const endTime = args?.endTime ?? getCurrentUnixTimestamp();
-    this.internalData = { metrics: { end: endTime } };
+    let endTime: number;
+    if (!this.loggedEndTime) {
+      endTime = args?.endTime ?? getCurrentUnixTimestamp();
+      this.internalData = { metrics: { end: endTime } };
+    } else {
+      endTime = this.loggedEndTime;
+    }
     this.log({});
 
     this.finished = true;

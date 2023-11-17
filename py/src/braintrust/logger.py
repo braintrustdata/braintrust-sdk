@@ -36,6 +36,7 @@ from .util import (
     SerializableDataClass,
     encode_uri_component,
     get_caller_location,
+    merge_dicts,
     response_raise_for_status,
 )
 
@@ -903,9 +904,6 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
         for key in metrics.keys():
             if not isinstance(key, str):
                 raise ValueError("metric keys must be strings")
-        for forbidden_key in ["start", "end", "caller_functionname", "caller_filename", "caller_lineno"]:
-            if forbidden_key in metrics:
-                raise ValueError(f"Key {forbidden_key} may not be specified in metrics")
 
     input = event.get("input")
     inputs = event.get("inputs")
@@ -1033,7 +1031,7 @@ class Experiment(ModelWrapper):
         :param expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
         :param scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments.
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
-        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically and should not be specified: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
+        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
         :param dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
         :param inputs: (Deprecated) the same as `input` (will be removed in a future version).
@@ -1189,6 +1187,7 @@ class SpanImpl(Span):
 
         self.finished = False
         self.set_current = True if set_current is None else set_current
+        self._logged_end_time = None
 
         self.bg_logger = bg_logger
 
@@ -1204,37 +1203,39 @@ class SpanImpl(Span):
             span_attributes=dict(**span_attributes, name=name),
         )
 
-        # Fields that are logged to every span row.
-        self._id = event.get("id", None)
-        if self._id is None:
-            self._id = str(uuid.uuid4())
-        self._span_id = str(uuid.uuid4())
+        id = event.get("id", None)
+        if id is None:
+            id = str(uuid.uuid4())
+        span_id = str(uuid.uuid4())
+        # `_object_info` contains fields that are logged to every span row.
         if root_experiment is not None:
-            self._root_span_id = self._span_id
-            self._object_info = {
-                "project_id": root_experiment.project.id,
-                "experiment_id": root_experiment.id,
-            }
-            self.internal_data.update(
-                created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            self._object_info = dict(
+                id=id,
+                span_id=span_id,
+                root_span_id=span_id,
+                project_id=root_experiment.project.id,
+                experiment_id=root_experiment.id,
             )
+            # TODO(manu): This can be pulled out to the initialization of
+            # `self.internal_data`, so that it's populated for every kind of
+            # span. Make this change separately to avoid affecting tests.
+            self.internal_data.update(created=datetime.datetime.now(datetime.timezone.utc).isoformat())
         elif root_project is not None:
-            self._root_span_id = self._span_id
-            self._object_info = {
-                "org_id": _state.org_id,
-                "project_id": root_project.id,
-                "log_id": "g",
-            }
-            self.internal_data.update(
-                # TODO: Hopefully we can remove this.
-                created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            self._object_info = dict(
+                id=id,
+                span_id=span_id,
+                root_span_id=span_id,
+                org_id=_state.org_id,
+                project_id=root_project.id,
+                log_id="g",
             )
+            self.internal_data.update(created=datetime.datetime.now(datetime.timezone.utc).isoformat())
         elif parent_span is not None:
-            self._root_span_id = parent_span._root_span_id
             self._object_info = {**parent_span._object_info}
-            self.internal_data.update(span_parents=[parent_span._span_id])
+            self._object_info.update(id=id, span_id=span_id)
+            self.internal_data.update(span_parents=[parent_span.span_id])
         else:
-            raise RuntimeError("Must provide either 'root_experiment' or 'parent_span'")
+            raise RuntimeError("Must provide either 'root_experiment', 'root_project', or 'parent_span'")
 
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.
@@ -1246,15 +1247,15 @@ class SpanImpl(Span):
 
     @property
     def id(self):
-        return self._id
+        return self._object_info["id"]
 
     @property
     def span_id(self):
-        return self._span_id
+        return self._object_info["span_id"]
 
     @property
     def root_span_id(self):
-        return self._root_span_id
+        return self._object_info["root_span_id"]
 
     def log(self, **event):
         self._check_not_finished()
@@ -1262,16 +1263,18 @@ class SpanImpl(Span):
         sanitized = {
             k: v for k, v in _validate_and_sanitize_experiment_log_partial_args(event).items() if v is not None
         }
-        # There should be no overlap between the dictionaries being merged.
+        # There should be no overlap between the dictionaries being merged,
+        # except for `sanitized` and `internal_data`, where the former overrides
+        # the latter.
+        sanitized_and_internal_data = {**self.internal_data}
+        merge_dicts(sanitized_and_internal_data, sanitized)
         record = dict(
-            **sanitized,
-            **self.internal_data,
-            id=self._id,
-            span_id=self._span_id,
-            root_span_id=self._root_span_id,
+            **sanitized_and_internal_data,
             **self._object_info,
             **{IS_MERGE_FIELD: self._is_merge},
         )
+        if "metrics" in record and "end" in record["metrics"]:
+            self._logged_end_time = record["metrics"]["end"]
         self.internal_data = {}
         self.bg_logger.log(record)
 
@@ -1291,8 +1294,11 @@ class SpanImpl(Span):
     def end(self, end_time=None):
         self._check_not_finished()
 
-        end_time = end_time or time.time()
-        self.internal_data = dict(metrics=dict(end=end_time))
+        if not self._logged_end_time:
+            end_time = end_time or time.time()
+            self.internal_data = dict(metrics=dict(end=end_time))
+        else:
+            end_time = self._logged_end_time
         self.log()
 
         self.finished = True
@@ -1603,7 +1609,7 @@ class Logger:
         :param expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
         :param scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
-        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically and should not be specified: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
+        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
         """
         # Do the lazy login before retrieving the last_start_time.
