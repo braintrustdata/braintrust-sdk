@@ -371,10 +371,12 @@ class _LogThread:
         self.queue_filled_semaphore.release()
 
     def _start(self):
-        with self.start_thread_lock:
-            if not self.started:
-                self.thread.start()
-                self.started = True
+        # Double read to avoid contention in the common case.
+        if not self.started:
+            with self.start_thread_lock:
+                if not self.started:
+                    self.thread.start()
+                    self.started = True
 
     def _finalize(self):
         self.logger.info("Flushing final log events...")
