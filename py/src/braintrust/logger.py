@@ -1205,6 +1205,7 @@ class SpanImpl(Span):
                 **(caller_location or {}),
             ),
             span_attributes=dict(**span_attributes, name=name),
+            created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         )
 
         id = event.get("id", None)
@@ -1220,10 +1221,6 @@ class SpanImpl(Span):
                 project_id=root_experiment.project.id,
                 experiment_id=root_experiment.id,
             )
-            # TODO(manu): This can be pulled out to the initialization of
-            # `self.internal_data`, so that it's populated for every kind of
-            # span. Make this change separately to avoid affecting tests.
-            self.internal_data.update(created=datetime.datetime.now(datetime.timezone.utc).isoformat())
         elif root_project is not None:
             self._object_info = dict(
                 id=id,
@@ -1233,7 +1230,6 @@ class SpanImpl(Span):
                 project_id=root_project.id,
                 log_id="g",
             )
-            self.internal_data.update(created=datetime.datetime.now(datetime.timezone.utc).isoformat())
         elif parent_span is not None:
             self._object_info = {**parent_span._object_info}
             self._object_info.update(id=id, span_id=span_id)
