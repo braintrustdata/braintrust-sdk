@@ -363,6 +363,11 @@ class _LogThread:
         self._start()
         for event in args:
             try:
+                _ = json.dumps(event)
+            except TypeError as e:
+                raise Exception(f"All logged values must be JSON-serializable: {event}") from e
+
+            try:
                 self.queue.put_nowait(event)
             except queue.Full:
                 # Notify consumers to start draining the queue.
