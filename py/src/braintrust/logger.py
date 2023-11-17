@@ -338,6 +338,7 @@ NUM_RETRIES = 3
 class _LogThread:
     def __init__(self, name=None):
         self.flush_lock = threading.RLock()
+        self.start_thread_lock = threading.RLock()
         self.thread = threading.Thread(target=self._publisher, daemon=True)
         self.started = False
 
@@ -370,9 +371,12 @@ class _LogThread:
         self.queue_filled_semaphore.release()
 
     def _start(self):
+        # Double read to avoid contention in the common case.
         if not self.started:
-            self.thread.start()
-            self.started = True
+            with self.start_thread_lock:
+                if not self.started:
+                    self.thread.start()
+                    self.started = True
 
     def _finalize(self):
         self.logger.info("Flushing final log events...")
