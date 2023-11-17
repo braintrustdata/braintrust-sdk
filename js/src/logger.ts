@@ -1542,6 +1542,7 @@ export class Experiment {
     const experimentUrl = `${projectUrl}/${encodeURIComponent(this.name)}`;
 
     let scores: Record<string, ScoreSummary> | undefined = undefined;
+    let metrics: Record<string, MetricSummary> | undefined = undefined;
     let comparisonExperimentName = undefined;
     if (summarizeScores) {
       if (comparisonExperimentId === undefined) {
@@ -1557,14 +1558,17 @@ export class Experiment {
       }
 
       if (comparisonExperimentId !== undefined) {
-        scores = await _state.logConn().get_json(
-          "/experiment-comparison",
+        const results = await _state.logConn().get_json(
+          "/experiment-comparison2",
           {
             experiment_id: this.id,
             base_experiment_id: comparisonExperimentId,
           },
           3
         );
+
+        scores = results["scores"];
+        metrics = results["metrics"];
       }
     }
 
@@ -1575,6 +1579,7 @@ export class Experiment {
       experimentUrl: experimentUrl,
       comparisonExperimentName: comparisonExperimentName,
       scores,
+      metrics,
     };
   }
 
@@ -2095,6 +2100,24 @@ export interface ScoreSummary {
 }
 
 /**
+ * Summary of a metric's performance.
+ * @property name Name of the metric.
+ * @property metric Average metric across all examples.
+ * @property unit Unit label for the metric.
+ * @property diff Difference in metric between the current and reference experiment.
+ * @property improvements Number of improvements in the metric.
+ * @property regressions Number of regressions in the metric.
+ */
+export interface MetricSummary {
+  name: string;
+  metric: number;
+  unit: string;
+  diff: number;
+  improvements: number;
+  regressions: number;
+}
+
+/**
  * Summary of an experiment's scores and metadata.
  * @property projectName Name of the project that the experiment belongs to.
  * @property experimentName Name of the experiment.
@@ -2110,6 +2133,7 @@ export interface ExperimentSummary {
   experimentUrl: string;
   comparisonExperimentName: string | undefined;
   scores: Record<string, ScoreSummary> | undefined;
+  metrics: Record<string, MetricSummary> | undefined;
 }
 
 /**
