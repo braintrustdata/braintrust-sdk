@@ -557,7 +557,10 @@ async function main() {
   parser.add_argument("-v", "--version", { action: "version", version });
 
   const parentParser = new ArgumentParser({ add_help: false });
-  parentParser.add_argument("--verbose", { action: "store_true" });
+  parentParser.add_argument("--verbose", {
+    action: "store_true",
+    help: "Include additional details, including full stack traces on errors.",
+  });
 
   const subparser = parser.add_subparsers({
     required: true,

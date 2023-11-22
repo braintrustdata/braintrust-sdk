@@ -18,9 +18,21 @@ def main(args=None):
         args = sys.argv[1:]
 
     parent_parser = argparse.ArgumentParser(add_help=False)
-    parent_parser.add_argument("--verbose", "-v", default=False, action="store_true")
+    parent_parser.add_argument(
+        "--verbose",
+        "-v",
+        default=False,
+        action="store_true",
+        help="Include additional details, including full stack traces on errors.",
+    )
 
-    parser = argparse.ArgumentParser(description="braintrust is a cli tool to work with Braintrust.")
+    parser = argparse.ArgumentParser(
+        description=textwrap.dedent(
+            """braintrust is a cli tool to work with Braintrust.
+    To see help for a specific subcommand, run `braintrust <subcommand> --help`,
+    e.g. `braintrust eval --help`"""
+        )
+    )
     subparsers = parser.add_subparsers(help="sub-command help", dest="subcommand", required=True)
 
     for module in [eval, install]:
