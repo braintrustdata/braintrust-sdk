@@ -70,13 +70,19 @@ def _get_base_branch(remote=None):
 
 
 def _get_base_branch_ancestor(remote=None):
-    remote_name, base_branch = _get_base_branch(remote)
+    try:
+        remote_name, base_branch = _get_base_branch(remote)
+    except Exception as e:
+        _logger.warning(
+            f"Skipping git metadata. This is likely because the repository has not been published to a remote yet. {e}"
+        )
+        return None
 
     head = "HEAD" if _current_repo().is_dirty() else "HEAD^"
     try:
         return subprocess.check_output(["git", "merge-base", head, f"{remote_name}/{base_branch}"]).decode().strip()
     except subprocess.CalledProcessError as e:
-        _logger.warning(f"Could not find a common ancestor with {remote_name}/{base_branch}", e)
+        # _logger.warning(f"Could not find a common ancestor with {remote_name}/{base_branch}")
         return None
 
 
@@ -86,12 +92,21 @@ def get_past_n_ancestors(n=10, remote=None):
         if repo is None:
             return
 
-        ancestor = repo.commit(_get_base_branch_ancestor())
+        ancestor_output = _get_base_branch_ancestor()
+        if ancestor_output is None:
+            return
+        ancestor = repo.commit(ancestor_output)
         for _ in range(n):
             yield ancestor.hexsha
-            if ancestor.parents:
-                ancestor = ancestor.parents[0]
-            else:
+            try:
+                if ancestor.parents:
+                    ancestor = ancestor.parents[0]
+                else:
+                    break
+            except ValueError:
+                # Since parents are fetched on-demand, this can happen if the
+                # downloaded repo does not have information for this commit's
+                # parent.
                 break
 
 
@@ -120,13 +135,12 @@ def get_repo_status():
 
         dirty = repo.is_dirty()
 
-        if not dirty:
-            commit = attempt(lambda: repo.head.commit.hexsha).strip()
-            commit_message = attempt(lambda: repo.head.commit.message).strip()
-            commit_time = attempt(lambda: repo.head.commit.committed_datetime.isoformat())
-            author_name = attempt(lambda: repo.head.commit.author.name).strip()
-            author_email = attempt(lambda: repo.head.commit.author.email).strip()
-            tag = attempt(lambda: repo.git.describe("--tags", "--exact-match", "--always"))
+        commit = attempt(lambda: repo.head.commit.hexsha).strip()
+        commit_message = attempt(lambda: repo.head.commit.message).strip()
+        commit_time = attempt(lambda: repo.head.commit.committed_datetime.isoformat())
+        author_name = attempt(lambda: repo.head.commit.author.name).strip()
+        author_email = attempt(lambda: repo.head.commit.author.email).strip()
+        tag = attempt(lambda: repo.git.describe("--tags", "--exact-match", "--always"))
 
         branch = attempt(lambda: repo.active_branch.name)
 

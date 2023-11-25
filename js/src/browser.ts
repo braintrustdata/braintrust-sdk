@@ -1,5 +1,6 @@
-import { _internalSetInitialState } from "./logger";
+import { configureBrowser } from "./browser-config";
 
-_internalSetInitialState();
+configureBrowser();
 
 export * from "./logger";
+export * from "./oai";

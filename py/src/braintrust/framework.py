@@ -187,9 +187,7 @@ def report_evaluator_result(eval_name, results, summary, verbose):
 
         for result in failing_results:
             info = "".join(
-                ["\n"] + traceback.format_exception(result.error)
-                if verbose
-                else traceback.format_exception_only(type(result.error), result.error)
+                result.exc_info if verbose else traceback.format_exception_only(type(result.error), result.error)
             ).rstrip()
             print(f"{bcolors.FAIL}{info}{bcolors.ENDC}")
     if summary:
@@ -334,6 +332,7 @@ class EvalResult:
     metadata: Metadata
     scores: Dict[str, Score]
     error: Optional[Exception] = None
+    exc_info: Optional[str] = None
 
 
 class DictEvalHooks(EvalHooks):
@@ -384,7 +383,13 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
         with start_span(name=name, input=dict(**kwargs)):
             score = scorer.eval_async if isinstance(scorer, Scorer) else scorer
 
-            scorer_args = {k: v for k, v in kwargs.items() if k in inspect.signature(score).parameters}
+            scorer_args = kwargs
+
+            signature = inspect.signature(score)
+            scorer_accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values())
+            if not scorer_accepts_kwargs:
+                scorer_args = {k: v for k, v in scorer_args.items() if k in signature.parameters}
+
             result = await await_or_run(score, **scorer_args)
             if isinstance(result, Score):
                 result_rest = result.as_dict()
@@ -401,6 +406,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
         metadata = {**(datum.metadata or {})}
         output = None
         error = None
+        exc_info = None
         scores = {}
 
         if experiment:
@@ -450,8 +456,11 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 current_span().log(metadata=metadata, scores=scores)
             except Exception as e:
                 error = e
+                # Python3.10 has a different set of arguments to format_exception than earlier versions,
+                # so just capture the stack trace here.
+                exc_info = traceback.format_exc()
 
-        return EvalResult(output=output, metadata=metadata, scores=scores, error=error)
+        return EvalResult(output=output, metadata=metadata, scores=scores, error=error, exc_info=exc_info)
 
     data_iterator = evaluator.data
     if inspect.isfunction(data_iterator):

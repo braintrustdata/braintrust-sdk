@@ -1,5 +1,6 @@
 """
-A Python library for logging data to Braintrust.
+A Python library for logging data to Braintrust. `braintrust` is distributed as
+a [library on PyPI](https://pypi.org/project/braintrust/).
 
 ### Quickstart
 
@@ -35,3 +36,4 @@ print(experiment.summarize())
 
 from .framework import *
 from .logger import *
+from .oai import wrap_openai

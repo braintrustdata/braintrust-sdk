@@ -208,7 +208,7 @@ async function initFile(
 interface EvaluatorState {
   [evaluator: string]: {
     sourceFile: string;
-    evaluator: EvaluatorDef<unknown, unknown>;
+    evaluator: EvaluatorDef<unknown, unknown, unknown>;
   };
 }
 
@@ -218,6 +218,7 @@ interface EvaluatorOpts {
   orgName?: string;
   apiUrl?: string;
   noSendLogs: boolean;
+  terminateOnFailure: boolean;
   watch: boolean;
   filters: Filter[];
   progressReporter: ProgressReporter;
@@ -230,7 +231,9 @@ function updateEvaluators(
 ) {
   for (const result of buildResults) {
     if (result.type === "failure") {
-      if (opts.verbose) {
+      if (opts.terminateOnFailure) {
+        throw result.error;
+      } else if (opts.verbose) {
         console.warn(`Failed to compile ${result.sourceFile}`);
         console.warn(result.error);
       } else {
@@ -351,6 +354,7 @@ interface RunArgs {
   tsconfig?: string;
   no_send_logs: boolean;
   no_progress_bars: boolean;
+  terminate_on_failure: boolean;
 }
 
 function checkMatch(
@@ -512,6 +516,7 @@ async function run(args: RunArgs) {
     orgName: args.org_name,
     apiUrl: args.api_url,
     noSendLogs: !!args.no_send_logs,
+    terminateOnFailure: !!args.terminate_on_failure,
     watch: !!args.watch,
     progressReporter: args.no_progress_bars
       ? new SimpleProgressReporter()
@@ -552,7 +557,10 @@ async function main() {
   parser.add_argument("-v", "--version", { action: "version", version });
 
   const parentParser = new ArgumentParser({ add_help: false });
-  parentParser.add_argument("--verbose", { action: "store_true" });
+  parentParser.add_argument("--verbose", {
+    action: "store_true",
+    help: "Include additional details, including full stack traces on errors.",
+  });
 
   const subparser = parser.add_subparsers({
     required: true,
@@ -589,6 +597,10 @@ async function main() {
   parser_run.add_argument("--no-progress-bars", {
     action: "store_true",
     help: "Do not show progress bars when processing evaluators.",
+  });
+  parser_run.add_argument("--terminate-on-failure", {
+    action: "store_true",
+    help: "If provided, terminates on a failing eval, instead of the default (moving onto the next one).",
   });
   parser_run.add_argument("files", {
     nargs: "*",

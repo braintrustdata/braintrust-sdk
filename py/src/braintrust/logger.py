@@ -32,9 +32,11 @@ from .util import (
     GLOBAL_PROJECT,
     IS_MERGE_FIELD,
     TRANSACTION_ID_FIELD,
+    AugmentedHTTPError,
     SerializableDataClass,
     encode_uri_component,
     get_caller_location,
+    merge_dicts,
     response_raise_for_status,
 )
 
@@ -105,6 +107,7 @@ class Span(ABC):
         pass
 
 
+# DEVNOTE: This is copied into autoevals/py/autoevals/util.py
 class _NoopSpan(Span):
     """A fake implementation of the Span API which does nothing. This can be used as the default span."""
 
@@ -335,6 +338,7 @@ NUM_RETRIES = 3
 class _LogThread:
     def __init__(self, name=None):
         self.flush_lock = threading.RLock()
+        self.start_thread_lock = threading.RLock()
         self.thread = threading.Thread(target=self._publisher, daemon=True)
         self.started = False
 
@@ -359,6 +363,11 @@ class _LogThread:
         self._start()
         for event in args:
             try:
+                _ = json.dumps(event)
+            except TypeError as e:
+                raise Exception(f"All logged values must be JSON-serializable: {event}") from e
+
+            try:
                 self.queue.put_nowait(event)
             except queue.Full:
                 # Notify consumers to start draining the queue.
@@ -367,9 +376,12 @@ class _LogThread:
         self.queue_filled_semaphore.release()
 
     def _start(self):
+        # Double read to avoid contention in the common case.
         if not self.started:
-            self.thread.start()
-            self.started = True
+            with self.start_thread_lock:
+                if not self.started:
+                    self.thread.start()
+                    self.started = True
 
     def _finalize(self):
         self.logger.info("Flushing final log events...")
@@ -400,6 +412,9 @@ class _LogThread:
             except queue.Empty:
                 pass
             all_items = list(reversed(merge_row_batch(all_items)))
+
+            if len(all_items) == 0:
+                return
 
             conn = _state.log_conn()
             post_promises = []
@@ -611,6 +626,9 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
         if api_key is None:
             api_key = os.environ.get("BRAINTRUST_API_KEY")
 
+        if org_name is None:
+            org_name = os.environ.get("BRAINTRUST_ORG_NAME")
+
         # If any provided login inputs disagree with our existing settings,
         # force login.
         if (
@@ -630,6 +648,7 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
 
         os.makedirs(CACHE_PATH, exist_ok=True)
 
+        conn = None
         if api_key is not None:
             resp = requests.post(_urljoin(_state.api_url, "/api/apikey/login"), json={"token": api_key})
             if not resp.ok:
@@ -894,9 +913,6 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
         for key in metrics.keys():
             if not isinstance(key, str):
                 raise ValueError("metric keys must be strings")
-        for forbidden_key in ["start", "end", "caller_functionname", "caller_filename", "caller_lineno"]:
-            if forbidden_key in metrics:
-                raise ValueError(f"Key {forbidden_key} may not be specified in metrics")
 
     input = event.get("input")
     inputs = event.get("inputs")
@@ -985,7 +1001,17 @@ class Experiment(ModelWrapper):
         if is_public is not None:
             args["public"] = is_public
 
-        response = _state.api_conn().post_json("api/experiment/register", args)
+        while True:
+            try:
+                response = _state.api_conn().post_json("api/experiment/register", args)
+                break
+            except AugmentedHTTPError as e:
+                if args.get("base_experiment") is not None and "base experiment" in str(e):
+                    _logger.warning(f"Base experiment {args['base_experiment']} not found.")
+                    args["base_experiment"] = None
+                else:
+                    raise
+
         self.project = ModelWrapper(response["project"])
         super().__init__(response["experiment"])
         self.dataset = dataset
@@ -1014,7 +1040,7 @@ class Experiment(ModelWrapper):
         :param expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
         :param scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments.
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
-        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically and should not be specified: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
+        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
         :param dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
         :param inputs: (Deprecated) the same as `input` (will be removed in a future version).
@@ -1077,6 +1103,7 @@ class Experiment(ModelWrapper):
         experiment_url = f"{project_url}/{encode_uri_component(self.name)}"
 
         score_summary = {}
+        metric_summary = {}
         comparison_experiment_name = None
         if summarize_scores:
             # Get the comparison experiment
@@ -1091,16 +1118,24 @@ class Experiment(ModelWrapper):
 
             if comparison_experiment_id is not None:
                 summary_items = _state.log_conn().get_json(
-                    "experiment-comparison",
+                    "experiment-comparison2",
                     args={
                         "experiment_id": self.id,
                         "base_experiment_id": comparison_experiment_id,
                     },
                     retries=3,
                 )
-                longest_score_name = max(len(k) for k in summary_items.keys()) if summary_items else 0
+                score_items = summary_items.get("scores", {})
+                metric_items = summary_items.get("metrics", {})
+
+                longest_score_name = max(len(k) for k in score_items.keys()) if score_items else 0
                 score_summary = {
-                    k: ScoreSummary(_longest_score_name=longest_score_name, **v) for (k, v) in summary_items.items()
+                    k: ScoreSummary(_longest_score_name=longest_score_name, **v) for (k, v) in score_items.items()
+                }
+
+                longest_metric_name = max(len(k) for k in metric_items.keys()) if metric_items else 0
+                metric_summary = {
+                    k: MetricSummary(_longest_metric_name=longest_metric_name, **v) for (k, v) in metric_items.items()
                 }
 
         return ExperimentSummary(
@@ -1110,6 +1145,7 @@ class Experiment(ModelWrapper):
             experiment_url=experiment_url,
             comparison_experiment_name=comparison_experiment_name,
             scores=score_summary,
+            metrics=metric_summary,
         )
 
     def close(self):
@@ -1170,6 +1206,7 @@ class SpanImpl(Span):
 
         self.finished = False
         self.set_current = True if set_current is None else set_current
+        self._logged_end_time = None
 
         self.bg_logger = bg_logger
 
@@ -1183,39 +1220,37 @@ class SpanImpl(Span):
                 **(caller_location or {}),
             ),
             span_attributes=dict(**span_attributes, name=name),
+            created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         )
 
-        # Fields that are logged to every span row.
-        self._id = event.get("id", None)
-        if self._id is None:
-            self._id = str(uuid.uuid4())
-        self._span_id = str(uuid.uuid4())
+        id = event.get("id", None)
+        if id is None:
+            id = str(uuid.uuid4())
+        span_id = str(uuid.uuid4())
+        # `_object_info` contains fields that are logged to every span row.
         if root_experiment is not None:
-            self._root_span_id = self._span_id
-            self._object_info = {
-                "project_id": root_experiment.project.id,
-                "experiment_id": root_experiment.id,
-            }
-            self.internal_data.update(
-                created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            self._object_info = dict(
+                id=id,
+                span_id=span_id,
+                root_span_id=span_id,
+                project_id=root_experiment.project.id,
+                experiment_id=root_experiment.id,
             )
         elif root_project is not None:
-            self._root_span_id = self._span_id
-            self._object_info = {
-                "org_id": _state.org_id,
-                "project_id": root_project.id,
-                "log_id": "g",
-            }
-            self.internal_data.update(
-                # TODO: Hopefully we can remove this.
-                created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            self._object_info = dict(
+                id=id,
+                span_id=span_id,
+                root_span_id=span_id,
+                org_id=_state.org_id,
+                project_id=root_project.id,
+                log_id="g",
             )
         elif parent_span is not None:
-            self._root_span_id = parent_span._root_span_id
             self._object_info = {**parent_span._object_info}
-            self.internal_data.update(span_parents=[parent_span._span_id])
+            self._object_info.update(id=id, span_id=span_id)
+            self.internal_data.update(span_parents=[parent_span.span_id])
         else:
-            raise RuntimeError("Must provide either 'root_experiment' or 'parent_span'")
+            raise RuntimeError("Must provide either 'root_experiment', 'root_project', or 'parent_span'")
 
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.
@@ -1227,15 +1262,15 @@ class SpanImpl(Span):
 
     @property
     def id(self):
-        return self._id
+        return self._object_info["id"]
 
     @property
     def span_id(self):
-        return self._span_id
+        return self._object_info["span_id"]
 
     @property
     def root_span_id(self):
-        return self._root_span_id
+        return self._object_info["root_span_id"]
 
     def log(self, **event):
         self._check_not_finished()
@@ -1243,16 +1278,18 @@ class SpanImpl(Span):
         sanitized = {
             k: v for k, v in _validate_and_sanitize_experiment_log_partial_args(event).items() if v is not None
         }
-        # There should be no overlap between the dictionaries being merged.
+        # There should be no overlap between the dictionaries being merged,
+        # except for `sanitized` and `internal_data`, where the former overrides
+        # the latter.
+        sanitized_and_internal_data = {**self.internal_data}
+        merge_dicts(sanitized_and_internal_data, sanitized)
         record = dict(
-            **sanitized,
-            **self.internal_data,
-            id=self._id,
-            span_id=self._span_id,
-            root_span_id=self._root_span_id,
+            **sanitized_and_internal_data,
             **self._object_info,
             **{IS_MERGE_FIELD: self._is_merge},
         )
+        if "metrics" in record and "end" in record["metrics"]:
+            self._logged_end_time = record["metrics"]["end"]
         self.internal_data = {}
         self.bg_logger.log(record)
 
@@ -1272,8 +1309,11 @@ class SpanImpl(Span):
     def end(self, end_time=None):
         self._check_not_finished()
 
-        end_time = end_time or time.time()
-        self.internal_data = dict(metrics=dict(end=end_time))
+        if not self._logged_end_time:
+            end_time = end_time or time.time()
+            self.internal_data = dict(metrics=dict(end=end_time))
+        else:
+            end_time = self._logged_end_time
         self.log()
 
         self.finished = True
@@ -1584,9 +1624,11 @@ class Logger:
         :param expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
         :param scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
-        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically and should not be specified: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
+        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
         """
+        # Do the lazy login before retrieving the last_start_time.
+        self._perform_lazy_login()
         span = self.start_span(
             start_time=self.last_start_time,
             input=input,
@@ -1681,6 +1723,40 @@ class ScoreSummary(SerializableDataClass):
 
 
 @dataclasses.dataclass
+class MetricSummary(SerializableDataClass):
+    """Summary of a metric's performance."""
+
+    """Name of the metric."""
+    name: str
+    """Average metric across all examples."""
+    metric: float
+    """Unit label for the metric."""
+    unit: str
+    """Difference in metric between the current and reference experiment."""
+    diff: float
+    """Number of improvements in the metric."""
+    improvements: int
+    """Number of regressions in the metric."""
+    regressions: int
+
+    # Used to help with formatting
+    _longest_metric_name: int
+
+    def __str__(self):
+        # format with 2 decimal points
+        metric = f"{self.metric:.2f}"
+        diff_pct = f"{abs(self.diff) * 100:05.2f}%"
+        diff_score = f"+{diff_pct}" if self.diff > 0 else f"-{diff_pct}" if self.diff < 0 else "-"
+
+        # pad the name with spaces so that its length is self._longest_score_name + 2
+        metric_name = f"'{self.name}'".ljust(self._longest_metric_name + 2)
+
+        return textwrap.dedent(
+            f"""{metric}{self.unit} ({diff_score}) {metric_name}\t({self.improvements} improvements, {self.regressions} regressions)"""
+        )
+
+
+@dataclasses.dataclass
 class ExperimentSummary(SerializableDataClass):
     """Summary of an experiment's scores and metadata."""
 
@@ -1696,6 +1772,8 @@ class ExperimentSummary(SerializableDataClass):
     comparison_experiment_name: Optional[str]
     """Summary of the experiment's scores."""
     scores: Dict[str, ScoreSummary]
+    """Summary of the experiment's metrics."""
+    metrics: Dict[str, ScoreSummary]
 
     def __str__(self):
         comparison_line = ""
@@ -1705,6 +1783,8 @@ class ExperimentSummary(SerializableDataClass):
             f"""\n=========================SUMMARY=========================\n{comparison_line}"""
             + "\n".join([str(score) for score in self.scores.values()])
             + ("\n\n" if self.scores else "")
+            + "\n".join([str(metric) for metric in self.metrics.values()])
+            + ("\n\n" if self.metrics else "")
             + textwrap.dedent(
                 f"""\
         See results for {self.experiment_name} at {self.experiment_url}"""

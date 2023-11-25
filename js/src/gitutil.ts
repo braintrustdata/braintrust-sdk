@@ -37,8 +37,6 @@ async function getBaseBranch(remote: string | undefined = undefined) {
 
     const remoteName = remote ?? (await git.getRemotes())[0]?.name;
     if (!remoteName) {
-      // TODO: We should fix this in the Python SDK too. If you have a repo with no remotes, it will
-      // fail with a cryptic error message.
       throw new Error("No remote found");
     }
 
@@ -103,7 +101,18 @@ export async function getPastNAncestors(
     return [];
   }
 
-  const ancestor = await getBaseBranchAncestor(remote);
+  let ancestor = undefined;
+  try {
+    ancestor = await getBaseBranchAncestor(remote);
+  } catch (e) {
+    console.warn(
+      "Skipping git metadata. This is likely because the repository has not been published to a remote yet.",
+      `${e}`
+    );
+  }
+  if (!ancestor) {
+    return [];
+  }
   const commits = await git.log({ from: ancestor, to: "HEAD" });
   return commits.all.map((c) => c.hash);
 }
@@ -132,26 +141,22 @@ export async function getRepoStatus() {
 
   const dirty = (await git.diffSummary()).files.length > 0;
 
-  if (!dirty) {
-    commit = await attempt(async () => await git.revparse(["HEAD"]));
-    commit_message = await attempt(async () =>
-      (await git.raw(["log", "-1", "--pretty=%B"])).trim()
-    );
-    commit_time = await attempt(async () =>
-      (await git.raw(["log", "-1", "--pretty=%cI"])).trim()
-    );
-    author_name = await attempt(async () =>
-      (await git.raw(["log", "-1", "--pretty=%aN"])).trim()
-    );
-    author_email = await attempt(async () =>
-      (await git.raw(["log", "-1", "--pretty=%aE"])).trim()
-    );
-    tag = await attempt(async () =>
-      (
-        await git.raw(["describe", "--tags", "--exact-match", "--always"])
-      ).trim()
-    );
-  }
+  commit = await attempt(async () => await git.revparse(["HEAD"]));
+  commit_message = await attempt(async () =>
+    (await git.raw(["log", "-1", "--pretty=%B"])).trim()
+  );
+  commit_time = await attempt(async () =>
+    (await git.raw(["log", "-1", "--pretty=%cI"])).trim()
+  );
+  author_name = await attempt(async () =>
+    (await git.raw(["log", "-1", "--pretty=%aN"])).trim()
+  );
+  author_email = await attempt(async () =>
+    (await git.raw(["log", "-1", "--pretty=%aE"])).trim()
+  );
+  tag = await attempt(async () =>
+    (await git.raw(["describe", "--tags", "--exact-match", "--always"])).trim()
+  );
 
   branch = await attempt(async () =>
     (await git.raw(["rev-parse", "--abbrev-ref", "HEAD"])).trim()
