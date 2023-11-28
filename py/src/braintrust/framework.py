@@ -190,6 +190,8 @@ def report_evaluator_result(eval_name, results, summary, verbose):
                 result.exc_info if verbose else traceback.format_exception_only(type(result.error), result.error)
             ).rstrip()
             print(f"{bcolors.FAIL}{info}{bcolors.ENDC}")
+
+        print(f"{bcolors.FAIL}Add --verbose to see full stack traces.{bcolors.ENDC}")
     if summary:
         print(f"{summary}")
     else:
