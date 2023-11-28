@@ -360,13 +360,14 @@ export function reportEvaluatorResult(
           "error",
           failingResults.length,
           true
-        )}${
-          !verbose ? " (add --verbose to see the full error)" : ""
-        }. This evaluation ("${evaluatorName}") will not be fully logged.`
+        )}. This evaluation ("${evaluatorName}") will not be fully logged.`
       )
     );
     for (const result of failingResults) {
       logError(result.error, verbose);
+    }
+    if (!verbose) {
+      console.warn(warning("Add --verbose to see full stack traces."));
     }
   } else if (summary) {
     console.log(summary);
