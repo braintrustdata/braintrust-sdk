@@ -13,21 +13,30 @@
  * your Braintrust API key):
  *
  * ```javascript
- * import * as braintrust from "braintrust";
+ * import { Eval } from "braintrust";
  *
- * const experiment = await braintrust.init("NodeTest", {apiKey: "YOUR_API_KEY"});
- * experiment.log({
- *   inputs: {test: 1},
- *   output: "foo",
- *   expected: "bar",
- *   scores: {
- *     n: 0.5,
+ * function isEqual({ output, expected }: { output: string; expected?: string }) {
+ *   return { name: "is_equal", score: output === expected ? 1 : 0 };
+ * }
+ *
+ * Eval("Say Hi Bot", {
+ *   data: () => {
+ *     return [
+ *       {
+ *         input: "Foo",
+ *         expected: "Hi Foo",
+ *       },
+ *       {
+ *         input: "Bar",
+ *         expected: "Hello Bar",
+ *       },
+ *     ]; // Replace with your eval dataset
  *   },
- *   metadata: {
- *     id: 1,
+ *   task: (input: string) => {
+ *     return "Hi " + input; // Replace with your LLM call
  *   },
+ *   scores: [isEqual],
  * });
- * console.log(await experiment.summarize());
  * ```
  *
  * @module braintrust
