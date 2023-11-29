@@ -115,7 +115,7 @@ export async function Eval<Input, Output, Expected>(
 
   const progressReporter = new BarProgressReporter();
   try {
-    const { metadata } = _evals[evalName];
+    const { metadata } = evaluator;
     return await withExperiment(
       name,
       async (experiment) => {

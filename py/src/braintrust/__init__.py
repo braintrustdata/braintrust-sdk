@@ -14,21 +14,26 @@ Then, run a simple experiment with the following code (replace `YOUR_API_KEY` wi
 your Braintrust API key):
 
 ```python
-import braintrust
+from braintrust import Eval
 
-experiment = braintrust.init(project="PyTest", api_key="YOUR_API_KEY")
-experiment.log(
-    inputs={"test": 1},
-    output="foo",
-    expected="bar",
-    scores={
-        "n": 0.5,
-    },
-    metadata={
-        "id": 1,
-    },
+def is_equal(expected, output):
+    return expected == output
+ 
+Eval(
+  "Say Hi Bot",
+  data=lambda: [
+      {
+          "input": "Foo",
+          "expected": "Hi Foo",
+      },
+      {
+          "input": "Bar",
+          "expected": "Hello Bar",
+      },
+  ],  # Replace with your eval dataset
+  task=lambda input: "Hi " + input,  # Replace with your LLM call
+  scores=[is_equal],
 )
-print(experiment.summarize())
 ```
 
 ### API Reference
