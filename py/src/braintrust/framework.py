@@ -1,12 +1,15 @@
 import abc
 import asyncio
+import contextvars
 import dataclasses
 import inspect
 import json
 import re
 import traceback
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from multiprocessing import cpu_count
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List, Optional, TypeVar, Union
 
 from tqdm.asyncio import tqdm as async_tqdm
@@ -360,6 +363,15 @@ def init_experiment(project_name, metadata):
     return ret
 
 
+THREAD_POOL_EXECUTOR = ThreadPoolExecutor(max_workers=cpu_count())
+
+
+def reset_thread_pool_executor(max_workers):
+    global THREAD_POOL_EXECUTOR
+    THREAD_POOL_EXECUTOR.shutdown()
+    THREAD_POOL_EXECUTOR = ThreadPoolExecutor(max_workers=max_workers)
+
+
 async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int], filters: List[Filter]):
     #   if (typeof evaluator.data === "string") {
     #     throw new Error("Unimplemented: string data paths");
@@ -372,11 +384,24 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
     #     data = dataResult;
     #   }
 
+    event_loop = asyncio.get_event_loop()
+
     async def await_or_run(f, *args, **kwargs):
         if inspect.iscoroutinefunction(f):
             return await f(*args, **kwargs)
         else:
-            return f(*args, **kwargs)
+
+            def run_f(args, kwargs, ctx):
+                tokens = [(var, var.set(value)) for var, value in ctx.items()]
+                try:
+                    return f(*args, **kwargs)
+                finally:
+                    for var, tok in tokens:
+                        var.reset(tok)
+
+            return await event_loop.run_in_executor(
+                THREAD_POOL_EXECUTOR, run_f, args, kwargs, contextvars.copy_context()
+            )
 
     async def await_or_run_scorer(scorer, scorer_idx, **kwargs):
         name = scorer._name() if hasattr(scorer, "_name") else scorer.__name__

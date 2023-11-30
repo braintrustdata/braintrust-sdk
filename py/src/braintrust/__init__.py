@@ -18,7 +18,7 @@ from braintrust import Eval
 
 def is_equal(expected, output):
     return expected == output
- 
+
 Eval(
   "Say Hi Bot",
   data=lambda: [

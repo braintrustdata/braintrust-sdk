@@ -17,6 +17,7 @@ from ..framework import (
     init_experiment,
     parse_filters,
     report_evaluator_result,
+    reset_thread_pool_executor,
     run_evaluator,
 )
 
@@ -172,6 +173,9 @@ def initialize_handles(files):
 
 
 def run(args):
+    if args.num_workers:
+        reset_thread_pool_executor(args.num_workers)
+
     evaluator_opts = EvaluatorOpts(
         verbose=args.verbose,
         no_send_logs=args.no_send_logs,
@@ -240,6 +244,11 @@ def build_parser(subparsers, parent_parser):
         "--terminate-on-failure",
         action="store_true",
         help="If provided, terminates on a failing eval, instead of the default (moving onto the next one).",
+    )
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        help="Specify the number of concurrent worker threads to run evals over, if they are defined as synchronous functions. Async functions will be run in the single-threaded asyncio event loop. If not specified, defaults to the number of cores on the machine.",
     )
     parser.add_argument(
         "files",
