@@ -22,11 +22,13 @@ PARAMS = {
     "KafkaTopic": "kafka_topic",
     "KafkaUsername": "kafka_username",
     "KafkaPassword": "kafka_password",
+    "EncryptDatabase": "encrypt_database",
 }
 
 DEFAULTS = {
     "ManagedKafka": "true",
     "DwType": "Postgres",
+    "EncryptDatabase": "false",
     "ProvisionedConcurrency": 0,
 }
 
@@ -94,6 +96,12 @@ def build_parser(subparsers, parents):
     )
     parser.add_argument(
         "--postgres-url", help="The postgres URL to use (if you are connecting to another VPC)", default=None
+    )
+    parser.add_argument(
+        "--encrypt-database",
+        help="Whether to encrypt the database",
+        default=None,
+        choices=[None, "true", "false"],
     )
 
     # ManagedKafka, KafkaBroker, KafkaTopic, KafkaUsername, KafkaPassword
