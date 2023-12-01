@@ -1,12 +1,15 @@
 import abc
 import asyncio
+import contextvars
 import dataclasses
 import inspect
 import json
 import re
 import traceback
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from multiprocessing import cpu_count
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List, Optional, TypeVar, Union
 
 from tqdm.asyncio import tqdm as async_tqdm
@@ -16,6 +19,7 @@ from autoevals import Score, Scorer
 
 from .logger import NOOP_SPAN, Span, current_span, start_span
 from .logger import init as _init_experiment
+from .resource_manager import ResourceManager
 from .util import SerializableDataClass
 
 Metadata = Dict[str, Any]
@@ -360,6 +364,29 @@ def init_experiment(project_name, metadata):
     return ret
 
 
+class EvalThreadPoolSingleton:
+    def __init__(self):
+        self._thread_pool = None
+        self._max_workers = cpu_count()
+
+    def set_max_workers(self, max_workers):
+        assert self._thread_pool is None, "Cannot set max_workers. Thread pool has already been initialized"
+        self._max_workers = max_workers
+
+    def thread_pool(self):
+        if self._thread_pool is None:
+            self._thread_pool = ThreadPoolExecutor(max_workers=self._max_workers)
+        return self._thread_pool
+
+
+_THREAD_POOL_SINGLETON = ResourceManager(EvalThreadPoolSingleton())
+
+
+def set_thread_pool_max_workers(max_workers):
+    with _THREAD_POOL_SINGLETON.get() as obj:
+        obj.set_max_workers(max_workers)
+
+
 async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int], filters: List[Filter]):
     #   if (typeof evaluator.data === "string") {
     #     throw new Error("Unimplemented: string data paths");
@@ -372,11 +399,25 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
     #     data = dataResult;
     #   }
 
+    event_loop = asyncio.get_event_loop()
+
     async def await_or_run(f, *args, **kwargs):
         if inspect.iscoroutinefunction(f):
             return await f(*args, **kwargs)
         else:
-            return f(*args, **kwargs)
+
+            def run_f(args, kwargs, ctx):
+                tokens = [(var, var.set(value)) for var, value in ctx.items()]
+                try:
+                    return f(*args, **kwargs)
+                finally:
+                    for var, tok in tokens:
+                        var.reset(tok)
+
+            with _THREAD_POOL_SINGLETON.get() as thread_pool:
+                return await event_loop.run_in_executor(
+                    thread_pool.thread_pool(), run_f, args, kwargs, contextvars.copy_context()
+                )
 
     async def await_or_run_scorer(scorer, scorer_idx, **kwargs):
         name = scorer._name() if hasattr(scorer, "_name") else scorer.__name__
