@@ -17,8 +17,8 @@ from ..framework import (
     init_experiment,
     parse_filters,
     report_evaluator_result,
-    reset_thread_pool_executor,
     run_evaluator,
+    set_thread_pool_max_workers,
 )
 
 INCLUDE = [
@@ -174,7 +174,7 @@ def initialize_handles(files):
 
 def run(args):
     if args.num_workers:
-        reset_thread_pool_executor(args.num_workers)
+        set_thread_pool_max_workers(args.num_workers)
 
     evaluator_opts = EvaluatorOpts(
         verbose=args.verbose,

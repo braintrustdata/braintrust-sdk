@@ -19,6 +19,7 @@ from autoevals import Score, Scorer
 
 from .logger import NOOP_SPAN, Span, current_span, start_span
 from .logger import init as _init_experiment
+from .resource_manager import ResourceManager
 from .util import SerializableDataClass
 
 Metadata = Dict[str, Any]
@@ -363,13 +364,27 @@ def init_experiment(project_name, metadata):
     return ret
 
 
-THREAD_POOL_EXECUTOR = ThreadPoolExecutor(max_workers=cpu_count())
+class EvalThreadPoolSingleton:
+    def __init__(self):
+        self._thread_pool = None
+        self._max_workers = cpu_count()
+
+    def set_max_workers(self, max_workers):
+        assert self._thread_pool is None, "Cannot set max_workers. Thread pool has already been initialized"
+        self._max_workers = max_workers
+
+    def thread_pool(self):
+        if self._thread_pool is None:
+            self._thread_pool = ThreadPoolExecutor(max_workers=self._max_workers)
+        return self._thread_pool
 
 
-def reset_thread_pool_executor(max_workers):
-    global THREAD_POOL_EXECUTOR
-    THREAD_POOL_EXECUTOR.shutdown()
-    THREAD_POOL_EXECUTOR = ThreadPoolExecutor(max_workers=max_workers)
+_THREAD_POOL_SINGLETON = ResourceManager(EvalThreadPoolSingleton())
+
+
+def set_thread_pool_max_workers(max_workers):
+    with _THREAD_POOL_SINGLETON.get() as obj:
+        obj.set_max_workers(max_workers)
 
 
 async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int], filters: List[Filter]):
@@ -399,9 +414,10 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                     for var, tok in tokens:
                         var.reset(tok)
 
-            return await event_loop.run_in_executor(
-                THREAD_POOL_EXECUTOR, run_f, args, kwargs, contextvars.copy_context()
-            )
+            with _THREAD_POOL_SINGLETON.get() as thread_pool:
+                return await event_loop.run_in_executor(
+                    thread_pool.thread_pool(), run_f, args, kwargs, contextvars.copy_context()
+                )
 
     async def await_or_run_scorer(scorer, scorer_idx, **kwargs):
         name = scorer._name() if hasattr(scorer, "_name") else scorer.__name__
