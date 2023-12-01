@@ -1276,9 +1276,13 @@ function validateAndSanitizeExperimentLogPartialArgs(
   }
 
   if (event.metrics) {
-    for (const key of Object.keys(event.metrics)) {
+    for (const [key, value] of Object.entries(event.metrics)) {
       if (typeof key !== "string") {
         throw new Error("metric keys must be strings");
+      }
+
+      if (typeof value !== "number") {
+        throw new Error("metric values must be numbers");
       }
     }
   }
