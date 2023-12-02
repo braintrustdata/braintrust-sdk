@@ -8,3 +8,4 @@ venv
 .idea
 node_modules
 .turbo
+jsdist
