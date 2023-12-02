@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-	"incremental": true,
+    "incremental": true,
     "declaration": true,
     "outDir": "./jsdist",
     "lib": ["es6"],
