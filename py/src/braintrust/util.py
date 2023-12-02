@@ -11,16 +11,6 @@ TRANSACTION_ID_FIELD = "_xact_id"
 IS_MERGE_FIELD = "_is_merge"
 
 
-class SerializableDataClass:
-    def as_dict(self):
-        """Serialize the object to a dictionary."""
-        return dataclasses.asdict(self)
-
-    def as_json(self, **kwargs):
-        """Serialize the object to JSON."""
-        return json.dumps(self.as_dict(), **kwargs)
-
-
 def encode_uri_component(name):
     """Encode a single component of a URI. Slashes are encoded as well, so this
     should not be used for multiple slash-separated URI components."""

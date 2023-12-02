@@ -43,8 +43,8 @@
     "typescript": "^5.1.6"
   },
   "dependencies": {
+    "@braintrust/core": "^0.0.3",
     "argparse": "^2.0.1",
-    "autoevals": "^0.0.31",
     "chalk": "^4.1.2",
     "cli-progress": "^3.12.0",
     "esbuild": "^0.18.19",

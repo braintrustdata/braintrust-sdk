@@ -12,15 +12,14 @@ from contextlib import contextmanager
 from multiprocessing import cpu_count
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List, Optional, TypeVar, Union
 
+from braintrust_core.score import Score, Scorer
+from braintrust_core.util import SerializableDataClass
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
-
-from autoevals import Score, Scorer
 
 from .logger import NOOP_SPAN, Span, current_span, start_span
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
-from .util import SerializableDataClass
 
 Metadata = Dict[str, Any]
 Input = TypeVar("Input")

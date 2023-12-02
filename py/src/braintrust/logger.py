@@ -21,6 +21,7 @@ from multiprocessing import cpu_count
 from typing import Any, Callable, Dict, Optional, Union
 
 import requests
+from braintrust_core.util import SerializableDataClass
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -33,7 +34,6 @@ from .util import (
     IS_MERGE_FIELD,
     TRANSACTION_ID_FIELD,
     AugmentedHTTPError,
-    SerializableDataClass,
     encode_uri_component,
     get_caller_location,
     merge_dicts,
@@ -107,7 +107,6 @@ class Span(ABC):
         pass
 
 
-# DEVNOTE: This is copied into autoevals/py/autoevals/util.py
 class _NoopSpan(Span):
     """A fake implementation of the Span API which does nothing. This can be used as the default span."""
 
