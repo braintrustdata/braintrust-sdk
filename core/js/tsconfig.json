@@ -7,9 +7,9 @@
     "moduleResolution": "node",
     "baseUrl": ".",
     "paths": {
-      "@lib/*": ["js/*"],
+      "@lib/*": ["src/*"],
     }
   },
   "include": ["."],
-  "exclude": ["node_modules/**", "**/jsdist/**"]
+  "exclude": ["node_modules/**", "**/dist/**"]
 }

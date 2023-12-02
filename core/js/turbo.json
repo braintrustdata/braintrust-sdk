@@ -2,7 +2,7 @@
   "extends": ["//"],
   "pipeline": {
     "build": {
-      "outputs": ["**/jsdist/**"]
+      "outputs": ["**/dist/**"]
     }
   }
 }

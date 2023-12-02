@@ -1,31 +1,32 @@
 {
-  "name": "braintrust_core",
+  "name": "@braintrust/core",
   "version": "0.0.1",
   "description": "Shared core dependencies for Braintrust packages",
-  "main": "./jsdist/index.js",
-  "module": "./jsdist/index.mjs",
-  "types": "./jsdist/index.d.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsup",
     "watch": "tsup --watch",
-    "clean": "rm -r jsdist/*"
+    "clean": "rm -r dist/*"
   },
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "types": "./jsdist/index.d.ts",
-      "import": "./jsdist/index.mjs",
-      "module": "./jsdist/index.mjs",
-      "require": "./jsdist/index.js"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "module": "./dist/index.mjs",
+      "require": "./dist/index.js"
     }
   },
   "files": [
-    "jsdist/**/*"
+    "dist/**/*"
   ],
   "license": "MIT",
   "publishConfig": {
     "access": "public"
   },
+  "homepage": "https://www.braintrustdata.com",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/braintrustdata/braintrust-sdk.git"
@@ -33,6 +34,9 @@
   "bugs": {
     "url": "https://github.com/braintrustdata/braintrust-sdk/issues"
   },
+  "keywords": [
+    "ai"
+  ],
   "devDependencies": {
     "tsup": "^8.0.1",
     "typescript": "^5.1.6",
