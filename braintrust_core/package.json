@@ -2,28 +2,39 @@
   "name": "braintrust_core",
   "version": "0.0.1",
   "description": "Shared core dependencies for Braintrust packages",
-  "main": "jsdist/bundle.js",
-  "types": "jsdist/index.d.ts",
-  "type": "module",
+  "main": "./jsdist/index.js",
+  "module": "./jsdist/index.mjs",
+  "types": "./jsdist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "watch": "tsup --watch",
+    "clean": "rm -r jsdist/*"
+  },
   "exports": {
-    "browser": {
+    "./package.json": "./package.json",
+    ".": {
       "types": "./jsdist/index.d.ts",
-      "import": "./jsdist/bundle.js",
-      "require": "./jsdist/bundle.cjs"
-    },
-    "default": {
-      "types": "./jsdist/index.d.ts",
-      "import": "./jsdist/bundle.js",
-      "require": "./jsdist/bundle.cjs"
+      "import": "./jsdist/index.mjs",
+      "module": "./jsdist/index.mjs",
+      "require": "./jsdist/index.js"
     }
   },
-  "scripts": {
-    "build": "tsc && tsx scripts/bundle-js.ts",
-    "watch": "tsc --watch"
-  },
-  "author": "",
+  "files": [
+    "jsdist/**/*"
+  ],
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/braintrustdata/braintrust-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/braintrustdata/braintrust-sdk/issues"
+  },
   "devDependencies": {
+    "tsup": "^8.0.1",
     "typescript": "^5.1.6",
     "tsx": "^3.12.7"
   },
