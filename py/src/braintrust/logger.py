@@ -45,7 +45,7 @@ class Span(ABC):
     """
     A Span encapsulates logged data and metrics for a unit of work. This interface is shared by all span implementations.
 
-    We suggest using one of the various `startSpan` methods, instead of creating Spans directly. See `Span.startSpan` for full details.
+    We suggest using one of the various `start_span` methods, instead of creating Spans directly. See `Span.start_span` for full details.
     """
 
     @property
@@ -99,6 +99,10 @@ class Span(ABC):
         """Alias for `end`."""
 
     @abstractmethod
+    def serialize(self) -> str:
+        """Returns a JSON-serialized version of the span which can be passed around to other processes, across the network, etc. To resume a span from its serialized form, call `braintrust.resume_span` (see docs for more details)."""
+
+    @abstractmethod
     def __enter__(self):
         pass
 
@@ -136,6 +140,9 @@ class _NoopSpan(Span):
 
     def close(self, end_time=None):
         return self.end(end_time)
+
+    def serialize():
+        return json.dumps(dict(span_type="NoopSpan"))
 
     def __enter__(self):
         return self
@@ -188,40 +195,25 @@ class BraintrustState:
         if not self._user_info:
             self._user_info = info
 
+    # Note: the format should be the same as in logger.ts.
+    def serialize_login_info(self):
+        return json.dumps(
+            dict(
+                api_url=self.api_url,
+                login_token=self.login_token,
+                org_id=self.org_id,
+                org_name=self.org_name,
+                log_url=self.log_url,
+            )
+        )
+
 
 _state = BraintrustState()
 _logger = logging.getLogger("braintrust")
 
 
-class _UnterminatedObjectsHandler:
-    """A utility to keep track of objects that should be cleaned up before program exit. At the end of the program, the _UnterminatedObjectsHandler will print out all un-terminated objects as a warning."""
-
-    def __init__(self):
-        self._unterminated_objects = ResourceManager({})
-        atexit.register(self._warn_unterminated)
-
-    def add_unterminated(self, obj, created_location=None):
-        with self._unterminated_objects.get() as unterminated_objects:
-            unterminated_objects[obj] = created_location
-
-    def remove_unterminated(self, obj):
-        with self._unterminated_objects.get() as unterminated_objects:
-            del unterminated_objects[obj]
-
-    def _warn_unterminated(self):
-        with self._unterminated_objects.get() as unterminated_objects:
-            if not unterminated_objects:
-                return
-            warning_message = "WARNING: Did not close the following braintrust objects. We recommend running `.close` on the listed objects, or binding them to a context manager so they are closed automatically:"
-            for obj, created_location in unterminated_objects.items():
-                msg = f"\n\tObject of type {type(obj)}"
-                if created_location:
-                    msg += f" created at {created_location}"
-                warning_message += msg
-            print(warning_message, file=sys.stderr)
-
-
-_unterminated_objects = _UnterminatedObjectsHandler()
+def _internal_get_global_state():
+    return _state
 
 
 class HTTPConnection:
@@ -597,6 +589,28 @@ def init_logger(
         async_flush=async_flush,
         set_current=set_current,
     )
+
+
+def resume_span(serialized_span: str, set_current=None):
+    """Resume a span serialized by `Span.serialize`. The state of the span will be identical to what it was when serialized. Similar to `Span.start_span`, we recommend running spans within a context manager to automatically mark them as current and ensure they are terminated. If you wish to resume a span outside a context manager, be sure to terminate it with `span.end()`.
+
+    :param serialized_span: The serialized contents returned by `Span.serialize`.
+    :param set_current: If true (the default), the span will be marked as the currently-active span for the duration of the context manager. Unless the span is bound to a context manager, it will not be marked as current. Equivalent to calling `with braintrust.with_current(span)`.
+    """
+
+    deserialized = json.loads(serialized_span)
+    span_type = deserialized["span_type"]
+    if span_type == "NoopSpan":
+        return NOOP_SPAN
+    elif span_type == "SpanImpl":
+        return SpanImpl(
+            init_method="from_serialized",
+            bg_logger=_LogThread(),
+            set_current=set_current,
+            serialized_contents=deserialized["serialized_contents"],
+        )
+    else:
+        raise Exception(f"Unknown span type {span_type}")
 
 
 login_lock = threading.RLock()
@@ -1021,8 +1035,6 @@ class Experiment(ModelWrapper):
         self.logger = _LogThread(name=experiment_name)
         self.last_start_time = time.time()
 
-        _unterminated_objects.add_unterminated(self, get_caller_location())
-
     def log(
         self,
         input=None,
@@ -1077,6 +1089,7 @@ class Experiment(ModelWrapper):
         self._check_not_finished()
 
         return SpanImpl(
+            init_method="primary",
             bg_logger=self.logger,
             name=name,
             span_attributes=span_attributes,
@@ -1163,7 +1176,6 @@ class Experiment(ModelWrapper):
         self.logger.flush()
 
         self.finished = True
-        _unterminated_objects.remove_unterminated(self)
         return self.id
 
     def _check_not_finished(self):
@@ -1184,15 +1196,38 @@ class Experiment(ModelWrapper):
         self.close()
 
 
+# Keep this in sync with the members created by _init_primary. It must be the
+# same as the serialization format in logger.ts.
+_SPAN_IMPL_SERIALIZATION_MEMBER_LIST = [
+    "_finished",
+    "_logged_end_time",
+    "_internal_data",
+    "_object_info",
+    "_is_merge",
+]
+
+
 class SpanImpl(Span):
     """Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
 
     We suggest using one of the various `start_span` methods, instead of creating Spans directly. See `Span.start_span` for full details.
     """
 
+    def __init__(self, init_method, *args, **kwargs):
+        if init_method == "primary":
+            self._init_primary(*args, **kwargs)
+        elif init_method == "from_serialized":
+            self._init_from_serialized(*args, **kwargs)
+        else:
+            raise Exception(f"Unknown init_method {init_method}")
+
+        assert hasattr(self, "bg_logger")
+        for member in _SPAN_IMPL_SERIALIZATION_MEMBER_LIST:
+            assert hasattr(self, member), member
+
     # root_experiment should only be specified for a root span. parent_span
     # should only be specified for non-root spans.
-    def __init__(
+    def _init_primary(
         self,
         bg_logger,
         name,
@@ -1207,7 +1242,7 @@ class SpanImpl(Span):
         if sum(x is not None for x in [root_experiment, root_project, parent_span]) != 1:
             raise ValueError("Must specify exactly one of `root_experiment`, `root_project`, and `parent_span`")
 
-        self.finished = False
+        self._finished = False
         self.set_current = True if set_current is None else set_current
         self._logged_end_time = None
 
@@ -1217,7 +1252,7 @@ class SpanImpl(Span):
         # "user-sanitized" set of fields which we want to log in just one of the
         # span rows.
         caller_location = get_caller_location()
-        self.internal_data = dict(
+        self._internal_data = dict(
             metrics=dict(
                 start=start_time or time.time(),
                 **(caller_location or {}),
@@ -1251,7 +1286,7 @@ class SpanImpl(Span):
         elif parent_span is not None:
             self._object_info = {**parent_span._object_info}
             self._object_info.update(id=id, span_id=span_id)
-            self.internal_data.update(span_parents=[parent_span.span_id])
+            self._internal_data.update(span_parents=[parent_span.span_id])
         else:
             raise RuntimeError("Must provide either 'root_experiment', 'root_project', or 'parent_span'")
 
@@ -1261,7 +1296,11 @@ class SpanImpl(Span):
         self.log(**{k: v for k, v in event.items() if k != "id"})
         self._is_merge = True
 
-        _unterminated_objects.add_unterminated(self, caller_location)
+    def _init_from_serialized(self, bg_logger, set_current, serialized_contents):
+        self.bg_logger = bg_logger
+        self.set_current = set_current
+        for k, v in json.loads(serialized_contents.items()):
+            setattr(self, k, v)
 
     @property
     def id(self):
@@ -1284,7 +1323,7 @@ class SpanImpl(Span):
         # There should be no overlap between the dictionaries being merged,
         # except for `sanitized` and `internal_data`, where the former overrides
         # the latter.
-        sanitized_and_internal_data = {**self.internal_data}
+        sanitized_and_internal_data = {**self._internal_data}
         merge_dicts(sanitized_and_internal_data, sanitized)
         record = dict(
             **sanitized_and_internal_data,
@@ -1293,13 +1332,14 @@ class SpanImpl(Span):
         )
         if "metrics" in record and "end" in record["metrics"]:
             self._logged_end_time = record["metrics"]["end"]
-        self.internal_data = {}
+        self._internal_data = {}
         self.bg_logger.log(record)
 
     def start_span(self, name, span_attributes={}, start_time=None, set_current=None, **event):
         self._check_not_finished()
 
         return SpanImpl(
+            init_method="primary",
             bg_logger=self.bg_logger,
             name=name,
             span_attributes=span_attributes,
@@ -1314,20 +1354,27 @@ class SpanImpl(Span):
 
         if not self._logged_end_time:
             end_time = end_time or time.time()
-            self.internal_data = dict(metrics=dict(end=end_time))
+            self._internal_data = dict(metrics=dict(end=end_time))
         else:
             end_time = self._logged_end_time
         self.log()
 
-        self.finished = True
-        _unterminated_objects.remove_unterminated(self)
+        self._finished = True
         return end_time
 
     def close(self, end_time=None):
         return self.end(end_time)
 
+    def serialize(self) -> str:
+        return json.dumps(
+            dict(
+                span_type="SpanImpl",
+                serialized_contents={k: getattr(self, k) for k in _SPAN_IMPL_SERIALIZATION_MEMBER_LIST},
+            )
+        )
+
     def _check_not_finished(self):
-        if self.finished:
+        if self._finished:
             raise RuntimeError("Cannot invoke method on finished span")
 
     def __enter__(self):
@@ -1378,8 +1425,6 @@ class Dataset(ModelWrapper):
 
         super().__init__(response["dataset"])
         self.logger = _LogThread(name=self.name)
-
-        _unterminated_objects.add_unterminated(self, get_caller_location())
 
     def insert(self, input, output, metadata=None, id=None):
         """
@@ -1546,7 +1591,6 @@ class Dataset(ModelWrapper):
         self.logger.flush()
 
         self.finished = True
-        _unterminated_objects.remove_unterminated(self)
         return self.id
 
     def _check_not_finished(self):
@@ -1662,6 +1706,7 @@ class Logger:
         """
         self._perform_lazy_login()
         return SpanImpl(
+            init_method="primary",
             bg_logger=self.logger,
             name=name,
             span_attributes=span_attributes,
