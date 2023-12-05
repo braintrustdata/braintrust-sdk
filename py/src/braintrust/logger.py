@@ -914,6 +914,10 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
             if not isinstance(key, str):
                 raise ValueError("metric keys must be strings")
 
+        for value in metrics.values():
+            if not isinstance(value, (int, float)):
+                raise ValueError("metric values must be numbers")
+
     input = event.get("input")
     inputs = event.get("inputs")
     if input is not None and inputs is not None:
