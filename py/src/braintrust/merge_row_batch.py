@@ -1,3 +1,5 @@
+from typing import List
+
 from .util import IS_MERGE_FIELD, merge_dicts
 
 DATA_OBJECT_KEYS = [
@@ -17,7 +19,7 @@ def _generate_unique_row_key(row: dict):
     return ":".join([coalesce_empty(k) for k in DATA_OBJECT_KEYS + ["id"]])
 
 
-def merge_row_batch(rows: list[dict]) -> list[dict]:
+def merge_row_batch(rows: List[dict]) -> List[dict]:
     out = []
     remaining_rows = []
     # First add any rows with no ID to `out`, since they will always be

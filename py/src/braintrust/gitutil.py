@@ -4,7 +4,7 @@ import re
 import subprocess
 import threading
 from dataclasses import dataclass
-from functools import cache as _cache
+from functools import lru_cache as _cache
 from typing import Optional
 
 from .util import SerializableDataClass
@@ -31,7 +31,7 @@ class RepoStatus(SerializableDataClass):
     commit_time: Optional[str]
 
 
-@_cache
+@_cache(1)
 def _current_repo():
     try:
         return git.Repo(search_parent_directories=True)
@@ -39,7 +39,7 @@ def _current_repo():
         return None
 
 
-@_cache
+@_cache(1)
 def _get_base_branch(remote=None):
     repo = _current_repo()
     remote = repo.remote(**({} if remote is None else {"name": remote})).name
