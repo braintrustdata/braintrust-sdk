@@ -29,6 +29,7 @@ class RepoStatus(SerializableDataClass):
     author_email: Optional[str]
     commit_message: Optional[str]
     commit_time: Optional[str]
+    git_diff: Optional[str]
 
 
 @_cache(1)
@@ -132,6 +133,7 @@ def get_repo_status():
         author_email = None
         tag = None
         branch = None
+        git_diff = None
 
         dirty = repo.is_dirty()
 
@@ -144,6 +146,9 @@ def get_repo_status():
 
         branch = attempt(lambda: repo.active_branch.name)
 
+        if dirty:
+            git_diff = attempt(lambda: repo.git.diff("HEAD"))
+
         return RepoStatus(
             commit=commit,
             branch=branch,
@@ -153,4 +158,5 @@ def get_repo_status():
             author_email=author_email,
             commit_message=commit_message,
             commit_time=commit_time,
+            git_diff=git_diff,
         )

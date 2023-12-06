@@ -14,6 +14,7 @@ export interface RepoStatus {
   author_email?: string;
   commit_message?: string;
   commit_time?: string;
+  git_diff?: string;
 }
 
 export async function currentRepo() {
@@ -151,6 +152,7 @@ export async function getRepoStatus() {
   let author_email = undefined;
   let tag = undefined;
   let branch = undefined;
+  let git_diff = undefined;
 
   const dirty = (await git.diffSummary()).files.length > 0;
 
@@ -175,6 +177,10 @@ export async function getRepoStatus() {
     (await git.raw(["rev-parse", "--abbrev-ref", "HEAD"])).trim()
   );
 
+  if (dirty) {
+    git_diff = await attempt(async () => await git.raw(["diff", "HEAD"]));
+  }
+
   return {
     commit,
     branch,
@@ -184,5 +190,6 @@ export async function getRepoStatus() {
     author_email,
     commit_message,
     commit_time,
+    git_diff,
   };
 }
