@@ -1,5 +1,7 @@
 import { simpleGit } from "simple-git";
 
+const COMMON_BASE_BRANCHES = ["main", "master", "develop"];
+
 /**
  * Information about the current HEAD of the repo.
  */
@@ -42,18 +44,29 @@ async function getBaseBranch(remote: string | undefined = undefined) {
 
     let branch = null;
 
-    try {
-      const remoteInfo = await git.remote(["show", remoteName]);
-      if (!remoteInfo) {
-        throw new Error(`Could not find remote ${remoteName}`);
+    // NOTE: This should potentially be configuration that we derive from the project,
+    // instead of spending a second or two computing it each time we run an experiment.
+
+    // To speed this up in the short term, we pick from a list of common names
+    // and only fall back to the remote origin if required.
+    const repoBranches = new Set((await git.branchLocal()).all);
+    const matchingBaseBranches = COMMON_BASE_BRANCHES.filter(b => repoBranches.has(b))
+    if (matchingBaseBranches.length === 1) {
+      branch = matchingBaseBranches[0];
+    } else {
+      try {
+        const remoteInfo = await git.remote(["show", remoteName]);
+        if (!remoteInfo) {
+          throw new Error(`Could not find remote ${remoteName}`);
+        }
+        const match = remoteInfo.match(/\s*HEAD branch:\s*(.*)$/m);
+        if (!match) {
+          throw new Error(`Could not find HEAD branch in remote ${remoteName}`);
+        }
+        branch = match[1];
+      } catch {
+        branch = "main";
       }
-      const match = remoteInfo.match(/\s*HEAD branch:\s*(.*)$/m);
-      if (!match) {
-        throw new Error(`Could not find HEAD branch in remote ${remoteName}`);
-      }
-      branch = match[1];
-    } catch {
-      branch = "main";
     }
 
     _baseBranch = { remote: remoteName, branch };
