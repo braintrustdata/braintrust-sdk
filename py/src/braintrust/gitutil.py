@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from functools import lru_cache as _cache
 from typing import Optional
 
-from .util import SerializableDataClass
+from braintrust_core.util import SerializableDataClass
 
 # https://stackoverflow.com/questions/48399498/git-executable-not-found-in-python
 os.environ["GIT_PYTHON_REFRESH"] = "quiet"

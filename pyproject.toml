@@ -4,6 +4,3 @@ line-length = 119
 [tool.ruff]
 line-length = 119
 select = ["I"]
-
-[tool.ruff.isort]
-known-third-party = ["supabase"]

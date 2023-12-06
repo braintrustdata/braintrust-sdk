@@ -24,8 +24,8 @@
     "watch:declarations": "tsc --declaration  --emitDeclarationOnly --outDir dist --watch",
     "docs": "npx typedoc --options typedoc.json src/index.ts",
     "test": "jest",
-    "prepublishOnly": "../../scripts/node_prepublish.py",
-    "postpublish": "../../scripts/node_postpublish.py"
+    "prepublishOnly": "../../scripts/node_prepublish_sdk.py",
+    "postpublish": "../../scripts/node_postpublish_sdk.py"
   },
   "author": "",
   "license": "MIT",
@@ -43,8 +43,8 @@
     "typescript": "^5.1.6"
   },
   "dependencies": {
+    "@braintrust/core": "file:../core/js",
     "argparse": "^2.0.1",
-    "autoevals": "^0.0.31",
     "chalk": "^4.1.2",
     "cli-progress": "^3.12.0",
     "esbuild": "^0.18.19",

@@ -10,7 +10,7 @@ import {
   withCurrent,
   withExperiment,
 } from "./logger";
-import { Score } from "autoevals";
+import { Score } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
 
@@ -35,7 +35,7 @@ export interface EvalHooks {
   span: Span;
 }
 
-// This happens to be compatible with ScorerArgs defined in autoevals
+// This happens to be compatible with ScorerArgs defined in @braintrust/core.
 export type EvalScorerArgs<Input, Output, Expected> = EvalCase<
   Input,
   Expected
