@@ -3,7 +3,11 @@ import os
 
 import setuptools
 
-dir_name = os.path.abspath(os.path.dirname(__file__))
+# Note: instead of using the directory name of the script, we use the current
+# working directory, because the script may be in a different location during
+# the packaging process. This means we assume the packaging is run in this
+# directory (sdk/core/py).
+dir_name = os.environ["PWD"]
 
 version = None
 description = None
