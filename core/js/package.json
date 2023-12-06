@@ -8,7 +8,9 @@
   "scripts": {
     "build": "tsup",
     "watch": "tsup --watch",
-    "clean": "rm -r dist/*"
+    "clean": "rm -r dist/*",
+    "prepublishOnly": "./scripts/node_prepublish.py",
+    "postpublish": "./scripts/node_postpublish.py"
   },
   "exports": {
     "./package.json": "./package.json",
@@ -42,6 +44,5 @@
     "typescript": "^5.1.6",
     "tsx": "^3.12.7"
   },
-  "dependencies": {
-  }
+  "dependencies": {}
 }
