@@ -43,7 +43,7 @@
     "typescript": "^5.1.6"
   },
   "dependencies": {
-    "@braintrust/core": "^0.0.6",
+    "@braintrust/core": "file:../core/js",
     "argparse": "^2.0.1",
     "chalk": "^4.1.2",
     "cli-progress": "^3.12.0",
