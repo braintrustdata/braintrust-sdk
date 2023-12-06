@@ -9,8 +9,8 @@
     "build": "tsup",
     "watch": "tsup --watch",
     "clean": "rm -r dist/*",
-    "prepublishOnly": "./scripts/node_prepublish.py",
-    "postpublish": "./scripts/node_postpublish.py"
+    "prepublishOnly": "../../../scripts/node_prepublish_core.py",
+    "postpublish": "../../../scripts/node_postpublish_core.py"
   },
   "exports": {
     "./package.json": "./package.json",
