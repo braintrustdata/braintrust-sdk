@@ -40,7 +40,7 @@ setuptools.setup(
     ],
     package_dir={"": "src"},
     packages=setuptools.find_packages(where="src"),
-    python_requires=">=3.9.0",
+    python_requires=">=3.8.0",
     install_requires=install_requires,
     extras_require=extras_require,
 )

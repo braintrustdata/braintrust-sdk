@@ -51,7 +51,9 @@ async function getBaseBranch(remote: string | undefined = undefined) {
     // To speed this up in the short term, we pick from a list of common names
     // and only fall back to the remote origin if required.
     const repoBranches = new Set((await git.branchLocal()).all);
-    const matchingBaseBranches = COMMON_BASE_BRANCHES.filter(b => repoBranches.has(b))
+    const matchingBaseBranches = COMMON_BASE_BRANCHES.filter((b) =>
+      repoBranches.has(b)
+    );
     if (matchingBaseBranches.length === 1) {
       branch = matchingBaseBranches[0];
     } else {
