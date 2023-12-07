@@ -1,3 +1,0 @@
-[submodule "autoevals"]
-	path = autoevals
-	url = https://github.com/braintrustdata/autoevals.git
