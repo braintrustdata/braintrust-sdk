@@ -43,9 +43,9 @@ export type EvalScorerArgs<Input, Output, Expected> = EvalCase<
   output: Output;
 };
 
-export type EvalScorer<Input, Output, Expected> =
-  | ((args: EvalScorerArgs<Input, Output, Expected>) => Score)
-  | ((args: EvalScorerArgs<Input, Output, Expected>) => Promise<Score>);
+export type EvalScorer<Input, Output, Expected> = (
+  args: EvalScorerArgs<Input, Output, Expected>
+) => Score | Promise<Score>;
 
 /**
  * Additional metadata for the eval definition, such as experiment name.

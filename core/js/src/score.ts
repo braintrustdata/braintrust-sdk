@@ -10,6 +10,6 @@ export type ScorerArgs<Output, Extra> = {
   expected?: Output;
 } & Extra;
 
-export type Scorer<Output, Extra> =
-  | ((args: ScorerArgs<Output, Extra>) => Promise<Score>)
-  | ((args: ScorerArgs<Output, Extra>) => Score);
+export type Scorer<Output, Extra> = (
+  args: ScorerArgs<Output, Extra>
+) => Score | Promise<Score>;
