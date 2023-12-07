@@ -13,15 +13,15 @@ py: ${VENV_PYTHON_PACKAGES}
 VENV_INITIALIZED := venv/.initialized
 
 ${VENV_INITIALIZED}:
-	rm -rf venv && python3.9 -m venv venv
+	rm -rf venv && python3 -m venv venv
 	@touch ${VENV_INITIALIZED}
 
 VENV_PYTHON_PACKAGES := venv/.python_packages
 
-${VENV_PYTHON_PACKAGES}: ${VENV_INITIALIZED} submodules-init
+${VENV_PYTHON_PACKAGES}: ${VENV_INITIALIZED}
 	bash -c 'source venv/bin/activate && python -m pip install --upgrade pip setuptools'
+	bash -c 'source venv/bin/activate && python -m pip install -e core/py'
 	bash -c 'source venv/bin/activate && python -m pip install -e py[all]'
-	bash -c 'source venv/bin/activate && python -m pip install -e autoevals[all]'
 	@touch $@
 
 ${VENV_PRE_COMMIT}: ${VENV_PYTHON_PACKAGES}
@@ -33,7 +33,3 @@ develop: ${VENV_PRE_COMMIT}
 
 fixup:
 	source env.sh && pre-commit run --all-files
-
-.PHONY: submodules-init
-submodules-init:
-	git submodule update --init
