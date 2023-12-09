@@ -2,7 +2,7 @@ import chalk from "chalk";
 import {
   Experiment,
   ExperimentSummary,
-  InitOptions,
+  Metadata,
   Span,
   currentSpan,
   noopSpan,
@@ -13,8 +13,6 @@ import {
 import { Score } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
-
-export type Metadata = Record<string, unknown>;
 
 export interface EvalCase<Input, Expected> {
   input: Input;
@@ -48,42 +46,30 @@ export type EvalScorer<Input, Output, Expected> = (
 ) => Score | Promise<Score>;
 
 /**
- * Additional metadata for the eval definition, such as experiment name.
- */
-export interface EvalMetadata {
-  // Specify a name for the experiment holding the eval results.
-  experimentName?: string;
-}
-
-export function evalMetadataToInitOptions(
-  metadata: EvalMetadata | undefined
-): InitOptions {
-  return { experiment: metadata?.experimentName };
-}
-
-/**
  * An evaluator is a collection of functions that can be used to evaluate a model.
  * It consists of:
  * - `data`, a function that returns a list of inputs, expected outputs, and metadata
  * - `task`, a function that takes an input and returns an output
  * - `scores`, a set of functions that take an input, output, and expected value and return a score
- * - `metadata`, optional additional metadata for the eval definition, such as experiment name.
+ * - `experimentName`, an optional name for the experiment.
  * - `trialCount`, the number of times to run the evaluator per input. This is useful for evaluating applications that
  *   have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the
  *   variance in the results.
+ * - `metadata`, optional additional metadata for the experiment.
  */
 export interface Evaluator<Input, Output, Expected> {
   data: EvalData<Input, Expected>;
   task: EvalTask<Input, Output>;
   scores: EvalScorer<Input, Output, Expected>[];
-  metadata?: EvalMetadata;
+  experimentName?: string;
   trialCount?: number;
+  metadata?: Metadata;
 }
 
-function makeEvalName(projectName: string, metadata: EvalMetadata | undefined) {
+function makeEvalName(projectName: string, experimentName?: string) {
   let out = projectName;
-  if (metadata?.experimentName) {
-    out += ` [experimentName=${metadata.experimentName}]`;
+  if (experimentName) {
+    out += ` [experimentName=${experimentName}]`;
   }
   return out;
 }
@@ -108,7 +94,7 @@ export async function Eval<Input, Output, Expected>(
   name: string,
   evaluator: Evaluator<Input, Output, Expected>
 ): Promise<void | ExperimentSummary> {
-  const evalName = makeEvalName(name, evaluator.metadata);
+  const evalName = makeEvalName(name, evaluator.experimentName);
   if (_evals[evalName]) {
     throw new Error(`Evaluator ${evalName} already exists`);
   }
@@ -119,7 +105,6 @@ export async function Eval<Input, Output, Expected>(
 
   const progressReporter = new BarProgressReporter();
   try {
-    const { metadata } = evaluator;
     return await withExperiment(
       name,
       async (experiment) => {
@@ -136,7 +121,10 @@ export async function Eval<Input, Output, Expected>(
         reportEvaluatorResult(name, ret, true);
         return ret.summary!;
       },
-      evalMetadataToInitOptions(metadata)
+      {
+          experiment: evaluator.experimentName,
+          metadata: evaluator.metadata,
+      },
     );
   } finally {
     progressReporter.stop();

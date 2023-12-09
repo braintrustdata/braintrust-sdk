@@ -51,7 +51,6 @@ export {
   Evaluator,
   EvalTask,
   Eval,
-  EvalMetadata,
   EvalScorerArgs,
 } from "./framework";
 
