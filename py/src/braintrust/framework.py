@@ -158,6 +158,13 @@ class Evaluator:
     """
     metadata: Optional[EvalMetadata]
 
+    """
+    The number of times to run the evaluator per input. This is useful for evaluating applications that
+    have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the
+    variance in the results.
+    """
+    trial_count: int = 1
+
 
 _evals = {}
 _lazy_load = False
@@ -222,6 +229,7 @@ def Eval(
     task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
     scores: List[EvalScorer],
     metadata: Union[Optional[EvalMetadata], Dict] = None,
+    trial_count: int = 1,
 ):
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -247,6 +255,8 @@ def Eval(
     :param scores: A list of scorers to evaluate the results of the task. Each scorer can be a Scorer object or a function
     that takes an `EvalScorerArgs` object and returns a `Score` object.
     :param metadata: Optional additional metadata for the eval definition, such as experiment name.
+    :param trial_count: The number of times to run the evaluator per input. This is useful for evaluating applications that
+    have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the variance in the results.
     :return: An `Evaluator` object.
     """
     if isinstance(metadata, dict):
@@ -259,7 +269,13 @@ def Eval(
         raise ValueError(f"Evaluator {eval_name} already exists")
 
     evaluator = Evaluator(
-        eval_name=eval_name, project_name=name, data=data, task=task, scores=scores, metadata=metadata
+        eval_name=eval_name,
+        project_name=name,
+        data=data,
+        task=task,
+        scores=scores,
+        metadata=metadata,
+        trial_count=trial_count,
     )
 
     if _lazy_load:
@@ -529,7 +545,8 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
         disable=position is None,
     ) as pbar:
         async for datum in pbar:
-            tasks.append(asyncio.create_task(run_evaluator_task(datum)))
+            for _ in range(evaluator.trial_count):
+                tasks.append(asyncio.create_task(run_evaluator_task(datum)))
 
     results = []
     for task in std_tqdm(tasks, desc=f"{evaluator.eval_name} (tasks)", position=position, disable=position is None):
