@@ -13,6 +13,8 @@ import {
 } from "./util";
 import { mergeRowBatch } from "./merge_row_batch";
 
+export type Metadata = Record<string, unknown>;
+
 export type SetCurrentArg = { setCurrent?: boolean };
 
 type StartSpanEventArgs = ExperimentLogPartialArgs & Partial<IdField>;
@@ -751,6 +753,7 @@ export type InitOptions = {
   apiKey?: string;
   orgName?: string;
   disableCache?: boolean;
+  metadata?: Metadata;
 };
 
 /**
@@ -773,6 +776,10 @@ export type InitOptions = {
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
  * @param options.disableCache Do not use cached login information.
+ * @param options.metadata (Optional) A dictionary with additional data about the test example, model outputs, or just
+ * about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
+ * `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
+ * JSON-serializable type, but its keys must be strings.
  * @returns The newly created Experiment.
  */
 export async function init(
@@ -790,6 +797,7 @@ export async function init(
     apiKey,
     orgName,
     disableCache,
+    metadata,
   } = options || {};
 
   await login({
@@ -806,6 +814,7 @@ export async function init(
     update,
     baseExperiment,
     isPublic,
+    metadata,
   });
 }
 
@@ -1341,6 +1350,7 @@ async function _initExperiment(
     update,
     baseExperiment,
     isPublic,
+    metadata,
   }: {
     experimentName?: string;
     description?: string;
@@ -1348,11 +1358,13 @@ async function _initExperiment(
     update?: boolean;
     baseExperiment?: string;
     isPublic?: boolean;
+    metadata?: Metadata;
   } = {
     experimentName: undefined,
     description: undefined,
     baseExperiment: undefined,
     isPublic: false,
+    metadata: undefined,
   }
 ) {
   const args: Record<string, unknown> = {
@@ -1390,6 +1402,10 @@ async function _initExperiment(
 
   if (isPublic !== undefined) {
     args["public"] = isPublic;
+  }
+
+  if (metadata) {
+    args["metadata"] = metadata;
   }
 
   let response = null;

@@ -102,7 +102,7 @@ def update_evaluators(evaluators, handles, terminate_on_failure):
 async def run_evaluator_task(evaluator, position, opts: EvaluatorOpts):
     experiment = None
     if not opts.no_send_logs:
-        experiment = init_experiment(evaluator.project_name, evaluator.metadata)
+        experiment = init_experiment(evaluator.project_name, evaluator.experiment_name, evaluator.metadata)
 
     try:
         return await run_evaluator(

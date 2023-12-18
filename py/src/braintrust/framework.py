@@ -17,11 +17,10 @@ from braintrust_core.util import SerializableDataClass
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 
-from .logger import NOOP_SPAN, Span, current_span, start_span
+from .logger import Metadata, NOOP_SPAN, Span, current_span, start_span
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
 
-Metadata = Dict[str, Any]
 Input = TypeVar("Input")
 Output = TypeVar("Output")
 
@@ -91,24 +90,6 @@ EvalScorer = Union[
 
 
 @dataclasses.dataclass
-class EvalMetadata(SerializableDataClass):
-    """
-    Additional metadata for the eval definition, such as experiment name.
-    """
-
-    """
-    Specify a name for the experiment holding the eval results.
-    """
-    experiment_name: Optional[str] = None
-
-
-def eval_metadata_to_init_options(metadata: Optional[EvalMetadata] = None) -> Dict:
-    if metadata is None:
-        return dict()
-    return dict(experiment=metadata.experiment_name)
-
-
-@dataclasses.dataclass
 class Evaluator:
     """
     An evaluator is an abstraction that defines an evaluation dataset, a task to run on the dataset, and a set of
@@ -154,9 +135,17 @@ class Evaluator:
     scores: List[EvalScorer]
 
     """
-    Optional additional metadata for the eval definition, such as experiment name.
+    Optional experiment name. If not specified, a name will be generated automatically.
     """
-    metadata: Optional[EvalMetadata]
+    experiment_name: Optional[str]
+
+    """
+    A dictionary with additional data about the test example, model outputs, or just about anything else that's
+    relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`,
+    example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
+    JSON-serializable type, but its keys must be strings.
+    """
+    metadata: Optional[Metadata]
 
     """
     The number of times to run the evaluator per input. This is useful for evaluating applications that
@@ -216,10 +205,10 @@ def report_evaluator_result(eval_name, results, summary, verbose):
             print(f"  {name}: {total / count}")
 
 
-def _make_eval_name(name: str, metadata: Optional[EvalMetadata]):
+def _make_eval_name(name: str, experiment_name: Optional[str]):
     out = name
-    if metadata is not None and metadata.experiment_name is not None:
-        out += f" [experiment_name={metadata.experiment_name}]"
+    if experiment_name is not None:
+        out += f" [experiment_name={experiment_name}]"
     return out
 
 
@@ -228,8 +217,9 @@ def Eval(
     data: Callable[[], Union[Iterator[EvalCase], AsyncIterator[EvalCase]]],
     task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
     scores: List[EvalScorer],
-    metadata: Union[Optional[EvalMetadata], Dict] = None,
+    experiment_name: Optional[str] = None,
     trial_count: int = 1,
+    metadata: Optional[Metadata] = None,
 ):
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -254,15 +244,16 @@ def Eval(
     :param task: Runs the evaluation task on a single input. The `hooks` object can be used to add metadata to the evaluation.
     :param scores: A list of scorers to evaluate the results of the task. Each scorer can be a Scorer object or a function
     that takes an `EvalScorerArgs` object and returns a `Score` object.
-    :param metadata: Optional additional metadata for the eval definition, such as experiment name.
+    :param experiment_name: (Optional) Experiment name. If not specified, a name will be generated automatically.
     :param trial_count: The number of times to run the evaluator per input. This is useful for evaluating applications that
     have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the variance in the results.
+    :param metadata: (Optional) A dictionary with additional data about the test example, model outputs, or just about
+    anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log
+    the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata`
+    can be any JSON-serializable type, but its keys must be strings.
     :return: An `Evaluator` object.
     """
-    if isinstance(metadata, dict):
-        metadata = EvalMetadata(**metadata)
-
-    eval_name = _make_eval_name(name, metadata)
+    eval_name = _make_eval_name(name, experiment_name)
 
     global _evals
     if eval_name in _evals:
@@ -274,8 +265,9 @@ def Eval(
         data=data,
         task=task,
         scores=scores,
-        metadata=metadata,
+        experiment_name=experiment_name,
         trial_count=trial_count,
+        metadata=metadata,
     )
 
     if _lazy_load:
@@ -288,7 +280,7 @@ def Eval(
             loop = None
 
         async def run_to_completion():
-            with init_experiment(evaluator.project_name, evaluator.metadata) as experiment:
+            with init_experiment(evaluator.project_name, evaluator.experiment_name, evaluator.metadata) as experiment:
                 results, summary = await run_evaluator(experiment, evaluator, 0, [])
                 report_evaluator_result(evaluator.eval_name, results, summary, True)
 
@@ -372,8 +364,8 @@ class DictEvalHooks(EvalHooks):
         self.metadata.update(info)
 
 
-def init_experiment(project_name, metadata):
-    ret = _init_experiment(project_name, **eval_metadata_to_init_options(metadata))
+def init_experiment(project_name, experiment_name: Optional[str] = None, metadata: Optional[Metadata] = None):
+    ret = _init_experiment(project_name, experiment=experiment_name, metadata=metadata)
     summary = ret.summarize(summarize_scores=False)
     print(f"Experiment {ret.name} is running at {summary.experiment_url}")
     return ret

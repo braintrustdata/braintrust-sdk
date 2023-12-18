@@ -41,6 +41,9 @@ from .util import (
 )
 
 
+Metadata = Dict[str, Any]
+
+
 class Span(ABC):
     """
     A Span encapsulates logged data and metrics for a unit of work. This interface is shared by all span implementations.
@@ -480,17 +483,18 @@ def _ensure_object(object_type, object_id, force=False):
 
 def init(
     project: str,
-    experiment: str = None,
-    description: str = None,
-    dataset: "Dataset" = None,
+    experiment: Optional[str] = None,
+    description: Optional[str] = None,
+    dataset: Optional["Dataset"] = None,
     update: bool = False,
-    base_experiment: str = None,
+    base_experiment: Optional[str] = None,
     is_public: bool = False,
-    api_url: str = None,
-    api_key: str = None,
-    org_name: str = None,
+    api_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    org_name: Optional[str] = None,
     disable_cache: bool = False,
-    set_current: bool = None,
+    set_current: Optional[bool] = None,
+    metadata: Optional[Metadata] = None,
 ):
     """
     Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
@@ -512,6 +516,7 @@ def init(
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
     :param disable_cache: Do not use cached login information.
     :param set_current: If true (default), set the currently-active experiment to the newly-created one. Unless the experiment is bound to a context manager, it will not be marked as current. Equivalent to calling `with braintrust.with_current(experiment)`.
+    :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
     :returns: The experiment object.
     """
     login(org_name=org_name, disable_cache=disable_cache, api_key=api_key, api_url=api_url)
@@ -524,6 +529,7 @@ def init(
         base_experiment=base_experiment,
         is_public=is_public,
         set_current=set_current,
+        metadata=metadata,
     )
 
 
@@ -973,6 +979,7 @@ class Experiment(ModelWrapper):
         base_experiment: str = None,
         is_public: bool = False,
         set_current: bool = None,
+        metadata: Optional[Metadata] = None,
     ):
         self.finished = False
         self.set_current = True if set_current is None else set_current
@@ -1003,6 +1010,9 @@ class Experiment(ModelWrapper):
 
         if is_public is not None:
             args["public"] = is_public
+
+        if metadata is not None:
+            args["metadata"] = metadata
 
         while True:
             try:
