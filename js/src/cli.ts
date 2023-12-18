@@ -113,15 +113,12 @@ function evaluateBuildResults(
 async function initLogger(
   projectName: string,
   experimentName?: string,
-  metadata?: Metadata,
+  metadata?: Metadata
 ) {
-  const logger = await initExperiment(
-    projectName,
-    {
-        experiment: experimentName,
-        metadata,
-    },
-  );
+  const logger = await initExperiment(projectName, {
+    experiment: experimentName,
+    metadata,
+  });
   const info = await logger.summarize({ summarizeScores: false });
   console.log(`Experiment ${logger.name} is running at ${info.experimentUrl}`);
   return logger;
@@ -155,7 +152,11 @@ function buildWatchPluginForEvaluator(
         for (const evaluator of Object.values(evalResult)) {
           const logger = opts.noSendLogs
             ? null
-            : await initLogger(evaluator.projectName, evaluator.experimentName, evaluator.metadata);
+            : await initLogger(
+                evaluator.projectName,
+                evaluator.experimentName,
+                evaluator.metadata
+              );
           const evaluatorResult = await runEvaluator(
             logger,
             evaluator,
@@ -325,7 +326,7 @@ async function runOnce(
       );
     } finally {
       if (logger) {
-        await logger.close();
+        await logger.flush();
       }
     }
   });

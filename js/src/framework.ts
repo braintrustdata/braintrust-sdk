@@ -1,14 +1,13 @@
 import chalk from "chalk";
 import {
+  NOOP_SPAN,
   Experiment,
   ExperimentSummary,
   Metadata,
   Span,
   currentSpan,
-  noopSpan,
-  traced,
+  init,
   withCurrent,
-  withExperiment,
 } from "./logger";
 import { Score } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
@@ -105,27 +104,26 @@ export async function Eval<Input, Output, Expected>(
 
   const progressReporter = new BarProgressReporter();
   try {
-    return await withExperiment(
-      name,
-      async (experiment) => {
-        const ret = await runEvaluator(
-          experiment,
-          {
-            evalName,
-            projectName: name,
-            ...(evaluator as Evaluator<unknown, unknown, unknown>),
-          },
-          progressReporter,
-          []
-        );
-        reportEvaluatorResult(name, ret, true);
-        return ret.summary!;
-      },
-      {
-          experiment: evaluator.experimentName,
-          metadata: evaluator.metadata,
-      },
-    );
+    const experiment = await init(name, {
+      experiment: evaluator.experimentName,
+      metadata: evaluator.metadata,
+    });
+    try {
+      const ret = await runEvaluator(
+        experiment,
+        {
+          evalName,
+          projectName: name,
+          ...(evaluator as Evaluator<unknown, unknown, unknown>),
+        },
+        progressReporter,
+        []
+      );
+      reportEvaluatorResult(name, ret, true);
+      return ret.summary!;
+    } finally {
+      experiment.flush();
+    }
   } finally {
     progressReporter.stop();
   }
@@ -220,27 +218,25 @@ export async function runEvaluator(
           const meta = (o: Record<string, unknown>) =>
             (metadata = { ...metadata, ...o });
 
-          await traced(
-            async () => {
-              const outputResult = evaluator.task(datum.input, {
-                meta,
-                span: currentSpan(),
-              });
-              if (outputResult instanceof Promise) {
-                output = await outputResult;
-              } else {
-                output = outputResult;
-              }
-              currentSpan().log({ input: datum.input, output });
-            },
-            { name: "task" }
-          );
+          await currentSpan().traced("task", async () => {
+            const outputResult = evaluator.task(datum.input, {
+              meta,
+              span: currentSpan(),
+            });
+            if (outputResult instanceof Promise) {
+              output = await outputResult;
+            } else {
+              output = outputResult;
+            }
+            currentSpan().log({ input: datum.input, output });
+          });
           currentSpan().log({ output });
 
           const scoringArgs = { ...datum, metadata, output };
           const scoreResults = await Promise.all(
             evaluator.scores.map(async (score, score_idx) => {
-              return traced(
+              return currentSpan().traced(
+                score.name || `scorer_${score_idx}`,
                 async () => {
                   const scoreResult = score(scoringArgs);
                   const result =
@@ -259,7 +255,6 @@ export async function runEvaluator(
                   return result;
                 },
                 {
-                  name: score.name || `scorer_${score_idx}`,
                   event: { input: scoringArgs },
                 }
               );
@@ -307,7 +302,7 @@ export async function runEvaluator(
               expected: datum.expected,
             },
           })
-        : noopSpan;
+        : NOOP_SPAN;
       try {
         return await withCurrent(rootSpan, callback);
       } finally {

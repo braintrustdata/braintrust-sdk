@@ -17,7 +17,7 @@ from braintrust_core.util import SerializableDataClass
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 
-from .logger import Metadata, NOOP_SPAN, Span, current_span, start_span
+from .logger import NOOP_SPAN, Metadata, Span, current_span
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
 
@@ -280,9 +280,12 @@ def Eval(
             loop = None
 
         async def run_to_completion():
-            with init_experiment(evaluator.project_name, evaluator.experiment_name, evaluator.metadata) as experiment:
+            experiment = init_experiment(evaluator.project_name, evaluator.experiment_name, evaluator.metadata)
+            try:
                 results, summary = await run_evaluator(experiment, evaluator, 0, [])
                 report_evaluator_result(evaluator.eval_name, results, summary, True)
+            finally:
+                experiment.flush()
 
         if loop:
             return loop.create_task(run_to_completion())
@@ -430,7 +433,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
         name = scorer._name() if hasattr(scorer, "_name") else scorer.__name__
         if name == "<lambda>":
             name = f"scorer_{scorer_idx}"
-        with start_span(name=name, input=dict(**kwargs)):
+        with current_span().start_span(name=name, input=dict(**kwargs)):
             score = scorer.eval_async if isinstance(scorer, Scorer) else scorer
 
             scorer_args = kwargs

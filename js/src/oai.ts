@@ -1,4 +1,4 @@
-import { Span, startSpan } from "./logger";
+import { Span, currentSpan } from "./logger";
 import { getCurrentUnixTimestamp } from "./util";
 
 interface ChatLike {
@@ -81,8 +81,7 @@ function wrapChatCompletion<
 >(completion: (params: P) => Promise<C>): (params: P) => Promise<any> {
   return async (params: P) => {
     const { messages, ...rest } = params;
-    const span = startSpan({
-      name: "OpenAI Chat Completion",
+    const span = currentSpan().startSpan("OpenAI Chat Completion", {
       event: {
         input: messages,
         metadata: {
