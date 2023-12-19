@@ -1136,7 +1136,7 @@ export function currentLogger(): Logger | undefined {
  * See `Span` for full details.
  */
 export function currentSpan(): Span {
-  return _state.currentSpan.getStore()!;
+  return _state.currentSpan.getStore() ?? noopSpan;
 }
 
 /**
