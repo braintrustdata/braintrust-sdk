@@ -11,6 +11,7 @@ import { ArgumentParser } from "argparse";
 import { v4 as uuidv4 } from "uuid";
 import pluralize from "pluralize";
 import {
+  Metadata,
   login,
   init as initExperiment,
   _internalGetGlobalState,
@@ -26,10 +27,8 @@ import nodeModulesPaths from "./jest/nodeModulesPaths";
 import {
   EvaluatorDef,
   EvaluatorFile,
-  EvalMetadata,
   Filter,
   error,
-  evalMetadataToInitOptions,
   logError,
   parseFilters,
   reportEvaluatorResult,
@@ -113,12 +112,13 @@ function evaluateBuildResults(
 
 async function initLogger(
   projectName: string,
-  metadata: EvalMetadata | undefined
+  experimentName?: string,
+  metadata?: Metadata
 ) {
-  const logger = await initExperiment(
-    projectName,
-    evalMetadataToInitOptions(metadata)
-  );
+  const logger = await initExperiment(projectName, {
+    experiment: experimentName,
+    metadata,
+  });
   const info = await logger.summarize({ summarizeScores: false });
   console.log(`Experiment ${logger.name} is running at ${info.experimentUrl}`);
   return logger;
@@ -152,7 +152,11 @@ function buildWatchPluginForEvaluator(
         for (const evaluator of Object.values(evalResult)) {
           const logger = opts.noSendLogs
             ? null
-            : await initLogger(evaluator.projectName, evaluator.metadata);
+            : await initLogger(
+                evaluator.projectName,
+                evaluator.experimentName,
+                evaluator.metadata
+              );
           const evaluatorResult = await runEvaluator(
             logger,
             evaluator,
@@ -310,6 +314,7 @@ async function runOnce(
       ? null
       : await initLogger(
           evaluator.evaluator.projectName,
+          evaluator.evaluator.experimentName,
           evaluator.evaluator.metadata
         );
     try {

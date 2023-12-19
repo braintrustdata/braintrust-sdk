@@ -2,16 +2,17 @@
 
 import { v4 as uuidv4 } from "uuid";
 
-import iso, { IsoAsyncLocalStorage, CallerLocation } from "./isomorph";
 import {
-  runFinally,
   TRANSACTION_ID_FIELD,
   IS_MERGE_FIELD,
-  GLOBAL_PROJECT,
-  getCurrentUnixTimestamp,
   mergeDicts,
-} from "./util";
-import { mergeRowBatch } from "./merge_row_batch";
+  mergeRowBatch,
+} from "@braintrust/core";
+
+import iso, { IsoAsyncLocalStorage, CallerLocation } from "./isomorph";
+import { runFinally, GLOBAL_PROJECT, getCurrentUnixTimestamp } from "./util";
+
+export type Metadata = Record<string, unknown>;
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -184,7 +185,9 @@ class BraintrustState {
     this.currentExperiment = iso.newAsyncLocalStorage();
     this.currentLogger = iso.newAsyncLocalStorage();
     this.currentSpan = iso.newAsyncLocalStorage();
-    this.currentSpan.enterWith(noopSpan);
+    if (this.currentSpan.enterWith) {
+        this.currentSpan.enterWith(noopSpan);
+    }
 
     this.apiUrl = null;
     this.loginToken = null;
@@ -756,6 +759,7 @@ export type InitOptions = {
   apiKey?: string;
   orgName?: string;
   disableCache?: boolean;
+  metadata?: Metadata;
 };
 
 /**
@@ -778,6 +782,10 @@ export type InitOptions = {
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
  * @param options.disableCache Do not use cached login information.
+ * @param options.metadata (Optional) A dictionary with additional data about the test example, model outputs, or just
+ * about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
+ * `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
+ * JSON-serializable type, but its keys must be strings.
  * @returns The newly created Experiment.
  */
 export async function init(
@@ -795,6 +803,7 @@ export async function init(
     apiKey,
     orgName,
     disableCache,
+    metadata,
   } = options || {};
 
   await login({
@@ -811,6 +820,7 @@ export async function init(
     update,
     baseExperiment,
     isPublic,
+    metadata,
   });
 }
 
@@ -1196,7 +1206,7 @@ export function currentLogger(): Logger | undefined {
  * See `Span` for full details.
  */
 export function currentSpan(): Span {
-  return _state.currentSpan.getStore()!;
+  return _state.currentSpan.getStore() ?? noopSpan;
 }
 
 /**
@@ -1411,6 +1421,7 @@ async function _initExperiment(
     update,
     baseExperiment,
     isPublic,
+    metadata,
   }: {
     experimentName?: string;
     description?: string;
@@ -1418,11 +1429,13 @@ async function _initExperiment(
     update?: boolean;
     baseExperiment?: string;
     isPublic?: boolean;
+    metadata?: Metadata;
   } = {
     experimentName: undefined,
     description: undefined,
     baseExperiment: undefined,
     isPublic: false,
+    metadata: undefined,
   }
 ) {
   const args: Record<string, unknown> = {
@@ -1460,6 +1473,10 @@ async function _initExperiment(
 
   if (isPublic !== undefined) {
     args["public"] = isPublic;
+  }
+
+  if (metadata) {
+    args["metadata"] = metadata;
   }
 
   let response = null;
