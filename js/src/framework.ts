@@ -122,9 +122,9 @@ export async function Eval<Input, Output, Expected>(
         return ret.summary!;
       },
       {
-          experiment: evaluator.experimentName,
-          metadata: evaluator.metadata,
-      },
+        experiment: evaluator.experimentName,
+        metadata: evaluator.metadata,
+      }
     );
   } finally {
     progressReporter.stop();

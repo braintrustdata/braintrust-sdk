@@ -1,5 +1,3 @@
-export const TRANSACTION_ID_FIELD = "_xact_id";
-export const IS_MERGE_FIELD = "_is_merge";
 export const GLOBAL_PROJECT = "Global";
 
 // Given a callback, runs the callback as a "finally" component. If
@@ -18,26 +16,6 @@ export function runFinally<R>(f: () => R, finallyF: () => void): R {
   } finally {
     if (runSyncCleanup) {
       finallyF();
-    }
-  }
-}
-
-// Mutably updates `mergeInto` with the contents of `mergeFrom`, merging objects deeply.
-export function mergeDicts(
-  mergeInto: Record<any, any>,
-  mergeFrom: Record<any, any>
-) {
-  for (const [k, mergeFromV] of Object.entries(mergeFrom)) {
-    const mergeIntoV = mergeInto[k];
-    if (
-      mergeIntoV instanceof Object &&
-      !Array.isArray(mergeIntoV) &&
-      mergeFrom instanceof Object &&
-      !Array.isArray(mergeFromV)
-    ) {
-      mergeDicts(mergeIntoV, mergeFromV);
-    } else {
-      mergeInto[k] = mergeFromV;
     }
   }
 }
