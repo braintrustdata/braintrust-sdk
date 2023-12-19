@@ -98,7 +98,7 @@ export interface Span {
   close(args?: EndSpanArgs): number;
 
   /**
-   * Returns a JSON-serialized version of the span which can be passed around to other processes, across the network, etc. To resume a span from its serialized form, call `braintrust.withResumedSpan` (see docs for more details).
+   * Serializes the span as a token which can be passed around to other processes, across the network, etc. To start a span under a serialized span, call `braintrust.startSpanUnderSerialized` (see docs for more details).
    */
   serialize(): string;
 
@@ -149,7 +149,7 @@ export class NoopSpan implements Span {
   }
 
   public serialize(): string {
-    return JSON.stringify({ span_type: "NoopSpan" });
+    return "";
   }
 
   public async flush(): Promise<void> {}
@@ -186,7 +186,7 @@ class BraintrustState {
     this.currentLogger = iso.newAsyncLocalStorage();
     this.currentSpan = iso.newAsyncLocalStorage();
     if (this.currentSpan.enterWith) {
-        this.currentSpan.enterWith(noopSpan);
+      this.currentSpan.enterWith(noopSpan);
     }
 
     this.apiUrl = null;
@@ -220,23 +220,6 @@ class BraintrustState {
       this._logConn = new HTTPConnection(this.logUrl);
     }
     return this._logConn!;
-  }
-
-  // Note: the format should be the same as in logger.py.
-  public serializeLoginInfo(): string {
-    return JSON.stringify({
-      api_url: this.apiUrl,
-      login_token: this.loginToken,
-      org_id: this.orgId,
-      org_name: this.orgName,
-      log_url: this.logUrl,
-    });
-  }
-
-  static initializeLogConnFromSerialized(serialized: Record<string, unknown>) {
-    const ret = new HTTPConnection(serialized["log_url"] as string);
-    ret.set_token(serialized["login_token"] as string);
-    return ret;
   }
 }
 
@@ -512,7 +495,6 @@ export class Logger {
     const project = await this.lazyProject.lazyInit();
     const { name, ...argsRest } = args ?? {};
     return new SpanImpl({
-      initMethod: "primary",
       bgLogger: this.bgLogger!,
       name: name ?? "root",
       ...argsRest,
@@ -540,6 +522,20 @@ export class Logger {
         await this.flush();
       }
     }
+  }
+
+  /**
+   * Serializes the logger as a token which can be passed around to other processes, across the network, etc. To start a span under a serialized Logger, call `braintrust.subspanFromSerialized` (see docs for more details).
+   */
+  public async serialize(): Promise<string> {
+    const project = await this.lazyProject.lazyInit();
+    return SerializedSpanInfoToString({
+      object_kind: "gl",
+      org_id: _state.orgId!,
+      project_id: project.id,
+      log_id: "g",
+      parent_span_kind: "none",
+    });
   }
 
   /*
@@ -999,64 +995,44 @@ export type ResumeSpanArgs = {
   flushOnExit?: boolean;
 };
 
-/**
- * Resume a span serialized by `Span.serialize`. The state of the span will be identical to what it was when serialized. Similar to `Span.startSpan`, we recommend running spans within a callback (using `withResumedSpan`) to automatically mark them as current and ensure they are terminated. If you wish to resume a span outside a callback, be sure to terminate it with `span.end()`.
- *
- * @param serializedSpan The serialized contents returned by `Span.serialize`.
- * @param args.serializedLoginInfo Optional serialized login information, so the deserialized span can write to the same destination as the original. Mainly for internal use.
- * @param args.flushOnExit If true (the default), the logger used by the span will automatically flush upon process exit. Mainly for internal use.
- * @returns The newly-created Span.
- */
-export function resumeSpan(
-  serializedSpan: string,
-  args?: ResumeSpanArgs
-): Span {
-  const deserialized = JSON.parse(serializedSpan);
-  const spanType = deserialized["span_type"];
-  if (spanType === "NoopSpan") {
-    return noopSpan;
-  } else if (spanType === "SpanImpl") {
-    const logConn = args?.serializedLoginInfo
-      ? BraintrustState.initializeLogConnFromSerialized(
-          JSON.parse(args.serializedLoginInfo)
-        )
-      : _state.logConn();
-    return new SpanImpl({
-      initMethod: "fromSerialized",
-      bgLogger: new BackgroundLogger({
-        logConn,
-        flushOnExit: args?.flushOnExit,
-      }),
-      serializedContents: deserialized["serialized_contents"],
-    });
-  } else {
-    throw new Error(`Unknown span type ${spanType}`);
-  }
-}
+export type CustomLoggerOpts = {
+  logUrl?: string;
+  logToken?: string;
+  flushOnExit?: boolean;
+};
 
 /**
- * Wrapper over `braintrust.resumeSpan` which passes the resumed `Span` to the
- * given callback and ends it afterwards. See `braintrust.resumeSpan` for full
- * details.
+ * Start a span under the serialized object from `*.serialize`. See `Span.startSpan` for documentation of the remaining arguments.
  *
- * @param args.setCurrent If true (the default), the span will be marked as the currently-active span for the duration of the callback. Equivalent to calling `braintrust.withCurrent(span, callback)`.
+ * @param objectToken The serialized token from `*.serialize`.
+ * @param args.logger_opts Optional (mainly for internal use). Control specific properties of the span's logger. If not specified, uses the global connection.
+ * @returns The newly-created Span.
  */
-export function withResumedSpan<R>(
-  serializedSpan: string,
-  callback: (span: Span) => R,
-  args?: SetCurrentArg & ResumeSpanArgs
-): R {
-  const span = resumeSpan(serializedSpan, args);
-  return runFinally(
-    () => {
-      if (args?.setCurrent ?? true) {
-        return withCurrent(span, () => callback(span));
-      } else {
-        return callback(span);
-      }
-    },
-    () => span.end()
-  );
+export function startSpanUnderSerialized(
+  objectToken: string,
+  name: string,
+  args?: StartSpanArgs & CustomLoggerOpts
+): Span {
+  if (objectToken === "") {
+    return noopSpan;
+  }
+  const spanInfo = SerializedSpanInfoFromString(objectToken);
+  const { logUrl, logToken, flushOnExit, ...argsRest } = args ?? {};
+  const logConn = (() => {
+    if (!logUrl || !logToken) {
+      return _state.logConn();
+    } else {
+      const logConn = new HTTPConnection(logUrl);
+      logConn.set_token(logToken);
+      return logConn;
+    }
+  })();
+  return new SpanImpl({
+    bgLogger: new BackgroundLogger({ logConn, flushOnExit: args?.flushOnExit }),
+    name,
+    ...argsRest,
+    serializedParent: spanInfo,
+  });
 }
 
 /**
@@ -1579,7 +1555,6 @@ export class Experiment {
 
     const { name, ...argsRest } = args ?? {};
     return new SpanImpl({
-      initMethod: "primary",
       bgLogger: this.bgLogger,
       name: name ?? "root",
       ...argsRest,
@@ -1674,6 +1649,18 @@ export class Experiment {
   }
 
   /**
+   * Serializes the experiment as a token which can be passed around to other processes, across the network, etc. To start a span under a serialized experiment, call `braintrust.startSpanUnderSerialized` (see docs for more details).
+   */
+  public serialize(): string {
+    return SerializedSpanInfoToString({
+      object_kind: "e",
+      project_id: this.project.id,
+      experiment_id: this.id,
+      parent_span_kind: "none",
+    });
+  }
+
+  /**
    * Finish the experiment and return its id. After calling close, you may not invoke any further methods on the experiment object.
    *
    * Will be invoked automatically if the experiment is wrapped in a callback passed to `braintrust.withExperiment`.
@@ -1696,35 +1683,99 @@ export class Experiment {
   }
 }
 
-// Keep this in sync with the members created by _initPrimary. It must be the
-// same as the serialization format in logger.py.
-const _SPAN_IMPL_SERIALIZATION_MEMBER_LIST = [
-  "_finished",
-  "_logged_end_time",
-  "_internal_data",
-  "_object_info",
-  "_is_merge",
-];
+// Format and utils for serializing objects to create spans later. Keep this in
+// sync with the span serialization implementation in logger.py.
+type SpanObjectIds =
+  | { object_kind: "e"; project_id: string; experiment_id: string }
+  | { object_kind: "gl"; org_id: string; project_id: string; log_id: "g" };
 
-type SpanImplInitPrimaryArgs = {
-  initMethod: "primary";
-  bgLogger: BackgroundLogger;
-  name: string;
-  spanAttributes?: Record<any, any>;
-  startTime?: number;
-  setCurrent?: boolean;
-  event?: ExperimentLogPartialArgs & Partial<IdField>;
-} & (
-  | { rootExperiment: Experiment }
-  | { rootProject: RegisteredProject }
-  | { parentSpan: SpanImpl }
-);
+type SpanParentSpanIds =
+  | { parent_span_kind: "sub_span"; span_id: string; root_span_id: string }
+  | { parent_span_kind: "root_span"; span_id: string; root_span_id?: undefined }
+  | { parent_span_kind: "none"; span_id?: undefined; root_span_id?: undefined };
 
-type SpanImplInitFromSerializedArgs = {
-  initMethod: "fromSerialized";
-  bgLogger: BackgroundLogger;
-  serializedContents: Record<string, unknown>;
-};
+type SerializedSpanInfo = SpanObjectIds & SpanParentSpanIds;
+
+function SerializedSpanInfoToString(info: SerializedSpanInfo): string {
+  const objectKindIds = (() => {
+    if (info.object_kind === "e") {
+      return [info.project_id, info.experiment_id];
+    } else if (info.object_kind === "gl") {
+      return [info.org_id, info.project_id];
+    } else {
+      throw new Error(`Unknown kind ${(info as any).object_kind}`);
+    }
+  })();
+  const parentSpanIds = (() => {
+    if (info.parent_span_kind === "sub_span") {
+      return [info.span_id, info.root_span_id];
+    } else if (info.parent_span_kind === "root_span") {
+      return [info.span_id, ""];
+    } else if (info.parent_span_kind === "none") {
+      return ["", ""];
+    } else {
+      throw new Error(
+        `Unknown parent_span_kind ${(info as any).parent_span_kind}`
+      );
+    }
+  })();
+  const ids = [info.object_kind, ...objectKindIds, ...parentSpanIds];
+  // Since all of these IDs are auto-generated as UUIDs, we can expect them to
+  // not contain any colons.
+  for (const id of ids) {
+    if (id.includes(":")) {
+      throw new Error(`Unexpected: id ${id} should not have a ':'`);
+    }
+  }
+  return ids.join(":");
+}
+
+function SerializedSpanInfoFromString(s: string): SerializedSpanInfo {
+  const ids = s.split(":");
+  if (ids.length !== 5) {
+    throw new Error(
+      `Expected serialized info ${s} to have 5 colon-separated components`
+    );
+  }
+
+  const objectKindInfo = (() => {
+    if (ids[0] === "e") {
+      return {
+        object_kind: ids[0],
+        project_id: ids[1],
+        experiment_id: ids[2],
+      } as const;
+    } else if (ids[0] === "gl") {
+      return {
+        object_kind: ids[0],
+        org_id: ids[1],
+        project_id: ids[2],
+        log_id: "g",
+      } as const;
+    } else {
+      throw new Error(`Unknown serialized object_kind ${ids[0]}`);
+    }
+  })();
+  const parentSpanInfo = (() => {
+    if (ids[4] === "") {
+      if (ids[3] === "") {
+        return { parent_span_kind: "none" } as const;
+      } else {
+        return { parent_span_kind: "root_span", span_id: ids[3] } as const;
+      }
+    } else {
+      return {
+        parent_span_kind: "sub_span",
+        span_id: ids[3],
+        root_span_id: ids[4],
+      } as const;
+    }
+  })();
+  return {
+    ...objectKindInfo,
+    ...parentSpanInfo,
+  };
+}
 
 /**
  * Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
@@ -1732,61 +1783,40 @@ type SpanImplInitFromSerializedArgs = {
  * We suggest using one of the various `startSpan` methods, instead of creating Spans directly. See `Span.startSpan` for full details.
  */
 export class SpanImpl implements Span {
-  // Since we permit constructing from an arbitrary JSON object, we cannot
-  // statically verify that all members are initialized. Thus we mark all
-  // members not-undefined with an exclamation point and dynamically verify they
-  // are set.
+  private bgLogger: BackgroundLogger;
 
-  private bgLogger!: BackgroundLogger;
-
-  private _finished!: boolean;
+  private _finished: boolean;
   // `_internal_data` contains fields that are not part of the "user-sanitized"
-  // set of fields which we want to log in just one of the span rows.
-  private _internal_data!: Partial<ExperimentEvent>;
-  private _is_merge!: boolean;
-  private _logged_end_time!: number | null;
+  // set of fields which we want to log in just one of the span rows. It is
+  // cleared after every log.
+  private _internal_data: Partial<ExperimentEvent>;
+  private _is_merge: boolean;
+  private _logged_end_time: number | null;
 
   // `_object_info` contains fields that are logged to every span row.
-  private _object_info!: {
+  private _object_info: {
     id: string;
     span_id: string;
     root_span_id: string;
-  } & (
-    | {
-        project_id: string;
-        experiment_id: string;
-      }
-    | {
-        org_id: string;
-        project_id: string;
-        log_id: "g";
-      }
-  );
+  } & SpanObjectIds;
 
   public kind: "span" = "span";
 
-  constructor(args: SpanImplInitPrimaryArgs | SpanImplInitFromSerializedArgs) {
-    if (args.initMethod === "primary") {
-      this._initPrimary(args);
-    } else if (args.initMethod === "fromSerialized") {
-      this._initFromSerialized(args);
-    } else {
-      throw new Error(`Unknown initMethod ${(args as any).initMethod}`);
-    }
-
-    if (!("bgLogger" in this)) {
-      throw new Error("Did not initialize bgLogger");
-    }
-    for (const member of _SPAN_IMPL_SERIALIZATION_MEMBER_LIST) {
-      if (!(member in this)) {
-        throw new Error(`Did not initialize member ${member}`);
-      }
-    }
-  }
-
-  private _initPrimary(args: SpanImplInitPrimaryArgs) {
-    // rootExperiment should only be specified for a root span. parentSpan
-    // should only be specified for non-root spans.
+  constructor(
+    args: {
+      bgLogger: BackgroundLogger;
+      name: string;
+      spanAttributes?: Record<any, any>;
+      startTime?: number;
+      setCurrent?: boolean;
+      event?: ExperimentLogPartialArgs & Partial<IdField>;
+    } & (
+      | { rootExperiment: Experiment }
+      | { rootProject: RegisteredProject }
+      | { parentSpan: SpanImpl }
+      | { serializedParent: SerializedSpanInfo }
+    )
+  ) {
     this._finished = false;
     this._logged_end_time = null;
 
@@ -1803,20 +1833,24 @@ export class SpanImpl implements Span {
     };
 
     const id = args.event?.id ?? uuidv4();
-    const span_id = uuidv4();
+    const makeSpanId = () => uuidv4();
     if ("rootExperiment" in args) {
+      const span_id = makeSpanId();
       this._object_info = {
         id,
         span_id,
         root_span_id: span_id,
+        object_kind: "e",
         project_id: args.rootExperiment.project.id,
         experiment_id: args.rootExperiment.id,
       };
     } else if ("rootProject" in args) {
+      const span_id = makeSpanId();
       this._object_info = {
         id,
         span_id,
         root_span_id: span_id,
+        object_kind: "gl",
         org_id: _state.orgId!,
         project_id: args.rootProject.id,
         log_id: "g",
@@ -1825,11 +1859,39 @@ export class SpanImpl implements Span {
       this._object_info = {
         ...args.parentSpan._object_info,
         id,
-        span_id,
+        span_id: makeSpanId(),
       };
       this._internal_data.span_parents = [args.parentSpan.span_id];
+    } else if ("serializedParent" in args) {
+      const span_id = makeSpanId();
+      const {
+        parent_span_kind,
+        span_id: parentSpanId,
+        root_span_id: rootSpanRaw,
+        ...objectIds
+      } = args.serializedParent;
+      const root_span_id = (() => {
+        if (parent_span_kind === "sub_span") {
+          return rootSpanRaw;
+        } else if (parent_span_kind === "root_span") {
+          return parentSpanId;
+        } else if (parent_span_kind === "none") {
+          return span_id;
+        } else {
+          throw new Error(`Invalid parent_span_kind ${parent_span_kind}`);
+        }
+      })();
+      this._object_info = {
+        id,
+        span_id,
+        root_span_id,
+        ...objectIds,
+      };
+      if (parentSpanId) {
+        this._internal_data.span_parents = [parentSpanId];
+      }
     } else {
-      throw new Error("Must provide either 'rootExperiment' or 'parentSpan'");
+      throw new Error("Must provide parent info");
     }
 
     // The first log is a replacement, but subsequent logs to the same span
@@ -1838,14 +1900,6 @@ export class SpanImpl implements Span {
     const { id: _id, ...eventRest } = args.event ?? {};
     this.log(eventRest);
     this._is_merge = true;
-  }
-
-  private _initFromSerialized(args: SpanImplInitFromSerializedArgs) {
-    this.bgLogger = args.bgLogger;
-
-    for (const [key, val] of Object.entries(args.serializedContents)) {
-      (this as any)[key] = val;
-    }
   }
 
   public get id(): string {
@@ -1885,7 +1939,6 @@ export class SpanImpl implements Span {
     this.checkNotFinished();
 
     return new SpanImpl({
-      initMethod: "primary",
       bgLogger: this.bgLogger,
       name,
       ...args,
@@ -1933,13 +1986,18 @@ export class SpanImpl implements Span {
   }
 
   public serialize(): string {
-    const serializedContents: Record<string, unknown> = {};
-    for (const key of _SPAN_IMPL_SERIALIZATION_MEMBER_LIST) {
-      serializedContents[key] = (this as any)[key];
-    }
-    return JSON.stringify({
-      span_type: "SpanImpl",
-      serialized_contents: serializedContents,
+    const { id, span_id, root_span_id, ...objectIds } = this._object_info;
+    const parentSpanInfo =
+      this.span_id === this.root_span_id
+        ? ({ parent_span_kind: "root_span", span_id: this.span_id } as const)
+        : ({
+            parent_span_kind: "sub_span",
+            span_id: this.span_id,
+            root_span_id: this.root_span_id,
+          } as const);
+    return SerializedSpanInfoToString({
+      ...parentSpanInfo,
+      ...objectIds,
     });
   }
 
