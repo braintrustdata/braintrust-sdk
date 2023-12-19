@@ -17,7 +17,7 @@ from braintrust_core.util import SerializableDataClass
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 
-from .logger import Metadata, NOOP_SPAN, Span, current_span, start_span
+from .logger import NOOP_SPAN, Metadata, Span, current_span, start_span
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
 

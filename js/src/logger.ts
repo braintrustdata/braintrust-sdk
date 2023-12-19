@@ -2,16 +2,15 @@
 
 import { v4 as uuidv4 } from "uuid";
 
-import iso, { IsoAsyncLocalStorage, CallerLocation } from "./isomorph";
 import {
-  runFinally,
   TRANSACTION_ID_FIELD,
   IS_MERGE_FIELD,
-  GLOBAL_PROJECT,
-  getCurrentUnixTimestamp,
   mergeDicts,
-} from "./util";
-import { mergeRowBatch } from "./merge_row_batch";
+  mergeRowBatch,
+} from "@braintrust/core";
+
+import iso, { IsoAsyncLocalStorage, CallerLocation } from "./isomorph";
+import { runFinally, GLOBAL_PROJECT, getCurrentUnixTimestamp } from "./util";
 
 export type Metadata = Record<string, unknown>;
 
