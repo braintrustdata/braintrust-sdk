@@ -28,6 +28,7 @@ from braintrust_core.db_fields import (
 from braintrust_core.merge_row_batch import merge_row_batch
 from braintrust_core.util import (
     SerializableDataClass,
+    coalesce,
     merge_dicts,
 )
 from requests.adapters import HTTPAdapter
@@ -77,22 +78,22 @@ class Span(ABC):
         """
 
     @abstractmethod
-    def start_span(self, name, span_attributes={}, start_time=None, set_current=None, **event):
+    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, **event):
         """Create a new span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `Span.log` will be merged into one logical row.
 
-        We recommend running spans within context managers (`with start_span(...) as span`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a callback, be sure to terminate it with `span.end()`.
+        We recommend running spans within context managers (`with start_span(...) as span`) to automatically mark them as current and ensure they are ended. Only spans run within a context manager will be marked current, so they can be accessed using `braintrust.current_span()`. If you wish to start a span outside a context manager, be sure to end it with `span.end()`.
 
-        :param name: The name of the span.
+        :param name: Optional name of the span. If not provided, a name will be inferred from the call stack.
         :param span_attributes: Optional additional attributes to attach to the span, such as a type name.
         :param start_time: Optional start time of the span, as a timestamp in seconds.
-        :param set_current: If true (the default), the span will be marked as the currently-active span for the duration of the context manager. Unless the span is bound to a context manager, it will not be marked as current. Equivalent to calling `with braintrust.with_current(span)`.
+        :param set_current: If true (the default), the span will be marked as the currently-active span for the duration of the context manager.
         :param **event: Data to be logged. See `Experiment.log` for full details.
         :returns: The newly-created `Span`
         """
 
     @abstractmethod
     def end(self, end_time=None) -> float:
-        """Terminate the span. Returns the end time logged to the row's metrics. After calling end, you may not invoke any further methods on the span object, except for the property accessors.
+        """Log an end time to the span (defaults to the current time). Returns the logged time.
 
         Will be invoked automatically if the span is bound to a context manager.
 
@@ -138,7 +139,7 @@ class _NoopSpan(Span):
     def log(self, **event):
         pass
 
-    def start_span(self, name, span_attributes={}, start_time=None, set_current=None, **event):
+    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, **event):
         return self
 
     def end(self, end_time=None):
@@ -163,8 +164,8 @@ NOOP_SPAN = _NoopSpan()
 class BraintrustState:
     def __init__(self):
         self.id = str(uuid.uuid4())
-        self.current_experiment = contextvars.ContextVar("braintrust_current_experiment", default=None)
-        self.current_logger = contextvars.ContextVar("braintrust_current_logger", default=None)
+        self.current_experiment = None
+        self.current_logger = None
         self.current_span = contextvars.ContextVar("braintrust_current_span", default=NOOP_SPAN)
 
         self.api_url = None
@@ -208,37 +209,6 @@ _logger = logging.getLogger("braintrust")
 
 def _internal_get_global_state():
     return _state
-
-
-class _UnterminatedObjectsHandler:
-    """A utility to keep track of objects that should be cleaned up before program exit. At the end of the program, the _UnterminatedObjectsHandler will print out all un-terminated objects as a warning."""
-
-    def __init__(self):
-        self._unterminated_objects = ResourceManager({})
-        atexit.register(self._warn_unterminated)
-
-    def add_unterminated(self, obj, created_location=None):
-        with self._unterminated_objects.get() as unterminated_objects:
-            unterminated_objects[obj] = created_location
-
-    def remove_unterminated(self, obj):
-        with self._unterminated_objects.get() as unterminated_objects:
-            del unterminated_objects[obj]
-
-    def _warn_unterminated(self):
-        with self._unterminated_objects.get() as unterminated_objects:
-            if not unterminated_objects:
-                return
-            warning_message = "WARNING: Did not close the following braintrust objects. We recommend running `.close` on the listed objects, or binding them to a context manager so they are closed automatically:"
-            for obj, created_location in unterminated_objects.items():
-                msg = f"\n\tObject of type {type(obj)}"
-                if created_location:
-                    msg += f" created at {created_location}"
-                warning_message += msg
-            print(warning_message, file=sys.stderr)
-
-
-_unterminated_objects = _UnterminatedObjectsHandler()
 
 
 class HTTPConnection:
@@ -351,7 +321,7 @@ DEFAULT_BATCH_SIZE = 100
 NUM_RETRIES = 3
 
 
-class _LogThread:
+class _BackgroundLogger:
     def __init__(self, name=None):
         self.flush_lock = threading.RLock()
         self.start_thread_lock = threading.RLock()
@@ -451,11 +421,13 @@ class _LogThread:
                     break
 
                 try:
-                    post_promises.append(HTTP_REQUEST_THREAD_POOL.submit(_LogThread._submit_logs_request, items, conn))
+                    post_promises.append(
+                        HTTP_REQUEST_THREAD_POOL.submit(_BackgroundLogger._submit_logs_request, items, conn)
+                    )
                 except RuntimeError:
                     # If the thread pool has shut down, e.g. because the process is terminating, run the request the
                     # old fashioned way.
-                    _LogThread._submit_logs_request(items, conn)
+                    _BackgroundLogger._submit_logs_request(items, conn)
 
             concurrent.futures.wait(post_promises)
 
@@ -506,14 +478,10 @@ def init(
     api_url: Optional[str] = None,
     api_key: Optional[str] = None,
     org_name: Optional[str] = None,
-    disable_cache: bool = False,
-    set_current: Optional[bool] = None,
     metadata: Optional[Metadata] = None,
 ):
     """
     Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
-
-    Remember to close your experiment when it is finished by calling `Experiment.close`. We recommend binding the experiment to a context manager (`with braintrust.init(...) as experiment`) to automatically mark it as current and ensure it is terminated.
 
     :param project: The name of the project to create the experiment in.
     :param experiment: The name of the experiment to create. If not specified, a name will be generated automatically.
@@ -528,13 +496,11 @@ def init(
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
-    :param disable_cache: Do not use cached login information.
-    :param set_current: If true (default), set the currently-active experiment to the newly-created one. Unless the experiment is bound to a context manager, it will not be marked as current. Equivalent to calling `with braintrust.with_current(experiment)`.
     :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
     :returns: The experiment object.
     """
-    login(org_name=org_name, disable_cache=disable_cache, api_key=api_key, api_url=api_url)
-    return Experiment(
+    login(org_name=org_name, api_key=api_key, api_url=api_url)
+    ret = Experiment(
         project_name=project,
         experiment_name=experiment,
         description=description,
@@ -542,9 +508,10 @@ def init(
         update=update,
         base_experiment=base_experiment,
         is_public=is_public,
-        set_current=set_current,
         metadata=metadata,
     )
+    _state.current_experiment = ret
+    return ret
 
 
 def init_dataset(
@@ -555,12 +522,9 @@ def init_dataset(
     api_url: str = None,
     api_key: str = None,
     org_name: str = None,
-    disable_cache: bool = False,
 ):
     """
     Create a new dataset in a specified project. If the project does not exist, it will be created.
-
-    Remember to close your dataset when it is finished by calling `Dataset.close`. We recommend wrapping the dataset within a context manager (`with braintrust.init_dataset(...) as dataset`) to ensure it is terminated.
 
     :param project: The name of the project to create the dataset in.
     :param name: The name of the dataset to create. If not specified, a name will be generated automatically.
@@ -570,10 +534,9 @@ def init_dataset(
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
-    :param disable_cache: Do not use cached login information.
     :returns: The dataset object.
     """
-    login(org_name=org_name, disable_cache=disable_cache, api_key=api_key, api_url=api_url)
+    login(org_name=org_name, api_key=api_key, api_url=api_url)
 
     return Dataset(
         project_name=project,
@@ -587,11 +550,9 @@ def init_logger(
     project: str = None,
     project_id: str = None,
     async_flush: bool = True,
-    set_current: bool = True,
     api_url: str = None,
     api_key: str = None,
     org_name: str = None,
-    disable_cache: bool = False,
 ):
     """
     Create a new logger in a specified project. If the project does not exist, it will be created.
@@ -599,30 +560,29 @@ def init_logger(
     :param project: The name of the project to log into. If unspecified, will default to the Global project.
     :param project_id: The id of the project to log into. This takes precedence over project if specified.
     :param async_flush: If true (the default), log events will be batched and sent asynchronously in a background thread. If false, log events will be sent synchronously. Set to false in serverless environments.
-    :param set_current: If true (default), set the currently-active logger to the newly-created one. Unless the logger is bound to a context manager, it will not be marked as current. Equivalent to calling `with braintrust.with_current(logger)`.
     :param api_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
-    :param disable_cache: Do not use cached login information.
     :returns: The newly created Logger.
     """
 
     def lazy_login():
-        login(org_name=org_name, disable_cache=disable_cache, api_key=api_key, api_url=api_url)
+        login(org_name=org_name, api_key=api_key, api_url=api_url)
 
-    return Logger(
+    ret = Logger(
         lazy_login=lazy_login,
         project=Project(name=project, id=project_id),
         async_flush=async_flush,
-        set_current=set_current,
     )
+    _state.current_logger = ret
+    return ret
 
 
 login_lock = threading.RLock()
 
 
-def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_login=False):
+def login(api_url=None, api_key=None, org_name=None, force_login=False):
     """
     Log into Braintrust. This will prompt you for your API token, which you can find at
     https://www.braintrustdata.com/app/token. This method is called automatically by `init()`.
@@ -631,7 +591,6 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
-    :param disable_cache: Do not use cached login information.
     :param force_login: Login again, even if you have already logged in (by default, this function will exit quickly if you have already logged in)
     """
 
@@ -697,6 +656,18 @@ def login(api_url=None, api_key=None, org_name=None, disable_cache=False, force_
         _state.logged_in = True
 
 
+def current_experiment() -> Optional["Experiment"]:
+    """Returns the currently-active experiment (set by `braintrust.init(...)`). Returns None if no current experiment has been set."""
+
+    return _state.current_experiment
+
+
+def current_logger() -> Optional["Logger"]:
+    """Returns the currently-active logger (set by `braintrust.init_logger(...)`). Returns None if no current logger has been set."""
+
+    return _state.current_logger
+
+
 def log(**event):
     """
     Log a single event to the current experiment. The event will be batched and uploaded behind the scenes.
@@ -704,13 +675,13 @@ def log(**event):
     :param **event: Data to be logged. See `Experiment.log` for full details.
     :returns: The `id` of the logged event.
     """
-
-    current_experiment = _state.current_experiment.get()
-
-    if not current_experiment:
+    print(
+        "braintrust.log is deprecated and will be removed in a future version of braintrust. Use `experiment.log` instead."
+    )
+    e = current_experiment()
+    if not e:
         raise Exception("Not initialized. Please call init() first")
-
-    return current_experiment.log(**event)
+    return e.log(**event)
 
 
 def summarize(summarize_scores=True, comparison_experiment_id=None):
@@ -721,31 +692,20 @@ def summarize(summarize_scores=True, comparison_experiment_id=None):
     :param comparison_experiment_id: The experiment to compare against. If None, the most recent experiment on the comparison_commit will be used.
     :returns: `ExperimentSummary`
     """
-    current_experiment = _state.current_experiment.get()
-
-    if not current_experiment:
+    print(
+        "braintrust.summarize is deprecated and will be removed in a future version of braintrust. Use `experiment.summarize` instead."
+    )
+    e = _state.current_experiment.get()
+    if not e:
         raise Exception("Not initialized. Please call init() first")
-
-    return current_experiment.summarize(
+    return e.summarize(
         summarize_scores=summarize_scores,
         comparison_experiment_id=comparison_experiment_id,
     )
 
 
-def current_experiment() -> Optional["Experiment"]:
-    """Returns the currently-active experiment (set by `with braintrust.init(...)` or `with braintrust.with_current(experiment)`). Returns undefined if no current experiment has been set."""
-
-    return _state.current_experiment.get()
-
-
-def current_logger() -> Optional["Logger"]:
-    """Returns the currently-active logger (set by `with braintrust.init_logger(...)` or `with braintrust.with_current(logger)`). Returns undefined if no current experiment has been set."""
-
-    return _state.current_logger.get()
-
-
 def current_span() -> Span:
-    """Return the currently-active span for logging (set by `with *.start_span` or `braintrust.with_current`). If there is no active span, returns a no-op span object, which supports the same interface as spans but does no logging.
+    """Return the currently-active span for logging (set by running a span under a context manager). If there is no active span, returns a no-op span object, which supports the same interface as spans but does no logging.
 
     See `Span` for full details.
     """
@@ -755,97 +715,47 @@ def current_span() -> Span:
 
 def get_span_parent_object() -> Union["Logger", "Experiment", Span]:
     """Mainly for internal use. Return the parent object for starting a span in a global context."""
+
     parent_span = current_span()
     if parent_span != NOOP_SPAN:
         return parent_span
+
     experiment = current_experiment()
     if experiment:
         return experiment
+
     logger = current_logger()
     if logger:
         return logger
+
     return NOOP_SPAN
 
 
-def start_span(name=None, span_attributes={}, start_time=None, set_current=None, **event) -> Span:
-    """Toplevel function for starting a span. It checks the following (in precedence order):
-    * Currently-active span
-    * Currently-active experiment
-    * Currently-active logger
-
-    and creates a span in the first one that is active. If none of these are active, it returns a no-op span object.
-
-    Unless a name is explicitly provided, the name of the span will be the name of the calling function, or "root" if no meaningful name can be determined.
-
-    We recommend running spans bound to a context manager (`with start_span`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a callback, be sure to terminate it with `span.end()`.
-
-    See `Span.startSpan` for full details.
-    """
-
-    name = name or get_caller_location()["caller_functionname"] or "root"
-    kwargs = dict(name=name, span_attributes=span_attributes, start_time=start_time, set_current=set_current, **event)
-    return get_span_parent_object().start_span(**kwargs)
-
-
-def start_span_under_serialized(
-    object_token, name, span_attributes={}, start_time=None, set_current=None, **event
-) -> Span:
-    """Start a span under the serialized object from `*.serialize`. See `Span.start_span` for documentation of the remaining arguments.
-
-    :param object_token: The serialized token from `*.serialize`.
-    :returns: The newly-created Span.
-    """
-
-    if object_token == "":
-        return NOOP_SPAN
-    span_info = _SerializedSpanInfo_from_string(object_token)
-    return SpanImpl(
-        bg_logger=_LogThread(name=name),
-        name=name,
-        span_attributes=span_attributes,
-        start_time=start_time,
-        set_current=set_current,
-        event=event,
-        serialized_parent=span_info,
-    )
-
-
-class _CurrentObjectWrapper:
-    """Context manager wrapper for marking an experiment as current."""
-
-    def __init__(self, object_cvar, object):
-        self.object_cvar = object_cvar
-        self.object = object
-
-    def __enter__(self):
-        self.context_token = self.object_cvar.set(self.object)
-
-    def __exit__(self, type, value, callback):
-        del type, value, callback
-
-        self.object_cvar.reset(self.context_token)
-
-
-def with_current(object: Union["Experiment", "Logger", "SpanImpl", _NoopSpan]):
-    """Set the given experiment or span as current within the bound context manager (`with braintrust.with_current(object)`) and any asynchronous operations created within the block. The current experiment can be accessed with `braintrust.current_experiment`, and the current span with `braintrust.current_span`.
-
-    :param object: The experiment or span to be marked as current.
-    """
-    if type(object) == Experiment:
-        return _CurrentObjectWrapper(_state.current_experiment, object)
-    elif type(object) == Logger:
-        return _CurrentObjectWrapper(_state.current_logger, object)
-    elif type(object) == SpanImpl or type(object) == _NoopSpan:
-        return _CurrentObjectWrapper(_state.current_span, object)
-    else:
-        raise RuntimeError(f"Invalid object of type {type(object)}")
+def _try_log_input_output(span, f_args, f_kwargs, output):
+    log_kwargs = dict(input=dict(args=f_args, kwargs=f_kwargs), output=output)
+    try:
+        span.log(**log_kwargs)
+    except Exception:
+        # Don't complain if the contents are not JSON-serializable.
+        pass
 
 
 def traced(*span_args, **span_kwargs):
-    """Decorator to trace the wrapped function as a span. Can either be applied bare (`@traced`) or by providing arguments (`@traced(*span_args, **span_kwargs)`), which will be forwarded to the created span. See `braintrust.start_span` for details on how the span is created, and `Span.start_span` for full details on the span arguments.
+    """Decorator to trace the wrapped function. Can either be applied bare (`@traced`) or by providing arguments (`@traced(*span_args, **span_kwargs)`), which will be forwarded to the created span. See `Span.start_span` for full details on the span arguments.
+
+    It checks the following (in precedence order):
+        * Currently-active span
+        * Currently-active experiment
+        * Currently-active logger
+
+    and creates a span in the first one that is active. If none of these are active, it returns a no-op span object.
+
+    The decorator will automatically log the input and output of the wrapped function to the corresponding fields of the created span. Pass the kwarg `notrace_io=True` to the decorator to prevent this.
 
     Unless a name is explicitly provided in `span_args` or `span_kwargs`, the name of the span will be the name of the decorated function.
     """
+
+    trace_io = not span_kwargs.pop("notrace_io", False)
 
     def decorator(span_args, span_kwargs, f):
         # We assume 'name' is the first positional argument in `start_span`.
@@ -854,13 +764,19 @@ def traced(*span_args, **span_kwargs):
 
         @wraps(f)
         def wrapper_sync(*f_args, **f_kwargs):
-            with start_span(*span_args, **span_kwargs):
-                return f(*f_args, **f_kwargs)
+            with start_span(*span_args, **span_kwargs) as span:
+                ret = f(*f_args, **f_kwargs)
+                if trace_io:
+                    _try_log_input_output(span, f_args, f_kwargs, ret)
+                return ret
 
         @wraps(f)
         async def wrapper_async(*f_args, **f_kwargs):
             with start_span(*span_args, **span_kwargs):
-                return await f(*f_args, **f_kwargs)
+                ret = await f(*f_args, **f_kwargs)
+                if trace_io:
+                    _try_log_input_output(span, f_args, f_kwargs, ret)
+                return ret
 
         if inspect.iscoroutinefunction(f):
             return wrapper_async
@@ -873,6 +789,47 @@ def traced(*span_args, **span_kwargs):
         return decorator(span_args[1:], span_kwargs, span_args[0])
     else:
         return partial(decorator, span_args, span_kwargs)
+
+
+def start_span(name=None, span_attributes={}, start_time=None, set_current=None, **event) -> Span:
+    """Lower-level alternative to `@traced` for starting a span at the toplevel. It creates a span under the first active object (using the same precedence order as `@traced`) or returns a no-op span object.
+
+    We recommend running spans bound to a context manager (`with start_span`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a context manager, be sure to terminate it with `span.end()`.
+
+    See `Span.start_span` for full details.
+    """
+
+    parent_object = get_span_parent_object()
+    if not isinstance(parent_object, Span):
+        name = coalesce(name, "root")
+    return parent_object.start_span(
+        name=name, span_attributes=span_attributes, start_time=start_time, set_current=set_current, **event
+    )
+
+
+def start_span_under_serialized(
+    object_token, name, span_attributes={}, start_time=None, set_current=None, **event
+) -> Span:
+    """Start a span under the serialized object from `*.serialize`. See `Span.start_span` for full details.
+
+    :param object_token: The serialized token from `*.serialize`.
+    :returns: The newly-created Span.
+    """
+
+    if object_token == "":
+        return NOOP_SPAN
+    span_info = _SerializedSpanInfo_from_string(object_token)
+    if span_info.span_parent_ids == None:
+        name = coalesce(name, "root")
+    return SpanImpl(
+        bg_logger=_LogThread(name=name),
+        name=name,
+        span_attributes=span_attributes,
+        start_time=start_time,
+        set_current=set_current,
+        event=event,
+        serialized_parent=span_info,
+    )
 
 
 def _check_org_info(org_info, org_name):
@@ -1017,12 +974,8 @@ class Experiment(ModelWrapper):
         update: bool = False,
         base_experiment: str = None,
         is_public: bool = False,
-        set_current: bool = None,
         metadata: Optional[Metadata] = None,
     ):
-        self.finished = False
-        self.set_current = True if set_current is None else set_current
-
         args = {"project_name": project_name, "org_id": _state.org_id}
 
         if experiment_name is not None:
@@ -1067,10 +1020,8 @@ class Experiment(ModelWrapper):
         self.project = ModelWrapper(response["project"])
         super().__init__(response["experiment"])
         self.dataset = dataset
-        self.logger = _LogThread(name=experiment_name)
+        self.bg_logger = _BackgroundLogger(name=experiment_name)
         self.last_start_time = time.time()
-
-        _unterminated_objects.add_unterminated(self, get_caller_location())
 
     def log(
         self,
@@ -1098,8 +1049,6 @@ class Experiment(ModelWrapper):
         :param inputs: (Deprecated) the same as `input` (will be removed in a future version).
         :returns: The `id` of the logged event.
         """
-        self._check_not_finished()
-
         event = _validate_and_sanitize_experiment_log_full_args(
             dict(
                 input=input,
@@ -1119,14 +1068,12 @@ class Experiment(ModelWrapper):
         return span.id
 
     def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, **event):
-        """Create a new toplevel span. The name parameter is optional and defaults to "root".
+        """Create a new toplevel span underneath the experiment. The name defaults to "root".
 
         See `Span.start_span` for full details
         """
-        self._check_not_finished()
-
         return SpanImpl(
-            bg_logger=self.logger,
+            bg_logger=self.bg_logger,
             name=name,
             span_attributes=span_attributes,
             start_time=start_time,
@@ -1143,11 +1090,9 @@ class Experiment(ModelWrapper):
         :param comparison_experiment_id: The experiment to compare against. If None, the most recent experiment on the origin's main branch will be used.
         :returns: `ExperimentSummary`
         """
-        self._check_not_finished()
-
         # Flush our events to the API, and to the data warehouse, to ensure that the link we print
         # includes the new experiment.
-        self.logger.flush()
+        self.bg_logger.flush()
 
         project_url = (
             f"{_state.api_url}/app/{encode_uri_component(_state.org_name)}/p/{encode_uri_component(self.project.name)}"
@@ -1209,36 +1154,23 @@ class Experiment(ModelWrapper):
         )
 
     def close(self):
-        """Finish the experiment and return its id. After calling close, you may not invoke any further methods on the experiment object.
+        """This function is deprecated. You can simply remove it from your code."""
 
-        Will be invoked automatically if the experiment is bound to a context manager.
-
-        :returns: The experiment id.
-        """
-        self._check_not_finished()
-
-        self.logger.flush()
-
-        self.finished = True
-        _unterminated_objects.remove_unterminated(self)
+        print(
+            "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed"
+        )
         return self.id
 
-    def _check_not_finished(self):
-        if self.finished:
-            raise RuntimeError("Cannot invoke method on finished experiment")
+    def flush(self):
+        """Flush any pending rows to the server."""
+
+        self.bg_logger.flush()
 
     def __enter__(self):
-        if self.set_current:
-            self._context_token = _state.current_experiment.set(self)
         return self
 
     def __exit__(self, type, value, callback):
         del type, value, callback
-
-        if self.set_current:
-            _state.current_experiment.reset(self._context_token)
-
-        self.close()
 
 
 # Format and utils for serializing objects to create spans later. Keep this in
@@ -1346,7 +1278,7 @@ class SpanImpl(Span):
     def __init__(
         self,
         bg_logger,
-        name,
+        name=None,
         span_attributes={},
         start_time=None,
         set_current=None,
@@ -1358,19 +1290,28 @@ class SpanImpl(Span):
     ):
         if sum(x is not None for x in [root_experiment, root_project, parent_span, serialized_parent]) != 1:
             raise ValueError(
-                "Must specify exactly one of `root_experiment`, `root_project`, `parent_span`, and `serialized_parent`"
+                "Must specify exactly one of `root_experiment`, `root_project`, `parent_span`, or `serialized_parent`"
             )
 
-        self.finished = False
-        self.set_current = True if set_current is None else set_current
+        self.set_current = coalesce(set_current, True)
         self._logged_end_time = None
 
         self.bg_logger = bg_logger
 
+        caller_location = get_caller_location()
+        if name is None:
+            if caller_location:
+                filename = os.path.basename(caller_location.caller_filename)
+                name = ":".join(
+                    [caller_location.caller_functionname]
+                    + ([f"{filename}:{caller_location.caller_lineno}"] if filename else [])
+                )
+            else:
+                name = "subspan"
+
         # `internal_data` contains fields that are not part of the
         # "user-sanitized" set of fields which we want to log in just one of the
         # span rows. It is cleared after every log.
-        caller_location = get_caller_location()
         self.internal_data = dict(
             metrics=dict(
                 start=start_time or time.time(),
@@ -1405,18 +1346,19 @@ class SpanImpl(Span):
             self.internal_data.update(span_parents=[parent_span.span_id])
         elif serialized_parent is not None:
 
-            def get_parent_and_root_span_ids():
+            parent_span_id = getattr(serialized_parent.span_parent_ids, "span_id", None)
+
+            def get_root_span_id():
                 ids = serialized_parent.span_parent_ids
                 if isinstance(ids, SpanParentSubSpanIds):
-                    return [ids.span_id, ids.root_span_id]
+                    return ids.root_span_id
                 elif isinstance(ids, SpanParentRootSpanIds):
-                    return [ids.span_id, ids.span_id]
+                    return ids.span_id
                 elif ids is None:
-                    return [None, span_id]
+                    return span_id
                 else:
                     raise Exception(f"Invalid span_parent_ids value {ids}")
 
-            parent_span_id, root_span_id = get_parent_and_root_span_ids()
             self._span_ids = SpanIds(id=id, span_id=span_id, root_span_id=get_root_span_id())
             self._object_ids = serialized_parent.object_ids
             self.internal_data.update(span_parents=[parent_span_id])
@@ -1428,8 +1370,6 @@ class SpanImpl(Span):
         self._is_merge = False
         self.log(**{k: v for k, v in event.items() if k != "id"})
         self._is_merge = True
-
-        _unterminated_objects.add_unterminated(self, caller_location)
 
     @property
     def id(self):
@@ -1444,8 +1384,6 @@ class SpanImpl(Span):
         return self._span_ids.root_span_id
 
     def log(self, **event):
-        self._check_not_finished()
-
         sanitized = {
             k: v for k, v in _validate_and_sanitize_experiment_log_partial_args(event).items() if v is not None
         }
@@ -1465,9 +1403,7 @@ class SpanImpl(Span):
         self.internal_data = {}
         self.bg_logger.log(record)
 
-    def start_span(self, name, span_attributes={}, start_time=None, set_current=None, **event):
-        self._check_not_finished()
-
+    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, **event):
         return SpanImpl(
             bg_logger=self.bg_logger,
             name=name,
@@ -1479,17 +1415,12 @@ class SpanImpl(Span):
         )
 
     def end(self, end_time=None):
-        self._check_not_finished()
-
         if not self._logged_end_time:
             end_time = end_time or time.time()
             self.internal_data = dict(metrics=dict(end=end_time))
         else:
             end_time = self._logged_end_time
         self.log()
-
-        self.finished = True
-        _unterminated_objects.remove_unterminated(self)
         return end_time
 
     def close(self, end_time=None):
@@ -1503,10 +1434,6 @@ class SpanImpl(Span):
         return _SerializedSpanInfo_to_string(
             SerializedSpanInfo(object_ids=self._object_ids, span_parent_ids=span_parent_ids)
         )
-
-    def _check_not_finished(self):
-        if self.finished:
-            raise RuntimeError("Cannot invoke method on finished span")
 
     def __enter__(self):
         if self.set_current:
@@ -1532,8 +1459,6 @@ class Dataset(ModelWrapper):
     """
 
     def __init__(self, project_name: str, name: str = None, description: str = None, version: "str | int" = None):
-        self.finished = False
-
         args = _populate_args(
             {"project_name": project_name, "org_id": _state.org_id},
             dataset_name=name,
@@ -1555,9 +1480,7 @@ class Dataset(ModelWrapper):
                 raise ValueError(f"version ({version}) must be a positive integer")
 
         super().__init__(response["dataset"])
-        self.logger = _LogThread(name=self.name)
-
-        _unterminated_objects.add_unterminated(self, get_caller_location())
+        self.bg_logger = _BackgroundLogger(name=self.name)
 
     def insert(self, input, output, metadata=None, id=None):
         """
@@ -1573,8 +1496,6 @@ class Dataset(ModelWrapper):
         :param id: (Optional) a unique identifier for the event. If you don't provide one, Braintrust will generate one for you.
         :returns: The `id` of the logged record.
         """
-        self._check_not_finished()
-
         if metadata:
             if not isinstance(metadata, dict):
                 raise ValueError("metadata must be a dictionary")
@@ -1596,7 +1517,7 @@ class Dataset(ModelWrapper):
 
         self._clear_cache()  # We may be able to optimize this
         self.new_records += 1
-        self.logger.log(args)
+        self.bg_logger.log(args)
         return args["id"]
 
     def delete(self, id):
@@ -1605,8 +1526,6 @@ class Dataset(ModelWrapper):
 
         :param id: The `id` of the record to delete.
         """
-        self._check_not_finished()
-
         args = _populate_args(
             {
                 "id": id,
@@ -1617,7 +1536,7 @@ class Dataset(ModelWrapper):
             },
         )
 
-        self.logger.log(args)
+        self.bg_logger.log(args)
         return args["id"]
 
     def summarize(self, summarize_data=True):
@@ -1627,11 +1546,9 @@ class Dataset(ModelWrapper):
         :param summarize_data: Whether to summarize the data. If False, only the metadata will be returned.
         :returns: `DatasetSummary`
         """
-        self._check_not_finished()
-
         # Flush our events to the API, and to the data warehouse, to ensure that the link we print
         # includes the new experiment.
-        self.logger.flush()
+        self.bg_logger.flush()
 
         project_url = (
             f"{_state.api_url}/app/{encode_uri_component(_state.org_name)}/p/{encode_uri_component(self.project.name)}"
@@ -1672,8 +1589,6 @@ class Dataset(ModelWrapper):
 
         :returns: An iterator over the records in the dataset.
         """
-        self._check_not_finished()
-
         for record in self.fetched_data:
             yield {
                 "id": record.get("id"),
@@ -1685,12 +1600,10 @@ class Dataset(ModelWrapper):
         self._clear_cache()
 
     def __iter__(self):
-        self._check_not_finished()
         return self.fetch()
 
     @property
     def fetched_data(self):
-        self._check_not_finished()
         if not self._fetched_data:
             resp = _state.log_conn().get(
                 "object/dataset", params={"id": self.id, "fmt": "json", "version": self._pinned_version}
@@ -1701,42 +1614,33 @@ class Dataset(ModelWrapper):
         return self._fetched_data
 
     def _clear_cache(self):
-        self._check_not_finished()
         self._fetched_data = None
 
     @property
     def version(self):
-        self._check_not_finished()
         if self._pinned_version is not None:
             return self._pinned_version
         else:
             return max([int(record.get(TRANSACTION_ID_FIELD, 0)) for record in self.fetched_data] or [0])
 
     def close(self):
-        """Terminate connection to the dataset and return its id. After calling close, you may not invoke any further methods on the dataset object.
+        """This function is deprecated. You can simply remove it from your code."""
 
-        Will be invoked automatically if the dataset is bound as a context manager.
-
-        :returns: The dataset id.
-        """
-        self._check_not_finished()
-
-        self.logger.flush()
-
-        self.finished = True
-        _unterminated_objects.remove_unterminated(self)
+        print(
+            "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed"
+        )
         return self.id
 
-    def _check_not_finished(self):
-        if self.finished:
-            raise RuntimeError("Cannot invoke method on finished dataset")
+    def flush(self):
+        """Flush any pending rows to the server."""
+
+        self.bg_logger.flush()
 
     def __enter__(self):
         return self
 
     def __exit__(self, type, value, callback):
         del type, value, callback
-        self.close()
 
 
 class Project:
@@ -1776,15 +1680,14 @@ class Project:
 
 
 class Logger:
-    def __init__(self, lazy_login: Callable, project: Project, async_flush: bool = True, set_current: bool = None):
+    def __init__(self, lazy_login: Callable, project: Project, async_flush: bool = True):
         self._lazy_login = lazy_login
         self._logged_in = False
 
         self.project = project
         self.async_flush = async_flush
-        self.set_current = True if set_current is None else set_current
 
-        self.logger = _LogThread()
+        self.bg_logger = _BackgroundLogger()
         self.last_start_time = time.time()
 
     def log(
@@ -1823,7 +1726,7 @@ class Logger:
         self.last_start_time = span.end()
 
         if not self.async_flush:
-            self.logger.flush()
+            self.bg_logger.flush()
 
         return span.id
 
@@ -1834,13 +1737,13 @@ class Logger:
             self._logged_in = True
 
     def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, **event):
-        """Create a new toplevel span. The name parameter is optional and defaults to "root".
+        """Create a new toplevel span underneath the logger. The name parameter defaults to "root".
 
         See `Span.start_span` for full details
         """
         self._perform_lazy_login()
         return SpanImpl(
-            bg_logger=self.logger,
+            bg_logger=self.bg_logger,
             name=name,
             span_attributes=span_attributes,
             start_time=start_time,
@@ -1850,18 +1753,10 @@ class Logger:
         )
 
     def __enter__(self):
-        self._perform_lazy_login()
-        if self.set_current:
-            self._context_token = _state.current_logger.set(self)
         return self
 
     def __exit__(self, type, value, callback):
         del type, value, callback
-
-        if self.set_current:
-            _state.current_logger.reset(self._context_token)
-
-        self.logger.flush()
 
     def serialize(self) -> str:
         """Serializes the logger as a token which can be passed around to other processes, across the network, etc. To start a span under a serialized logger, call `braintrust.start_span_under_serialized` (see docs for more details)."""
@@ -1878,7 +1773,7 @@ class Logger:
         Flush any pending logs to the server.
         """
         self._perform_lazy_login()
-        self.logger.flush()
+        self.bg_logger.flush()
 
 
 @dataclasses.dataclass

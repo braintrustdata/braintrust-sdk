@@ -1,14 +1,11 @@
 import chalk from "chalk";
 import {
+  NOOP_SPAN,
   Experiment,
   ExperimentSummary,
   Metadata,
   Span,
-  currentSpan,
-  noopSpan,
-  traced,
-  withCurrent,
-  withExperiment,
+  init,
 } from "./logger";
 import { Score } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
@@ -105,27 +102,26 @@ export async function Eval<Input, Output, Expected>(
 
   const progressReporter = new BarProgressReporter();
   try {
-    return await withExperiment(
-      name,
-      async (experiment) => {
-        const ret = await runEvaluator(
-          experiment,
-          {
-            evalName,
-            projectName: name,
-            ...(evaluator as Evaluator<unknown, unknown, unknown>),
-          },
-          progressReporter,
-          []
-        );
-        reportEvaluatorResult(name, ret, true);
-        return ret.summary!;
-      },
-      {
-        experiment: evaluator.experimentName,
-        metadata: evaluator.metadata,
-      }
-    );
+    const experiment = await init(name, {
+      experiment: evaluator.experimentName,
+      metadata: evaluator.metadata,
+    });
+    try {
+      const ret = await runEvaluator(
+        experiment,
+        {
+          evalName,
+          projectName: name,
+          ...(evaluator as Evaluator<unknown, unknown, unknown>),
+        },
+        progressReporter,
+        []
+      );
+      reportEvaluatorResult(name, ret, true);
+      return ret.summary!;
+    } finally {
+      experiment.flush();
+    }
   } finally {
     progressReporter.stop();
   }
@@ -215,33 +211,30 @@ export async function runEvaluator(
       let output: any = undefined;
       let error: unknown | undefined = undefined;
       let scores: Record<string, number> = {};
-      const callback = async () => {
+      const callback = async (rootSpan: Span) => {
         try {
           const meta = (o: Record<string, unknown>) =>
             (metadata = { ...metadata, ...o });
 
-          await traced(
-            async () => {
-              const outputResult = evaluator.task(datum.input, {
-                meta,
-                span: currentSpan(),
-              });
+          await rootSpan.traced(
+            async (span: Span) => {
+              const outputResult = evaluator.task(datum.input, { meta, span });
               if (outputResult instanceof Promise) {
                 output = await outputResult;
               } else {
                 output = outputResult;
               }
-              currentSpan().log({ input: datum.input, output });
+              span.log({ input: datum.input, output });
             },
             { name: "task" }
           );
-          currentSpan().log({ output });
+          rootSpan.log({ output });
 
           const scoringArgs = { ...datum, metadata, output };
           const scoreResults = await Promise.all(
             evaluator.scores.map(async (score, score_idx) => {
-              return traced(
-                async () => {
+              return rootSpan.traced(
+                async (span: Span) => {
                   const scoreResult = score(scoringArgs);
                   const result =
                     scoreResult instanceof Promise
@@ -252,7 +245,7 @@ export async function runEvaluator(
                     name: _,
                     ...resultRest
                   } = result;
-                  currentSpan().log({
+                  span.log({
                     output: resultRest,
                     metadata: resultMetadata,
                   });
@@ -284,7 +277,7 @@ export async function runEvaluator(
             meta({ scores: scoreMetadata });
           }
 
-          currentSpan().log({ scores, metadata });
+          rootSpan.log({ scores, metadata });
         } catch (e) {
           error = e;
         } finally {
@@ -299,19 +292,16 @@ export async function runEvaluator(
         };
       };
 
-      const rootSpan: Span = experiment
-        ? experiment.startSpan({
-            name: "eval",
-            event: {
-              input: datum.input,
-              expected: datum.expected,
-            },
-          })
-        : noopSpan;
-      try {
-        return await withCurrent(rootSpan, callback);
-      } finally {
-        rootSpan.end();
+      if (!experiment) {
+        return await callback(NOOP_SPAN);
+      } else {
+        return await experiment.traced(callback, {
+          name: "eval",
+          event: {
+            input: datum.input,
+            expected: datum.expected,
+          },
+        });
       }
     });
   const results = await Promise.all(evals);
