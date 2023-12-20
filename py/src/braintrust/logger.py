@@ -21,22 +21,27 @@ from multiprocessing import cpu_count
 from typing import Any, Callable, Dict, Optional, Union
 
 import requests
-from braintrust_core.util import SerializableDataClass
+from braintrust_core.db_fields import (
+    IS_MERGE_FIELD,
+    TRANSACTION_ID_FIELD,
+)
+from braintrust_core.merge_row_batch import merge_row_batch
+from braintrust_core.util import (
+    SerializableDataClass,
+    coalesce,
+    merge_dicts,
+)
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from .cache import CACHE_PATH, EXPERIMENTS_PATH, LOGIN_INFO_PATH
 from .gitutil import get_past_n_ancestors, get_repo_status
-from .merge_row_batch import merge_row_batch
 from .resource_manager import ResourceManager
 from .util import (
     GLOBAL_PROJECT,
-    IS_MERGE_FIELD,
-    TRANSACTION_ID_FIELD,
     AugmentedHTTPError,
     encode_uri_component,
     get_caller_location,
-    merge_dicts,
     response_raise_for_status,
 )
 
@@ -47,7 +52,7 @@ class Span(ABC):
     """
     A Span encapsulates logged data and metrics for a unit of work. This interface is shared by all span implementations.
 
-    We suggest using one of the various `traced` / `startSpan` methods, instead of creating Spans directly. See `Span.startSpan` for full details.
+    We suggest using one of the various `start_span` methods, instead of creating Spans directly. See `Span.start_span` for full details.
     """
 
     @property
@@ -73,15 +78,15 @@ class Span(ABC):
         """
 
     @abstractmethod
-    def start_span(self, name, span_attributes={}, start_time=None, set_current=None, **event):
+    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, **event):
         """Create a new span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `Span.log` will be merged into one logical row.
 
-        We recommend running spans within context managers (`with start_span(...) as span`) to automatically mark them as current and ensure they are ended. If you wish to start a span outside a callback, be sure to end it with `span.end()`.
+        We recommend running spans within context managers (`with start_span(...) as span`) to automatically mark them as current and ensure they are ended. Only spans run within a context manager will be marked current, so they can be accessed using `braintrust.current_span()`. If you wish to start a span outside a context manager, be sure to end it with `span.end()`.
 
-        :param name: The name of the span.
+        :param name: Optional name of the span. If not provided, a name will be inferred from the call stack.
         :param span_attributes: Optional additional attributes to attach to the span, such as a type name.
         :param start_time: Optional start time of the span, as a timestamp in seconds.
-        :param set_current: If true (the default), the span will be marked as the currently-active span for the duration of the context manager. Unless the span is bound to a context manager, it will not be marked as current. Equivalent to calling `with braintrust.with_current(span)`.
+        :param set_current: If true (the default), the span will be marked as the currently-active span for the duration of the context manager.
         :param **event: Data to be logged. See `Experiment.log` for full details.
         :returns: The newly-created `Span`
         """
@@ -99,6 +104,10 @@ class Span(ABC):
     @abstractmethod
     def close(self, end_time=None) -> float:
         """Alias for `end`."""
+
+    @abstractmethod
+    def serialize(self) -> str:
+        """Serializes the span as a token which can be passed around to other processes, across the network, etc. To start a span under a serialized span, call `braintrust.start_span_under_serialized` (see docs for more details)."""
 
     @abstractmethod
     def __enter__(self):
@@ -130,7 +139,7 @@ class _NoopSpan(Span):
     def log(self, **event):
         pass
 
-    def start_span(self, name, span_attributes={}, start_time=None, set_current=None, **event):
+    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, **event):
         return self
 
     def end(self, end_time=None):
@@ -138,6 +147,9 @@ class _NoopSpan(Span):
 
     def close(self, end_time=None):
         return self.end(end_time)
+
+    def serialize():
+        return ""
 
     def __enter__(self):
         return self
@@ -193,6 +205,10 @@ class BraintrustState:
 
 _state = BraintrustState()
 _logger = logging.getLogger("braintrust")
+
+
+def _internal_get_global_state():
+    return _state
 
 
 class HTTPConnection:
@@ -316,7 +332,7 @@ class _BackgroundLogger:
         if name:
             log_namespace += f" [{name}]"
 
-        self.bg_logger = logging.getLogger(log_namespace)
+        self.logger = logging.getLogger(log_namespace)
 
         try:
             queue_size = int(os.environ.get("BRAINTRUST_QUEUE_SIZE"))
@@ -354,7 +370,7 @@ class _BackgroundLogger:
                     self.started = True
 
     def _finalize(self):
-        self.bg_logger.info("Flushing final log events...")
+        self.logger.info("Flushing final log events...")
         self.flush()
 
     def _publisher(self, batch_size=None):
@@ -659,7 +675,9 @@ def log(**event):
     :param **event: Data to be logged. See `Experiment.log` for full details.
     :returns: The `id` of the logged event.
     """
-
+    print(
+        "braintrust.log is deprecated and will be removed in a future version of braintrust. Use `experiment.log` instead."
+    )
     e = current_experiment()
     if not e:
         raise Exception("Not initialized. Please call init() first")
@@ -674,6 +692,9 @@ def summarize(summarize_scores=True, comparison_experiment_id=None):
     :param comparison_experiment_id: The experiment to compare against. If None, the most recent experiment on the comparison_commit will be used.
     :returns: `ExperimentSummary`
     """
+    print(
+        "braintrust.summarize is deprecated and will be removed in a future version of braintrust. Use `experiment.summarize` instead."
+    )
     e = _state.current_experiment.get()
     if not e:
         raise Exception("Not initialized. Please call init() first")
@@ -684,7 +705,7 @@ def summarize(summarize_scores=True, comparison_experiment_id=None):
 
 
 def current_span() -> Span:
-    """Return the currently-active span for logging (set by `with *.start_span` or `braintrust.with_current`). If there is no active span, returns a no-op span object, which supports the same interface as spans but does no logging.
+    """Return the currently-active span for logging (set by running a span under a context manager). If there is no active span, returns a no-op span object, which supports the same interface as spans but does no logging.
 
     See `Span` for full details.
     """
@@ -692,35 +713,49 @@ def current_span() -> Span:
     return _state.current_span.get()
 
 
-class _CurrentObjectWrapper:
-    """Context manager wrapper for marking a context-variable-managed object as current."""
+def get_span_parent_object() -> Union["Logger", "Experiment", Span]:
+    """Mainly for internal use. Return the parent object for starting a span in a global context."""
 
-    def __init__(self, object_cvar, object):
-        self.object_cvar = object_cvar
-        self.object = object
+    parent_span = current_span()
+    if parent_span != NOOP_SPAN:
+        return parent_span
 
-    def __enter__(self):
-        self.context_token = self.object_cvar.set(self.object)
+    experiment = current_experiment()
+    if experiment:
+        return experiment
 
-    def __exit__(self, type, value, callback):
-        del type, value, callback
+    logger = current_logger()
+    if logger:
+        return logger
 
-        self.object_cvar.reset(self.context_token)
+    return NOOP_SPAN
 
 
-def with_current(span: Union["SpanImpl", _NoopSpan]):
-    """Set the given span as current within the bound context manager (`with braintrust.with_current(object)`) and any asynchronous operations created within the block. The current span can be accessed with `braintrust.current_span`.
-
-    :param object: The span to be marked as current.
-    """
-    return _CurrentObjectWrapper(_state.current_span, span)
+def _try_log_input_output(span, f_args, f_kwargs, output):
+    log_kwargs = dict(input=dict(args=f_args, kwargs=f_kwargs), output=output)
+    try:
+        span.log(**log_kwargs)
+    except Exception:
+        # Don't complain if the contents are not JSON-serializable.
+        pass
 
 
 def traced(*span_args, **span_kwargs):
-    """Decorator to trace the wrapped function as a subspan of `current_span()`. Can either be applied bare (`@traced`) or by providing arguments (`@traced(*span_args, **span_kwargs)`), which will be forwarded to the created span. See `Span.start_span` for full details on the span arguments.
+    """Decorator to trace the wrapped function. Can either be applied bare (`@traced`) or by providing arguments (`@traced(*span_args, **span_kwargs)`), which will be forwarded to the created span. See `Span.start_span` for full details on the span arguments.
+
+    It checks the following (in precedence order):
+        * Currently-active span
+        * Currently-active experiment
+        * Currently-active logger
+
+    and creates a span in the first one that is active. If none of these are active, it returns a no-op span object.
+
+    The decorator will automatically log the input and output of the wrapped function to the corresponding fields of the created span. Pass the kwarg `notrace_io=True` to the decorator to prevent this.
 
     Unless a name is explicitly provided in `span_args` or `span_kwargs`, the name of the span will be the name of the decorated function.
     """
+
+    trace_io = not span_kwargs.pop("notrace_io", False)
 
     def decorator(span_args, span_kwargs, f):
         # We assume 'name' is the first positional argument in `start_span`.
@@ -729,13 +764,19 @@ def traced(*span_args, **span_kwargs):
 
         @wraps(f)
         def wrapper_sync(*f_args, **f_kwargs):
-            with current_span().start_span(*span_args, **span_kwargs):
-                return f(*f_args, **f_kwargs)
+            with start_span(*span_args, **span_kwargs) as span:
+                ret = f(*f_args, **f_kwargs)
+                if trace_io:
+                    _try_log_input_output(span, f_args, f_kwargs, ret)
+                return ret
 
         @wraps(f)
         async def wrapper_async(*f_args, **f_kwargs):
-            with current_span().start_span(*span_args, **span_kwargs):
-                return await f(*f_args, **f_kwargs)
+            with start_span(*span_args, **span_kwargs):
+                ret = await f(*f_args, **f_kwargs)
+                if trace_io:
+                    _try_log_input_output(span, f_args, f_kwargs, ret)
+                return ret
 
         if inspect.iscoroutinefunction(f):
             return wrapper_async
@@ -748,6 +789,47 @@ def traced(*span_args, **span_kwargs):
         return decorator(span_args[1:], span_kwargs, span_args[0])
     else:
         return partial(decorator, span_args, span_kwargs)
+
+
+def start_span(name=None, span_attributes={}, start_time=None, set_current=None, **event) -> Span:
+    """Lower-level alternative to `@traced` for starting a span at the toplevel. It creates a span under the first active object (using the same precedence order as `@traced`) or returns a no-op span object.
+
+    We recommend running spans bound to a context manager (`with start_span`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a context manager, be sure to terminate it with `span.end()`.
+
+    See `Span.start_span` for full details.
+    """
+
+    parent_object = get_span_parent_object()
+    if not isinstance(parent_object, Span):
+        name = coalesce(name, "root")
+    return parent_object.start_span(
+        name=name, span_attributes=span_attributes, start_time=start_time, set_current=set_current, **event
+    )
+
+
+def start_span_under_serialized(
+    object_token, name, span_attributes={}, start_time=None, set_current=None, **event
+) -> Span:
+    """Start a span under the serialized object from `*.serialize`. See `Span.start_span` for full details.
+
+    :param object_token: The serialized token from `*.serialize`.
+    :returns: The newly-created Span.
+    """
+
+    if object_token == "":
+        return NOOP_SPAN
+    span_info = _SerializedSpanInfo_from_string(object_token)
+    if span_info.span_parent_ids == None:
+        name = coalesce(name, "root")
+    return SpanImpl(
+        bg_logger=_LogThread(name=name),
+        name=name,
+        span_attributes=span_attributes,
+        start_time=start_time,
+        set_current=set_current,
+        event=event,
+        serialized_parent=span_info,
+    )
 
 
 def _check_org_info(org_info, org_name):
@@ -986,7 +1068,7 @@ class Experiment(ModelWrapper):
         return span.id
 
     def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, **event):
-        """Create a new toplevel span. The name parameter is optional and defaults to "root".
+        """Create a new toplevel span underneath the experiment. The name defaults to "root".
 
         See `Span.start_span` for full details
         """
@@ -1063,6 +1145,22 @@ class Experiment(ModelWrapper):
             metrics=metric_summary,
         )
 
+    def serialize(self) -> str:
+        """Serializes the experiment as a token which can be passed around to other processes, across the network, etc. To start a span under a serialized experiment, call `braintrust.start_span_under_serialized` (see docs for more details)."""
+        return _SerializedSpanInfo_to_string(
+            SerializedSpanInfo(
+                object_ids=SpanExperimentIds(project_id=self.project.id, experiment_id=self.id), parent_span_ids=None
+            )
+        )
+
+    def close(self):
+        """This function is deprecated. You can simply remove it from your code."""
+
+        print(
+            "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed"
+        )
+        return self.id
+
     def flush(self):
         """Flush any pending rows to the server."""
 
@@ -1075,18 +1173,108 @@ class Experiment(ModelWrapper):
         del type, value, callback
 
 
+# Format and utils for serializing objects to create spans later. Keep this in
+# sync with the span serialization implementation in logger.ts.
+
+
+@dataclasses.dataclass
+class SpanExperimentIds:
+    project_id: str
+    experiment_id: str
+
+
+@dataclasses.dataclass
+class SpanProjectLogIds:
+    org_id: str
+    project_id: str
+    log_id: str
+
+
+@dataclasses.dataclass
+class SpanParentSubSpanIds:
+    span_id: str
+    root_span_id: str
+
+
+@dataclasses.dataclass
+class SpanParentRootSpanIds:
+    span_id: str
+
+
+@dataclasses.dataclass
+class SerializedSpanInfo:
+    object_ids: Union[SpanExperimentIds, SpanProjectLogIds]
+    span_parent_ids: Union[SpanParentSubSpanIds, SpanParentRootSpanIds, None]
+
+
+def _SerializedSpanInfo_to_string(info: SerializedSpanInfo) -> str:
+    ids = info.object_ids
+    if isinstance(ids, SpanExperimentIds):
+        object_ids = ["e", ids.project_id, ids.experiment_id]
+    elif isinstance(ids, SpanProjectLogIds):
+        object_ids = ["pl", ids.org_id, ids.project_id]
+    else:
+        raise Exception(f"Unknown object_ids value {ids}")
+
+    ids = info.span_parent_ids
+    if isinstance(ids, SpanParentSubSpanIds):
+        span_parent_ids = [ids.span_id, ids.root_span_id]
+    elif isinstance(ids, SpanParentRootSpanIds):
+        span_parent_ids = [ids.span_id, ""]
+    elif ids is None:
+        span_parent_ids = ["", ""]
+    else:
+        raise Exception(f"Unknown span_parent_ids value {ids}")
+
+    ids = object_ids + span_parent_ids
+    # Since all of these IDs are auto-generated as UUIDs, we can expect them to
+    # not contain any colons.
+    for id in ids:
+        if ":" in id:
+            raise Exception(f"Unexpected: id {id} should not have a ':'")
+    return ":".join(ids)
+
+
+def _SerializedSpanInfo_from_string(s: str) -> SerializedSpanInfo:
+    ids = s.split(":")
+    if len(ids) != 5:
+        raise Exception(f"Expected serialized info {s} to have 5 colon-separated components")
+
+    if ids[0] == "e":
+        object_ids = SpanExperimentIds(project_id=ids[1], experiment_id=ids[2])
+    elif ids[0] == "pl":
+        object_ids = SpanProjectLogIds(org_id=ids[1], project_id=ids[2], log_id="g")
+    else:
+        raise Exception(f"Unknown serialized object kind {ids[0]}")
+
+    if ids[4] == "":
+        if ids[3] == "":
+            span_parent_ids = None
+        else:
+            span_parent_ids = SpanParentRootSpanIds(span_id=ids[3])
+    else:
+        span_parent_ids = SpanParentSubSpanIds(span_id=ids[3], root_span_id=ids[4])
+
+    return SerializedSpanInfo(object_ids=object_ids, span_parent_ids=span_parent_ids)
+
+
+@dataclasses.dataclass
+class SpanIds:
+    id: str
+    span_id: str
+    root_span_id: str
+
+
 class SpanImpl(Span):
     """Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
 
     We suggest using one of the various `start_span` methods, instead of creating Spans directly. See `Span.start_span` for full details.
     """
 
-    # root_experiment should only be specified for a root span. parent_span
-    # should only be specified for non-root spans.
     def __init__(
         self,
         bg_logger,
-        name,
+        name=None,
         span_attributes={},
         start_time=None,
         set_current=None,
@@ -1094,19 +1282,32 @@ class SpanImpl(Span):
         root_experiment=None,
         root_project=None,
         parent_span=None,
+        serialized_parent=None,
     ):
-        if sum(x is not None for x in [root_experiment, root_project, parent_span]) != 1:
-            raise ValueError("Must specify exactly one of `root_experiment`, `root_project`, and `parent_span`")
+        if sum(x is not None for x in [root_experiment, root_project, parent_span, serialized_parent]) != 1:
+            raise ValueError(
+                "Must specify exactly one of `root_experiment`, `root_project`, `parent_span`, or `serialized_parent`"
+            )
 
-        self.set_current = True if set_current is None else set_current
+        self.set_current = coalesce(set_current, True)
         self._logged_end_time = None
 
         self.bg_logger = bg_logger
 
+        caller_location = get_caller_location()
+        if name is None:
+            if caller_location:
+                filename = os.path.basename(caller_location.caller_filename)
+                name = ":".join(
+                    [caller_location.caller_functionname]
+                    + ([f"{filename}:{caller_location.caller_lineno}"] if filename else [])
+                )
+            else:
+                name = "subspan"
+
         # `internal_data` contains fields that are not part of the
         # "user-sanitized" set of fields which we want to log in just one of the
-        # span rows.
-        caller_location = get_caller_location()
+        # span rows. It is cleared after every log.
         self.internal_data = dict(
             metrics=dict(
                 start=start_time or time.time(),
@@ -1120,30 +1321,45 @@ class SpanImpl(Span):
         if id is None:
             id = str(uuid.uuid4())
         span_id = str(uuid.uuid4())
-        # `_object_info` contains fields that are logged to every span row.
+        # `_span_ids` and `_object_ids` contain fields that are logged to every span
+        # row.
         if root_experiment is not None:
-            self._object_info = dict(
-                id=id,
-                span_id=span_id,
-                root_span_id=span_id,
+            self._span_ids = SpanIds(id=id, span_id=span_id, root_span_id=span_id)
+            self._object_ids = SpanExperimentIds(
                 project_id=root_experiment.project.id,
                 experiment_id=root_experiment.id,
             )
         elif root_project is not None:
-            self._object_info = dict(
-                id=id,
-                span_id=span_id,
-                root_span_id=span_id,
+            self._span_ids = SpanIds(id=id, span_id=span_id, root_span_id=span_id)
+            self._object_ids = SpanProjectLogIds(
                 org_id=_state.org_id,
                 project_id=root_project.id,
                 log_id="g",
             )
         elif parent_span is not None:
-            self._object_info = {**parent_span._object_info}
-            self._object_info.update(id=id, span_id=span_id)
+            self._span_ids = SpanIds(id=id, span_id=span_id, root_span_id=parent_span.root_span_id)
+            self._object_ids = parent_span._object_ids
             self.internal_data.update(span_parents=[parent_span.span_id])
+        elif serialized_parent is not None:
+
+            parent_span_id = getattr(serialized_parent.span_parent_ids, "span_id", None)
+
+            ids = serialized_parent.span_parent_ids
+            if isinstance(ids, SpanParentSubSpanIds):
+                root_span_id = ids.root_span_id
+            elif isinstance(ids, SpanParentRootSpanIds):
+                root_span_id = ids.span_id
+            elif ids is None:
+                root_span_id = span_id
+            else:
+                raise Exception(f"Invalid span_parent_ids value {ids}")
+
+            self._span_ids = SpanIds(id=id, span_id=span_id, root_span_id=get_root_span_id())
+            self._object_ids = serialized_parent.object_ids
+            if parent_span_id:
+                self.internal_data.update(span_parents=[parent_span_id])
         else:
-            raise RuntimeError("Must provide either 'root_experiment', 'root_project', or 'parent_span'")
+            raise RuntimeError("Must provide parent info")
 
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.
@@ -1153,15 +1369,15 @@ class SpanImpl(Span):
 
     @property
     def id(self):
-        return self._object_info["id"]
+        return self._span_ids.id
 
     @property
     def span_id(self):
-        return self._object_info["span_id"]
+        return self._span_ids.span_id
 
     @property
     def root_span_id(self):
-        return self._object_info["root_span_id"]
+        return self._span_ids.root_span_id
 
     def log(self, **event):
         sanitized = {
@@ -1174,7 +1390,8 @@ class SpanImpl(Span):
         merge_dicts(sanitized_and_internal_data, sanitized)
         record = dict(
             **sanitized_and_internal_data,
-            **self._object_info,
+            **dataclasses.asdict(self._span_ids),
+            **dataclasses.asdict(self._object_ids),
             **{IS_MERGE_FIELD: self._is_merge},
         )
         if "metrics" in record and "end" in record["metrics"]:
@@ -1182,7 +1399,7 @@ class SpanImpl(Span):
         self.internal_data = {}
         self.bg_logger.log(record)
 
-    def start_span(self, name, span_attributes={}, start_time=None, set_current=None, **event):
+    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, **event):
         return SpanImpl(
             bg_logger=self.bg_logger,
             name=name,
@@ -1204,6 +1421,15 @@ class SpanImpl(Span):
 
     def close(self, end_time=None):
         return self.end(end_time)
+
+    def serialize(self) -> str:
+        if self.span_id == self.root_span_id:
+            span_parent_ids = SpanParentRootSpanIds(span_id=self.span_id)
+        else:
+            span_parent_ids = SpanParentSubSpanIds(span_id=self.span_id, root_span_id=self.root_span_id)
+        return _SerializedSpanInfo_to_string(
+            SerializedSpanInfo(object_ids=self._object_ids, span_parent_ids=span_parent_ids)
+        )
 
     def __enter__(self):
         if self.set_current:
@@ -1393,6 +1619,14 @@ class Dataset(ModelWrapper):
         else:
             return max([int(record.get(TRANSACTION_ID_FIELD, 0)) for record in self.fetched_data] or [0])
 
+    def close(self):
+        """This function is deprecated. You can simply remove it from your code."""
+
+        print(
+            "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed"
+        )
+        return self.id
+
     def flush(self):
         """Flush any pending rows to the server."""
 
@@ -1499,7 +1733,7 @@ class Logger:
             self._logged_in = True
 
     def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, **event):
-        """Create a new toplevel span. The name parameter is optional and defaults to "root".
+        """Create a new toplevel span underneath the logger. The name parameter defaults to "root".
 
         See `Span.start_span` for full details
         """
@@ -1519,6 +1753,16 @@ class Logger:
 
     def __exit__(self, type, value, callback):
         del type, value, callback
+
+    def serialize(self) -> str:
+        """Serializes the logger as a token which can be passed around to other processes, across the network, etc. To start a span under a serialized logger, call `braintrust.start_span_under_serialized` (see docs for more details)."""
+        self._perform_lazy_login()
+        return _SerializedSpanInfo_to_string(
+            SerializedSpanInfo(
+                object_ids=SpanProjectLogIds(org_id=_state.org_id, project_id=self.project.id, log_id="g"),
+                parent_span_ids=None,
+            )
+        )
 
     def flush(self):
         """

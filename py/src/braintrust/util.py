@@ -1,14 +1,11 @@
-import dataclasses
 import inspect
-import json
 import os.path
 import urllib.parse
+from pathlib import Path
 
 from requests import HTTPError
 
 GLOBAL_PROJECT = "Global"
-TRANSACTION_ID_FIELD = "_xact_id"
-IS_MERGE_FIELD = "_is_merge"
 
 
 def encode_uri_component(name):
@@ -29,37 +26,29 @@ def response_raise_for_status(resp):
         raise AugmentedHTTPError(f"{resp.text}") from e
 
 
+# Taken from
+# https://stackoverflow.com/questions/3812849/how-to-check-whether-a-directory-is-a-sub-directory-of-another-directory.
+def is_subpath(test_path, directory):
+    test_path = Path(test_path)
+    directory = Path(directory)
+    return test_path == directory or directory in test_path.parents
+
+
 def get_caller_location():
     # Modified from
     # https://stackoverflow.com/questions/24438976/debugging-get-filename-and-line-number-from-which-a-function-is-called
     # to fetch the first stack frame not contained inside the same directory as
-    # this file.
+    # this file (or any of its subdirectories).
     this_dir = None
     call_stack = inspect.stack()
     for frame in call_stack:
         caller = inspect.getframeinfo(frame.frame)
         if this_dir is None:
             this_dir = os.path.dirname(caller.filename)
-        if os.path.dirname(caller.filename) != this_dir:
+        if not is_subpath(caller.filename, this_dir):
             return dict(
                 caller_functionname=caller.function,
                 caller_filename=caller.filename,
                 caller_lineno=caller.lineno,
             )
     return None
-
-
-def merge_dicts(merge_into: dict, merge_from: dict):
-    """Merges merge_from into merge_into, destructively updating merge_into."""
-
-    if not isinstance(merge_into, dict):
-        raise ValueError("merge_into must be a dictionary")
-    if not isinstance(merge_from, dict):
-        raise ValueError("merge_from must be a dictionary")
-
-    for k, merge_from_v in merge_from.items():
-        merge_into_v = merge_into.get(k)
-        if isinstance(merge_into_v, dict) and isinstance(merge_from_v, dict):
-            merge_dicts(merge_into_v, merge_from_v)
-        else:
-            merge_into[k] = merge_from_v
