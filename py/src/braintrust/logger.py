@@ -106,10 +106,6 @@ class Span(ABC):
         """Alias for `end`."""
 
     @abstractmethod
-    def serialize(self) -> str:
-        """Serializes the span as a token which can be passed around to other processes, across the network, etc. To start a span under a serialized span, call `braintrust.start_span_under_serialized` (see docs for more details)."""
-
-    @abstractmethod
     def __enter__(self):
         pass
 
@@ -147,9 +143,6 @@ class _NoopSpan(Span):
 
     def close(self, end_time=None):
         return self.end(end_time)
-
-    def serialize():
-        return ""
 
     def __enter__(self):
         return self
@@ -205,10 +198,6 @@ class BraintrustState:
 
 _state = BraintrustState()
 _logger = logging.getLogger("braintrust")
-
-
-def _internal_get_global_state():
-    return _state
 
 
 class HTTPConnection:
@@ -656,18 +645,6 @@ def login(api_url=None, api_key=None, org_name=None, force_login=False):
         _state.logged_in = True
 
 
-def current_experiment() -> Optional["Experiment"]:
-    """Returns the currently-active experiment (set by `braintrust.init(...)`). Returns None if no current experiment has been set."""
-
-    return _state.current_experiment
-
-
-def current_logger() -> Optional["Logger"]:
-    """Returns the currently-active logger (set by `braintrust.init_logger(...)`). Returns None if no current logger has been set."""
-
-    return _state.current_logger
-
-
 def log(**event):
     """
     Log a single event to the current experiment. The event will be batched and uploaded behind the scenes.
@@ -702,6 +679,18 @@ def summarize(summarize_scores=True, comparison_experiment_id=None):
         summarize_scores=summarize_scores,
         comparison_experiment_id=comparison_experiment_id,
     )
+
+
+def current_experiment() -> Optional["Experiment"]:
+    """Returns the currently-active experiment (set by `braintrust.init(...)`). Returns None if no current experiment has been set."""
+
+    return _state.current_experiment
+
+
+def current_logger() -> Optional["Logger"]:
+    """Returns the currently-active logger (set by `braintrust.init_logger(...)`). Returns None if no current logger has been set."""
+
+    return _state.current_logger
 
 
 def current_span() -> Span:
@@ -804,31 +793,6 @@ def start_span(name=None, span_attributes={}, start_time=None, set_current=None,
         name = coalesce(name, "root")
     return parent_object.start_span(
         name=name, span_attributes=span_attributes, start_time=start_time, set_current=set_current, **event
-    )
-
-
-def start_span_under_serialized(
-    object_token, name, span_attributes={}, start_time=None, set_current=None, **event
-) -> Span:
-    """Start a span under the serialized object from `*.serialize`. See `Span.start_span` for full details.
-
-    :param object_token: The serialized token from `*.serialize`.
-    :returns: The newly-created Span.
-    """
-
-    if object_token == "":
-        return NOOP_SPAN
-    span_info = _SerializedSpanInfo_from_string(object_token)
-    if span_info.span_parent_ids == None:
-        name = coalesce(name, "root")
-    return SpanImpl(
-        bg_logger=_LogThread(name=name),
-        name=name,
-        span_attributes=span_attributes,
-        start_time=start_time,
-        set_current=set_current,
-        event=event,
-        serialized_parent=span_info,
     )
 
 
@@ -1145,14 +1109,6 @@ class Experiment(ModelWrapper):
             metrics=metric_summary,
         )
 
-    def serialize(self) -> str:
-        """Serializes the experiment as a token which can be passed around to other processes, across the network, etc. To start a span under a serialized experiment, call `braintrust.start_span_under_serialized` (see docs for more details)."""
-        return _SerializedSpanInfo_to_string(
-            SerializedSpanInfo(
-                object_ids=SpanExperimentIds(project_id=self.project.id, experiment_id=self.id), parent_span_ids=None
-            )
-        )
-
     def close(self):
         """This function is deprecated. You can simply remove it from your code."""
 
@@ -1173,98 +1129,6 @@ class Experiment(ModelWrapper):
         del type, value, callback
 
 
-# Format and utils for serializing objects to create spans later. Keep this in
-# sync with the span serialization implementation in logger.ts.
-
-
-@dataclasses.dataclass
-class SpanExperimentIds:
-    project_id: str
-    experiment_id: str
-
-
-@dataclasses.dataclass
-class SpanProjectLogIds:
-    org_id: str
-    project_id: str
-    log_id: str
-
-
-@dataclasses.dataclass
-class SpanParentSubSpanIds:
-    span_id: str
-    root_span_id: str
-
-
-@dataclasses.dataclass
-class SpanParentRootSpanIds:
-    span_id: str
-
-
-@dataclasses.dataclass
-class SerializedSpanInfo:
-    object_ids: Union[SpanExperimentIds, SpanProjectLogIds]
-    span_parent_ids: Union[SpanParentSubSpanIds, SpanParentRootSpanIds, None]
-
-
-def _SerializedSpanInfo_to_string(info: SerializedSpanInfo) -> str:
-    ids = info.object_ids
-    if isinstance(ids, SpanExperimentIds):
-        object_ids = ["e", ids.project_id, ids.experiment_id]
-    elif isinstance(ids, SpanProjectLogIds):
-        object_ids = ["pl", ids.org_id, ids.project_id]
-    else:
-        raise Exception(f"Unknown object_ids value {ids}")
-
-    ids = info.span_parent_ids
-    if isinstance(ids, SpanParentSubSpanIds):
-        span_parent_ids = [ids.span_id, ids.root_span_id]
-    elif isinstance(ids, SpanParentRootSpanIds):
-        span_parent_ids = [ids.span_id, ""]
-    elif ids is None:
-        span_parent_ids = ["", ""]
-    else:
-        raise Exception(f"Unknown span_parent_ids value {ids}")
-
-    ids = object_ids + span_parent_ids
-    # Since all of these IDs are auto-generated as UUIDs, we can expect them to
-    # not contain any colons.
-    for id in ids:
-        if ":" in id:
-            raise Exception(f"Unexpected: id {id} should not have a ':'")
-    return ":".join(ids)
-
-
-def _SerializedSpanInfo_from_string(s: str) -> SerializedSpanInfo:
-    ids = s.split(":")
-    if len(ids) != 5:
-        raise Exception(f"Expected serialized info {s} to have 5 colon-separated components")
-
-    if ids[0] == "e":
-        object_ids = SpanExperimentIds(project_id=ids[1], experiment_id=ids[2])
-    elif ids[0] == "pl":
-        object_ids = SpanProjectLogIds(org_id=ids[1], project_id=ids[2], log_id="g")
-    else:
-        raise Exception(f"Unknown serialized object kind {ids[0]}")
-
-    if ids[4] == "":
-        if ids[3] == "":
-            span_parent_ids = None
-        else:
-            span_parent_ids = SpanParentRootSpanIds(span_id=ids[3])
-    else:
-        span_parent_ids = SpanParentSubSpanIds(span_id=ids[3], root_span_id=ids[4])
-
-    return SerializedSpanInfo(object_ids=object_ids, span_parent_ids=span_parent_ids)
-
-
-@dataclasses.dataclass
-class SpanIds:
-    id: str
-    span_id: str
-    root_span_id: str
-
-
 class SpanImpl(Span):
     """Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
 
@@ -1282,12 +1146,9 @@ class SpanImpl(Span):
         root_experiment=None,
         root_project=None,
         parent_span=None,
-        serialized_parent=None,
     ):
-        if sum(x is not None for x in [root_experiment, root_project, parent_span, serialized_parent]) != 1:
-            raise ValueError(
-                "Must specify exactly one of `root_experiment`, `root_project`, `parent_span`, or `serialized_parent`"
-            )
+        if sum(x is not None for x in [root_experiment, root_project, parent_span]) != 1:
+            raise ValueError("Must specify exactly one of `root_experiment`, `root_project`, and `parent_span`")
 
         self.set_current = coalesce(set_current, True)
         self._logged_end_time = None
@@ -1307,7 +1168,8 @@ class SpanImpl(Span):
 
         # `internal_data` contains fields that are not part of the
         # "user-sanitized" set of fields which we want to log in just one of the
-        # span rows. It is cleared after every log.
+        # span rows.
+        caller_location = get_caller_location()
         self.internal_data = dict(
             metrics=dict(
                 start=start_time or time.time(),
@@ -1321,43 +1183,28 @@ class SpanImpl(Span):
         if id is None:
             id = str(uuid.uuid4())
         span_id = str(uuid.uuid4())
-        # `_span_ids` and `_object_ids` contain fields that are logged to every span
-        # row.
+        # `_object_info` contains fields that are logged to every span row.
         if root_experiment is not None:
-            self._span_ids = SpanIds(id=id, span_id=span_id, root_span_id=span_id)
-            self._object_ids = SpanExperimentIds(
+            self._object_info = dict(
+                id=id,
+                span_id=span_id,
+                root_span_id=span_id,
                 project_id=root_experiment.project.id,
                 experiment_id=root_experiment.id,
             )
         elif root_project is not None:
-            self._span_ids = SpanIds(id=id, span_id=span_id, root_span_id=span_id)
-            self._object_ids = SpanProjectLogIds(
+            self._object_info = dict(
+                id=id,
+                span_id=span_id,
+                root_span_id=span_id,
                 org_id=_state.org_id,
                 project_id=root_project.id,
                 log_id="g",
             )
         elif parent_span is not None:
-            self._span_ids = SpanIds(id=id, span_id=span_id, root_span_id=parent_span.root_span_id)
-            self._object_ids = parent_span._object_ids
+            self._object_info = {**parent_span._object_info}
+            self._object_info.update(id=id, span_id=span_id)
             self.internal_data.update(span_parents=[parent_span.span_id])
-        elif serialized_parent is not None:
-
-            parent_span_id = getattr(serialized_parent.span_parent_ids, "span_id", None)
-
-            ids = serialized_parent.span_parent_ids
-            if isinstance(ids, SpanParentSubSpanIds):
-                root_span_id = ids.root_span_id
-            elif isinstance(ids, SpanParentRootSpanIds):
-                root_span_id = ids.span_id
-            elif ids is None:
-                root_span_id = span_id
-            else:
-                raise Exception(f"Invalid span_parent_ids value {ids}")
-
-            self._span_ids = SpanIds(id=id, span_id=span_id, root_span_id=get_root_span_id())
-            self._object_ids = serialized_parent.object_ids
-            if parent_span_id:
-                self.internal_data.update(span_parents=[parent_span_id])
         else:
             raise RuntimeError("Must provide parent info")
 
@@ -1369,15 +1216,15 @@ class SpanImpl(Span):
 
     @property
     def id(self):
-        return self._span_ids.id
+        return self._object_info["id"]
 
     @property
     def span_id(self):
-        return self._span_ids.span_id
+        return self._object_info["span_id"]
 
     @property
     def root_span_id(self):
-        return self._span_ids.root_span_id
+        return self._object_info["root_span_id"]
 
     def log(self, **event):
         sanitized = {
@@ -1390,8 +1237,7 @@ class SpanImpl(Span):
         merge_dicts(sanitized_and_internal_data, sanitized)
         record = dict(
             **sanitized_and_internal_data,
-            **dataclasses.asdict(self._span_ids),
-            **dataclasses.asdict(self._object_ids),
+            **self._object_info,
             **{IS_MERGE_FIELD: self._is_merge},
         )
         if "metrics" in record and "end" in record["metrics"]:
@@ -1421,15 +1267,6 @@ class SpanImpl(Span):
 
     def close(self, end_time=None):
         return self.end(end_time)
-
-    def serialize(self) -> str:
-        if self.span_id == self.root_span_id:
-            span_parent_ids = SpanParentRootSpanIds(span_id=self.span_id)
-        else:
-            span_parent_ids = SpanParentSubSpanIds(span_id=self.span_id, root_span_id=self.root_span_id)
-        return _SerializedSpanInfo_to_string(
-            SerializedSpanInfo(object_ids=self._object_ids, span_parent_ids=span_parent_ids)
-        )
 
     def __enter__(self):
         if self.set_current:
@@ -1753,16 +1590,6 @@ class Logger:
 
     def __exit__(self, type, value, callback):
         del type, value, callback
-
-    def serialize(self) -> str:
-        """Serializes the logger as a token which can be passed around to other processes, across the network, etc. To start a span under a serialized logger, call `braintrust.start_span_under_serialized` (see docs for more details)."""
-        self._perform_lazy_login()
-        return _SerializedSpanInfo_to_string(
-            SerializedSpanInfo(
-                object_ids=SpanProjectLogIds(org_id=_state.org_id, project_id=self.project.id, log_id="g"),
-                parent_span_ids=None,
-            )
-        )
 
     def flush(self):
         """
