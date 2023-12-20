@@ -26,7 +26,7 @@ function wrapFetch(origFetch: Fetch): Fetch {
     }
     augmentedInit.headers.set(
       PARENT_SPAN_HEADER,
-      await getSpanParentObject().serialize()
+      getSpanParentObject().serialize()
     );
     // Serializing the parent object should trigger lazy-login for any
     // lazily-initialized objects, so the global state should also be

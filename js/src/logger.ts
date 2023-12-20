@@ -548,7 +548,7 @@ export class Logger {
   public async traced<R>(
     callback: (span: Span) => R,
     args?: StartSpanOptionalNameArgs & SetCurrentArg
-  ): Promise<Awaited<R>> {
+  ): Promise<R> {
     const { setCurrent, ...argsRest } = args ?? {};
     const span = await this.startSpan(argsRest);
     try {
@@ -1183,7 +1183,7 @@ export function currentSpan(): Span {
 /**
  * Mainly for internal use. Return the parent object for starting a span in a global context.
  */
-export function getSpanParentObject(): Span | Experiment | Logger {
+export function getSpanParentObject(): Span | Experiment {
   const parentSpan = currentSpan();
   if (!Object.is(parentSpan, noopSpan)) {
     return parentSpan;
@@ -1194,7 +1194,9 @@ export function getSpanParentObject(): Span | Experiment | Logger {
   }
   const logger = currentLogger();
   if (logger) {
-    return logger;
+    throw new Error(
+      "Cannot start a span within a logger from startSpan(). Use logger.startSpan() instead."
+    );
   }
   return noopSpan;
 }
@@ -1213,9 +1215,7 @@ export function getSpanParentObject(): Span | Experiment | Logger {
  *
  * See `Span.startSpan` for full details.
  */
-export async function startSpan(
-  args?: StartSpanOptionalNameArgs
-): Promise<Span> {
+export function startSpan(args?: StartSpanOptionalNameArgs): Span {
   const { name: nameOpt, ...argsRest } = args ?? {};
   const name =
     (nameOpt ?? iso.getCallerLocation()?.caller_functionname) || "root";
@@ -1231,20 +1231,21 @@ export async function startSpan(
 /**
  * Wrapper over `braintrust.startSpan`, which passes the initialized `Span` it to the given callback and ends it afterwards. See `Span.traced` for full details.
  */
-export async function traced<R>(
+export function traced<R>(
   callback: (span: Span) => R,
   args?: StartSpanOptionalNameArgs & SetCurrentArg
-): Promise<Awaited<R>> {
-  const span = await startSpan(args);
-  try {
-    if (args?.setCurrent ?? true) {
-      return await withCurrent(span, () => callback(span));
-    } else {
-      return await callback(span);
-    }
-  } finally {
-    span.end();
-  }
+): R {
+  const span = startSpan(args);
+  return runFinally(
+    () => {
+      if (args?.setCurrent ?? true) {
+        return withCurrent(span, () => callback(span));
+      } else {
+        return callback(span);
+      }
+    },
+    () => span.end()
+  );
 }
 
 export type CustomLoggerOpts = {
