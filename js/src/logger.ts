@@ -1101,7 +1101,7 @@ export function currentSpan(): Span {
 /**
  * Mainly for internal use. Return the parent object for starting a span in a global context.
  */
-export function getSpanParentObject(): Span | Experiment | Logger {
+export function getSpanParentObject(): Span | Experiment {
   const parentSpan = currentSpan();
   if (!Object.is(parentSpan, NOOP_SPAN)) {
     return parentSpan;
@@ -1112,7 +1112,9 @@ export function getSpanParentObject(): Span | Experiment | Logger {
   }
   const logger = currentLogger();
   if (logger) {
-    return logger;
+    throw new Error(
+      "Cannot start a span within a logger from startSpan(). Use logger.startSpan() instead."
+    );
   }
   return NOOP_SPAN;
 }
@@ -1619,7 +1621,7 @@ type SpanParentSpanIds =
 type SerializedSpanInfo = SpanObjectIds & SpanParentSpanIds;
 
 function SerializedSpanInfoToString(info: SerializedSpanInfo): string {
-  const objectKindIds = (() => {
+  const objectIds = (() => {
     if (info.object_kind === "e") {
       return [info.project_id, info.experiment_id];
     } else if (info.object_kind === "pl") {
@@ -1628,7 +1630,7 @@ function SerializedSpanInfoToString(info: SerializedSpanInfo): string {
       throw new Error(`Unknown kind ${(info as any).object_kind}`);
     }
   })();
-  const parentSpanIds = (() => {
+  const spanParentIds = (() => {
     if (info.parent_span_kind === "sub_span") {
       return [info.span_id, info.root_span_id];
     } else if (info.parent_span_kind === "root_span") {
@@ -1641,7 +1643,7 @@ function SerializedSpanInfoToString(info: SerializedSpanInfo): string {
       );
     }
   })();
-  const ids = [info.object_kind, ...objectKindIds, ...parentSpanIds];
+  const ids = [info.object_kind, ...objectIds, ...spanParentIds];
   // Since all of these IDs are auto-generated as UUIDs, we can expect them to
   // not contain any colons.
   for (const id of ids) {
@@ -1660,7 +1662,7 @@ function SerializedSpanInfoFromString(s: string): SerializedSpanInfo {
     );
   }
 
-  const objectKindInfo = (() => {
+  const objectIds = (() => {
     if (ids[0] === "e") {
       return {
         object_kind: ids[0],
@@ -1678,7 +1680,8 @@ function SerializedSpanInfoFromString(s: string): SerializedSpanInfo {
       throw new Error(`Unknown serialized object_kind ${ids[0]}`);
     }
   })();
-  const parentSpanInfo = (() => {
+
+  const spanParentIds = (() => {
     if (ids[4] === "") {
       if (ids[3] === "") {
         return { parent_span_kind: "none" } as const;
@@ -1694,8 +1697,8 @@ function SerializedSpanInfoFromString(s: string): SerializedSpanInfo {
     }
   })();
   return {
-    ...objectKindInfo,
-    ...parentSpanInfo,
+    ...objectIds,
+    ...spanParentIds,
   };
 }
 
