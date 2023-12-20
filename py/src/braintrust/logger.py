@@ -1276,27 +1276,25 @@ class SerializedSpanInfo:
 
 
 def _SerializedSpanInfo_to_string(info: SerializedSpanInfo) -> str:
-    def get_object_kind_ids():
-        ids = info.object_ids
-        if isinstance(ids, SpanExperimentIds):
-            return ["e", ids.project_id, ids.experiment_id]
-        elif isinstance(ids, SpanProjectLogIds):
-            return ["pl", ids.org_id, ids.project_id]
-        else:
-            raise Exception(f"Unknown object_ids value {ids}")
+    ids = info.object_ids
+    if isinstance(ids, SpanExperimentIds):
+        object_ids = ["e", ids.project_id, ids.experiment_id]
+    elif isinstance(ids, SpanProjectLogIds):
+        object_ids = ["pl", ids.org_id, ids.project_id]
+    else:
+        raise Exception(f"Unknown object_ids value {ids}")
 
-    def get_span_parent_ids():
-        ids = info.span_parent_ids
-        if isinstance(ids, SpanParentSubSpanIds):
-            return [ids.span_id, ids.root_span_id]
-        elif isinstance(ids, SpanParentRootSpanIds):
-            return [ids.span_id, ""]
-        elif ids is None:
-            return ["", ""]
-        else:
-            raise Exception(f"Unknown span_parent_ids value {ids}")
+    ids = info.span_parent_ids
+    if isinstance(ids, SpanParentSubSpanIds):
+        span_parent_ids = [ids.span_id, ids.root_span_id]
+    elif isinstance(ids, SpanParentRootSpanIds):
+        span_parent_ids = [ids.span_id, ""]
+    elif ids is None:
+        span_parent_ids = ["", ""]
+    else:
+        raise Exception(f"Unknown span_parent_ids value {ids}")
 
-    ids = get_object_kind_ids() + get_span_parent_ids()
+    ids = object_ids + span_parent_ids
     # Since all of these IDs are auto-generated as UUIDs, we can expect them to
     # not contain any colons.
     for id in ids:
@@ -1310,24 +1308,22 @@ def _SerializedSpanInfo_from_string(s: str) -> SerializedSpanInfo:
     if len(ids) != 5:
         raise Exception(f"Expected serialized info {s} to have 5 colon-separated components")
 
-    def get_object_ids():
-        if ids[0] == "e":
-            return SpanExperimentIds(project_id=ids[1], experiment_id=ids[2])
-        elif ids[0] == "pl":
-            return SpanProjectLogIds(org_id=ids[1], project_id=ids[2], log_id="g")
-        else:
-            raise Exception(f"Unknown serialized object kind {ids[0]}")
+    if ids[0] == "e":
+        object_ids = SpanExperimentIds(project_id=ids[1], experiment_id=ids[2])
+    elif ids[0] == "pl":
+        object_ids = SpanProjectLogIds(org_id=ids[1], project_id=ids[2], log_id="g")
+    else:
+        raise Exception(f"Unknown serialized object kind {ids[0]}")
 
-    def get_span_parent_ids():
-        if ids[4] == "":
-            if ids[3] == "":
-                return None
-            else:
-                return SpanParentRootSpanIds(span_id=ids[3])
+    if ids[4] == "":
+        if ids[3] == "":
+            span_parent_ids = None
         else:
-            return SpanParentSubSpanIds(span_id=ids[3], root_span_id=ids[4])
+            span_parent_ids = SpanParentRootSpanIds(span_id=ids[3])
+    else:
+        span_parent_ids = SpanParentSubSpanIds(span_id=ids[3], root_span_id=ids[4])
 
-    return SerializedSpanInfo(object_ids=get_object_ids(), span_parent_ids=get_span_parent_ids())
+    return SerializedSpanInfo(object_ids=object_ids, span_parent_ids=span_parent_ids)
 
 
 @dataclasses.dataclass
@@ -1405,21 +1401,22 @@ class SpanImpl(Span):
             self.internal_data.update(span_parents=[parent_span.span_id])
         elif serialized_parent is not None:
 
-            def get_parent_and_root_span_ids():
-                ids = serialized_parent.span_parent_ids
-                if isinstance(ids, SpanParentSubSpanIds):
-                    return [ids.span_id, ids.root_span_id]
-                elif isinstance(ids, SpanParentRootSpanIds):
-                    return [ids.span_id, ids.span_id]
-                elif ids is None:
-                    return [None, span_id]
-                else:
-                    raise Exception(f"Invalid span_parent_ids value {ids}")
+            parent_span_id = getattr(serialized_parent.span_parent_ids, "span_id", None)
 
-            parent_span_id, root_span_id = get_parent_and_root_span_ids()
+            ids = serialized_parent.span_parent_ids
+            if isinstance(ids, SpanParentSubSpanIds):
+                root_span_id = ids.root_span_id
+            elif isinstance(ids, SpanParentRootSpanIds):
+                root_span_id = ids.span_id
+            elif ids is None:
+                root_span_id = span_id
+            else:
+                raise Exception(f"Invalid span_parent_ids value {ids}")
+
             self._span_ids = SpanIds(id=id, span_id=span_id, root_span_id=get_root_span_id())
             self._object_ids = serialized_parent.object_ids
-            self.internal_data.update(span_parents=[parent_span_id])
+            if parent_span_id:
+                self.internal_data.update(span_parents=[parent_span_id])
         else:
             raise RuntimeError("Must provide parent info")
 
