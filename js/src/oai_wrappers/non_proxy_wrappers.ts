@@ -63,7 +63,7 @@ function wrapChatCompletion<
 >(completion: (params: P) => Promise<C>): (params: P) => Promise<any> {
   return async (params: P) => {
     const { messages, ...rest } = params;
-    const span = startSpan({
+    const span = await startSpan({
       name: "OpenAI Chat Completion",
       event: {
         input: messages,

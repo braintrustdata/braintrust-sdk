@@ -1,4 +1,4 @@
-import { _internalGetGlobalState, currentSpan } from "../logger";
+import { _internalGetGlobalState, getSpanParentObject } from "../logger";
 
 function getProxyBaseUrlDefault({ version }: { version: number }): string {
   return (
@@ -12,9 +12,9 @@ function getProxyApiKeyDefault(): string | undefined {
 }
 
 // Defined in
-// https://github.com/braintrustdata/braintrust-proxy/blob/main/packages/proxy/src/tracing.ts.
+// https://github.com/braintrustdata/braintrust-proxy/blob/main/packages/proxy/src/proxy.ts.
+const ORG_NAME_HEADER = "x-bt-org-name";
 const PARENT_SPAN_HEADER = "x-bt-parent-span";
-const SERIALIZED_STATE_HEADER = "x-bt-serialized-state";
 
 type Fetch = (url: RequestInfo, init?: RequestInit) => Promise<Response>;
 
@@ -24,11 +24,17 @@ function wrapFetch(origFetch: Fetch): Fetch {
     if (!(augmentedInit.headers instanceof Headers)) {
       augmentedInit.headers = new Headers(augmentedInit.headers);
     }
-    augmentedInit.headers.set(PARENT_SPAN_HEADER, currentSpan().serialize());
     augmentedInit.headers.set(
-      SERIALIZED_STATE_HEADER,
-      _internalGetGlobalState().serializeLoginInfo()
+      PARENT_SPAN_HEADER,
+      await getSpanParentObject().serialize()
     );
+    // Serializing the parent object should trigger lazy-login for any
+    // lazily-initialized objects, so the global state should also be
+    // initialized.
+    const orgName = _internalGetGlobalState().orgName;
+    if (orgName) {
+      augmentedInit.headers.set(ORG_NAME_HEADER, orgName);
+    }
     return await origFetch(url, augmentedInit);
   };
 }

@@ -2,7 +2,7 @@
 import os
 from typing import Union
 
-from braintrust.logger import _internal_get_global_state, current_span
+from braintrust.logger import _internal_get_global_state, get_span_parent_object
 
 _httpx = None
 
@@ -32,16 +32,21 @@ def _get_proxy_api_key_sentinel():
 
 
 # Defined in
-# https://github.com/braintrustdata/braintrust-proxy/blob/main/packages/proxy/src/tracing.ts.
+# https://github.com/braintrustdata/braintrust-proxy/blob/main/packages/proxy/src/proxy.ts.
+ORG_NAME_HEADER = "x-bt-org-name"
 PARENT_SPAN_HEADER = "x-bt-parent-span"
-SERIALIZED_STATE_HEADER = "x-bt-serialized-state"
 
 
 def wrap_build_request(orig_build_request):
     def ret(*args, **kwargs):
         req = orig_build_request(*args, **kwargs)
-        req.headers[PARENT_SPAN_HEADER] = current_span().serialize()
-        req.headers[SERIALIZED_STATE_HEADER] = _internal_get_global_state().serialize_login_info()
+        req.headers[PARENT_SPAN_HEADER] = get_span_parent_object().serialize()
+        # Serializing the parent object should trigger lazy-login for any
+        # lazily-initialized objects, so the global state should also be
+        # initialized.
+        org_name = _internal_get_global_state().org_name
+        if org_name:
+            req.headers[ORG_NAME_HEADER] = org_name
         return req
 
     return ret
