@@ -764,7 +764,7 @@ def traced(*span_args, **span_kwargs):
 
         @wraps(f)
         async def wrapper_async(*f_args, **f_kwargs):
-            with start_span(*span_args, **span_kwargs):
+            with start_span(*span_args, **span_kwargs) as span:
                 ret = await f(*f_args, **f_kwargs)
                 if trace_io:
                     _try_log_input_output(span, f_sig, f_args, f_kwargs, ret)
