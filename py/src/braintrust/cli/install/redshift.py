@@ -180,7 +180,7 @@ def main(args):
     #    else:
     #        raise NotImplementedError("Only Serverless Redshift is currently supported")
 
-    login_kwargs = {"org_name": args.org_name, "disable_cache": True} if args.org_name else {}
+    login_kwargs = {"org_name": args.org_name} if args.org_name else {}
     login(**login_kwargs)
 
     resp = log_conn().get(

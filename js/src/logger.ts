@@ -9,7 +9,7 @@ import {
   mergeRowBatch,
 } from "@braintrust/core";
 
-import iso, { IsoAsyncLocalStorage, CallerLocation } from "./isomorph";
+import iso, { IsoAsyncLocalStorage } from "./isomorph";
 import { runFinally, GLOBAL_PROJECT, getCurrentUnixTimestamp } from "./util";
 
 export type Metadata = Record<string, unknown>;
@@ -19,12 +19,11 @@ export type SetCurrentArg = { setCurrent?: boolean };
 type StartSpanEventArgs = ExperimentLogPartialArgs & Partial<IdField>;
 
 export type StartSpanArgs = {
+  name?: string;
   spanAttributes?: Record<any, any>;
   startTime?: number;
   event?: StartSpanEventArgs;
 };
-
-export type StartSpanOptionalNameArgs = StartSpanArgs & { name?: string };
 
 export type EndSpanArgs = {
   endTime?: number;
@@ -33,7 +32,9 @@ export type EndSpanArgs = {
 /**
  * A Span encapsulates logged data and metrics for a unit of work. This interface is shared by all span implementations.
  *
- * We suggest using one of the various `startSpan` methods, instead of creating Spans directly. See `Span.startSpan` for full details.
+ * We suggest using one of the various `traced` methods, instead of creating Spans directly.
+ *
+ * See `Span.traced` for full details.
  */
 export interface Span {
   /**
@@ -59,33 +60,36 @@ export interface Span {
   log(event: ExperimentLogPartialArgs): void;
 
   /**
-   * Create a new span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `Span.log` will be merged into one logical row.
+   * Create a new span and run the provided callback. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `Span.log` will be merged into one logical row.
    *
-   * We recommend running spans within a callback (using `traced`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a callback, be sure to terminate it with `span.end()`.
+   * Spans created within `traced` are ended automatically. By default, the span is marked as current, so they can be accessed using `braintrust.currentSpan`.
    *
-   * @param name The name of the span.
+   * @param callback The function to be run under the span context.
+   * @param args.name Optional name of the span. If not provided, a name will be inferred from the call stack.
    * @param args.span_attributes Optional additional attributes to attach to the span, such as a type name.
    * @param args.start_time Optional start time of the span, as a timestamp in seconds.
+   * @param args.setCurrent If true (the default), the span will be marked as the currently-active span for the duration of the callback.
    * @param args.event Data to be logged. See `Experiment.log` for full details.
-   * @returns The newly-created `Span`
-   */
-  startSpan(name: string, args?: StartSpanArgs): Span;
-
-  /**
-   * Wrapper over `Span.startSpan`, which passes the initialized `Span` it to the given callback and ends it afterwards. See `Span.startSpan` for full details.
-   *
-   * @param args.setCurrent If true (the default), the span will be marked as the currently-active span for the duration of the callback. Equivalent to calling `braintrust.withCurrent(span, callback)`.
+   * @Returns The result of running `callback`.
    */
   traced<R>(
-    name: string,
     callback: (span: Span) => R,
     args?: StartSpanArgs & SetCurrentArg
   ): R;
 
   /**
-   * Terminate the span. Returns the end time logged to the row's metrics. After calling end, you may not invoke any further methods on the span object, except for the property accessors.
+   * Lower-level alternative to `traced`, which does not automatically end the span or mark it as current. Be sure to end the span with `span.end()` when it has finished.
    *
-   * Will be invoked automatically if the span is constructed with traced.
+   * See `traced` for full details.
+   *
+   * @returns The newly-created `Span`
+   */
+  startSpan(args?: StartSpanArgs): Span;
+
+  /**
+   * Log an end time to the span (defaults to the current time). Returns the logged time.
+   *
+   * Will be invoked automatically if the span is constructed with `traced`.
    *
    * @param args.endTime Optional end time of the span, as a timestamp in seconds.
    * @returns The end time logged to the span metrics.
@@ -118,16 +122,15 @@ export class NoopSpan implements Span {
 
   public log(_: ExperimentLogPartialArgs) {}
 
-  public startSpan(_0: string, _1?: StartSpanArgs) {
-    return this;
-  }
-
   public traced<R>(
-    _0: string,
     callback: (span: Span) => R,
     _1: StartSpanArgs & SetCurrentArg
   ): R {
     return callback(this);
+  }
+
+  public startSpan(_1?: StartSpanArgs) {
+    return this;
   }
 
   public end(args?: EndSpanArgs): number {
@@ -139,7 +142,7 @@ export class NoopSpan implements Span {
   }
 }
 
-export const noopSpan = new NoopSpan();
+export const NOOP_SPAN = new NoopSpan();
 
 // In certain situations (e.g. the cli), we want separately-compiled modules to
 // use the same state as the toplevel module. This global variable serves as a
@@ -150,8 +153,8 @@ declare global {
 
 class BraintrustState {
   public id: string;
-  public currentExperiment: IsoAsyncLocalStorage<Experiment | undefined>;
-  public currentLogger: IsoAsyncLocalStorage<Logger | undefined>;
+  public currentExperiment: Experiment | undefined;
+  public currentLogger: Logger | undefined;
   public currentSpan: IsoAsyncLocalStorage<Span>;
 
   public apiUrl: string | null;
@@ -166,12 +169,9 @@ class BraintrustState {
 
   constructor() {
     this.id = uuidv4(); // This is for debugging
-    this.currentExperiment = iso.newAsyncLocalStorage();
-    this.currentLogger = iso.newAsyncLocalStorage();
+    this.currentExperiment = undefined;
+    this.currentLogger = undefined;
     this.currentSpan = iso.newAsyncLocalStorage();
-    if (this.currentSpan.enterWith) {
-      this.currentSpan.enterWith(noopSpan);
-    }
 
     this.apiUrl = null;
     this.loginToken = null;
@@ -218,46 +218,6 @@ export function _internalSetInitialState() {
   _state = globalThis.__inherited_braintrust_state || new BraintrustState();
 }
 export const _internalGetGlobalState = () => _state;
-
-// A utility to keep track of objects that should be cleaned up before
-// program exit. At the end of the program, the UnterminatedObjectsHandler
-// will print out all un-terminated objects as a warning.
-class UnterminatedObjectsHandler {
-  private unterminatedObjects: Map<any, CallerLocation | undefined>;
-
-  constructor() {
-    this.unterminatedObjects = new Map();
-    iso.processOn("exit", () => {
-      this.warnUnterminated();
-    });
-  }
-
-  addUnterminated(obj: any, createdLocation: CallerLocation | undefined) {
-    this.unterminatedObjects.set(obj, createdLocation);
-  }
-
-  removeUnterminated(obj: any) {
-    this.unterminatedObjects.delete(obj);
-  }
-
-  private warnUnterminated() {
-    if (this.unterminatedObjects.size === 0) {
-      return;
-    }
-    let warningMessage =
-      "WARNING: Did not close the following braintrust objects. We recommend running `.close` on the listed objects, or by running them inside a callback so they are closed automatically:";
-    this.unterminatedObjects.forEach((createdLocation, obj) => {
-      let msg = `\n\tObject of type ${obj?.constructor?.name}`;
-      if (createdLocation) {
-        msg += ` created at ${JSON.stringify(createdLocation)}`;
-      }
-      warningMessage += msg;
-    });
-    console.warn(warningMessage);
-  }
-}
-
-let unterminatedObjects = new UnterminatedObjectsHandler();
 
 class FailedHTTPResponse extends Error {
   public status: number;
@@ -409,10 +369,6 @@ class HTTPConnection {
   }
 }
 
-interface UserInfo {
-  id: string;
-}
-
 interface RegisteredProject {
   id: string;
   name: string;
@@ -457,7 +413,7 @@ export class Logger {
   private loggedIn: boolean = false;
   private lazyProject: Project;
   private logOptions: LogOptions;
-  private bgLogger: BackgroundLogger;
+  private bgLogger: BackgroundLogger | undefined;
   private lastStartTime: number;
 
   // For type identification.
@@ -471,8 +427,6 @@ export class Logger {
     this._lazyLogin = lazyLogin;
     this.lazyProject = lazyProject;
     this.logOptions = logOptions;
-
-    this.bgLogger = new BackgroundLogger();
     this.lastStartTime = getCurrentUnixTimestamp();
   }
 
@@ -480,6 +434,7 @@ export class Logger {
     if (!this.loggedIn) {
       await this._lazyLogin();
       this.lastStartTime = getCurrentUnixTimestamp();
+      this.bgLogger = new BackgroundLogger({ logConn: _state.logConn() });
       this.loggedIn = true;
     }
   }
@@ -511,35 +466,19 @@ export class Logger {
   }
 
   /**
-   * Create a new toplevel span. The name parameter is optional and defaults to "root".
+   * Create a new toplevel span underneath the logger. The name defaults to "root".
    *
-   * See `Span.startSpan` for full details.
-   */
-  public async startSpan(args?: StartSpanOptionalNameArgs): Promise<Span> {
-    await this.lazyLogin();
-    const project = await this.lazyProject.lazyInit();
-    const { name, ...argsRest } = args ?? {};
-    return new SpanImpl({
-      bgLogger: this.bgLogger,
-      name: name ?? "root",
-      ...argsRest,
-      rootProject: project,
-    });
-  }
-
-  /**
-   * Wrapper over `Logger.startSpan`, which passes the initialized `Span` it to the given callback and ends it afterwards. See `Span.traced` for full details.
+   * See `Span.traced` for full details.
    */
   public async traced<R>(
     callback: (span: Span) => R,
-    args?: StartSpanOptionalNameArgs & SetCurrentArg
-  ): Promise<R> {
+    args?: StartSpanArgs & SetCurrentArg
+  ): Promise<Awaited<R>> {
     const { setCurrent, ...argsRest } = args ?? {};
     const span = await this.startSpan(argsRest);
     try {
-      let ret = null;
       return await (setCurrent ?? true
-        ? withCurrent(span, () => callback(span))
+        ? withCurrent(span, callback)
         : callback(span));
     } finally {
       span.end();
@@ -549,11 +488,29 @@ export class Logger {
     }
   }
 
+  /**
+   * Lower-level alternative to `traced`, which does not automatically end the span or mark it as current.
+   *
+   * See `traced` for full details.
+   */
+  public async startSpan(args?: StartSpanArgs): Promise<Span> {
+    await this.lazyLogin();
+    const project = await this.lazyProject.lazyInit();
+    const { name, ...argsRest } = args ?? {};
+    return new SpanImpl({
+      bgLogger: this.bgLogger!,
+      name: name ?? "root",
+      ...argsRest,
+      rootProject: project,
+    });
+  }
+
   /*
    * Flush any pending logs to the server.
    */
   async flush(): Promise<void> {
-    return await this.bgLogger.flush();
+    await this.lazyLogin();
+    return await this.bgLogger!.flush();
   }
 }
 
@@ -753,14 +710,11 @@ export type InitOptions = {
   apiUrl?: string;
   apiKey?: string;
   orgName?: string;
-  disableCache?: boolean;
   metadata?: Metadata;
 };
 
 /**
  * Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
- *
- * Remember to close your experiment when it is finished by calling `Experiment.close`. We recommend initializing the experiment within a callback (using `braintrust.withExperiment`) to automatically mark it as current and ensure it is terminated.
  *
  * @param project The name of the project to create the experiment in.
  * @param options Additional options for configuring init().
@@ -776,7 +730,6 @@ export type InitOptions = {
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
- * @param options.disableCache Do not use cached login information.
  * @param options.metadata (Optional) A dictionary with additional data about the test example, model outputs, or just
  * about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
  * `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
@@ -797,18 +750,16 @@ export async function init(
     apiUrl,
     apiKey,
     orgName,
-    disableCache,
     metadata,
   } = options || {};
 
   await login({
     orgName: orgName,
-    disableCache,
     apiKey,
     apiUrl,
   });
 
-  return await _initExperiment(project, {
+  const ret = await _initExperiment(project, {
     experimentName: experiment,
     description,
     dataset,
@@ -817,51 +768,37 @@ export async function init(
     isPublic,
     metadata,
   });
+  _state.currentExperiment = ret;
+  return ret;
 }
 
 /**
- * Wrapper over `braintrust.init`, which passes the initialized `Experiment` it to the given callback and closes it afterwards. See `braintrust.init` for full details.
- *
- * @param options.setCurrent If true (default), set the currently-active experiment to the newly-created one. Equivalent to calling `braintrust.withCurrent(experiment, callback)`.
+ * This function is deprecated. Use `init` instead.
  */
 export async function withExperiment<R>(
   project: string,
   callback: (experiment: Experiment) => R,
   options: Readonly<InitOptions & SetCurrentArg> = {}
 ): Promise<R> {
-  const experiment = await init(project, options);
-  return runFinally(
-    () => {
-      if (options.setCurrent ?? true) {
-        return withCurrent(experiment, () => callback(experiment));
-      } else {
-        return callback(experiment);
-      }
-    },
-    () => experiment.close()
+  console.warn(
+    "withExperiment is deprecated and will be removed in a future version of braintrust. Simply create the experiment with `init`."
   );
+  const experiment = await init(project, options);
+  return callback(experiment);
 }
 
 /**
- * Wrapper over `braintrust.initLogger`, which passes the initialized `Logger` it to the given callback and closes it afterwards. See `braintrust.initLogger` for full details.
- *
- * @param options.setCurrent If true (default), set the currently-active logger to the newly-created one. Equivalent to calling `braintrust.withCurrent(logger, callback)`.
+ * This function is deprecated. Use `initLogger` instead.
  */
 export async function withLogger<R>(
   callback: (logger: Logger) => R,
   options: Readonly<InitLoggerOptions & SetCurrentArg> = {}
 ): Promise<R> {
-  const logger = initLogger(options);
-  return runFinally(
-    () => {
-      if (options.setCurrent ?? true) {
-        return withCurrent(logger, () => callback(logger));
-      } else {
-        return callback(logger);
-      }
-    },
-    () => logger.flush()
+  console.warn(
+    "withLogger is deprecated and will be removed in a future version of braintrust. Simply create the logger with `initLogger`."
   );
+  const logger = initLogger(options);
+  return callback(logger);
 }
 
 type InitDatasetOptions = {
@@ -871,13 +808,10 @@ type InitDatasetOptions = {
   apiUrl?: string;
   apiKey?: string;
   orgName?: string;
-  disableCache?: boolean;
 };
 
 /**
  * Create a new dataset in a specified project. If the project does not exist, it will be created.
- *
- * Remember to close your dataset when it is finished by calling `Dataset.close`. We recommend initializing the dataset within a callback (using `braintrust.withDataset`) to ensure it is terminated.
  *
  * @param project The name of the project to create the dataset in.
  * @param options Additional options for configuring init().
@@ -887,26 +821,17 @@ type InitDatasetOptions = {
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
- * @param options.disableCache Do not use cached login information.
  * @returns The newly created Dataset.
  */
 export async function initDataset(
   project: string,
   options: Readonly<InitDatasetOptions> = {}
 ) {
-  const {
-    dataset,
-    description,
-    version,
-    apiUrl,
-    apiKey,
-    orgName,
-    disableCache,
-  } = options || {};
+  const { dataset, description, version, apiUrl, apiKey, orgName } =
+    options || {};
 
   await login({
     orgName: orgName,
-    disableCache,
     apiKey,
     apiUrl,
   });
@@ -919,18 +844,18 @@ export async function initDataset(
 }
 
 /**
- * Wrapper over `braintrust.initDataset`, which passes the initialized `Dataset` it to the given callback and closes it afterwards. See `braintrust.initDataset` for full details.
+ * This function is deprecated. Use `initDataset` instead.
  */
 export async function withDataset<R>(
   project: string,
   callback: (dataset: Dataset) => R,
   options: Readonly<InitDatasetOptions> = {}
 ): Promise<R> {
-  const dataset = await initDataset(project, options);
-  return runFinally(
-    () => callback(dataset),
-    () => dataset.close()
+  console.warn(
+    "withDataset is deprecated and will be removed in a future version of braintrust. Simply create the dataset with `initDataset`."
   );
+  const dataset = await initDataset(project, options);
+  return callback(dataset);
 }
 
 type InitLoggerOptions = {
@@ -940,7 +865,6 @@ type InitLoggerOptions = {
   apiUrl?: string;
   apiKey?: string;
   orgName?: string;
-  disableCache?: boolean;
 };
 
 /**
@@ -954,30 +878,21 @@ type InitLoggerOptions = {
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
- * @param options.disableCache Do not use cached login information.
  * @returns The newly created Logger.
  */
 export function initLogger(options: Readonly<InitLoggerOptions> = {}) {
-  const {
-    projectName,
-    projectId,
-    asyncFlush,
-    apiUrl,
-    apiKey,
-    orgName,
-    disableCache,
-  } = options || {};
+  const { projectName, projectId, asyncFlush, apiUrl, apiKey, orgName } =
+    options || {};
 
   const lazyLogin = async () => {
     await login({
       orgName: orgName,
-      disableCache,
       apiKey,
       apiUrl,
     });
   };
 
-  return new Logger(
+  const ret = new Logger(
     lazyLogin,
     new Project({
       name: projectName,
@@ -987,6 +902,8 @@ export function initLogger(options: Readonly<InitLoggerOptions> = {}) {
       asyncFlush,
     }
   );
+  _state.currentLogger = ret;
+  return ret;
 }
 
 /**
@@ -998,7 +915,6 @@ export function initLogger(options: Readonly<InitLoggerOptions> = {}) {
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
- * @param options.disableCache Do not use cached login information.
  * @param options.forceLogin Login again, even if you have already logged in (by default, this function will exit quickly if you have already logged in)
  */
 export async function login(
@@ -1006,7 +922,6 @@ export async function login(
     apiUrl?: string;
     apiKey?: string;
     orgName?: string;
-    disableCache?: boolean;
     forceLogin?: boolean;
   } = {}
 ) {
@@ -1015,7 +930,6 @@ export async function login(
       "https://www.braintrustdata.com",
     apiKey = iso.getEnv("BRAINTRUST_API_KEY"),
     orgName = iso.getEnv("BRAINTRUST_ORG_NAME"),
-    disableCache = false,
   } = options || {};
 
   let { forceLogin = false } = options || {};
@@ -1086,12 +1000,14 @@ export async function login(
  * @returns The `id` of the logged event.
  */
 export function log(event: ExperimentLogFullArgs): string {
-  const currentExperiment = _state.currentExperiment.getStore();
-  if (!currentExperiment) {
+  console.warn(
+    "braintrust.log is deprecated and will be removed in a future version of braintrust. Use `experiment.log` instead."
+  );
+  const e = currentExperiment();
+  if (!e) {
     throw new Error("Not initialized. Please call init() first");
   }
-
-  return currentExperiment.log(event);
+  return e.log(event);
 }
 
 /**
@@ -1108,35 +1024,56 @@ export async function summarize(
     readonly comparisonExperimentId?: string;
   } = {}
 ): Promise<ExperimentSummary> {
-  const currentExperiment = _state.currentExperiment.getStore();
-  if (!currentExperiment) {
+  console.warn(
+    "braintrust.summarize is deprecated and will be removed in a future version of braintrust. Use `experiment.summarize` instead."
+  );
+  const e = currentExperiment();
+  if (!e) {
     throw new Error("Not initialized. Please call init() first");
   }
-
-  return await currentExperiment.summarize(options);
+  return await e.summarize(options);
 }
 
 /**
- * Returns the currently-active experiment (set by `braintrust.withExperiment` or `braintrust.withCurrent`). Returns undefined if no current experiment has been set.
+ * Returns the currently-active experiment (set by `braintrust.init`). Returns undefined if no current experiment has been set.
  */
 export function currentExperiment(): Experiment | undefined {
-  return _state.currentExperiment.getStore();
+  return _state.currentExperiment;
 }
 
 /**
- * Returns the currently-active logger (set by `braintrust.withLogger` or `braintrust.withCurrent`). Returns undefined if no current logger has been set.
+ * Returns the currently-active logger (set by `braintrust.initLogger`). Returns undefined if no current logger has been set.
  */
 export function currentLogger(): Logger | undefined {
-  return _state.currentLogger.getStore();
+  return _state.currentLogger;
 }
 
 /**
- * Return the currently-active span for logging (set by `traced` or `braintrust.withCurrent`). If there is no active span, returns a no-op span object, which supports the same interface as spans but does no logging.
+ * Return the currently-active span for logging (set by one of the `traced` methods). If there is no active span, returns a no-op span object, which supports the same interface as spans but does no logging.
  *
  * See `Span` for full details.
  */
 export function currentSpan(): Span {
-  return _state.currentSpan.getStore() ?? noopSpan;
+  return _state.currentSpan.getStore() ?? NOOP_SPAN;
+}
+
+/**
+ * Mainly for internal use. Return the parent object for starting a span in a global context.
+ */
+export function getSpanParentObject(): Span | Experiment | Logger {
+  const parentSpan = currentSpan();
+  if (!Object.is(parentSpan, NOOP_SPAN)) {
+    return parentSpan;
+  }
+  const experiment = currentExperiment();
+  if (experiment) {
+    return experiment;
+  }
+  const logger = currentLogger();
+  if (logger) {
+    return logger;
+  }
+  return NOOP_SPAN;
 }
 
 /**
@@ -1145,86 +1082,40 @@ export function currentSpan(): Span {
  *  * Currently-active experiment
  *  * Currently-active logger
  *
- * and creates a span in the first one that is active. If none of these are active, it returns a no-op span object.
+ * and creates a span under the first one that is active. If none of these are active, it returns a no-op span object.
  *
- * Unless a name is explicitly provided, the name of the span will be the name of the calling function, or "root" if no meaningful name can be determined.
- *
- * We recommend running spans within a callback (using `traced`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a callback, be sure to terminate it with `span.end()`.
- *
- * See `Span.startSpan` for full details.
+ * See `Span.traced` for full details.
  */
-export function startSpan(args?: StartSpanOptionalNameArgs): Span {
-  const { name: nameOpt, ...argsRest } = args ?? {};
-  const name =
-    (nameOpt ?? iso.getCallerLocation()?.caller_functionname) || "root";
-  const parentSpan = currentSpan();
-
-  if (!parentSpan) {
-    throw new Error(
-      "Cannot call startSpan() from outside a trace. Please wrap this code in a traced() callback."
-    );
-  }
-
-  if (!Object.is(parentSpan, noopSpan)) {
-    return parentSpan.startSpan(name, argsRest);
-  }
-
-  const experiment = currentExperiment();
-  if (experiment) {
-    return experiment.startSpan({ name, ...argsRest });
-  }
-
-  const logger = currentLogger();
-  if (logger) {
-    throw new Error(
-      "Cannot start a span within a logger from startSpan(). Use logger.startSpan() instead."
-    );
-  }
-
-  return noopSpan;
-}
-
-/**
- * Wrapper over `braintrust.startSpan`, which passes the initialized `Span` it to the given callback and ends it afterwards. See `Span.traced` for full details.
- */
-export function traced<R>(
+export async function traced<R>(
   callback: (span: Span) => R,
-  args?: StartSpanOptionalNameArgs & SetCurrentArg
-): R {
-  const span = startSpan(args);
-  return runFinally(
-    () => {
-      if (args?.setCurrent ?? true) {
-        return withCurrent(span, () => callback(span));
-      } else {
-        return callback(span);
-      }
-    },
-    () => span.end()
-  );
+  args?: StartSpanArgs & SetCurrentArg
+): Promise<Awaited<R>> {
+  const span = await startSpan(args);
+  try {
+    if (args?.setCurrent ?? true) {
+      return await withCurrent(span, callback);
+    } else {
+      return await callback(span);
+    }
+  } finally {
+    span.end();
+  }
 }
 
 /**
- * Set the given experiment or span as current within the given callback and any asynchronous operations created within the callback. The current experiment can be accessed with `braintrust.currentExperiment`, and the current span with `braintrust.currentSpan`.
- *
- * @param object: The experiment or span to be marked as current.
- * @param callback: The callback to be run under the scope of the current object.
+ * Lower-level alternative to `traced`, which does not automatically end the span or mark it as current. See `traced` for full details.
  */
-export function withCurrent<R>(
-  object: Experiment | Logger | Span,
-  callback: () => R
-): R {
-  if (object.kind === "experiment") {
-    return _state.currentExperiment.run(object, callback);
-  } else if (object.kind === "logger") {
-    return _state.currentLogger.run(object, callback);
-  } else if (object.kind === "span") {
-    return _state.currentSpan.run(object, callback);
-  } else {
-    throw new Error(
-      `Invalid object of type ${(object as any).constructor.name}`
-    );
-  }
+export async function startSpan(args?: StartSpanArgs): Promise<Span> {
+  const parentObject = getSpanParentObject();
+  const { name: nameOpt, ...argsRest } = args ?? {};
+  const name = parentObject.kind === "span" ? nameOpt : nameOpt ?? "root";
+  return parentObject.startSpan({ name, ...argsRest });
+}
+
+// Set the given span as current within the given callback and any asynchronous
+// operations created within the callback.
+function withCurrent<R>(span: Span, callback: (span: Span) => R): R {
+  return _state.currentSpan.run(span, () => callback(span));
 }
 
 function _check_org_info(org_info: any, org_name: string | undefined) {
@@ -1454,8 +1345,6 @@ export class Experiment {
   public readonly dataset?: Dataset;
   private bgLogger: BackgroundLogger;
   private lastStartTime: number;
-  private finished: boolean;
-
   // For type identification.
   public kind: "experiment" = "experiment";
 
@@ -1465,16 +1354,12 @@ export class Experiment {
     name: string,
     dataset?: Dataset
   ) {
-    this.finished = false;
-
     this.project = project;
     this.id = id;
     this.name = name;
     this.dataset = dataset;
     this.bgLogger = new BackgroundLogger();
     this.lastStartTime = getCurrentUnixTimestamp();
-
-    unterminatedObjects.addUnterminated(this, iso.getCallerLocation());
   }
 
   /**
@@ -1493,8 +1378,6 @@ export class Experiment {
    * :returns: The `id` of the logged event.
    */
   public log(event: Readonly<ExperimentLogFullArgs>): string {
-    this.checkNotFinished();
-
     event = validateAndSanitizeExperimentLogFullArgs(event, !!this.dataset);
     const span = this.startSpan({ startTime: this.lastStartTime, event });
     this.lastStartTime = span.end();
@@ -1502,13 +1385,34 @@ export class Experiment {
   }
 
   /**
-   * Create a new toplevel span. The name parameter is optional and defaults to "root".
+   * Create a new toplevel span underneath the experiment. The name defaults to "root".
    *
-   * See `Span.startSpan` for full details.
+   * See `Span.traced` for full details.
    */
-  public startSpan(args?: StartSpanOptionalNameArgs): Span {
-    this.checkNotFinished();
+  public traced<R>(
+    callback: (span: Span) => R,
+    args?: StartSpanArgs & SetCurrentArg
+  ): R {
+    const { setCurrent, ...argsRest } = args ?? {};
+    const span = this.startSpan(argsRest);
+    return runFinally(
+      () => {
+        if (setCurrent ?? true) {
+          return withCurrent(span, callback);
+        } else {
+          return callback(span);
+        }
+      },
+      () => span.end()
+    );
+  }
 
+  /**
+   * Lower-level alternative to `traced`, which does not automatically end the span or mark it as current.
+   *
+   * See `traced` for full details.
+   */
+  public startSpan(args?: StartSpanArgs): Span {
     const { name, ...argsRest } = args ?? {};
     return new SpanImpl({
       bgLogger: this.bgLogger,
@@ -1516,27 +1420,6 @@ export class Experiment {
       ...argsRest,
       rootExperiment: this,
     });
-  }
-
-  /**
-   * Wrapper over `Experiment.startSpan`, which passes the initialized `Span` it to the given callback and ends it afterwards. See `Span.traced` for full details.
-   */
-  public traced<R>(
-    callback: (span: Span) => R,
-    args?: StartSpanOptionalNameArgs & SetCurrentArg
-  ): R {
-    const { setCurrent, ...argsRest } = args ?? {};
-    const span = this.startSpan(argsRest);
-    return runFinally(
-      () => {
-        if (setCurrent ?? true) {
-          return withCurrent(span, () => callback(span));
-        } else {
-          return callback(span);
-        }
-      },
-      () => span.end()
-    );
   }
 
   /**
@@ -1605,36 +1488,29 @@ export class Experiment {
   }
 
   /**
-   * Finish the experiment and return its id. After calling close, you may not invoke any further methods on the experiment object.
-   *
-   * Will be invoked automatically if the experiment is wrapped in a callback passed to `braintrust.withExperiment`.
-   *
-   * @returns The experiment id.
+   * Flush any pending rows to the server.
    */
-  public async close(): Promise<string> {
-    this.checkNotFinished();
-
-    await this.bgLogger.flush();
-
-    this.finished = true;
-    unterminatedObjects.removeUnterminated(this);
-    return this.id;
+  async flush(): Promise<void> {
+    return await this.bgLogger.flush();
   }
 
-  private checkNotFinished() {
-    if (this.finished) {
-      throw new Error("Cannot invoke method on finished experiment");
-    }
+  /**
+   * This function is deprecated. You can simply remove it from your code.
+   */
+  public async close(): Promise<string> {
+    console.warn(
+      "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed"
+    );
+    return this.id;
   }
 }
 
 /**
  * Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
  *
- * We suggest using one of the various `startSpan` methods, instead of creating Spans directly. See `Span.startSpan` for full details.
+ * We suggest using one of the various `traced` methods, instead of creating Spans directly. See `Span.startSpan` for full details.
  */
 export class SpanImpl implements Span {
-  private finished: boolean;
   private bgLogger: BackgroundLogger;
   // `internalData` contains fields that are not part of the "user-sanitized"
   // set of fields which we want to log in just one of the span rows.
@@ -1664,31 +1540,37 @@ export class SpanImpl implements Span {
   // root_experiment should only be specified for a root span. parent_span
   // should only be specified for non-root spans.
   constructor(
-    args: {
-      bgLogger: BackgroundLogger;
-      name: string;
-      spanAttributes?: Record<any, any>;
-      startTime?: number;
-      setCurrent?: boolean;
-      event?: ExperimentLogPartialArgs & Partial<IdField>;
-    } & (
-      | { rootExperiment: Experiment }
-      | { rootProject: RegisteredProject }
-      | { parentSpan: SpanImpl }
-    )
+    args: { bgLogger: BackgroundLogger } & StartSpanArgs &
+      (
+        | { rootExperiment: Experiment }
+        | { rootProject: RegisteredProject }
+        | { parentSpan: SpanImpl }
+      )
   ) {
-    this.finished = false;
     this.loggedEndTime = undefined;
 
     this.bgLogger = args.bgLogger;
 
     const callerLocation = iso.getCallerLocation();
+    const name = (() => {
+      if (args.name) return args.name;
+      if (callerLocation) {
+        const pathComponents = callerLocation.caller_filename.split("/");
+        const filename = pathComponents[pathComponents.length - 1];
+        return [callerLocation.caller_functionname]
+          .concat(
+            filename ? [`${filename}:${callerLocation.caller_lineno}`] : []
+          )
+          .join(":");
+      }
+      return "subspan";
+    })();
     this.internalData = {
       metrics: {
         start: args.startTime ?? getCurrentUnixTimestamp(),
         ...callerLocation,
       },
-      span_attributes: { ...args.spanAttributes, name: args.name },
+      span_attributes: { ...args.spanAttributes, name },
       created: new Date().toISOString(),
     };
 
@@ -1728,8 +1610,6 @@ export class SpanImpl implements Span {
     const { id: _id, ...eventRest } = args.event ?? {};
     this.log(eventRest);
     this.isMerge = true;
-
-    unterminatedObjects.addUnterminated(this, callerLocation);
   }
 
   public get id(): string {
@@ -1745,11 +1625,9 @@ export class SpanImpl implements Span {
   }
 
   public log(event: ExperimentLogPartialArgs): void {
-    this.checkNotFinished();
-
     const sanitized = validateAndSanitizeExperimentLogPartialArgs(event);
     // There should be no overlap between the dictionaries being merged,
-    // except for `sanitized` and `internal_data`, where the former overrides
+    // except for `sanitized` and `internalData`, where the former overrides
     // the latter.
     const sanitizedAndInternalData = { ...this.internalData };
     mergeDicts(sanitizedAndInternalData, sanitized);
@@ -1765,28 +1643,16 @@ export class SpanImpl implements Span {
     this.bgLogger.log([record]);
   }
 
-  public startSpan(name: string, args?: StartSpanArgs): Span {
-    this.checkNotFinished();
-
-    return new SpanImpl({
-      bgLogger: this.bgLogger,
-      name,
-      ...args,
-      parentSpan: this,
-    });
-  }
-
   public traced<R>(
-    name: string,
     callback: (span: Span) => R,
     args?: StartSpanArgs & SetCurrentArg
   ): R {
     const { setCurrent, ...argsRest } = args ?? {};
-    const span = this.startSpan(name, argsRest);
+    const span = this.startSpan(argsRest);
     return runFinally(
       () => {
         if (setCurrent ?? true) {
-          return withCurrent(span, () => callback(span));
+          return withCurrent(span, callback);
         } else {
           return callback(span);
         }
@@ -1795,9 +1661,15 @@ export class SpanImpl implements Span {
     );
   }
 
-  public end(args?: EndSpanArgs): number {
-    this.checkNotFinished();
+  public startSpan(args?: StartSpanArgs): Span {
+    return new SpanImpl({
+      bgLogger: this.bgLogger,
+      ...args,
+      parentSpan: this,
+    });
+  }
 
+  public end(args?: EndSpanArgs): number {
     let endTime: number;
     if (!this.loggedEndTime) {
       endTime = args?.endTime ?? getCurrentUnixTimestamp();
@@ -1806,20 +1678,11 @@ export class SpanImpl implements Span {
       endTime = this.loggedEndTime;
     }
     this.log({});
-
-    this.finished = true;
-    unterminatedObjects.removeUnterminated(this);
     return endTime;
   }
 
   public close(args?: EndSpanArgs): number {
     return this.end(args);
-  }
-
-  private checkNotFinished() {
-    if (this.finished) {
-      throw new Error("Cannot invoke method on finished span");
-    }
   }
 }
 
@@ -1864,8 +1727,7 @@ export class Dataset {
   public readonly name: string;
   private pinnedVersion?: string;
   private _fetchedData?: any[] = undefined;
-  private logger: BackgroundLogger;
-  private finished: boolean;
+  private bgLogger: BackgroundLogger;
 
   constructor(
     project: RegisteredProject,
@@ -1873,8 +1735,6 @@ export class Dataset {
     name: string,
     pinnedVersion?: string
   ) {
-    this.finished = false;
-
     this.project = project;
     this.id = id;
     this.name = name;
@@ -1909,8 +1769,6 @@ export class Dataset {
     readonly metadata?: Record<string, unknown>;
     readonly id?: string;
   }): string {
-    this.checkNotFinished();
-
     if (metadata !== undefined) {
       for (const key of Object.keys(metadata)) {
         if (typeof key !== "string") {
@@ -1929,13 +1787,11 @@ export class Dataset {
       metadata,
     };
 
-    this.logger.log([args]);
+    this.bgLogger.log([args]);
     return args.id;
   }
 
   public delete(id: string): string {
-    this.checkNotFinished();
-
     const args = {
       id,
       project_id: this.project.id,
@@ -1944,7 +1800,7 @@ export class Dataset {
       _object_delete: true,
     };
 
-    this.logger.log([args]);
+    this.bgLogger.log([args]);
     return args.id;
   }
 
@@ -1957,11 +1813,9 @@ export class Dataset {
   public async summarize(
     options: { readonly summarizeData?: boolean } = {}
   ): Promise<DatasetSummary> {
-    this.checkNotFinished();
-
     let { summarizeData = true } = options || {};
 
-    await this.logger.flush();
+    await this.bgLogger.flush();
     const projectUrl = `${_state.apiUrl}/app/${encodeURIComponent(
       _state.orgName!
     )}/p/${encodeURIComponent(this.project.name)}`;
@@ -2006,8 +1860,6 @@ export class Dataset {
    * @returns An iterator over the dataset's records.
    */
   async *fetch(): AsyncGenerator<DatasetRecord> {
-    this.checkNotFinished();
-
     const records = await this.fetchedData();
     for (const record of records) {
       yield {
@@ -2032,14 +1884,10 @@ export class Dataset {
    * ```
    */
   [Symbol.asyncIterator]() {
-    this.checkNotFinished();
-
     return this.fetch();
   }
 
   async fetchedData() {
-    this.checkNotFinished();
-
     if (this._fetchedData === undefined) {
       const resp = await _state.logConn().get("object/dataset", {
         id: this.id,
@@ -2058,14 +1906,10 @@ export class Dataset {
   }
 
   clearCache() {
-    this.checkNotFinished();
-
     this._fetchedData = undefined;
   }
 
   async version() {
-    this.checkNotFinished();
-
     if (this.pinnedVersion !== undefined) {
       return this.pinnedVersion;
     } else {
@@ -2082,25 +1926,20 @@ export class Dataset {
   }
 
   /**
-   * Terminate connection to the dataset and return its id. After calling close, you may not invoke any further methods on the dataset object.
-   *
-   * Will be invoked automatically if the dataset is bound as a context manager.
-   *
-   * @returns The dataset id.
+   * Flush any pending rows to the server.
    */
-  public async close(): Promise<string> {
-    this.checkNotFinished();
-
-    await this.logger.flush();
-    this.finished = true;
-    unterminatedObjects.removeUnterminated(this);
-    return this.id;
+  async flush(): Promise<void> {
+    return await this.bgLogger.flush();
   }
 
-  private checkNotFinished() {
-    if (this.finished) {
-      throw new Error("Cannot invoke method on finished dataset");
-    }
+  /**
+   * This function is deprecated. You can simply remove it from your code.
+   */
+  public async close(): Promise<string> {
+    console.warn(
+      "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed"
+    );
+    return this.id;
   }
 }
 
@@ -2177,7 +2016,6 @@ export interface DataSummary {
  * @property datasetUrl URL to the experiment's page in the Braintrust app.
  * @property dataSummary Summary of the dataset's data.
  */
-
 export interface DatasetSummary {
   projectName: string;
   datasetName: string;

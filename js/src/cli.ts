@@ -326,7 +326,7 @@ async function runOnce(
       );
     } finally {
       if (logger) {
-        await logger.close();
+        await logger.flush();
       }
     }
   });
