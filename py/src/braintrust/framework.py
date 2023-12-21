@@ -17,7 +17,7 @@ from braintrust_core.util import SerializableDataClass
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 
-from .logger import NOOP_SPAN, Metadata, Span
+from .logger import NOOP_SPAN, Metadata, Span, current_span, start_span
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
 
@@ -280,12 +280,9 @@ def Eval(
             loop = None
 
         async def run_to_completion():
-            experiment = init_experiment(evaluator.project_name, evaluator.experiment_name, evaluator.metadata)
-            try:
+            with init_experiment(evaluator.project_name, evaluator.experiment_name, evaluator.metadata) as experiment:
                 results, summary = await run_evaluator(experiment, evaluator, 0, [])
                 report_evaluator_result(evaluator.eval_name, results, summary, True)
-            finally:
-                experiment.flush()
 
         if loop:
             return loop.create_task(run_to_completion())
@@ -429,11 +426,11 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                     thread_pool.thread_pool(), run_f, args, kwargs, contextvars.copy_context()
                 )
 
-    async def await_or_run_scorer(root_span, scorer, scorer_idx, **kwargs):
+    async def await_or_run_scorer(scorer, scorer_idx, **kwargs):
         name = scorer._name() if hasattr(scorer, "_name") else scorer.__name__
         if name == "<lambda>":
             name = f"scorer_{scorer_idx}"
-        with root_span.start_span(name=name, input=dict(**kwargs)) as span:
+        with start_span(name=name, input=dict(**kwargs)):
             score = scorer.eval_async if isinstance(scorer, Scorer) else scorer
 
             scorer_args = kwargs
@@ -447,9 +444,9 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
             if isinstance(result, Score):
                 result_rest = result.as_dict()
                 result_metadata = result_rest.pop("metadata", {})
-                span.log(output=result_rest, metadata=result_metadata)
+                current_span().log(output=result_rest, metadata=result_metadata)
             else:
-                span.log(output=result)
+                current_span().log(output=result)
             return result
 
     async def run_evaluator_task(datum):
@@ -475,11 +472,11 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 if len(inspect.signature(evaluator.task).parameters) == 2:
                     task_args.append(hooks)
 
-                with root_span.start_span("task") as span:
-                    hooks.set_span(span)
+                with current_span().start_span("task") as task_span:
+                    hooks.set_span(task_span)
                     output = await await_or_run(evaluator.task, *task_args)
-                    span.log(input=task_args[0], output=output)
-                root_span.log(output=output)
+                    task_span.log(input=task_args[0], output=output)
+                current_span().log(output=output)
 
                 # First, resolve the scorers if they are classes
                 scorers = [
@@ -487,7 +484,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                     for scorer in evaluator.scores
                 ]
                 score_promises = [
-                    asyncio.create_task(await_or_run_scorer(root_span, score, idx, **datum.as_dict(), output=output))
+                    asyncio.create_task(await_or_run_scorer(score, idx, **datum.as_dict(), output=output))
                     for idx, score in enumerate(scorers)
                 ]
                 score_results = [await p for p in score_promises]
@@ -506,7 +503,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                     hooks.meta(scores=score_metadata)
 
                 # XXX: We could probably log these as they are being produced
-                root_span.log(metadata=metadata, scores=scores)
+                current_span().log(metadata=metadata, scores=scores)
             except Exception as e:
                 error = e
                 # Python3.10 has a different set of arguments to format_exception than earlier versions,

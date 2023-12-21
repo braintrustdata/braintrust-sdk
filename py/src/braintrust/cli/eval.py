@@ -110,7 +110,7 @@ async def run_evaluator_task(evaluator, position, opts: EvaluatorOpts):
         )
     finally:
         if experiment:
-            experiment.flush()
+            experiment.close()
 
 
 async def run_once(handles, evaluator_opts):
