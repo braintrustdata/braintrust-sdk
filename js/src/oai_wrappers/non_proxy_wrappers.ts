@@ -1,11 +1,19 @@
-import { Span, startSpan } from "../logger";
-import { getCurrentUnixTimestamp } from "../util";
+import { Span, startSpan } from "./logger";
+import { getCurrentUnixTimestamp } from "./util";
 
+interface BetaLike {
+  chat: {
+    completions: {
+      stream: any;
+    };
+  };
+}
 interface ChatLike {
   completions: any;
 }
 interface OpenAILike {
   chat: ChatLike;
+  beta?: BetaLike;
 }
 
 export function openAIV4NonProxyWrapper<T extends OpenAILike>(openai: T): T {
@@ -26,10 +34,42 @@ export function openAIV4NonProxyWrapper<T extends OpenAILike>(openai: T): T {
       return Reflect.get(target, name, receiver);
     },
   });
+
+  let betaProxy: OpenAILike;
+  if (openai.beta?.chat?.completions?.stream) {
+    let betaChatCompletionProxy = new Proxy(openai?.beta?.chat.completions, {
+      get(target, name, receiver) {
+        const baseVal = Reflect.get(target, name, receiver);
+        if (name === "stream") {
+          return wrapBetaChatCompletion(baseVal.bind(target));
+        }
+        return baseVal;
+      },
+    });
+    let betaChatProxy = new Proxy(openai.beta.chat, {
+      get(target, name, receiver) {
+        if (name === "completions") {
+          return betaChatCompletionProxy;
+        }
+        return Reflect.get(target, name, receiver);
+      },
+    });
+    betaProxy = new Proxy(openai.beta, {
+      get(target, name, receiver) {
+        if (name === "chat") {
+          return betaChatProxy;
+        }
+        return Reflect.get(target, name, receiver);
+      },
+    });
+  }
   let proxy = new Proxy(openai, {
     get(target, name, receiver) {
       if (name === "chat") {
         return chatProxy;
+      }
+      if (name === "beta" && betaProxy) {
+        return betaProxy;
       }
       return Reflect.get(target, name, receiver);
     },
@@ -54,6 +94,50 @@ interface NonStreamingChatResponse {
     | undefined;
 }
 
+function wrapBetaChatCompletion<
+  P extends ChatParams,
+  C extends StreamingChatResponse
+>(completion: (params: P) => Promise<C>): (params: P) => Promise<any> {
+  return async (params: P) => {
+    const { messages, ...rest } = params;
+    const span = startSpan({
+      name: "OpenAI Chat Completion",
+      event: {
+        input: messages,
+        metadata: {
+          ...rest,
+        },
+      },
+    });
+    const startTime = getCurrentUnixTimestamp();
+
+    const ret = (await completion(params)) as StreamingChatResponse;
+
+    let first = true;
+    ret.on("chunk", (_chunk: any) => {
+      if (first) {
+        const now = getCurrentUnixTimestamp();
+        span.log({
+          metrics: {
+            time_to_first_token: now - startTime,
+          },
+        });
+        first = false;
+      }
+    });
+    ret.on("chatCompletion", (completion: any) => {
+      span.log({
+        output: completion.choices[0],
+      });
+    });
+    ret.on("end", () => {
+      span.end();
+    });
+
+    return ret;
+  };
+}
+
 // TODO: Mock this up better
 type StreamingChatResponse = any;
 
@@ -63,7 +147,7 @@ function wrapChatCompletion<
 >(completion: (params: P) => Promise<C>): (params: P) => Promise<any> {
   return async (params: P) => {
     const { messages, ...rest } = params;
-    const span = await startSpan({
+    const span = startSpan({
       name: "OpenAI Chat Completion",
       event: {
         input: messages,
