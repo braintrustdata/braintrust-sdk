@@ -170,7 +170,7 @@ class BraintrustState {
     this.currentLogger = iso.newAsyncLocalStorage();
     this.currentSpan = iso.newAsyncLocalStorage();
     if (this.currentSpan.enterWith) {
-        this.currentSpan.enterWith(noopSpan);
+      this.currentSpan.enterWith(noopSpan);
     }
 
     this.apiUrl = null;
