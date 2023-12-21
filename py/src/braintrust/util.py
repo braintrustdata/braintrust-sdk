@@ -1,5 +1,6 @@
 import inspect
 import os.path
+import sys
 import urllib.parse
 
 from requests import HTTPError
@@ -43,3 +44,9 @@ def get_caller_location():
                 caller_lineno=caller.lineno,
             )
     return None
+
+
+# Taken from
+# https://stackoverflow.com/questions/5574702/how-do-i-print-to-stderr-in-python.
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
