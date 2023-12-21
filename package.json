@@ -1,0 +1,19 @@
+{
+  "repository": "https://github.com/braintrustdata/braintrust-sdk",
+  "license": "MIT",
+  "private": true,
+  "workspaces": [
+    "js",
+    "core/js"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "start": "turbo run start",
+    "lint": "turbo run lint",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "turbo": "^1.11.2"
+  }
+}
