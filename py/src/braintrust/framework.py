@@ -368,7 +368,7 @@ class DictEvalHooks(EvalHooks):
 
 
 def init_experiment(project_name, experiment_name: Optional[str] = None, metadata: Optional[Metadata] = None):
-    ret = _init_experiment(project_name, experiment=experiment_name, metadata=metadata)
+    ret = _init_experiment(project_name, experiment=experiment_name, metadata=metadata, set_current=False)
     summary = ret.summarize(summarize_scores=False)
     print(f"Experiment {ret.name} is running at {summary.experiment_url}")
     return ret
