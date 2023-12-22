@@ -17,6 +17,8 @@ from braintrust_core.util import SerializableDataClass
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 
+from braintrust.util import eprint
+
 from .logger import NOOP_SPAN, Metadata, Span
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
@@ -154,6 +156,11 @@ class Evaluator:
     """
     trial_count: int = 1
 
+    """
+    Whether the experiment should be public. Defaults to false.
+    """
+    is_public: bool = False
+
 
 _evals = {}
 _lazy_load = False
@@ -177,22 +184,28 @@ def pluralize(n, singular, plural):
         return plural
 
 
-def report_evaluator_result(eval_name, results, summary, verbose):
+def report_evaluator_result(eval_name, results, summary, verbose, jsonl):
     failing_results = [x for x in results if x.error]
     if len(failing_results) > 0:
-        print(
+        eprint(
             f"{bcolors.FAIL}Evaluator {eval_name} failed with {len(failing_results)} {pluralize(len(failing_results), 'error', 'errors')}{bcolors.ENDC}"
         )
 
-        for result in failing_results:
-            info = "".join(
-                result.exc_info if verbose else traceback.format_exception_only(type(result.error), result.error)
-            ).rstrip()
-            print(f"{bcolors.FAIL}{info}{bcolors.ENDC}")
+        errors = [
+            result.exc_info if verbose or jsonl else traceback.format_exception_only(type(result.error), result.error)
+            for result in failing_results
+        ]
 
-        print(f"{bcolors.FAIL}Add --verbose to see full stack traces.{bcolors.ENDC}")
+        if jsonl:
+            print(json.dumps({"eval_name": eval_name, "errors": errors}))
+        else:
+            for result in failing_results:
+                info = "".join(errors).rstrip()
+                eprint(f"{bcolors.FAIL}{info}{bcolors.ENDC}")
+
+            eprint(f"{bcolors.FAIL}Add --verbose to see full stack traces.{bcolors.ENDC}")
     if summary:
-        print(f"{summary}")
+        print(json.dumps(summary.as_dict()) if jsonl else f"{summary}")
     else:
         scores_by_name = defaultdict(lambda: (0, 0))
         for result in results:
@@ -200,9 +213,13 @@ def report_evaluator_result(eval_name, results, summary, verbose):
                 curr = scores_by_name[name]
                 scores_by_name[name] = (curr[0] + score, curr[1] + 1)
 
-        print(f"Average scores for {eval_name}:")
-        for name, (total, count) in scores_by_name.items():
-            print(f"  {name}: {total / count}")
+        if jsonl:
+            summary = {"scores": scores_by_name}
+            print(json.dumps(summary))
+        else:
+            print(f"Average scores for {eval_name}:")
+            for name, (total, count) in scores_by_name.items():
+                print(f"  {name}: {total / count}")
 
 
 def _make_eval_name(name: str, experiment_name: Optional[str]):
@@ -220,6 +237,7 @@ def Eval(
     experiment_name: Optional[str] = None,
     trial_count: int = 1,
     metadata: Optional[Metadata] = None,
+    is_public: bool = False,
 ):
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -251,6 +269,7 @@ def Eval(
     anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log
     the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata`
     can be any JSON-serializable type, but its keys must be strings.
+    :param is_public: (Optional) Whether the experiment should be public. Defaults to false.
     :return: An `Evaluator` object.
     """
     eval_name = _make_eval_name(name, experiment_name)
@@ -268,6 +287,7 @@ def Eval(
         experiment_name=experiment_name,
         trial_count=trial_count,
         metadata=metadata,
+        is_public=is_public,
     )
 
     if _lazy_load:
@@ -280,7 +300,12 @@ def Eval(
             loop = None
 
         async def run_to_completion():
-            experiment = init_experiment(evaluator.project_name, evaluator.experiment_name, evaluator.metadata)
+            experiment = init_experiment(
+                evaluator.project_name,
+                evaluator.experiment_name,
+                metadata=evaluator.metadata,
+                is_public=evaluator.is_public,
+            )
             try:
                 results, summary = await run_evaluator(experiment, evaluator, 0, [])
                 report_evaluator_result(evaluator.eval_name, results, summary, True)
@@ -367,10 +392,10 @@ class DictEvalHooks(EvalHooks):
         self.metadata.update(info)
 
 
-def init_experiment(project_name, experiment_name: Optional[str] = None, metadata: Optional[Metadata] = None):
-    ret = _init_experiment(project_name, experiment=experiment_name, metadata=metadata)
+def init_experiment(project_name, experiment_name: Optional[str] = None, **kwargs):
+    ret = _init_experiment(project_name, experiment=experiment_name, **kwargs)
     summary = ret.summarize(summarize_scores=False)
-    print(f"Experiment {ret.name} is running at {summary.experiment_url}")
+    eprint(f"Experiment {ret.name} is running at {summary.experiment_url}")
     return ret
 
 
