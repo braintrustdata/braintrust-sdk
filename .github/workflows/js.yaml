@@ -1,0 +1,34 @@
+name: js
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x]
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "pnpm"
+      - run: pnpm install
+      - run: make test-js
+      - run: pnpm build
+      - name: Debug with upterm
+        if: failure()
+        uses: lhotari/action-upterm@v1
+        with:
+          limit-access-to-actor: true
+          wait-timeout-minutes: 10

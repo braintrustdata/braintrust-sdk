@@ -1,241 +1,33 @@
-import { Span, startSpan } from "./logger";
-import { getCurrentUnixTimestamp } from "./util";
-
-interface BetaLike {
-  chat: {
-    completions: {
-      stream: any;
-    };
-  };
-}
-interface ChatLike {
-  completions: any;
-}
-interface OpenAILike {
-  chat: ChatLike;
-  beta?: BetaLike;
-}
+import { openAIV4NonProxyWrapper } from "./oai_wrappers/non_proxy_wrappers";
+import { openAIV4ProxyWrapper } from "./oai_wrappers/proxy_wrappers";
 
 /**
- * Wrap an `OpenAI` object (created with `new OpenAI(...)`) to add tracing. If Braintrust is
- * not configured, this is a no-op
+ * Wrap an `OpenAI` object (created with `new OpenAI(...)`) to add tracing.
  *
  * Currently, this only supports the `v4` API.
  *
- * @param openai
+ * @param openai The `OpenAI` object.
+ * @param options.useProxy By default (or if `false`), the wrapper does not trace through the proxy. Pass `true` to use the Braintrust proxy as the base URL. The URL is obtained from the environment variable `BRAINTRUST_PROXY_URL`, defaulting to `https://braintrustproxy.com/v1. Pass a string to use a custom proxy URL.
+ * @param options.apiKey Only used when `useProxy` is set. By default, the API key is set from `BRAINTRUST_API_KEY` if available. Pass a string to use a custom API key.
  * @returns The wrapped `OpenAI` object.
  */
-export function wrapOpenAI<T extends object>(openai: T): T {
+export function wrapOpenAI<T extends object>(
+  openai: T,
+  options?: { useProxy?: string | boolean; apiKey?: string }
+): T {
   if ((openai as any)?.chat?.completions?.create) {
-    return wrapOpenAIv4(openai as any) as T;
+    const useProxyOpt = options?.useProxy;
+    if (useProxyOpt) {
+      return openAIV4ProxyWrapper({
+        openai: openai as any,
+        useProxy: useProxyOpt,
+        apiKey: options?.apiKey,
+      }) as T;
+    } else {
+      return openAIV4NonProxyWrapper(openai as any) as T;
+    }
   } else {
     console.warn("Unsupported OpenAI library (potentially v3). Not wrapping.");
     return openai;
-  }
-}
-
-export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
-  let completionProxy = new Proxy(openai.chat.completions, {
-    get(target, name, receiver) {
-      const baseVal = Reflect.get(target, name, receiver);
-      if (name === "create") {
-        return wrapChatCompletion(baseVal.bind(target));
-      }
-      return baseVal;
-    },
-  });
-  let chatProxy = new Proxy(openai.chat, {
-    get(target, name, receiver) {
-      if (name === "completions") {
-        return completionProxy;
-      }
-      return Reflect.get(target, name, receiver);
-    },
-  });
-
-  let betaProxy: OpenAILike;
-  if (openai.beta?.chat?.completions?.stream) {
-    let betaChatCompletionProxy = new Proxy(openai?.beta?.chat.completions, {
-      get(target, name, receiver) {
-        const baseVal = Reflect.get(target, name, receiver);
-        if (name === "stream") {
-          return wrapBetaChatCompletion(baseVal.bind(target));
-        }
-        return baseVal;
-      },
-    });
-    let betaChatProxy = new Proxy(openai.beta.chat, {
-      get(target, name, receiver) {
-        if (name === "completions") {
-          return betaChatCompletionProxy;
-        }
-        return Reflect.get(target, name, receiver);
-      },
-    });
-    betaProxy = new Proxy(openai.beta, {
-      get(target, name, receiver) {
-        if (name === "chat") {
-          return betaChatProxy;
-        }
-        return Reflect.get(target, name, receiver);
-      },
-    });
-  }
-  let proxy = new Proxy(openai, {
-    get(target, name, receiver) {
-      if (name === "chat") {
-        return chatProxy;
-      }
-      if (name === "beta" && betaProxy) {
-        return betaProxy;
-      }
-      return Reflect.get(target, name, receiver);
-    },
-  });
-
-  return proxy;
-}
-
-type ChatParams = {
-  messages: unknown;
-  stream?: boolean | null;
-};
-
-interface NonStreamingChatResponse {
-  choices: any[];
-  usage:
-    | {
-        total_tokens: number;
-        prompt_tokens: number;
-        completion_tokens: number;
-      }
-    | undefined;
-}
-
-function wrapBetaChatCompletion<
-  P extends ChatParams,
-  C extends StreamingChatResponse
->(completion: (params: P) => Promise<C>): (params: P) => Promise<any> {
-  return async (params: P) => {
-    const { messages, ...rest } = params;
-    const span = startSpan({
-      name: "OpenAI Chat Completion",
-      event: {
-        input: messages,
-        metadata: {
-          ...rest,
-        },
-      },
-    });
-    const startTime = getCurrentUnixTimestamp();
-
-    const ret = (await completion(params)) as StreamingChatResponse;
-
-    let first = true;
-    ret.on("chunk", (_chunk: any) => {
-      if (first) {
-        const now = getCurrentUnixTimestamp();
-        span.log({
-          metrics: {
-            time_to_first_token: now - startTime,
-          },
-        });
-        first = false;
-      }
-    });
-    ret.on("chatCompletion", (completion: any) => {
-      span.log({
-        output: completion.choices[0],
-      });
-    });
-    ret.on("end", () => {
-      span.end();
-    });
-
-    return ret;
-  };
-}
-
-// TODO: Mock this up better
-type StreamingChatResponse = any;
-
-function wrapChatCompletion<
-  P extends ChatParams,
-  C extends NonStreamingChatResponse | StreamingChatResponse
->(completion: (params: P) => Promise<C>): (params: P) => Promise<any> {
-  return async (params: P) => {
-    const { messages, ...rest } = params;
-    const span = startSpan({
-      name: "OpenAI Chat Completion",
-      event: {
-        input: messages,
-        metadata: {
-          ...rest,
-        },
-      },
-    });
-    if (params.stream) {
-      const startTime = getCurrentUnixTimestamp();
-      const ret = (await completion(params)) as StreamingChatResponse;
-      return new WrapperStream(span, startTime, ret);
-    } else {
-      try {
-        const ret = (await completion(params)) as NonStreamingChatResponse;
-        const { messages, ...rest } = params;
-        span.log({
-          input: messages,
-          metadata: {
-            ...rest,
-          },
-          output: ret.choices[0],
-          metrics: {
-            tokens: ret.usage?.total_tokens,
-            prompt_tokens: ret.usage?.prompt_tokens,
-            completion_tokens: ret.usage?.completion_tokens,
-          },
-        });
-        return ret;
-      } finally {
-        span.end();
-      }
-    }
-  };
-}
-
-class WrapperStream<Item> implements AsyncIterable<Item> {
-  private span: Span;
-  private iter: AsyncIterable<Item>;
-  private startTime: number;
-
-  constructor(span: Span, startTime: number, iter: AsyncIterable<Item>) {
-    this.span = span;
-    this.iter = iter;
-    this.startTime = startTime;
-  }
-
-  async *[Symbol.asyncIterator](): AsyncIterator<Item, any, undefined> {
-    let first = true;
-    let allResults = [];
-    try {
-      for await (const item of this.iter) {
-        if (first) {
-          const now = getCurrentUnixTimestamp();
-          this.span.log({
-            metrics: {
-              time_to_first_token: now - this.startTime,
-            },
-          });
-          first = false;
-        }
-
-        allResults.push(item);
-        yield item;
-      }
-      this.span.log({
-        output: allResults,
-      });
-    } finally {
-      this.span.end();
-    }
   }
 }

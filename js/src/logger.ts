@@ -11,6 +11,12 @@ import {
 
 import iso, { IsoAsyncLocalStorage, CallerLocation } from "./isomorph";
 import { runFinally, GLOBAL_PROJECT, getCurrentUnixTimestamp } from "./util";
+import {
+  SpanObjectIds,
+  SerializedSpanInfo,
+  serializedSpanInfoToString,
+  serializedSpanInfoFromString,
+} from "./serialized_span_info";
 
 export type Metadata = Record<string, unknown>;
 
@@ -97,6 +103,16 @@ export interface Span {
    */
   close(args?: EndSpanArgs): number;
 
+  /**
+   * Serializes the span as a token which can be passed around to other processes, across the network, etc. To start a span under a serialized span, call `braintrust.startSpanUnderSerialized` (see docs for more details).
+   */
+  serialize(): string;
+
+  /**
+   * Flush any pending logs to the server.
+   */
+  flush(): Promise<void>;
+
   // For type identification.
   kind: "span";
 }
@@ -137,6 +153,12 @@ export class NoopSpan implements Span {
   public close(args?: EndSpanArgs): number {
     return this.end(args);
   }
+
+  public serialize(): string {
+    return "";
+  }
+
+  public async flush(): Promise<void> {}
 }
 
 export const noopSpan = new NoopSpan();
@@ -457,7 +479,7 @@ export class Logger {
   private loggedIn: boolean = false;
   private lazyProject: Project;
   private logOptions: LogOptions;
-  private bgLogger: BackgroundLogger;
+  private bgLogger: BackgroundLogger | undefined;
   private lastStartTime: number;
 
   // For type identification.
@@ -471,8 +493,6 @@ export class Logger {
     this._lazyLogin = lazyLogin;
     this.lazyProject = lazyProject;
     this.logOptions = logOptions;
-
-    this.bgLogger = new BackgroundLogger();
     this.lastStartTime = getCurrentUnixTimestamp();
   }
 
@@ -480,6 +500,7 @@ export class Logger {
     if (!this.loggedIn) {
       await this._lazyLogin();
       this.lastStartTime = getCurrentUnixTimestamp();
+      this.bgLogger = new BackgroundLogger({ logConn: _state.logConn() });
       this.loggedIn = true;
     }
   }
@@ -520,7 +541,7 @@ export class Logger {
     const project = await this.lazyProject.lazyInit();
     const { name, ...argsRest } = args ?? {};
     return new SpanImpl({
-      bgLogger: this.bgLogger,
+      bgLogger: this.bgLogger!,
       name: name ?? "root",
       ...argsRest,
       rootProject: project,
@@ -549,11 +570,26 @@ export class Logger {
     }
   }
 
+  /**
+   * Serializes the logger as a token which can be passed around to other processes, across the network, etc. To start a span under a serialized Logger, call `braintrust.startSpanUnderSerialized` (see docs for more details).
+   */
+  public async serialize(): Promise<string> {
+    const project = await this.lazyProject.lazyInit();
+    return serializedSpanInfoToString({
+      object_kind: "pl",
+      org_id: _state.orgId!,
+      project_id: project.id,
+      log_id: "g",
+      parent_span_kind: "none",
+    });
+  }
+
   /*
    * Flush any pending logs to the server.
    */
   async flush(): Promise<void> {
-    return await this.bgLogger.flush();
+    await this.lazyLogin();
+    return await this.bgLogger!.flush();
   }
 }
 
@@ -635,17 +671,28 @@ function now() {
 }
 
 class BackgroundLogger {
+  private logConn: HTTPConnection;
   private items: BackgroundLogEvent[] = [];
   private active_flush: Promise<string[]> = Promise.resolve([]);
   private active_flush_resolved = true;
 
-  constructor() {
+  constructor({
+    logConn,
+    flushOnExit,
+  }: {
+    logConn: HTTPConnection;
+    flushOnExit?: boolean;
+  }) {
+    this.logConn = logConn;
+
     // Note that this will not run for explicit termination events, such as
     // calls to `process.exit()` or uncaught exceptions. Thus it is a
     // "best-effort" flush.
-    iso.processOn("beforeExit", async () => {
-      await this.flush();
-    });
+    if (flushOnExit ?? true) {
+      iso.processOn("beforeExit", async () => {
+        await this.flush();
+      });
+    }
   }
 
   log(items: BackgroundLogEvent[]) {
@@ -693,7 +740,7 @@ class BackgroundLogger {
           for (let i = 0; i < NumRetries; i++) {
             const startTime = now();
             try {
-              return (await _state.logConn().post_json("logs", itemsS)).map(
+              return (await this.logConn.post_json("logs", itemsS)).map(
                 (res: any) => res.id
               );
             } catch (e) {
@@ -1140,6 +1187,27 @@ export function currentSpan(): Span {
 }
 
 /**
+ * Mainly for internal use. Return the parent object for starting a span in a global context.
+ */
+export function getSpanParentObject(): Span | Experiment {
+  const parentSpan = currentSpan();
+  if (!Object.is(parentSpan, noopSpan)) {
+    return parentSpan;
+  }
+  const experiment = currentExperiment();
+  if (experiment) {
+    return experiment;
+  }
+  const logger = currentLogger();
+  if (logger) {
+    throw new Error(
+      "Cannot start a span within a logger from startSpan(). Use logger.startSpan() instead."
+    );
+  }
+  return noopSpan;
+}
+
+/**
  * Toplevel function for starting a span. It checks the following (in precedence order):
  *  * Currently-active span
  *  * Currently-active experiment
@@ -1157,31 +1225,13 @@ export function startSpan(args?: StartSpanOptionalNameArgs): Span {
   const { name: nameOpt, ...argsRest } = args ?? {};
   const name =
     (nameOpt ?? iso.getCallerLocation()?.caller_functionname) || "root";
-  const parentSpan = currentSpan();
+  const parentObject = getSpanParentObject();
 
-  if (!parentSpan) {
-    throw new Error(
-      "Cannot call startSpan() from outside a trace. Please wrap this code in a traced() callback."
-    );
+  if (parentObject.kind === "span") {
+    return parentObject.startSpan(name, argsRest);
+  } else {
+    return parentObject.startSpan({ name, ...argsRest });
   }
-
-  if (!Object.is(parentSpan, noopSpan)) {
-    return parentSpan.startSpan(name, argsRest);
-  }
-
-  const experiment = currentExperiment();
-  if (experiment) {
-    return experiment.startSpan({ name, ...argsRest });
-  }
-
-  const logger = currentLogger();
-  if (logger) {
-    throw new Error(
-      "Cannot start a span within a logger from startSpan(). Use logger.startSpan() instead."
-    );
-  }
-
-  return noopSpan;
 }
 
 /**
@@ -1202,6 +1252,46 @@ export function traced<R>(
     },
     () => span.end()
   );
+}
+
+export type CustomLoggerOpts = {
+  logUrl?: string;
+  logToken?: string;
+  flushOnExit?: boolean;
+};
+
+/**
+ * Start a span under the serialized object from `*.serialize`. See `Span.startSpan` for documentation of the remaining arguments.
+ *
+ * @param objectToken The serialized token from `*.serialize`.
+ * @param args.logger_opts Optional (mainly for internal use). Control specific properties of the span's logger. If not specified, uses the global connection.
+ * @returns The newly-created Span.
+ */
+export function startSpanUnderSerialized(
+  objectToken: string,
+  name: string,
+  args?: StartSpanArgs & CustomLoggerOpts
+): Span {
+  if (objectToken === "") {
+    return noopSpan;
+  }
+  const spanInfo = serializedSpanInfoFromString(objectToken);
+  const { logUrl, logToken, flushOnExit, ...argsRest } = args ?? {};
+  const logConn = (() => {
+    if (!logUrl || !logToken) {
+      return _state.logConn();
+    } else {
+      const logConn = new HTTPConnection(logUrl);
+      logConn.set_token(logToken);
+      return logConn;
+    }
+  })();
+  return new SpanImpl({
+    bgLogger: new BackgroundLogger({ logConn, flushOnExit: args?.flushOnExit }),
+    name,
+    ...argsRest,
+    serializedParent: spanInfo,
+  });
 }
 
 /**
@@ -1471,7 +1561,7 @@ export class Experiment {
     this.id = id;
     this.name = name;
     this.dataset = dataset;
-    this.bgLogger = new BackgroundLogger();
+    this.bgLogger = new BackgroundLogger({ logConn: _state.logConn() });
     this.lastStartTime = getCurrentUnixTimestamp();
 
     unterminatedObjects.addUnterminated(this, iso.getCallerLocation());
@@ -1605,6 +1695,18 @@ export class Experiment {
   }
 
   /**
+   * Serializes the experiment as a token which can be passed around to other processes, across the network, etc. To start a span under a serialized experiment, call `braintrust.startSpanUnderSerialized` (see docs for more details).
+   */
+  public serialize(): string {
+    return serializedSpanInfoToString({
+      object_kind: "e",
+      project_id: this.project.id,
+      experiment_id: this.id,
+      parent_span_kind: "none",
+    });
+  }
+
+  /**
    * Finish the experiment and return its id. After calling close, you may not invoke any further methods on the experiment object.
    *
    * Will be invoked automatically if the experiment is wrapped in a callback passed to `braintrust.withExperiment`.
@@ -1637,32 +1739,23 @@ export class SpanImpl implements Span {
   private finished: boolean;
   private bgLogger: BackgroundLogger;
   // `internalData` contains fields that are not part of the "user-sanitized"
-  // set of fields which we want to log in just one of the span rows.
+  // set of fields which we want to log in just one of the span rows. It is
+  // cleared after every log.
   private internalData: Partial<ExperimentEvent>;
   private isMerge: boolean;
   private loggedEndTime: number | undefined;
 
-  // `_object_info` contains fields that are logged to every span row.
-  private readonly _object_info: {
+  // `_span_ids` and `_object_ids` contain fields that are logged to every span
+  // row.
+  private readonly _span_ids: {
     id: string;
     span_id: string;
     root_span_id: string;
-  } & (
-    | {
-        project_id: string;
-        experiment_id: string;
-      }
-    | {
-        org_id: string;
-        project_id: string;
-        log_id: "g";
-      }
-  );
+  };
+  private readonly _object_ids: SpanObjectIds;
 
   public kind: "span" = "span";
 
-  // root_experiment should only be specified for a root span. parent_span
-  // should only be specified for non-root spans.
   constructor(
     args: {
       bgLogger: BackgroundLogger;
@@ -1675,6 +1768,7 @@ export class SpanImpl implements Span {
       | { rootExperiment: Experiment }
       | { rootProject: RegisteredProject }
       | { parentSpan: SpanImpl }
+      | { serializedParent: SerializedSpanInfo }
     )
   ) {
     this.finished = false;
@@ -1695,31 +1789,61 @@ export class SpanImpl implements Span {
     const id = args.event?.id ?? uuidv4();
     const span_id = uuidv4();
     if ("rootExperiment" in args) {
-      this._object_info = {
+      this._span_ids = {
         id,
         span_id,
         root_span_id: span_id,
+      };
+      this._object_ids = {
+        object_kind: "e",
         project_id: args.rootExperiment.project.id,
         experiment_id: args.rootExperiment.id,
       };
     } else if ("rootProject" in args) {
-      this._object_info = {
+      this._span_ids = {
         id,
         span_id,
         root_span_id: span_id,
+      };
+      this._object_ids = {
+        object_kind: "pl",
         org_id: _state.orgId!,
         project_id: args.rootProject.id,
         log_id: "g",
       };
     } else if ("parentSpan" in args) {
-      this._object_info = {
-        ...args.parentSpan._object_info,
+      this._span_ids = {
         id,
         span_id,
+        root_span_id: args.parentSpan.root_span_id,
       };
+      this._object_ids = args.parentSpan._object_ids;
       this.internalData.span_parents = [args.parentSpan.span_id];
+    } else if ("serializedParent" in args) {
+      const {
+        parent_span_kind,
+        span_id: parentSpanId,
+        root_span_id: rootSpanRaw,
+        ...objectIds
+      } = args.serializedParent;
+      const root_span_id = (() => {
+        if (parent_span_kind === "sub_span") {
+          return rootSpanRaw;
+        } else if (parent_span_kind === "root_span") {
+          return parentSpanId;
+        } else if (parent_span_kind === "none") {
+          return span_id;
+        } else {
+          throw new Error(`Invalid parent_span_kind ${parent_span_kind}`);
+        }
+      })();
+      this._span_ids = { id, span_id, root_span_id };
+      this._object_ids = objectIds;
+      if (parentSpanId) {
+        this.internalData.span_parents = [parentSpanId];
+      }
     } else {
-      throw new Error("Must provide either 'rootExperiment' or 'parentSpan'");
+      throw new Error("Must provide parent info");
     }
 
     // The first log is a replacement, but subsequent logs to the same span
@@ -1733,15 +1857,15 @@ export class SpanImpl implements Span {
   }
 
   public get id(): string {
-    return this._object_info.id;
+    return this._span_ids.id;
   }
 
   public get span_id(): string {
-    return this._object_info.span_id;
+    return this._span_ids.span_id;
   }
 
   public get root_span_id(): string {
-    return this._object_info.root_span_id;
+    return this._span_ids.root_span_id;
   }
 
   public log(event: ExperimentLogPartialArgs): void {
@@ -1749,13 +1873,15 @@ export class SpanImpl implements Span {
 
     const sanitized = validateAndSanitizeExperimentLogPartialArgs(event);
     // There should be no overlap between the dictionaries being merged,
-    // except for `sanitized` and `internal_data`, where the former overrides
+    // except for `sanitized` and `internalData`, where the former overrides
     // the latter.
     const sanitizedAndInternalData = { ...this.internalData };
     mergeDicts(sanitizedAndInternalData, sanitized);
+    const { object_kind: _object_kind, ...object_ids } = this._object_ids;
     const record = {
       ...sanitizedAndInternalData,
-      ...this._object_info,
+      ...this._span_ids,
+      ...object_ids,
       [IS_MERGE_FIELD]: this.isMerge,
     };
     if (record.metrics?.end) {
@@ -1814,6 +1940,25 @@ export class SpanImpl implements Span {
 
   public close(args?: EndSpanArgs): number {
     return this.end(args);
+  }
+
+  public serialize(): string {
+    const parentSpanInfo =
+      this.span_id === this.root_span_id
+        ? ({ parent_span_kind: "root_span", span_id: this.span_id } as const)
+        : ({
+            parent_span_kind: "sub_span",
+            span_id: this.span_id,
+            root_span_id: this.root_span_id,
+          } as const);
+    return serializedSpanInfoToString({
+      ...parentSpanInfo,
+      ...this._object_ids,
+    });
+  }
+
+  public async flush(): Promise<void> {
+    await this.bgLogger.flush();
   }
 
   private checkNotFinished() {
@@ -1879,7 +2024,7 @@ export class Dataset {
     this.id = id;
     this.name = name;
     this.pinnedVersion = pinnedVersion;
-    this.logger = new BackgroundLogger();
+    this.logger = new BackgroundLogger({ logConn: _state.logConn() });
 
     unterminatedObjects.addUnterminated(this, iso.getCallerLocation());
   }
