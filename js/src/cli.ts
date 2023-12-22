@@ -120,7 +120,9 @@ async function initLogger(
     metadata,
   });
   const info = await logger.summarize({ summarizeScores: false });
-  console.log(`Experiment ${logger.name} is running at ${info.experimentUrl}`);
+  console.error(
+    `Experiment ${logger.name} is running at ${info.experimentUrl}`
+  );
   return logger;
 }
 
@@ -132,7 +134,7 @@ function buildWatchPluginForEvaluator(
     name: "run-evalutator-on-end",
     setup(build: esbuild.PluginBuild) {
       build.onEnd(async (result) => {
-        console.log(`Done building ${inFile}`);
+        console.error(`Done building ${inFile}`);
 
         if (!result.outputFiles) {
           if (opts.verbose) {
@@ -163,7 +165,12 @@ function buildWatchPluginForEvaluator(
             opts.progressReporter,
             opts.filters
           );
-          reportEvaluatorResult(evaluator.evalName, evaluatorResult, true);
+          reportEvaluatorResult(
+            evaluator.evalName,
+            evaluatorResult,
+            true,
+            opts.jsonl
+          );
         }
       });
     },
@@ -224,6 +231,7 @@ interface EvaluatorOpts {
   noSendLogs: boolean;
   terminateOnFailure: boolean;
   watch: boolean;
+  jsonl: boolean;
   filters: Filter[];
   progressReporter: ProgressReporter;
 }
@@ -274,13 +282,13 @@ async function runAndWatch(
   opts: EvaluatorOpts
 ) {
   const count = Object.keys(handles).length;
-  console.log(`Watching ${pluralize("file", count, true)}...`);
+  console.error(`Watching ${pluralize("file", count, true)}...`);
 
   Object.values(handles).map((handle) => handle.watch());
 
   ["SIGINT", "SIGTERM"].forEach((signal: string) => {
     process.on(signal, function () {
-      console.log("Stopped watching.");
+      console.error("Stopped watching.");
       for (const handle of Object.values(handles)) {
         handle.destroy();
       }
@@ -331,10 +339,10 @@ async function runOnce(
     }
   });
 
-  console.log(`Processing ${resultPromises.length} evaluators...`);
+  console.error(`Processing ${resultPromises.length} evaluators...`);
   const allEvalsResults = await Promise.all(resultPromises);
   opts.progressReporter.stop();
-  console.log("");
+  console.error("");
 
   for (const [evaluator, idx] of Object.keys(evaluators).map((k, i) => [
     k,
@@ -343,7 +351,8 @@ async function runOnce(
     reportEvaluatorResult(
       evaluator,
       allEvalsResults[idx as number],
-      opts.verbose
+      opts.verbose,
+      opts.jsonl
     );
   }
 }
@@ -351,6 +360,7 @@ async function runOnce(
 interface RunArgs {
   files: string[];
   watch: boolean;
+  jsonl: boolean;
   verbose: boolean;
   api_key?: string;
   org_name?: string;
@@ -523,6 +533,7 @@ async function run(args: RunArgs) {
     noSendLogs: !!args.no_send_logs,
     terminateOnFailure: !!args.terminate_on_failure,
     watch: !!args.watch,
+    jsonl: args.jsonl,
     progressReporter: args.no_progress_bars
       ? new SimpleProgressReporter()
       : new BarProgressReporter(),
@@ -592,6 +603,10 @@ async function main() {
     help: "Only run evaluators that match these filters. Each filter is a regular expression (https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp). For example, --filter metadata.priority='^P0$' input.name='foo.*bar' will only run evaluators that have metadata.priority equal to 'P0' and input.name matching the regular expression 'foo.*bar'.",
     nargs: "*",
   });
+  parser_run.add_argument("--jsonl", {
+    action: "store_true",
+    help: "Format score summaries as jsonl, i.e. one JSON-formatted line per summary.",
+  });
   parser_run.add_argument("--tsconfig", {
     help: "Specify a custom tsconfig.json file to use.",
   });
@@ -614,6 +629,7 @@ async function main() {
   parser_run.set_defaults({ func: run });
 
   const parsed = parser.parse_args();
+
   try {
     await parsed.func(parsed);
   } catch (e) {

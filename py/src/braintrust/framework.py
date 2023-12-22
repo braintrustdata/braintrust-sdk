@@ -393,6 +393,10 @@ _THREAD_POOL_SINGLETON = ResourceManager(EvalThreadPoolSingleton())
 
 
 def set_thread_pool_max_workers(max_workers):
+    """
+    Set the maximum number of threads to use for running evaluators. By default, this is the number of
+    CPUs on the machine.
+    """
     with _THREAD_POOL_SINGLETON.get() as obj:
         obj.set_max_workers(max_workers)
 

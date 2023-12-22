@@ -45,25 +45,43 @@ export type EvalScorer<Input, Output, Expected> = (
   args: EvalScorerArgs<Input, Output, Expected>
 ) => Score | Promise<Score>;
 
-/**
- * An evaluator is a collection of functions that can be used to evaluate a model.
- * It consists of:
- * - `data`, a function that returns a list of inputs, expected outputs, and metadata
- * - `task`, a function that takes an input and returns an output
- * - `scores`, a set of functions that take an input, output, and expected value and return a score
- * - `experimentName`, an optional name for the experiment.
- * - `trialCount`, the number of times to run the evaluator per input. This is useful for evaluating applications that
- *   have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the
- *   variance in the results.
- * - `metadata`, optional additional metadata for the experiment.
- */
 export interface Evaluator<Input, Output, Expected> {
+  /**
+   * A function that returns a list of inputs, expected outputs, and metadata.
+   */
   data: EvalData<Input, Expected>;
+
+  /**
+   * A function that takes an input and returns an output.
+   */
   task: EvalTask<Input, Output>;
+
+  /**
+   * A set of functions that take an input, output, and expected value and return a score.
+   */
   scores: EvalScorer<Input, Output, Expected>[];
+
+  /**
+   * An optional name for the experiment.
+   */
   experimentName?: string;
+
+  /**
+   * The number of times to run the evaluator per input. This is useful for evaluating applications that
+   * have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the
+   * variance in the results.
+   */
   trialCount?: number;
+
+  /**
+   * Optional additional metadata for the experiment.
+   */
   metadata?: Metadata;
+
+  /**
+   * Whether the experiment should be public. Defaults to false.
+   */
+  isPublic?: boolean;
 }
 
 function makeEvalName(projectName: string, experimentName?: string) {
@@ -118,12 +136,13 @@ export async function Eval<Input, Output, Expected>(
           progressReporter,
           []
         );
-        reportEvaluatorResult(name, ret, true);
+        reportEvaluatorResult(name, ret, true, false);
         return ret.summary!;
       },
       {
         experiment: evaluator.experimentName,
         metadata: evaluator.metadata,
+        isPublic: evaluator.isPublic,
       }
     );
   } finally {
@@ -339,7 +358,8 @@ export function reportEvaluatorResult(
     results: { scores: Record<string, number>; error: unknown }[];
     summary: unknown;
   },
-  verbose: boolean
+  verbose: boolean,
+  jsonl: boolean
 ) {
   const { results, summary } = evaluatorResult;
   const failingResults = results.filter(
@@ -350,7 +370,7 @@ export function reportEvaluatorResult(
     // TODO: We may want to support a non-strict mode (and make this the "strict" behavior), so that
     // users can still log imperfect evaluations. In the meantime, they should handle these cases inside
     // of their tasks.
-    console.warn(
+    console.error(
       warning(
         `Evaluator ${evaluatorName} failed with ${pluralize(
           "error",
@@ -359,14 +379,25 @@ export function reportEvaluatorResult(
         )}. This evaluation ("${evaluatorName}") will not be fully logged.`
       )
     );
-    for (const result of failingResults) {
-      logError(result.error, verbose);
+    if (jsonl) {
+      console.log(
+        JSON.stringify({
+          evaluatorName,
+          errors: failingResults.map(
+            (r) => `${r.error instanceof Error ? r.error.stack : r.error}`
+          ),
+        })
+      );
+    } else {
+      for (const result of failingResults) {
+        logError(result.error, verbose);
+      }
     }
-    if (!verbose) {
-      console.warn(warning("Add --verbose to see full stack traces."));
+    if (!verbose && !jsonl) {
+      console.error(warning("Add --verbose to see full stack traces."));
     }
   } else if (summary) {
-    console.log(summary);
+    console.log(jsonl ? JSON.stringify(summary) : summary);
   } else {
     const scoresByName: { [name: string]: { total: number; count: number } } =
       {};
@@ -389,6 +420,6 @@ export function reportEvaluatorResult(
       ),
     };
 
-    console.log(summary);
+    console.log(jsonl ? JSON.stringify(summary) : summary);
   }
 }
