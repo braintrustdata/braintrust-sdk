@@ -33,3 +33,13 @@ develop: ${VENV_PRE_COMMIT}
 
 fixup:
 	source env.sh && pre-commit run --all-files
+
+.PHONY: test test-py test-js
+
+test: test-py test-js
+
+test-js:
+	pnpm test
+
+test-py:
+	python -m unittest discover py/tests

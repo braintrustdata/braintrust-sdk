@@ -37,6 +37,15 @@ from urllib3.util.retry import Retry
 from .cache import CACHE_PATH, EXPERIMENTS_PATH, LOGIN_INFO_PATH
 from .gitutil import get_past_n_ancestors, get_repo_status
 from .resource_manager import ResourceManager
+from .serialized_span_info import (
+    SerializedSpanInfo,
+    SpanExperimentIds,
+    SpanParentRootSpanIds,
+    SpanParentSubSpanIds,
+    SpanProjectLogIds,
+    serialized_span_info_from_string,
+    serialized_span_info_to_string,
+)
 from .util import (
     GLOBAL_PROJECT,
     AugmentedHTTPError,
@@ -819,7 +828,7 @@ def start_span_under_serialized(
 
     if object_token == "":
         return NOOP_SPAN
-    span_info = _SerializedSpanInfo_from_string(object_token)
+    span_info = serialized_span_info_from_string(object_token)
     return SpanImpl(
         bg_logger=_LogThread(name=name),
         name=name,
@@ -1146,7 +1155,7 @@ class Experiment(ModelWrapper):
 
     def serialize(self) -> str:
         """Serializes the experiment as a token which can be passed around to other processes, across the network, etc. To start a span under a serialized experiment, call `braintrust.start_span_under_serialized` (see docs for more details)."""
-        return _SerializedSpanInfo_to_string(
+        return serialized_span_info_to_string(
             SerializedSpanInfo(
                 object_ids=SpanExperimentIds(project_id=self.project.id, experiment_id=self.id), parent_span_ids=None
             )
@@ -1170,91 +1179,6 @@ class Experiment(ModelWrapper):
 
     def __exit__(self, type, value, callback):
         del type, value, callback
-
-
-# Format and utils for serializing objects to create spans later. Keep this in
-# sync with the span serialization implementation in logger.ts.
-
-
-@dataclasses.dataclass
-class SpanExperimentIds:
-    project_id: str
-    experiment_id: str
-
-
-@dataclasses.dataclass
-class SpanProjectLogIds:
-    org_id: str
-    project_id: str
-    log_id: str
-
-
-@dataclasses.dataclass
-class SpanParentSubSpanIds:
-    span_id: str
-    root_span_id: str
-
-
-@dataclasses.dataclass
-class SpanParentRootSpanIds:
-    span_id: str
-
-
-@dataclasses.dataclass
-class SerializedSpanInfo:
-    object_ids: Union[SpanExperimentIds, SpanProjectLogIds]
-    span_parent_ids: Union[SpanParentSubSpanIds, SpanParentRootSpanIds, None]
-
-
-def _SerializedSpanInfo_to_string(info: SerializedSpanInfo) -> str:
-    ids = info.object_ids
-    if isinstance(ids, SpanExperimentIds):
-        object_ids = ["e", ids.project_id, ids.experiment_id]
-    elif isinstance(ids, SpanProjectLogIds):
-        object_ids = ["pl", ids.org_id, ids.project_id]
-    else:
-        raise Exception(f"Unknown object_ids value {ids}")
-
-    ids = info.span_parent_ids
-    if isinstance(ids, SpanParentSubSpanIds):
-        span_parent_ids = [ids.span_id, ids.root_span_id]
-    elif isinstance(ids, SpanParentRootSpanIds):
-        span_parent_ids = [ids.span_id, ""]
-    elif ids is None:
-        span_parent_ids = ["", ""]
-    else:
-        raise Exception(f"Unknown span_parent_ids value {ids}")
-
-    ids = object_ids + span_parent_ids
-    # Since all of these IDs are auto-generated as UUIDs, we can expect them to
-    # not contain any colons.
-    for id in ids:
-        if ":" in id:
-            raise Exception(f"Unexpected: id {id} should not have a ':'")
-    return ":".join(ids)
-
-
-def _SerializedSpanInfo_from_string(s: str) -> SerializedSpanInfo:
-    ids = s.split(":")
-    if len(ids) != 5:
-        raise Exception(f"Expected serialized info {s} to have 5 colon-separated components")
-
-    if ids[0] == "e":
-        object_ids = SpanExperimentIds(project_id=ids[1], experiment_id=ids[2])
-    elif ids[0] == "pl":
-        object_ids = SpanProjectLogIds(org_id=ids[1], project_id=ids[2], log_id="g")
-    else:
-        raise Exception(f"Unknown serialized object kind {ids[0]}")
-
-    if ids[4] == "":
-        if ids[3] == "":
-            span_parent_ids = None
-        else:
-            span_parent_ids = SpanParentRootSpanIds(span_id=ids[3])
-    else:
-        span_parent_ids = SpanParentSubSpanIds(span_id=ids[3], root_span_id=ids[4])
-
-    return SerializedSpanInfo(object_ids=object_ids, span_parent_ids=span_parent_ids)
 
 
 @dataclasses.dataclass
@@ -1427,7 +1351,7 @@ class SpanImpl(Span):
             span_parent_ids = SpanParentRootSpanIds(span_id=self.span_id)
         else:
             span_parent_ids = SpanParentSubSpanIds(span_id=self.span_id, root_span_id=self.root_span_id)
-        return _SerializedSpanInfo_to_string(
+        return serialized_span_info_to_string(
             SerializedSpanInfo(object_ids=self._object_ids, span_parent_ids=span_parent_ids)
         )
 
@@ -1751,7 +1675,7 @@ class Logger:
     def serialize(self) -> str:
         """Serializes the logger as a token which can be passed around to other processes, across the network, etc. To start a span under a serialized logger, call `braintrust.start_span_under_serialized` (see docs for more details)."""
         self._perform_lazy_login()
-        return _SerializedSpanInfo_to_string(
+        return serialized_span_info_to_string(
             SerializedSpanInfo(
                 object_ids=SpanProjectLogIds(org_id=_state.org_id, project_id=self.project.id, log_id="g"),
                 parent_span_ids=None,

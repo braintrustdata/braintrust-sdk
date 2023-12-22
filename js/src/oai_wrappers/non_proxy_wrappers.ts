@@ -1,5 +1,5 @@
-import { Span, startSpan } from "./logger";
-import { getCurrentUnixTimestamp } from "./util";
+import { Span, startSpan } from "../logger";
+import { getCurrentUnixTimestamp } from "../util";
 
 interface BetaLike {
   chat: {

@@ -1,14 +1,15 @@
 import { _internalGetGlobalState, getSpanParentObject } from "../logger";
+import iso from "../isomorph";
 
 function getProxyBaseUrlDefault({ version }: { version: number }): string {
   return (
-    process.env["BRAINTRUST_PROXY_URL"] ??
+    iso.getEnv("BRAINTRUST_PROXY_URL") ??
     `https://braintrustproxy.com/v${version}`
   );
 }
 
 function getProxyApiKeyDefault(): string | undefined {
-  return process.env["BRAINTRUST_API_KEY"];
+  return iso.getEnv("BRAINTRUST_API_KEY");
 }
 
 // Defined in
@@ -43,27 +44,19 @@ function wrapFetch(origFetch: Fetch): Fetch {
 // https://github.com/openai/openai-node/tree/v4.22.1.
 export function openAIV4ProxyWrapper({
   openai,
-  proxyBaseUrl,
-  proxyApiKey,
+  useProxy,
+  apiKey,
 }: {
   openai: any;
-  proxyBaseUrl?: string | null;
-  proxyApiKey?: string | null;
+  useProxy: string | true;
+  apiKey?: string;
 }) {
-  if (proxyBaseUrl === undefined) {
-    proxyBaseUrl = getProxyBaseUrlDefault({ version: 1 });
+  openai.baseURL =
+    useProxy === true ? getProxyBaseUrlDefault({ version: 1 }) : useProxy;
+  apiKey = apiKey ?? getProxyApiKeyDefault();
+  if (apiKey) {
+    openai.apiKey = apiKey;
   }
-  if (proxyBaseUrl) {
-    openai.baseURL = proxyBaseUrl;
-  }
-
-  if (proxyApiKey === undefined) {
-    proxyApiKey = getProxyApiKeyDefault();
-  }
-  if (proxyApiKey) {
-    openai.apiKey = proxyApiKey;
-  }
-
   openai.fetch = wrapFetch(openai.fetch);
   return openai;
 }

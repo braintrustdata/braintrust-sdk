@@ -7,19 +7,24 @@ import { openAIV4ProxyWrapper } from "./oai_wrappers/proxy_wrappers";
  * Currently, this only supports the `v4` API.
  *
  * @param openai The `OpenAI` object.
- * @param proxyBaseUrl Use the Braintrust proxy (https://github.com/braintrustdata/braintrust-proxy) as the base URL. When left `undefined`, the URL is obtained from the environment variable `BRAINTRUST_PROXY_URL`, defaulting to `https://braintrustproxy.com/v[api_version]`. Pass `null` to leave the original base URL intact and use the non-proxy wrapper, or pass a string to use a custom URL.
- * @param proxyApiKey For clients using the proxy wrapper (`proxyBaseUrl` is not `null`). When left `undefined`, the API key is set from `BRAINTRUST_API_KEY` if available. Pass `null` to leave the original API key intact, or pass a string to use a custom API key.
+ * @param options.useProxy By default (or if `false`), the wrapper does not trace through the proxy. Pass `true` to use the Braintrust proxy as the base URL. The URL is obtained from the environment variable `BRAINTRUST_PROXY_URL`, defaulting to `https://braintrustproxy.com/v1. Pass a string to use a custom proxy URL.
+ * @param options.apiKey Only used when `useProxy` is set. By default, the API key is set from `BRAINTRUST_API_KEY` if available. Pass a string to use a custom API key.
  * @returns The wrapped `OpenAI` object.
  */
 export function wrapOpenAI<T extends object>(
   openai: T,
-  args?: { proxyBaseUrl?: string | null; proxyApiKey?: string | null }
+  options?: { useProxy?: string | boolean; apiKey?: string }
 ): T {
   if ((openai as any)?.chat?.completions?.create) {
-    if (args?.proxyBaseUrl === null) {
-      return openAIV4NonProxyWrapper(openai as any) as T;
+    const useProxyOpt = options?.useProxy;
+    if (useProxyOpt) {
+      return openAIV4ProxyWrapper({
+        openai: openai as any,
+        useProxy: useProxyOpt,
+        apiKey: options?.apiKey,
+      }) as T;
     } else {
-      return openAIV4ProxyWrapper({ openai: openai as any, ...args }) as T;
+      return openAIV4NonProxyWrapper(openai as any) as T;
     }
   } else {
     console.warn("Unsupported OpenAI library (potentially v3). Not wrapping.");
