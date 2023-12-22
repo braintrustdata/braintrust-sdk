@@ -469,6 +469,7 @@ def init(
     api_key: Optional[str] = None,
     org_name: Optional[str] = None,
     metadata: Optional[Metadata] = None,
+    set_current: bool = True,
 ):
     """
     Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
@@ -487,6 +488,7 @@ def init(
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
     :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
+    :param set_current: If true (the default), set the global current-experiment to the newly-created one.
     :returns: The experiment object.
     """
     login(org_name=org_name, api_key=api_key, api_url=api_url)
@@ -500,7 +502,8 @@ def init(
         is_public=is_public,
         metadata=metadata,
     )
-    _state.current_experiment = ret
+    if set_current:
+        _state.current_experiment = ret
     return ret
 
 
@@ -543,6 +546,7 @@ def init_logger(
     api_url: str = None,
     api_key: str = None,
     org_name: str = None,
+    set_current: bool = True,
 ):
     """
     Create a new logger in a specified project. If the project does not exist, it will be created.
@@ -554,6 +558,7 @@ def init_logger(
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+    :param set_current: If true (the default), set the global current-experiment to the newly-created one.
     :returns: The newly created Logger.
     """
 
@@ -565,7 +570,8 @@ def init_logger(
         project=Project(name=project, id=project_id),
         async_flush=async_flush,
     )
-    _state.current_logger = ret
+    if set_current:
+        _state.current_logger = ret
     return ret
 
 
