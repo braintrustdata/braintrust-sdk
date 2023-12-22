@@ -151,7 +151,9 @@ declare global {
 class BraintrustState {
   public id: string;
   public currentExperiment: IsoAsyncLocalStorage<Experiment | undefined>;
-  public currentLogger: IsoAsyncLocalStorage<Logger | undefined>;
+  // Note: the value of IsAsyncFlush doesn't really matter here, since we
+  // (safely) dynamically cast it whenever retrieving the logger.
+  public currentLogger: IsoAsyncLocalStorage<Logger<false> | undefined>;
   public currentSpan: IsoAsyncLocalStorage<Span>;
 
   public apiUrl: string | null;
@@ -409,54 +411,35 @@ class HTTPConnection {
   }
 }
 
-interface UserInfo {
-  id: string;
-}
-
-interface RegisteredProject {
+interface ObjectMetadata {
   id: string;
   name: string;
 }
 
-class Project {
-  name?: string;
-  id?: string;
-
-  constructor({ name, id }: { name?: string; id?: string }) {
-    this.name = name;
-    this.id = id;
-  }
-
-  async lazyInit(): Promise<RegisteredProject> {
-    if (this.id === undefined) {
-      const response = await _state
-        .apiConn()
-        .post_json("api/project/register", {
-          project_name: this.name || GLOBAL_PROJECT,
-          org_id: _state.orgId,
-        });
-      this.id = response.project.id;
-      this.name = response.project.name;
-    } else if (this.name === undefined) {
-      const response = await _state.apiConn().get_json("api/project", {
-        id: this.id,
-      });
-      this.name = response.name;
-    }
-
-    return { id: this.id!, name: this.name! };
-  }
+interface ProjectExperimentMetadata {
+  project: ObjectMetadata;
+  experiment: ObjectMetadata;
 }
 
-export interface LogOptions {
-  asyncFlush?: boolean;
+interface ProjectDatasetMetadata {
+  project: ObjectMetadata;
+  dataset: ObjectMetadata;
 }
 
-export class Logger {
-  private _lazyLogin: () => Promise<void>;
-  private loggedIn: boolean = false;
-  private lazyProject: Project;
-  private logOptions: LogOptions;
+interface OrgProjectMetadata {
+  org_id: string;
+  project: ObjectMetadata;
+}
+
+export interface LogOptions<IsAsyncFlush> {
+  asyncFlush?: IsAsyncFlush;
+}
+
+export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
+
+export class Logger<IsAsyncFlush extends boolean> {
+  private lazyMetadata: Promise<OrgProjectMetadata>;
+  private logOptions: LogOptions<IsAsyncFlush>;
   private bgLogger: BackgroundLogger;
   private lastStartTime: number;
 
@@ -464,24 +447,31 @@ export class Logger {
   public kind: "logger" = "logger";
 
   constructor(
-    lazyLogin: () => Promise<void>,
-    lazyProject: Project,
-    logOptions: LogOptions = {}
+    lazyMetadata: Promise<OrgProjectMetadata>,
+    logOptions: LogOptions<IsAsyncFlush> = {}
   ) {
-    this._lazyLogin = lazyLogin;
-    this.lazyProject = lazyProject;
+    this.lazyMetadata = lazyMetadata;
     this.logOptions = logOptions;
-
     this.bgLogger = new BackgroundLogger();
     this.lastStartTime = getCurrentUnixTimestamp();
   }
 
-  private async lazyLogin() {
-    if (!this.loggedIn) {
-      await this._lazyLogin();
-      this.lastStartTime = getCurrentUnixTimestamp();
-      this.loggedIn = true;
-    }
+  public get org_id(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata).org_id;
+    })();
+  }
+
+  public get project_id(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata).project.id;
+    })();
+  }
+
+  public get project_name(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata).project.name;
+    })();
   }
 
   /**
@@ -497,17 +487,21 @@ export class Logger {
    * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
    * :returns: The `id` of the logged event.
    */
-  public async log(event: Readonly<StartSpanEventArgs>): Promise<string> {
-    // Do the lazy login before retrieving the last_start_time.
-    await this.lazyLogin();
-    const span = await this.startSpan({ startTime: this.lastStartTime, event });
+  public log(
+    event: Readonly<StartSpanEventArgs>
+  ): PromiseUnless<IsAsyncFlush, string> {
+    const span = this.startSpan({ startTime: this.lastStartTime, event });
     this.lastStartTime = span.end();
-
-    if (!this.logOptions.asyncFlush) {
-      await this.flush();
+    const ret = span.id;
+    type Ret = PromiseUnless<IsAsyncFlush, string>;
+    if (this.logOptions.asyncFlush === true) {
+      return ret as Ret;
+    } else {
+      return (async () => {
+        await this.flush();
+        return ret;
+      })() as Ret;
     }
-
-    return span.id;
   }
 
   /**
@@ -515,37 +509,52 @@ export class Logger {
    *
    * See `Span.startSpan` for full details.
    */
-  public async startSpan(args?: StartSpanOptionalNameArgs): Promise<Span> {
-    await this.lazyLogin();
-    const project = await this.lazyProject.lazyInit();
+  public startSpan(args?: StartSpanOptionalNameArgs): Span {
     const { name, ...argsRest } = args ?? {};
+    const parentIds: Promise<ParentProjectLogIds> = (async () => ({
+      kind: "project_log",
+      org_id: await this.org_id,
+      project_id: await this.project_id,
+      log_id: "g",
+    }))();
     return new SpanImpl({
+      parentIds,
       bgLogger: this.bgLogger,
       name: name ?? "root",
       ...argsRest,
-      rootProject: project,
     });
   }
 
   /**
    * Wrapper over `Logger.startSpan`, which passes the initialized `Span` it to the given callback and ends it afterwards. See `Span.traced` for full details.
    */
-  public async traced<R>(
+  public traced<R>(
     callback: (span: Span) => R,
     args?: StartSpanOptionalNameArgs & SetCurrentArg
-  ): Promise<R> {
+  ): PromiseUnless<IsAsyncFlush, R> {
     const { setCurrent, ...argsRest } = args ?? {};
-    const span = await this.startSpan(argsRest);
-    try {
-      let ret = null;
-      return await (setCurrent ?? true
-        ? withCurrent(span, () => callback(span))
-        : callback(span));
-    } finally {
-      span.end();
-      if (!this.logOptions.asyncFlush) {
+    const span = this.startSpan(argsRest);
+
+    const ret = runFinally(
+      () => {
+        if (setCurrent ?? true) {
+          return withCurrent(span, () => callback(span));
+        } else {
+          return callback(span);
+        }
+      },
+      () => span.end()
+    );
+    type Ret = PromiseUnless<IsAsyncFlush, R>;
+
+    if (this.logOptions.asyncFlush) {
+      return ret as Ret;
+    } else {
+      return (async () => {
+        const awaitedRet = await ret;
         await this.flush();
-      }
+        return awaitedRet;
+      })() as Ret;
     }
   }
 
@@ -555,6 +564,23 @@ export class Logger {
   async flush(): Promise<void> {
     return await this.bgLogger.flush();
   }
+
+  get asyncFlush(): IsAsyncFlush | undefined {
+    return this.logOptions.asyncFlush;
+  }
+}
+
+function castLogger<ToB extends boolean, FromB extends boolean>(
+  logger: Logger<FromB> | undefined,
+  asyncFlush?: ToB
+): Logger<ToB> | undefined {
+  if (logger === undefined) return undefined;
+  if (asyncFlush && !!asyncFlush !== !!logger.asyncFlush) {
+    throw new Error(
+      `Asserted asyncFlush setting ${asyncFlush} does not match stored logger's setting ${logger.asyncFlush}`
+    );
+  }
+  return logger as unknown as Logger<ToB>;
 }
 
 export type IdField = { id: string };
@@ -635,7 +661,7 @@ function now() {
 }
 
 class BackgroundLogger {
-  private items: BackgroundLogEvent[] = [];
+  private items: Promise<BackgroundLogEvent>[] = [];
   private active_flush: Promise<string[]> = Promise.resolve([]);
   private active_flush_resolved = true;
 
@@ -648,7 +674,7 @@ class BackgroundLogger {
     });
   }
 
-  log(items: BackgroundLogEvent[]) {
+  log(items: Promise<BackgroundLogEvent>[]) {
     this.items.push(...items);
 
     if (this.active_flush_resolved) {
@@ -663,8 +689,9 @@ class BackgroundLogger {
     // Since the merged rows are guaranteed to refer to independent rows,
     // publish order does not matter and we can flush all item batches
     // concurrently.
-    const allItems = mergeRowBatch(this.items || []).reverse();
+    const itemPromises = this.items;
     this.items = [];
+    const allItems = mergeRowBatch(await Promise.all(itemPromises)).reverse();
 
     let postPromises = [];
     while (true) {
@@ -783,10 +810,10 @@ export type InitOptions = {
  * JSON-serializable type, but its keys must be strings.
  * @returns The newly created Experiment.
  */
-export async function init(
+export function init(
   project: string,
   options: Readonly<InitOptions> = {}
-): Promise<Experiment> {
+): Experiment {
   const {
     experiment,
     description,
@@ -801,22 +828,78 @@ export async function init(
     metadata,
   } = options || {};
 
-  await login({
-    orgName: orgName,
-    disableCache,
-    apiKey,
-    apiUrl,
-  });
+  const lazyMetadata: Promise<ProjectExperimentMetadata> = (async () => {
+    await login({
+      orgName: orgName,
+      disableCache,
+      apiKey,
+      apiUrl,
+    });
+    const args: Record<string, unknown> = {
+      project_name: project,
+      org_id: _state.orgId,
+    };
 
-  return await _initExperiment(project, {
-    experimentName: experiment,
-    description,
-    dataset,
-    update,
-    baseExperiment,
-    isPublic,
-    metadata,
-  });
+    if (experiment) {
+      args["experiment_name"] = experiment;
+    }
+
+    if (description) {
+      args["description"] = description;
+    }
+
+    if (update) {
+      args["update"] = update;
+    }
+
+    const repoStatus = await iso.getRepoStatus();
+    if (repoStatus) {
+      args["repo_info"] = repoStatus;
+    }
+
+    if (baseExperiment) {
+      args["base_experiment"] = baseExperiment;
+    } else {
+      args["ancestor_commits"] = await iso.getPastNAncestors();
+    }
+
+    if (dataset !== undefined) {
+      args["dataset_id"] = dataset.id;
+      args["dataset_version"] = await dataset.version();
+    }
+
+    if (isPublic !== undefined) {
+      args["public"] = isPublic;
+    }
+
+    if (metadata) {
+      args["metadata"] = metadata;
+    }
+
+    let response = null;
+    while (true) {
+      try {
+        response = await _state
+          .apiConn()
+          .post_json("api/experiment/register", args);
+        break;
+      } catch (e: any) {
+        if (
+          args["base_experiment"] &&
+          `${"data" in e && e.data}`.includes("base experiment")
+        ) {
+          console.warn(`Base experiment ${args["base_experiment"]} not found.`);
+          delete args["base_experiment"];
+        } else {
+          throw e;
+        }
+      }
+    }
+
+    return { project: response.project, experiment: response.experiment };
+  })();
+
+  return new Experiment(lazyMetadata, dataset);
 }
 
 /**
@@ -829,7 +912,7 @@ export async function withExperiment<R>(
   callback: (experiment: Experiment) => R,
   options: Readonly<InitOptions & SetCurrentArg> = {}
 ): Promise<R> {
-  const experiment = await init(project, options);
+  const experiment = init(project, options);
   return runFinally(
     () => {
       if (options.setCurrent ?? true) {
@@ -847,15 +930,18 @@ export async function withExperiment<R>(
  *
  * @param options.setCurrent If true (default), set the currently-active logger to the newly-created one. Equivalent to calling `braintrust.withCurrent(logger, callback)`.
  */
-export async function withLogger<R>(
-  callback: (logger: Logger) => R,
-  options: Readonly<InitLoggerOptions & SetCurrentArg> = {}
+export async function withLogger<
+  IsAsyncFlush extends boolean = false,
+  R = void
+>(
+  callback: (logger: Logger<IsAsyncFlush>) => R,
+  options: Readonly<InitLoggerOptions<IsAsyncFlush> & SetCurrentArg> = {}
 ): Promise<R> {
   const logger = initLogger(options);
   return runFinally(
     () => {
       if (options.setCurrent ?? true) {
-        return withCurrent(logger, () => callback(logger));
+        return withCurrent(logger as Logger<false>, () => callback(logger));
       } else {
         return callback(logger);
       }
@@ -890,7 +976,7 @@ type InitDatasetOptions = {
  * @param options.disableCache Do not use cached login information.
  * @returns The newly created Dataset.
  */
-export async function initDataset(
+export function initDataset(
   project: string,
   options: Readonly<InitDatasetOptions> = {}
 ) {
@@ -904,18 +990,28 @@ export async function initDataset(
     disableCache,
   } = options || {};
 
-  await login({
-    orgName: orgName,
-    disableCache,
-    apiKey,
-    apiUrl,
-  });
+  const lazyMetadata: Promise<ProjectDatasetMetadata> = (async () => {
+    await login({
+      orgName: orgName,
+      disableCache,
+      apiKey,
+      apiUrl,
+    });
 
-  return await _initDataset(project, {
-    name: dataset,
-    description,
-    version,
-  });
+    const args: Record<string, unknown> = {
+      org_id: _state.orgId,
+      project_name: project,
+      dataset_name: dataset,
+      description,
+    };
+    const response = await _state
+      .apiConn()
+      .post_json("api/dataset/register", args);
+
+    return { project: response.project, dataset: response.dataset };
+  })();
+
+  return new Dataset(lazyMetadata, version);
 }
 
 /**
@@ -926,17 +1022,17 @@ export async function withDataset<R>(
   callback: (dataset: Dataset) => R,
   options: Readonly<InitDatasetOptions> = {}
 ): Promise<R> {
-  const dataset = await initDataset(project, options);
+  const dataset = initDataset(project, options);
   return runFinally(
     () => callback(dataset),
     () => dataset.close()
   );
 }
 
-type InitLoggerOptions = {
+type InitLoggerOptions<IsAsyncFlush> = {
   projectName?: string;
   projectId?: string;
-  asyncFlush?: boolean;
+  asyncFlush?: IsAsyncFlush;
   apiUrl?: string;
   apiKey?: string;
   orgName?: string;
@@ -957,7 +1053,9 @@ type InitLoggerOptions = {
  * @param options.disableCache Do not use cached login information.
  * @returns The newly created Logger.
  */
-export function initLogger(options: Readonly<InitLoggerOptions> = {}) {
+export function initLogger<IsAsyncFlush extends boolean = false>(
+  options: Readonly<InitLoggerOptions<IsAsyncFlush>> = {}
+) {
   const {
     projectName,
     projectId,
@@ -968,25 +1066,38 @@ export function initLogger(options: Readonly<InitLoggerOptions> = {}) {
     disableCache,
   } = options || {};
 
-  const lazyLogin = async () => {
+  const lazyMetadata: Promise<OrgProjectMetadata> = (async () => {
     await login({
       orgName: orgName,
       disableCache,
       apiKey,
       apiUrl,
     });
-  };
+    const org_id = _state.orgId!;
+    const project: ObjectMetadata = await (async () => {
+      if (projectId === undefined) {
+        const response = await _state
+          .apiConn()
+          .post_json("api/project/register", {
+            project_name: projectName || GLOBAL_PROJECT,
+            org_id,
+          });
+        return { id: response.project.id, name: response.project.name };
+      } else if (projectName === undefined) {
+        const response = await _state.apiConn().get_json("api/project", {
+          id: projectId,
+        });
+        return { id: projectId, name: response.name };
+      } else {
+        return { id: projectId, name: projectName };
+      }
+    })();
+    return { org_id, project };
+  })();
 
-  return new Logger(
-    lazyLogin,
-    new Project({
-      name: projectName,
-      id: projectId,
-    }),
-    {
-      asyncFlush,
-    }
-  );
+  return new Logger<IsAsyncFlush>(lazyMetadata, {
+    asyncFlush,
+  });
 }
 
 /**
@@ -1126,8 +1237,10 @@ export function currentExperiment(): Experiment | undefined {
 /**
  * Returns the currently-active logger (set by `braintrust.withLogger` or `braintrust.withCurrent`). Returns undefined if no current logger has been set.
  */
-export function currentLogger(): Logger | undefined {
-  return _state.currentLogger.getStore();
+export function currentLogger<IsAsyncFlush extends boolean>(options?: {
+  asyncFlush?: IsAsyncFlush;
+}): Logger<IsAsyncFlush> | undefined {
+  return castLogger(_state.currentLogger.getStore(), options?.asyncFlush);
 }
 
 /**
@@ -1211,7 +1324,7 @@ export function traced<R>(
  * @param callback: The callback to be run under the scope of the current object.
  */
 export function withCurrent<R>(
-  object: Experiment | Logger | Span,
+  object: Experiment | Logger<false> | Span,
   callback: () => R
 ): R {
   if (object.kind === "experiment") {
@@ -1342,99 +1455,6 @@ function validateAndSanitizeExperimentLogFullArgs(
   return event;
 }
 
-async function _initExperiment(
-  projectName: string,
-  {
-    experimentName,
-    description,
-    dataset,
-    update,
-    baseExperiment,
-    isPublic,
-    metadata,
-  }: {
-    experimentName?: string;
-    description?: string;
-    dataset?: Dataset;
-    update?: boolean;
-    baseExperiment?: string;
-    isPublic?: boolean;
-    metadata?: Metadata;
-  } = {
-    experimentName: undefined,
-    description: undefined,
-    baseExperiment: undefined,
-    isPublic: false,
-    metadata: undefined,
-  }
-) {
-  const args: Record<string, unknown> = {
-    project_name: projectName,
-    org_id: _state.orgId,
-  };
-
-  if (experimentName) {
-    args["experiment_name"] = experimentName;
-  }
-
-  if (description) {
-    args["description"] = description;
-  }
-
-  if (update) {
-    args["update"] = update;
-  }
-
-  const repoStatus = await iso.getRepoStatus();
-  if (repoStatus) {
-    args["repo_info"] = repoStatus;
-  }
-
-  if (baseExperiment) {
-    args["base_experiment"] = baseExperiment;
-  } else {
-    args["ancestor_commits"] = await iso.getPastNAncestors();
-  }
-
-  if (dataset !== undefined) {
-    args["dataset_id"] = dataset.id;
-    args["dataset_version"] = await dataset.version();
-  }
-
-  if (isPublic !== undefined) {
-    args["public"] = isPublic;
-  }
-
-  if (metadata) {
-    args["metadata"] = metadata;
-  }
-
-  let response = null;
-  while (true) {
-    try {
-      response = await _state
-        .apiConn()
-        .post_json("api/experiment/register", args);
-      break;
-    } catch (e: any) {
-      if (
-        args["base_experiment"] &&
-        `${"data" in e && e.data}`.includes("base experiment")
-      ) {
-        console.warn(`Base experiment ${args["base_experiment"]} not found.`);
-        delete args["base_experiment"];
-      } else {
-        throw e;
-      }
-    }
-  }
-
-  const project = response.project;
-  const experiment = response.experiment;
-
-  return new Experiment(project, experiment.id, experiment.name, dataset);
-}
-
 /**
  * An experiment is a collection of logged events, such as model inputs and outputs, which represent
  * a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -1448,9 +1468,7 @@ async function _initExperiment(
  * You should not create `Experiment` objects directly. Instead, use the `braintrust.init()` method.
  */
 export class Experiment {
-  public readonly project: RegisteredProject;
-  public readonly id: string;
-  public readonly name: string;
+  private readonly lazyMetadata: Promise<ProjectExperimentMetadata>;
   public readonly dataset?: Dataset;
   private bgLogger: BackgroundLogger;
   private lastStartTime: number;
@@ -1460,21 +1478,41 @@ export class Experiment {
   public kind: "experiment" = "experiment";
 
   constructor(
-    project: RegisteredProject,
-    id: string,
-    name: string,
+    lazyMetadata: Promise<ProjectExperimentMetadata>,
     dataset?: Dataset
   ) {
     this.finished = false;
 
-    this.project = project;
-    this.id = id;
-    this.name = name;
+    this.lazyMetadata = lazyMetadata;
     this.dataset = dataset;
     this.bgLogger = new BackgroundLogger();
     this.lastStartTime = getCurrentUnixTimestamp();
 
     unterminatedObjects.addUnterminated(this, iso.getCallerLocation());
+  }
+
+  public get id(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata).experiment.id;
+    })();
+  }
+
+  public get name(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata).experiment.name;
+    })();
+  }
+
+  public get project_id(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata).project.id;
+    })();
+  }
+
+  public get project_name(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata).project.name;
+    })();
   }
 
   /**
@@ -1510,11 +1548,16 @@ export class Experiment {
     this.checkNotFinished();
 
     const { name, ...argsRest } = args ?? {};
+    const parentIds: Promise<ParentExperimentIds> = (async () => ({
+      kind: "experiment",
+      project_id: await this.project_id,
+      experiment_id: await this.id,
+    }))();
     return new SpanImpl({
+      parentIds,
       bgLogger: this.bgLogger,
       name: name ?? "root",
       ...argsRest,
-      rootExperiment: this,
     });
   }
 
@@ -1557,10 +1600,13 @@ export class Experiment {
       options || {};
 
     await this.bgLogger.flush();
+    const metadata = await this.lazyMetadata;
     const projectUrl = `${_state.apiUrl}/app/${encodeURIComponent(
       _state.orgName!
-    )}/p/${encodeURIComponent(this.project.name)}`;
-    const experimentUrl = `${projectUrl}/${encodeURIComponent(this.name)}`;
+    )}/p/${encodeURIComponent(metadata.project.name)}`;
+    const experimentUrl = `${projectUrl}/${encodeURIComponent(
+      metadata.experiment.name
+    )}`;
 
     let scores: Record<string, ScoreSummary> | undefined = undefined;
     let metrics: Record<string, MetricSummary> | undefined = undefined;
@@ -1569,7 +1615,7 @@ export class Experiment {
       if (comparisonExperimentId === undefined) {
         const conn = _state.logConn();
         const resp = await conn.get("/crud/base_experiments", {
-          id: this.id,
+          id: metadata.experiment.id,
         });
         const base_experiments = await resp.json();
         if (base_experiments.length > 0) {
@@ -1582,7 +1628,7 @@ export class Experiment {
         const results = await _state.logConn().get_json(
           "/experiment-comparison2",
           {
-            experiment_id: this.id,
+            experiment_id: metadata.experiment.id,
             base_experiment_id: comparisonExperimentId,
           },
           3
@@ -1594,8 +1640,8 @@ export class Experiment {
     }
 
     return {
-      projectName: this.project.name,
-      experimentName: this.name,
+      projectName: metadata.project.name,
+      experimentName: metadata.experiment.name,
       projectUrl: projectUrl,
       experimentUrl: experimentUrl,
       comparisonExperimentName: comparisonExperimentName,
@@ -1628,6 +1674,19 @@ export class Experiment {
   }
 }
 
+interface ParentExperimentIds {
+  kind: "experiment";
+  project_id: string;
+  experiment_id: string;
+}
+
+interface ParentProjectLogIds {
+  kind: "project_log";
+  org_id: string;
+  project_id: string;
+  log_id: "g";
+}
+
 /**
  * Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
  *
@@ -1642,41 +1701,28 @@ export class SpanImpl implements Span {
   private isMerge: boolean;
   private loggedEndTime: number | undefined;
 
-  // `_object_info` contains fields that are logged to every span row.
-  private readonly _object_info: {
+  // These fields are logged to every span row.
+  private parentIds: Promise<ParentExperimentIds | ParentProjectLogIds>;
+  private readonly rowIds: {
     id: string;
     span_id: string;
     root_span_id: string;
-  } & (
-    | {
-        project_id: string;
-        experiment_id: string;
-      }
-    | {
-        org_id: string;
-        project_id: string;
-        log_id: "g";
-      }
-  );
+  };
 
   public kind: "span" = "span";
 
   // root_experiment should only be specified for a root span. parent_span
   // should only be specified for non-root spans.
-  constructor(
-    args: {
-      bgLogger: BackgroundLogger;
-      name: string;
-      spanAttributes?: Record<any, any>;
-      startTime?: number;
-      setCurrent?: boolean;
-      event?: ExperimentLogPartialArgs & Partial<IdField>;
-    } & (
-      | { rootExperiment: Experiment }
-      | { rootProject: RegisteredProject }
-      | { parentSpan: SpanImpl }
-    )
-  ) {
+  constructor(args: {
+    parentIds: Promise<ParentExperimentIds | ParentProjectLogIds>;
+    parentSpanInfo?: { span_id: string; root_span_id: string };
+    bgLogger: BackgroundLogger;
+    name: string;
+    spanAttributes?: Record<any, any>;
+    startTime?: number;
+    setCurrent?: boolean;
+    event?: ExperimentLogPartialArgs & Partial<IdField>;
+  }) {
     this.finished = false;
     this.loggedEndTime = undefined;
 
@@ -1692,34 +1738,17 @@ export class SpanImpl implements Span {
       created: new Date().toISOString(),
     };
 
+    this.parentIds = args.parentIds;
+
     const id = args.event?.id ?? uuidv4();
     const span_id = uuidv4();
-    if ("rootExperiment" in args) {
-      this._object_info = {
-        id,
-        span_id,
-        root_span_id: span_id,
-        project_id: args.rootExperiment.project.id,
-        experiment_id: args.rootExperiment.id,
-      };
-    } else if ("rootProject" in args) {
-      this._object_info = {
-        id,
-        span_id,
-        root_span_id: span_id,
-        org_id: _state.orgId!,
-        project_id: args.rootProject.id,
-        log_id: "g",
-      };
-    } else if ("parentSpan" in args) {
-      this._object_info = {
-        ...args.parentSpan._object_info,
-        id,
-        span_id,
-      };
-      this.internalData.span_parents = [args.parentSpan.span_id];
-    } else {
-      throw new Error("Must provide either 'rootExperiment' or 'parentSpan'");
+    this.rowIds = {
+      id,
+      span_id,
+      root_span_id: args.parentSpanInfo?.root_span_id ?? span_id,
+    };
+    if (args.parentSpanInfo) {
+      this.internalData.span_parents = [args.parentSpanInfo.span_id];
     }
 
     // The first log is a replacement, but subsequent logs to the same span
@@ -1733,15 +1762,15 @@ export class SpanImpl implements Span {
   }
 
   public get id(): string {
-    return this._object_info.id;
+    return this.rowIds.id;
   }
 
   public get span_id(): string {
-    return this._object_info.span_id;
+    return this.rowIds.span_id;
   }
 
   public get root_span_id(): string {
-    return this._object_info.root_span_id;
+    return this.rowIds.root_span_id;
   }
 
   public log(event: ExperimentLogPartialArgs): void {
@@ -1753,15 +1782,18 @@ export class SpanImpl implements Span {
     // the latter.
     const sanitizedAndInternalData = { ...this.internalData };
     mergeDicts(sanitizedAndInternalData, sanitized);
-    const record = {
-      ...sanitizedAndInternalData,
-      ...this._object_info,
-      [IS_MERGE_FIELD]: this.isMerge,
-    };
-    if (record.metrics?.end) {
-      this.loggedEndTime = record.metrics?.end as number;
-    }
     this.internalData = {};
+    if (sanitizedAndInternalData.metrics?.end) {
+      this.loggedEndTime = sanitizedAndInternalData.metrics?.end as number;
+    }
+    const record = (async () => {
+      return {
+        ...sanitizedAndInternalData,
+        ...this.rowIds,
+        ...(await this.parentIds),
+        [IS_MERGE_FIELD]: this.isMerge,
+      };
+    })();
     this.bgLogger.log([record]);
   }
 
@@ -1769,10 +1801,14 @@ export class SpanImpl implements Span {
     this.checkNotFinished();
 
     return new SpanImpl({
+      parentIds: this.parentIds,
+      parentSpanInfo: {
+        span_id: this.rowIds.span_id,
+        root_span_id: this.rowIds.root_span_id,
+      },
       bgLogger: this.bgLogger,
       name,
       ...args,
-      parentSpan: this,
     });
   }
 
@@ -1823,34 +1859,6 @@ export class SpanImpl implements Span {
   }
 }
 
-async function _initDataset(
-  project_name: string,
-  {
-    name,
-    description,
-    version,
-  }: {
-    name?: string;
-    description?: string;
-    version?: string;
-  } = {}
-) {
-  const args: Record<string, unknown> = {
-    org_id: _state.orgId,
-    project_name,
-    dataset_name: name,
-    description,
-  };
-  const response = await _state
-    .apiConn()
-    .post_json("api/dataset/register", args);
-
-  const project = response.project;
-  const dataset = response.dataset;
-
-  return new Dataset(project, dataset.id, dataset.name, version);
-}
-
 /**
  * A dataset is a collection of records, such as model inputs and outputs, which represent
  * data you can use to evaluate and fine-tune models. You can log production data to datasets,
@@ -1859,29 +1867,47 @@ async function _initDataset(
  * You should not create `Dataset` objects directly. Instead, use the `braintrust.initDataset()` method.
  */
 export class Dataset {
-  public readonly project: RegisteredProject;
-  public readonly id: string;
-  public readonly name: string;
+  private readonly lazyMetadata: Promise<ProjectDatasetMetadata>;
   private pinnedVersion?: string;
   private _fetchedData?: any[] = undefined;
   private logger: BackgroundLogger;
   private finished: boolean;
 
   constructor(
-    project: RegisteredProject,
-    id: string,
-    name: string,
+    lazyMetadata: Promise<ProjectDatasetMetadata>,
     pinnedVersion?: string
   ) {
     this.finished = false;
 
-    this.project = project;
-    this.id = id;
-    this.name = name;
+    this.lazyMetadata = lazyMetadata;
     this.pinnedVersion = pinnedVersion;
     this.logger = new BackgroundLogger();
 
     unterminatedObjects.addUnterminated(this, iso.getCallerLocation());
+  }
+
+  public get id(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata).dataset.id;
+    })();
+  }
+
+  public get name(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata).dataset.name;
+    })();
+  }
+
+  public get project_id(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata).project.id;
+    })();
+  }
+
+  public get project_name(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata).project.name;
+    })();
   }
 
   /**
@@ -1919,33 +1945,34 @@ export class Dataset {
       }
     }
 
-    const args = {
-      id: id || uuidv4(),
+    const rowId = id || uuidv4();
+    const args = (async () => ({
+      id: rowId,
       inputs: input,
       output,
-      project_id: this.project.id,
-      dataset_id: this.id,
+      project_id: await this.project_id,
+      dataset_id: await this.id,
       created: new Date().toISOString(),
       metadata,
-    };
+    }))();
 
     this.logger.log([args]);
-    return args.id;
+    return rowId;
   }
 
   public delete(id: string): string {
     this.checkNotFinished();
 
-    const args = {
+    const args = (async () => ({
       id,
-      project_id: this.project.id,
-      dataset_id: this.id,
+      project_id: await this.project_id,
+      dataset_id: await this.id,
       created: new Date().toISOString(),
       _object_delete: true,
-    };
+    }))();
 
     this.logger.log([args]);
-    return args.id;
+    return id;
   }
 
   /**
@@ -1964,23 +1991,23 @@ export class Dataset {
     await this.logger.flush();
     const projectUrl = `${_state.apiUrl}/app/${encodeURIComponent(
       _state.orgName!
-    )}/p/${encodeURIComponent(this.project.name)}`;
-    const datasetUrl = `${projectUrl}/d/${encodeURIComponent(this.name)}`;
+    )}/p/${encodeURIComponent(await this.project_name)}`;
+    const datasetUrl = `${projectUrl}/d/${encodeURIComponent(await this.name)}`;
 
     let dataSummary = undefined;
     if (summarizeData) {
       dataSummary = await _state.logConn().get_json(
         "dataset-summary",
         {
-          dataset_id: this.id,
+          dataset_id: await this.id,
         },
         3
       );
     }
 
     return {
-      projectName: this.project.name,
-      datasetName: this.name,
+      projectName: await this.project_name,
+      datasetName: await this.name,
       projectUrl,
       datasetUrl,
       dataSummary,
@@ -2042,7 +2069,7 @@ export class Dataset {
 
     if (this._fetchedData === undefined) {
       const resp = await _state.logConn().get("object/dataset", {
-        id: this.id,
+        id: await this.id,
         fmt: "json",
         version: this.pinnedVersion,
       });
