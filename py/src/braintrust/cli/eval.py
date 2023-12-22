@@ -132,7 +132,9 @@ async def run_once(handles, evaluator_opts):
     eval_results = [await p for p in eval_promises]
 
     for eval_name, (results, summary) in zip(evaluators.keys(), eval_results):
-        report_evaluator_result(eval_name, results, summary, evaluator_opts.verbose, evaluator_opts.jsonl)
+        report_evaluator_result(
+            eval_name, results, summary, verbose=evaluator_opts.verbose, jsonl=evaluator_opts.jsonl
+        )
 
 
 def check_match(path_input, include_patterns, exclude_patterns):

@@ -136,7 +136,7 @@ export async function Eval<Input, Output, Expected>(
           progressReporter,
           []
         );
-        reportEvaluatorResult(name, ret, true, false);
+        reportEvaluatorResult(name, ret, { verbose: true, jsonl: false });
         return ret.summary!;
       },
       {
@@ -358,8 +358,13 @@ export function reportEvaluatorResult(
     results: { scores: Record<string, number>; error: unknown }[];
     summary: unknown;
   },
-  verbose: boolean,
-  jsonl: boolean
+  {
+    verbose,
+    jsonl,
+  }: {
+    verbose: boolean;
+    jsonl: boolean;
+  }
 ) {
   const { results, summary } = evaluatorResult;
   const failingResults = results.filter(

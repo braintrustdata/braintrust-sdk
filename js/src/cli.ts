@@ -165,12 +165,10 @@ function buildWatchPluginForEvaluator(
             opts.progressReporter,
             opts.filters
           );
-          reportEvaluatorResult(
-            evaluator.evalName,
-            evaluatorResult,
-            true,
-            opts.jsonl
-          );
+          reportEvaluatorResult(evaluator.evalName, evaluatorResult, {
+            verbose: true,
+            jsonl: opts.jsonl,
+          });
         }
       });
     },
@@ -348,12 +346,10 @@ async function runOnce(
     k,
     i,
   ])) {
-    reportEvaluatorResult(
-      evaluator,
-      allEvalsResults[idx as number],
-      opts.verbose,
-      opts.jsonl
-    );
+    reportEvaluatorResult(evaluator, allEvalsResults[idx as number], {
+      verbose: opts.verbose,
+      jsonl: opts.jsonl,
+    });
   }
 }
 

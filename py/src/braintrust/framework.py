@@ -308,7 +308,7 @@ def Eval(
             )
             try:
                 results, summary = await run_evaluator(experiment, evaluator, 0, [])
-                report_evaluator_result(evaluator.eval_name, results, summary, True)
+                report_evaluator_result(evaluator.eval_name, results, summary, verbose=True, jsonl=False)
             finally:
                 experiment.flush()
 
