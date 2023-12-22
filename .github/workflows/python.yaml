@@ -24,3 +24,9 @@ jobs:
           python -m pip install --upgrade pip setuptools build twine
           python -m pip install -e py
       - run: make test-py
+      - name: Debug with upterm
+        if: failure()
+        uses: lhotari/action-upterm@v1
+        with:
+          limit-access-to-actor: true
+          wait-timeout-minutes: 10

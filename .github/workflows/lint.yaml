@@ -13,3 +13,9 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
       - uses: pre-commit/action@v3.0.0
+      - name: Debug with upterm
+        if: failure()
+        uses: lhotari/action-upterm@v1
+        with:
+          limit-access-to-actor: true
+          wait-timeout-minutes: 10

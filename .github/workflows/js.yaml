@@ -26,3 +26,9 @@ jobs:
       - run: pnpm install
       - run: make test-js
       - run: pnpm build
+      - name: Debug with upterm
+        if: failure()
+        uses: lhotari/action-upterm@v1
+        with:
+          limit-access-to-actor: true
+          wait-timeout-minutes: 10
