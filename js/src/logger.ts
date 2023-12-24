@@ -412,11 +412,7 @@ export class Logger<IsAsyncFlush extends boolean> {
   ) {
     this.lazyMetadata = lazyMetadata;
     this.logOptions = logOptions;
-    const logConn = (async () => {
-      // This should do the login.
-      await lazyMetadata;
-      return _state.logConn();
-    })();
+    const logConn = this.getState().then((state) => state.logConn());
     this.bgLogger = new BackgroundLogger(logConn);
     this.lastStartTime = getCurrentUnixTimestamp();
   }
@@ -437,6 +433,12 @@ export class Logger<IsAsyncFlush extends boolean> {
     return (async () => {
       return (await this.lazyMetadata).project.name;
     })();
+  }
+
+  private async getState(): Promise<BraintrustState> {
+    // Ensure the login state is populated by awaiting lazyMetadata.
+    await this.lazyMetadata;
+    return _state;
   }
 
   /**
@@ -1007,25 +1009,25 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
       apiUrl,
     });
     const org_id = _state.orgId!;
-    const project: ObjectMetadata = await (async () => {
-      if (projectId === undefined) {
-        const response = await _state
-          .apiConn()
-          .post_json("api/project/register", {
-            project_name: projectName || GLOBAL_PROJECT,
-            org_id,
-          });
-        return { id: response.project.id, name: response.project.name };
-      } else if (projectName === undefined) {
-        const response = await _state.apiConn().get_json("api/project", {
-          id: projectId,
+    if (projectId === undefined) {
+      const response = await _state
+        .apiConn()
+        .post_json("api/project/register", {
+          project_name: projectName || GLOBAL_PROJECT,
+          org_id,
         });
-        return { id: projectId, name: response.name };
-      } else {
-        return { id: projectId, name: projectName };
-      }
-    })();
-    return { org_id, project };
+      return {
+        org_id,
+        project: { id: response.project.id, name: response.project.name },
+      };
+    } else if (projectName === undefined) {
+      const response = await _state.apiConn().get_json("api/project", {
+        id: projectId,
+      });
+      return { org_id, project: { id: projectId, name: response.name } };
+    } else {
+      return { org_id, project: { id: projectId, name: projectName } };
+    }
   })();
 
   const ret = new Logger<IsAsyncFlush>(lazyMetadata, {
@@ -1419,11 +1421,7 @@ export class Experiment {
     this.lazyMetadata = lazyMetadata;
     this.dataset = dataset;
 
-    const logConn = (async () => {
-      // This should do the login.
-      await lazyMetadata;
-      return _state.logConn();
-    })();
+    const logConn = this.getState().then((state) => state.logConn());
     this.bgLogger = new BackgroundLogger(logConn);
     this.lastStartTime = getCurrentUnixTimestamp();
   }
@@ -1450,6 +1448,12 @@ export class Experiment {
     return (async () => {
       return (await this.lazyMetadata).project.name;
     })();
+  }
+
+  private async getState(): Promise<BraintrustState> {
+    // Ensure the login state is populated by awaiting lazyMetadata.
+    await this.lazyMetadata;
+    return _state;
   }
 
   /**
@@ -1535,12 +1539,12 @@ export class Experiment {
       options || {};
 
     await this.bgLogger.flush();
-    const metadata = await this.lazyMetadata;
-    const projectUrl = `${_state.apiUrl}/app/${encodeURIComponent(
-      _state.orgName!
-    )}/p/${encodeURIComponent(metadata.project.name)}`;
+    const state = await this.getState();
+    const projectUrl = `${state.apiUrl}/app/${encodeURIComponent(
+      state.orgName!
+    )}/p/${encodeURIComponent(await this.project_name)}`;
     const experimentUrl = `${projectUrl}/${encodeURIComponent(
-      metadata.experiment.name
+      await this.name
     )}`;
 
     let scores: Record<string, ScoreSummary> | undefined = undefined;
@@ -1548,9 +1552,9 @@ export class Experiment {
     let comparisonExperimentName = undefined;
     if (summarizeScores) {
       if (comparisonExperimentId === undefined) {
-        const conn = _state.logConn();
+        const conn = state.logConn();
         const resp = await conn.get("/crud/base_experiments", {
-          id: metadata.experiment.id,
+          id: await this.id,
         });
         const base_experiments = await resp.json();
         if (base_experiments.length > 0) {
@@ -1560,10 +1564,10 @@ export class Experiment {
       }
 
       if (comparisonExperimentId !== undefined) {
-        const results = await _state.logConn().get_json(
+        const results = await state.logConn().get_json(
           "/experiment-comparison2",
           {
-            experiment_id: metadata.experiment.id,
+            experiment_id: await this.id,
             base_experiment_id: comparisonExperimentId,
           },
           3
@@ -1575,8 +1579,8 @@ export class Experiment {
     }
 
     return {
-      projectName: metadata.project.name,
-      experimentName: metadata.experiment.name,
+      projectName: await this.project_name,
+      experimentName: await this.name,
       projectUrl: projectUrl,
       experimentUrl: experimentUrl,
       comparisonExperimentName: comparisonExperimentName,
@@ -1644,8 +1648,8 @@ export class SpanImpl implements Span {
   constructor(
     args: {
       parentIds: Promise<ParentExperimentIds | ParentProjectLogIds>;
-      parentSpanInfo?: { span_id: string; root_span_id: string };
       bgLogger: BackgroundLogger;
+      parentSpanInfo?: { span_id: string; root_span_id: string };
     } & StartSpanArgs
   ) {
     this.loggedEndTime = undefined;
@@ -1751,11 +1755,11 @@ export class SpanImpl implements Span {
   public startSpan(args?: StartSpanArgs): Span {
     return new SpanImpl({
       parentIds: this.parentIds,
+      bgLogger: this.bgLogger,
       parentSpanInfo: {
         span_id: this.rowIds.span_id,
         root_span_id: this.rowIds.root_span_id,
       },
-      bgLogger: this.bgLogger,
       ...args,
     });
   }
@@ -1796,11 +1800,7 @@ export class Dataset {
   ) {
     this.lazyMetadata = lazyMetadata;
     this.pinnedVersion = pinnedVersion;
-    const logConn = (async () => {
-      // This should do the login.
-      await lazyMetadata;
-      return _state.logConn();
-    })();
+    const logConn = this.getState().then((state) => state.logConn());
     this.bgLogger = new BackgroundLogger(logConn);
   }
 
@@ -1826,6 +1826,12 @@ export class Dataset {
     return (async () => {
       return (await this.lazyMetadata).project.name;
     })();
+  }
+
+  private async getState(): Promise<BraintrustState> {
+    // Ensure the login state is populated by awaiting lazyMetadata.
+    await this.lazyMetadata;
+    return _state;
   }
 
   /**
@@ -1901,14 +1907,15 @@ export class Dataset {
     let { summarizeData = true } = options || {};
 
     await this.bgLogger.flush();
-    const projectUrl = `${_state.apiUrl}/app/${encodeURIComponent(
-      _state.orgName!
+    const state = await this.getState();
+    const projectUrl = `${state.apiUrl}/app/${encodeURIComponent(
+      state.orgName!
     )}/p/${encodeURIComponent(await this.project_name)}`;
     const datasetUrl = `${projectUrl}/d/${encodeURIComponent(await this.name)}`;
 
     let dataSummary = undefined;
     if (summarizeData) {
-      dataSummary = await _state.logConn().get_json(
+      dataSummary = await state.logConn().get_json(
         "dataset-summary",
         {
           dataset_id: await this.id,
@@ -1974,7 +1981,8 @@ export class Dataset {
 
   async fetchedData() {
     if (this._fetchedData === undefined) {
-      const resp = await _state.logConn().get("object/dataset", {
+      const state = await this.getState();
+      const resp = await state.logConn().get("object/dataset", {
         id: await this.id,
         fmt: "json",
         version: this.pinnedVersion,
