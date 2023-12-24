@@ -64,11 +64,17 @@ class LazyValue(Generic[T]):
 
     def __init__(self, callable: Callable[[], T], use_mutex: bool):
         self.callable = callable
-        self.mutex = threading.RLock() if use_mutex else None
+        self.mutex = threading.Lock() if use_mutex else None
         self.has_computed = False
         self.value = None
 
     def get(self) -> T:
+        # Short-circuit check `has_computed`. This should be fine because
+        # setting `has_computed` is atomic and python should have sequentially
+        # consistent semantics, so we'll observe the write to `self.value` as
+        # well.
+        if self.has_computed:
+            return self.value
         if self.mutex:
             self.mutex.lock()
         try:
