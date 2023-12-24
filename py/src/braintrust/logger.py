@@ -40,6 +40,7 @@ from .resource_manager import ResourceManager
 from .util import (
     GLOBAL_PROJECT,
     AugmentedHTTPError,
+    LazyValue,
     encode_uri_component,
     eprint,
     get_caller_location,
@@ -291,14 +292,6 @@ def org_id():
     return _state.org_id
 
 
-class ModelWrapper:
-    def __init__(self, data):
-        self.data = data
-
-    def __getattr__(self, name: str) -> Any:
-        return self.data[name]
-
-
 # 6 MB (from our own testing).
 MAX_REQUEST_SIZE = 6 * 1024 * 1024
 
@@ -307,21 +300,26 @@ def construct_json_array(items):
     return "[" + ",".join(items) + "]"
 
 
+def _check_json_serializable(event):
+    try:
+        _ = json.dumps(event)
+    except TypeError as e:
+        raise Exception(f"All logged values must be JSON-serializable: {event}") from e
+
+
 DEFAULT_BATCH_SIZE = 100
 NUM_RETRIES = 3
 
 
 class _BackgroundLogger:
-    def __init__(self, name=None):
+    def __init__(self, log_conn: LazyValue[HTTPConnection]):
+        self.log_conn = log_conn
         self.flush_lock = threading.RLock()
         self.start_thread_lock = threading.RLock()
         self.thread = threading.Thread(target=self._publisher, daemon=True)
         self.started = False
 
         log_namespace = "braintrust"
-        if name:
-            log_namespace += f" [{name}]"
-
         self.logger = logging.getLogger(log_namespace)
 
         try:
@@ -338,11 +336,6 @@ class _BackgroundLogger:
     def log(self, *args):
         self._start()
         for event in args:
-            try:
-                _ = json.dumps(event)
-            except TypeError as e:
-                raise Exception(f"All logged values must be JSON-serializable: {event}") from e
-
             try:
                 self.queue.put_nowait(event)
             except queue.Full:
@@ -387,12 +380,14 @@ class _BackgroundLogger:
                     all_items.append(self.queue.get_nowait())
             except queue.Empty:
                 pass
+            # Unwrap all the lazily-computed values.
+            all_items = [item.get() for item in all_items]
             all_items = list(reversed(merge_row_batch(all_items)))
 
             if len(all_items) == 0:
                 return
 
-            conn = _state.log_conn()
+            conn = self.log_conn.get()
             post_promises = []
             while True:
                 items = []
@@ -457,6 +452,30 @@ def _ensure_object(object_type, object_id, force=False):
     return experiment_path
 
 
+@dataclasses.dataclass
+class ObjectMetadata:
+    id: str
+    name: str
+
+
+@dataclasses.dataclass
+class ProjectExperimentMetadata:
+    project: ObjectMetadata
+    experiment: ObjectMetadata
+
+
+@dataclasses.dataclass
+class ProjectDatasetMetadata:
+    project: ObjectMetadata
+    dataset: ObjectMetadata
+
+
+@dataclasses.dataclass
+class OrgProjectMetadata:
+    org_id: str
+    project: ObjectMetadata
+
+
 def init(
     project: str,
     experiment: Optional[str] = None,
@@ -491,17 +510,58 @@ def init(
     :param set_current: If true (the default), set the global current-experiment to the newly-created one.
     :returns: The experiment object.
     """
-    login(org_name=org_name, api_key=api_key, api_url=api_url)
-    ret = Experiment(
-        project_name=project,
-        experiment_name=experiment,
-        description=description,
-        dataset=dataset,
-        update=update,
-        base_experiment=base_experiment,
-        is_public=is_public,
-        metadata=metadata,
-    )
+
+    def compute_lazy_metadata():
+        login(org_name=org_name, api_key=api_key, api_url=api_url)
+        args = {"project_name": project, "org_id": _state.org_id}
+
+        if experiment_name is not None:
+            args["experiment_name"] = experiment
+
+        if description is not None:
+            args["description"] = description
+
+        if update:
+            args["update"] = update
+
+        repo_status = get_repo_status()
+        if repo_status:
+            args["repo_info"] = repo_status.as_dict()
+
+        if base_experiment is not None:
+            args["base_experiment"] = base_experiment
+        else:
+            args["ancestor_commits"] = list(get_past_n_ancestors())
+
+        if dataset is not None:
+            args["dataset_id"] = dataset.id
+            args["dataset_version"] = dataset.version
+
+        if is_public is not None:
+            args["public"] = is_public
+
+        if metadata is not None:
+            args["metadata"] = metadata
+
+        while True:
+            try:
+                response = _state.api_conn().post_json("api/experiment/register", args)
+                break
+            except AugmentedHTTPError as e:
+                if args.get("base_experiment") is not None and "base experiment" in str(e):
+                    _logger.warning(f"Base experiment {args['base_experiment']} not found.")
+                    args["base_experiment"] = None
+                else:
+                    raise
+
+        project = response["project"]
+        experiment = response["experiment"]
+        return ProjectExperimentMetadata(
+            project=ObjectMetadata(id=project["id"], name=project["name"]),
+            experiment=ObjectMetadata(id=experiment["id"], name=experiment["name"]),
+        )
+
+    ret = Experiment(lazy_metadata=LazyValue(compute_lazy_metadata, use_mutex=True), dataset=dataset)
     if set_current:
         _state.current_experiment = ret
     return ret
@@ -529,14 +589,23 @@ def init_dataset(
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
     :returns: The dataset object.
     """
-    login(org_name=org_name, api_key=api_key, api_url=api_url)
 
-    return Dataset(
-        project_name=project,
-        name=name,
-        description=description,
-        version=version,
-    )
+    def compute_lazy_metadata():
+        login(org_name=org_name, api_key=api_key, api_url=api_url)
+        args = _populate_args(
+            {"project_name": project, "org_id": _state.org_id},
+            dataset_name=name,
+            description=description,
+        )
+        response = _state.api_conn().post_json("api/dataset/register", args)
+        project = response["project"]
+        dataset = response["dataset"]
+        return ProjectDatasetMetadata(
+            project=ObjectMetadata(id=project["id"], name=project["name"]),
+            dataset=ObjectMetadata(id=dataset["id"], name=dataset["name"]),
+        )
+
+    return Dataset(lazy_metadata=LazyValue(compute_lazy_metadata, use_mutex=True), version=version)
 
 
 def init_logger(
@@ -562,12 +631,27 @@ def init_logger(
     :returns: The newly created Logger.
     """
 
-    def lazy_login():
+    def compute_lazy_metadata():
         login(org_name=org_name, api_key=api_key, api_url=api_url)
+        org_id = _state.org_id
+        if project_id is None:
+            response = _state.api_conn().post_json(
+                "api/project/register",
+                {
+                    "project_name": project or GLOBAL_PROJECT,
+                    "org_id": _state.org_id,
+                },
+            )
+            project = response["project"]
+            return OrgProjectMetadata(org_id=org_id, project=ObjectMetadata(id=project["id"], name=project["name"]))
+        elif project is None:
+            response = _state.api_conn().get_json("api/project", {"id": project_id})
+            return OrgProjectMetadata(org_id=org_id, project=ObjectMetadata(id=project_id, name=response["name"]))
+        else:
+            return OrgProjectMetadata(org_id=org_id, project=ObjectMetadata(id=project_id, name=project))
 
     ret = Logger(
-        lazy_login=lazy_login,
-        project=Project(name=project, id=project_id),
+        lazy_metadata=LazyValue(compute_lazy_metadata, use_mutex=True),
         async_flush=async_flush,
     )
     if set_current:
@@ -924,7 +1008,7 @@ def _validate_and_sanitize_experiment_log_full_args(event, has_dataset):
     return event
 
 
-class Experiment(ModelWrapper):
+class Experiment:
     """
     An experiment is a collection of logged events, such as model inputs and outputs, which represent
     a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -940,61 +1024,38 @@ class Experiment(ModelWrapper):
 
     def __init__(
         self,
-        project_name: str,
-        experiment_name: str = None,
-        description: str = None,
+        lazy_metadata: LazyValue[ProjectExperimentMetadata],
         dataset: "Dataset" = None,
-        update: bool = False,
-        base_experiment: str = None,
-        is_public: bool = False,
-        metadata: Optional[Metadata] = None,
     ):
-        args = {"project_name": project_name, "org_id": _state.org_id}
-
-        if experiment_name is not None:
-            args["experiment_name"] = experiment_name
-
-        if description is not None:
-            args["description"] = description
-
-        if update:
-            args["update"] = update
-
-        repo_status = get_repo_status()
-        if repo_status:
-            args["repo_info"] = repo_status.as_dict()
-
-        if base_experiment is not None:
-            args["base_experiment"] = base_experiment
-        else:
-            args["ancestor_commits"] = list(get_past_n_ancestors())
-
-        if dataset is not None:
-            args["dataset_id"] = dataset.id
-            args["dataset_version"] = dataset.version
-
-        if is_public is not None:
-            args["public"] = is_public
-
-        if metadata is not None:
-            args["metadata"] = metadata
-
-        while True:
-            try:
-                response = _state.api_conn().post_json("api/experiment/register", args)
-                break
-            except AugmentedHTTPError as e:
-                if args.get("base_experiment") is not None and "base experiment" in str(e):
-                    _logger.warning(f"Base experiment {args['base_experiment']} not found.")
-                    args["base_experiment"] = None
-                else:
-                    raise
-
-        self.project = ModelWrapper(response["project"])
-        super().__init__(response["experiment"])
+        self._lazy_metadata = lazy_metadata
         self.dataset = dataset
-        self.bg_logger = _BackgroundLogger(name=experiment_name)
+
+        def compute_log_conn():
+            return self._get_state().log_conn()
+
+        self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
         self.last_start_time = time.time()
+
+    @property
+    def id(self):
+        return self._lazy_metadata.get().experiment.id
+
+    @property
+    def name(self):
+        return self._lazy_metadata.get().experiment.name
+
+    @property
+    def project_id(self):
+        return self._lazy_metadata.get().project.id
+
+    @property
+    def project_name(self):
+        return self._lazy_metadata.get().project.name
+
+    def _get_state(self) -> BraintrustState:
+        # Ensure the login state is populated by fetching the lazy_metadata.
+        self._lazy_metadata.get()
+        return _state
 
     def log(
         self,
@@ -1045,14 +1106,18 @@ class Experiment(ModelWrapper):
 
         See `Span.start_span` for full details
         """
+
+        def compute_parent_ids():
+            return ParentExperimentIds(project_id=self.project_id, experiment_id=self.id)
+
         return SpanImpl(
+            parent_ids=LazyValue(compute_parent_ids, use_mutex=False),
             bg_logger=self.bg_logger,
             name=name,
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
             event=event,
-            root_experiment=self,
         )
 
     def summarize(self, summarize_scores=True, comparison_experiment_id=None):
@@ -1067,8 +1132,9 @@ class Experiment(ModelWrapper):
         # includes the new experiment.
         self.bg_logger.flush()
 
+        state = self._get_state()
         project_url = (
-            f"{_state.api_url}/app/{encode_uri_component(_state.org_name)}/p/{encode_uri_component(self.project.name)}"
+            f"{state.api_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project_name)}"
         )
         experiment_url = f"{project_url}/{encode_uri_component(self.name)}"
 
@@ -1078,7 +1144,7 @@ class Experiment(ModelWrapper):
         if summarize_scores:
             # Get the comparison experiment
             if comparison_experiment_id is None:
-                conn = _state.log_conn()
+                conn = state.log_conn()
                 resp = conn.get("/crud/base_experiments", params={"id": self.id})
                 response_raise_for_status(resp)
                 base_experiments = resp.json()
@@ -1087,7 +1153,7 @@ class Experiment(ModelWrapper):
                     comparison_experiment_name = base_experiments[0]["base_exp_name"]
 
             if comparison_experiment_id is not None:
-                summary_items = _state.log_conn().get_json(
+                summary_items = state.log_conn().get_json(
                     "experiment-comparison2",
                     args={
                         "experiment_id": self.id,
@@ -1109,7 +1175,7 @@ class Experiment(ModelWrapper):
                 }
 
         return ExperimentSummary(
-            project_name=self.project.name,
+            project_name=self.project_name,
             experiment_name=self.name,
             project_url=project_url,
             experiment_url=experiment_url,
@@ -1138,6 +1204,32 @@ class Experiment(ModelWrapper):
         del type, value, callback
 
 
+@dataclasses.dataclass
+class ParentExperimentIds:
+    project_id: str
+    experiment_id: str
+
+
+@dataclasses.dataclass
+class ParentProjectLogIds:
+    org_id: str
+    project_id: str
+    log_id: str
+
+
+@dataclasses.dataclass
+class ParentSpanInfo:
+    span_id: str
+    root_span_id: str
+
+
+@dataclasses.dataclass
+class RowIds:
+    id: str
+    span_id: str
+    root_span_id: str
+
+
 class SpanImpl(Span):
     """Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
 
@@ -1146,19 +1238,15 @@ class SpanImpl(Span):
 
     def __init__(
         self,
+        parent_ids: LazyValue[Union[ParentExperimentIds, ParentProjectLogIds]],
         bg_logger,
+        parent_span_info: Optional[ParentSpanInfo] = None,
         name=None,
         span_attributes={},
         start_time=None,
         set_current=None,
         event={},
-        root_experiment=None,
-        root_project=None,
-        parent_span=None,
     ):
-        if sum(x is not None for x in [root_experiment, root_project, parent_span]) != 1:
-            raise ValueError("Must specify exactly one of `root_experiment`, `root_project`, and `parent_span`")
-
         self.set_current = coalesce(set_current, True)
         self._logged_end_time = None
 
@@ -1178,7 +1266,6 @@ class SpanImpl(Span):
         # `internal_data` contains fields that are not part of the
         # "user-sanitized" set of fields which we want to log in just one of the
         # span rows.
-        caller_location = get_caller_location()
         self.internal_data = dict(
             metrics=dict(
                 start=start_time or time.time(),
@@ -1188,34 +1275,17 @@ class SpanImpl(Span):
             created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         )
 
+        self.parent_ids = parent_ids
+
         id = event.get("id", None)
         if id is None:
             id = str(uuid.uuid4())
         span_id = str(uuid.uuid4())
-        # `_object_info` contains fields that are logged to every span row.
-        if root_experiment is not None:
-            self._object_info = dict(
-                id=id,
-                span_id=span_id,
-                root_span_id=span_id,
-                project_id=root_experiment.project.id,
-                experiment_id=root_experiment.id,
-            )
-        elif root_project is not None:
-            self._object_info = dict(
-                id=id,
-                span_id=span_id,
-                root_span_id=span_id,
-                org_id=_state.org_id,
-                project_id=root_project.id,
-                log_id="g",
-            )
-        elif parent_span is not None:
-            self._object_info = {**parent_span._object_info}
-            self._object_info.update(id=id, span_id=span_id)
-            self.internal_data.update(span_parents=[parent_span.span_id])
-        else:
-            raise RuntimeError("Must provide parent info")
+        self.row_ids = RowIds(
+            id=id, span_id=span_id, root_span_id=parent_span_info.root_span_id if parent_span_info else span_id
+        )
+        if parent_span_info:
+            self.internal_data.update(span_parents=[parent_span_info.span_id])
 
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.
@@ -1225,15 +1295,15 @@ class SpanImpl(Span):
 
     @property
     def id(self):
-        return self._object_info["id"]
+        return self.row_ids.id
 
     @property
     def span_id(self):
-        return self._object_info["span_id"]
+        return self.row_ids.span_id
 
     @property
     def root_span_id(self):
-        return self._object_info["root_span_id"]
+        return self.row_ids.root_span_id
 
     def log(self, **event):
         sanitized = {
@@ -1244,25 +1314,35 @@ class SpanImpl(Span):
         # the latter.
         sanitized_and_internal_data = {**self.internal_data}
         merge_dicts(sanitized_and_internal_data, sanitized)
-        record = dict(
-            **sanitized_and_internal_data,
-            **self._object_info,
-            **{IS_MERGE_FIELD: self._is_merge},
-        )
+        self.internal_data = {}
         if "metrics" in record and "end" in record["metrics"]:
             self._logged_end_time = record["metrics"]["end"]
-        self.internal_data = {}
-        self.bg_logger.log(record)
+        # Validate the non-lazily-computed part of the record-to-log.
+        partial_record = dict(
+            **sanitized_and_internal_data,
+            **dataclasses.asdict(self.row_ids),
+            **{IS_MERGE_FIELD: self._is_merge},
+        )
+        _check_json_serializable(partial_record)
+
+        def compute_record():
+            return dict(
+                **partial_record,
+                **dataclasses.asdict(self.parent_ids.get()),
+            )
+
+        self.bg_logger.log(LazyValue(compute_record, use_mutex=False))
 
     def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, **event):
         return SpanImpl(
+            parent_ids=self.parent_ids,
             bg_logger=self.bg_logger,
+            parent_span_info=ParentSpanInfo(span_id=self.span_id, root_span_id=self.root_span_id),
             name=name,
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
             event=event,
-            parent_span=self,
         )
 
     def end(self, end_time=None):
@@ -1291,7 +1371,7 @@ class SpanImpl(Span):
         self.end()
 
 
-class Dataset(ModelWrapper):
+class Dataset:
     """
     A dataset is a collection of records, such as model inputs and outputs, which represent
     data you can use to evaluate and fine-tune models. You can log production data to datasets,
@@ -1300,19 +1380,10 @@ class Dataset(ModelWrapper):
     You should not create `Dataset` objects directly. Instead, use the `braintrust.init_dataset()` method.
     """
 
-    def __init__(self, project_name: str, name: str = None, description: str = None, version: "str | int" = None):
-        args = _populate_args(
-            {"project_name": project_name, "org_id": _state.org_id},
-            dataset_name=name,
-            description=description,
-        )
-        response = _state.api_conn().post_json("api/dataset/register", args)
-        self.project = ModelWrapper(response["project"])
-
+    def __init__(self, lazy_metadata: LazyValue[ProjectDatasetMetadata], version: Union[None, int, str] = None):
+        self._lazy_metadata = lazy_metadata
         self.new_records = 0
-
         self._fetched_data = None
-
         self._pinned_version = None
         if version is not None:
             try:
@@ -1321,8 +1392,31 @@ class Dataset(ModelWrapper):
             except (ValueError, AssertionError):
                 raise ValueError(f"version ({version}) must be a positive integer")
 
-        super().__init__(response["dataset"])
-        self.bg_logger = _BackgroundLogger(name=self.name)
+        def compute_log_conn():
+            return self._get_state().log_conn()
+
+        self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
+
+    @property
+    def id(self):
+        return self._lazy_metadata.get().dataset.id
+
+    @property
+    def name(self):
+        return self._lazy_metadata.get().dataset.name
+
+    @property
+    def project_id(self):
+        return self._lazy_metadata.get().project.id
+
+    @property
+    def project_name(self):
+        return self._lazy_metadata.get().project.name
+
+    def _get_state(self) -> BraintrustState:
+        # Ensure the login state is populated by fetching the lazy_metadata.
+        self._lazy_metadata.get()
+        return _state
 
     def insert(self, input, output, metadata=None, id=None):
         """
@@ -1345,22 +1439,30 @@ class Dataset(ModelWrapper):
                 if not isinstance(key, str):
                     raise ValueError("metadata keys must be strings")
 
-        args = _populate_args(
+        row_id = id or str(uuid.uuid4())
+        # Validate the non-lazily-computed part of the record-to-log.
+        partial_args = _populate_args(
             {
-                "id": id or str(uuid.uuid4()),
+                "id": row_id,
                 "inputs": input,
                 "output": output,
-                "project_id": self.project.id,
-                "dataset_id": self.id,
                 "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             },
             metadata=metadata,
         )
+        _check_json_serializable(partial_args)
+
+        def compute_args():
+            return dict(
+                **partial_args,
+                project_id=self.project_id,
+                dataset_id=self.id,
+            )
 
         self._clear_cache()  # We may be able to optimize this
         self.new_records += 1
-        self.bg_logger.log(args)
-        return args["id"]
+        self.bg_logger.log(LazyValue(compute_args, use_mutex=False))
+        return row_id
 
     def delete(self, id):
         """
@@ -1368,18 +1470,26 @@ class Dataset(ModelWrapper):
 
         :param id: The `id` of the record to delete.
         """
-        args = _populate_args(
+
+        # Validate the non-lazily-computed part of the record-to-log.
+        partial_args = _populate_args(
             {
                 "id": id,
-                "project_id": self.project.id,
-                "dataset_id": self.id,
                 "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "_object_delete": True,  # XXX potentially place this in the logging endpoint
             },
         )
+        _check_json_serializable(partial_args)
 
-        self.bg_logger.log(args)
-        return args["id"]
+        def compute_args():
+            return dict(
+                **partial_args,
+                project_id=self.project_id,
+                dataset_id=self.id,
+            )
+
+        self.bg_logger.log(LazyValue(compute_args, use_mutex=False))
+        return id
 
     def summarize(self, summarize_data=True):
         """
@@ -1391,15 +1501,15 @@ class Dataset(ModelWrapper):
         # Flush our events to the API, and to the data warehouse, to ensure that the link we print
         # includes the new experiment.
         self.bg_logger.flush()
-
+        state = self._get_state()
         project_url = (
-            f"{_state.api_url}/app/{encode_uri_component(_state.org_name)}/p/{encode_uri_component(self.project.name)}"
+            f"{state.api_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project_name)}"
         )
         dataset_url = f"{project_url}/d/{encode_uri_component(self.name)}"
 
         data_summary = None
         if summarize_data:
-            data_summary_d = _state.log_conn().get_json(
+            data_summary_d = state.log_conn().get_json(
                 "dataset-summary",
                 args={
                     "dataset_id": self.id,
@@ -1409,7 +1519,7 @@ class Dataset(ModelWrapper):
             data_summary = DataSummary(new_records=self.new_records, **data_summary_d)
 
         return DatasetSummary(
-            project_name=self.project.name,
+            project_name=self.project_name,
             dataset_name=self.name,
             project_url=project_url,
             dataset_url=dataset_url,
@@ -1447,7 +1557,8 @@ class Dataset(ModelWrapper):
     @property
     def fetched_data(self):
         if not self._fetched_data:
-            resp = _state.log_conn().get(
+            state = self._get_state()
+            resp = state.log_conn().get(
                 "object/dataset", params={"id": self.id, "fmt": "json", "version": self._pinned_version}
             )
             response_raise_for_status(resp)
@@ -1522,15 +1633,32 @@ class Project:
 
 
 class Logger:
-    def __init__(self, lazy_login: Callable, project: Project, async_flush: bool = True):
-        self._lazy_login = lazy_login
-        self._logged_in = False
-
-        self.project = project
+    def __init__(self, lazy_metadata: LazyValue[OrgProjectMetadata], async_flush: bool = True):
+        self._lazy_metadata = lazy_metadata
         self.async_flush = async_flush
 
-        self.bg_logger = _BackgroundLogger()
+        def compute_log_conn():
+            return self._get_state().log_conn()
+
+        self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
         self.last_start_time = time.time()
+
+    @property
+    def org_id(self):
+        return self._lazy_metadata.get().org_id
+
+    @property
+    def project_id(self):
+        return self._lazy_metadata.get().project.id
+
+    @property
+    def project_name(self):
+        return self._lazy_metadata.get().project.name
+
+    def _get_state(self) -> BraintrustState:
+        # Ensure the login state is populated by fetching the lazy_metadata.
+        self._lazy_metadata.get()
+        return _state
 
     def log(
         self,
@@ -1553,8 +1681,6 @@ class Logger:
         :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
         """
-        # Do the lazy login before retrieving the last_start_time.
-        self._perform_lazy_login()
         span = self.start_span(
             start_time=self.last_start_time,
             input=input,
@@ -1572,26 +1698,27 @@ class Logger:
 
         return span.id
 
-    def _perform_lazy_login(self):
-        if not self._logged_in:
-            self._lazy_login()
-            self.last_start_time = time.time()
-            self._logged_in = True
-
     def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, **event):
         """Create a new toplevel span underneath the logger. The name parameter defaults to "root".
 
         See `Span.start_span` for full details
         """
-        self._perform_lazy_login()
+
+        def compute_parent_ids():
+            return ParentProjectLogIds(
+                org_id=self.org_id,
+                project_id=self.project_id,
+                log_id="g",
+            )
+
         return SpanImpl(
+            parent_ids=LazyValue(compute_parent_ids, use_mutex=False),
             bg_logger=self.bg_logger,
             name=name,
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
             event=event,
-            root_project=self.project,
         )
 
     def __enter__(self):

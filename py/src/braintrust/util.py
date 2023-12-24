@@ -1,7 +1,9 @@
 import inspect
 import os.path
 import sys
+import threading
 import urllib.parse
+from typing import Any, Callable, Generic, TypeVar
 
 from requests import HTTPError
 
@@ -50,3 +52,31 @@ def get_caller_location():
 # https://stackoverflow.com/questions/5574702/how-do-i-print-to-stderr-in-python.
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
+
+
+T = TypeVar("T")
+
+
+class LazyValue(Generic[T]):
+    """A simple wrapper around a callable object which computes the value
+    on-demand and saves it for future retrievals.
+    """
+
+    def __init__(self, callable: Callable[[], T], use_mutex: bool):
+        self.callable = callable
+        self.mutex = threading.RLock() if use_mutex else None
+        self.has_computed = False
+        self.value = None
+
+    def get(self) -> T:
+        if self.mutex:
+            self.mutex.lock()
+        try:
+            if not self.has_computed:
+                res = self.callable()
+                self.value = res
+                self.has_computed = True
+            return self.value
+        finally:
+            if self.mutex:
+                self.mutex.unlock()
