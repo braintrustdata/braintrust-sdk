@@ -511,7 +511,7 @@ def init(
     :returns: The experiment object.
     """
 
-    def compute_lazy_metadata():
+    def compute_metadata():
         login(org_name=org_name, api_key=api_key, api_url=api_url)
         args = {"project_name": project, "org_id": _state.org_id}
 
@@ -561,7 +561,7 @@ def init(
             experiment=ObjectMetadata(id=experiment["id"], name=experiment["name"]),
         )
 
-    ret = Experiment(lazy_metadata=LazyValue(compute_lazy_metadata, use_mutex=True), dataset=dataset)
+    ret = Experiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset)
     if set_current:
         _state.current_experiment = ret
     return ret
@@ -590,7 +590,7 @@ def init_dataset(
     :returns: The dataset object.
     """
 
-    def compute_lazy_metadata():
+    def compute_metadata():
         login(org_name=org_name, api_key=api_key, api_url=api_url)
         args = _populate_args(
             {"project_name": project, "org_id": _state.org_id},
@@ -605,7 +605,7 @@ def init_dataset(
             dataset=ObjectMetadata(id=dataset["id"], name=dataset["name"]),
         )
 
-    return Dataset(lazy_metadata=LazyValue(compute_lazy_metadata, use_mutex=True), version=version)
+    return Dataset(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), version=version)
 
 
 def init_logger(
@@ -631,7 +631,7 @@ def init_logger(
     :returns: The newly created Logger.
     """
 
-    def compute_lazy_metadata():
+    def compute_metadata():
         login(org_name=org_name, api_key=api_key, api_url=api_url)
         org_id = _state.org_id
         if project_id is None:
@@ -651,7 +651,7 @@ def init_logger(
             return OrgProjectMetadata(org_id=org_id, project=ObjectMetadata(id=project_id, name=project))
 
     ret = Logger(
-        lazy_metadata=LazyValue(compute_lazy_metadata, use_mutex=True),
+        lazy_metadata=LazyValue(compute_metadata, use_mutex=True),
         async_flush=async_flush,
     )
     if set_current:
@@ -1045,12 +1045,8 @@ class Experiment:
         return self._lazy_metadata.get().experiment.name
 
     @property
-    def project_id(self):
-        return self._lazy_metadata.get().project.id
-
-    @property
-    def project_name(self):
-        return self._lazy_metadata.get().project.name
+    def project(self):
+        return self._lazy_metadata.get().project
 
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
@@ -1108,7 +1104,7 @@ class Experiment:
         """
 
         def compute_parent_ids():
-            return ParentExperimentIds(project_id=self.project_id, experiment_id=self.id)
+            return ParentExperimentIds(project_id=self.project.id, experiment_id=self.id)
 
         return SpanImpl(
             parent_ids=LazyValue(compute_parent_ids, use_mutex=False),
@@ -1134,7 +1130,7 @@ class Experiment:
 
         state = self._get_state()
         project_url = (
-            f"{state.api_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project_name)}"
+            f"{state.api_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
         )
         experiment_url = f"{project_url}/{encode_uri_component(self.name)}"
 
@@ -1175,7 +1171,7 @@ class Experiment:
                 }
 
         return ExperimentSummary(
-            project_name=self.project_name,
+            project_name=self.project.name,
             experiment_name=self.name,
             project_url=project_url,
             experiment_url=experiment_url,
@@ -1406,12 +1402,8 @@ class Dataset:
         return self._lazy_metadata.get().dataset.name
 
     @property
-    def project_id(self):
-        return self._lazy_metadata.get().project.id
-
-    @property
-    def project_name(self):
-        return self._lazy_metadata.get().project.name
+    def project(self):
+        return self._lazy_metadata.get().project
 
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
@@ -1455,7 +1447,7 @@ class Dataset:
         def compute_args():
             return dict(
                 **partial_args,
-                project_id=self.project_id,
+                project_id=self.project.id,
                 dataset_id=self.id,
             )
 
@@ -1484,7 +1476,7 @@ class Dataset:
         def compute_args():
             return dict(
                 **partial_args,
-                project_id=self.project_id,
+                project_id=self.project.id,
                 dataset_id=self.id,
             )
 
@@ -1503,7 +1495,7 @@ class Dataset:
         self.bg_logger.flush()
         state = self._get_state()
         project_url = (
-            f"{state.api_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project_name)}"
+            f"{state.api_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
         )
         dataset_url = f"{project_url}/d/{encode_uri_component(self.name)}"
 
@@ -1519,7 +1511,7 @@ class Dataset:
             data_summary = DataSummary(new_records=self.new_records, **data_summary_d)
 
         return DatasetSummary(
-            project_name=self.project_name,
+            project_name=self.project.name,
             dataset_name=self.name,
             project_url=project_url,
             dataset_url=dataset_url,
@@ -1648,12 +1640,8 @@ class Logger:
         return self._lazy_metadata.get().org_id
 
     @property
-    def project_id(self):
-        return self._lazy_metadata.get().project.id
-
-    @property
-    def project_name(self):
-        return self._lazy_metadata.get().project.name
+    def project(self):
+        return self._lazy_metadata.get().project
 
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
@@ -1707,7 +1695,7 @@ class Logger:
         def compute_parent_ids():
             return ParentProjectLogIds(
                 org_id=self.org_id,
-                project_id=self.project_id,
+                project_id=self.project.id,
                 log_id="g",
             )
 

@@ -371,7 +371,7 @@ class HTTPConnection {
   }
 }
 
-interface ObjectMetadata {
+export interface ObjectMetadata {
   id: string;
   name: string;
 }
@@ -423,15 +423,9 @@ export class Logger<IsAsyncFlush extends boolean> {
     })();
   }
 
-  public get project_id(): Promise<string> {
+  public get project(): Promise<ObjectMetadata> {
     return (async () => {
-      return (await this.lazyMetadata).project.id;
-    })();
-  }
-
-  public get project_name(): Promise<string> {
-    return (async () => {
-      return (await this.lazyMetadata).project.name;
+      return (await this.lazyMetadata).project;
     })();
   }
 
@@ -515,7 +509,7 @@ export class Logger<IsAsyncFlush extends boolean> {
     const parentIds: Promise<ParentProjectLogIds> = (async () => ({
       kind: "project_log",
       org_id: await this.org_id,
-      project_id: await this.project_id,
+      project_id: (await this.project).id,
       log_id: "g",
     }))();
     return new SpanImpl({
@@ -1438,15 +1432,9 @@ export class Experiment {
     })();
   }
 
-  public get project_id(): Promise<string> {
+  public get project(): Promise<ObjectMetadata> {
     return (async () => {
-      return (await this.lazyMetadata).project.id;
-    })();
-  }
-
-  public get project_name(): Promise<string> {
-    return (async () => {
-      return (await this.lazyMetadata).project.name;
+      return (await this.lazyMetadata).project;
     })();
   }
 
@@ -1510,7 +1498,7 @@ export class Experiment {
     const { name, ...argsRest } = args ?? {};
     const parentIds: Promise<ParentExperimentIds> = (async () => ({
       kind: "experiment",
-      project_id: await this.project_id,
+      project_id: (await this.project).id,
       experiment_id: await this.id,
     }))();
     return new SpanImpl({
@@ -1542,7 +1530,7 @@ export class Experiment {
     const state = await this.getState();
     const projectUrl = `${state.apiUrl}/app/${encodeURIComponent(
       state.orgName!
-    )}/p/${encodeURIComponent(await this.project_name)}`;
+    )}/p/${encodeURIComponent((await this.project).name)}`;
     const experimentUrl = `${projectUrl}/${encodeURIComponent(
       await this.name
     )}`;
@@ -1579,7 +1567,7 @@ export class Experiment {
     }
 
     return {
-      projectName: await this.project_name,
+      projectName: (await this.project).name,
       experimentName: await this.name,
       projectUrl: projectUrl,
       experimentUrl: experimentUrl,
@@ -1816,15 +1804,9 @@ export class Dataset {
     })();
   }
 
-  public get project_id(): Promise<string> {
+  public get project(): Promise<ObjectMetadata> {
     return (async () => {
-      return (await this.lazyMetadata).project.id;
-    })();
-  }
-
-  public get project_name(): Promise<string> {
-    return (async () => {
-      return (await this.lazyMetadata).project.name;
+      return (await this.lazyMetadata).project;
     })();
   }
 
@@ -1872,7 +1854,7 @@ export class Dataset {
       id: rowId,
       inputs: input,
       output,
-      project_id: await this.project_id,
+      project_id: (await this.project).id,
       dataset_id: await this.id,
       created: new Date().toISOString(),
       metadata,
@@ -1885,7 +1867,7 @@ export class Dataset {
   public delete(id: string): string {
     const args = (async () => ({
       id,
-      project_id: await this.project_id,
+      project_id: (await this.project).id,
       dataset_id: await this.id,
       created: new Date().toISOString(),
       _object_delete: true,
@@ -1910,7 +1892,7 @@ export class Dataset {
     const state = await this.getState();
     const projectUrl = `${state.apiUrl}/app/${encodeURIComponent(
       state.orgName!
-    )}/p/${encodeURIComponent(await this.project_name)}`;
+    )}/p/${encodeURIComponent((await this.project).name)}`;
     const datasetUrl = `${projectUrl}/d/${encodeURIComponent(await this.name)}`;
 
     let dataSummary = undefined;
@@ -1925,7 +1907,7 @@ export class Dataset {
     }
 
     return {
-      projectName: await this.project_name,
+      projectName: (await this.project).name,
       datasetName: await this.name,
       projectUrl,
       datasetUrl,
