@@ -924,7 +924,72 @@ def _validate_and_sanitize_experiment_log_full_args(event, has_dataset):
     return event
 
 
-class Experiment(ModelWrapper):
+class ObjectFetcher:
+    def __init__(self, object_type, json_fields, id, pinned_version=None):
+        self.object_type = object_type
+        self.id = id
+        self.json_fields = set()
+
+        self.json_fields.update(json_fields)
+        self.json_fields.update(["span_parents", "span_attributes"])
+        self.exclude_fields = set(["_object_delete"])
+
+        self._pinned_version = pinned_version
+
+        self._fetched_data = None
+
+    def fetch(self):
+        """
+        Fetch all records.
+
+        ```python
+        for record in object.fetch():
+            print(record)
+
+        # You can also iterate over the object directly.
+        for record in object:
+            print(record)
+
+        :returns: An iterator over the records.
+        """
+        self._refetch()
+        for record in self._fetched_data:
+            yield {
+                k: json.loads(v) if k in self.json_fields and v is not None else v
+                for k, v in record.items()
+                if k not in self.exclude_fields
+            }
+
+    @property
+    def fetched_data(self):
+        eprint(
+            ".fetched_data is deprecated and will be removed in a future version of braintrust. Use .fetch() or the iterator instead"
+        )
+        return self._refetch()
+
+    def _refetch(self):
+        if self._fetched_data is None:
+            resp = _state.log_conn().get(
+                f"object/{self.object_type}", params={"id": self.id, "fmt": "json", "version": self._pinned_version}
+            )
+            response_raise_for_status(resp)
+
+            self._fetched_data = [json.loads(line) for line in resp.content.split(b"\n") if line.strip()]
+
+        return self._fetched_data
+
+    def _clear_cache(self):
+        self._fetched_data = None
+
+    @property
+    def version(self):
+        if self._pinned_version is not None:
+            return self._pinned_version
+        else:
+            return max([int(record.get(TRANSACTION_ID_FIELD, 0)) for record in self.fetched_data] or [0])
+
+
+class Experiment(ModelWrapper, ObjectFetcher):
     """
     An experiment is a collection of logged events, such as model inputs and outputs, which represent
     a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -991,10 +1056,19 @@ class Experiment(ModelWrapper):
                     raise
 
         self.project = ModelWrapper(response["project"])
-        super().__init__(response["experiment"])
+        ModelWrapper.__init__(self, response["experiment"])
+
         self.dataset = dataset
         self.bg_logger = _BackgroundLogger(name=experiment_name)
         self.last_start_time = time.time()
+
+        ObjectFetcher.__init__(
+            self,
+            object_type="experiment",
+            json_fields=["input", "output", "expected", "metadata", "scores", "metrics"],
+            id=self.id,
+            pinned_version=None,
+        )
 
     def log(
         self,
@@ -1446,6 +1520,9 @@ class Dataset(ModelWrapper):
 
     @property
     def fetched_data(self):
+        eprint(
+            ".fetched_data is deprecated and will be removed in a future version of braintrust. Use .fetch() or the iterator instead"
+        )
         if not self._fetched_data:
             resp = _state.log_conn().get(
                 "object/dataset", params={"id": self.id, "fmt": "json", "version": self._pinned_version}
