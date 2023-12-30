@@ -76,7 +76,7 @@ class LazyValue(Generic[T]):
         if self.has_computed:
             return self.value
         if self.mutex:
-            self.mutex.lock()
+            self.mutex.acquire()
         try:
             if not self.has_computed:
                 res = self.callable()
@@ -85,4 +85,4 @@ class LazyValue(Generic[T]):
             return self.value
         finally:
             if self.mutex:
-                self.mutex.unlock()
+                self.mutex.release()

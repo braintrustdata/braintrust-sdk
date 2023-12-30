@@ -162,7 +162,9 @@ class BraintrustState:
         self.current_experiment = None
         self.current_logger = None
         self.current_span = contextvars.ContextVar("braintrust_current_span", default=NOOP_SPAN)
+        self.reset_login_info()
 
+    def reset_login_info(self):
         self.api_url = None
         self.login_token = None
         self.org_id = None
@@ -198,7 +200,15 @@ class BraintrustState:
             self._user_info = info
 
 
-_state = BraintrustState()
+_state = None
+
+
+def _internal_reset_global_state():
+    global _state
+    _state = BraintrustState()
+
+
+_internal_reset_global_state()
 _logger = logging.getLogger("braintrust")
 
 
@@ -456,6 +466,7 @@ def _ensure_object(object_type, object_id, force=False):
 class ObjectMetadata:
     id: str
     name: str
+    full_info: Dict[str, Any]
 
 
 @dataclasses.dataclass
@@ -515,7 +526,7 @@ def init(
         login(org_name=org_name, api_key=api_key, api_url=api_url)
         args = {"project_name": project, "org_id": _state.org_id}
 
-        if experiment_name is not None:
+        if experiment is not None:
             args["experiment_name"] = experiment
 
         if description is not None:
@@ -554,11 +565,13 @@ def init(
                 else:
                     raise
 
-        project = response["project"]
-        experiment = response["experiment"]
+        resp_project = response["project"]
+        resp_experiment = response["experiment"]
         return ProjectExperimentMetadata(
-            project=ObjectMetadata(id=project["id"], name=project["name"]),
-            experiment=ObjectMetadata(id=experiment["id"], name=experiment["name"]),
+            project=ObjectMetadata(id=resp_project["id"], name=resp_project["name"], full_info=resp_project),
+            experiment=ObjectMetadata(
+                id=resp_experiment["id"], name=resp_experiment["name"], full_info=resp_experiment
+            ),
         )
 
     ret = Experiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset)
@@ -598,11 +611,11 @@ def init_dataset(
             description=description,
         )
         response = _state.api_conn().post_json("api/dataset/register", args)
-        project = response["project"]
-        dataset = response["dataset"]
+        resp_project = response["project"]
+        resp_dataset = response["dataset"]
         return ProjectDatasetMetadata(
-            project=ObjectMetadata(id=project["id"], name=project["name"]),
-            dataset=ObjectMetadata(id=dataset["id"], name=dataset["name"]),
+            project=ObjectMetadata(id=resp_project["id"], name=resp_project["name"], full_info=resp_project),
+            dataset=ObjectMetadata(id=resp_dataset["id"], name=resp_dataset["name"], full_info=resp_dataset),
         )
 
     return Dataset(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), version=version)
@@ -644,13 +657,20 @@ def init_logger(
                     "org_id": _state.org_id,
                 },
             )
-            project = response["project"]
-            return OrgProjectMetadata(org_id=org_id, project=ObjectMetadata(id=project["id"], name=project["name"]))
+            resp_project = response["project"]
+            return OrgProjectMetadata(
+                org_id=org_id,
+                project=ObjectMetadata(id=resp_project["id"], name=resp_project["name"], full_info=resp_project),
+            )
         elif project is None:
             response = _state.api_conn().get_json("api/project", {"id": project_id})
-            return OrgProjectMetadata(org_id=org_id, project=ObjectMetadata(id=project_id, name=response["name"]))
+            return OrgProjectMetadata(
+                org_id=org_id, project=ObjectMetadata(id=project_id, name=response["name"], full_info=response)
+            )
         else:
-            return OrgProjectMetadata(org_id=org_id, project=ObjectMetadata(id=project_id, name=project))
+            return OrgProjectMetadata(
+                org_id=org_id, project=ObjectMetadata(id=project_id, name=project, full_info=dict())
+            )
 
     ret = Logger(
         lazy_metadata=LazyValue(compute_metadata, use_mutex=True),
@@ -693,7 +713,7 @@ def login(api_url=None, api_key=None, org_name=None, force_login=False):
             # We have already logged in
             return
 
-        _state = BraintrustState()
+        _state.reset_login_info()
 
         _state.api_url = api_url
 
@@ -1038,8 +1058,16 @@ class Experiment:
         return self._lazy_metadata.get().experiment.name
 
     @property
+    def data(self):
+        return self._lazy_metadata.get().experiment.full_info
+
+    @property
     def project(self):
         return self._lazy_metadata.get().project
+
+    # Capture all metadata attributes which aren't covered by existing methods.
+    def __getattr__(self, name: str) -> Any:
+        return self._lazy_metadata.get().experiment.full_info[name]
 
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
@@ -1304,8 +1332,6 @@ class SpanImpl(Span):
         sanitized_and_internal_data = {**self.internal_data}
         merge_dicts(sanitized_and_internal_data, sanitized)
         self.internal_data = {}
-        if "metrics" in record and "end" in record["metrics"]:
-            self._logged_end_time = record["metrics"]["end"]
         # Validate the non-lazily-computed part of the record-to-log.
         partial_record = dict(
             **sanitized_and_internal_data,
@@ -1313,6 +1339,9 @@ class SpanImpl(Span):
             **{IS_MERGE_FIELD: self._is_merge},
         )
         _check_json_serializable(partial_record)
+
+        if "metrics" in partial_record and "end" in partial_record["metrics"]:
+            self._logged_end_time = partial_record["metrics"]["end"]
 
         def compute_record():
             return dict(
@@ -1395,8 +1424,16 @@ class Dataset:
         return self._lazy_metadata.get().dataset.name
 
     @property
+    def data(self):
+        return self._lazy_metadata.get().experiment.full_info
+
+    @property
     def project(self):
         return self._lazy_metadata.get().project
+
+    # Capture all metadata attributes which aren't covered by existing methods.
+    def __getattr__(self, name: str) -> Any:
+        return self._lazy_metadata.get().dataset.full_info[name]
 
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
@@ -1712,7 +1749,6 @@ class Logger:
         """
         Flush any pending logs to the server.
         """
-        self._perform_lazy_login()
         self.bg_logger.flush()
 
 

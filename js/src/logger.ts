@@ -159,22 +159,27 @@ class BraintrustState {
   public currentLogger: Logger<false> | undefined;
   public currentSpan: IsoAsyncLocalStorage<Span>;
 
-  public apiUrl: string | null;
-  public loginToken: string | null;
-  public orgId: string | null;
-  public orgName: string | null;
-  public logUrl: string | null;
-  public loggedIn: boolean;
+  public apiUrl: string | null = null;
+  public loginToken: string | null = null;
+  public orgId: string | null = null;
+  public orgName: string | null = null;
+  public logUrl: string | null = null;
+  public loggedIn: boolean = false;
 
-  private _apiConn: HTTPConnection | null;
-  private _logConn: HTTPConnection | null;
+  private _apiConn: HTTPConnection | null = null;
+  private _logConn: HTTPConnection | null = null;
 
   constructor() {
     this.id = uuidv4(); // This is for debugging
     this.currentExperiment = undefined;
     this.currentLogger = undefined;
     this.currentSpan = iso.newAsyncLocalStorage();
+    this.resetLoginInfo();
 
+    globalThis.__inherited_braintrust_state = this;
+  }
+
+  public resetLoginInfo() {
     this.apiUrl = null;
     this.loginToken = null;
     this.orgId = null;
@@ -184,8 +189,6 @@ class BraintrustState {
 
     this._apiConn = null;
     this._logConn = null;
-
-    globalThis.__inherited_braintrust_state = this;
   }
 
   public apiConn(): HTTPConnection {
@@ -374,6 +377,7 @@ class HTTPConnection {
 export interface ObjectMetadata {
   id: string;
   name: string;
+  fullInfo: Record<string, unknown>;
 }
 
 interface ProjectExperimentMetadata {
@@ -857,7 +861,18 @@ export function init(
       }
     }
 
-    return { project: response.project, experiment: response.experiment };
+    return {
+      project: {
+        id: response.project.id,
+        name: response.project.name,
+        fullInfo: response.project,
+      },
+      experiment: {
+        id: response.experiment.id,
+        name: response.experiment.name,
+        fullInfo: response.experiment,
+      },
+    };
   })();
 
   const ret = new Experiment(lazyMetadata, dataset);
@@ -942,7 +957,18 @@ export function initDataset(
       .apiConn()
       .post_json("api/dataset/register", args);
 
-    return { project: response.project, dataset: response.dataset };
+    return {
+      project: {
+        id: response.project.id,
+        name: response.project.name,
+        fullInfo: response.project,
+      },
+      dataset: {
+        id: response.dataset.id,
+        name: response.dataset.name,
+        fullInfo: response.dataset,
+      },
+    };
   })();
 
   return new Dataset(lazyMetadata, version);
@@ -1022,15 +1048,29 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
         });
       return {
         org_id,
-        project: { id: response.project.id, name: response.project.name },
+        project: {
+          id: response.project.id,
+          name: response.project.name,
+          fullInfo: response.project,
+        },
       };
     } else if (projectName === undefined) {
       const response = await _state.apiConn().get_json("api/project", {
         id: projectId,
       });
-      return { org_id, project: { id: projectId, name: response.name } };
+      return {
+        org_id,
+        project: {
+          id: projectId,
+          name: response.name,
+          fullInfo: response.project,
+        },
+      };
     } else {
-      return { org_id, project: { id: projectId, name: projectName } };
+      return {
+        org_id,
+        project: { id: projectId, name: projectName, fullInfo: {} },
+      };
     }
   })();
 
@@ -1075,7 +1115,7 @@ export async function login(
     return;
   }
 
-  _state = new BraintrustState();
+  _state.resetLoginInfo();
 
   _state.apiUrl = apiUrl;
 
