@@ -979,6 +979,7 @@ type InitLoggerOptions<IsAsyncFlush> = {
   apiUrl?: string;
   apiKey?: string;
   orgName?: string;
+  forceLogin?: boolean;
   setCurrent?: boolean;
 } & AsyncFlushArg<IsAsyncFlush>;
 
@@ -993,20 +994,29 @@ type InitLoggerOptions<IsAsyncFlush> = {
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+ * @param options.forceLogin Login again, even if you have already logged in (by default, the logger will not login if you are already logged in)
  * @param setCurrent If true (the default), set the global current-experiment to the newly-created one.
  * @returns The newly created Logger.
  */
 export function initLogger<IsAsyncFlush extends boolean = false>(
   options: Readonly<InitLoggerOptions<IsAsyncFlush>> = {}
 ) {
-  const { projectName, projectId, asyncFlush, apiUrl, apiKey, orgName } =
-    options || {};
+  const {
+    projectName,
+    projectId,
+    asyncFlush,
+    apiUrl,
+    apiKey,
+    orgName,
+    forceLogin,
+  } = options || {};
 
   const lazyMetadata: Promise<OrgProjectMetadata> = (async () => {
     await login({
       orgName: orgName,
       apiKey,
       apiUrl,
+      forceLogin,
     });
     const org_id = _state.orgId!;
     if (projectId === undefined) {
@@ -1066,17 +1076,6 @@ export async function login(
   } = options || {};
 
   let { forceLogin = false } = options || {};
-
-  // If any provided login inputs disagree with our existing settings, force
-  // login.
-  if (
-    apiUrl != _state.apiUrl ||
-    (apiKey !== undefined &&
-      HTTPConnection.sanitize_token(apiKey) != _state.loginToken) ||
-    (orgName !== undefined && orgName != _state.orgName)
-  ) {
-    forceLogin = true;
-  }
 
   if (_state.loggedIn && !forceLogin) {
     return;

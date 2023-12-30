@@ -546,6 +546,7 @@ def init_logger(
     api_url: str = None,
     api_key: str = None,
     org_name: str = None,
+    force_login: bool = False,
     set_current: bool = True,
 ):
     """
@@ -558,12 +559,13 @@ def init_logger(
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+    :param force_login: Login again, even if you have already logged in (by default, the logger will not login if you are already logged in)
     :param set_current: If true (the default), set the global current-experiment to the newly-created one.
     :returns: The newly created Logger.
     """
 
     def lazy_login():
-        login(org_name=org_name, api_key=api_key, api_url=api_url)
+        login(org_name=org_name, api_key=api_key, api_url=api_url, force_login=force_login)
 
     ret = Logger(
         lazy_login=lazy_login,
@@ -602,15 +604,6 @@ def login(api_url=None, api_key=None, org_name=None, force_login=False):
 
         if org_name is None:
             org_name = os.environ.get("BRAINTRUST_ORG_NAME")
-
-        # If any provided login inputs disagree with our existing settings,
-        # force login.
-        if (
-            api_url != _state.api_url
-            or (api_key is not None and HTTPConnection.sanitize_token(api_key) != _state.login_token)
-            or (org_name is not None and org_name != _state.org_name)
-        ):
-            force_login = True
 
         if not force_login and _state.logged_in:
             # We have already logged in
