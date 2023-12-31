@@ -42,4 +42,5 @@ Eval(
 
 from .framework import *
 from .logger import *
+from .logger import _internal_reset_global_state
 from .oai import wrap_openai
