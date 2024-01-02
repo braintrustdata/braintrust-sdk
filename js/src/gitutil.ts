@@ -18,10 +18,16 @@ export interface RepoStatus {
 }
 
 export async function currentRepo() {
-  const git = simpleGit();
-  if (await git.checkIsRepo()) {
-    return git;
-  } else {
+  try {
+    const git = simpleGit();
+    if (await git.checkIsRepo()) {
+      return git;
+    } else {
+      return null;
+    }
+  }
+  catch  (e) {
+    console.warn('Error occurred while checking if current directory is a git repo.', e);
     return null;
   }
 }
