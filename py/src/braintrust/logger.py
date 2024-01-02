@@ -408,7 +408,11 @@ class _BackgroundLogger:
                     else:
                         break
 
-                    item_s = json.dumps(item)
+                    try:
+                        item_s = json.dumps(item)
+                    except:
+                        _logger.error(f"Could not serialize item: {item}")
+                        raise
                     items.append(item_s)
                     items_len += len(item_s)
 
