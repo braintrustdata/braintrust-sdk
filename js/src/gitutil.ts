@@ -27,7 +27,6 @@ export async function currentRepo() {
     }
   }
   catch  (e) {
-    console.warn('Error occurred while checking if current directory is a git repo.', e);
     return null;
   }
 }
