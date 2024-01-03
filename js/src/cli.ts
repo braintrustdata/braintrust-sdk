@@ -115,13 +115,13 @@ async function initLogger(
   experimentName?: string,
   metadata?: Metadata
 ) {
-  const logger = await initExperiment(projectName, {
+  const logger = initExperiment(projectName, {
     experiment: experimentName,
     metadata,
   });
   const info = await logger.summarize({ summarizeScores: false });
   console.error(
-    `Experiment ${logger.name} is running at ${info.experimentUrl}`
+    `Experiment ${info.experimentName} is running at ${info.experimentUrl}`
   );
   return logger;
 }
