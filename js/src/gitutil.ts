@@ -18,10 +18,15 @@ export interface RepoStatus {
 }
 
 export async function currentRepo() {
-  const git = simpleGit();
-  if (await git.checkIsRepo()) {
-    return git;
-  } else {
+  try {
+    const git = simpleGit();
+    if (await git.checkIsRepo()) {
+      return git;
+    } else {
+      return null;
+    }
+  }
+  catch  (e) {
     return null;
   }
 }
