@@ -114,9 +114,7 @@ def get_past_n_ancestors(n=10, remote=None):
 def attempt(op):
     try:
         return op()
-    except TypeError:
-        return None
-    except git.GitCommandError:
+    except (TypeError, ValueError, git.GitCommandError):
         return None
 
 
@@ -137,11 +135,11 @@ def get_repo_status():
 
         dirty = repo.is_dirty()
 
-        commit = attempt(lambda: repo.head.commit.hexsha).strip()
-        commit_message = attempt(lambda: repo.head.commit.message).strip()
+        commit = attempt(lambda: repo.head.commit.hexsha.strip())
+        commit_message = attempt(lambda: repo.head.commit.message.strip())
         commit_time = attempt(lambda: repo.head.commit.committed_datetime.isoformat())
-        author_name = attempt(lambda: repo.head.commit.author.name).strip()
-        author_email = attempt(lambda: repo.head.commit.author.email).strip()
+        author_name = attempt(lambda: repo.head.commit.author.name.strip())
+        author_email = attempt(lambda: repo.head.commit.author.email.strip())
         tag = attempt(lambda: repo.git.describe("--tags", "--exact-match", "--always"))
 
         branch = attempt(lambda: repo.active_branch.name)
