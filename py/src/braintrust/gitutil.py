@@ -118,6 +118,13 @@ def attempt(op):
         return None
 
 
+def truncate_to_byte_limit(input_string, byte_limit=65536):
+    encoded = input_string.encode("utf-8")
+    if len(encoded) <= byte_limit:
+        return input_string
+    return encoded[:byte_limit].decode("utf-8", errors="ignore")
+
+
 def get_repo_status():
     with _gitlock:
         repo = _current_repo()
@@ -145,7 +152,7 @@ def get_repo_status():
         branch = attempt(lambda: repo.active_branch.name)
 
         if dirty:
-            git_diff = attempt(lambda: repo.git.diff("HEAD"))
+            git_diff = attempt(lambda: truncate_to_byte_limit(repo.git.diff("HEAD")))
 
         return RepoStatus(
             commit=commit,
