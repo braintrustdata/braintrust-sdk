@@ -1,6 +1,6 @@
 import dataclasses
 from abc import ABC, abstractmethod
-from typing import Dict
+from typing import Dict, Optional
 
 from .util import SerializableDataClass
 
@@ -8,7 +8,7 @@ from .util import SerializableDataClass
 @dataclasses.dataclass
 class Score(SerializableDataClass):
     name: str
-    score: float
+    score: Optional[float]
     metadata: Dict[str, any] = dataclasses.field(default_factory=dict)
     error: Exception = None
 

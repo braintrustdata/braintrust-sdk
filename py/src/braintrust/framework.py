@@ -213,6 +213,8 @@ def report_evaluator_result(eval_name, results, summary, verbose, jsonl):
         for result in results:
             for name, score in result.scores.items():
                 curr = scores_by_name[name]
+                if curr is None:
+                    continue
                 scores_by_name[name] = (curr[0] + score, curr[1] + 1)
 
         if jsonl:
