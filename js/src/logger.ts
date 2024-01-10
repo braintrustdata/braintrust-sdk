@@ -555,7 +555,7 @@ export type InputsField = { inputs: unknown };
 export type OtherExperimentLogFields = {
   output: unknown;
   expected: unknown;
-  scores: Record<string, number>;
+  scores: Record<string, number | null>;
   metadata: Record<string, unknown>;
   metrics: Record<string, unknown>;
   datasetRecordId: string;

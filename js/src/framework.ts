@@ -230,7 +230,7 @@ export async function runEvaluator(
       let metadata: Metadata = { ...datum.metadata };
       let output: any = undefined;
       let error: unknown | undefined = undefined;
-      let scores: Record<string, number> = {};
+      let scores: Record<string, number | null> = {};
       const callback = async (rootSpan: Span) => {
         try {
           const meta = (o: Record<string, unknown>) =>
@@ -346,7 +346,7 @@ export function logError(e: unknown, verbose: boolean) {
 export function reportEvaluatorResult(
   evaluatorName: string | number,
   evaluatorResult: {
-    results: { scores: Record<string, number>; error: unknown }[];
+    results: { scores: Record<string, number | null>; error: unknown }[];
     summary: unknown;
   },
   {
@@ -400,6 +400,9 @@ export function reportEvaluatorResult(
     for (const result of results) {
       for (const [name, score] of Object.entries(result.scores)) {
         const { total, count } = scoresByName[name] || { total: 0, count: 0 };
+        if (score === null) {
+          continue;
+        }
         scoresByName[name] = { total: total + score, count: count + 1 };
       }
     }
