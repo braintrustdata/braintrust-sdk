@@ -192,16 +192,18 @@ def report_evaluator_result(eval_name, results, summary, verbose, jsonl):
         )
 
         errors = [
-            result.exc_info if verbose or jsonl else traceback.format_exception_only(type(result.error), result.error)
+            result.exc_info
+            if verbose or jsonl
+            else "\n".join(traceback.format_exception_only(type(result.error), result.error))
             for result in failing_results
         ]
 
         if jsonl:
             print(json.dumps({"eval_name": eval_name, "errors": errors}))
         else:
-            for result in failing_results:
-                info = "".join(errors).rstrip()
-                eprint(f"{bcolors.FAIL}{info}{bcolors.ENDC}")
+            print(errors)
+            info = "".join(errors).rstrip()
+            eprint(f"{bcolors.FAIL}{info}{bcolors.ENDC}")
 
             eprint(f"{bcolors.FAIL}Add --verbose to see full stack traces.{bcolors.ENDC}")
     if summary:
