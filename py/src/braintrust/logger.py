@@ -960,6 +960,9 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
             if not isinstance(name, str):
                 raise ValueError("score names must be strings")
 
+            if score is None:
+                continue
+
             if isinstance(score, bool):
                 score = 1 if score else 0
                 scores[name] = score

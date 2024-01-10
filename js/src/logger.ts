@@ -1348,6 +1348,10 @@ function validateAndSanitizeExperimentLogPartialArgs(
         throw new Error("score names must be strings");
       }
 
+      if (score === null || score === undefined) {
+        continue;
+      }
+
       if (typeof score === "boolean") {
         score = score ? 1 : 0;
         event.scores[name] = score;
