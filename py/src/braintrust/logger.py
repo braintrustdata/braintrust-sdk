@@ -826,11 +826,20 @@ def get_span_parent_object() -> Union["Logger", "Experiment", Span]:
 
 def _try_log_input_output(span, f_sig, f_args, f_kwargs, output):
     bound_args = f_sig.bind(*f_args, **f_kwargs).arguments
+
+    input_serializable = bound_args
     try:
-        span.log(input=bound_args, output=output)
-    except Exception:
-        # Don't complain if the contents are not JSON-serializable.
-        pass
+        _check_json_serializable(bound_args)
+    except Exception as e:
+        input_serializable = "<input not json-serializable>: " + str(e)
+
+    output_serializable = output
+    try:
+        _check_json_serializable(output)
+    except Exception as e:
+        output_serializable = "<output not json-serializable>: " + str(e)
+
+    span.log(input=input_serializable, output=output_serializable)
 
 
 def traced(*span_args, **span_kwargs):
