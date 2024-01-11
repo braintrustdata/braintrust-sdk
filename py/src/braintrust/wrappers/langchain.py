@@ -1,3 +1,4 @@
+import contextvars
 import logging
 import sys
 from typing import Any, Dict, List, Optional, Union
@@ -21,6 +22,8 @@ except ImportError:
     BaseMessage = object
     LLMResult = object
 
+langchain_parent = contextvars.ContextVar("langchain_current_span", default=None)
+
 
 class BraintrustTracer(BaseCallbackHandler):
     def __init__(self, logger=None):
@@ -30,14 +33,18 @@ class BraintrustTracer(BaseCallbackHandler):
     def _start_span(self, parent_run_id, run_id, name: Optional[str], **kwargs: Any) -> Any:
         assert run_id not in self.spans, f"Span already exists for run_id {run_id} (this is likely a bug)"
 
+        current_parent = langchain_parent.get()
         if parent_run_id in self.spans:
             parent_span = self.spans[parent_run_id]
+        elif current_parent is not None:
+            parent_span = current_parent
         elif self.logger is not None:
             parent_span = self.logger
         else:
             parent_span = braintrust
 
         span = parent_span.start_span(name=name, **kwargs)
+        langchain_parent.set(span)
         self.spans[run_id] = span
         return span
 
@@ -45,6 +52,10 @@ class BraintrustTracer(BaseCallbackHandler):
         assert run_id in self.spans, f"No span exists for run_id {run_id} (this is likely a bug)"
         span = self.spans.pop(run_id)
         span.log(**kwargs)
+
+        if langchain_parent.get() == span:
+            langchain_parent.set(None)
+
         span.end()
 
     def on_chain_start(
