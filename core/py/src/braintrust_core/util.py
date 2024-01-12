@@ -38,3 +38,5 @@ def merge_dicts(merge_into: Dict, merge_from: Dict):
             merge_dicts(merge_into_v, merge_from_v)
         else:
             merge_into[k] = merge_from_v
+
+    return merge_into
