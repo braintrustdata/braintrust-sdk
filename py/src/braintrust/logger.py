@@ -22,8 +22,11 @@ from typing import Any, Callable, Dict, Optional, Union
 
 import requests
 from braintrust_core.db_fields import (
+    AUDIT_METADATA_FIELD,
+    AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
     TRANSACTION_ID_FIELD,
+    VALID_SOURCES,
 )
 from braintrust_core.merge_row_batch import merge_row_batch
 from braintrust_core.util import (
@@ -1033,6 +1036,89 @@ def _validate_and_sanitize_experiment_log_full_args(event, has_dataset):
     return event
 
 
+@dataclasses.dataclass
+class ParentExperimentIds:
+    project_id: str
+    experiment_id: str
+
+
+@dataclasses.dataclass
+class ParentProjectLogIds:
+    org_id: str
+    project_id: str
+    log_id: str
+
+
+@dataclasses.dataclass
+class ParentSpanInfo:
+    span_id: str
+    root_span_id: str
+
+
+@dataclasses.dataclass
+class RowIds:
+    id: str
+    span_id: str
+    root_span_id: str
+
+
+class FeedbackLogger:
+    def __init__(self, bg_logger, parent_ids: LazyValue[Union[ParentExperimentIds, ParentProjectLogIds]]):
+        self._feedback_bg_logger = bg_logger
+        self.parent_ids = parent_ids
+
+    def log_feedback(self, id, scores=None, correction=None, comment=None, metadata=None, source="external"):
+        if source not in VALID_SOURCES:
+            raise ValueError(f"source must be one of {VALID_SOURCES}")
+        if scores is None and correction is None and comment is None:
+            raise ValueError("At least one of scores, correction, or comment must be specified")
+
+        update_event = _validate_and_sanitize_experiment_log_partial_args(
+            event=dict(
+                scores=scores,
+                metadata=metadata,
+                expected=correction,
+            )
+        )
+
+        # Although we validate metadata the normal way, we want to save it as audit metadata,
+        # not ordinary metadata
+        metadata = update_event.pop("metadata")
+        update_event = {k: v for k, v in update_event.items() if v is not None}
+
+        if len(update_event) > 0:
+
+            def compute_record():
+                return dict(
+                    id=id,
+                    **update_event,
+                    **dataclasses.asdict(self.parent_ids.get()),
+                    **{AUDIT_SOURCE_FIELD: source, AUDIT_METADATA_FIELD: metadata, IS_MERGE_FIELD: True},
+                )
+
+            self._feedback_bg_logger.log(LazyValue(compute_record, use_mutex=False))
+
+        if comment is not None:
+
+            def compute_record():
+                return dict(
+                    id=str(uuid.uuid4()),
+                    created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    origin={
+                        # NOTE: We do not know (or care?) what the transaction id of the row that
+                        # we're commenting on is here, so we omit it.
+                        "id": id,
+                    },
+                    comment={
+                        "text": comment,
+                    },
+                    **dataclasses.asdict(self.parent_ids.get()),
+                    **{AUDIT_SOURCE_FIELD: source, AUDIT_METADATA_FIELD: metadata, IS_MERGE_FIELD: True},
+                )
+
+            self._feedback_bg_logger.log(LazyValue(compute_record, use_mutex=False))
+
+
 class Experiment:
     """
     An experiment is a collection of logged events, such as model inputs and outputs, which represent
@@ -1231,32 +1317,6 @@ class Experiment:
 
     def __exit__(self, type, value, callback):
         del type, value, callback
-
-
-@dataclasses.dataclass
-class ParentExperimentIds:
-    project_id: str
-    experiment_id: str
-
-
-@dataclasses.dataclass
-class ParentProjectLogIds:
-    org_id: str
-    project_id: str
-    log_id: str
-
-
-@dataclasses.dataclass
-class ParentSpanInfo:
-    span_id: str
-    root_span_id: str
-
-
-@dataclasses.dataclass
-class RowIds:
-    id: str
-    span_id: str
-    root_span_id: str
 
 
 class SpanImpl(Span):
@@ -1666,7 +1726,7 @@ class Project:
         return self._name
 
 
-class Logger:
+class Logger(FeedbackLogger):
     def __init__(self, lazy_metadata: LazyValue[OrgProjectMetadata], async_flush: bool = True):
         self._lazy_metadata = lazy_metadata
         self.async_flush = async_flush
@@ -1676,6 +1736,8 @@ class Logger:
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
         self.last_start_time = time.time()
+
+        FeedbackLogger.__init__(self, self.bg_logger, self._lazy_parent_ids())
 
     @property
     def org_id(self):
@@ -1728,12 +1790,7 @@ class Logger:
 
         return span.id
 
-    def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, **event):
-        """Create a new toplevel span underneath the logger. The name parameter defaults to "root".
-
-        See `Span.start_span` for full details
-        """
-
+    def _lazy_parent_ids(self):
         def compute_parent_ids():
             return ParentProjectLogIds(
                 org_id=self.org_id,
@@ -1741,8 +1798,16 @@ class Logger:
                 log_id="g",
             )
 
+        return LazyValue(compute_parent_ids, use_mutex=False)
+
+    def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, **event):
+        """Create a new toplevel span underneath the logger. The name parameter defaults to "root".
+
+        See `Span.start_span` for full details
+        """
+
         return SpanImpl(
-            parent_ids=LazyValue(compute_parent_ids, use_mutex=False),
+            parent_ids=self._lazy_parent_ids(),
             bg_logger=self.bg_logger,
             name=name,
             span_attributes=span_attributes,
