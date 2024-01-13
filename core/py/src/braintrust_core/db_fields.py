@@ -4,4 +4,8 @@ CREATED_FIELD = "created"
 IS_MERGE_FIELD = "_is_merge"
 ID_FIELD = "id"
 
+AUDIT_SOURCE_FIELD = "_audit_source"
+AUDIT_METADATA_FIELD = "_audit_metadata"
+VALID_SOURCES = ["app", "api", "external"]
+
 ALL_ROW_ID_FIELDS = [ID_FIELD, TRANSACTION_ID_FIELD, CREATED_FIELD, IS_MERGE_FIELD, OBJECT_DELETE_FIELD]
