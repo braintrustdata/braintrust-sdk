@@ -1078,61 +1078,61 @@ class RowIds:
     root_span_id: str
 
 
-class FeedbackLogger:
-    def __init__(self, bg_logger, parent_ids: LazyValue[Union[ParentExperimentIds, ParentProjectLogIds]]):
-        self._feedback_bg_logger = bg_logger
-        self.parent_ids = parent_ids
+def _log_feedback_impl(
+    bg_logger, parent_ids, id, scores=None, expected=None, comment=None, metadata=None, source=None
+):
+    if source is None:
+        source = "external"
+    elif source not in VALID_SOURCES:
+        raise ValueError(f"source must be one of {VALID_SOURCES}")
 
-    def log_feedback(self, id, scores=None, correction=None, comment=None, metadata=None, source="external"):
-        if source not in VALID_SOURCES:
-            raise ValueError(f"source must be one of {VALID_SOURCES}")
-        if scores is None and correction is None and comment is None:
-            raise ValueError("At least one of scores, correction, or comment must be specified")
+    if scores is None and expected is None and comment is None:
+        raise ValueError("At least one of scores, expected, or comment must be specified")
 
-        update_event = _validate_and_sanitize_experiment_log_partial_args(
-            event=dict(
-                scores=scores,
-                metadata=metadata,
-                expected=correction,
-            )
+    update_event = _validate_and_sanitize_experiment_log_partial_args(
+        event=dict(
+            scores=scores,
+            metadata=metadata,
+            expected=expected,
         )
+    )
 
-        # Although we validate metadata the normal way, we want to save it as audit metadata,
-        # not ordinary metadata
-        metadata = update_event.pop("metadata")
-        update_event = {k: v for k, v in update_event.items() if v is not None}
+    # Although we validate metadata the normal way, we want to save it as audit metadata,
+    # not ordinary metadata
+    metadata = update_event.pop("metadata")
+    update_event = {k: v for k, v in update_event.items() if v is not None}
 
-        if len(update_event) > 0:
+    if len(update_event) > 0:
 
-            def compute_record():
-                return dict(
-                    id=id,
-                    **update_event,
-                    **dataclasses.asdict(self.parent_ids.get()),
-                    **{AUDIT_SOURCE_FIELD: source, AUDIT_METADATA_FIELD: metadata, IS_MERGE_FIELD: True},
-                )
+        def compute_record():
+            return dict(
+                id=id,
+                **update_event,
+                **dataclasses.asdict(parent_ids.get()),
+                **{AUDIT_SOURCE_FIELD: source, AUDIT_METADATA_FIELD: metadata, IS_MERGE_FIELD: True},
+            )
 
-            self._feedback_bg_logger.log(LazyValue(compute_record, use_mutex=False))
+        bg_logger.log(LazyValue(compute_record, use_mutex=False))
 
-        if comment is not None:
+    if comment is not None:
 
-            def compute_record():
-                return dict(
-                    id=str(uuid.uuid4()),
-                    created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                    origin={
-                        # NOTE: We do not know (or care?) what the transaction id of the row that
-                        # we're commenting on is here, so we omit it.
-                        "id": id,
-                    },
-                    comment={
-                        "text": comment,
-                    },
-                    **dataclasses.asdict(self.parent_ids.get()),
-                    **{AUDIT_SOURCE_FIELD: source, AUDIT_METADATA_FIELD: metadata, IS_MERGE_FIELD: True},
-                )
+        def compute_record():
+            return dict(
+                id=str(uuid.uuid4()),
+                created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                origin={
+                    # NOTE: We do not know (or care?) what the transaction id of the row that
+                    # we're commenting on is here, so we omit it.
+                    "id": id,
+                },
+                comment={
+                    "text": comment,
+                },
+                **dataclasses.asdict(parent_ids.get()),
+                **{AUDIT_SOURCE_FIELD: source, AUDIT_METADATA_FIELD: metadata},
+            )
 
-            self._feedback_bg_logger.log(LazyValue(compute_record, use_mutex=False))
+        bg_logger.log(LazyValue(compute_record, use_mutex=False))
 
 
 class Experiment:
@@ -1205,7 +1205,7 @@ class Experiment:
 
         :param input: The arguments that uniquely define a test case (an arbitrary, JSON serializable object). Later on, Braintrust will use the `input` to know whether two test cases are the same between experiments, so they should not contain experiment-specific state. A simple rule of thumb is that if you run the same experiment twice, the `input` should be identical.
         :param output: The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
-        :param expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
+        :param expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
         :param scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments.
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
         :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
@@ -1232,18 +1232,50 @@ class Experiment:
         self.last_start_time = span.end()
         return span.id
 
+    def log_feedback(
+        self,
+        id,
+        scores=None,
+        expected=None,
+        comment=None,
+        metadata=None,
+        source=None,
+    ):
+        """
+        Log feedback to an event in the experiment. Feedback is used to save feedback scores, set an expected value, or add a comment.
+
+        :param id: The id of the event to log feedback for. This is the `id` returned by `log` or accessible as the `id` field of a span.
+        :param scores: (Optional) a dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the event.
+        :param expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not.
+        :param comment: (Optional) an optional comment string to log about the event.
+        :param metadata: (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
+        :param source: (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
+        """
+        return _log_feedback_impl(
+            bg_logger=self.bg_logger,
+            parent_ids=self._lazy_parent_ids(),
+            id=id,
+            scores=scores,
+            expected=expected,
+            comment=comment,
+            metadata=metadata,
+            source=source,
+        )
+
+    def _lazy_parent_ids(self):
+        def compute_parent_ids():
+            return ParentExperimentIds(project_id=self.project.id, experiment_id=self.id)
+
+        return LazyValue(compute_parent_ids, use_mutex=False)
+
     def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
         """Create a new toplevel span underneath the experiment. The name defaults to "root".
 
         See `Span.start_span` for full details
         """
 
-        # XXX rename to object_ids?
-        def compute_parent_ids():
-            return ParentExperimentIds(project_id=self.project.id, experiment_id=self.id)
-
         return SpanImpl(
-            parent_ids=LazyValue(compute_parent_ids, use_mutex=False),
+            parent_ids=self._lazy_parent_ids(),
             bg_logger=self.bg_logger,
             name=name,
             span_attributes=span_attributes,
@@ -1751,7 +1783,7 @@ class Project:
         return self._name
 
 
-class Logger(FeedbackLogger):
+class Logger:
     def __init__(self, lazy_metadata: LazyValue[OrgProjectMetadata], async_flush: bool = True):
         self._lazy_metadata = lazy_metadata
         self.async_flush = async_flush
@@ -1761,8 +1793,6 @@ class Logger(FeedbackLogger):
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
         self.last_start_time = time.time()
-
-        FeedbackLogger.__init__(self, self.bg_logger, self._lazy_parent_ids())
 
     @property
     def org_id(self):
@@ -1814,6 +1844,36 @@ class Logger(FeedbackLogger):
             self.bg_logger.flush()
 
         return span.id
+
+    def log_feedback(
+        self,
+        id,
+        scores=None,
+        expected=None,
+        comment=None,
+        metadata=None,
+        source=None,
+    ):
+        """
+        Log feedback to an event. Feedback is used to save feedback scores, set an expected value, or add a comment.
+
+        :param id: The id of the event to log feedback for. This is the `id` returned by `log` or accessible as the `id` field of a span.
+        :param scores: (Optional) a dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the event.
+        :param expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not.
+        :param comment: (Optional) an optional comment string to log about the event.
+        :param metadata: (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
+        :param source: (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
+        """
+        return _log_feedback_impl(
+            bg_logger=self.bg_logger,
+            parent_ids=self._lazy_parent_ids(),
+            id=id,
+            scores=scores,
+            expected=expected,
+            comment=comment,
+            metadata=metadata,
+            source=source,
+        )
 
     def _lazy_parent_ids(self):
         def compute_parent_ids():
