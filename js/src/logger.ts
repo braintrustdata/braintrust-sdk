@@ -615,6 +615,17 @@ export class Logger<IsAsyncFlush extends boolean> {
     });
   }
 
+  /**
+   * Log feedback to an event. Feedback is used to save feedback scores, set an expected value, or add a comment.
+   *
+   * @param event
+   * @param event.id The id of the event to log feedback for. This is the `id` returned by `log` or accessible as the `id` field of a span.
+   * @param event.scores (Optional) a dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the event.
+   * @param event.expected (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not.
+   * @param event.comment (Optional) an optional comment string to log about the event.
+   * @param event.metadata (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
+   * @param event.source (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
+   */
   public logFeedback(event: LogFeedbackFullArgs): void {
     logFeedbackImpl(this.bgLogger, this.lazyParentIds(), event);
   }
@@ -1744,6 +1755,17 @@ export class Experiment {
     };
   }
 
+  /**
+   * Log feedback to an event in the experiment. Feedback is used to save feedback scores, set an expected value, or add a comment.
+   *
+   * @param event
+   * @param event.id The id of the event to log feedback for. This is the `id` returned by `log` or accessible as the `id` field of a span.
+   * @param event.scores (Optional) a dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the event.
+   * @param event.expected (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not.
+   * @param event.comment (Optional) an optional comment string to log about the event.
+   * @param event.metadata (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
+   * @param event.source (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
+   */
   public logFeedback(event: LogFeedbackFullArgs): void {
     logFeedbackImpl(this.bgLogger, this.lazyParentIds(), event);
   }
