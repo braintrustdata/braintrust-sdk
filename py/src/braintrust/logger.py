@@ -1086,6 +1086,7 @@ class RowIds:
     id: str
     span_id: str
     root_span_id: str
+    _parent_id: Optional[str] = None
 
 
 def _log_feedback_impl(
@@ -1440,7 +1441,7 @@ class SpanImpl(Span):
         if parent_span_info:
             self.internal_data.update(span_parents=[parent_span_info.span_id])
         if parent_id:
-            self.internal_data.update({PARENT_ID_FIELD: parent_id})
+            self.row_ids._parent_id = parent_id
 
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.

@@ -1829,6 +1829,7 @@ export class SpanImpl implements Span {
     id: string;
     span_id: string;
     root_span_id: string;
+    [PARENT_ID_FIELD]?: string;
   };
 
   public kind: "span" = "span";
@@ -1882,7 +1883,7 @@ export class SpanImpl implements Span {
       this.internalData.span_parents = [args.parentSpanInfo.span_id];
     }
     if (!isEmpty(args.parentId)) {
-      this.internalData[PARENT_ID_FIELD] = args.parentId;
+      this.rowIds[PARENT_ID_FIELD] = args.parentId;
     }
 
     // The first log is a replacement, but subsequent logs to the same span
@@ -1916,11 +1917,17 @@ export class SpanImpl implements Span {
     if (sanitizedAndInternalData.metrics?.end) {
       this.loggedEndTime = sanitizedAndInternalData.metrics?.end as number;
     }
+
+    const parentIds = (async () => {
+      const { kind, ...ids } = await this.parentIds;
+      return ids;
+    })();
+
     const record = (async () => {
       return {
         ...sanitizedAndInternalData,
         ...this.rowIds,
-        ...(await this.parentIds),
+        ...(await parentIds),
         [IS_MERGE_FIELD]: this.isMerge,
       };
     })();
