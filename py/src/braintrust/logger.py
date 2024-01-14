@@ -84,6 +84,13 @@ class Span(ABC):
         """
 
     @abstractmethod
+    def log_feedback(self, **event):
+        """Add feedback to the current span. Unlike `Experiment.log_feedback` and `Logger.log_feedback`, this method does not accept an id parameter, because it logs feedback to the current span.
+
+        :param **event: Data to be logged. See `Experiment.log_feedback` for full details.
+        """
+
+    @abstractmethod
     def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
         """Create a new span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `Span.log` will be merged into one logical row.
 
@@ -141,6 +148,9 @@ class _NoopSpan(Span):
         return ""
 
     def log(self, **event):
+        pass
+
+    def log_feedback(self, **event):
         pass
 
     def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
@@ -1478,6 +1488,17 @@ class SpanImpl(Span):
             )
 
         self.bg_logger.log(LazyValue(compute_record, use_mutex=False))
+
+    def log_feedback(self, **event):
+        args = dict(
+            **event,
+            id=self.id,
+        )
+        return _log_feedback_impl(
+            bg_logger=self.bg_logger,
+            parent_ids=self.parent_ids,
+            **args,
+        )
 
     def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
         return SpanImpl(

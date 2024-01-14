@@ -71,6 +71,13 @@ export interface Span {
   log(event: ExperimentLogPartialArgs): void;
 
   /**
+   * Add feedback to the current span. Unlike `Experiment.logFeedback` and `Logger.logFeedback`, this method does not accept an id parameter, because it logs feedback to the current span.
+   *
+   * @param event: Data to be logged. See `Experiment.logFeedback` for full details.
+   */
+  logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void;
+
+  /**
    * Create a new span and run the provided callback. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `Span.log` will be merged into one logical row.
    *
    * Spans created within `traced` are ended automatically. By default, the span is marked as current, so they can be accessed using `braintrust.currentSpan`.
@@ -133,6 +140,8 @@ export class NoopSpan implements Span {
   }
 
   public log(_: ExperimentLogPartialArgs) {}
+
+  public logFeedback(event: Omit<LogFeedbackFullArgs, "id">) {}
 
   public traced<R>(
     callback: (span: Span) => R,
@@ -1872,7 +1881,7 @@ export class SpanImpl implements Span {
     if (args.parentSpanInfo) {
       this.internalData.span_parents = [args.parentSpanInfo.span_id];
     }
-    if (args.parentId) {
+    if (!isEmpty(args.parentId)) {
       this.internalData[PARENT_ID_FIELD] = args.parentId;
     }
 
@@ -1916,6 +1925,13 @@ export class SpanImpl implements Span {
       };
     })();
     this.bgLogger.log([record]);
+  }
+
+  public logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void {
+    logFeedbackImpl(this.bgLogger, this.parentIds, {
+      ...event,
+      id: this.id,
+    });
   }
 
   public traced<R>(
