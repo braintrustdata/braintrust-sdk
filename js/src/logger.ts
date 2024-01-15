@@ -712,8 +712,8 @@ type SanitizedExperimentLogPartialArgs = Partial<OtherExperimentLogFields> &
 type ExperimentEvent = Partial<InputField> &
   Partial<OtherExperimentLogFields> & {
     id: string;
-    span_id: string;
-    root_span_id: string;
+    span_id?: string;
+    root_span_id?: string;
     project_id: string;
     experiment_id: string;
     [IS_MERGE_FIELD]: boolean;
@@ -722,6 +722,8 @@ type ExperimentEvent = Partial<InputField> &
     span_parents: string[];
     span_attributes: Record<string, unknown>;
     [PARENT_ID_FIELD]: string;
+    [AUDIT_SOURCE_FIELD]: Source;
+    [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
   }>;
 
 interface DatasetEvent {
@@ -739,12 +741,23 @@ type LoggingEvent = Omit<ExperimentEvent, "experiment_id"> & {
   log_id: "g";
 };
 
+export type CommentEvent = IdField & {
+  created: string;
+  origin: {
+    id: string;
+  };
+  comment: {
+    text: string;
+  };
+  [AUDIT_SOURCE_FIELD]: Source;
+  [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
+} & Omit<ParentExperimentIds | ParentProjectLogIds, "kind">;
+
 type BackgroundLogEvent =
   | ExperimentEvent
   | DatasetEvent
   | LoggingEvent
-  | LogFeedbackFullArgs
-  | LogCommentFullArgs;
+  | CommentEvent;
 
 export interface DatasetRecord {
   id: string;
@@ -1840,8 +1853,15 @@ export class SpanImpl implements Span {
     args: {
       parentIds: Promise<ParentExperimentIds | ParentProjectLogIds>;
       bgLogger: BackgroundLogger;
-      parentSpanInfo?: { span_id: string; root_span_id: string };
-    } & StartSpanArgs
+    } & Omit<StartSpanArgs, "parentId"> &
+      (
+        | {
+            parentSpanInfo?: { span_id: string; root_span_id: string };
+          }
+        | {
+            parentId?: string;
+          }
+      )
   ) {
     this.loggedEndTime = undefined;
 
@@ -1877,12 +1897,15 @@ export class SpanImpl implements Span {
     this.rowIds = {
       id,
       span_id,
-      root_span_id: args.parentSpanInfo?.root_span_id ?? span_id,
+      root_span_id:
+        "parentSpanInfo" in args && args.parentSpanInfo?.root_span_id
+          ? args.parentSpanInfo.root_span_id
+          : span_id,
     };
-    if (args.parentSpanInfo) {
+    if ("parentSpanInfo" in args && args.parentSpanInfo?.span_id) {
       this.internalData.span_parents = [args.parentSpanInfo.span_id];
     }
-    if (!isEmpty(args.parentId)) {
+    if ("parentId" in args && !isEmpty(args.parentId)) {
       this.rowIds[PARENT_ID_FIELD] = args.parentId;
     }
 
@@ -1959,7 +1982,7 @@ export class SpanImpl implements Span {
     );
   }
 
-  public startSpan(args?: StartSpanArgs): Span {
+  public startSpan(args?: Omit<StartSpanArgs, "parent_id">): Span {
     return new SpanImpl({
       parentIds: this.parentIds,
       bgLogger: this.bgLogger,
