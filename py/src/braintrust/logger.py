@@ -1409,10 +1409,10 @@ class SpanImpl(Span):
         caller_location = get_caller_location()
         if name is None:
             if caller_location:
-                filename = os.path.basename(caller_location.caller_filename)
+                filename = os.path.basename(caller_location["caller_filename"])
                 name = ":".join(
-                    [caller_location.caller_functionname]
-                    + ([f"{filename}:{caller_location.caller_lineno}"] if filename else [])
+                    [caller_location["caller_functionname"]]
+                    + ([f"{filename}:{caller_location['caller_lineno']}"] if filename else [])
                 )
             else:
                 name = "subspan"
