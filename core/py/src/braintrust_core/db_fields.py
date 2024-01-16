@@ -1,11 +1,10 @@
 TRANSACTION_ID_FIELD = "_xact_id"
 OBJECT_DELETE_FIELD = "_object_delete"
 CREATED_FIELD = "created"
-IS_MERGE_FIELD = "_is_merge"
 ID_FIELD = "id"
 
-MERGE_TYPE_FIELD = "_merge_type"
-MERGE_TYPES = ["shallow", "deep"]
+IS_MERGE_FIELD = "_is_merge"
+MERGE_PATHS_FIELD = "_merge_paths"
 
 AUDIT_SOURCE_FIELD = "_audit_source"
 AUDIT_METADATA_FIELD = "_audit_metadata"
@@ -18,6 +17,6 @@ ALL_ROW_ID_FIELDS = [
     TRANSACTION_ID_FIELD,
     CREATED_FIELD,
     IS_MERGE_FIELD,
-    MERGE_TYPE_FIELD,
+    MERGE_PATHS_FIELD,
     OBJECT_DELETE_FIELD,
 ]

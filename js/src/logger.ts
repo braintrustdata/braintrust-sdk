@@ -5,7 +5,6 @@ import { v4 as uuidv4 } from "uuid";
 import {
   TRANSACTION_ID_FIELD,
   IS_MERGE_FIELD,
-  MERGE_TYPE_FIELD,
   PARENT_ID_FIELD,
   mergeDicts,
   mergeRowBatch,
@@ -13,7 +12,6 @@ import {
   VALID_SOURCES,
   AUDIT_SOURCE_FIELD,
   AUDIT_METADATA_FIELD,
-  MergeType,
 } from "@braintrust/core";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -473,7 +471,6 @@ function logFeedbackImpl(
         [AUDIT_SOURCE_FIELD]: source,
         [AUDIT_METADATA_FIELD]: metadata,
         [IS_MERGE_FIELD]: true,
-        [MERGE_TYPE_FIELD]: "deep",
       };
     })();
     bgLogger.log([record]);
@@ -719,12 +716,7 @@ type ExperimentEvent = Partial<InputField> &
     root_span_id?: string;
     project_id: string;
     experiment_id: string;
-
-    // DEPRECATION_NOTICE: We should remove this field once all APIs and clients have moved
-    // to the MERGE_TYPE_FIELD field. We currently indicate both IS_MERGE_FIELD: true and
-    // MERGE_TYPE_FIELD: "deep" in each place, but can remove IS_MERGE_FIELD once ready.
     [IS_MERGE_FIELD]: boolean;
-    [MERGE_TYPE_FIELD]?: MergeType;
   } & Partial<{
     created: string;
     span_parents: string[];
@@ -1959,7 +1951,6 @@ export class SpanImpl implements Span {
         ...this.rowIds,
         ...(await parentIds),
         [IS_MERGE_FIELD]: this.isMerge,
-        [MERGE_TYPE_FIELD]: this.isMerge ? ("deep" as MergeType) : undefined,
       };
     })();
     this.bgLogger.log([record]);

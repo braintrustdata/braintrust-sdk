@@ -8,7 +8,6 @@ import json
 import logging
 import os
 import queue
-import sys
 import textwrap
 import threading
 import time
@@ -16,16 +15,14 @@ import traceback
 import uuid
 from abc import ABC, abstractmethod
 from functools import partial, wraps
-from getpass import getpass
 from multiprocessing import cpu_count
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import requests
 from braintrust_core.db_fields import (
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
-    MERGE_TYPE_FIELD,
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
@@ -1125,7 +1122,6 @@ def _log_feedback_impl(
                     AUDIT_SOURCE_FIELD: source,
                     AUDIT_METADATA_FIELD: metadata,
                     IS_MERGE_FIELD: True,
-                    MERGE_TYPE_FIELD: "deep",
                 },
             )
 
@@ -1485,7 +1481,7 @@ class SpanImpl(Span):
         partial_record = dict(
             **sanitized_and_internal_data,
             **dataclasses.asdict(self.row_ids),
-            **{IS_MERGE_FIELD: self._is_merge, MERGE_TYPE_FIELD: "deep" if self._is_merge else None},
+            **{IS_MERGE_FIELD: self._is_merge},
         )
         _check_json_serializable(partial_record)
 
