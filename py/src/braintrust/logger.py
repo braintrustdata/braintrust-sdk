@@ -25,7 +25,7 @@ from braintrust_core.db_fields import (
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
-    PARENT_ID_FIELD,
+    MERGE_TYPE_FIELD,
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
@@ -1121,7 +1121,12 @@ def _log_feedback_impl(
                 id=id,
                 **update_event,
                 **dataclasses.asdict(parent_ids.get()),
-                **{AUDIT_SOURCE_FIELD: source, AUDIT_METADATA_FIELD: metadata, IS_MERGE_FIELD: True},
+                **{
+                    AUDIT_SOURCE_FIELD: source,
+                    AUDIT_METADATA_FIELD: metadata,
+                    IS_MERGE_FIELD: True,
+                    MERGE_TYPE_FIELD: "deep",
+                },
             )
 
         bg_logger.log(LazyValue(compute_record, use_mutex=False))
@@ -1480,7 +1485,7 @@ class SpanImpl(Span):
         partial_record = dict(
             **sanitized_and_internal_data,
             **dataclasses.asdict(self.row_ids),
-            **{IS_MERGE_FIELD: self._is_merge},
+            **{IS_MERGE_FIELD: self._is_merge, MERGE_TYPE_FIELD: "deep" if self._is_merge else None},
         )
         _check_json_serializable(partial_record)
 

@@ -473,6 +473,7 @@ function logFeedbackImpl(
         [AUDIT_SOURCE_FIELD]: source,
         [AUDIT_METADATA_FIELD]: metadata,
         [IS_MERGE_FIELD]: true,
+        [MERGE_TYPE_FIELD]: "deep",
       };
     })();
     bgLogger.log([record]);
@@ -720,7 +721,8 @@ type ExperimentEvent = Partial<InputField> &
     experiment_id: string;
 
     // DEPRECATION_NOTICE: We should remove this field once all APIs and clients have moved
-    // to the MERGE_TYPE_FIELD field.
+    // to the MERGE_TYPE_FIELD field. We currently indicate both IS_MERGE_FIELD: true and
+    // MERGE_TYPE_FIELD: "deep" in each place, but can remove IS_MERGE_FIELD once ready.
     [IS_MERGE_FIELD]: boolean;
     [MERGE_TYPE_FIELD]?: MergeType;
   } & Partial<{
