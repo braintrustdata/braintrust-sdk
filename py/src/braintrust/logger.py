@@ -392,6 +392,13 @@ class _BackgroundLogger:
         while True:
             # Wait for some data on the queue before trying to flush.
             self.queue_filled_semaphore.acquire()
+
+            while _DEBUG_LOGGING_PAUSED:
+                _logger.warning(
+                    "Logging paused. Sleeping for 100ms and will try again. This flag should only be set for debugging purposes."
+                )
+                time.sleep(0.1)
+
             try:
                 self.flush(**kwargs)
             except Exception:
@@ -401,12 +408,6 @@ class _BackgroundLogger:
         # We cannot have multiple threads flushing in parallel, because the
         # order of published elements would be undefined.
         with self.flush_lock:
-            while _DEBUG_LOGGING_PAUSED:
-                _logger.warning(
-                    "Logging paused. Sleeping for 100ms and will try again. This flag should only be set for debugging purposes."
-                )
-                time.sleep(0.1)
-
             # Drain the queue.
             all_items = []
             try:
