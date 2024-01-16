@@ -1904,8 +1904,7 @@ export class SpanImpl implements Span {
     };
     if ("parentSpanInfo" in args && args.parentSpanInfo?.span_id) {
       this.internalData.span_parents = [args.parentSpanInfo.span_id];
-    }
-    if ("parentId" in args && !isEmpty(args.parentId)) {
+    } else if ("parentId" in args && !isEmpty(args.parentId)) {
       this.rowIds[PARENT_ID_FIELD] = args.parentId;
     }
 
