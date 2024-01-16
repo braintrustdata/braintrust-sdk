@@ -22,8 +22,12 @@ from typing import Any, Callable, Dict, Optional, Union
 
 import requests
 from braintrust_core.db_fields import (
+    AUDIT_METADATA_FIELD,
+    AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
+    PARENT_ID_FIELD,
     TRANSACTION_ID_FIELD,
+    VALID_SOURCES,
 )
 from braintrust_core.merge_row_batch import merge_row_batch
 from braintrust_core.util import (
@@ -80,7 +84,14 @@ class Span(ABC):
         """
 
     @abstractmethod
-    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, **event):
+    def log_feedback(self, **event):
+        """Add feedback to the current span. Unlike `Experiment.log_feedback` and `Logger.log_feedback`, this method does not accept an id parameter, because it logs feedback to the current span.
+
+        :param **event: Data to be logged. See `Experiment.log_feedback` for full details.
+        """
+
+    @abstractmethod
+    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
         """Create a new span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `Span.log` will be merged into one logical row.
 
         We recommend running spans within context managers (`with start_span(...) as span`) to automatically mark them as current and ensure they are ended. Only spans run within a context manager will be marked current, so they can be accessed using `braintrust.current_span()`. If you wish to start a span outside a context manager, be sure to end it with `span.end()`.
@@ -89,6 +100,8 @@ class Span(ABC):
         :param span_attributes: Optional additional attributes to attach to the span, such as a type name.
         :param start_time: Optional start time of the span, as a timestamp in seconds.
         :param set_current: If true (the default), the span will be marked as the currently-active span for the duration of the context manager.
+        :param parent_id: Optional id of the parent span. If not provided, the current span will be used (depending on context). This is useful for adding
+        spans to an existing trace.
         :param **event: Data to be logged. See `Experiment.log` for full details.
         :returns: The newly-created `Span`
         """
@@ -137,7 +150,10 @@ class _NoopSpan(Span):
     def log(self, **event):
         pass
 
-    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, **event):
+    def log_feedback(self, **event):
+        pass
+
+    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
         return self
 
     def end(self, end_time=None):
@@ -320,6 +336,8 @@ def _check_json_serializable(event):
 DEFAULT_BATCH_SIZE = 100
 NUM_RETRIES = 3
 
+_DEBUG_LOGGING_PAUSED = False
+
 
 class _BackgroundLogger:
     def __init__(self, log_conn: LazyValue[HTTPConnection]):
@@ -374,6 +392,13 @@ class _BackgroundLogger:
         while True:
             # Wait for some data on the queue before trying to flush.
             self.queue_filled_semaphore.acquire()
+
+            while _DEBUG_LOGGING_PAUSED:
+                _logger.warning(
+                    "Logging paused. Sleeping for 100ms and will try again. This flag should only be set for debugging purposes."
+                )
+                time.sleep(0.1)
+
             try:
                 self.flush(**kwargs)
             except Exception:
@@ -895,7 +920,7 @@ def traced(*span_args, **span_kwargs):
         return partial(decorator, span_args, span_kwargs)
 
 
-def start_span(name=None, span_attributes={}, start_time=None, set_current=None, **event) -> Span:
+def start_span(name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event) -> Span:
     """Lower-level alternative to `@traced` for starting a span at the toplevel. It creates a span under the first active object (using the same precedence order as `@traced`) or returns a no-op span object.
 
     We recommend running spans bound to a context manager (`with start_span`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a context manager, be sure to terminate it with `span.end()`.
@@ -907,7 +932,12 @@ def start_span(name=None, span_attributes={}, start_time=None, set_current=None,
     if not isinstance(parent_object, Span):
         name = coalesce(name, "root")
     return parent_object.start_span(
-        name=name, span_attributes=span_attributes, start_time=start_time, set_current=set_current, **event
+        name=name,
+        span_attributes=span_attributes,
+        start_time=start_time,
+        set_current=set_current,
+        parent_id=parent_id,
+        **event,
     )
 
 
@@ -1033,6 +1063,90 @@ def _validate_and_sanitize_experiment_log_full_args(event, has_dataset):
     return event
 
 
+@dataclasses.dataclass
+class ParentExperimentIds:
+    project_id: str
+    experiment_id: str
+
+
+@dataclasses.dataclass
+class ParentProjectLogIds:
+    org_id: str
+    project_id: str
+    log_id: str
+
+
+@dataclasses.dataclass
+class ParentSpanInfo:
+    span_id: str
+    root_span_id: str
+
+
+@dataclasses.dataclass
+class RowIds:
+    id: str
+    span_id: str
+    root_span_id: str
+    _parent_id: Optional[str] = None
+
+
+def _log_feedback_impl(
+    bg_logger, parent_ids, id, scores=None, expected=None, comment=None, metadata=None, source=None
+):
+    if source is None:
+        source = "external"
+    elif source not in VALID_SOURCES:
+        raise ValueError(f"source must be one of {VALID_SOURCES}")
+
+    if scores is None and expected is None and comment is None:
+        raise ValueError("At least one of scores, expected, or comment must be specified")
+
+    update_event = _validate_and_sanitize_experiment_log_partial_args(
+        event=dict(
+            scores=scores,
+            metadata=metadata,
+            expected=expected,
+        )
+    )
+
+    # Although we validate metadata the normal way, we want to save it as audit metadata,
+    # not ordinary metadata
+    metadata = update_event.pop("metadata")
+    update_event = {k: v for k, v in update_event.items() if v is not None}
+
+    if len(update_event) > 0:
+
+        def compute_record():
+            return dict(
+                id=id,
+                **update_event,
+                **dataclasses.asdict(parent_ids.get()),
+                **{AUDIT_SOURCE_FIELD: source, AUDIT_METADATA_FIELD: metadata, IS_MERGE_FIELD: True},
+            )
+
+        bg_logger.log(LazyValue(compute_record, use_mutex=False))
+
+    if comment is not None:
+
+        def compute_record():
+            return dict(
+                id=str(uuid.uuid4()),
+                created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                origin={
+                    # NOTE: We do not know (or care?) what the transaction id of the row that
+                    # we're commenting on is here, so we omit it.
+                    "id": id,
+                },
+                comment={
+                    "text": comment,
+                },
+                **dataclasses.asdict(parent_ids.get()),
+                **{AUDIT_SOURCE_FIELD: source, AUDIT_METADATA_FIELD: metadata},
+            )
+
+        bg_logger.log(LazyValue(compute_record, use_mutex=False))
+
+
 class Experiment:
     """
     An experiment is a collection of logged events, such as model inputs and outputs, which represent
@@ -1103,7 +1217,7 @@ class Experiment:
 
         :param input: The arguments that uniquely define a test case (an arbitrary, JSON serializable object). Later on, Braintrust will use the `input` to know whether two test cases are the same between experiments, so they should not contain experiment-specific state. A simple rule of thumb is that if you run the same experiment twice, the `input` should be identical.
         :param output: The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
-        :param expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
+        :param expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
         :param scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments.
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
         :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
@@ -1130,22 +1244,56 @@ class Experiment:
         self.last_start_time = span.end()
         return span.id
 
-    def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, **event):
+    def log_feedback(
+        self,
+        id,
+        scores=None,
+        expected=None,
+        comment=None,
+        metadata=None,
+        source=None,
+    ):
+        """
+        Log feedback to an event in the experiment. Feedback is used to save feedback scores, set an expected value, or add a comment.
+
+        :param id: The id of the event to log feedback for. This is the `id` returned by `log` or accessible as the `id` field of a span.
+        :param scores: (Optional) a dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the event.
+        :param expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not.
+        :param comment: (Optional) an optional comment string to log about the event.
+        :param metadata: (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
+        :param source: (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
+        """
+        return _log_feedback_impl(
+            bg_logger=self.bg_logger,
+            parent_ids=self._lazy_parent_ids(),
+            id=id,
+            scores=scores,
+            expected=expected,
+            comment=comment,
+            metadata=metadata,
+            source=source,
+        )
+
+    def _lazy_parent_ids(self):
+        def compute_parent_ids():
+            return ParentExperimentIds(project_id=self.project.id, experiment_id=self.id)
+
+        return LazyValue(compute_parent_ids, use_mutex=False)
+
+    def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
         """Create a new toplevel span underneath the experiment. The name defaults to "root".
 
         See `Span.start_span` for full details
         """
 
-        def compute_parent_ids():
-            return ParentExperimentIds(project_id=self.project.id, experiment_id=self.id)
-
         return SpanImpl(
-            parent_ids=LazyValue(compute_parent_ids, use_mutex=False),
+            parent_ids=self._lazy_parent_ids(),
             bg_logger=self.bg_logger,
             name=name,
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
+            parent_id=parent_id,
             event=event,
         )
 
@@ -1233,32 +1381,6 @@ class Experiment:
         del type, value, callback
 
 
-@dataclasses.dataclass
-class ParentExperimentIds:
-    project_id: str
-    experiment_id: str
-
-
-@dataclasses.dataclass
-class ParentProjectLogIds:
-    org_id: str
-    project_id: str
-    log_id: str
-
-
-@dataclasses.dataclass
-class ParentSpanInfo:
-    span_id: str
-    root_span_id: str
-
-
-@dataclasses.dataclass
-class RowIds:
-    id: str
-    span_id: str
-    root_span_id: str
-
-
 class SpanImpl(Span):
     """Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
 
@@ -1270,6 +1392,10 @@ class SpanImpl(Span):
         parent_ids: LazyValue[Union[ParentExperimentIds, ParentProjectLogIds]],
         bg_logger,
         parent_span_info: Optional[ParentSpanInfo] = None,
+        # This is similarly named, but semantically different than parent_span_info. parent_span_info
+        # very directly populates the span_parents field of the span, whereas parent_id is the plain-old
+        # id field of the parent span, and is resolved on the server, not in the SDK.
+        parent_id=None,
         name=None,
         span_attributes={},
         start_time=None,
@@ -1284,10 +1410,10 @@ class SpanImpl(Span):
         caller_location = get_caller_location()
         if name is None:
             if caller_location:
-                filename = os.path.basename(caller_location.caller_filename)
+                filename = os.path.basename(caller_location["caller_filename"])
                 name = ":".join(
-                    [caller_location.caller_functionname]
-                    + ([f"{filename}:{caller_location.caller_lineno}"] if filename else [])
+                    [caller_location["caller_functionname"]]
+                    + ([f"{filename}:{caller_location['caller_lineno']}"] if filename else [])
                 )
             else:
                 name = "subspan"
@@ -1313,8 +1439,14 @@ class SpanImpl(Span):
         self.row_ids = RowIds(
             id=id, span_id=span_id, root_span_id=parent_span_info.root_span_id if parent_span_info else span_id
         )
+
+        if parent_span_info is not None and parent_id is not None:
+            raise ValueError("Only one of parent_span_info and parent_id may be specified")
+
         if parent_span_info:
             self.internal_data.update(span_parents=[parent_span_info.span_id])
+        elif parent_id:
+            self.row_ids._parent_id = parent_id
 
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.
@@ -1363,7 +1495,18 @@ class SpanImpl(Span):
 
         self.bg_logger.log(LazyValue(compute_record, use_mutex=False))
 
-    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, **event):
+    def log_feedback(self, **event):
+        args = dict(
+            **event,
+            id=self.id,
+        )
+        return _log_feedback_impl(
+            bg_logger=self.bg_logger,
+            parent_ids=self.parent_ids,
+            **args,
+        )
+
+    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
         return SpanImpl(
             parent_ids=self.parent_ids,
             bg_logger=self.bg_logger,
@@ -1372,6 +1515,7 @@ class SpanImpl(Span):
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
+            parent_id=parent_id,
             event=event,
         )
 
@@ -1728,12 +1872,37 @@ class Logger:
 
         return span.id
 
-    def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, **event):
-        """Create a new toplevel span underneath the logger. The name parameter defaults to "root".
-
-        See `Span.start_span` for full details
+    def log_feedback(
+        self,
+        id,
+        scores=None,
+        expected=None,
+        comment=None,
+        metadata=None,
+        source=None,
+    ):
         """
+        Log feedback to an event. Feedback is used to save feedback scores, set an expected value, or add a comment.
 
+        :param id: The id of the event to log feedback for. This is the `id` returned by `log` or accessible as the `id` field of a span.
+        :param scores: (Optional) a dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the event.
+        :param expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not.
+        :param comment: (Optional) an optional comment string to log about the event.
+        :param metadata: (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
+        :param source: (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
+        """
+        return _log_feedback_impl(
+            bg_logger=self.bg_logger,
+            parent_ids=self._lazy_parent_ids(),
+            id=id,
+            scores=scores,
+            expected=expected,
+            comment=comment,
+            metadata=metadata,
+            source=source,
+        )
+
+    def _lazy_parent_ids(self):
         def compute_parent_ids():
             return ParentProjectLogIds(
                 org_id=self.org_id,
@@ -1741,13 +1910,22 @@ class Logger:
                 log_id="g",
             )
 
+        return LazyValue(compute_parent_ids, use_mutex=False)
+
+    def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
+        """Create a new toplevel span underneath the logger. The name parameter defaults to "root".
+
+        See `Span.start_span` for full details
+        """
+
         return SpanImpl(
-            parent_ids=LazyValue(compute_parent_ids, use_mutex=False),
+            parent_ids=self._lazy_parent_ids(),
             bg_logger=self.bg_logger,
             name=name,
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
+            parent_id=parent_id,
             event=event,
         )
 

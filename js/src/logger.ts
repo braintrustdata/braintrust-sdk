@@ -5,12 +5,22 @@ import { v4 as uuidv4 } from "uuid";
 import {
   TRANSACTION_ID_FIELD,
   IS_MERGE_FIELD,
+  PARENT_ID_FIELD,
   mergeDicts,
   mergeRowBatch,
+  Source,
+  VALID_SOURCES,
+  AUDIT_SOURCE_FIELD,
+  AUDIT_METADATA_FIELD,
 } from "@braintrust/core";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
-import { runFinally, GLOBAL_PROJECT, getCurrentUnixTimestamp } from "./util";
+import {
+  runFinally,
+  GLOBAL_PROJECT,
+  getCurrentUnixTimestamp,
+  isEmpty,
+} from "./util";
 
 export type Metadata = Record<string, unknown>;
 
@@ -22,6 +32,7 @@ export type StartSpanArgs = {
   name?: string;
   spanAttributes?: Record<any, any>;
   startTime?: number;
+  parentId?: string;
   event?: StartSpanEventArgs;
 };
 
@@ -60,6 +71,13 @@ export interface Span {
   log(event: ExperimentLogPartialArgs): void;
 
   /**
+   * Add feedback to the current span. Unlike `Experiment.logFeedback` and `Logger.logFeedback`, this method does not accept an id parameter, because it logs feedback to the current span.
+   *
+   * @param event: Data to be logged. See `Experiment.logFeedback` for full details.
+   */
+  logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void;
+
+  /**
    * Create a new span and run the provided callback. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `Span.log` will be merged into one logical row.
    *
    * Spans created within `traced` are ended automatically. By default, the span is marked as current, so they can be accessed using `braintrust.currentSpan`.
@@ -69,6 +87,7 @@ export interface Span {
    * @param args.span_attributes Optional additional attributes to attach to the span, such as a type name.
    * @param args.start_time Optional start time of the span, as a timestamp in seconds.
    * @param args.setCurrent If true (the default), the span will be marked as the currently-active span for the duration of the callback.
+   * @param args.parentId Optional id of the parent span. If not provided, the current span will be used (depending on context). This is useful for adding spans to an existing trace.
    * @param args.event Data to be logged. See `Experiment.log` for full details.
    * @Returns The result of running `callback`.
    */
@@ -121,6 +140,8 @@ export class NoopSpan implements Span {
   }
 
   public log(_: ExperimentLogPartialArgs) {}
+
+  public logFeedback(event: Omit<LogFeedbackFullArgs, "id">) {}
 
   public traced<R>(
     callback: (span: Span) => R,
@@ -401,6 +422,82 @@ export interface LogOptions<IsAsyncFlush> {
 
 export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
 
+function logFeedbackImpl(
+  bgLogger: BackgroundLogger,
+  parentIds: Promise<ParentExperimentIds | ParentProjectLogIds>,
+  {
+    id,
+    expected,
+    scores,
+    metadata: inputMetadata,
+    comment,
+    source: inputSource,
+  }: LogFeedbackFullArgs
+) {
+  const source = inputSource ?? "external";
+
+  if (!VALID_SOURCES.includes(source)) {
+    throw new Error(`source must be one of ${VALID_SOURCES}`);
+  }
+
+  if (isEmpty(scores) && isEmpty(expected) && isEmpty(comment)) {
+    throw new Error(
+      "At least one of scores, expected, or comment must be specified"
+    );
+  }
+
+  const validatedEvent = validateAndSanitizeExperimentLogPartialArgs({
+    scores,
+    metadata: inputMetadata,
+    expected,
+  });
+
+  let { metadata, ...updateEvent } = validatedEvent;
+  updateEvent = Object.fromEntries(
+    Object.entries(updateEvent).filter(([_, v]) => !isEmpty(v))
+  );
+
+  const trueParentIds = (async () => {
+    const { kind, ...ids } = await parentIds;
+    return ids;
+  })();
+
+  if (Object.keys(updateEvent).length > 0) {
+    const record = (async () => {
+      return {
+        id,
+        ...updateEvent,
+        ...(await trueParentIds),
+        [AUDIT_SOURCE_FIELD]: source,
+        [AUDIT_METADATA_FIELD]: metadata,
+        [IS_MERGE_FIELD]: true,
+      };
+    })();
+    bgLogger.log([record]);
+  }
+
+  if (!isEmpty(comment)) {
+    const record = (async () => {
+      return {
+        id: uuidv4(),
+        created: new Date().toISOString(),
+        origin: {
+          // NOTE: We do not know (or care?) what the transaction id of the row that
+          // we're commenting on is here, so we omit it.
+          id,
+        },
+        comment: {
+          text: comment,
+        },
+        ...(await trueParentIds),
+        [AUDIT_SOURCE_FIELD]: source,
+        [AUDIT_METADATA_FIELD]: metadata,
+      };
+    })();
+    bgLogger.log([record]);
+  }
+}
+
 export class Logger<IsAsyncFlush extends boolean> {
   private lazyMetadata: Promise<OrgProjectMetadata>;
   private logOptions: LogOptions<IsAsyncFlush>;
@@ -503,6 +600,15 @@ export class Logger<IsAsyncFlush extends boolean> {
     }
   }
 
+  private async lazyParentIds(): Promise<ParentProjectLogIds> {
+    return {
+      kind: "project_log",
+      org_id: await this.org_id,
+      project_id: (await this.project).id,
+      log_id: "g",
+    };
+  }
+
   /**
    * Lower-level alternative to `traced`, which does not automatically end the span or mark it as current.
    *
@@ -510,18 +616,27 @@ export class Logger<IsAsyncFlush extends boolean> {
    */
   public startSpan(args?: StartSpanArgs): Span {
     const { name, ...argsRest } = args ?? {};
-    const parentIds: Promise<ParentProjectLogIds> = (async () => ({
-      kind: "project_log",
-      org_id: await this.org_id,
-      project_id: (await this.project).id,
-      log_id: "g",
-    }))();
     return new SpanImpl({
-      parentIds,
+      parentIds: this.lazyParentIds(),
       bgLogger: this.bgLogger,
       name: name ?? "root",
       ...argsRest,
     });
+  }
+
+  /**
+   * Log feedback to an event. Feedback is used to save feedback scores, set an expected value, or add a comment.
+   *
+   * @param event
+   * @param event.id The id of the event to log feedback for. This is the `id` returned by `log` or accessible as the `id` field of a span.
+   * @param event.scores (Optional) a dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the event.
+   * @param event.expected (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not.
+   * @param event.comment (Optional) an optional comment string to log about the event.
+   * @param event.metadata (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
+   * @param event.source (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
+   */
+  public logFeedback(event: LogFeedbackFullArgs): void {
+    logFeedbackImpl(this.bgLogger, this.lazyParentIds(), event);
   }
 
   /*
@@ -571,14 +686,34 @@ export type ExperimentLogFullArgs = Partial<
   Partial<InputField | InputsField> &
   Partial<IdField>;
 
+export type LogFeedbackFullArgs = IdField &
+  Partial<
+    Omit<OtherExperimentLogFields, "output" | "metrics" | "datasetRecordId"> & {
+      comment: string;
+      source: Source;
+    }
+  >;
+
+export type LogCommentFullArgs = IdField & {
+  created: string;
+  origin: {
+    id: string;
+  };
+  comment: {
+    text: string;
+  };
+  [AUDIT_SOURCE_FIELD]: Source;
+  [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
+} & Omit<ParentExperimentIds | ParentProjectLogIds, "kind">;
+
 type SanitizedExperimentLogPartialArgs = Partial<OtherExperimentLogFields> &
   Partial<InputField>;
 
 type ExperimentEvent = Partial<InputField> &
   Partial<OtherExperimentLogFields> & {
     id: string;
-    span_id: string;
-    root_span_id: string;
+    span_id?: string;
+    root_span_id?: string;
     project_id: string;
     experiment_id: string;
     [IS_MERGE_FIELD]: boolean;
@@ -586,6 +721,9 @@ type ExperimentEvent = Partial<InputField> &
     created: string;
     span_parents: string[];
     span_attributes: Record<string, unknown>;
+    [PARENT_ID_FIELD]: string;
+    [AUDIT_SOURCE_FIELD]: Source;
+    [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
   }>;
 
 interface DatasetEvent {
@@ -603,7 +741,23 @@ type LoggingEvent = Omit<ExperimentEvent, "experiment_id"> & {
   log_id: "g";
 };
 
-type BackgroundLogEvent = ExperimentEvent | DatasetEvent | LoggingEvent;
+export type CommentEvent = IdField & {
+  created: string;
+  origin: {
+    id: string;
+  };
+  comment: {
+    text: string;
+  };
+  [AUDIT_SOURCE_FIELD]: Source;
+  [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
+} & Omit<ParentExperimentIds | ParentProjectLogIds, "kind">;
+
+type BackgroundLogEvent =
+  | ExperimentEvent
+  | DatasetEvent
+  | LoggingEvent
+  | CommentEvent;
 
 export interface DatasetRecord {
   id: string;
@@ -1532,6 +1686,14 @@ export class Experiment {
     );
   }
 
+  private async lazyParentIds(): Promise<ParentExperimentIds> {
+    return {
+      kind: "experiment",
+      project_id: (await this.project).id,
+      experiment_id: await this.id,
+    };
+  }
+
   /**
    * Lower-level alternative to `traced`, which does not automatically end the span or mark it as current.
    *
@@ -1539,13 +1701,8 @@ export class Experiment {
    */
   public startSpan(args?: StartSpanArgs): Span {
     const { name, ...argsRest } = args ?? {};
-    const parentIds: Promise<ParentExperimentIds> = (async () => ({
-      kind: "experiment",
-      project_id: (await this.project).id,
-      experiment_id: await this.id,
-    }))();
     return new SpanImpl({
-      parentIds,
+      parentIds: this.lazyParentIds(),
       bgLogger: this.bgLogger,
       name: name ?? "root",
       ...argsRest,
@@ -1621,6 +1778,21 @@ export class Experiment {
   }
 
   /**
+   * Log feedback to an event in the experiment. Feedback is used to save feedback scores, set an expected value, or add a comment.
+   *
+   * @param event
+   * @param event.id The id of the event to log feedback for. This is the `id` returned by `log` or accessible as the `id` field of a span.
+   * @param event.scores (Optional) a dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the event.
+   * @param event.expected (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not.
+   * @param event.comment (Optional) an optional comment string to log about the event.
+   * @param event.metadata (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
+   * @param event.source (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
+   */
+  public logFeedback(event: LogFeedbackFullArgs): void {
+    logFeedbackImpl(this.bgLogger, this.lazyParentIds(), event);
+  }
+
+  /**
    * Flush any pending rows to the server.
    */
   async flush(): Promise<void> {
@@ -1670,6 +1842,7 @@ export class SpanImpl implements Span {
     id: string;
     span_id: string;
     root_span_id: string;
+    [PARENT_ID_FIELD]?: string;
   };
 
   public kind: "span" = "span";
@@ -1680,8 +1853,15 @@ export class SpanImpl implements Span {
     args: {
       parentIds: Promise<ParentExperimentIds | ParentProjectLogIds>;
       bgLogger: BackgroundLogger;
-      parentSpanInfo?: { span_id: string; root_span_id: string };
-    } & StartSpanArgs
+    } & Omit<StartSpanArgs, "parentId"> &
+      (
+        | {
+            parentSpanInfo?: { span_id: string; root_span_id: string };
+          }
+        | {
+            parentId?: string;
+          }
+      )
   ) {
     this.loggedEndTime = undefined;
 
@@ -1717,10 +1897,15 @@ export class SpanImpl implements Span {
     this.rowIds = {
       id,
       span_id,
-      root_span_id: args.parentSpanInfo?.root_span_id ?? span_id,
+      root_span_id:
+        "parentSpanInfo" in args && args.parentSpanInfo?.root_span_id
+          ? args.parentSpanInfo.root_span_id
+          : span_id,
     };
-    if (args.parentSpanInfo) {
+    if ("parentSpanInfo" in args && args.parentSpanInfo?.span_id) {
       this.internalData.span_parents = [args.parentSpanInfo.span_id];
+    } else if ("parentId" in args && !isEmpty(args.parentId)) {
+      this.rowIds[PARENT_ID_FIELD] = args.parentId;
     }
 
     // The first log is a replacement, but subsequent logs to the same span
@@ -1754,15 +1939,28 @@ export class SpanImpl implements Span {
     if (sanitizedAndInternalData.metrics?.end) {
       this.loggedEndTime = sanitizedAndInternalData.metrics?.end as number;
     }
+
+    const parentIds = (async () => {
+      const { kind, ...ids } = await this.parentIds;
+      return ids;
+    })();
+
     const record = (async () => {
       return {
         ...sanitizedAndInternalData,
         ...this.rowIds,
-        ...(await this.parentIds),
+        ...(await parentIds),
         [IS_MERGE_FIELD]: this.isMerge,
       };
     })();
     this.bgLogger.log([record]);
+  }
+
+  public logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void {
+    logFeedbackImpl(this.bgLogger, this.parentIds, {
+      ...event,
+      id: this.id,
+    });
   }
 
   public traced<R>(
@@ -1783,7 +1981,7 @@ export class SpanImpl implements Span {
     );
   }
 
-  public startSpan(args?: StartSpanArgs): Span {
+  public startSpan(args?: Omit<StartSpanArgs, "parent_id">): Span {
     return new SpanImpl({
       parentIds: this.parentIds,
       bgLogger: this.bgLogger,

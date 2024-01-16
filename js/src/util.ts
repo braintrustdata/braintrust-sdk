@@ -23,3 +23,7 @@ export function runFinally<R>(f: () => R, finallyF: () => void): R {
 export function getCurrentUnixTimestamp(): number {
   return new Date().getTime() / 1000;
 }
+
+export function isEmpty(a: unknown): a is null | undefined {
+  return a === undefined || a === null;
+}

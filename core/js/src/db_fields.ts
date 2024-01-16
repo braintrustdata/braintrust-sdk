@@ -6,7 +6,10 @@ export const ID_FIELD = "id";
 
 export const AUDIT_SOURCE_FIELD = "_audit_source";
 export const AUDIT_METADATA_FIELD = "_audit_metadata";
-export const VALID_SOURCES = ["app", "api", "external"];
+export const VALID_SOURCES = ["app", "api", "external"] as const;
+export type Source = (typeof VALID_SOURCES)[number];
+
+export const PARENT_ID_FIELD = "_parent_id";
 
 export const ALL_ROW_ID_FIELDS = [
   TRANSACTION_ID_FIELD,
