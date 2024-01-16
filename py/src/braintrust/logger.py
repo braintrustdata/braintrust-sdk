@@ -1439,9 +1439,13 @@ class SpanImpl(Span):
         self.row_ids = RowIds(
             id=id, span_id=span_id, root_span_id=parent_span_info.root_span_id if parent_span_info else span_id
         )
+
+        if parent_span_info is not None and parent_id is not None:
+            raise ValueError("Only one of parent_span_info and parent_id may be specified")
+
         if parent_span_info:
             self.internal_data.update(span_parents=[parent_span_info.span_id])
-        if parent_id:
+        elif parent_id:
             self.row_ids._parent_id = parent_id
 
         # The first log is a replacement, but subsequent logs to the same span
