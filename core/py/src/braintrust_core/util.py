@@ -1,6 +1,6 @@
 import dataclasses
 import json
-from typing import Dict
+from typing import Dict, List, Set, Tuple
 
 
 class SerializableDataClass:
@@ -24,8 +24,9 @@ def coalesce(*args):
     return None
 
 
-def merge_dicts(merge_into: Dict, merge_from: Dict):
-    """Merges merge_from into merge_into, destructively updating merge_into."""
+def merge_dicts_with_paths(merge_into: Dict, merge_from: Dict, path: List[str], merge_paths: Set[Tuple[str]]):
+    """Merges merge_from into merge_into, destructively updating merge_into. Does not merge any further than
+    merge_paths."""
 
     if not isinstance(merge_into, dict):
         raise ValueError("merge_into must be a dictionary")
@@ -33,10 +34,17 @@ def merge_dicts(merge_into: Dict, merge_from: Dict):
         raise ValueError("merge_from must be a dictionary")
 
     for k, merge_from_v in merge_from.items():
+        full_path = tuple(path + [k])
         merge_into_v = merge_into.get(k)
-        if isinstance(merge_into_v, dict) and isinstance(merge_from_v, dict):
+        if isinstance(merge_into_v, dict) and isinstance(merge_from_v, dict) and full_path not in merge_paths:
             merge_dicts(merge_into_v, merge_from_v)
         else:
             merge_into[k] = merge_from_v
 
     return merge_into
+
+
+def merge_dicts(merge_into: Dict, merge_from: Dict):
+    """Merges merge_from into merge_into, destructively updating merge_into."""
+
+    return merge_dicts_with_paths(merge_into, merge_from, [], set())
