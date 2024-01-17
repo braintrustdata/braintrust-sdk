@@ -34,10 +34,10 @@ def merge_dicts_with_paths(merge_into: Dict, merge_from: Dict, path: List[str], 
         raise ValueError("merge_from must be a dictionary")
 
     for k, merge_from_v in merge_from.items():
-        full_path = tuple(path + [k])
+        full_path = path + [k]
         merge_into_v = merge_into.get(k)
-        if isinstance(merge_into_v, dict) and isinstance(merge_from_v, dict) and full_path not in merge_paths:
-            merge_dicts(merge_into_v, merge_from_v)
+        if isinstance(merge_into_v, dict) and isinstance(merge_from_v, dict) and tuple(full_path) not in merge_paths:
+            merge_dicts_with_paths(merge_into_v, merge_from_v, full_path, merge_paths)
         else:
             merge_into[k] = merge_from_v
 
