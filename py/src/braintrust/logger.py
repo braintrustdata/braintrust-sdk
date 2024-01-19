@@ -8,7 +8,6 @@ import json
 import logging
 import os
 import queue
-import sys
 import textwrap
 import threading
 import time
@@ -16,16 +15,14 @@ import traceback
 import uuid
 from abc import ABC, abstractmethod
 from functools import partial, wraps
-from getpass import getpass
 from multiprocessing import cpu_count
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import requests
 from braintrust_core.db_fields import (
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
-    PARENT_ID_FIELD,
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
@@ -1121,7 +1118,11 @@ def _log_feedback_impl(
                 id=id,
                 **update_event,
                 **dataclasses.asdict(parent_ids.get()),
-                **{AUDIT_SOURCE_FIELD: source, AUDIT_METADATA_FIELD: metadata, IS_MERGE_FIELD: True},
+                **{
+                    AUDIT_SOURCE_FIELD: source,
+                    AUDIT_METADATA_FIELD: metadata,
+                    IS_MERGE_FIELD: True,
+                },
             )
 
         bg_logger.log(LazyValue(compute_record, use_mutex=False))
