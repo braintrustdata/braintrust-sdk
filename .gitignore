@@ -8,3 +8,6 @@ venv
 .idea
 node_modules
 .turbo
+build
+dist
+*.egg-info

@@ -16,7 +16,9 @@ export function configureBrowser() {
     return;
   }
   try {
-    iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
+    if (typeof AsyncLocalStorage !== "undefined") {
+      iso.newAsyncLocalStorage = <T>() => new AsyncLocalStorage<T>();
+    }
   } catch {
     // Ignore
   }

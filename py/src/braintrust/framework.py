@@ -1,24 +1,28 @@
 import abc
 import asyncio
+import contextvars
 import dataclasses
 import inspect
 import json
 import re
 import traceback
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from multiprocessing import cpu_count
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List, Optional, TypeVar, Union
 
+from braintrust_core.score import Score, Scorer
+from braintrust_core.util import SerializableDataClass
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 
-from autoevals import Score, Scorer
+from braintrust.util import eprint
 
-from .logger import NOOP_SPAN, Span, current_span, start_span
+from .logger import NOOP_SPAN, Metadata, Span
 from .logger import init as _init_experiment
-from .util import SerializableDataClass
+from .resource_manager import ResourceManager
 
-Metadata = Dict[str, Any]
 Input = TypeVar("Input")
 Output = TypeVar("Output")
 
@@ -88,24 +92,6 @@ EvalScorer = Union[
 
 
 @dataclasses.dataclass
-class EvalMetadata(SerializableDataClass):
-    """
-    Additional metadata for the eval definition, such as experiment name.
-    """
-
-    """
-    Specify a name for the experiment holding the eval results.
-    """
-    experiment_name: Optional[str] = None
-
-
-def eval_metadata_to_init_options(metadata: Optional[EvalMetadata] = None) -> Dict:
-    if metadata is None:
-        return dict()
-    return dict(experiment=metadata.experiment_name)
-
-
-@dataclasses.dataclass
 class Evaluator:
     """
     An evaluator is an abstraction that defines an evaluation dataset, a task to run on the dataset, and a set of
@@ -151,9 +137,29 @@ class Evaluator:
     scores: List[EvalScorer]
 
     """
-    Optional additional metadata for the eval definition, such as experiment name.
+    Optional experiment name. If not specified, a name will be generated automatically.
     """
-    metadata: Optional[EvalMetadata]
+    experiment_name: Optional[str]
+
+    """
+    A dictionary with additional data about the test example, model outputs, or just about anything else that's
+    relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`,
+    example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
+    JSON-serializable type, but its keys must be strings.
+    """
+    metadata: Optional[Metadata]
+
+    """
+    The number of times to run the evaluator per input. This is useful for evaluating applications that
+    have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the
+    variance in the results.
+    """
+    trial_count: int = 1
+
+    """
+    Whether the experiment should be public. Defaults to false.
+    """
+    is_public: bool = False
 
 
 _evals = {}
@@ -178,38 +184,52 @@ def pluralize(n, singular, plural):
         return plural
 
 
-def report_evaluator_result(eval_name, results, summary, verbose):
+def report_evaluator_result(eval_name, results, summary, verbose, jsonl):
     failing_results = [x for x in results if x.error]
     if len(failing_results) > 0:
-        print(
+        eprint(
             f"{bcolors.FAIL}Evaluator {eval_name} failed with {len(failing_results)} {pluralize(len(failing_results), 'error', 'errors')}{bcolors.ENDC}"
         )
 
-        for result in failing_results:
-            info = "".join(
-                result.exc_info if verbose else traceback.format_exception_only(type(result.error), result.error)
-            ).rstrip()
-            print(f"{bcolors.FAIL}{info}{bcolors.ENDC}")
+        errors = [
+            result.exc_info
+            if verbose or jsonl
+            else "\n".join(traceback.format_exception_only(type(result.error), result.error))
+            for result in failing_results
+        ]
 
-        print(f"{bcolors.FAIL}Add --verbose to see full stack traces.{bcolors.ENDC}")
+        if jsonl:
+            print(json.dumps({"eval_name": eval_name, "errors": errors}))
+        else:
+            print(errors)
+            info = "".join(errors).rstrip()
+            eprint(f"{bcolors.FAIL}{info}{bcolors.ENDC}")
+
+            eprint(f"{bcolors.FAIL}Add --verbose to see full stack traces.{bcolors.ENDC}")
     if summary:
-        print(f"{summary}")
+        print(json.dumps(summary.as_dict()) if jsonl else f"{summary}")
     else:
         scores_by_name = defaultdict(lambda: (0, 0))
         for result in results:
             for name, score in result.scores.items():
                 curr = scores_by_name[name]
+                if curr is None:
+                    continue
                 scores_by_name[name] = (curr[0] + score, curr[1] + 1)
 
-        print(f"Average scores for {eval_name}:")
-        for name, (total, count) in scores_by_name.items():
-            print(f"  {name}: {total / count}")
+        if jsonl:
+            summary = {"scores": scores_by_name}
+            print(json.dumps(summary))
+        else:
+            print(f"Average scores for {eval_name}:")
+            for name, (total, count) in scores_by_name.items():
+                print(f"  {name}: {total / count}")
 
 
-def _make_eval_name(name: str, metadata: Optional[EvalMetadata]):
+def _make_eval_name(name: str, experiment_name: Optional[str]):
     out = name
-    if metadata is not None and metadata.experiment_name is not None:
-        out += f" [experiment_name={metadata.experiment_name}]"
+    if experiment_name is not None:
+        out += f" [experiment_name={experiment_name}]"
     return out
 
 
@@ -218,7 +238,10 @@ def Eval(
     data: Callable[[], Union[Iterator[EvalCase], AsyncIterator[EvalCase]]],
     task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
     scores: List[EvalScorer],
-    metadata: Union[Optional[EvalMetadata], Dict] = None,
+    experiment_name: Optional[str] = None,
+    trial_count: int = 1,
+    metadata: Optional[Metadata] = None,
+    is_public: bool = False,
 ):
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -243,20 +266,32 @@ def Eval(
     :param task: Runs the evaluation task on a single input. The `hooks` object can be used to add metadata to the evaluation.
     :param scores: A list of scorers to evaluate the results of the task. Each scorer can be a Scorer object or a function
     that takes an `EvalScorerArgs` object and returns a `Score` object.
-    :param metadata: Optional additional metadata for the eval definition, such as experiment name.
+    :param experiment_name: (Optional) Experiment name. If not specified, a name will be generated automatically.
+    :param trial_count: The number of times to run the evaluator per input. This is useful for evaluating applications that
+    have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the variance in the results.
+    :param metadata: (Optional) A dictionary with additional data about the test example, model outputs, or just about
+    anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log
+    the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata`
+    can be any JSON-serializable type, but its keys must be strings.
+    :param is_public: (Optional) Whether the experiment should be public. Defaults to false.
     :return: An `Evaluator` object.
     """
-    if isinstance(metadata, dict):
-        metadata = EvalMetadata(**metadata)
-
-    eval_name = _make_eval_name(name, metadata)
+    eval_name = _make_eval_name(name, experiment_name)
 
     global _evals
     if eval_name in _evals:
         raise ValueError(f"Evaluator {eval_name} already exists")
 
     evaluator = Evaluator(
-        eval_name=eval_name, project_name=name, data=data, task=task, scores=scores, metadata=metadata
+        eval_name=eval_name,
+        project_name=name,
+        data=data,
+        task=task,
+        scores=scores,
+        experiment_name=experiment_name,
+        trial_count=trial_count,
+        metadata=metadata,
+        is_public=is_public,
     )
 
     if _lazy_load:
@@ -269,9 +304,17 @@ def Eval(
             loop = None
 
         async def run_to_completion():
-            with init_experiment(evaluator.project_name, evaluator.metadata) as experiment:
+            experiment = init_experiment(
+                evaluator.project_name,
+                evaluator.experiment_name,
+                metadata=evaluator.metadata,
+                is_public=evaluator.is_public,
+            )
+            try:
                 results, summary = await run_evaluator(experiment, evaluator, 0, [])
-                report_evaluator_result(evaluator.eval_name, results, summary, True)
+                report_evaluator_result(evaluator.eval_name, results, summary, verbose=True, jsonl=False)
+            finally:
+                experiment.flush()
 
         if loop:
             return loop.create_task(run_to_completion())
@@ -353,11 +396,38 @@ class DictEvalHooks(EvalHooks):
         self.metadata.update(info)
 
 
-def init_experiment(project_name, metadata):
-    ret = _init_experiment(project_name, **eval_metadata_to_init_options(metadata))
+def init_experiment(project_name, experiment_name: Optional[str] = None, set_current=False, **kwargs):
+    ret = _init_experiment(project_name, experiment=experiment_name, set_current=set_current, **kwargs)
     summary = ret.summarize(summarize_scores=False)
-    print(f"Experiment {ret.name} is running at {summary.experiment_url}")
+    eprint(f"Experiment {ret.name} is running at {summary.experiment_url}")
     return ret
+
+
+class EvalThreadPoolSingleton:
+    def __init__(self):
+        self._thread_pool = None
+        self._max_workers = cpu_count()
+
+    def set_max_workers(self, max_workers):
+        assert self._thread_pool is None, "Cannot set max_workers. Thread pool has already been initialized"
+        self._max_workers = max_workers
+
+    def thread_pool(self):
+        if self._thread_pool is None:
+            self._thread_pool = ThreadPoolExecutor(max_workers=self._max_workers)
+        return self._thread_pool
+
+
+_THREAD_POOL_SINGLETON = ResourceManager(EvalThreadPoolSingleton())
+
+
+def set_thread_pool_max_workers(max_workers):
+    """
+    Set the maximum number of threads to use for running evaluators. By default, this is the number of
+    CPUs on the machine.
+    """
+    with _THREAD_POOL_SINGLETON.get() as obj:
+        obj.set_max_workers(max_workers)
 
 
 async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int], filters: List[Filter]):
@@ -372,17 +442,31 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
     #     data = dataResult;
     #   }
 
+    event_loop = asyncio.get_event_loop()
+
     async def await_or_run(f, *args, **kwargs):
         if inspect.iscoroutinefunction(f):
             return await f(*args, **kwargs)
         else:
-            return f(*args, **kwargs)
 
-    async def await_or_run_scorer(scorer, scorer_idx, **kwargs):
+            def run_f(args, kwargs, ctx):
+                tokens = [(var, var.set(value)) for var, value in ctx.items()]
+                try:
+                    return f(*args, **kwargs)
+                finally:
+                    for var, tok in tokens:
+                        var.reset(tok)
+
+            with _THREAD_POOL_SINGLETON.get() as thread_pool:
+                return await event_loop.run_in_executor(
+                    thread_pool.thread_pool(), run_f, args, kwargs, contextvars.copy_context()
+                )
+
+    async def await_or_run_scorer(root_span, scorer, scorer_idx, **kwargs):
         name = scorer._name() if hasattr(scorer, "_name") else scorer.__name__
         if name == "<lambda>":
             name = f"scorer_{scorer_idx}"
-        with start_span(name=name, input=dict(**kwargs)):
+        with root_span.start_span(name=name, input=dict(**kwargs)) as span:
             score = scorer.eval_async if isinstance(scorer, Scorer) else scorer
 
             scorer_args = kwargs
@@ -396,9 +480,9 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
             if isinstance(result, Score):
                 result_rest = result.as_dict()
                 result_metadata = result_rest.pop("metadata", {})
-                current_span().log(output=result_rest, metadata=result_metadata)
+                span.log(output=result_rest, metadata=result_metadata)
             else:
-                current_span().log(output=result)
+                span.log(output=result)
             return result
 
     async def run_evaluator_task(datum):
@@ -424,11 +508,11 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 if len(inspect.signature(evaluator.task).parameters) == 2:
                     task_args.append(hooks)
 
-                with current_span().start_span("task") as task_span:
-                    hooks.set_span(task_span)
+                with root_span.start_span("task") as span:
+                    hooks.set_span(span)
                     output = await await_or_run(evaluator.task, *task_args)
-                    task_span.log(input=task_args[0], output=output)
-                current_span().log(output=output)
+                    span.log(input=task_args[0], output=output)
+                root_span.log(output=output)
 
                 # First, resolve the scorers if they are classes
                 scorers = [
@@ -436,7 +520,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                     for scorer in evaluator.scores
                 ]
                 score_promises = [
-                    asyncio.create_task(await_or_run_scorer(score, idx, **datum.as_dict(), output=output))
+                    asyncio.create_task(await_or_run_scorer(root_span, score, idx, **datum.as_dict(), output=output))
                     for idx, score in enumerate(scorers)
                 ]
                 score_results = [await p for p in score_promises]
@@ -455,7 +539,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                     hooks.meta(scores=score_metadata)
 
                 # XXX: We could probably log these as they are being produced
-                current_span().log(metadata=metadata, scores=scores)
+                root_span.log(metadata=metadata, scores=scores)
             except Exception as e:
                 error = e
                 # Python3.10 has a different set of arguments to format_exception than earlier versions,
@@ -489,7 +573,8 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
         disable=position is None,
     ) as pbar:
         async for datum in pbar:
-            tasks.append(asyncio.create_task(run_evaluator_task(datum)))
+            for _ in range(evaluator.trial_count):
+                tasks.append(asyncio.create_task(run_evaluator_task(datum)))
 
     results = []
     for task in std_tqdm(tasks, desc=f"{evaluator.eval_name} (tasks)", position=position, disable=position is None):

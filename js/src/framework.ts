@@ -1,20 +1,15 @@
 import chalk from "chalk";
 import {
+  NOOP_SPAN,
   Experiment,
   ExperimentSummary,
-  InitOptions,
+  Metadata,
   Span,
-  currentSpan,
-  noopSpan,
-  traced,
-  withCurrent,
-  withExperiment,
+  init,
 } from "./logger";
-import { Score } from "autoevals";
+import { Score } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
-
-export type Metadata = Record<string, unknown>;
 
 export interface EvalCase<Input, Expected> {
   input: Input;
@@ -35,7 +30,7 @@ export interface EvalHooks {
   span: Span;
 }
 
-// This happens to be compatible with ScorerArgs defined in autoevals
+// This happens to be compatible with ScorerArgs defined in @braintrust/core.
 export type EvalScorerArgs<Input, Output, Expected> = EvalCase<
   Input,
   Expected
@@ -43,43 +38,53 @@ export type EvalScorerArgs<Input, Output, Expected> = EvalCase<
   output: Output;
 };
 
-export type EvalScorer<Input, Output, Expected> =
-  | ((args: EvalScorerArgs<Input, Output, Expected>) => Score)
-  | ((args: EvalScorerArgs<Input, Output, Expected>) => Promise<Score>);
+export type EvalScorer<Input, Output, Expected> = (
+  args: EvalScorerArgs<Input, Output, Expected>
+) => Score | Promise<Score>;
 
-/**
- * Additional metadata for the eval definition, such as experiment name.
- */
-export interface EvalMetadata {
-  // Specify a name for the experiment holding the eval results.
-  experimentName?: string;
-}
-
-export function evalMetadataToInitOptions(
-  metadata: EvalMetadata | undefined
-): InitOptions {
-  return { experiment: metadata?.experimentName };
-}
-
-/**
- * An evaluator is a collection of functions that can be used to evaluate a model.
- * It consists of:
- * - `data`, a function that returns a list of inputs, expected outputs, and metadata
- * - `task`, a function that takes an input and returns an output
- * - `scores`, a set of functions that take an input, output, and expected value and return a score
- * - `metadata`, optional additional metadata for the eval definition, such as experiment name.
- */
 export interface Evaluator<Input, Output, Expected> {
+  /**
+   * A function that returns a list of inputs, expected outputs, and metadata.
+   */
   data: EvalData<Input, Expected>;
+
+  /**
+   * A function that takes an input and returns an output.
+   */
   task: EvalTask<Input, Output>;
+
+  /**
+   * A set of functions that take an input, output, and expected value and return a score.
+   */
   scores: EvalScorer<Input, Output, Expected>[];
-  metadata?: EvalMetadata;
+
+  /**
+   * An optional name for the experiment.
+   */
+  experimentName?: string;
+
+  /**
+   * The number of times to run the evaluator per input. This is useful for evaluating applications that
+   * have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the
+   * variance in the results.
+   */
+  trialCount?: number;
+
+  /**
+   * Optional additional metadata for the experiment.
+   */
+  metadata?: Metadata;
+
+  /**
+   * Whether the experiment should be public. Defaults to false.
+   */
+  isPublic?: boolean;
 }
 
-function makeEvalName(projectName: string, metadata: EvalMetadata | undefined) {
+function makeEvalName(projectName: string, experimentName?: string) {
   let out = projectName;
-  if (metadata?.experimentName) {
-    out += ` [experimentName=${metadata.experimentName}]`;
+  if (experimentName) {
+    out += ` [experimentName=${experimentName}]`;
   }
   return out;
 }
@@ -104,7 +109,7 @@ export async function Eval<Input, Output, Expected>(
   name: string,
   evaluator: Evaluator<Input, Output, Expected>
 ): Promise<void | ExperimentSummary> {
-  const evalName = makeEvalName(name, evaluator.metadata);
+  const evalName = makeEvalName(name, evaluator.experimentName);
   if (_evals[evalName]) {
     throw new Error(`Evaluator ${evalName} already exists`);
   }
@@ -115,25 +120,28 @@ export async function Eval<Input, Output, Expected>(
 
   const progressReporter = new BarProgressReporter();
   try {
-    const { metadata } = _evals[evalName];
-    return await withExperiment(
-      name,
-      async (experiment) => {
-        const ret = await runEvaluator(
-          experiment,
-          {
-            evalName,
-            projectName: name,
-            ...(evaluator as Evaluator<unknown, unknown, unknown>),
-          },
-          progressReporter,
-          []
-        );
-        reportEvaluatorResult(name, ret, true);
-        return ret.summary!;
-      },
-      evalMetadataToInitOptions(metadata)
-    );
+    const experiment = init(name, {
+      experiment: evaluator.experimentName,
+      metadata: evaluator.metadata,
+      isPublic: evaluator.isPublic,
+      setCurrent: false,
+    });
+    try {
+      const ret = await runEvaluator(
+        experiment,
+        {
+          evalName,
+          projectName: name,
+          ...(evaluator as Evaluator<unknown, unknown, unknown>),
+        },
+        progressReporter,
+        []
+      );
+      reportEvaluatorResult(name, ret, { verbose: true, jsonl: false });
+      return ret.summary!;
+    } finally {
+      experiment.flush();
+    }
   } finally {
     progressReporter.stop();
   }
@@ -214,110 +222,108 @@ export async function runEvaluator(
 
   progressReporter.start(evaluator.evalName, data.length);
 
-  const evals = data.map(async (datum) => {
-    let metadata: Metadata = { ...datum.metadata };
-    let output: any = undefined;
-    let error: unknown | undefined = undefined;
-    let scores: Record<string, number> = {};
-    const callback = async () => {
-      try {
-        const meta = (o: Record<string, unknown>) =>
-          (metadata = { ...metadata, ...o });
+  const evals = data
+    .flatMap((datum) =>
+      [...Array(evaluator.trialCount ?? 1).keys()].map(() => datum)
+    )
+    .map(async (datum) => {
+      let metadata: Metadata = { ...datum.metadata };
+      let output: any = undefined;
+      let error: unknown | undefined = undefined;
+      let scores: Record<string, number | null> = {};
+      const callback = async (rootSpan: Span) => {
+        try {
+          const meta = (o: Record<string, unknown>) =>
+            (metadata = { ...metadata, ...o });
 
-        await traced(
-          async () => {
-            const outputResult = evaluator.task(datum.input, {
-              meta,
-              span: currentSpan(),
-            });
-            if (outputResult instanceof Promise) {
-              output = await outputResult;
-            } else {
-              output = outputResult;
-            }
-            currentSpan().log({ input: datum.input, output });
-          },
-          { name: "task" }
-        );
-        currentSpan().log({ output });
-
-        const scoringArgs = { ...datum, metadata, output };
-        const scoreResults = await Promise.all(
-          evaluator.scores.map(async (score, score_idx) => {
-            return traced(
-              async () => {
-                const scoreResult = score(scoringArgs);
-                const result =
-                  scoreResult instanceof Promise
-                    ? await scoreResult
-                    : scoreResult;
-                const {
-                  metadata: resultMetadata,
-                  name: _,
-                  ...resultRest
-                } = result;
-                currentSpan().log({
-                  output: resultRest,
-                  metadata: resultMetadata,
-                });
-                return result;
-              },
-              {
-                name: score.name || `scorer_${score_idx}`,
-                event: { input: scoringArgs },
+          await rootSpan.traced(
+            async (span: Span) => {
+              const outputResult = evaluator.task(datum.input, { meta, span });
+              if (outputResult instanceof Promise) {
+                output = await outputResult;
+              } else {
+                output = outputResult;
               }
-            );
-          })
-        );
+              span.log({ input: datum.input, output });
+            },
+            { name: "task" }
+          );
+          rootSpan.log({ output });
 
-        const scoreMetadata: Record<string, unknown> = {};
-        for (const scoreResult of scoreResults) {
-          scores[scoreResult.name] = scoreResult.score;
-          const metadata = {
-            ...scoreResult.metadata,
-          };
-          if (scoreResult.error !== undefined) {
-            metadata.error = scoreResult.error;
+          const scoringArgs = { ...datum, metadata, output };
+          const scoreResults = await Promise.all(
+            evaluator.scores.map(async (score, score_idx) => {
+              return rootSpan.traced(
+                async (span: Span) => {
+                  const scoreResult = score(scoringArgs);
+                  const result =
+                    scoreResult instanceof Promise
+                      ? await scoreResult
+                      : scoreResult;
+                  const {
+                    metadata: resultMetadata,
+                    name: _,
+                    ...resultRest
+                  } = result;
+                  span.log({
+                    output: resultRest,
+                    metadata: resultMetadata,
+                  });
+                  return result;
+                },
+                {
+                  name: score.name || `scorer_${score_idx}`,
+                  event: { input: scoringArgs },
+                }
+              );
+            })
+          );
+
+          const scoreMetadata: Record<string, unknown> = {};
+          for (const scoreResult of scoreResults) {
+            scores[scoreResult.name] = scoreResult.score;
+            const metadata = {
+              ...scoreResult.metadata,
+            };
+            if (scoreResult.error !== undefined) {
+              metadata.error = scoreResult.error;
+            }
+            if (Object.keys(metadata).length > 0) {
+              scoreMetadata[scoreResult.name] = metadata;
+            }
           }
-          if (Object.keys(metadata).length > 0) {
-            scoreMetadata[scoreResult.name] = metadata;
+
+          if (Object.keys(scoreMetadata).length > 0) {
+            meta({ scores: scoreMetadata });
           }
+
+          rootSpan.log({ scores, metadata });
+        } catch (e) {
+          error = e;
+        } finally {
+          progressReporter.increment(evaluator.evalName);
         }
 
-        if (Object.keys(scoreMetadata).length > 0) {
-          meta({ scores: scoreMetadata });
-        }
-
-        currentSpan().log({ scores, metadata });
-      } catch (e) {
-        error = e;
-      } finally {
-        progressReporter.increment(evaluator.evalName);
-      }
-
-      return {
-        output,
-        metadata,
-        scores,
-        error,
+        return {
+          output,
+          metadata,
+          scores,
+          error,
+        };
       };
-    };
 
-    const rootSpan: Span = experiment
-      ? experiment.startSpan({
+      if (!experiment) {
+        return await callback(NOOP_SPAN);
+      } else {
+        return await experiment.traced(callback, {
           name: "eval",
           event: {
             input: datum.input,
             expected: datum.expected,
           },
-        })
-      : noopSpan;
-    try {
-      return await withCurrent(rootSpan, callback);
-    } finally {
-      rootSpan.end();
-    }
-  });
+        });
+      }
+    });
   const results = await Promise.all(evals);
   const summary = experiment ? await experiment.summarize() : null;
   return {
@@ -340,10 +346,16 @@ export function logError(e: unknown, verbose: boolean) {
 export function reportEvaluatorResult(
   evaluatorName: string | number,
   evaluatorResult: {
-    results: { scores: Record<string, number>; error: unknown }[];
+    results: { scores: Record<string, number | null>; error: unknown }[];
     summary: unknown;
   },
-  verbose: boolean
+  {
+    verbose,
+    jsonl,
+  }: {
+    verbose: boolean;
+    jsonl: boolean;
+  }
 ) {
   const { results, summary } = evaluatorResult;
   const failingResults = results.filter(
@@ -354,7 +366,7 @@ export function reportEvaluatorResult(
     // TODO: We may want to support a non-strict mode (and make this the "strict" behavior), so that
     // users can still log imperfect evaluations. In the meantime, they should handle these cases inside
     // of their tasks.
-    console.warn(
+    console.error(
       warning(
         `Evaluator ${evaluatorName} failed with ${pluralize(
           "error",
@@ -363,20 +375,34 @@ export function reportEvaluatorResult(
         )}. This evaluation ("${evaluatorName}") will not be fully logged.`
       )
     );
-    for (const result of failingResults) {
-      logError(result.error, verbose);
+    if (jsonl) {
+      console.log(
+        JSON.stringify({
+          evaluatorName,
+          errors: failingResults.map(
+            (r) => `${r.error instanceof Error ? r.error.stack : r.error}`
+          ),
+        })
+      );
+    } else {
+      for (const result of failingResults) {
+        logError(result.error, verbose);
+      }
     }
-    if (!verbose) {
-      console.warn(warning("Add --verbose to see full stack traces."));
+    if (!verbose && !jsonl) {
+      console.error(warning("Add --verbose to see full stack traces."));
     }
   } else if (summary) {
-    console.log(summary);
+    console.log(jsonl ? JSON.stringify(summary) : summary);
   } else {
     const scoresByName: { [name: string]: { total: number; count: number } } =
       {};
     for (const result of results) {
       for (const [name, score] of Object.entries(result.scores)) {
         const { total, count } = scoresByName[name] || { total: 0, count: 0 };
+        if (score === null) {
+          continue;
+        }
         scoresByName[name] = { total: total + score, count: count + 1 };
       }
     }
@@ -393,6 +419,6 @@ export function reportEvaluatorResult(
       ),
     };
 
-    console.log(summary);
+    console.log(jsonl ? JSON.stringify(summary) : summary);
   }
 }

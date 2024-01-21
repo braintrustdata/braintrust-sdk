@@ -4,10 +4,10 @@ import re
 import subprocess
 import threading
 from dataclasses import dataclass
-from functools import cache as _cache
+from functools import lru_cache as _cache
 from typing import Optional
 
-from .util import SerializableDataClass
+from braintrust_core.util import SerializableDataClass
 
 # https://stackoverflow.com/questions/48399498/git-executable-not-found-in-python
 os.environ["GIT_PYTHON_REFRESH"] = "quiet"
@@ -29,9 +29,10 @@ class RepoStatus(SerializableDataClass):
     author_email: Optional[str]
     commit_message: Optional[str]
     commit_time: Optional[str]
+    git_diff: Optional[str]
 
 
-@_cache
+@_cache(1)
 def _current_repo():
     try:
         return git.Repo(search_parent_directories=True)
@@ -39,7 +40,7 @@ def _current_repo():
         return None
 
 
-@_cache
+@_cache(1)
 def _get_base_branch(remote=None):
     repo = _current_repo()
     remote = repo.remote(**({} if remote is None else {"name": remote})).name
@@ -113,10 +114,15 @@ def get_past_n_ancestors(n=10, remote=None):
 def attempt(op):
     try:
         return op()
-    except TypeError:
+    except (TypeError, ValueError, git.GitCommandError):
         return None
-    except git.GitCommandError:
-        return None
+
+
+def truncate_to_byte_limit(input_string, byte_limit=65536):
+    encoded = input_string.encode("utf-8")
+    if len(encoded) <= byte_limit:
+        return input_string
+    return encoded[:byte_limit].decode("utf-8", errors="ignore")
 
 
 def get_repo_status():
@@ -132,17 +138,21 @@ def get_repo_status():
         author_email = None
         tag = None
         branch = None
+        git_diff = None
 
         dirty = repo.is_dirty()
 
-        commit = attempt(lambda: repo.head.commit.hexsha).strip()
-        commit_message = attempt(lambda: repo.head.commit.message).strip()
+        commit = attempt(lambda: repo.head.commit.hexsha.strip())
+        commit_message = attempt(lambda: repo.head.commit.message.strip())
         commit_time = attempt(lambda: repo.head.commit.committed_datetime.isoformat())
-        author_name = attempt(lambda: repo.head.commit.author.name).strip()
-        author_email = attempt(lambda: repo.head.commit.author.email).strip()
+        author_name = attempt(lambda: repo.head.commit.author.name.strip())
+        author_email = attempt(lambda: repo.head.commit.author.email.strip())
         tag = attempt(lambda: repo.git.describe("--tags", "--exact-match", "--always"))
 
         branch = attempt(lambda: repo.active_branch.name)
+
+        if dirty:
+            git_diff = attempt(lambda: truncate_to_byte_limit(repo.git.diff("HEAD")))
 
         return RepoStatus(
             commit=commit,
@@ -153,4 +163,5 @@ def get_repo_status():
             author_email=author_email,
             commit_message=commit_message,
             commit_time=commit_time,
+            git_diff=git_diff,
         )

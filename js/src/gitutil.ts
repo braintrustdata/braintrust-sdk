@@ -1,5 +1,7 @@
 import { simpleGit } from "simple-git";
 
+const COMMON_BASE_BRANCHES = ["main", "master", "develop"];
+
 /**
  * Information about the current HEAD of the repo.
  */
@@ -12,13 +14,19 @@ export interface RepoStatus {
   author_email?: string;
   commit_message?: string;
   commit_time?: string;
+  git_diff?: string;
 }
 
 export async function currentRepo() {
-  const git = simpleGit();
-  if (await git.checkIsRepo()) {
-    return git;
-  } else {
+  try {
+    const git = simpleGit();
+    if (await git.checkIsRepo()) {
+      return git;
+    } else {
+      return null;
+    }
+  }
+  catch  (e) {
     return null;
   }
 }
@@ -42,18 +50,31 @@ async function getBaseBranch(remote: string | undefined = undefined) {
 
     let branch = null;
 
-    try {
-      const remoteInfo = await git.remote(["show", remoteName]);
-      if (!remoteInfo) {
-        throw new Error(`Could not find remote ${remoteName}`);
+    // NOTE: This should potentially be configuration that we derive from the project,
+    // instead of spending a second or two computing it each time we run an experiment.
+
+    // To speed this up in the short term, we pick from a list of common names
+    // and only fall back to the remote origin if required.
+    const repoBranches = new Set((await git.branchLocal()).all);
+    const matchingBaseBranches = COMMON_BASE_BRANCHES.filter((b) =>
+      repoBranches.has(b)
+    );
+    if (matchingBaseBranches.length === 1) {
+      branch = matchingBaseBranches[0];
+    } else {
+      try {
+        const remoteInfo = await git.remote(["show", remoteName]);
+        if (!remoteInfo) {
+          throw new Error(`Could not find remote ${remoteName}`);
+        }
+        const match = remoteInfo.match(/\s*HEAD branch:\s*(.*)$/m);
+        if (!match) {
+          throw new Error(`Could not find HEAD branch in remote ${remoteName}`);
+        }
+        branch = match[1];
+      } catch {
+        branch = "main";
       }
-      const match = remoteInfo.match(/\s*HEAD branch:\s*(.*)$/m);
-      if (!match) {
-        throw new Error(`Could not find HEAD branch in remote ${remoteName}`);
-      }
-      branch = match[1];
-    } catch {
-      branch = "main";
     }
 
     _baseBranch = { remote: remoteName, branch };
@@ -125,6 +146,17 @@ async function attempt<T>(fn: () => Promise<T>): Promise<T | undefined> {
   }
 }
 
+function truncateToByteLimit(s: string, byteLimit: number = 65536): string {
+    const encoded = (new TextEncoder()).encode(s);
+    if (encoded.length <= byteLimit) {
+        return s;
+    }
+
+    const truncated = encoded.subarray(0, byteLimit);
+    // Decode back to string, automatically ignoring any incomplete character at the end
+    return (new TextDecoder()).decode(truncated);
+}
+
 export async function getRepoStatus() {
   const git = await currentRepo();
   if (git === null) {
@@ -138,6 +170,7 @@ export async function getRepoStatus() {
   let author_email = undefined;
   let tag = undefined;
   let branch = undefined;
+  let git_diff = undefined;
 
   const dirty = (await git.diffSummary()).files.length > 0;
 
@@ -162,6 +195,10 @@ export async function getRepoStatus() {
     (await git.raw(["rev-parse", "--abbrev-ref", "HEAD"])).trim()
   );
 
+  if (dirty) {
+    git_diff = await attempt(async () => truncateToByteLimit(await git.raw(["diff", "HEAD"])));
+  }
+
   return {
     commit,
     branch,
@@ -171,5 +208,6 @@ export async function getRepoStatus() {
     author_email,
     commit_message,
     commit_time,
+    git_diff,
   };
 }

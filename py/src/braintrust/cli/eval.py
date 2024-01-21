@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from threading import Lock
 from typing import List
 
+from braintrust.util import eprint
+
 from .. import login
 from ..framework import (
     Evaluator,
@@ -18,6 +20,7 @@ from ..framework import (
     parse_filters,
     report_evaluator_result,
     run_evaluator,
+    set_thread_pool_max_workers,
 )
 
 INCLUDE = [
@@ -66,6 +69,7 @@ class EvaluatorOpts:
     terminate_on_failure: bool
     watch: bool
     filters: List[str]
+    jsonl: bool
 
 
 @dataclass
@@ -82,7 +86,7 @@ def update_evaluators(evaluators, handles, terminate_on_failure):
             if terminate_on_failure:
                 raise
             else:
-                print(f"Failed to import {handle.in_file}: {e}", file=sys.stderr)
+                eprint(f"Failed to import {handle.in_file}: {e}")
                 continue
 
         for eval_name, evaluator in module_evals.items():
@@ -101,7 +105,12 @@ def update_evaluators(evaluators, handles, terminate_on_failure):
 async def run_evaluator_task(evaluator, position, opts: EvaluatorOpts):
     experiment = None
     if not opts.no_send_logs:
-        experiment = init_experiment(evaluator.project_name, evaluator.metadata)
+        experiment = init_experiment(
+            evaluator.project_name,
+            evaluator.experiment_name,
+            metadata=evaluator.metadata,
+            is_public=evaluator.is_public,
+        )
 
     try:
         return await run_evaluator(
@@ -109,7 +118,7 @@ async def run_evaluator_task(evaluator, position, opts: EvaluatorOpts):
         )
     finally:
         if experiment:
-            experiment.close()
+            experiment.flush()
 
 
 async def run_once(handles, evaluator_opts):
@@ -123,7 +132,9 @@ async def run_once(handles, evaluator_opts):
     eval_results = [await p for p in eval_promises]
 
     for eval_name, (results, summary) in zip(evaluators.keys(), eval_results):
-        report_evaluator_result(eval_name, results, summary, evaluator_opts.verbose)
+        report_evaluator_result(
+            eval_name, results, summary, verbose=evaluator_opts.verbose, jsonl=evaluator_opts.jsonl
+        )
 
 
 def check_match(path_input, include_patterns, exclude_patterns):
@@ -172,6 +183,9 @@ def initialize_handles(files):
 
 
 def run(args):
+    if args.num_workers:
+        set_thread_pool_max_workers(args.num_workers)
+
     evaluator_opts = EvaluatorOpts(
         verbose=args.verbose,
         no_send_logs=args.no_send_logs,
@@ -179,6 +193,7 @@ def run(args):
         terminate_on_failure=args.terminate_on_failure,
         watch=args.watch,
         filters=parse_filters(args.filter) if args.filter else [],
+        jsonl=args.jsonl,
     )
 
     handles = initialize_handles(args.files)
@@ -191,7 +206,7 @@ def run(args):
         )
 
     if args.watch:
-        print("Watch mode is not yet implemented", file=sys.stderr)
+        eprint("Watch mode is not yet implemented")
         exit(1)
     else:
         asyncio.run(run_once(handles, evaluator_opts))
@@ -227,6 +242,11 @@ def build_parser(subparsers, parent_parser):
         nargs="*",
     )
     parser.add_argument(
+        "--jsonl",
+        help="Format score summaries as jsonl, i.e. one JSON-formatted line per summary.",
+        action="store_true",
+    )
+    parser.add_argument(
         "--no-send-logs",
         action="store_true",
         help="Do not send logs to Braintrust. Useful for testing evaluators without uploading results.",
@@ -240,6 +260,11 @@ def build_parser(subparsers, parent_parser):
         "--terminate-on-failure",
         action="store_true",
         help="If provided, terminates on a failing eval, instead of the default (moving onto the next one).",
+    )
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        help="Specify the number of concurrent worker threads to run evals over, if they are defined as synchronous functions. Async functions will be run in the single-threaded asyncio event loop. If not specified, defaults to the number of cores on the machine.",
     )
     parser.add_argument(
         "files",

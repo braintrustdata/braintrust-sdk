@@ -11,17 +11,6 @@ _logger = logging.getLogger("braintrust.install.api")
 PARAMS = {
     "OrgName": "org_name",
     "ProvisionedConcurrency": "provisioned_concurrency",
-    "DwDatabase": "dw_database",
-    "DwHost": "dw_host",
-    "DwUsername": "dw_username",
-    "DwPassword": "dw_password",
-    "DwPort": "dw_port",
-    "DwType": "dw_type",
-    "ManagedKafka": "managed_kafka",
-    "KafkaBroker": "kafka_broker",
-    "KafkaTopic": "kafka_topic",
-    "KafkaUsername": "kafka_username",
-    "KafkaPassword": "kafka_password",
     "EncryptDatabase": "encrypt_database",
 }
 
@@ -74,19 +63,6 @@ def build_parser(subparsers, parents):
         type=int,
     )
 
-    # DwHost, DwPort, DwPassword, DwPort, DwType, DwUsername
-    parser.add_argument("--dw-database", help="The database of the data warehouse", default=None)
-    parser.add_argument("--dw-host", help="The host of the data warehouse", default=None)
-    parser.add_argument("--dw-username", help="The username of the data warehouse", default=None)
-    parser.add_argument("--dw-password", help="The password of the data warehouse", default=None)
-    parser.add_argument("--dw-port", help="The port of the data warehouse", default=None)
-    parser.add_argument(
-        "--dw-type",
-        help="The type of the data warehouse",
-        default=None,
-        choices=[None, "Postgres", "Redshift", "Snowflake"],
-    )
-
     # PostgresUrl
     parser.add_argument(
         "--managed-postgres",
@@ -103,18 +79,6 @@ def build_parser(subparsers, parents):
         default=None,
         choices=[None, "true", "false"],
     )
-
-    # ManagedKafka, KafkaBroker, KafkaTopic, KafkaUsername, KafkaPassword
-    parser.add_argument(
-        "--managed-kafka",
-        help="Whether to include a managed Kafka (MSK)",
-        default=None,
-        choices=[None, "true", "false"],
-    )
-    parser.add_argument("--kafka-broker", help="The Kafka broker to use", default=None)
-    parser.add_argument("--kafka-topic", help="The Kafka topic to use", default=None)
-    parser.add_argument("--kafka-username", help="The Kafka username to use", default=None)
-    parser.add_argument("--kafka-password", help="The Kafka password to use", default=None)
 
     # ElastiCacheClusterId
     parser.add_argument("--elasticache-cluster-host", help="The ElastiCacheCluster host to use", default=None)

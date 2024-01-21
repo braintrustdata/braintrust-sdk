@@ -1,24 +1,13 @@
-import dataclasses
 import inspect
-import json
 import os.path
+import sys
+import threading
 import urllib.parse
+from typing import Any, Callable, Generic, TypeVar
 
 from requests import HTTPError
 
 GLOBAL_PROJECT = "Global"
-TRANSACTION_ID_FIELD = "_xact_id"
-IS_MERGE_FIELD = "_is_merge"
-
-
-class SerializableDataClass:
-    def as_dict(self):
-        """Serialize the object to a dictionary."""
-        return dataclasses.asdict(self)
-
-    def as_json(self, **kwargs):
-        """Serialize the object to JSON."""
-        return json.dumps(self.as_dict(), **kwargs)
 
 
 def encode_uri_component(name):
@@ -59,17 +48,41 @@ def get_caller_location():
     return None
 
 
-def merge_dicts(merge_into: dict, merge_from: dict):
-    """Merges merge_from into merge_into, destructively updating merge_into."""
+# Taken from
+# https://stackoverflow.com/questions/5574702/how-do-i-print-to-stderr-in-python.
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
 
-    if not isinstance(merge_into, dict):
-        raise ValueError("merge_into must be a dictionary")
-    if not isinstance(merge_from, dict):
-        raise ValueError("merge_from must be a dictionary")
 
-    for k, merge_from_v in merge_from.items():
-        merge_into_v = merge_into.get(k)
-        if isinstance(merge_into_v, dict) and isinstance(merge_from_v, dict):
-            merge_dicts(merge_into_v, merge_from_v)
-        else:
-            merge_into[k] = merge_from_v
+T = TypeVar("T")
+
+
+class LazyValue(Generic[T]):
+    """A simple wrapper around a callable object which computes the value
+    on-demand and saves it for future retrievals.
+    """
+
+    def __init__(self, callable: Callable[[], T], use_mutex: bool):
+        self.callable = callable
+        self.mutex = threading.Lock() if use_mutex else None
+        self.has_computed = False
+        self.value = None
+
+    def get(self) -> T:
+        # Short-circuit check `has_computed`. This should be fine because
+        # setting `has_computed` is atomic and python should have sequentially
+        # consistent semantics, so we'll observe the write to `self.value` as
+        # well.
+        if self.has_computed:
+            return self.value
+        if self.mutex:
+            self.mutex.acquire()
+        try:
+            if not self.has_computed:
+                res = self.callable()
+                self.value = res
+                self.has_computed = True
+            return self.value
+        finally:
+            if self.mutex:
+                self.mutex.release()
