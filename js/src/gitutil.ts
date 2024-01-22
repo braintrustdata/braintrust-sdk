@@ -25,8 +25,7 @@ export async function currentRepo() {
     } else {
       return null;
     }
-  }
-  catch  (e) {
+  } catch (e) {
     return null;
   }
 }
@@ -147,14 +146,14 @@ async function attempt<T>(fn: () => Promise<T>): Promise<T | undefined> {
 }
 
 function truncateToByteLimit(s: string, byteLimit: number = 65536): string {
-    const encoded = (new TextEncoder()).encode(s);
-    if (encoded.length <= byteLimit) {
-        return s;
-    }
+  const encoded = new TextEncoder().encode(s);
+  if (encoded.length <= byteLimit) {
+    return s;
+  }
 
-    const truncated = encoded.subarray(0, byteLimit);
-    // Decode back to string, automatically ignoring any incomplete character at the end
-    return (new TextDecoder()).decode(truncated);
+  const truncated = encoded.subarray(0, byteLimit);
+  // Decode back to string, automatically ignoring any incomplete character at the end
+  return new TextDecoder().decode(truncated);
 }
 
 export async function getRepoStatus() {
@@ -196,7 +195,9 @@ export async function getRepoStatus() {
   );
 
   if (dirty) {
-    git_diff = await attempt(async () => truncateToByteLimit(await git.raw(["diff", "HEAD"])));
+    git_diff = await attempt(async () =>
+      truncateToByteLimit(await git.raw(["diff", "HEAD"]))
+    );
   }
 
   return {
