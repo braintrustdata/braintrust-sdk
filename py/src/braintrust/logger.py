@@ -1425,11 +1425,12 @@ class SpanImpl(Span):
         self.internal_data = dict(
             metrics=dict(
                 start=start_time or time.time(),
-                **(caller_location or {}),
             ),
             span_attributes=dict(**span_attributes, name=name),
             created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         )
+        if caller_location:
+            self.internal_data["context"] = caller_location
 
         self.parent_ids = parent_ids
 
