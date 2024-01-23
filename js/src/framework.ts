@@ -7,7 +7,7 @@ import {
   Span,
   init,
 } from "./logger";
-import { Score } from "@braintrust/core";
+import { Score, SpanTypeAttribute } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
 
@@ -246,7 +246,7 @@ export async function runEvaluator(
               }
               span.log({ input: datum.input, output });
             },
-            { name: "task" }
+            { name: "task", spanAttributes: { type: SpanTypeAttribute.TASK } }
           );
           rootSpan.log({ output });
 
@@ -273,6 +273,9 @@ export async function runEvaluator(
                 },
                 {
                   name: score.name || `scorer_${score_idx}`,
+                  spanAttributes: {
+                    type: SpanTypeAttribute.SCORE,
+                  },
                   event: { input: scoringArgs },
                 }
               );
@@ -317,6 +320,9 @@ export async function runEvaluator(
       } else {
         return await experiment.traced(callback, {
           name: "eval",
+          spanAttributes: {
+            type: SpanTypeAttribute.EVAL,
+          },
           event: {
             input: datum.input,
             expected: datum.expected,

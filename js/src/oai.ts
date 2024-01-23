@@ -1,3 +1,4 @@
+import { SpanTypeAttribute } from "@braintrust/core";
 import { Span, startSpan } from "./logger";
 import { getCurrentUnixTimestamp } from "./util";
 
@@ -14,6 +15,10 @@ interface ChatLike {
 interface OpenAILike {
   chat: ChatLike;
   beta?: BetaLike;
+}
+
+declare global {
+  var __inherited_braintrust_wrap_openai: ((openai: any) => any) | undefined;
 }
 
 /**
@@ -33,6 +38,7 @@ export function wrapOpenAI<T extends object>(openai: T): T {
     return openai;
   }
 }
+globalThis.__inherited_braintrust_wrap_openai = wrapOpenAI;
 
 export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
   let completionProxy = new Proxy(openai.chat.completions, {
@@ -114,12 +120,15 @@ interface NonStreamingChatResponse {
 
 function wrapBetaChatCompletion<
   P extends ChatParams,
-  C extends StreamingChatResponse
+  C extends StreamingChatResponse,
 >(completion: (params: P) => Promise<C>): (params: P) => Promise<any> {
   return async (params: P) => {
     const { messages, ...rest } = params;
     const span = startSpan({
       name: "OpenAI Chat Completion",
+      spanAttributes: {
+        type: SpanTypeAttribute.LLM,
+      },
       event: {
         input: messages,
         metadata: {
@@ -161,12 +170,15 @@ type StreamingChatResponse = any;
 
 function wrapChatCompletion<
   P extends ChatParams,
-  C extends NonStreamingChatResponse | StreamingChatResponse
+  C extends NonStreamingChatResponse | StreamingChatResponse,
 >(completion: (params: P) => Promise<C>): (params: P) => Promise<any> {
   return async (params: P) => {
     const { messages, ...rest } = params;
     const span = startSpan({
       name: "OpenAI Chat Completion",
+      spanAttributes: {
+        type: SpanTypeAttribute.LLM,
+      },
       event: {
         input: messages,
         metadata: {

@@ -13,6 +13,7 @@ from multiprocessing import cpu_count
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List, Optional, TypeVar, Union
 
 from braintrust_core.score import Score, Scorer
+from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import SerializableDataClass
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
@@ -466,7 +467,9 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
         name = scorer._name() if hasattr(scorer, "_name") else scorer.__name__
         if name == "<lambda>":
             name = f"scorer_{scorer_idx}"
-        with root_span.start_span(name=name, input=dict(**kwargs)) as span:
+        with root_span.start_span(
+            name=name, span_attributes={"type": SpanTypeAttribute.SCORE}, input=dict(**kwargs)
+        ) as span:
             score = scorer.eval_async if isinstance(scorer, Scorer) else scorer
 
             scorer_args = kwargs
@@ -496,7 +499,9 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
         scores = {}
 
         if experiment:
-            root_span = experiment.start_span("eval", input=datum.input, expected=datum.expected)
+            root_span = experiment.start_span(
+                "eval", span_attributes={"type": SpanTypeAttribute.EVAL}, input=datum.input, expected=datum.expected
+            )
         else:
             root_span = NOOP_SPAN
         with root_span:
@@ -508,7 +513,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 if len(inspect.signature(evaluator.task).parameters) == 2:
                     task_args.append(hooks)
 
-                with root_span.start_span("task") as span:
+                with root_span.start_span("task", span_attributes={"type": SpanTypeAttribute.TASK}) as span:
                     hooks.set_span(span)
                     output = await await_or_run(evaluator.task, *task_args)
                     span.log(input=task_args[0], output=output)

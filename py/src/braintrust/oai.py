@@ -1,5 +1,7 @@
 import time
 
+from braintrust_core.span_types import SpanTypeAttribute
+
 from .logger import current_span
 
 
@@ -20,7 +22,9 @@ class ChatCompletionWrapper:
         params = self._parse_params(kwargs)
         stream = kwargs.get("stream", False)
 
-        span = current_span().start_span(name="OpenAI Chat Completion", **params)
+        span = current_span().start_span(
+            name="OpenAI Chat Completion", span_attributes={"type": SpanTypeAttribute.LLM}, **params
+        )
         should_end = True
         try:
             start = time.time()
@@ -66,7 +70,9 @@ class ChatCompletionWrapper:
         params = self._parse_params(kwargs)
         stream = kwargs.get("stream", False)
 
-        span = current_span().start_span(name="OpenAI Chat Completion", **params)
+        span = current_span().start_span(
+            name="OpenAI Chat Completion", span_attributes={"type": SpanTypeAttribute.LLM}, **params
+        )
         should_end = True
         try:
             start = time.time()
@@ -126,7 +132,9 @@ class EmbeddingWrapper:
     def create(self, *args, **kwargs):
         params = self._parse_params(kwargs)
 
-        with current_span().start_span(name="OpenAI Embedding", **params) as span:
+        with current_span().start_span(
+            name="OpenAI Embedding", span_attributes={"type": SpanTypeAttribute.LLM}, **params
+        ) as span:
             raw_response = self.create_fn(*args, **kwargs)
             log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
             span.log(
@@ -141,7 +149,9 @@ class EmbeddingWrapper:
     async def acreate(self, *args, **kwargs):
         params = self._parse_params(kwargs)
 
-        with current_span().start_span(name="OpenAI Embedding", **params) as span:
+        with current_span().start_span(
+            name="OpenAI Embedding", span_attributes={"type": SpanTypeAttribute.LLM}, **params
+        ) as span:
             raw_response = await self.acreate_fn(*args, **kwargs)
             log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
             span.log(
