@@ -14,6 +14,7 @@ interface BetaLike {
 interface ChatLike {
   completions: any;
 }
+
 interface OpenAILike {
   chat: ChatLike;
   embeddings: any;
@@ -137,8 +138,8 @@ interface NonStreamingChatResponse {
 function wrapBetaChatCompletion<
   P extends ChatParams,
   C extends StreamingChatResponse,
->(completion: (params: P) => Promise<C>): (params: P) => Promise<any> {
-  return async (params: P) => {
+>(completion: (params: P) => C): (params: P) => Promise<any> {
+  return (params: P) => {
     const { messages, ...rest } = params;
     const span = startSpan({
       name: "OpenAI Chat Completion",
@@ -154,7 +155,7 @@ function wrapBetaChatCompletion<
     });
     const startTime = getCurrentUnixTimestamp();
 
-    const ret = (await completion(params)) as StreamingChatResponse;
+    const ret = completion(params) as StreamingChatResponse;
 
     let first = true;
     ret.on("chunk", (_chunk: any) => {
