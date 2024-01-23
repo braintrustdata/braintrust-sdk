@@ -168,10 +168,6 @@ export const NOOP_SPAN = new NoopSpan();
 // In certain situations (e.g. the cli), we want separately-compiled modules to
 // use the same state as the toplevel module. This global variable serves as a
 // mechanism to propagate the initial state from some toplevel creator.
-//
-// DEPRECATION_NOTICE: autoevals no longer uses this. However, since neither library
-// takes a direct dependency on the other, if we remove this while older versions of
-// autoevals are out in the wild, we may break them.
 declare global {
   var __inherited_braintrust_state: BraintrustState;
 }
