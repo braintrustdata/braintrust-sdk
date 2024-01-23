@@ -1,6 +1,7 @@
 import { SpanTypeAttribute } from "@braintrust/core";
-import { Span, startSpan } from "./logger";
+import { Span, startSpan, traced } from "./logger";
 import { getCurrentUnixTimestamp } from "./util";
+import { RequestOptions } from "https";
 
 interface BetaLike {
   chat: {
@@ -8,12 +9,14 @@ interface BetaLike {
       stream: any;
     };
   };
+  embeddings: any;
 }
 interface ChatLike {
   completions: any;
 }
 interface OpenAILike {
   chat: ChatLike;
+  embeddings: any;
   beta?: BetaLike;
 }
 
@@ -59,6 +62,16 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
     },
   });
 
+  let embeddingProxy = new Proxy(openai.embeddings, {
+    get(target, name, receiver) {
+      const baseVal = Reflect.get(target, name, receiver);
+      if (name === "create") {
+        return wrapEmbeddings(baseVal.bind(target));
+      }
+      return baseVal;
+    },
+  });
+
   let betaProxy: OpenAILike;
   if (openai.beta?.chat?.completions?.stream) {
     let betaChatCompletionProxy = new Proxy(openai?.beta?.chat.completions, {
@@ -91,6 +104,9 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
     get(target, name, receiver) {
       if (name === "chat") {
         return chatProxy;
+      }
+      if (name === "embeddings") {
+        return embeddingProxy;
       }
       if (name === "beta" && betaProxy) {
         return betaProxy;
@@ -171,8 +187,10 @@ type StreamingChatResponse = any;
 function wrapChatCompletion<
   P extends ChatParams,
   C extends NonStreamingChatResponse | StreamingChatResponse,
->(completion: (params: P) => Promise<C>): (params: P) => Promise<any> {
-  return async (params: P) => {
+>(
+  completion: (params: P, options?: unknown) => Promise<C>
+): (params: P, options?: unknown) => Promise<any> {
+  return async (params: P, options?: unknown) => {
     const { messages, ...rest } = params;
     const span = startSpan({
       name: "OpenAI Chat Completion",
@@ -188,11 +206,14 @@ function wrapChatCompletion<
     });
     if (params.stream) {
       const startTime = getCurrentUnixTimestamp();
-      const ret = (await completion(params)) as StreamingChatResponse;
+      const ret = (await completion(params, options)) as StreamingChatResponse;
       return new WrapperStream(span, startTime, ret);
     } else {
       try {
-        const ret = (await completion(params)) as NonStreamingChatResponse;
+        const ret = (await completion(
+          params,
+          options
+        )) as NonStreamingChatResponse;
         const { messages, ...rest } = params;
         span.log({
           input: messages,
@@ -211,6 +232,58 @@ function wrapChatCompletion<
         span.end();
       }
     }
+  };
+}
+
+type EmbeddingCreateParams = {
+  input: string;
+};
+
+type CreateEmbeddingResponse = {
+  data: { embedding: Array<number> }[];
+  usage:
+    | {
+        total_tokens: number;
+        prompt_tokens: number;
+      }
+    | undefined;
+};
+
+function wrapEmbeddings<
+  P extends EmbeddingCreateParams,
+  C extends CreateEmbeddingResponse,
+>(
+  create: (params: P, options?: unknown) => Promise<C>
+): (params: P, options?: unknown) => Promise<any> {
+  return async (params: P, options?: unknown) => {
+    const { input, ...rest } = params;
+    return traced(
+      async (span) => {
+        const result = await create(params, options);
+        const output = result.data[0];
+        span.log({
+          output,
+          metrics: {
+            tokens: result.usage?.total_tokens,
+            prompt_tokens: result.usage?.prompt_tokens,
+          },
+        });
+
+        return result;
+      },
+      {
+        name: "OpenAI Embedding",
+        spanAttributes: {
+          type: SpanTypeAttribute.LLM,
+        },
+        event: {
+          input,
+          metadata: {
+            ...rest,
+          },
+        },
+      }
+    );
   };
 }
 
