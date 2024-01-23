@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from functools import partial, wraps
 from multiprocessing import cpu_count
 from typing import Any, Dict, Optional, Union
+from braintrust_core.span_types import SpanTypeAttribute
 
 import requests
 from braintrust_core.db_fields import (
@@ -887,6 +888,11 @@ def traced(*span_args, **span_kwargs):
             span_args += (f.__name__,)
 
         f_sig = inspect.signature(f)
+
+        if "span_attributes" not in span_kwargs:
+            span_kwargs["span_attributes"] = {}
+        if "type" not in span_kwargs["span_attributes"]:
+            span_kwargs["span_attributes"]["type"] = SpanTypeAttribute.FUNCTION
 
         @wraps(f)
         def wrapper_sync(*f_args, **f_kwargs):

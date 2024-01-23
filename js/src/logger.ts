@@ -352,8 +352,8 @@ class HTTPConnection {
           typeof params === "string"
             ? params
             : params
-            ? JSON.stringify(params)
-            : undefined,
+              ? JSON.stringify(params)
+              : undefined,
         keepalive: true,
         ...rest,
       })
