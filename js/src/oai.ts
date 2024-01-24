@@ -137,7 +137,7 @@ interface NonStreamingChatResponse {
 
 function wrapBetaChatCompletion<
   P extends ChatParams,
-  C extends StreamingChatResponse,
+  C extends StreamingChatResponse
 >(completion: (params: P) => C): (params: P) => Promise<any> {
   return (params: P) => {
     const { messages, ...rest } = params;
@@ -187,7 +187,7 @@ type StreamingChatResponse = any;
 
 function wrapChatCompletion<
   P extends ChatParams,
-  C extends NonStreamingChatResponse | StreamingChatResponse,
+  C extends NonStreamingChatResponse | StreamingChatResponse
 >(
   completion: (params: P, options?: unknown) => Promise<C>
 ): (params: P, options?: unknown) => Promise<any> {
@@ -252,7 +252,7 @@ type CreateEmbeddingResponse = {
 
 function wrapEmbeddings<
   P extends EmbeddingCreateParams,
-  C extends CreateEmbeddingResponse,
+  C extends CreateEmbeddingResponse
 >(
   create: (params: P, options?: unknown) => Promise<C>
 ): (params: P, options?: unknown) => Promise<any> {
