@@ -721,6 +721,7 @@ type ExperimentEvent = Partial<InputField> &
     created: string;
     span_parents: string[];
     span_attributes: Record<string, unknown>;
+    context: Record<string, unknown>;
     [PARENT_ID_FIELD]: string;
     [AUDIT_SOURCE_FIELD]: Source;
     [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
@@ -1884,8 +1885,8 @@ export class SpanImpl implements Span {
     this.internalData = {
       metrics: {
         start: args.startTime ?? getCurrentUnixTimestamp(),
-        ...callerLocation,
       },
+      context: { ...callerLocation },
       span_attributes: { ...args.spanAttributes, name },
       created: new Date().toISOString(),
     };
