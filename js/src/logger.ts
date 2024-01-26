@@ -12,6 +12,8 @@ import {
   VALID_SOURCES,
   AUDIT_SOURCE_FIELD,
   AUDIT_METADATA_FIELD,
+  GitMetadataSettings,
+  mergeGitMetadataSettings,
 } from "@braintrust/core";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -186,6 +188,7 @@ class BraintrustState {
   public orgName: string | null = null;
   public logUrl: string | null = null;
   public loggedIn: boolean = false;
+  public gitMetadataSettings?: GitMetadataSettings;
 
   private _apiConn: HTTPConnection | null = null;
   private _logConn: HTTPConnection | null = null;
@@ -207,6 +210,7 @@ class BraintrustState {
     this.orgName = null;
     this.logUrl = null;
     this.loggedIn = false;
+    this.gitMetadataSettings = undefined;
 
     this._apiConn = null;
     this._logConn = null;
@@ -352,8 +356,8 @@ class HTTPConnection {
           typeof params === "string"
             ? params
             : params
-            ? JSON.stringify(params)
-            : undefined,
+              ? JSON.stringify(params)
+              : undefined,
         keepalive: true,
         ...rest,
       })
@@ -905,6 +909,7 @@ export type InitOptions = {
   apiKey?: string;
   orgName?: string;
   metadata?: Metadata;
+  gitMetadataSettings?: GitMetadataSettings;
   setCurrent?: boolean;
 };
 
@@ -929,6 +934,7 @@ export type InitOptions = {
  * about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
  * `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
  * JSON-serializable type, but its keys must be strings.
+ * @param options.gitMetadataSettings (Optional) Settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
  * @param setCurrent If true (the default), set the global current-experiment to the newly-created one.
  * @returns The newly created Experiment.
  */
@@ -947,6 +953,7 @@ export function init(
     apiKey,
     orgName,
     metadata,
+    gitMetadataSettings,
   } = options || {};
 
   const lazyMetadata: Promise<ProjectExperimentMetadata> = (async () => {
@@ -972,7 +979,19 @@ export function init(
       args["update"] = update;
     }
 
-    const repoStatus = await iso.getRepoStatus();
+    let mergedGitMetadataSettings = {
+      ...(_state.gitMetadataSettings || {
+        collect: "all",
+      }),
+    };
+    if (gitMetadataSettings) {
+      mergedGitMetadataSettings = mergeGitMetadataSettings(
+        mergedGitMetadataSettings,
+        gitMetadataSettings
+      );
+    }
+
+    const repoStatus = await iso.getRepoStatus(gitMetadataSettings);
     if (repoStatus) {
       args["repo_info"] = repoStatus;
     }
@@ -1477,6 +1496,7 @@ function _check_org_info(org_info: any, org_name: string | undefined) {
       _state.orgId = org.id;
       _state.orgName = org.name;
       _state.logUrl = iso.getEnv("BRAINTRUST_LOG_URL") ?? org.api_url;
+      _state.gitMetadataSettings = org.git_metadata || undefined;
       break;
     }
   }

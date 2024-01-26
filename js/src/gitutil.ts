@@ -1,3 +1,4 @@
+import { GitMetadataSettings, RepoStatus } from "@braintrust/core";
 import { simpleGit } from "simple-git";
 
 const COMMON_BASE_BRANCHES = ["main", "master", "develop"];
@@ -5,18 +6,6 @@ const COMMON_BASE_BRANCHES = ["main", "master", "develop"];
 /**
  * Information about the current HEAD of the repo.
  */
-export interface RepoStatus {
-  commit?: string;
-  branch?: string;
-  tag?: string;
-  dirty: boolean;
-  author_name?: string;
-  author_email?: string;
-  commit_message?: string;
-  commit_time?: string;
-  git_diff?: string;
-}
-
 export async function currentRepo() {
   try {
     const git = simpleGit();
@@ -88,9 +77,8 @@ async function getBaseBranchAncestor(remote: string | undefined = undefined) {
     throw new Error("Not in a git repo");
   }
 
-  const { remote: remoteName, branch: baseBranch } = await getBaseBranch(
-    remote
-  );
+  const { remote: remoteName, branch: baseBranch } =
+    await getBaseBranch(remote);
 
   const isDirty = (await git.diffSummary()).files.length > 0;
   const head = isDirty ? "HEAD" : "HEAD^";
@@ -156,7 +144,25 @@ function truncateToByteLimit(s: string, byteLimit: number = 65536): string {
   return new TextDecoder().decode(truncated);
 }
 
-export async function getRepoStatus() {
+export async function getRepoStatus(settings?: GitMetadataSettings) {
+  if (settings && settings.collect === "none") {
+    return undefined;
+  }
+
+  const repo = await repoStatus();
+  if (!repo || !settings || settings.collect === "all") {
+    return repo;
+  }
+
+  let sanitized: RepoStatus = {};
+  settings.fields?.forEach((field) => {
+    sanitized = { ...sanitized, [field]: repo[field] };
+  });
+
+  return sanitized;
+}
+
+async function repoStatus() {
   const git = await currentRepo();
   if (git === null) {
     return undefined;
