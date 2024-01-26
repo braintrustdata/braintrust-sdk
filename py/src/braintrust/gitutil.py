@@ -3,11 +3,9 @@ import os
 import re
 import subprocess
 import threading
-from dataclasses import dataclass, field
 from functools import lru_cache as _cache
-from typing import List, Literal, Optional
-
-from braintrust_core.util import SerializableDataClass
+from typing import List, Optional
+from braintrust_core.git_fields import GitMetadataSettings, RepoStatus
 
 # https://stackoverflow.com/questions/48399498/git-executable-not-found-in-python
 os.environ["GIT_PYTHON_REFRESH"] = "quiet"
@@ -15,27 +13,6 @@ import git
 
 _logger = logging.getLogger("braintrust.gitutil")
 _gitlock = threading.RLock()
-
-
-@dataclass
-class GitMetadataSettings(SerializableDataClass):
-    collect: Literal["all", "some", "none"] = "all"
-    fields: Optional[List[str]] = field(default_factory=list)
-
-
-@dataclass
-class RepoStatus(SerializableDataClass):
-    """Information about the current HEAD of the repo."""
-
-    commit: Optional[str]
-    branch: Optional[str]
-    tag: Optional[str]
-    dirty: Optional[bool]
-    author_name: Optional[str]
-    author_email: Optional[str]
-    commit_message: Optional[str]
-    commit_time: Optional[str]
-    git_diff: Optional[str]
 
 
 @_cache(1)

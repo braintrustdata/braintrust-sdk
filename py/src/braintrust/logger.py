@@ -26,6 +26,7 @@ from braintrust_core.db_fields import (
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
+from braintrust_core.git_fields import GitMetadataSettings
 from braintrust_core.merge_row_batch import merge_row_batch
 from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
@@ -37,8 +38,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from .cache import CACHE_PATH, EXPERIMENTS_PATH, LOGIN_INFO_PATH
-from .gitutil import GitMetadataSettings, get_past_n_ancestors, get_repo_status
-from .resource_manager import ResourceManager
+from .gitutil import get_past_n_ancestors, get_repo_status
 from .util import (
     GLOBAL_PROJECT,
     AugmentedHTTPError,

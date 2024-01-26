@@ -1,20 +1,4 @@
-export interface RepoStatus {
-  commit?: string;
-  branch?: string;
-  tag?: string;
-  dirty?: boolean;
-  author_name?: string;
-  author_email?: string;
-  commit_message?: string;
-  commit_time?: string;
-}
-
-type GitFields = Array<keyof RepoStatus>;
-type CollectMetadata = "all" | "none" | "some";
-export type GitMetadataSettings = {
-  collect: CollectMetadata;
-  fields: GitFields;
-};
+import { GitMetadataSettings, RepoStatus } from "@braintrust/core";
 
 export interface CallerLocation {
   caller_functionname: string;
@@ -41,7 +25,9 @@ class DefaultAsyncLocalStorage<T> implements IsoAsyncLocalStorage<T> {
 }
 
 export interface Common {
-  getRepoStatus: (settings?: GitMetadataSettings) => Promise<RepoStatus | undefined>;
+  getRepoStatus: (
+    settings?: GitMetadataSettings
+  ) => Promise<RepoStatus | undefined>;
   getPastNAncestors: () => Promise<string[]>;
   getEnv: (name: string) => string | undefined;
   getCallerLocation: () => CallerLocation | undefined;
