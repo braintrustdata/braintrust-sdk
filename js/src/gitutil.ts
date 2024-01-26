@@ -9,13 +9,20 @@ export interface RepoStatus {
   commit?: string;
   branch?: string;
   tag?: string;
-  dirty: boolean;
+  dirty?: boolean;
   author_name?: string;
   author_email?: string;
   commit_message?: string;
   commit_time?: string;
   git_diff?: string;
 }
+
+type GitFields = Array<keyof RepoStatus>;
+type CollectMetadata = "all" | "none" | "some";
+export type GitMetadataSettings = {
+  collect: CollectMetadata;
+  fields: GitFields;
+};
 
 export async function currentRepo() {
   try {
@@ -156,7 +163,26 @@ function truncateToByteLimit(s: string, byteLimit: number = 65536): string {
   return new TextDecoder().decode(truncated);
 }
 
-export async function getRepoStatus() {
+export async function getRepoStatus(settings?: GitMetadataSettings) {
+  if (settings && settings.collect === "none") {
+    return undefined;
+  }
+
+  const repo = await repoStatus();
+  if (!repo || !settings || settings.collect === "all") {
+    return repo;
+  }
+
+  let sanitized: RepoStatus = {};
+  settings.fields?.forEach((field) => {
+    sanitized = { ...sanitized, [field]: repo[field] };
+  })
+
+  return sanitized;
+}
+
+
+async function repoStatus() {
   const git = await currentRepo();
   if (git === null) {
     return undefined;

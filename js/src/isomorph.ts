@@ -2,12 +2,19 @@ export interface RepoStatus {
   commit?: string;
   branch?: string;
   tag?: string;
-  dirty: boolean;
+  dirty?: boolean;
   author_name?: string;
   author_email?: string;
   commit_message?: string;
   commit_time?: string;
 }
+
+type GitFields = Array<keyof RepoStatus>;
+type CollectMetadata = "all" | "none" | "some";
+export type GitMetadataSettings = {
+  collect: CollectMetadata;
+  fields: GitFields;
+};
 
 export interface CallerLocation {
   caller_functionname: string;
@@ -34,7 +41,7 @@ class DefaultAsyncLocalStorage<T> implements IsoAsyncLocalStorage<T> {
 }
 
 export interface Common {
-  getRepoStatus: () => Promise<RepoStatus | undefined>;
+  getRepoStatus: (settings?: GitMetadataSettings) => Promise<RepoStatus | undefined>;
   getPastNAncestors: () => Promise<string[]>;
   getEnv: (name: string) => string | undefined;
   getCallerLocation: () => CallerLocation | undefined;
@@ -43,7 +50,7 @@ export interface Common {
 }
 
 const iso: Common = {
-  getRepoStatus: async () => undefined,
+  getRepoStatus: async (_settings) => undefined,
   getPastNAncestors: async () => [],
   getEnv: (_name) => undefined,
   getCallerLocation: () => undefined,

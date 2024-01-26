@@ -14,7 +14,7 @@ import {
   AUDIT_METADATA_FIELD,
 } from "@braintrust/core";
 
-import iso, { IsoAsyncLocalStorage } from "./isomorph";
+import iso, { GitMetadataSettings, IsoAsyncLocalStorage } from "./isomorph";
 import {
   runFinally,
   GLOBAL_PROJECT,
@@ -186,6 +186,7 @@ class BraintrustState {
   public orgName: string | null = null;
   public logUrl: string | null = null;
   public loggedIn: boolean = false;
+  public gitMetadataSettings?: GitMetadataSettings;
 
   private _apiConn: HTTPConnection | null = null;
   private _logConn: HTTPConnection | null = null;
@@ -207,6 +208,7 @@ class BraintrustState {
     this.orgName = null;
     this.logUrl = null;
     this.loggedIn = false;
+    this.gitMetadataSettings = undefined;
 
     this._apiConn = null;
     this._logConn = null;
@@ -972,7 +974,7 @@ export function init(
       args["update"] = update;
     }
 
-    const repoStatus = await iso.getRepoStatus();
+    const repoStatus = await iso.getRepoStatus(_state.gitMetadataSettings);
     if (repoStatus) {
       args["repo_info"] = repoStatus;
     }
@@ -1477,6 +1479,7 @@ function _check_org_info(org_info: any, org_name: string | undefined) {
       _state.orgId = org.id;
       _state.orgName = org.name;
       _state.logUrl = iso.getEnv("BRAINTRUST_LOG_URL") ?? org.api_url;
+      _state.gitMetadataSettings = org.git_metadata || undefined;
       break;
     }
   }

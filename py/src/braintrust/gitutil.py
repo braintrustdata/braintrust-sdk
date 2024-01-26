@@ -3,9 +3,9 @@ import os
 import re
 import subprocess
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache as _cache
-from typing import Optional
+from typing import List, Literal, Optional
 
 from braintrust_core.util import SerializableDataClass
 
@@ -18,13 +18,19 @@ _gitlock = threading.RLock()
 
 
 @dataclass
+class GitMetadataSettings(SerializableDataClass):
+    collect: Literal["all", "some", "none"] = "all"
+    fields: Optional[List[str]] = field(default_factory=list)
+
+
+@dataclass
 class RepoStatus(SerializableDataClass):
     """Information about the current HEAD of the repo."""
 
     commit: Optional[str]
     branch: Optional[str]
     tag: Optional[str]
-    dirty: bool
+    dirty: Optional[bool]
     author_name: Optional[str]
     author_email: Optional[str]
     commit_message: Optional[str]
@@ -125,7 +131,21 @@ def truncate_to_byte_limit(input_string, byte_limit=65536):
     return encoded[:byte_limit].decode("utf-8", errors="ignore")
 
 
-def get_repo_status():
+def get_repo_status(settings: Optional[GitMetadataSettings] = None):
+    if settings is None:
+        settings = GitMetadataSettings()
+
+    if settings.collect == "none":
+        return None
+
+    repo = repo_status()
+    if repo is None or settings.collect == "all":
+        return repo
+
+    return RepoStatus(**{k: v if k in settings.fields else None for k, v in repo.as_dict().items()})
+
+
+def repo_status():
     with _gitlock:
         repo = _current_repo()
         if repo is None:

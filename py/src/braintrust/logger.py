@@ -37,7 +37,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from .cache import CACHE_PATH, EXPERIMENTS_PATH, LOGIN_INFO_PATH
-from .gitutil import get_past_n_ancestors, get_repo_status
+from .gitutil import GitMetadataSettings, get_past_n_ancestors, get_repo_status
 from .resource_manager import ResourceManager
 from .util import (
     GLOBAL_PROJECT,
@@ -185,6 +185,7 @@ class BraintrustState:
         self.org_name = None
         self.log_url = None
         self.logged_in = False
+        self.git_metadata_settings = None
 
         self._api_conn = None
         self._log_conn = None
@@ -558,7 +559,7 @@ def init(
         if update:
             args["update"] = update
 
-        repo_status = get_repo_status()
+        repo_status = get_repo_status(_state.git_metadata_settings)
         if repo_status:
             args["repo_info"] = repo_status.as_dict()
 
@@ -955,6 +956,7 @@ def _check_org_info(org_info, org_name):
             _state.org_id = orgs["id"]
             _state.org_name = orgs["name"]
             _state.log_url = os.environ.get("BRAINTRUST_LOG_URL", orgs["api_url"])
+            _state.git_metadata_settings = GitMetadataSettings(**(orgs.get("git_metadata") or {}))
             break
 
     if _state.org_id is None:
