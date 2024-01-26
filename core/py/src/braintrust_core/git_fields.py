@@ -23,3 +23,23 @@ class RepoStatus(SerializableDataClass):
 class GitMetadataSettings(SerializableDataClass):
     collect: Literal["all", "some", "none"] = "all"
     fields: Optional[List[str]] = field(default_factory=list)
+
+    @classmethod
+    def merge(cls, s1: "GitMetadataSettings", s2: "GitMetadataSettings") -> "GitMetadataSettings":
+        # If either is all, then return the other
+        # If either is none, then return that one
+        if s1.collect == "all":
+            return s2
+        elif s2.collect == "all":
+            return s1
+        elif s1.collect == "none":
+            return s1
+        elif s2.collect == "none":
+            return s2
+
+        assert s1.collect == "some" and s2.collect == "some"
+        # intersect the fields
+        ret = GitMetadataSettings(collect="some", fields=list(set(s1.fields).intersection(s2.fields)))
+        if not ret.fields:
+            ret.collect = "none"
+        return ret

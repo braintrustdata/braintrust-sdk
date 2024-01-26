@@ -523,6 +523,7 @@ def init(
     api_key: Optional[str] = None,
     org_name: Optional[str] = None,
     metadata: Optional[Metadata] = None,
+    git_metadata_settings: Optional[GitMetadataSettings] = None,
     set_current: bool = True,
 ):
     """
@@ -542,6 +543,7 @@ def init(
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
     :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
+    :param git_metadata_settings: (Optional) Settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param set_current: If true (the default), set the global current-experiment to the newly-created one.
     :returns: The experiment object.
     """
@@ -559,7 +561,13 @@ def init(
         if update:
             args["update"] = update
 
-        repo_status = get_repo_status(_state.git_metadata_settings)
+        merged_git_metadata_settings = _state.git_metadata_settings
+        if git_metadata_settings is not None:
+            merged_git_metadata_settings = GitMetadataSettings.merge(
+                merged_git_metadata_settings, git_metadata_settings
+            )
+
+        repo_status = get_repo_status(merged_git_metadata_settings)
         if repo_status:
             args["repo_info"] = repo_status.as_dict()
 
