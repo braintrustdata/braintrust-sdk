@@ -14,7 +14,7 @@ export type GitFields = Array<keyof RepoStatus>;
 export type CollectMetadata = "all" | "none" | "some";
 export type GitMetadataSettings = {
   collect: CollectMetadata;
-  fields: GitFields;
+  fields?: GitFields;
 };
 
 export function mergeGitMetadataSettings(
@@ -32,7 +32,7 @@ export function mergeGitMetadataSettings(
   }
 
   // s1.collect === "some" && s2.collect === "some"
-  const fields = s1.fields.filter((f) => s2.fields.includes(f));
+  const fields = (s1.fields ?? []).filter((f) => (s2.fields ?? []).includes(f));
   const collect = fields.length > 0 ? "some" : "none";
   return { collect, fields };
 }

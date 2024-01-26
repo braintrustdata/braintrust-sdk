@@ -982,7 +982,6 @@ export function init(
     let mergedGitMetadataSettings = {
       ...(_state.gitMetadataSettings || {
         collect: "all",
-        fields: [],
       }),
     };
     if (gitMetadataSettings) {

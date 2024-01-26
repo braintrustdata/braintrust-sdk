@@ -39,7 +39,7 @@ class GitMetadataSettings(SerializableDataClass):
 
         assert s1.collect == "some" and s2.collect == "some"
         # intersect the fields
-        ret = GitMetadataSettings(collect="some", fields=list(set(s1.fields).intersection(s2.fields)))
+        ret = GitMetadataSettings(collect="some", fields=list(set(s1.fields or []).intersection(s2.fields or [])))
         if not ret.fields:
             ret.collect = "none"
         return ret
