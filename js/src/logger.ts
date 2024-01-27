@@ -99,7 +99,9 @@ export interface Span {
   ): R;
 
   /**
-   * Lower-level alternative to `traced`, which does not automatically end the span or mark it as current. Be sure to end the span with `span.end()` when it has finished.
+   * Lower-level alternative to `traced`. This allows you to start a span yourself, and can be useful in situations
+   * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
+   * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
    *
    * See `traced` for full details.
    *
@@ -614,7 +616,9 @@ export class Logger<IsAsyncFlush extends boolean> {
   }
 
   /**
-   * Lower-level alternative to `traced`, which does not automatically end the span or mark it as current.
+   * Lower-level alternative to `traced`. This allows you to start a span yourself, and can be useful in situations
+   * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
+   * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
    *
    * See `traced` for full details.
    */
@@ -1461,7 +1465,11 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
 }
 
 /**
- * Lower-level alternative to `traced`, which does not automatically end the span or mark it as current. See `traced` for full details.
+ * Lower-level alternative to `traced`. This allows you to start a span yourself, and can be useful in situations
+ * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
+ * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
+ *
+ * See `traced` for full details.
  */
 export function startSpan<IsAsyncFlush extends boolean = false>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush>
@@ -1716,7 +1724,9 @@ export class Experiment {
   }
 
   /**
-   * Lower-level alternative to `traced`, which does not automatically end the span or mark it as current.
+   * Lower-level alternative to `traced`. This allows you to start a span yourself, and can be useful in situations
+   * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
+   * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
    *
    * See `traced` for full details.
    */
