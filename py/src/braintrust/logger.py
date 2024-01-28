@@ -179,7 +179,7 @@ class BraintrustState:
         self.reset_login_info()
 
     def reset_login_info(self):
-        self.api_url = None
+        self.app_url = None
         self.login_token = None
         self.org_id = None
         self.org_name = None
@@ -187,16 +187,16 @@ class BraintrustState:
         self.logged_in = False
         self.git_metadata_settings = None
 
-        self._api_conn = None
+        self._app_conn = None
         self._log_conn = None
         self._user_info = None
 
-    def api_conn(self):
-        if not self._api_conn:
-            if not self.api_url:
-                raise RuntimeError("Must initialize api_url before requesting api_conn")
-            self._api_conn = HTTPConnection(self.api_url)
-        return self._api_conn
+    def app_conn(self):
+        if not self._app_conn:
+            if not self.app_url:
+                raise RuntimeError("Must initialize app_url before requesting app_conn")
+            self._app_conn = HTTPConnection(self.app_url)
+        return self._app_conn
 
     def log_conn(self):
         if not self._log_conn:
@@ -306,7 +306,7 @@ def log_conn():
 
 
 def api_conn():
-    return _state.api_conn()
+    return _state.app_conn()
 
 
 def user_info():
@@ -519,7 +519,7 @@ def init(
     update: bool = False,
     base_experiment: Optional[str] = None,
     is_public: bool = False,
-    api_url: Optional[str] = None,
+    app_url: Optional[str] = None,
     api_key: Optional[str] = None,
     org_name: Optional[str] = None,
     metadata: Optional[Metadata] = None,
@@ -538,7 +538,7 @@ def init(
     :param base_experiment: An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this
     experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
     :param is_public: An optional parameter to control whether the experiment is publicly visible to anybody with the link or privately visible to only members of the organization. Defaults to private.
-    :param api_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -549,7 +549,7 @@ def init(
     """
 
     def compute_metadata():
-        login(org_name=org_name, api_key=api_key, api_url=api_url)
+        login(org_name=org_name, api_key=api_key, app_url=app_url)
         args = {"project_name": project, "org_id": _state.org_id}
 
         if experiment is not None:
@@ -588,7 +588,7 @@ def init(
 
         while True:
             try:
-                response = _state.api_conn().post_json("api/experiment/register", args)
+                response = _state.app_conn().post_json("api/experiment/register", args)
                 break
             except AugmentedHTTPError as e:
                 if args.get("base_experiment") is not None and "base experiment" in str(e):
@@ -617,7 +617,7 @@ def init_dataset(
     name: str = None,
     description: str = None,
     version: "str | int" = None,
-    api_url: str = None,
+    app_url: str = None,
     api_key: str = None,
     org_name: str = None,
 ):
@@ -628,7 +628,7 @@ def init_dataset(
     :param name: The name of the dataset to create. If not specified, a name will be generated automatically.
     :param description: An optional description of the dataset.
     :param version: An optional version of the dataset (to read). If not specified, the latest version will be used.
-    :param api_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -636,13 +636,13 @@ def init_dataset(
     """
 
     def compute_metadata():
-        login(org_name=org_name, api_key=api_key, api_url=api_url)
+        login(org_name=org_name, api_key=api_key, app_url=app_url)
         args = _populate_args(
             {"project_name": project, "org_id": _state.org_id},
             dataset_name=name,
             description=description,
         )
-        response = _state.api_conn().post_json("api/dataset/register", args)
+        response = _state.app_conn().post_json("api/dataset/register", args)
         resp_project = response["project"]
         resp_dataset = response["dataset"]
         return ProjectDatasetMetadata(
@@ -657,7 +657,7 @@ def init_logger(
     project: str = None,
     project_id: str = None,
     async_flush: bool = True,
-    api_url: str = None,
+    app_url: str = None,
     api_key: str = None,
     org_name: str = None,
     force_login: bool = False,
@@ -669,7 +669,7 @@ def init_logger(
     :param project: The name of the project to log into. If unspecified, will default to the Global project.
     :param project_id: The id of the project to log into. This takes precedence over project if specified.
     :param async_flush: If true (the default), log events will be batched and sent asynchronously in a background thread. If false, log events will be sent synchronously. Set to false in serverless environments.
-    :param api_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+    :param app_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -679,10 +679,10 @@ def init_logger(
     """
 
     def compute_metadata():
-        login(org_name=org_name, api_key=api_key, api_url=api_url, force_login=force_login)
+        login(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login)
         org_id = _state.org_id
         if project_id is None:
-            response = _state.api_conn().post_json(
+            response = _state.app_conn().post_json(
                 "api/project/register",
                 {
                     "project_name": project or GLOBAL_PROJECT,
@@ -695,7 +695,7 @@ def init_logger(
                 project=ObjectMetadata(id=resp_project["id"], name=resp_project["name"], full_info=resp_project),
             )
         elif project is None:
-            response = _state.api_conn().get_json("api/project", {"id": project_id})
+            response = _state.app_conn().get_json("api/project", {"id": project_id})
             return OrgProjectMetadata(
                 org_id=org_id, project=ObjectMetadata(id=project_id, name=response["name"], full_info=response)
             )
@@ -716,12 +716,12 @@ def init_logger(
 login_lock = threading.RLock()
 
 
-def login(api_url=None, api_key=None, org_name=None, force_login=False):
+def login(app_url=None, api_key=None, org_name=None, force_login=False):
     """
     Log into Braintrust. This will prompt you for your API token, which you can find at
     https://www.braintrustdata.com/app/token. This method is called automatically by `init()`.
 
-    :param api_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -732,8 +732,8 @@ def login(api_url=None, api_key=None, org_name=None, force_login=False):
 
     # Only permit one thread to login at a time
     with login_lock:
-        if api_url is None:
-            api_url = os.environ.get("BRAINTRUST_API_URL", "https://www.braintrustdata.com")
+        if app_url is None:
+            app_url = os.environ.get("BRAINTRUST_APP_URL", "https://www.braintrustdata.com")
 
         if api_key is None:
             api_key = os.environ.get("BRAINTRUST_API_KEY")
@@ -747,13 +747,13 @@ def login(api_url=None, api_key=None, org_name=None, force_login=False):
 
         _state.reset_login_info()
 
-        _state.api_url = api_url
+        _state.app_url = app_url
 
         os.makedirs(CACHE_PATH, exist_ok=True)
 
         conn = None
         if api_key is not None:
-            resp = requests.post(_urljoin(_state.api_url, "/api/apikey/login"), json={"token": api_key})
+            resp = requests.post(_urljoin(_state.app_url, "/api/apikey/login"), json={"token": api_key})
             if not resp.ok:
                 api_key_prefix = (
                     (" (" + api_key[:2] + "*" * (len(api_key) - 4) + api_key[-2:] + ")") if len(api_key) > 4 else ""
@@ -776,7 +776,7 @@ def login(api_url=None, api_key=None, org_name=None, force_login=False):
         conn.make_long_lived()
 
         # Set the same token in the API
-        _state.api_conn().set_token(conn.token)
+        _state.app_conn().set_token(conn.token)
         _state.login_token = conn.token
         _state.logged_in = True
 
@@ -963,7 +963,7 @@ def _check_org_info(org_info, org_name):
         if org_name is None or orgs["name"] == org_name:
             _state.org_id = orgs["id"]
             _state.org_name = orgs["name"]
-            _state.log_url = os.environ.get("BRAINTRUST_LOG_URL", orgs["api_url"])
+            _state.log_url = os.environ.get("BRAINTRUST_API_URL", orgs["api_url"])
             _state.git_metadata_settings = GitMetadataSettings(**(orgs.get("git_metadata") or {}))
             break
 
@@ -1328,7 +1328,7 @@ class Experiment:
 
         state = self._get_state()
         project_url = (
-            f"{state.api_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
+            f"{state.app_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
         )
         experiment_url = f"{project_url}/{encode_uri_component(self.name)}"
 
@@ -1699,7 +1699,7 @@ class Dataset:
         self.bg_logger.flush()
         state = self._get_state()
         project_url = (
-            f"{state.api_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
+            f"{state.app_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
         )
         dataset_url = f"{project_url}/d/{encode_uri_component(self.name)}"
 
@@ -1802,7 +1802,7 @@ class Project:
         if self._id is None or self._name is None:
             with self.init_lock:
                 if self._id is None:
-                    response = _state.api_conn().post_json(
+                    response = _state.app_conn().post_json(
                         "api/project/register",
                         {
                             "project_name": self._name or GLOBAL_PROJECT,
@@ -1812,7 +1812,7 @@ class Project:
                     self._id = response["project"]["id"]
                     self._name = response["project"]["name"]
                 elif self._name is None:
-                    response = _state.api_conn().get_json("api/project", {"id": self._id})
+                    response = _state.app_conn().get_json("api/project", {"id": self._id})
                     self._name = response["name"]
 
         return self

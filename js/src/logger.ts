@@ -184,7 +184,7 @@ class BraintrustState {
   public currentLogger: Logger<false> | undefined;
   public currentSpan: IsoAsyncLocalStorage<Span>;
 
-  public apiUrl: string | null = null;
+  public appUrl: string | null = null;
   public loginToken: string | null = null;
   public orgId: string | null = null;
   public orgName: string | null = null;
@@ -206,7 +206,7 @@ class BraintrustState {
   }
 
   public resetLoginInfo() {
-    this.apiUrl = null;
+    this.appUrl = null;
     this.loginToken = null;
     this.orgId = null;
     this.orgName = null;
@@ -220,10 +220,10 @@ class BraintrustState {
 
   public apiConn(): HTTPConnection {
     if (!this._apiConn) {
-      if (!this.apiUrl) {
-        throw new Error("Must initialize apiUrl before requesting apiConn");
+      if (!this.appUrl) {
+        throw new Error("Must initialize appUrl before requesting apiConn");
       }
-      this._apiConn = new HTTPConnection(this.apiUrl);
+      this._apiConn = new HTTPConnection(this.appUrl);
     }
     return this._apiConn!;
   }
@@ -909,7 +909,7 @@ export type InitOptions = {
   update?: boolean;
   baseExperiment?: string;
   isPublic?: boolean;
-  apiUrl?: string;
+  appUrl?: string;
   apiKey?: string;
   orgName?: string;
   metadata?: Metadata;
@@ -930,7 +930,7 @@ export type InitOptions = {
  * @param options.baseExperiment An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this
  * experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
  * @param options.isPublic An optional parameter to control whether the experiment is publicly visible to anybody with the link or privately visible to only members of the organization. Defaults to private.
- * @param options.apiUrl The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -953,7 +953,7 @@ export function init(
     baseExperiment,
     isPublic,
     update,
-    apiUrl,
+    appUrl,
     apiKey,
     orgName,
     metadata,
@@ -964,7 +964,7 @@ export function init(
     await login({
       orgName: orgName,
       apiKey,
-      apiUrl,
+      appUrl,
     });
     const args: Record<string, unknown> = {
       project_name: project,
@@ -1093,7 +1093,7 @@ type InitDatasetOptions = {
   dataset?: string;
   description?: string;
   version?: string;
-  apiUrl?: string;
+  appUrl?: string;
   apiKey?: string;
   orgName?: string;
 };
@@ -1105,7 +1105,7 @@ type InitDatasetOptions = {
  * @param options Additional options for configuring init().
  * @param options.dataset The name of the dataset to create. If not specified, a name will be generated automatically.
  * @param options.description An optional description of the dataset.
- * @param options.apiUrl The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -1115,14 +1115,14 @@ export function initDataset(
   project: string,
   options: Readonly<InitDatasetOptions> = {}
 ) {
-  const { dataset, description, version, apiUrl, apiKey, orgName } =
+  const { dataset, description, version, appUrl, apiKey, orgName } =
     options || {};
 
   const lazyMetadata: Promise<ProjectDatasetMetadata> = (async () => {
     await login({
       orgName: orgName,
       apiKey,
-      apiUrl,
+      appUrl,
     });
 
     const args: Record<string, unknown> = {
@@ -1174,7 +1174,7 @@ type AsyncFlushArg<IsAsyncFlush> = {
 type InitLoggerOptions<IsAsyncFlush> = {
   projectName?: string;
   projectId?: string;
-  apiUrl?: string;
+  appUrl?: string;
   apiKey?: string;
   orgName?: string;
   forceLogin?: boolean;
@@ -1188,7 +1188,7 @@ type InitLoggerOptions<IsAsyncFlush> = {
  * @param options.projectName The name of the project to log into. If unspecified, will default to the Global project.
  * @param options.projectId The id of the project to log into. This takes precedence over projectName if specified.
  * @param options.asyncFlush If true, will log asynchronously in the background. Otherwise, will log synchronously. (false by default, to support serverless environments)
- * @param options.apiUrl The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -1203,7 +1203,7 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
     projectName,
     projectId,
     asyncFlush,
-    apiUrl,
+    appUrl,
     apiKey,
     orgName,
     forceLogin,
@@ -1213,7 +1213,7 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
     await login({
       orgName: orgName,
       apiKey,
-      apiUrl,
+      appUrl,
       forceLogin,
     });
     const org_id = _state.orgId!;
@@ -1266,7 +1266,7 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
  * https://www.braintrustdata.com/app/token. This method is called automatically by `init()`.
  *
  * @param options Options for configuring login().
- * @param options.apiUrl The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -1274,14 +1274,14 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
  */
 export async function login(
   options: {
-    apiUrl?: string;
+    appUrl?: string;
     apiKey?: string;
     orgName?: string;
     forceLogin?: boolean;
   } = {}
 ) {
   const {
-    apiUrl = iso.getEnv("BRAINTRUST_API_URL") ||
+    appUrl = iso.getEnv("BRAINTRUST_APP_URL") ||
       "https://www.braintrustdata.com",
     apiKey = iso.getEnv("BRAINTRUST_API_KEY"),
     orgName = iso.getEnv("BRAINTRUST_ORG_NAME"),
@@ -1295,13 +1295,13 @@ export async function login(
 
   _state.resetLoginInfo();
 
-  _state.apiUrl = apiUrl;
+  _state.appUrl = appUrl;
 
   let conn = null;
 
   if (apiKey !== undefined) {
     const resp = await checkResponse(
-      await fetch(_urljoin(_state.apiUrl, `/api/apikey/login`), {
+      await fetch(_urljoin(_state.appUrl, `/api/apikey/login`), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1503,7 +1503,7 @@ function _check_org_info(org_info: any, org_name: string | undefined) {
     if (org_name === undefined || org.name === org_name) {
       _state.orgId = org.id;
       _state.orgName = org.name;
-      _state.logUrl = iso.getEnv("BRAINTRUST_LOG_URL") ?? org.api_url;
+      _state.logUrl = iso.getEnv("BRAINTRUST_API_URL") ?? org.api_url;
       _state.gitMetadataSettings = org.git_metadata || undefined;
       break;
     }
@@ -1759,7 +1759,7 @@ export class Experiment {
 
     await this.bgLogger.flush();
     const state = await this.getState();
-    const projectUrl = `${state.apiUrl}/app/${encodeURIComponent(
+    const projectUrl = `${state.appUrl}/app/${encodeURIComponent(
       state.orgName!
     )}/p/${encodeURIComponent((await this.project).name)}`;
     const experimentUrl = `${projectUrl}/${encodeURIComponent(
@@ -2162,7 +2162,7 @@ export class Dataset {
 
     await this.bgLogger.flush();
     const state = await this.getState();
-    const projectUrl = `${state.apiUrl}/app/${encodeURIComponent(
+    const projectUrl = `${state.appUrl}/app/${encodeURIComponent(
       state.orgName!
     )}/p/${encodeURIComponent((await this.project).name)}`;
     const datasetUrl = `${projectUrl}/d/${encodeURIComponent(await this.name)}`;
