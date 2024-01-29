@@ -26,6 +26,7 @@ from braintrust_core.db_fields import (
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
+from braintrust_core.git_fields import GitMetadataSettings
 from braintrust_core.merge_row_batch import merge_row_batch
 from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
@@ -38,7 +39,6 @@ from urllib3.util.retry import Retry
 
 from .cache import CACHE_PATH, EXPERIMENTS_PATH, LOGIN_INFO_PATH
 from .gitutil import get_past_n_ancestors, get_repo_status
-from .resource_manager import ResourceManager
 from .util import (
     GLOBAL_PROJECT,
     AugmentedHTTPError,
@@ -185,6 +185,7 @@ class BraintrustState:
         self.org_name = None
         self.log_url = None
         self.logged_in = False
+        self.git_metadata_settings = None
 
         self._api_conn = None
         self._log_conn = None
@@ -522,6 +523,7 @@ def init(
     api_key: Optional[str] = None,
     org_name: Optional[str] = None,
     metadata: Optional[Metadata] = None,
+    git_metadata_settings: Optional[GitMetadataSettings] = None,
     set_current: bool = True,
 ):
     """
@@ -541,6 +543,7 @@ def init(
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
     :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
+    :param git_metadata_settings: (Optional) Settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param set_current: If true (the default), set the global current-experiment to the newly-created one.
     :returns: The experiment object.
     """
@@ -558,7 +561,13 @@ def init(
         if update:
             args["update"] = update
 
-        repo_status = get_repo_status()
+        merged_git_metadata_settings = _state.git_metadata_settings
+        if git_metadata_settings is not None:
+            merged_git_metadata_settings = GitMetadataSettings.merge(
+                merged_git_metadata_settings, git_metadata_settings
+            )
+
+        repo_status = get_repo_status(merged_git_metadata_settings)
         if repo_status:
             args["repo_info"] = repo_status.as_dict()
 
@@ -955,6 +964,7 @@ def _check_org_info(org_info, org_name):
             _state.org_id = orgs["id"]
             _state.org_name = orgs["name"]
             _state.log_url = os.environ.get("BRAINTRUST_LOG_URL", orgs["api_url"])
+            _state.git_metadata_settings = GitMetadataSettings(**(orgs.get("git_metadata") or {}))
             break
 
     if _state.org_id is None:
