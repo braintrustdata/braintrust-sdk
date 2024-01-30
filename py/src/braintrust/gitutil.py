@@ -5,6 +5,7 @@ import subprocess
 import threading
 from functools import lru_cache as _cache
 from typing import List, Optional
+
 from braintrust_core.git_fields import GitMetadataSettings, RepoStatus
 
 # https://stackoverflow.com/questions/48399498/git-executable-not-found-in-python
