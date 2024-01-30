@@ -77,8 +77,9 @@ async function getBaseBranchAncestor(remote: string | undefined = undefined) {
     throw new Error("Not in a git repo");
   }
 
-  const { remote: remoteName, branch: baseBranch } =
-    await getBaseBranch(remote);
+  const { remote: remoteName, branch: baseBranch } = await getBaseBranch(
+    remote
+  );
 
   const isDirty = (await git.diffSummary()).files.length > 0;
   const head = isDirty ? "HEAD" : "HEAD^";

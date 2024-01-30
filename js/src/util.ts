@@ -27,3 +27,27 @@ export function getCurrentUnixTimestamp(): number {
 export function isEmpty(a: unknown): a is null | undefined {
   return a === undefined || a === null;
 }
+
+// A simple wrapper around a callable async function which computes the value
+// on-demand and saves it for future retrievals. The difference between this and
+// a bare Promise is that the async callable is run only when asked for. There
+// should be no un-awaited promises floating around (as long as the user
+// immediately consumes what is returned by `LazyValue.value()`).
+export class LazyValue<T> {
+  private callable: () => Promise<T>;
+  private value: { hasComputed: true; val: T } | { hasComputed: false } = {
+    hasComputed: false,
+  };
+
+  constructor(callable: () => Promise<T>) {
+    this.callable = callable;
+  }
+
+  async get(): Promise<T> {
+    if (this.value.hasComputed) {
+      return this.value.val;
+    }
+    this.value = { hasComputed: true, val: await this.callable() };
+    return this.value.val;
+  }
+}
