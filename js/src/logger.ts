@@ -15,6 +15,7 @@ import {
   GitMetadataSettings,
   mergeGitMetadataSettings,
   TransactionId,
+  makeLegacyRecordString,
 } from "@braintrust/core";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -779,8 +780,25 @@ type BackgroundLogEvent =
 export interface DatasetRecord {
   id: string;
   input: any;
-  output: any;
+  expected: any;
   metadata: any;
+}
+
+interface LegacyDatasetRecord {
+  id: string;
+  input: any;
+  output?: any;
+  expected?: any;
+  metadata: any;
+}
+
+function patchLegacyDataset(r: LegacyDatasetRecord): DatasetRecord {
+  return {
+    id: r.id,
+    input: r.input,
+    expected: r.expected ? r.expected : r.output,
+    metadata: r.metadata,
+  };
 }
 
 // 6 MB (from our own testing).
@@ -870,9 +888,16 @@ class BackgroundLogger {
           for (let i = 0; i < NumRetries; i++) {
             const startTime = now();
             try {
-              return (
-                await (await this.logConn.get()).post_json("logs", itemsS)
-              ).map((res: any) => res.id);
+              try {
+                return (
+                  await (await this.logConn.get()).post_json("logs3", itemsS)
+                ).ids.map((res: any) => res.id);
+              } catch (e) {
+                // Fallback to legacy API. Remove once all API endpoints are updated.
+                return (
+                  await (await this.logConn.get()).post_json("logs", constructJsonArray(items.map((r) => makeLegacyRecordString(r))))
+                ).map((res: any) => res.id);
+              }
             } catch (e) {
               const retryingText = i + 1 === NumRetries ? "" : " Retrying";
               const errMsg = (() => {
@@ -1707,7 +1732,8 @@ class ObjectFetcher<RecordType> {
 
   constructor(
     private objectType: "dataset" | "experiment",
-    private pinnedVersion: string | undefined
+    private pinnedVersion: string | undefined,
+    private patchLegacyRecord: ((r: any) => RecordType) | undefined
   ) {}
 
   public get id(): Promise<string> {
@@ -1732,13 +1758,22 @@ class ObjectFetcher<RecordType> {
   async fetchedData() {
     if (this._fetchedData === undefined) {
       const state = await this.getState();
-      const resp = await state.logConn().get(`object/${this.objectType}`, {
-        id: await this.id,
-        fmt: "json2",
-        version: this.pinnedVersion,
-      });
-
-      this._fetchedData = await resp.json();
+      try {
+        const resp = await state.logConn().get(`object_v2/${this.objectType}`, {
+          id: await this.id,
+          fmt: "json2",
+          version: this.pinnedVersion,
+        });
+        this._fetchedData = await resp.json();
+      } catch (e) {
+        const resp = await state.logConn().get(`object/${this.objectType}`, {
+          id: await this.id,
+          fmt: "json2",
+          version: this.pinnedVersion,
+          flag: "v2",
+        });
+        this._fetchedData = (await resp.json())?.map((r: any) => this.patchLegacyRecord ? this.patchLegacyRecord(r) : r);
+      }
     }
     return this._fetchedData || [];
   }
@@ -1794,7 +1829,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     lazyMetadata: LazyValue<ProjectExperimentMetadata>,
     dataset?: Dataset
   ) {
-    super("experiment", undefined);
+    super("experiment", undefined, undefined);
     this.lazyMetadata = lazyMetadata;
     this.dataset = dataset;
 
@@ -2029,7 +2064,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
  */
 export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
   constructor(private readonly lazyMetadata: LazyValue<ObjectMetadata>) {
-    super("experiment", undefined);
+    super("experiment", undefined, undefined);
   }
 
   public get id(): Promise<string> {
@@ -2276,7 +2311,7 @@ export class SpanImpl implements Span {
 }
 
 /**
- * A dataset is a collection of records, such as model inputs and outputs, which represent
+ * A dataset is a collection of records, such as model inputs and expected outputs, which represent
  * data you can use to evaluate and fine-tune models. You can log production data to datasets,
  * curate them with interesting examples, edit/delete records, and run evaluations against them.
  *
@@ -2290,7 +2325,7 @@ export class Dataset extends ObjectFetcher<DatasetRecord> {
     lazyMetadata: LazyValue<ProjectDatasetMetadata>,
     pinnedVersion?: string
   ) {
-    super("dataset", pinnedVersion);
+    super("dataset", pinnedVersion, patchLegacyDataset);
     this.lazyMetadata = lazyMetadata;
     const logConn = new LazyValue(() =>
       this.getState().then((state) => state.logConn())
@@ -2328,24 +2363,27 @@ export class Dataset extends ObjectFetcher<DatasetRecord> {
    *
    * @param event The event to log.
    * @param event.input The argument that uniquely define an input case (an arbitrary, JSON serializable object).
-   * @param event.output The output of your application, including post-processing (an arbitrary, JSON serializable object).
+   * @param event.expected The output of your application, including post-processing (an arbitrary, JSON serializable object).
    * @param event.metadata (Optional) a dictionary with additional data about the test example, model outputs, or just
    * about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
    * `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
    * JSON-serializable type, but its keys must be strings.
    * @param event.id (Optional) a unique identifier for the event. If you don't provide one, Braintrust will generate one for you.
+   * @param event.output: (Deprecated) The output of your application. Use `expected` instead.
    * @returns The `id` of the logged record.
    */
   public insert({
     input,
-    output,
+    expected,
     metadata,
     id,
+    output,
   }: {
     readonly input?: unknown;
-    readonly output: unknown;
+    readonly expected?: unknown;
     readonly metadata?: Record<string, unknown>;
     readonly id?: string;
+    readonly output?: unknown;
   }): string {
     if (metadata !== undefined) {
       for (const key of Object.keys(metadata)) {
@@ -2355,11 +2393,17 @@ export class Dataset extends ObjectFetcher<DatasetRecord> {
       }
     }
 
+    if (expected && output) {
+      throw new Error(
+        "Only one of expected or output (deprecated) can be specified. Prefer expected."
+      );
+    }
+
     const rowId = id || uuidv4();
     const args = new LazyValue(async () => ({
       id: rowId,
       inputs: input,
-      output,
+      expected: expected === undefined ? output : expected,
       project_id: (await this.project).id,
       dataset_id: await this.id,
       created: new Date().toISOString(),
@@ -2407,6 +2451,7 @@ export class Dataset extends ObjectFetcher<DatasetRecord> {
         "dataset-summary",
         {
           dataset_id: await this.id,
+          object_flag: "v2",
         },
         3
       );

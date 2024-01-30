@@ -27,6 +27,7 @@ from braintrust_core.db_fields import (
     VALID_SOURCES,
 )
 from braintrust_core.git_fields import GitMetadataSettings
+from braintrust_core.legacy_api import patch_legacy_record, make_legacy_record_string
 from braintrust_core.merge_row_batch import merge_row_batch
 from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
@@ -455,7 +456,11 @@ class _BackgroundLogger:
         items_s = construct_json_array(items)
         for i in range(NUM_RETRIES):
             start_time = time.time()
-            resp = conn.post("/logs", data=items_s)
+
+            resp = conn.post("/logs3", data=items_s)
+            if not resp.ok:
+                resp = conn.post("/logs", data=construct_json_array([make_legacy_record_string(r) for r in items]))
+
             if resp.ok:
                 return
             retrying_text = "" if i + 1 == NUM_RETRIES else " Retrying"
@@ -1158,12 +1163,20 @@ class ObjectFetcher:
 
     def _refetch(self):
         if self._fetched_data is None:
-            resp = _state.log_conn().get(
-                f"object/{self.object_type}", params={"id": self.id, "fmt": "json2", "version": self._pinned_version}
-            )
-            response_raise_for_status(resp)
-
-            self._fetched_data = resp.json()
+            try:
+                resp = _state.log_conn().get(
+                        f"object_v2/{self.object_type}", params={"id": self.id, "fmt": "json2", "version": self._pinned_version}
+                )
+                response_raise_for_status(resp)
+                self._fetched_data = resp.json()
+            except Exception as e:
+                resp = _state.log_conn().get(
+                        f"object/{self.object_type}", params={"id": self.id, "fmt": "json2", "version": self._pinned_version, "flag": "v2"}
+                )
+                response_raise_for_status(resp)
+                # The `record_from_legacy_api` mutation is only necessary when loading dataset rows from old versions
+                # of the API where the "v2" flag isn't respected. Remove this once all endpoints are updated.
+                self._fetched_data = [patch_legacy_record(r) for r in resp.json()] if self.object_type == "dataset" else resp.json()
 
         return self._fetched_data
 
@@ -1791,18 +1804,19 @@ class Dataset(ObjectFetcher):
         self._lazy_metadata.get()
         return _state
 
-    def insert(self, input, output, metadata=None, id=None):
+    def insert(self, input, expected=None, metadata=None, id=None, output=None):
         """
         Insert a single record to the dataset. The record will be batched and uploaded behind the scenes. If you pass in an `id`,
         and a record with that `id` already exists, it will be overwritten (upsert).
 
         :param input: The argument that uniquely define an input case (an arbitrary, JSON serializable object).
-        :param output: The output of your application, including post-processing (an arbitrary, JSON serializable object).
+        :param expected: The output of your application, including post-processing (an arbitrary, JSON serializable object).
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just
         about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
         `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
         JSON-serializable type, but its keys must be strings.
         :param id: (Optional) a unique identifier for the event. If you don't provide one, Braintrust will generate one for you.
+        :param output: (Deprecated) The output of your application. Use `expected` instead.
         :returns: The `id` of the logged record.
         """
         if metadata:
@@ -1812,13 +1826,16 @@ class Dataset(ObjectFetcher):
                 if not isinstance(key, str):
                     raise ValueError("metadata keys must be strings")
 
+        if expected is not None and output is not None:
+            raise ValueError("Only one of expected or output (deprecated) can be specified. Prefer expected.")
+
         row_id = id or str(uuid.uuid4())
         # Validate the non-lazily-computed part of the record-to-log.
         partial_args = _populate_args(
             {
                 "id": row_id,
                 "inputs": input,
-                "output": output,
+                "expected": expected if expected is not None else output,
                 "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             },
             metadata=metadata,
