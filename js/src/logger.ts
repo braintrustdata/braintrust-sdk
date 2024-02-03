@@ -359,8 +359,8 @@ class HTTPConnection {
           typeof params === "string"
             ? params
             : params
-            ? JSON.stringify(params)
-            : undefined,
+              ? JSON.stringify(params)
+              : undefined,
         keepalive: true,
         ...rest,
       })
@@ -923,7 +923,7 @@ export type InitOptions = {
   experiment?: string;
   description?: string;
   dataset?: Dataset;
-  update?: boolean;
+  open?: boolean;
   baseExperiment?: string;
   isPublic?: boolean;
   appUrl?: string;
@@ -932,6 +932,7 @@ export type InitOptions = {
   metadata?: Metadata;
   gitMetadataSettings?: GitMetadataSettings;
   setCurrent?: boolean;
+  update?: boolean;
 };
 
 /**
@@ -943,7 +944,7 @@ export type InitOptions = {
  * @param options.description An optional description of the experiment.
  * @param options.dataset (Optional) A dataset to associate with the experiment. You can pass in the name of the dataset (in the same project) or a
  * dataset object (from any project).
- * @param options.update If the experiment already exists, continue logging to it.
+ * @param options.open If the experiment already exists, open it instead of creating a new one.
  * @param options.baseExperiment An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this
  * experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
  * @param options.isPublic An optional parameter to control whether the experiment is publicly visible to anybody with the link or privately visible to only members of the organization. Defaults to private.
@@ -957,6 +958,7 @@ export type InitOptions = {
  * JSON-serializable type, but its keys must be strings.
  * @param options.gitMetadataSettings (Optional) Settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
  * @param setCurrent If true (the default), set the global current-experiment to the newly-created one.
+ * @param options.update (Deprecated) If true, old alias for `open`. This parameter will be removed in a future version of braintrust.
  * @returns The newly created Experiment.
  */
 export function init(
@@ -969,6 +971,7 @@ export function init(
     dataset,
     baseExperiment,
     isPublic,
+    open,
     update,
     appUrl,
     apiKey,
@@ -997,8 +1000,14 @@ export function init(
         args["description"] = description;
       }
 
-      if (update) {
-        args["update"] = update;
+      if (!isEmpty(open) && !isEmpty(update) && open !== update) {
+        throw new Error(
+          "Cannot specify both `open` and `update` parameters with different values."
+        );
+      }
+
+      if (open || update) {
+        args["update"] = true;
       }
 
       let mergedGitMetadataSettings = {
@@ -1025,7 +1034,7 @@ export function init(
       }
 
       if (dataset !== undefined) {
-        args["dataset_id"] = dataset.id;
+        args["dataset_id"] = await dataset.id;
         args["dataset_version"] = await dataset.version();
       }
 
@@ -1616,7 +1625,10 @@ function validateAndSanitizeExperimentLogFullArgs(
   hasDataset: boolean
 ): ExperimentLogFullArgs {
   if (
-    ("input" in event && event.input && "inputs" in event && event.inputs) ||
+    ("input" in event &&
+      !isEmpty(event.input) &&
+      "inputs" in event &&
+      !isEmpty(event.inputs)) ||
     (!("input" in event) && !("inputs" in event))
   ) {
     throw new Error(
@@ -1624,10 +1636,10 @@ function validateAndSanitizeExperimentLogFullArgs(
     );
   }
 
-  if (!event.output) {
+  if (isEmpty(event.output)) {
     throw new Error("output must be specified");
   }
-  if (!event.scores) {
+  if (isEmpty(event.scores)) {
     throw new Error("scores must be specified");
   }
 
