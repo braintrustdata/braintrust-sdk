@@ -13,6 +13,7 @@ from multiprocessing import cpu_count
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List, Optional, TypeVar, Union
 
 from braintrust_core.score import Score, Scorer
+from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import SerializableDataClass
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
@@ -192,16 +193,18 @@ def report_evaluator_result(eval_name, results, summary, verbose, jsonl):
         )
 
         errors = [
-            result.exc_info if verbose or jsonl else traceback.format_exception_only(type(result.error), result.error)
+            result.exc_info
+            if verbose or jsonl
+            else "\n".join(traceback.format_exception_only(type(result.error), result.error))
             for result in failing_results
         ]
 
         if jsonl:
             print(json.dumps({"eval_name": eval_name, "errors": errors}))
         else:
-            for result in failing_results:
-                info = "".join(errors).rstrip()
-                eprint(f"{bcolors.FAIL}{info}{bcolors.ENDC}")
+            print(errors)
+            info = "".join(errors).rstrip()
+            eprint(f"{bcolors.FAIL}{info}{bcolors.ENDC}")
 
             eprint(f"{bcolors.FAIL}Add --verbose to see full stack traces.{bcolors.ENDC}")
     if summary:
@@ -211,6 +214,8 @@ def report_evaluator_result(eval_name, results, summary, verbose, jsonl):
         for result in results:
             for name, score in result.scores.items():
                 curr = scores_by_name[name]
+                if curr is None:
+                    continue
                 scores_by_name[name] = (curr[0] + score, curr[1] + 1)
 
         if jsonl:
@@ -462,7 +467,9 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
         name = scorer._name() if hasattr(scorer, "_name") else scorer.__name__
         if name == "<lambda>":
             name = f"scorer_{scorer_idx}"
-        with root_span.start_span(name=name, input=dict(**kwargs)) as span:
+        with root_span.start_span(
+            name=name, span_attributes={"type": SpanTypeAttribute.SCORE}, input=dict(**kwargs)
+        ) as span:
             score = scorer.eval_async if isinstance(scorer, Scorer) else scorer
 
             scorer_args = kwargs
@@ -492,7 +499,9 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
         scores = {}
 
         if experiment:
-            root_span = experiment.start_span("eval", input=datum.input, expected=datum.expected)
+            root_span = experiment.start_span(
+                "eval", span_attributes={"type": SpanTypeAttribute.EVAL}, input=datum.input, expected=datum.expected
+            )
         else:
             root_span = NOOP_SPAN
         with root_span:
@@ -504,7 +513,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 if len(inspect.signature(evaluator.task).parameters) == 2:
                     task_args.append(hooks)
 
-                with root_span.start_span("task") as span:
+                with root_span.start_span("task", span_attributes={"type": SpanTypeAttribute.TASK}) as span:
                     hooks.set_span(span)
                     output = await await_or_run(evaluator.task, *task_args)
                     span.log(input=task_args[0], output=output)

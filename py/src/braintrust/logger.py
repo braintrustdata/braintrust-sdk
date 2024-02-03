@@ -8,7 +8,6 @@ import json
 import logging
 import os
 import queue
-import sys
 import textwrap
 import threading
 import time
@@ -16,16 +15,20 @@ import traceback
 import uuid
 from abc import ABC, abstractmethod
 from functools import partial, wraps
-from getpass import getpass
 from multiprocessing import cpu_count
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import requests
 from braintrust_core.db_fields import (
+    AUDIT_METADATA_FIELD,
+    AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
     TRANSACTION_ID_FIELD,
+    VALID_SOURCES,
 )
+from braintrust_core.git_fields import GitMetadataSettings
 from braintrust_core.merge_row_batch import merge_row_batch
+from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
     SerializableDataClass,
     coalesce,
@@ -36,10 +39,10 @@ from urllib3.util.retry import Retry
 
 from .cache import CACHE_PATH, EXPERIMENTS_PATH, LOGIN_INFO_PATH
 from .gitutil import get_past_n_ancestors, get_repo_status
-from .resource_manager import ResourceManager
 from .util import (
     GLOBAL_PROJECT,
     AugmentedHTTPError,
+    LazyValue,
     encode_uri_component,
     eprint,
     get_caller_location,
@@ -79,7 +82,14 @@ class Span(ABC):
         """
 
     @abstractmethod
-    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, **event):
+    def log_feedback(self, **event):
+        """Add feedback to the current span. Unlike `Experiment.log_feedback` and `Logger.log_feedback`, this method does not accept an id parameter, because it logs feedback to the current span.
+
+        :param **event: Data to be logged. See `Experiment.log_feedback` for full details.
+        """
+
+    @abstractmethod
+    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
         """Create a new span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `Span.log` will be merged into one logical row.
 
         We recommend running spans within context managers (`with start_span(...) as span`) to automatically mark them as current and ensure they are ended. Only spans run within a context manager will be marked current, so they can be accessed using `braintrust.current_span()`. If you wish to start a span outside a context manager, be sure to end it with `span.end()`.
@@ -88,6 +98,8 @@ class Span(ABC):
         :param span_attributes: Optional additional attributes to attach to the span, such as a type name.
         :param start_time: Optional start time of the span, as a timestamp in seconds.
         :param set_current: If true (the default), the span will be marked as the currently-active span for the duration of the context manager.
+        :param parent_id: Optional id of the parent span. If not provided, the current span will be used (depending on context). This is useful for adding
+        spans to an existing trace.
         :param **event: Data to be logged. See `Experiment.log` for full details.
         :returns: The newly-created `Span`
         """
@@ -136,7 +148,10 @@ class _NoopSpan(Span):
     def log(self, **event):
         pass
 
-    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, **event):
+    def log_feedback(self, **event):
+        pass
+
+    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
         return self
 
     def end(self, end_time=None):
@@ -161,24 +176,27 @@ class BraintrustState:
         self.current_experiment = None
         self.current_logger = None
         self.current_span = contextvars.ContextVar("braintrust_current_span", default=NOOP_SPAN)
+        self.reset_login_info()
 
-        self.api_url = None
+    def reset_login_info(self):
+        self.app_url = None
         self.login_token = None
         self.org_id = None
         self.org_name = None
         self.log_url = None
         self.logged_in = False
+        self.git_metadata_settings = None
 
-        self._api_conn = None
+        self._app_conn = None
         self._log_conn = None
         self._user_info = None
 
-    def api_conn(self):
-        if not self._api_conn:
-            if not self.api_url:
-                raise RuntimeError("Must initialize api_url before requesting api_conn")
-            self._api_conn = HTTPConnection(self.api_url)
-        return self._api_conn
+    def app_conn(self):
+        if not self._app_conn:
+            if not self.app_url:
+                raise RuntimeError("Must initialize app_url before requesting app_conn")
+            self._app_conn = HTTPConnection(self.app_url)
+        return self._app_conn
 
     def log_conn(self):
         if not self._log_conn:
@@ -197,7 +215,15 @@ class BraintrustState:
             self._user_info = info
 
 
-_state = BraintrustState()
+_state = None
+
+
+def _internal_reset_global_state():
+    global _state
+    _state = BraintrustState()
+
+
+_internal_reset_global_state()
 _logger = logging.getLogger("braintrust")
 
 
@@ -280,7 +306,7 @@ def log_conn():
 
 
 def api_conn():
-    return _state.api_conn()
+    return _state.app_conn()
 
 
 def user_info():
@@ -291,14 +317,6 @@ def org_id():
     return _state.org_id
 
 
-class ModelWrapper:
-    def __init__(self, data):
-        self.data = data
-
-    def __getattr__(self, name: str) -> Any:
-        return self.data[name]
-
-
 # 6 MB (from our own testing).
 MAX_REQUEST_SIZE = 6 * 1024 * 1024
 
@@ -307,21 +325,28 @@ def construct_json_array(items):
     return "[" + ",".join(items) + "]"
 
 
+def _check_json_serializable(event):
+    try:
+        _ = json.dumps(event)
+    except TypeError as e:
+        raise Exception(f"All logged values must be JSON-serializable: {event}") from e
+
+
 DEFAULT_BATCH_SIZE = 100
 NUM_RETRIES = 3
 
+_DEBUG_LOGGING_PAUSED = False
+
 
 class _BackgroundLogger:
-    def __init__(self, name=None):
+    def __init__(self, log_conn: LazyValue[HTTPConnection]):
+        self.log_conn = log_conn
         self.flush_lock = threading.RLock()
         self.start_thread_lock = threading.RLock()
         self.thread = threading.Thread(target=self._publisher, daemon=True)
         self.started = False
 
         log_namespace = "braintrust"
-        if name:
-            log_namespace += f" [{name}]"
-
         self.logger = logging.getLogger(log_namespace)
 
         try:
@@ -338,11 +363,6 @@ class _BackgroundLogger:
     def log(self, *args):
         self._start()
         for event in args:
-            try:
-                _ = json.dumps(event)
-            except TypeError as e:
-                raise Exception(f"All logged values must be JSON-serializable: {event}") from e
-
             try:
                 self.queue.put_nowait(event)
             except queue.Full:
@@ -371,6 +391,13 @@ class _BackgroundLogger:
         while True:
             # Wait for some data on the queue before trying to flush.
             self.queue_filled_semaphore.acquire()
+
+            while _DEBUG_LOGGING_PAUSED:
+                _logger.warning(
+                    "Logging paused. Sleeping for 100ms and will try again. This flag should only be set for debugging purposes."
+                )
+                time.sleep(0.1)
+
             try:
                 self.flush(**kwargs)
             except Exception:
@@ -387,12 +414,14 @@ class _BackgroundLogger:
                     all_items.append(self.queue.get_nowait())
             except queue.Empty:
                 pass
+            # Unwrap all the lazily-computed values.
+            all_items = [item.get() for item in all_items]
             all_items = list(reversed(merge_row_batch(all_items)))
 
             if len(all_items) == 0:
                 return
 
-            conn = _state.log_conn()
+            conn = self.log_conn.get()
             post_promises = []
             while True:
                 items = []
@@ -457,6 +486,31 @@ def _ensure_object(object_type, object_id, force=False):
     return experiment_path
 
 
+@dataclasses.dataclass
+class ObjectMetadata:
+    id: str
+    name: str
+    full_info: Dict[str, Any]
+
+
+@dataclasses.dataclass
+class ProjectExperimentMetadata:
+    project: ObjectMetadata
+    experiment: ObjectMetadata
+
+
+@dataclasses.dataclass
+class ProjectDatasetMetadata:
+    project: ObjectMetadata
+    dataset: ObjectMetadata
+
+
+@dataclasses.dataclass
+class OrgProjectMetadata:
+    org_id: str
+    project: ObjectMetadata
+
+
 def init(
     project: str,
     experiment: Optional[str] = None,
@@ -465,10 +519,11 @@ def init(
     update: bool = False,
     base_experiment: Optional[str] = None,
     is_public: bool = False,
-    api_url: Optional[str] = None,
+    app_url: Optional[str] = None,
     api_key: Optional[str] = None,
     org_name: Optional[str] = None,
     metadata: Optional[Metadata] = None,
+    git_metadata_settings: Optional[GitMetadataSettings] = None,
     set_current: bool = True,
 ):
     """
@@ -483,25 +538,75 @@ def init(
     :param base_experiment: An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this
     experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
     :param is_public: An optional parameter to control whether the experiment is publicly visible to anybody with the link or privately visible to only members of the organization. Defaults to private.
-    :param api_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
     :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
+    :param git_metadata_settings: (Optional) Settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param set_current: If true (the default), set the global current-experiment to the newly-created one.
     :returns: The experiment object.
     """
-    login(org_name=org_name, api_key=api_key, api_url=api_url)
-    ret = Experiment(
-        project_name=project,
-        experiment_name=experiment,
-        description=description,
-        dataset=dataset,
-        update=update,
-        base_experiment=base_experiment,
-        is_public=is_public,
-        metadata=metadata,
-    )
+
+    def compute_metadata():
+        login(org_name=org_name, api_key=api_key, app_url=app_url)
+        args = {"project_name": project, "org_id": _state.org_id}
+
+        if experiment is not None:
+            args["experiment_name"] = experiment
+
+        if description is not None:
+            args["description"] = description
+
+        if update:
+            args["update"] = update
+
+        merged_git_metadata_settings = _state.git_metadata_settings
+        if git_metadata_settings is not None:
+            merged_git_metadata_settings = GitMetadataSettings.merge(
+                merged_git_metadata_settings, git_metadata_settings
+            )
+
+        repo_status = get_repo_status(merged_git_metadata_settings)
+        if repo_status:
+            args["repo_info"] = repo_status.as_dict()
+
+        if base_experiment is not None:
+            args["base_experiment"] = base_experiment
+        else:
+            args["ancestor_commits"] = list(get_past_n_ancestors())
+
+        if dataset is not None:
+            args["dataset_id"] = dataset.id
+            args["dataset_version"] = dataset.version
+
+        if is_public is not None:
+            args["public"] = is_public
+
+        if metadata is not None:
+            args["metadata"] = metadata
+
+        while True:
+            try:
+                response = _state.app_conn().post_json("api/experiment/register", args)
+                break
+            except AugmentedHTTPError as e:
+                if args.get("base_experiment") is not None and "base experiment" in str(e):
+                    _logger.warning(f"Base experiment {args['base_experiment']} not found.")
+                    args["base_experiment"] = None
+                else:
+                    raise
+
+        resp_project = response["project"]
+        resp_experiment = response["experiment"]
+        return ProjectExperimentMetadata(
+            project=ObjectMetadata(id=resp_project["id"], name=resp_project["name"], full_info=resp_project),
+            experiment=ObjectMetadata(
+                id=resp_experiment["id"], name=resp_experiment["name"], full_info=resp_experiment
+            ),
+        )
+
+    ret = Experiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset)
     if set_current:
         _state.current_experiment = ret
     return ret
@@ -512,7 +617,7 @@ def init_dataset(
     name: str = None,
     description: str = None,
     version: "str | int" = None,
-    api_url: str = None,
+    app_url: str = None,
     api_key: str = None,
     org_name: str = None,
 ):
@@ -523,29 +628,39 @@ def init_dataset(
     :param name: The name of the dataset to create. If not specified, a name will be generated automatically.
     :param description: An optional description of the dataset.
     :param version: An optional version of the dataset (to read). If not specified, the latest version will be used.
-    :param api_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
     :returns: The dataset object.
     """
-    login(org_name=org_name, api_key=api_key, api_url=api_url)
 
-    return Dataset(
-        project_name=project,
-        name=name,
-        description=description,
-        version=version,
-    )
+    def compute_metadata():
+        login(org_name=org_name, api_key=api_key, app_url=app_url)
+        args = _populate_args(
+            {"project_name": project, "org_id": _state.org_id},
+            dataset_name=name,
+            description=description,
+        )
+        response = _state.app_conn().post_json("api/dataset/register", args)
+        resp_project = response["project"]
+        resp_dataset = response["dataset"]
+        return ProjectDatasetMetadata(
+            project=ObjectMetadata(id=resp_project["id"], name=resp_project["name"], full_info=resp_project),
+            dataset=ObjectMetadata(id=resp_dataset["id"], name=resp_dataset["name"], full_info=resp_dataset),
+        )
+
+    return Dataset(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), version=version)
 
 
 def init_logger(
     project: str = None,
     project_id: str = None,
     async_flush: bool = True,
-    api_url: str = None,
+    app_url: str = None,
     api_key: str = None,
     org_name: str = None,
+    force_login: bool = False,
     set_current: bool = True,
 ):
     """
@@ -554,20 +669,43 @@ def init_logger(
     :param project: The name of the project to log into. If unspecified, will default to the Global project.
     :param project_id: The id of the project to log into. This takes precedence over project if specified.
     :param async_flush: If true (the default), log events will be batched and sent asynchronously in a background thread. If false, log events will be sent synchronously. Set to false in serverless environments.
-    :param api_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+    :param app_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+    :param force_login: Login again, even if you have already logged in (by default, the logger will not login if you are already logged in)
     :param set_current: If true (the default), set the global current-experiment to the newly-created one.
     :returns: The newly created Logger.
     """
 
-    def lazy_login():
-        login(org_name=org_name, api_key=api_key, api_url=api_url)
+    def compute_metadata():
+        login(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login)
+        org_id = _state.org_id
+        if project_id is None:
+            response = _state.app_conn().post_json(
+                "api/project/register",
+                {
+                    "project_name": project or GLOBAL_PROJECT,
+                    "org_id": _state.org_id,
+                },
+            )
+            resp_project = response["project"]
+            return OrgProjectMetadata(
+                org_id=org_id,
+                project=ObjectMetadata(id=resp_project["id"], name=resp_project["name"], full_info=resp_project),
+            )
+        elif project is None:
+            response = _state.app_conn().get_json("api/project", {"id": project_id})
+            return OrgProjectMetadata(
+                org_id=org_id, project=ObjectMetadata(id=project_id, name=response["name"], full_info=response)
+            )
+        else:
+            return OrgProjectMetadata(
+                org_id=org_id, project=ObjectMetadata(id=project_id, name=project, full_info=dict())
+            )
 
     ret = Logger(
-        lazy_login=lazy_login,
-        project=Project(name=project, id=project_id),
+        lazy_metadata=LazyValue(compute_metadata, use_mutex=True),
         async_flush=async_flush,
     )
     if set_current:
@@ -578,12 +716,12 @@ def init_logger(
 login_lock = threading.RLock()
 
 
-def login(api_url=None, api_key=None, org_name=None, force_login=False):
+def login(app_url=None, api_key=None, org_name=None, force_login=False):
     """
     Log into Braintrust. This will prompt you for your API token, which you can find at
     https://www.braintrustdata.com/app/token. This method is called automatically by `init()`.
 
-    :param api_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -594,8 +732,8 @@ def login(api_url=None, api_key=None, org_name=None, force_login=False):
 
     # Only permit one thread to login at a time
     with login_lock:
-        if api_url is None:
-            api_url = os.environ.get("BRAINTRUST_API_URL", "https://www.braintrustdata.com")
+        if app_url is None:
+            app_url = os.environ.get("BRAINTRUST_APP_URL", "https://www.braintrustdata.com")
 
         if api_key is None:
             api_key = os.environ.get("BRAINTRUST_API_KEY")
@@ -603,28 +741,19 @@ def login(api_url=None, api_key=None, org_name=None, force_login=False):
         if org_name is None:
             org_name = os.environ.get("BRAINTRUST_ORG_NAME")
 
-        # If any provided login inputs disagree with our existing settings,
-        # force login.
-        if (
-            api_url != _state.api_url
-            or (api_key is not None and HTTPConnection.sanitize_token(api_key) != _state.login_token)
-            or (org_name is not None and org_name != _state.org_name)
-        ):
-            force_login = True
-
         if not force_login and _state.logged_in:
             # We have already logged in
             return
 
-        _state = BraintrustState()
+        _state.reset_login_info()
 
-        _state.api_url = api_url
+        _state.app_url = app_url
 
         os.makedirs(CACHE_PATH, exist_ok=True)
 
         conn = None
         if api_key is not None:
-            resp = requests.post(_urljoin(_state.api_url, "/api/apikey/login"), json={"token": api_key})
+            resp = requests.post(_urljoin(_state.app_url, "/api/apikey/login"), json={"token": api_key})
             if not resp.ok:
                 api_key_prefix = (
                     (" (" + api_key[:2] + "*" * (len(api_key) - 4) + api_key[-2:] + ")") if len(api_key) > 4 else ""
@@ -647,7 +776,7 @@ def login(api_url=None, api_key=None, org_name=None, force_login=False):
         conn.make_long_lived()
 
         # Set the same token in the API
-        _state.api_conn().set_token(conn.token)
+        _state.app_conn().set_token(conn.token)
         _state.login_token = conn.token
         _state.logged_in = True
 
@@ -729,11 +858,20 @@ def get_span_parent_object() -> Union["Logger", "Experiment", Span]:
 
 def _try_log_input_output(span, f_sig, f_args, f_kwargs, output):
     bound_args = f_sig.bind(*f_args, **f_kwargs).arguments
+
+    input_serializable = bound_args
     try:
-        span.log(input=bound_args, output=output)
-    except Exception:
-        # Don't complain if the contents are not JSON-serializable.
-        pass
+        _check_json_serializable(bound_args)
+    except Exception as e:
+        input_serializable = "<input not json-serializable>: " + str(e)
+
+    output_serializable = output
+    try:
+        _check_json_serializable(output)
+    except Exception as e:
+        output_serializable = "<output not json-serializable>: " + str(e)
+
+    span.log(input=input_serializable, output=output_serializable)
 
 
 def traced(*span_args, **span_kwargs):
@@ -759,6 +897,11 @@ def traced(*span_args, **span_kwargs):
             span_args += (f.__name__,)
 
         f_sig = inspect.signature(f)
+
+        if "span_attributes" not in span_kwargs:
+            span_kwargs["span_attributes"] = {}
+        if "type" not in span_kwargs["span_attributes"]:
+            span_kwargs["span_attributes"]["type"] = SpanTypeAttribute.FUNCTION
 
         @wraps(f)
         def wrapper_sync(*f_args, **f_kwargs):
@@ -789,7 +932,7 @@ def traced(*span_args, **span_kwargs):
         return partial(decorator, span_args, span_kwargs)
 
 
-def start_span(name=None, span_attributes={}, start_time=None, set_current=None, **event) -> Span:
+def start_span(name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event) -> Span:
     """Lower-level alternative to `@traced` for starting a span at the toplevel. It creates a span under the first active object (using the same precedence order as `@traced`) or returns a no-op span object.
 
     We recommend running spans bound to a context manager (`with start_span`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a context manager, be sure to terminate it with `span.end()`.
@@ -801,7 +944,12 @@ def start_span(name=None, span_attributes={}, start_time=None, set_current=None,
     if not isinstance(parent_object, Span):
         name = coalesce(name, "root")
     return parent_object.start_span(
-        name=name, span_attributes=span_attributes, start_time=start_time, set_current=set_current, **event
+        name=name,
+        span_attributes=span_attributes,
+        start_time=start_time,
+        set_current=set_current,
+        parent_id=parent_id,
+        **event,
     )
 
 
@@ -815,7 +963,8 @@ def _check_org_info(org_info, org_name):
         if org_name is None or orgs["name"] == org_name:
             _state.org_id = orgs["id"]
             _state.org_name = orgs["name"]
-            _state.log_url = os.environ.get("BRAINTRUST_LOG_URL", orgs["api_url"])
+            _state.log_url = os.environ.get("BRAINTRUST_API_URL", orgs["api_url"])
+            _state.git_metadata_settings = GitMetadataSettings(**(orgs.get("git_metadata") or {}))
             break
 
     if _state.org_id is None:
@@ -862,6 +1011,9 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
         for name, score in scores.items():
             if not isinstance(name, str):
                 raise ValueError("score names must be strings")
+
+            if score is None:
+                continue
 
             if isinstance(score, bool):
                 score = 1 if score else 0
@@ -911,6 +1063,8 @@ def _validate_and_sanitize_experiment_log_full_args(event, has_dataset):
     if (input is not None and inputs is not None) or (input is None and inputs is None):
         raise ValueError("Exactly one of input or inputs (deprecated) must be specified. Prefer input.")
 
+    if event.get("output") is None:
+        raise ValueError("output must be specified")
     if event.get("scores") is None:
         raise ValueError("scores must be specified")
     elif not isinstance(event["scores"], dict):
@@ -989,7 +1143,95 @@ class ObjectFetcher:
             return max([int(record.get(TRANSACTION_ID_FIELD, 0)) for record in self.fetched_data] or [0])
 
 
-class Experiment(ModelWrapper, ObjectFetcher):
+@dataclasses.dataclass
+class ParentExperimentIds:
+    project_id: str
+    experiment_id: str
+
+
+@dataclasses.dataclass
+class ParentProjectLogIds:
+    org_id: str
+    project_id: str
+    log_id: str
+
+
+@dataclasses.dataclass
+class ParentSpanInfo:
+    span_id: str
+    root_span_id: str
+
+
+@dataclasses.dataclass
+class RowIds:
+    id: str
+    span_id: str
+    root_span_id: str
+    _parent_id: Optional[str] = None
+
+
+def _log_feedback_impl(
+    bg_logger, parent_ids, id, scores=None, expected=None, comment=None, metadata=None, source=None
+):
+    if source is None:
+        source = "external"
+    elif source not in VALID_SOURCES:
+        raise ValueError(f"source must be one of {VALID_SOURCES}")
+
+    if scores is None and expected is None and comment is None:
+        raise ValueError("At least one of scores, expected, or comment must be specified")
+
+    update_event = _validate_and_sanitize_experiment_log_partial_args(
+        event=dict(
+            scores=scores,
+            metadata=metadata,
+            expected=expected,
+        )
+    )
+
+    # Although we validate metadata the normal way, we want to save it as audit metadata,
+    # not ordinary metadata
+    metadata = update_event.pop("metadata")
+    update_event = {k: v for k, v in update_event.items() if v is not None}
+
+    if len(update_event) > 0:
+
+        def compute_record():
+            return dict(
+                id=id,
+                **update_event,
+                **dataclasses.asdict(parent_ids.get()),
+                **{
+                    AUDIT_SOURCE_FIELD: source,
+                    AUDIT_METADATA_FIELD: metadata,
+                    IS_MERGE_FIELD: True,
+                },
+            )
+
+        bg_logger.log(LazyValue(compute_record, use_mutex=False))
+
+    if comment is not None:
+
+        def compute_record():
+            return dict(
+                id=str(uuid.uuid4()),
+                created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                origin={
+                    # NOTE: We do not know (or care?) what the transaction id of the row that
+                    # we're commenting on is here, so we omit it.
+                    "id": id,
+                },
+                comment={
+                    "text": comment,
+                },
+                **dataclasses.asdict(parent_ids.get()),
+                **{AUDIT_SOURCE_FIELD: source, AUDIT_METADATA_FIELD: metadata},
+            )
+
+        bg_logger.log(LazyValue(compute_record, use_mutex=False))
+
+
+class Experiment:
     """
     An experiment is a collection of logged events, such as model inputs and outputs, which represent
     a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -1005,61 +1247,16 @@ class Experiment(ModelWrapper, ObjectFetcher):
 
     def __init__(
         self,
-        project_name: str,
-        experiment_name: str = None,
-        description: str = None,
+        lazy_metadata: LazyValue[ProjectExperimentMetadata],
         dataset: "Dataset" = None,
-        update: bool = False,
-        base_experiment: str = None,
-        is_public: bool = False,
-        metadata: Optional[Metadata] = None,
     ):
-        args = {"project_name": project_name, "org_id": _state.org_id}
-
-        if experiment_name is not None:
-            args["experiment_name"] = experiment_name
-
-        if description is not None:
-            args["description"] = description
-
-        if update:
-            args["update"] = update
-
-        repo_status = get_repo_status()
-        if repo_status:
-            args["repo_info"] = repo_status.as_dict()
-
-        if base_experiment is not None:
-            args["base_experiment"] = base_experiment
-        else:
-            args["ancestor_commits"] = list(get_past_n_ancestors())
-
-        if dataset is not None:
-            args["dataset_id"] = dataset.id
-            args["dataset_version"] = dataset.version
-
-        if is_public is not None:
-            args["public"] = is_public
-
-        if metadata is not None:
-            args["metadata"] = metadata
-
-        while True:
-            try:
-                response = _state.api_conn().post_json("api/experiment/register", args)
-                break
-            except AugmentedHTTPError as e:
-                if args.get("base_experiment") is not None and "base experiment" in str(e):
-                    _logger.warning(f"Base experiment {args['base_experiment']} not found.")
-                    args["base_experiment"] = None
-                else:
-                    raise
-
-        self.project = ModelWrapper(response["project"])
-        ModelWrapper.__init__(self, response["experiment"])
-
+        self._lazy_metadata = lazy_metadata
         self.dataset = dataset
-        self.bg_logger = _BackgroundLogger(name=experiment_name)
+
+        def compute_log_conn():
+            return self._get_state().log_conn()
+
+        self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
         self.last_start_time = time.time()
 
         ObjectFetcher.__init__(
@@ -1069,6 +1266,31 @@ class Experiment(ModelWrapper, ObjectFetcher):
             id=self.id,
             pinned_version=None,
         )
+
+    @property
+    def id(self):
+        return self._lazy_metadata.get().experiment.id
+
+    @property
+    def name(self):
+        return self._lazy_metadata.get().experiment.name
+
+    @property
+    def data(self):
+        return self._lazy_metadata.get().experiment.full_info
+
+    @property
+    def project(self):
+        return self._lazy_metadata.get().project
+
+    # Capture all metadata attributes which aren't covered by existing methods.
+    def __getattr__(self, name: str) -> Any:
+        return self._lazy_metadata.get().experiment.full_info[name]
+
+    def _get_state(self) -> BraintrustState:
+        # Ensure the login state is populated by fetching the lazy_metadata.
+        self._lazy_metadata.get()
+        return _state
 
     def log(
         self,
@@ -1087,10 +1309,10 @@ class Experiment(ModelWrapper, ObjectFetcher):
 
         :param input: The arguments that uniquely define a test case (an arbitrary, JSON serializable object). Later on, Braintrust will use the `input` to know whether two test cases are the same between experiments, so they should not contain experiment-specific state. A simple rule of thumb is that if you run the same experiment twice, the `input` should be identical.
         :param output: The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
-        :param expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
+        :param expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
         :param scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments.
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
-        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
+        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
         :param dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
         :param inputs: (Deprecated) the same as `input` (will be removed in a future version).
@@ -1114,19 +1336,57 @@ class Experiment(ModelWrapper, ObjectFetcher):
         self.last_start_time = span.end()
         return span.id
 
-    def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, **event):
+    def log_feedback(
+        self,
+        id,
+        scores=None,
+        expected=None,
+        comment=None,
+        metadata=None,
+        source=None,
+    ):
+        """
+        Log feedback to an event in the experiment. Feedback is used to save feedback scores, set an expected value, or add a comment.
+
+        :param id: The id of the event to log feedback for. This is the `id` returned by `log` or accessible as the `id` field of a span.
+        :param scores: (Optional) a dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the event.
+        :param expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not.
+        :param comment: (Optional) an optional comment string to log about the event.
+        :param metadata: (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
+        :param source: (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
+        """
+        return _log_feedback_impl(
+            bg_logger=self.bg_logger,
+            parent_ids=self._lazy_parent_ids(),
+            id=id,
+            scores=scores,
+            expected=expected,
+            comment=comment,
+            metadata=metadata,
+            source=source,
+        )
+
+    def _lazy_parent_ids(self):
+        def compute_parent_ids():
+            return ParentExperimentIds(project_id=self.project.id, experiment_id=self.id)
+
+        return LazyValue(compute_parent_ids, use_mutex=False)
+
+    def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
         """Create a new toplevel span underneath the experiment. The name defaults to "root".
 
         See `Span.start_span` for full details
         """
+
         return SpanImpl(
+            parent_ids=self._lazy_parent_ids(),
             bg_logger=self.bg_logger,
             name=name,
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
+            parent_id=parent_id,
             event=event,
-            root_experiment=self,
         )
 
     def summarize(self, summarize_scores=True, comparison_experiment_id=None):
@@ -1141,8 +1401,9 @@ class Experiment(ModelWrapper, ObjectFetcher):
         # includes the new experiment.
         self.bg_logger.flush()
 
+        state = self._get_state()
         project_url = (
-            f"{_state.api_url}/app/{encode_uri_component(_state.org_name)}/p/{encode_uri_component(self.project.name)}"
+            f"{state.app_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
         )
         experiment_url = f"{project_url}/{encode_uri_component(self.name)}"
 
@@ -1152,7 +1413,7 @@ class Experiment(ModelWrapper, ObjectFetcher):
         if summarize_scores:
             # Get the comparison experiment
             if comparison_experiment_id is None:
-                conn = _state.log_conn()
+                conn = state.log_conn()
                 resp = conn.get("/crud/base_experiments", params={"id": self.id})
                 response_raise_for_status(resp)
                 base_experiments = resp.json()
@@ -1161,7 +1422,7 @@ class Experiment(ModelWrapper, ObjectFetcher):
                     comparison_experiment_name = base_experiments[0]["base_exp_name"]
 
             if comparison_experiment_id is not None:
-                summary_items = _state.log_conn().get_json(
+                summary_items = state.log_conn().get_json(
                     "experiment-comparison2",
                     args={
                         "experiment_id": self.id,
@@ -1220,19 +1481,19 @@ class SpanImpl(Span):
 
     def __init__(
         self,
+        parent_ids: LazyValue[Union[ParentExperimentIds, ParentProjectLogIds]],
         bg_logger,
+        parent_span_info: Optional[ParentSpanInfo] = None,
+        # This is similarly named, but semantically different than parent_span_info. parent_span_info
+        # very directly populates the span_parents field of the span, whereas parent_id is the plain-old
+        # id field of the parent span, and is resolved on the server, not in the SDK.
+        parent_id=None,
         name=None,
         span_attributes={},
         start_time=None,
         set_current=None,
         event={},
-        root_experiment=None,
-        root_project=None,
-        parent_span=None,
     ):
-        if sum(x is not None for x in [root_experiment, root_project, parent_span]) != 1:
-            raise ValueError("Must specify exactly one of `root_experiment`, `root_project`, and `parent_span`")
-
         self.set_current = coalesce(set_current, True)
         self._logged_end_time = None
 
@@ -1241,10 +1502,10 @@ class SpanImpl(Span):
         caller_location = get_caller_location()
         if name is None:
             if caller_location:
-                filename = os.path.basename(caller_location.caller_filename)
+                filename = os.path.basename(caller_location["caller_filename"])
                 name = ":".join(
-                    [caller_location.caller_functionname]
-                    + ([f"{filename}:{caller_location.caller_lineno}"] if filename else [])
+                    [caller_location["caller_functionname"]]
+                    + ([f"{filename}:{caller_location['caller_lineno']}"] if filename else [])
                 )
             else:
                 name = "subspan"
@@ -1252,44 +1513,33 @@ class SpanImpl(Span):
         # `internal_data` contains fields that are not part of the
         # "user-sanitized" set of fields which we want to log in just one of the
         # span rows.
-        caller_location = get_caller_location()
         self.internal_data = dict(
             metrics=dict(
                 start=start_time or time.time(),
-                **(caller_location or {}),
             ),
             span_attributes=dict(**span_attributes, name=name),
             created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         )
+        if caller_location:
+            self.internal_data["context"] = caller_location
+
+        self.parent_ids = parent_ids
 
         id = event.get("id", None)
         if id is None:
             id = str(uuid.uuid4())
         span_id = str(uuid.uuid4())
-        # `_object_info` contains fields that are logged to every span row.
-        if root_experiment is not None:
-            self._object_info = dict(
-                id=id,
-                span_id=span_id,
-                root_span_id=span_id,
-                project_id=root_experiment.project.id,
-                experiment_id=root_experiment.id,
-            )
-        elif root_project is not None:
-            self._object_info = dict(
-                id=id,
-                span_id=span_id,
-                root_span_id=span_id,
-                org_id=_state.org_id,
-                project_id=root_project.id,
-                log_id="g",
-            )
-        elif parent_span is not None:
-            self._object_info = {**parent_span._object_info}
-            self._object_info.update(id=id, span_id=span_id)
-            self.internal_data.update(span_parents=[parent_span.span_id])
-        else:
-            raise RuntimeError("Must provide parent info")
+        self.row_ids = RowIds(
+            id=id, span_id=span_id, root_span_id=parent_span_info.root_span_id if parent_span_info else span_id
+        )
+
+        if parent_span_info is not None and parent_id is not None:
+            raise ValueError("Only one of parent_span_info and parent_id may be specified")
+
+        if parent_span_info:
+            self.internal_data.update(span_parents=[parent_span_info.span_id])
+        elif parent_id:
+            self.row_ids._parent_id = parent_id
 
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.
@@ -1299,15 +1549,15 @@ class SpanImpl(Span):
 
     @property
     def id(self):
-        return self._object_info["id"]
+        return self.row_ids.id
 
     @property
     def span_id(self):
-        return self._object_info["span_id"]
+        return self.row_ids.span_id
 
     @property
     def root_span_id(self):
-        return self._object_info["root_span_id"]
+        return self.row_ids.root_span_id
 
     def log(self, **event):
         sanitized = {
@@ -1318,25 +1568,48 @@ class SpanImpl(Span):
         # the latter.
         sanitized_and_internal_data = {**self.internal_data}
         merge_dicts(sanitized_and_internal_data, sanitized)
-        record = dict(
+        self.internal_data = {}
+        # Validate the non-lazily-computed part of the record-to-log.
+        partial_record = dict(
             **sanitized_and_internal_data,
-            **self._object_info,
+            **dataclasses.asdict(self.row_ids),
             **{IS_MERGE_FIELD: self._is_merge},
         )
-        if "metrics" in record and "end" in record["metrics"]:
-            self._logged_end_time = record["metrics"]["end"]
-        self.internal_data = {}
-        self.bg_logger.log(record)
+        _check_json_serializable(partial_record)
 
-    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, **event):
-        return SpanImpl(
+        if "metrics" in partial_record and "end" in partial_record["metrics"]:
+            self._logged_end_time = partial_record["metrics"]["end"]
+
+        def compute_record():
+            return dict(
+                **partial_record,
+                **dataclasses.asdict(self.parent_ids.get()),
+            )
+
+        self.bg_logger.log(LazyValue(compute_record, use_mutex=False))
+
+    def log_feedback(self, **event):
+        args = dict(
+            **event,
+            id=self.id,
+        )
+        return _log_feedback_impl(
             bg_logger=self.bg_logger,
+            parent_ids=self.parent_ids,
+            **args,
+        )
+
+    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
+        return SpanImpl(
+            parent_ids=self.parent_ids,
+            bg_logger=self.bg_logger,
+            parent_span_info=ParentSpanInfo(span_id=self.span_id, root_span_id=self.root_span_id),
             name=name,
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
+            parent_id=parent_id,
             event=event,
-            parent_span=self,
         )
 
     def end(self, end_time=None):
@@ -1365,7 +1638,7 @@ class SpanImpl(Span):
         self.end()
 
 
-class Dataset(ModelWrapper):
+class Dataset:
     """
     A dataset is a collection of records, such as model inputs and outputs, which represent
     data you can use to evaluate and fine-tune models. You can log production data to datasets,
@@ -1374,19 +1647,10 @@ class Dataset(ModelWrapper):
     You should not create `Dataset` objects directly. Instead, use the `braintrust.init_dataset()` method.
     """
 
-    def __init__(self, project_name: str, name: str = None, description: str = None, version: "str | int" = None):
-        args = _populate_args(
-            {"project_name": project_name, "org_id": _state.org_id},
-            dataset_name=name,
-            description=description,
-        )
-        response = _state.api_conn().post_json("api/dataset/register", args)
-        self.project = ModelWrapper(response["project"])
-
+    def __init__(self, lazy_metadata: LazyValue[ProjectDatasetMetadata], version: Union[None, int, str] = None):
+        self._lazy_metadata = lazy_metadata
         self.new_records = 0
-
         self._fetched_data = None
-
         self._pinned_version = None
         if version is not None:
             try:
@@ -1395,8 +1659,35 @@ class Dataset(ModelWrapper):
             except (ValueError, AssertionError):
                 raise ValueError(f"version ({version}) must be a positive integer")
 
-        super().__init__(response["dataset"])
-        self.bg_logger = _BackgroundLogger(name=self.name)
+        def compute_log_conn():
+            return self._get_state().log_conn()
+
+        self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
+
+    @property
+    def id(self):
+        return self._lazy_metadata.get().dataset.id
+
+    @property
+    def name(self):
+        return self._lazy_metadata.get().dataset.name
+
+    @property
+    def data(self):
+        return self._lazy_metadata.get().experiment.full_info
+
+    @property
+    def project(self):
+        return self._lazy_metadata.get().project
+
+    # Capture all metadata attributes which aren't covered by existing methods.
+    def __getattr__(self, name: str) -> Any:
+        return self._lazy_metadata.get().dataset.full_info[name]
+
+    def _get_state(self) -> BraintrustState:
+        # Ensure the login state is populated by fetching the lazy_metadata.
+        self._lazy_metadata.get()
+        return _state
 
     def insert(self, input, output, metadata=None, id=None):
         """
@@ -1419,22 +1710,30 @@ class Dataset(ModelWrapper):
                 if not isinstance(key, str):
                     raise ValueError("metadata keys must be strings")
 
-        args = _populate_args(
+        row_id = id or str(uuid.uuid4())
+        # Validate the non-lazily-computed part of the record-to-log.
+        partial_args = _populate_args(
             {
-                "id": id or str(uuid.uuid4()),
+                "id": row_id,
                 "inputs": input,
                 "output": output,
-                "project_id": self.project.id,
-                "dataset_id": self.id,
                 "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             },
             metadata=metadata,
         )
+        _check_json_serializable(partial_args)
+
+        def compute_args():
+            return dict(
+                **partial_args,
+                project_id=self.project.id,
+                dataset_id=self.id,
+            )
 
         self._clear_cache()  # We may be able to optimize this
         self.new_records += 1
-        self.bg_logger.log(args)
-        return args["id"]
+        self.bg_logger.log(LazyValue(compute_args, use_mutex=False))
+        return row_id
 
     def delete(self, id):
         """
@@ -1442,18 +1741,26 @@ class Dataset(ModelWrapper):
 
         :param id: The `id` of the record to delete.
         """
-        args = _populate_args(
+
+        # Validate the non-lazily-computed part of the record-to-log.
+        partial_args = _populate_args(
             {
                 "id": id,
-                "project_id": self.project.id,
-                "dataset_id": self.id,
                 "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "_object_delete": True,  # XXX potentially place this in the logging endpoint
             },
         )
+        _check_json_serializable(partial_args)
 
-        self.bg_logger.log(args)
-        return args["id"]
+        def compute_args():
+            return dict(
+                **partial_args,
+                project_id=self.project.id,
+                dataset_id=self.id,
+            )
+
+        self.bg_logger.log(LazyValue(compute_args, use_mutex=False))
+        return id
 
     def summarize(self, summarize_data=True):
         """
@@ -1465,15 +1772,15 @@ class Dataset(ModelWrapper):
         # Flush our events to the API, and to the data warehouse, to ensure that the link we print
         # includes the new experiment.
         self.bg_logger.flush()
-
+        state = self._get_state()
         project_url = (
-            f"{_state.api_url}/app/{encode_uri_component(_state.org_name)}/p/{encode_uri_component(self.project.name)}"
+            f"{state.app_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
         )
         dataset_url = f"{project_url}/d/{encode_uri_component(self.name)}"
 
         data_summary = None
         if summarize_data:
-            data_summary_d = _state.log_conn().get_json(
+            data_summary_d = state.log_conn().get_json(
                 "dataset-summary",
                 args={
                     "dataset_id": self.id,
@@ -1524,7 +1831,8 @@ class Dataset(ModelWrapper):
             ".fetched_data is deprecated and will be removed in a future version of braintrust. Use .fetch() or the iterator instead"
         )
         if not self._fetched_data:
-            resp = _state.log_conn().get(
+            state = self._get_state()
+            resp = state.log_conn().get(
                 "object/dataset", params={"id": self.id, "fmt": "json", "version": self._pinned_version}
             )
             response_raise_for_status(resp)
@@ -1572,7 +1880,7 @@ class Project:
         if self._id is None or self._name is None:
             with self.init_lock:
                 if self._id is None:
-                    response = _state.api_conn().post_json(
+                    response = _state.app_conn().post_json(
                         "api/project/register",
                         {
                             "project_name": self._name or GLOBAL_PROJECT,
@@ -1582,7 +1890,7 @@ class Project:
                     self._id = response["project"]["id"]
                     self._name = response["project"]["name"]
                 elif self._name is None:
-                    response = _state.api_conn().get_json("api/project", {"id": self._id})
+                    response = _state.app_conn().get_json("api/project", {"id": self._id})
                     self._name = response["name"]
 
         return self
@@ -1599,15 +1907,28 @@ class Project:
 
 
 class Logger:
-    def __init__(self, lazy_login: Callable, project: Project, async_flush: bool = True):
-        self._lazy_login = lazy_login
-        self._logged_in = False
-
-        self.project = project
+    def __init__(self, lazy_metadata: LazyValue[OrgProjectMetadata], async_flush: bool = True):
+        self._lazy_metadata = lazy_metadata
         self.async_flush = async_flush
 
-        self.bg_logger = _BackgroundLogger()
+        def compute_log_conn():
+            return self._get_state().log_conn()
+
+        self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
         self.last_start_time = time.time()
+
+    @property
+    def org_id(self):
+        return self._lazy_metadata.get().org_id
+
+    @property
+    def project(self):
+        return self._lazy_metadata.get().project
+
+    def _get_state(self) -> BraintrustState:
+        # Ensure the login state is populated by fetching the lazy_metadata.
+        self._lazy_metadata.get()
+        return _state
 
     def log(
         self,
@@ -1622,16 +1943,14 @@ class Logger:
         """
         Log a single event. The event will be batched and uploaded behind the scenes.
 
-        :param input: The arguments that uniquely define a user input(an arbitrary, JSON serializable object).
-        :param output: The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
-        :param expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
-        :param scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
+        :param input: (Optional) the arguments that uniquely define a user input(an arbitrary, JSON serializable object).
+        :param output: (Optional) the output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
+        :param expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
+        :param scores: (Optional) a dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
-        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
+        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
         """
-        # Do the lazy login before retrieving the last_start_time.
-        self._perform_lazy_login()
         span = self.start_span(
             start_time=self.last_start_time,
             input=input,
@@ -1649,26 +1968,61 @@ class Logger:
 
         return span.id
 
-    def _perform_lazy_login(self):
-        if not self._logged_in:
-            self._lazy_login()
-            self.last_start_time = time.time()
-            self._logged_in = True
+    def log_feedback(
+        self,
+        id,
+        scores=None,
+        expected=None,
+        comment=None,
+        metadata=None,
+        source=None,
+    ):
+        """
+        Log feedback to an event. Feedback is used to save feedback scores, set an expected value, or add a comment.
 
-    def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, **event):
+        :param id: The id of the event to log feedback for. This is the `id` returned by `log` or accessible as the `id` field of a span.
+        :param scores: (Optional) a dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the event.
+        :param expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not.
+        :param comment: (Optional) an optional comment string to log about the event.
+        :param metadata: (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
+        :param source: (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
+        """
+        return _log_feedback_impl(
+            bg_logger=self.bg_logger,
+            parent_ids=self._lazy_parent_ids(),
+            id=id,
+            scores=scores,
+            expected=expected,
+            comment=comment,
+            metadata=metadata,
+            source=source,
+        )
+
+    def _lazy_parent_ids(self):
+        def compute_parent_ids():
+            return ParentProjectLogIds(
+                org_id=self.org_id,
+                project_id=self.project.id,
+                log_id="g",
+            )
+
+        return LazyValue(compute_parent_ids, use_mutex=False)
+
+    def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
         """Create a new toplevel span underneath the logger. The name parameter defaults to "root".
 
         See `Span.start_span` for full details
         """
-        self._perform_lazy_login()
+
         return SpanImpl(
+            parent_ids=self._lazy_parent_ids(),
             bg_logger=self.bg_logger,
             name=name,
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
+            parent_id=parent_id,
             event=event,
-            root_project=self.project,
         )
 
     def __enter__(self):
@@ -1681,7 +2035,6 @@ class Logger:
         """
         Flush any pending logs to the server.
         """
-        self._perform_lazy_login()
         self.bg_logger.flush()
 
 

@@ -19,4 +19,5 @@ export function mergeDicts(
       mergeInto[k] = mergeFromV;
     }
   }
+  return mergeInto;
 }

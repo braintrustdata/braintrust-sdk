@@ -115,13 +115,13 @@ async function initLogger(
   experimentName?: string,
   metadata?: Metadata
 ) {
-  const logger = await initExperiment(projectName, {
+  const logger = initExperiment(projectName, {
     experiment: experimentName,
     metadata,
   });
   const info = await logger.summarize({ summarizeScores: false });
   console.error(
-    `Experiment ${logger.name} is running at ${info.experimentUrl}`
+    `Experiment ${info.experimentName} is running at ${info.experimentUrl}`
   );
   return logger;
 }
@@ -225,7 +225,7 @@ interface EvaluatorOpts {
   verbose: boolean;
   apiKey?: string;
   orgName?: string;
-  apiUrl?: string;
+  appUrl?: string;
   noSendLogs: boolean;
   terminateOnFailure: boolean;
   watch: boolean;
@@ -332,7 +332,7 @@ async function runOnce(
       );
     } finally {
       if (logger) {
-        await logger.close();
+        await logger.flush();
       }
     }
   });
@@ -360,7 +360,7 @@ interface RunArgs {
   verbose: boolean;
   api_key?: string;
   org_name?: string;
-  api_url?: string;
+  app_url?: string;
   filter?: string[];
   tsconfig?: string;
   no_send_logs: boolean;
@@ -525,7 +525,7 @@ async function run(args: RunArgs) {
     verbose: args.verbose,
     apiKey: args.api_key,
     orgName: args.org_name,
-    apiUrl: args.api_url,
+    appUrl: args.app_url,
     noSendLogs: !!args.no_send_logs,
     terminateOnFailure: !!args.terminate_on_failure,
     watch: !!args.watch,
@@ -543,7 +543,7 @@ async function run(args: RunArgs) {
       await login({
         apiKey: args.api_key,
         orgName: args.org_name,
-        apiUrl: args.api_url,
+        appUrl: args.app_url,
       });
     }
     if (args.watch) {
@@ -588,8 +588,8 @@ async function main() {
   parser_run.add_argument("--org-name", {
     help: "The name of a specific organization to connect to. This is useful if you belong to multiple.",
   });
-  parser_run.add_argument("--api-url", {
-    help: "Specify a custom braintrust api url. Defaults to https://www.braintrustdata.com. This is only necessary if you are using an experimental version of Braintrust",
+  parser_run.add_argument("--app-url", {
+    help: "Specify a custom braintrust app url. Defaults to https://www.braintrustdata.com. This is only necessary if you are using an experimental version of Braintrust",
   });
   parser_run.add_argument("--watch", {
     action: "store_true",

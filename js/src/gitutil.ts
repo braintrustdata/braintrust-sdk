@@ -1,3 +1,4 @@
+import { GitMetadataSettings, RepoStatus } from "@braintrust/core";
 import { simpleGit } from "simple-git";
 
 const COMMON_BASE_BRANCHES = ["main", "master", "develop"];
@@ -5,23 +6,15 @@ const COMMON_BASE_BRANCHES = ["main", "master", "develop"];
 /**
  * Information about the current HEAD of the repo.
  */
-export interface RepoStatus {
-  commit?: string;
-  branch?: string;
-  tag?: string;
-  dirty: boolean;
-  author_name?: string;
-  author_email?: string;
-  commit_message?: string;
-  commit_time?: string;
-  git_diff?: string;
-}
-
 export async function currentRepo() {
-  const git = simpleGit();
-  if (await git.checkIsRepo()) {
-    return git;
-  } else {
+  try {
+    const git = simpleGit();
+    if (await git.checkIsRepo()) {
+      return git;
+    } else {
+      return null;
+    }
+  } catch (e) {
     return null;
   }
 }
@@ -141,7 +134,36 @@ async function attempt<T>(fn: () => Promise<T>): Promise<T | undefined> {
   }
 }
 
-export async function getRepoStatus() {
+function truncateToByteLimit(s: string, byteLimit: number = 65536): string {
+  const encoded = new TextEncoder().encode(s);
+  if (encoded.length <= byteLimit) {
+    return s;
+  }
+
+  const truncated = encoded.subarray(0, byteLimit);
+  // Decode back to string, automatically ignoring any incomplete character at the end
+  return new TextDecoder().decode(truncated);
+}
+
+export async function getRepoStatus(settings?: GitMetadataSettings) {
+  if (settings && settings.collect === "none") {
+    return undefined;
+  }
+
+  const repo = await repoStatus();
+  if (!repo || !settings || settings.collect === "all") {
+    return repo;
+  }
+
+  let sanitized: RepoStatus = {};
+  settings.fields?.forEach((field) => {
+    sanitized = { ...sanitized, [field]: repo[field] };
+  });
+
+  return sanitized;
+}
+
+async function repoStatus() {
   const git = await currentRepo();
   if (git === null) {
     return undefined;
@@ -180,7 +202,9 @@ export async function getRepoStatus() {
   );
 
   if (dirty) {
-    git_diff = await attempt(async () => await git.raw(["diff", "HEAD"]));
+    git_diff = await attempt(async () =>
+      truncateToByteLimit(await git.raw(["diff", "HEAD"]))
+    );
   }
 
   return {

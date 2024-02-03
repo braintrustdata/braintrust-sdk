@@ -3,11 +3,10 @@ import os
 import re
 import subprocess
 import threading
-from dataclasses import dataclass
 from functools import lru_cache as _cache
-from typing import Optional
+from typing import List, Optional
 
-from braintrust_core.util import SerializableDataClass
+from braintrust_core.git_fields import GitMetadataSettings, RepoStatus
 
 # https://stackoverflow.com/questions/48399498/git-executable-not-found-in-python
 os.environ["GIT_PYTHON_REFRESH"] = "quiet"
@@ -15,21 +14,6 @@ import git
 
 _logger = logging.getLogger("braintrust.gitutil")
 _gitlock = threading.RLock()
-
-
-@dataclass
-class RepoStatus(SerializableDataClass):
-    """Information about the current HEAD of the repo."""
-
-    commit: Optional[str]
-    branch: Optional[str]
-    tag: Optional[str]
-    dirty: bool
-    author_name: Optional[str]
-    author_email: Optional[str]
-    commit_message: Optional[str]
-    commit_time: Optional[str]
-    git_diff: Optional[str]
 
 
 @_cache(1)
@@ -114,13 +98,32 @@ def get_past_n_ancestors(n=10, remote=None):
 def attempt(op):
     try:
         return op()
-    except TypeError:
-        return None
-    except git.GitCommandError:
+    except (TypeError, ValueError, git.GitCommandError):
         return None
 
 
-def get_repo_status():
+def truncate_to_byte_limit(input_string, byte_limit=65536):
+    encoded = input_string.encode("utf-8")
+    if len(encoded) <= byte_limit:
+        return input_string
+    return encoded[:byte_limit].decode("utf-8", errors="ignore")
+
+
+def get_repo_status(settings: Optional[GitMetadataSettings] = None):
+    if settings is None:
+        settings = GitMetadataSettings()
+
+    if settings.collect == "none":
+        return None
+
+    repo = repo_status()
+    if repo is None or settings.collect == "all":
+        return repo
+
+    return RepoStatus(**{k: v if k in settings.fields else None for k, v in repo.as_dict().items()})
+
+
+def repo_status():
     with _gitlock:
         repo = _current_repo()
         if repo is None:
@@ -137,17 +140,17 @@ def get_repo_status():
 
         dirty = repo.is_dirty()
 
-        commit = attempt(lambda: repo.head.commit.hexsha).strip()
-        commit_message = attempt(lambda: repo.head.commit.message).strip()
+        commit = attempt(lambda: repo.head.commit.hexsha.strip())
+        commit_message = attempt(lambda: repo.head.commit.message.strip())
         commit_time = attempt(lambda: repo.head.commit.committed_datetime.isoformat())
-        author_name = attempt(lambda: repo.head.commit.author.name).strip()
-        author_email = attempt(lambda: repo.head.commit.author.email).strip()
+        author_name = attempt(lambda: repo.head.commit.author.name.strip())
+        author_email = attempt(lambda: repo.head.commit.author.email.strip())
         tag = attempt(lambda: repo.git.describe("--tags", "--exact-match", "--always"))
 
         branch = attempt(lambda: repo.active_branch.name)
 
         if dirty:
-            git_diff = attempt(lambda: repo.git.diff("HEAD"))
+            git_diff = attempt(lambda: truncate_to_byte_limit(repo.git.diff("HEAD")))
 
         return RepoStatus(
             commit=commit,
