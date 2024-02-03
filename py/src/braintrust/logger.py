@@ -516,7 +516,7 @@ def init(
     experiment: Optional[str] = None,
     description: Optional[str] = None,
     dataset: Optional["Dataset"] = None,
-    update: bool = False,
+    open: bool = False,
     base_experiment: Optional[str] = None,
     is_public: bool = False,
     app_url: Optional[str] = None,
@@ -525,6 +525,7 @@ def init(
     metadata: Optional[Metadata] = None,
     git_metadata_settings: Optional[GitMetadataSettings] = None,
     set_current: bool = True,
+    update: Optional[bool] = None,
 ):
     """
     Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
@@ -534,7 +535,7 @@ def init(
     :param description: (Optional) An optional description of the experiment.
     :param dataset: (Optional) A dataset to associate with the experiment. The dataset must be initialized with `braintrust.init_dataset` before passing
     it into the experiment.
-    :param update: If the experiment already exists, continue logging to it.
+    :param open: If the experiment already exists, open it instead of creating a new one.
     :param base_experiment: An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this
     experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
     :param is_public: An optional parameter to control whether the experiment is publicly visible to anybody with the link or privately visible to only members of the organization. Defaults to private.
@@ -545,6 +546,7 @@ def init(
     :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
     :param git_metadata_settings: (Optional) Settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param set_current: If true (the default), set the global current-experiment to the newly-created one.
+    :param update: (Deprecated) If true, old alias for `open`. This parameter will be removed in a future version of braintrust.
     :returns: The experiment object.
     """
 
@@ -558,8 +560,8 @@ def init(
         if description is not None:
             args["description"] = description
 
-        if update:
-            args["update"] = update
+        if update or open:
+            args["update"] = True
 
         merged_git_metadata_settings = _state.git_metadata_settings
         if git_metadata_settings is not None:
@@ -1078,10 +1080,27 @@ def _validate_and_sanitize_experiment_log_full_args(event, has_dataset):
     return event
 
 
+class ObjectIterator:
+    def __init__(self, refetch_fn):
+        self._refetch_fn = refetch_fn
+        self.idx = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        data = self._refetch_fn()
+        if self.idx >= len(data):
+            raise StopIteration
+        self.idx += 1
+        return data[self.idx - 1]
+
+
 class ObjectFetcher:
-    def __init__(self, object_type, json_fields, id, pinned_version=None):
+    def __init__(self, object_type, json_fields, pinned_version=None):
+        assert hasattr(self, "id"), "ObjectFetcher subclasses must have an 'id' attribute"
+
         self.object_type = object_type
-        self.id = id
         self.json_fields = set()
 
         self.json_fields.update(json_fields)
@@ -1106,13 +1125,10 @@ class ObjectFetcher:
 
         :returns: An iterator over the records.
         """
-        self._refetch()
-        for record in self._fetched_data:
-            yield {
-                k: json.loads(v) if k in self.json_fields and v is not None else v
-                for k, v in record.items()
-                if k not in self.exclude_fields
-            }
+        return ObjectIterator(self._refetch)
+
+    def __iter__(self):
+        return self.fetch()
 
     @property
     def fetched_data(self):
@@ -1231,7 +1247,25 @@ def _log_feedback_impl(
         bg_logger.log(LazyValue(compute_record, use_mutex=False))
 
 
-class Experiment:
+class ExperimentDatasetIterator:
+    def __init__(self, iterator):
+        self.iterator = iterator
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        while True:
+            value = next(self.iterator)
+            if value["root_span_id"] != value["span_id"]:
+                continue
+
+            output, expected = value.pop("output", None), value.pop("expected", None)
+            value["expected"] = expected if expected is not None else output
+            return value
+
+
+class Experiment(ObjectFetcher):
     """
     An experiment is a collection of logged events, such as model inputs and outputs, which represent
     a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -1263,7 +1297,6 @@ class Experiment:
             self,
             object_type="experiment",
             json_fields=["input", "output", "expected", "metadata", "scores", "metrics"],
-            id=self.id,
             pinned_version=None,
         )
 
@@ -1388,6 +1421,9 @@ class Experiment:
             parent_id=parent_id,
             event=event,
         )
+
+    def as_dataset(self):
+        return ExperimentDatasetIterator(self.fetch())
 
     def summarize(self, summarize_scores=True, comparison_experiment_id=None):
         """
