@@ -1255,6 +1255,12 @@ def _log_feedback_impl(
         bg_logger.log(LazyValue(compute_record, use_mutex=False))
 
 
+@dataclasses.dataclass
+class ExperimentIdentifier:
+    id: str
+    name: str
+
+
 class ExperimentDatasetIterator:
     def __init__(self, iterator):
         self.iterator = iterator
@@ -1437,6 +1443,19 @@ class Experiment(ObjectFetcher):
     def as_dataset(self):
         return ExperimentDatasetIterator(self.fetch())
 
+    def fetch_base_experiment(self):
+        state = self._get_state()
+        conn = state.log_conn()
+        resp = conn.get("/crud/base_experiments", params={"id": self.id})
+        response_raise_for_status(resp)
+        base_experiments = resp.json()
+        if base_experiments:
+            return ExperimentIdentifier(
+                id=base_experiments[0]["base_exp_id"], name=base_experiments[0]["base_exp_name"]
+            )
+        else:
+            return None
+
     def summarize(self, summarize_scores=True, comparison_experiment_id=None):
         """
         Summarize the experiment, including the scores (compared to the closest reference experiment) and metadata.
@@ -1461,13 +1480,10 @@ class Experiment(ObjectFetcher):
         if summarize_scores:
             # Get the comparison experiment
             if comparison_experiment_id is None:
-                conn = state.log_conn()
-                resp = conn.get("/crud/base_experiments", params={"id": self.id})
-                response_raise_for_status(resp)
-                base_experiments = resp.json()
-                if base_experiments:
-                    comparison_experiment_id = base_experiments[0]["base_exp_id"]
-                    comparison_experiment_name = base_experiments[0]["base_exp_name"]
+                base_experiment = self.fetch_base_experiment()
+                if base_experiment:
+                    comparison_experiment_id = base_experiment.id
+                    comparison_experiment_name = base_experiment.name
 
             if comparison_experiment_id is not None:
                 summary_items = state.log_conn().get_json(
