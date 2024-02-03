@@ -1654,6 +1654,82 @@ function validateAndSanitizeExperimentLogFullArgs(
   return event;
 }
 
+class ObjectFetcher<RecordType> {
+  private excludeFields: Set<string> = new Set(["_object_delete"]);
+  private _fetchedData: any[] | undefined = undefined;
+
+  constructor(
+    private objectType: "dataset" | "experiment",
+    private jsonFields: Set<string>,
+    private pinnedVersion: string | undefined
+  ) {}
+
+  public get id(): Promise<string> {
+    throw new Error("ObjectFetcher subclasses must have an 'id' attribute");
+  }
+
+  async getState(): Promise<BraintrustState> {
+    throw new Error("ObjectFetcher subclasses must have a 'getState' method");
+  }
+
+  async *fetch(): AsyncGenerator<RecordType> {
+    const records = await this.fetchedData();
+    for (const record of records) {
+      yield Object.fromEntries(
+        Object.entries(record)
+          .filter(([k, _]) => !this.excludeFields.has(k))
+          .map(([k, v]) => [
+            k,
+            this.jsonFields.has(k) && typeof v === "string" ? JSON.parse(v) : v,
+          ])
+      ) as RecordType;
+    }
+    this.clearCache();
+  }
+
+  [Symbol.iterator]() {
+    return this.fetch();
+  }
+
+  async fetchedData() {
+    if (this._fetchedData === undefined) {
+      const state = await this.getState();
+      const resp = await state.logConn().get(`object/${this.objectType}`, {
+        id: await this.id,
+        fmt: "json",
+        version: this.pinnedVersion,
+      });
+
+      const text = await resp.text();
+      this._fetchedData = text
+        .split("\n")
+        .filter((x: string) => x.trim() !== "")
+        .map((x: string) => JSON.parse(x));
+    }
+    return this._fetchedData || [];
+  }
+
+  clearCache() {
+    this._fetchedData = undefined;
+  }
+
+  public async version() {
+    if (this.pinnedVersion !== undefined) {
+      return this.pinnedVersion;
+    } else {
+      const fetchedData = await this.fetchedData();
+      let maxVersion = undefined;
+      for (const record of fetchedData) {
+        const xactId = record[TRANSACTION_ID_FIELD];
+        if (maxVersion === undefined || (xactId ?? xactId > maxVersion)) {
+          maxVersion = xactId;
+        }
+      }
+      return maxVersion;
+    }
+  }
+}
+
 /**
  * An experiment is a collection of logged events, such as model inputs and outputs, which represent
  * a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -2094,18 +2170,16 @@ export class SpanImpl implements Span {
  *
  * You should not create `Dataset` objects directly. Instead, use the `braintrust.initDataset()` method.
  */
-export class Dataset {
+export class Dataset extends ObjectFetcher<DatasetRecord> {
   private readonly lazyMetadata: LazyValue<ProjectDatasetMetadata>;
-  private pinnedVersion?: string;
-  private _fetchedData?: any[] = undefined;
   private bgLogger: BackgroundLogger;
 
   constructor(
     lazyMetadata: LazyValue<ProjectDatasetMetadata>,
     pinnedVersion?: string
   ) {
+    super("dataset", new Set(["input", "output", "metadata"]), pinnedVersion);
     this.lazyMetadata = lazyMetadata;
-    this.pinnedVersion = pinnedVersion;
     const logConn = new LazyValue(() =>
       this.getState().then((state) => state.logConn())
     );
@@ -2130,7 +2204,7 @@ export class Dataset {
     })();
   }
 
-  private async getState(): Promise<BraintrustState> {
+  async getState(): Promise<BraintrustState> {
     // Ensure the login state is populated by awaiting lazyMetadata.
     await this.lazyMetadata.get();
     return _state;
@@ -2233,91 +2307,6 @@ export class Dataset {
       datasetUrl,
       dataSummary,
     };
-  }
-
-  /**
-   * Fetch all records in the dataset.
-   *
-   * @example
-   * ```
-   * // Use an async iterator to fetch all records in the dataset.
-   * for await (const record of dataset.fetch()) {
-   *  console.log(record);
-   * }
-   *
-   * // You can also iterate over the dataset directly.
-   * for await (const record of dataset) {
-   *  console.log(record);
-   * }
-   * ```
-   *
-   * @returns An iterator over the dataset's records.
-   */
-  async *fetch(): AsyncGenerator<DatasetRecord> {
-    const records = await this.fetchedData();
-    for (const record of records) {
-      yield {
-        id: record.id,
-        input: record.input && JSON.parse(record.input),
-        output: record.input && JSON.parse(record.output),
-        metadata: record.metadata && JSON.parse(record.metadata),
-      };
-    }
-    this.clearCache();
-  }
-
-  /**
-   * Fetch all records in the dataset.
-   *
-   * @example
-   * ```
-   * // Use an async iterator to fetch all records in the dataset.
-   * for await (const record of dataset) {
-   *  console.log(record);
-   * }
-   * ```
-   */
-  [Symbol.asyncIterator]() {
-    return this.fetch();
-  }
-
-  async fetchedData() {
-    if (this._fetchedData === undefined) {
-      const state = await this.getState();
-      const resp = await state.logConn().get("object/dataset", {
-        id: await this.id,
-        fmt: "json",
-        version: this.pinnedVersion,
-      });
-
-      const text = await resp.text();
-      this._fetchedData = text
-        .split("\n")
-        .filter((x: string) => x.trim() !== "")
-        .map((x: string) => JSON.parse(x));
-    }
-
-    return this._fetchedData || [];
-  }
-
-  clearCache() {
-    this._fetchedData = undefined;
-  }
-
-  async version() {
-    if (this.pinnedVersion !== undefined) {
-      return this.pinnedVersion;
-    } else {
-      const fetchedData = await this.fetchedData();
-      let maxVersion = undefined;
-      for (const record of fetchedData) {
-        const xactId = record[TRANSACTION_ID_FIELD];
-        if (maxVersion === undefined || (xactId ?? xactId > maxVersion)) {
-          maxVersion = xactId;
-        }
-      }
-      return maxVersion;
-    }
   }
 
   /**

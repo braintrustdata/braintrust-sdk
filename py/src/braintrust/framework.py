@@ -2,7 +2,6 @@ import abc
 import asyncio
 import contextvars
 import dataclasses
-from enum import Enum
 import inspect
 import json
 import re
@@ -10,6 +9,7 @@ import traceback
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from enum import Enum
 from multiprocessing import cpu_count
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List, Optional, TypeVar, Union
 
