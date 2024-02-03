@@ -107,7 +107,11 @@ class BaseExperiment:
     ```
     """
 
-    pass
+    """
+    The name of the base experiment to use. If unspecified, Braintrust will automatically figure out the best base
+    using your git history (or fall back to timestamps).
+    """
+    name: Optional[str] = None
 
 
 @dataclasses.dataclass
@@ -586,7 +590,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
             )
         base_experiment = experiment.fetch_base_experiment()
         data_iterator = _init_experiment(
-            project=experiment.project.name, experiment=base_experiment.name, open=True
+            project=evaluator.project_name, experiment=base_experiment.name, open=True
         ).as_dataset()
 
     if inspect.isfunction(data_iterator):

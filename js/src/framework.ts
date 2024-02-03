@@ -10,6 +10,7 @@ import {
 import { Score, SpanTypeAttribute } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
+import { isEmpty } from "./util";
 
 export interface EvalCase<Input, Expected> {
   input: Input;
@@ -20,12 +21,32 @@ export interface EvalCase<Input, Expected> {
 export type BaseExperiment<Input, Expected> = {
   _type: "BaseExperiment";
   _phantom?: [Input, Expected];
+  name?: string;
 };
-export function BaseExperiment<
-  Input = unknown,
-  Expected = unknown,
->(): BaseExperiment<Input, Expected> {
-  return { _type: "BaseExperiment" };
+
+/**
+ * Use this to specify that the dataset should actually be the data from a previous (base) experiment.
+ * Braintrust will automatically figure out the best base experiment to use based on your git history
+ * (or fall back to timestamps).
+
+ * If you instead want to specify a specific experiment, then use
+ * ```typescript
+ * ...
+ *  data: init(project_name, { experiment: experimentName, open: true }).asDataset()
+ * ...
+ * ```
+ *
+ * @param options
+ * @param options.name The name of the base experiment to use. If unspecified, Braintrust will automatically figure out the best base
+ * using your git history (or fall back to timestamps).
+ * @returns
+ */
+export function BaseExperiment<Input = unknown, Expected = unknown>(
+  options: {
+    name?: string;
+  } = {}
+): BaseExperiment<Input, Expected> {
+  return { _type: "BaseExperiment", ...options };
 }
 
 export type EvalData<Input, Expected> =
@@ -247,12 +268,16 @@ export async function runEvaluator(
         "Cannot use BaseExperiment() without connecting to Braintrust (you most likely set --no-send-logs)"
       );
     }
-    const baseExperiment = await experiment.fetchBaseExperiment();
-    if (!baseExperiment) {
-      throw new Error("BaseExperiment() failed to fetch base experiment");
+    let name = dataResult.name;
+    if (isEmpty(name)) {
+      const baseExperiment = await experiment.fetchBaseExperiment();
+      if (!baseExperiment) {
+        throw new Error("BaseExperiment() failed to fetch base experiment");
+      }
+      name = baseExperiment.name;
     }
     dataResult = init(evaluator.projectName, {
-      experiment: baseExperiment?.name,
+      experiment: name,
       open: true,
     }).asDataset();
   }
