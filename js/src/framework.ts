@@ -17,11 +17,24 @@ export interface EvalCase<Input, Expected> {
   metadata?: Metadata;
 }
 
+export type BaseExperiment<Input, Expected> = {
+  _type: "BaseExperiment";
+  _phantom?: [Input, Expected];
+};
+export function BaseExperiment<
+  Input = unknown,
+  Expected = unknown,
+>(): BaseExperiment<Input, Expected> {
+  return { _type: "BaseExperiment" };
+}
+
 export type EvalData<Input, Expected> =
   | EvalCase<Input, Expected>[]
   | (() => EvalCase<Input, Expected>[])
   | (() => Promise<EvalCase<Input, Expected>[]>)
-  | AsyncGenerator<EvalCase<Input, Expected>>;
+  | AsyncGenerator<EvalCase<Input, Expected>>
+  | BaseExperiment<Input, Expected>
+  | (() => BaseExperiment<Input, Expected>);
 
 export type EvalTask<Input, Output> =
   | ((input: Input, hooks: EvalHooks) => Promise<Output>)
@@ -221,18 +234,41 @@ export async function runEvaluator(
   if (typeof evaluator.data === "string") {
     throw new Error("Unimplemented: string data paths");
   }
-  const dataResult =
+  let dataResult =
     typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
-  let data = null;
+
+  if ("_type" in dataResult) {
+    if (dataResult._type !== "BaseExperiment") {
+      // For some reason, the typesystem won't let me check if dataResult._type === "BaseExperiment"
+      throw new Error("Invalid _type");
+    }
+    if (!experiment) {
+      throw new Error(
+        "Cannot use BaseExperiment() without connecting to Braintrust (you most likely set --no-send-logs)"
+      );
+    }
+    const baseExperiment = await experiment.fetchBaseExperiment();
+    if (!baseExperiment) {
+      throw new Error("BaseExperiment() failed to fetch base experiment");
+    }
+    dataResult = init(evaluator.projectName, {
+      experiment: baseExperiment?.name,
+      open: true,
+    }).asDataset();
+  }
+
+  let data: EvalCase<unknown, unknown>[] = [];
   if (dataResult instanceof Promise) {
     data = await dataResult;
-  } else {
-    // TODO: We may eventually want to push this iterator logic down
-    // into the below loop, to avoid materializing the whole dataset
+  } else if (Symbol.asyncIterator in dataResult) {
+    // TODO: Eventually, we may want to support pushing the async generator logic
+    // down into the evaluator, so we can avoid materializing large datasets
     data = [];
     for await (const d of dataResult) {
       data.push(d);
     }
+  } else {
+    data = dataResult;
   }
 
   data = data.filter((d) => filters.every((f) => evaluateFilter(d, f)));
