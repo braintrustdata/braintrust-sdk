@@ -18,8 +18,10 @@ export interface EvalCase<Input, Expected> {
 }
 
 export type EvalData<Input, Expected> =
+  | EvalCase<Input, Expected>[]
   | (() => EvalCase<Input, Expected>[])
-  | (() => Promise<EvalCase<Input, Expected>[]>);
+  | (() => Promise<EvalCase<Input, Expected>[]>)
+  | AsyncGenerator<EvalCase<Input, Expected>>;
 
 export type EvalTask<Input, Output> =
   | ((input: Input, hooks: EvalHooks) => Promise<Output>)
@@ -108,14 +110,23 @@ globalThis._evals = {};
 export async function Eval<Input, Output, Expected>(
   name: string,
   evaluator: Evaluator<Input, Output, Expected>
-): Promise<void | ExperimentSummary> {
+): Promise<ExperimentSummary> {
   const evalName = makeEvalName(name, evaluator.experimentName);
   if (_evals[evalName]) {
     throw new Error(`Evaluator ${evalName} already exists`);
   }
   if (globalThis._lazy_load) {
     _evals[evalName] = { evalName, projectName: name, ...evaluator };
-    return;
+    // Better to return this empty object than have an annoying-to-use signature
+    return {
+      projectName: "_lazy_load",
+      experimentName: "_lazy_load",
+      projectUrl: "",
+      experimentUrl: "",
+      comparisonExperimentName: "",
+      scores: {},
+      metrics: {},
+    };
   }
 
   const progressReporter = new BarProgressReporter();
@@ -210,12 +221,18 @@ export async function runEvaluator(
   if (typeof evaluator.data === "string") {
     throw new Error("Unimplemented: string data paths");
   }
-  const dataResult = evaluator.data();
+  const dataResult =
+    typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
   let data = null;
   if (dataResult instanceof Promise) {
     data = await dataResult;
   } else {
-    data = dataResult;
+    // TODO: We may eventually want to push this iterator logic down
+    // into the below loop, to avoid materializing the whole dataset
+    data = [];
+    for await (const d of dataResult) {
+      data.push(d);
+    }
   }
 
   data = data.filter((d) => filters.every((f) => evaluateFilter(d, f)));

@@ -24,6 +24,7 @@ import {
   isEmpty,
   LazyValue,
 } from "./util";
+import { EvalCase } from "./framework";
 
 export type Metadata = Record<string, unknown>;
 
@@ -1668,7 +1669,7 @@ class ObjectFetcher<RecordType> {
     throw new Error("ObjectFetcher subclasses must have an 'id' attribute");
   }
 
-  async getState(): Promise<BraintrustState> {
+  protected async getState(): Promise<BraintrustState> {
     throw new Error("ObjectFetcher subclasses must have a 'getState' method");
   }
 
@@ -1730,6 +1731,11 @@ class ObjectFetcher<RecordType> {
   }
 }
 
+export interface ExperimentIdentifier {
+  name: string;
+  id: string;
+}
+
 /**
  * An experiment is a collection of logged events, such as model inputs and outputs, which represent
  * a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -1742,7 +1748,7 @@ class ObjectFetcher<RecordType> {
  *
  * You should not create `Experiment` objects directly. Instead, use the `braintrust.init()` method.
  */
-export class Experiment {
+export class Experiment extends ObjectFetcher<ExperimentEvent> {
   private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>;
   public readonly dataset?: Dataset;
   private bgLogger: BackgroundLogger;
@@ -1754,6 +1760,11 @@ export class Experiment {
     lazyMetadata: LazyValue<ProjectExperimentMetadata>,
     dataset?: Dataset
   ) {
+    super(
+      "experiment",
+      new Set(["input", "output", "expected", "metadata", "scores", "metrics"]),
+      undefined
+    );
     this.lazyMetadata = lazyMetadata;
     this.dataset = dataset;
 
@@ -1782,7 +1793,7 @@ export class Experiment {
     })();
   }
 
-  private async getState(): Promise<BraintrustState> {
+  protected async getState(): Promise<BraintrustState> {
     // Ensure the login state is populated by awaiting lazyMetadata.
     await this.lazyMetadata.get();
     return _state;
@@ -1858,6 +1869,41 @@ export class Experiment {
     });
   }
 
+  public async *asDataset<
+    Input = unknown,
+    Expected = unknown,
+  >(): AsyncGenerator<EvalCase<Input, Expected>> {
+    const records = this.fetch();
+    for await (const record of records) {
+      if (record.root_span_id !== record.span_id) {
+        continue;
+      }
+
+      const { output, expected } = record;
+      yield {
+        input: record.input as Input,
+        expected: (expected ?? output) as Expected,
+      };
+    }
+  }
+
+  public async fetchBaseExperiment() {
+    const state = await this.getState();
+    const conn = state.logConn();
+    const resp = await conn.get("/crud/base_experiments", {
+      id: await this.id,
+    });
+    const base_experiments = await resp.json();
+    if (base_experiments.length > 0) {
+      return {
+        id: base_experiments[0]["base_exp_id"],
+        name: base_experiments[0]["base_exp_name"],
+      };
+    } else {
+      return null;
+    }
+  }
+
   /**
    * Summarize the experiment, including the scores (compared to the closest reference experiment) and metadata.
    *
@@ -1889,14 +1935,10 @@ export class Experiment {
     let comparisonExperimentName = undefined;
     if (summarizeScores) {
       if (comparisonExperimentId === undefined) {
-        const conn = state.logConn();
-        const resp = await conn.get("/crud/base_experiments", {
-          id: await this.id,
-        });
-        const base_experiments = await resp.json();
-        if (base_experiments.length > 0) {
-          comparisonExperimentId = base_experiments[0]["base_exp_id"];
-          comparisonExperimentName = base_experiments[0]["base_exp_name"];
+        const baseExperiment = await this.fetchBaseExperiment();
+        if (baseExperiment !== null) {
+          comparisonExperimentId = baseExperiment.id;
+          comparisonExperimentName = baseExperiment.name;
         }
       }
 
@@ -2204,7 +2246,7 @@ export class Dataset extends ObjectFetcher<DatasetRecord> {
     })();
   }
 
-  async getState(): Promise<BraintrustState> {
+  protected async getState(): Promise<BraintrustState> {
     // Ensure the login state is populated by awaiting lazyMetadata.
     await this.lazyMetadata.get();
     return _state;
