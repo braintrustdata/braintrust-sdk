@@ -93,12 +93,8 @@ EvalScorer = Union[
 ]
 
 
-# TODO: This may eventually be a class with more filters, like specifying a branch, commit, experiment id, etc.
-class DatasetQuery(Enum):
-    BASE_EXPERMENT = "BaseExperiment"
-
-
-def base_experiment():
+@dataclasses.dataclass
+class BaseExperiment:
     """
     Use this to specify that the dataset should actually be the data from a previous (base) experiment.
     Braintrust will automatically figure out the best base experiment to use based on your git history
@@ -110,7 +106,8 @@ def base_experiment():
     data=braintrust.init(project=project_name, experiment=experiment_name, open=True).as_dataset()
     ```
     """
-    return DatasetQuery.BASE_EXPERMENT
+
+    pass
 
 
 @dataclasses.dataclass
@@ -142,7 +139,8 @@ class Evaluator:
         Iterator[EvalCase],
         Awaitable[Iterator[EvalCase]],
         Callable[[], Union[Iterator[EvalCase], Awaitable[Iterator[EvalCase]]]],
-        DatasetQuery,
+        BaseExperiment,
+        type,
     ]
 
     """
@@ -578,18 +576,18 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
 
     data_iterator = evaluator.data
 
-    if isinstance(data_iterator, DatasetQuery):
-        if data_iterator == DatasetQuery.BASE_EXPERMENT:
-            if experiment is None:
-                raise ValueError(
-                    "Cannot use DatasetQuery.BASE_EXPERIMENT without connecting to Braintrust (you most likely set --no-send-logs)"
-                )
-            base_experiment = experiment.fetch_base_experiment()
-            data_iterator = _init_experiment(
-                project=experiment.project.name, experiment=base_experiment.name, open=True
-            ).as_dataset()
-        else:
-            raise ValueError(f"Unrecognized dataset query {data_iterator}")
+    if inspect.isclass(data_iterator):
+        data_iterator = data_iterator()
+
+    if isinstance(data_iterator, BaseExperiment):
+        if experiment is None:
+            raise ValueError(
+                "Cannot use BaseExperiment() without connecting to Braintrust (you most likely set --no-send-logs)"
+            )
+        base_experiment = experiment.fetch_base_experiment()
+        data_iterator = _init_experiment(
+            project=experiment.project.name, experiment=base_experiment.name, open=True
+        ).as_dataset()
 
     if inspect.isfunction(data_iterator):
         data_iterator = data_iterator()
@@ -626,4 +624,4 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
     return results, summary
 
 
-__all__ = ["Evaluator", "Eval", "Score", "EvalCase", "EvalHooks", "base_experiment"]
+__all__ = ["Evaluator", "Eval", "Score", "EvalCase", "EvalHooks", "BaseExperiment"]
