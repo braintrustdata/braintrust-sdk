@@ -12,6 +12,16 @@ class SerializableDataClass:
         """Serialize the object to JSON."""
         return json.dumps(self.as_dict(), **kwargs)
 
+    @classmethod
+    def from_dict(cls, d: Dict):
+        """Deserialize the object from a dictionary."""
+        fields = set(f.name for f in dataclasses.fields(cls))
+        filtered = {k: v for k, v in d.items() if k in fields}
+        print(fields)
+        print("d", d)
+        print("filtered", filtered)
+        return cls(**filtered)
+
 
 def coalesce(*args):
     """Returns the first non-None value in the list of `args`, or `None` if they

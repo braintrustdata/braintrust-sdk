@@ -314,6 +314,7 @@ def Eval(
             try:
                 results, summary = await run_evaluator(experiment, evaluator, 0, [])
                 report_evaluator_result(evaluator.eval_name, results, summary, verbose=True, jsonl=False)
+                return summary
             finally:
                 experiment.flush()
 
@@ -490,7 +491,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
 
     async def run_evaluator_task(datum):
         if isinstance(datum, dict):
-            datum = EvalCase(**datum)
+            datum = EvalCase.from_dict(datum)
 
         metadata = {**(datum.metadata or {})}
         output = None

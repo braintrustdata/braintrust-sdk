@@ -1081,19 +1081,27 @@ def _validate_and_sanitize_experiment_log_full_args(event, has_dataset):
 
 
 class ObjectIterator:
-    def __init__(self, refetch_fn):
-        self._refetch_fn = refetch_fn
+    def __init__(self, refetch_fn, json_fields, exclude_fields):
+        self.refetch_fn = refetch_fn
+        self.json_fields = json_fields
+        self.exclude_fields = exclude_fields
         self.idx = 0
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        data = self._refetch_fn()
+        data = self.refetch_fn()
         if self.idx >= len(data):
             raise StopIteration
+        value = data[self.idx]
         self.idx += 1
-        return data[self.idx - 1]
+
+        return {
+            k: json.loads(v) if k in self.json_fields and v is not None else v
+            for k, v in value.items()
+            if k not in self.exclude_fields
+        }
 
 
 class ObjectFetcher:
@@ -1125,7 +1133,7 @@ class ObjectFetcher:
 
         :returns: An iterator over the records.
         """
-        return ObjectIterator(self._refetch)
+        return ObjectIterator(self._refetch, self.json_fields, self.exclude_fields)
 
     def __iter__(self):
         return self.fetch()
@@ -1260,9 +1268,13 @@ class ExperimentDatasetIterator:
             if value["root_span_id"] != value["span_id"]:
                 continue
 
-            output, expected = value.pop("output", None), value.pop("expected", None)
-            value["expected"] = expected if expected is not None else output
-            return value
+            output, expected = value.get("output"), value.get("expected")
+            return {
+                "input": value.get("input"),
+                "expected": expected if expected is not None else output,
+                # NOTE: We'll eventually want to track origin information here (and generalize
+                # the `dataset_record_id` field)
+            }
 
 
 class Experiment(ObjectFetcher):
@@ -1674,7 +1686,7 @@ class SpanImpl(Span):
         self.end()
 
 
-class Dataset:
+class Dataset(ObjectFetcher):
     """
     A dataset is a collection of records, such as model inputs and outputs, which represent
     data you can use to evaluate and fine-tune models. You can log production data to datasets,
@@ -1699,6 +1711,13 @@ class Dataset:
             return self._get_state().log_conn()
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
+
+        ObjectFetcher.__init__(
+            self,
+            object_type="dataset",
+            json_fields=["input", "output", "metadata"],
+            pinned_version=None,
+        )
 
     @property
     def id(self):
@@ -1832,59 +1851,6 @@ class Dataset:
             dataset_url=dataset_url,
             data_summary=data_summary,
         )
-
-    def fetch(self):
-        """
-        Fetch all records in the dataset.
-
-        ```python
-        for record in dataset.fetch():
-            print(record)
-
-        # You can also iterate over the dataset directly.
-        for record in dataset:
-            print(record)
-        ```
-
-        :returns: An iterator over the records in the dataset.
-        """
-        for record in self.fetched_data:
-            yield {
-                "id": record.get("id"),
-                "input": json.loads(record.get("input") or "null"),
-                "output": json.loads(record.get("output") or "null"),
-                "metadata": json.loads(record.get("metadata") or "null"),
-            }
-
-        self._clear_cache()
-
-    def __iter__(self):
-        return self.fetch()
-
-    @property
-    def fetched_data(self):
-        eprint(
-            ".fetched_data is deprecated and will be removed in a future version of braintrust. Use .fetch() or the iterator instead"
-        )
-        if not self._fetched_data:
-            state = self._get_state()
-            resp = state.log_conn().get(
-                "object/dataset", params={"id": self.id, "fmt": "json", "version": self._pinned_version}
-            )
-            response_raise_for_status(resp)
-
-            self._fetched_data = [json.loads(line) for line in resp.content.split(b"\n") if line.strip()]
-        return self._fetched_data
-
-    def _clear_cache(self):
-        self._fetched_data = None
-
-    @property
-    def version(self):
-        if self._pinned_version is not None:
-            return self._pinned_version
-        else:
-            return max([int(record.get(TRANSACTION_ID_FIELD, 0)) for record in self.fetched_data] or [0])
 
     def close(self):
         """This function is deprecated. You can simply remove it from your code."""
