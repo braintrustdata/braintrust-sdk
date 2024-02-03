@@ -17,9 +17,6 @@ class SerializableDataClass:
         """Deserialize the object from a dictionary."""
         fields = set(f.name for f in dataclasses.fields(cls))
         filtered = {k: v for k, v in d.items() if k in fields}
-        print(fields)
-        print("d", d)
-        print("filtered", filtered)
         return cls(**filtered)
 
 
