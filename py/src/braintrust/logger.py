@@ -553,6 +553,8 @@ def init(
     if open:
         if experiment is None:
             raise ValueError("Cannot open an experiment without specifying its name")
+        if update:
+            raise ValueError("Cannot open and update an experiment at the same time")
 
         def compute_metadata():
             login(org_name=org_name, api_key=api_key, app_url=app_url)

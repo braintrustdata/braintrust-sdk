@@ -991,6 +991,10 @@ export function init<IsOpen extends boolean = false>(
     if (isEmpty(experiment)) {
       throw new Error("Cannot open an experiment without specifying its name");
     }
+    if (update) {
+      throw new Error("Cannot open and update an experiment at the same time");
+    }
+
     const lazyMetadata: LazyValue<ObjectMetadata> = new LazyValue(async () => {
       await login({
         orgName: orgName,
