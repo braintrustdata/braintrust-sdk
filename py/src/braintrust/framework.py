@@ -217,9 +217,11 @@ def report_evaluator_result(eval_name, results, summary, verbose, jsonl):
         )
 
         errors = [
-            result.exc_info
-            if verbose or jsonl
-            else "\n".join(traceback.format_exception_only(type(result.error), result.error))
+            (
+                result.exc_info
+                if verbose or jsonl
+                else "\n".join(traceback.format_exception_only(type(result.error), result.error))
+            )
             for result in failing_results
         ]
 

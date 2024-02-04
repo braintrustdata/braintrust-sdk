@@ -14,7 +14,8 @@ class SerializableDataClass:
 
     @classmethod
     def from_dict(cls, d: Dict):
-        """Deserialize the object from a dictionary."""
+        """Deserialize the object from a dictionary. This method
+        is shallow and will not call from_dict() on nested objects."""
         fields = set(f.name for f in dataclasses.fields(cls))
         filtered = {k: v for k, v in d.items() if k in fields}
         return cls(**filtered)
