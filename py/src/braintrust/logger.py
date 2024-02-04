@@ -550,6 +550,27 @@ def init(
     :returns: The experiment object.
     """
 
+    if open:
+        if experiment is None:
+            raise ValueError("Cannot open an experiment without specifying its name")
+
+        def compute_metadata():
+            login(org_name=org_name, api_key=api_key, app_url=app_url)
+            args = {"experiment_name": experiment, "project_name": project, "org_name": _state.org_name}
+
+            response = _state.app_conn().post_json("api/experiment/get", args)
+            if len(response) == 0:
+                raise ValueError(f"Experiment {experiment} not found in project {project}.")
+
+            info = response[0]
+            return ObjectMetadata(
+                id=info["id"],
+                name=info["name"],
+                full_info=info,
+            )
+
+        return ReadonlyExperiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True))
+
     def compute_metadata():
         login(org_name=org_name, api_key=api_key, app_url=app_url)
         args = {"project_name": project, "org_id": _state.org_id}
@@ -560,8 +581,8 @@ def init(
         if description is not None:
             args["description"] = description
 
-        if update or open:
-            args["update"] = True
+        if update:
+            args["update"] = update
 
         merged_git_metadata_settings = _state.git_metadata_settings
         if git_metadata_settings is not None:
@@ -1423,9 +1444,6 @@ class Experiment(ObjectFetcher):
             event=event,
         )
 
-    def as_dataset(self):
-        return ExperimentDatasetIterator(self.fetch())
-
     def fetch_base_experiment(self):
         state = self._get_state()
         conn = state.app_conn()
@@ -1521,6 +1539,27 @@ class Experiment(ObjectFetcher):
 
     def __exit__(self, type, value, callback):
         del type, value, callback
+
+
+class ReadonlyExperiment(ObjectFetcher):
+    """
+    A read-only view of an experiment, initialized by passing `open=True` to `init()`.
+    """
+
+    def __init__(
+        self,
+        lazy_metadata: LazyValue[ObjectMetadata],
+    ):
+        self._lazy_metadata = lazy_metadata
+
+        ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
+
+    @property
+    def id(self):
+        return self._lazy_metadata.get().id
+
+    def as_dataset(self):
+        return ExperimentDatasetIterator(self.fetch())
 
 
 class SpanImpl(Span):

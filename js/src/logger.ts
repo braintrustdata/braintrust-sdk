@@ -1008,10 +1008,17 @@ export function init<IsOpen extends boolean>(
         .post_json("api/experiment/get", args);
 
       if (response.length === 0) {
-        throw new Error(`Experiment ${experiment} not found.`);
+        throw new Error(
+          `Experiment ${experiment} not found in project ${project}.`
+        );
       }
 
-      return response[0];
+      const info = response[0];
+      return {
+        id: info.id,
+        name: info.name,
+        fullInfo: info,
+      };
     });
 
     return new ReadonlyExperiment(
@@ -1759,48 +1766,6 @@ export interface EvalCase<Input, Expected> {
   metadata?: Metadata;
 }
 
-export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
-  constructor(private readonly lazyMetadata: LazyValue<ObjectMetadata>) {
-    super("experiment", undefined);
-  }
-
-  public get id(): Promise<string> {
-    return (async () => {
-      return (await this.lazyMetadata.get()).id;
-    })();
-  }
-
-  public get name(): Promise<string> {
-    return (async () => {
-      return (await this.lazyMetadata.get()).name;
-    })();
-  }
-
-  protected async getState(): Promise<BraintrustState> {
-    // Ensure the login state is populated by awaiting lazyMetadata.
-    await this.lazyMetadata.get();
-    return _state;
-  }
-
-  public async *asDataset<
-    Input = unknown,
-    Expected = unknown,
-  >(): AsyncGenerator<EvalCase<Input, Expected>> {
-    const records = this.fetch();
-    for await (const record of records) {
-      if (record.root_span_id !== record.span_id) {
-        continue;
-      }
-
-      const { output, expected } = record;
-      yield {
-        input: record.input as Input,
-        expected: (expected ?? output) as Expected,
-      };
-    }
-  }
-}
-
 /**
  * An experiment is a collection of logged events, such as model inputs and outputs, which represent
  * a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -2052,6 +2017,51 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
       "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed"
     );
     return this.id;
+  }
+}
+
+/**
+ * A read-only view of an experiment, initialized by passing `open: true` to `init()`.
+ */
+export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
+  constructor(private readonly lazyMetadata: LazyValue<ObjectMetadata>) {
+    super("experiment", undefined);
+  }
+
+  public get id(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata.get()).id;
+    })();
+  }
+
+  public get name(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata.get()).name;
+    })();
+  }
+
+  protected async getState(): Promise<BraintrustState> {
+    // Ensure the login state is populated by awaiting lazyMetadata.
+    await this.lazyMetadata.get();
+    return _state;
+  }
+
+  public async *asDataset<
+    Input = unknown,
+    Expected = unknown,
+  >(): AsyncGenerator<EvalCase<Input, Expected>> {
+    const records = this.fetch();
+    for await (const record of records) {
+      if (record.root_span_id !== record.span_id) {
+        continue;
+      }
+
+      const { output, expected } = record;
+      yield {
+        input: record.input as Input,
+        expected: (expected ?? output) as Expected,
+      };
+    }
   }
 }
 
