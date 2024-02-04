@@ -359,8 +359,8 @@ class HTTPConnection {
           typeof params === "string"
             ? params
             : params
-            ? JSON.stringify(params)
-            : undefined,
+              ? JSON.stringify(params)
+              : undefined,
         keepalive: true,
         ...rest,
       })
@@ -1888,6 +1888,8 @@ interface ParentProjectLogIds {
   log_id: "g";
 }
 
+let executionCounter = 0;
+
 /**
  * Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
  *
@@ -1951,7 +1953,11 @@ export class SpanImpl implements Span {
         start: args.startTime ?? getCurrentUnixTimestamp(),
       },
       context: { ...callerLocation },
-      span_attributes: { ...args.spanAttributes, name },
+      span_attributes: {
+        ...args.spanAttributes,
+        name,
+        exec_counter: executionCounter++,
+      },
       created: new Date().toISOString(),
     };
 

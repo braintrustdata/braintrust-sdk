@@ -1400,6 +1400,11 @@ class Experiment:
         del type, value, callback
 
 
+# Make this an atomic counter
+_EXEC_COUNTER_LOCK = threading.Lock()
+_EXEC_COUNTER = 0
+
+
 class SpanImpl(Span):
     """Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
 
@@ -1440,11 +1445,16 @@ class SpanImpl(Span):
         # `internal_data` contains fields that are not part of the
         # "user-sanitized" set of fields which we want to log in just one of the
         # span rows.
+        global _EXEC_COUNTER
+        with _EXEC_COUNTER_LOCK:
+            _EXEC_COUNTER += 1
+            exec_counter = _EXEC_COUNTER
+
         self.internal_data = dict(
             metrics=dict(
                 start=start_time or time.time(),
             ),
-            span_attributes=dict(**span_attributes, name=name),
+            span_attributes=dict(**span_attributes, name=name, exec_counter=exec_counter),
             created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         )
         if caller_location:
