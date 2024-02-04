@@ -294,118 +294,118 @@ export async function runEvaluator(
     data = dataResult;
   }
 
-  data = data.filter((d) => filters.every((f) => evaluateFilter(d, f)));
+  data = data
+    .filter((d) => filters.every((f) => evaluateFilter(d, f)))
+    .flatMap((datum) =>
+      [...Array(evaluator.trialCount ?? 1).keys()].map(() => datum)
+    );
 
   progressReporter.start(evaluator.evalName, data.length);
 
-  const evals = data
-    .flatMap((datum) =>
-      [...Array(evaluator.trialCount ?? 1).keys()].map(() => datum)
-    )
-    .map(async (datum) => {
-      let metadata: Metadata = { ...datum.metadata };
-      let output: any = undefined;
-      let error: unknown | undefined = undefined;
-      let scores: Record<string, number | null> = {};
-      const callback = async (rootSpan: Span) => {
-        try {
-          const meta = (o: Record<string, unknown>) =>
-            (metadata = { ...metadata, ...o });
+  const evals = data.map(async (datum) => {
+    let metadata: Metadata = { ...datum.metadata };
+    let output: any = undefined;
+    let error: unknown | undefined = undefined;
+    let scores: Record<string, number | null> = {};
+    const callback = async (rootSpan: Span) => {
+      try {
+        const meta = (o: Record<string, unknown>) =>
+          (metadata = { ...metadata, ...o });
 
-          await rootSpan.traced(
-            async (span: Span) => {
-              const outputResult = evaluator.task(datum.input, { meta, span });
-              if (outputResult instanceof Promise) {
-                output = await outputResult;
-              } else {
-                output = outputResult;
-              }
-              span.log({ input: datum.input, output });
-            },
-            { name: "task", spanAttributes: { type: SpanTypeAttribute.TASK } }
-          );
-          rootSpan.log({ output });
+        await rootSpan.traced(
+          async (span: Span) => {
+            const outputResult = evaluator.task(datum.input, { meta, span });
+            if (outputResult instanceof Promise) {
+              output = await outputResult;
+            } else {
+              output = outputResult;
+            }
+            span.log({ input: datum.input, output });
+          },
+          { name: "task", spanAttributes: { type: SpanTypeAttribute.TASK } }
+        );
+        rootSpan.log({ output });
 
-          const scoringArgs = { ...datum, metadata, output };
-          const scoreResults = await Promise.all(
-            evaluator.scores.map(async (score, score_idx) => {
-              return rootSpan.traced(
-                async (span: Span) => {
-                  const scoreResult = score(scoringArgs);
-                  const result =
-                    scoreResult instanceof Promise
-                      ? await scoreResult
-                      : scoreResult;
-                  const {
-                    metadata: resultMetadata,
-                    name: _,
-                    ...resultRest
-                  } = result;
-                  span.log({
-                    output: resultRest,
-                    metadata: resultMetadata,
-                  });
-                  return result;
+        const scoringArgs = { ...datum, metadata, output };
+        const scoreResults = await Promise.all(
+          evaluator.scores.map(async (score, score_idx) => {
+            return rootSpan.traced(
+              async (span: Span) => {
+                const scoreResult = score(scoringArgs);
+                const result =
+                  scoreResult instanceof Promise
+                    ? await scoreResult
+                    : scoreResult;
+                const {
+                  metadata: resultMetadata,
+                  name: _,
+                  ...resultRest
+                } = result;
+                span.log({
+                  output: resultRest,
+                  metadata: resultMetadata,
+                });
+                return result;
+              },
+              {
+                name: score.name || `scorer_${score_idx}`,
+                spanAttributes: {
+                  type: SpanTypeAttribute.SCORE,
                 },
-                {
-                  name: score.name || `scorer_${score_idx}`,
-                  spanAttributes: {
-                    type: SpanTypeAttribute.SCORE,
-                  },
-                  event: { input: scoringArgs },
-                }
-              );
-            })
-          );
+                event: { input: scoringArgs },
+              }
+            );
+          })
+        );
 
-          const scoreMetadata: Record<string, unknown> = {};
-          for (const scoreResult of scoreResults) {
-            scores[scoreResult.name] = scoreResult.score;
-            const metadata = {
-              ...scoreResult.metadata,
-            };
-            if (scoreResult.error !== undefined) {
-              metadata.error = scoreResult.error;
-            }
-            if (Object.keys(metadata).length > 0) {
-              scoreMetadata[scoreResult.name] = metadata;
-            }
+        const scoreMetadata: Record<string, unknown> = {};
+        for (const scoreResult of scoreResults) {
+          scores[scoreResult.name] = scoreResult.score;
+          const metadata = {
+            ...scoreResult.metadata,
+          };
+          if (scoreResult.error !== undefined) {
+            metadata.error = scoreResult.error;
           }
-
-          if (Object.keys(scoreMetadata).length > 0) {
-            meta({ scores: scoreMetadata });
+          if (Object.keys(metadata).length > 0) {
+            scoreMetadata[scoreResult.name] = metadata;
           }
-
-          rootSpan.log({ scores, metadata });
-        } catch (e) {
-          error = e;
-        } finally {
-          progressReporter.increment(evaluator.evalName);
         }
 
-        return {
-          output,
-          metadata,
-          scores,
-          error,
-        };
-      };
+        if (Object.keys(scoreMetadata).length > 0) {
+          meta({ scores: scoreMetadata });
+        }
 
-      if (!experiment) {
-        return await callback(NOOP_SPAN);
-      } else {
-        return await experiment.traced(callback, {
-          name: "eval",
-          spanAttributes: {
-            type: SpanTypeAttribute.EVAL,
-          },
-          event: {
-            input: datum.input,
-            expected: datum.expected,
-          },
-        });
+        rootSpan.log({ scores, metadata });
+      } catch (e) {
+        error = e;
+      } finally {
+        progressReporter.increment(evaluator.evalName);
       }
-    });
+
+      return {
+        output,
+        metadata,
+        scores,
+        error,
+      };
+    };
+
+    if (!experiment) {
+      return await callback(NOOP_SPAN);
+    } else {
+      return await experiment.traced(callback, {
+        name: "eval",
+        spanAttributes: {
+          type: SpanTypeAttribute.EVAL,
+        },
+        event: {
+          input: datum.input,
+          expected: datum.expected,
+        },
+      });
+    }
+  });
   const results = await Promise.all(evals);
   const summary = experiment ? await experiment.summarize() : null;
   return {
