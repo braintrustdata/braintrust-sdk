@@ -920,11 +920,15 @@ class BackgroundLogger {
   }
 }
 
-export type InitOptions = {
+type InitOpenOption<IsOpen extends boolean> = {
+  open?: IsOpen;
+};
+
+export type InitOptions<IsOpen extends boolean> = {
   experiment?: string;
   description?: string;
   dataset?: Dataset;
-  open?: boolean;
+  update?: boolean;
   baseExperiment?: string;
   isPublic?: boolean;
   appUrl?: string;
@@ -933,8 +937,10 @@ export type InitOptions = {
   metadata?: Metadata;
   gitMetadataSettings?: GitMetadataSettings;
   setCurrent?: boolean;
-  update?: boolean;
-};
+} & InitOpenOption<IsOpen>;
+
+type InitializedExperiment<IsOpen extends boolean | undefined> =
+  IsOpen extends true ? ReadonlyExperiment : Experiment;
 
 /**
  * Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
@@ -945,7 +951,7 @@ export type InitOptions = {
  * @param options.description An optional description of the experiment.
  * @param options.dataset (Optional) A dataset to associate with the experiment. You can pass in the name of the dataset (in the same project) or a
  * dataset object (from any project).
- * @param options.open If the experiment already exists, open it instead of creating a new one.
+ * @param options.update If the experiment already exists, continue logging to it.
  * @param options.baseExperiment An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this
  * experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
  * @param options.isPublic An optional parameter to control whether the experiment is publicly visible to anybody with the link or privately visible to only members of the organization. Defaults to private.
@@ -959,13 +965,13 @@ export type InitOptions = {
  * JSON-serializable type, but its keys must be strings.
  * @param options.gitMetadataSettings (Optional) Settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
  * @param setCurrent If true (the default), set the global current-experiment to the newly-created one.
- * @param options.update (Deprecated) If true, old alias for `open`. This parameter will be removed in a future version of braintrust.
+ * @param options.open If the experiment already exists, open it in read-only mode.
  * @returns The newly created Experiment.
  */
-export function init(
+export function init<IsOpen extends boolean>(
   project: string,
-  options: Readonly<InitOptions> = {}
-): Experiment {
+  options: Readonly<InitOptions<IsOpen>> = {}
+): InitializedExperiment<IsOpen> {
   const {
     experiment,
     description,
@@ -980,6 +986,38 @@ export function init(
     metadata,
     gitMetadataSettings,
   } = options || {};
+
+  if (open) {
+    if (isEmpty(experiment)) {
+      throw new Error("Cannot open an experiment without specifying its name");
+    }
+    const lazyMetadata: LazyValue<ObjectMetadata> = new LazyValue(async () => {
+      await login({
+        orgName: orgName,
+        apiKey,
+        appUrl,
+      });
+      const args: Record<string, unknown> = {
+        project_name: project,
+        org_name: _state.orgName,
+        experiment_name: experiment,
+      };
+
+      const response = await _state
+        .apiConn()
+        .post_json("api/experiment/get", args);
+
+      if (response.length === 0) {
+        throw new Error(`Experiment ${experiment} not found.`);
+      }
+
+      return response[0];
+    });
+
+    return new ReadonlyExperiment(
+      lazyMetadata
+    ) as InitializedExperiment<IsOpen>;
+  }
 
   const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(
     async () => {
@@ -1001,14 +1039,8 @@ export function init(
         args["description"] = description;
       }
 
-      if (!isEmpty(open) && !isEmpty(update) && open !== update) {
-        throw new Error(
-          "Cannot specify both `open` and `update` parameters with different values."
-        );
-      }
-
-      if (open || update) {
-        args["update"] = true;
+      if (update) {
+        args["update"] = update;
       }
 
       let mergedGitMetadataSettings = {
@@ -1088,7 +1120,7 @@ export function init(
   if (options.setCurrent ?? true) {
     _state.currentExperiment = ret;
   }
-  return ret;
+  return ret as InitializedExperiment<IsOpen>;
 }
 
 /**
@@ -1097,7 +1129,7 @@ export function init(
 export function withExperiment<R>(
   project: string,
   callback: (experiment: Experiment) => R,
-  options: Readonly<InitOptions & SetCurrentArg> = {}
+  options: Readonly<InitOptions<false> & SetCurrentArg> = {}
 ): R {
   console.warn(
     "withExperiment is deprecated and will be removed in a future version of braintrust. Simply create the experiment with `init`."
@@ -1727,6 +1759,48 @@ export interface EvalCase<Input, Expected> {
   metadata?: Metadata;
 }
 
+export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
+  constructor(private readonly lazyMetadata: LazyValue<ObjectMetadata>) {
+    super("experiment", undefined);
+  }
+
+  public get id(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata.get()).id;
+    })();
+  }
+
+  public get name(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata.get()).name;
+    })();
+  }
+
+  protected async getState(): Promise<BraintrustState> {
+    // Ensure the login state is populated by awaiting lazyMetadata.
+    await this.lazyMetadata.get();
+    return _state;
+  }
+
+  public async *asDataset<
+    Input = unknown,
+    Expected = unknown,
+  >(): AsyncGenerator<EvalCase<Input, Expected>> {
+    const records = this.fetch();
+    for await (const record of records) {
+      if (record.root_span_id !== record.span_id) {
+        continue;
+      }
+
+      const { output, expected } = record;
+      yield {
+        input: record.input as Input,
+        expected: (expected ?? output) as Expected,
+      };
+    }
+  }
+}
+
 /**
  * An experiment is a collection of logged events, such as model inputs and outputs, which represent
  * a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -1854,24 +1928,6 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
       name: name ?? "root",
       ...argsRest,
     });
-  }
-
-  public async *asDataset<
-    Input = unknown,
-    Expected = unknown,
-  >(): AsyncGenerator<EvalCase<Input, Expected>> {
-    const records = this.fetch();
-    for await (const record of records) {
-      if (record.root_span_id !== record.span_id) {
-        continue;
-      }
-
-      const { output, expected } = record;
-      yield {
-        input: record.input as Input,
-        expected: (expected ?? output) as Expected,
-      };
-    }
   }
 
   public async fetchBaseExperiment() {
