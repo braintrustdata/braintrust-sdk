@@ -14,6 +14,7 @@ import {
   AUDIT_METADATA_FIELD,
   GitMetadataSettings,
   mergeGitMetadataSettings,
+  TransactionId,
 } from "@braintrust/core";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -919,7 +920,11 @@ class BackgroundLogger {
   }
 }
 
-export type InitOptions = {
+type InitOpenOption<IsOpen extends boolean> = {
+  open?: IsOpen;
+};
+
+export type InitOptions<IsOpen extends boolean> = {
   experiment?: string;
   description?: string;
   dataset?: Dataset;
@@ -932,7 +937,10 @@ export type InitOptions = {
   metadata?: Metadata;
   gitMetadataSettings?: GitMetadataSettings;
   setCurrent?: boolean;
-};
+} & InitOpenOption<IsOpen>;
+
+type InitializedExperiment<IsOpen extends boolean | undefined> =
+  IsOpen extends true ? ReadonlyExperiment : Experiment;
 
 /**
  * Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
@@ -957,18 +965,20 @@ export type InitOptions = {
  * JSON-serializable type, but its keys must be strings.
  * @param options.gitMetadataSettings (Optional) Settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
  * @param setCurrent If true (the default), set the global current-experiment to the newly-created one.
+ * @param options.open If the experiment already exists, open it in read-only mode.
  * @returns The newly created Experiment.
  */
-export function init(
+export function init<IsOpen extends boolean = false>(
   project: string,
-  options: Readonly<InitOptions> = {}
-): Experiment {
+  options: Readonly<InitOptions<IsOpen>> = {}
+): InitializedExperiment<IsOpen> {
   const {
     experiment,
     description,
     dataset,
     baseExperiment,
     isPublic,
+    open,
     update,
     appUrl,
     apiKey,
@@ -976,6 +986,49 @@ export function init(
     metadata,
     gitMetadataSettings,
   } = options || {};
+
+  if (open) {
+    if (isEmpty(experiment)) {
+      throw new Error("Cannot open an experiment without specifying its name");
+    }
+    if (update) {
+      throw new Error("Cannot open and update an experiment at the same time");
+    }
+
+    const lazyMetadata: LazyValue<ObjectMetadata> = new LazyValue(async () => {
+      await login({
+        orgName: orgName,
+        apiKey,
+        appUrl,
+      });
+      const args: Record<string, unknown> = {
+        project_name: project,
+        org_name: _state.orgName,
+        experiment_name: experiment,
+      };
+
+      const response = await _state
+        .apiConn()
+        .post_json("api/experiment/get", args);
+
+      if (response.length === 0) {
+        throw new Error(
+          `Experiment ${experiment} not found in project ${project}.`
+        );
+      }
+
+      const info = response[0];
+      return {
+        id: info.id,
+        name: info.name,
+        fullInfo: info,
+      };
+    });
+
+    return new ReadonlyExperiment(
+      lazyMetadata
+    ) as InitializedExperiment<IsOpen>;
+  }
 
   const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(
     async () => {
@@ -1025,7 +1078,7 @@ export function init(
       }
 
       if (dataset !== undefined) {
-        args["dataset_id"] = dataset.id;
+        args["dataset_id"] = await dataset.id;
         args["dataset_version"] = await dataset.version();
       }
 
@@ -1078,7 +1131,7 @@ export function init(
   if (options.setCurrent ?? true) {
     _state.currentExperiment = ret;
   }
-  return ret;
+  return ret as InitializedExperiment<IsOpen>;
 }
 
 /**
@@ -1087,7 +1140,7 @@ export function init(
 export function withExperiment<R>(
   project: string,
   callback: (experiment: Experiment) => R,
-  options: Readonly<InitOptions & SetCurrentArg> = {}
+  options: Readonly<InitOptions<false> & SetCurrentArg> = {}
 ): R {
   console.warn(
     "withExperiment is deprecated and will be removed in a future version of braintrust. Simply create the experiment with `init`."
@@ -1616,7 +1669,10 @@ function validateAndSanitizeExperimentLogFullArgs(
   hasDataset: boolean
 ): ExperimentLogFullArgs {
   if (
-    ("input" in event && event.input && "inputs" in event && event.inputs) ||
+    ("input" in event &&
+      !isEmpty(event.input) &&
+      "inputs" in event &&
+      !isEmpty(event.inputs)) ||
     (!("input" in event) && !("inputs" in event))
   ) {
     throw new Error(
@@ -1624,10 +1680,10 @@ function validateAndSanitizeExperimentLogFullArgs(
     );
   }
 
-  if (!event.output) {
+  if (isEmpty(event.output)) {
     throw new Error("output must be specified");
   }
-  if (!event.scores) {
+  if (isEmpty(event.scores)) {
     throw new Error("scores must be specified");
   }
 
@@ -1642,6 +1698,78 @@ function validateAndSanitizeExperimentLogFullArgs(
   return event;
 }
 
+export type WithTransactionId<R> = R & {
+  [TRANSACTION_ID_FIELD]: TransactionId;
+};
+
+class ObjectFetcher<RecordType> {
+  private _fetchedData: WithTransactionId<RecordType>[] | undefined = undefined;
+
+  constructor(
+    private objectType: "dataset" | "experiment",
+    private pinnedVersion: string | undefined
+  ) {}
+
+  public get id(): Promise<string> {
+    throw new Error("ObjectFetcher subclasses must have an 'id' attribute");
+  }
+
+  protected async getState(): Promise<BraintrustState> {
+    throw new Error("ObjectFetcher subclasses must have a 'getState' method");
+  }
+
+  async *fetch(): AsyncGenerator<WithTransactionId<RecordType>> {
+    const records = await this.fetchedData();
+    for (const record of records) {
+      yield record;
+    }
+  }
+
+  [Symbol.iterator]() {
+    return this.fetch();
+  }
+
+  async fetchedData() {
+    if (this._fetchedData === undefined) {
+      const state = await this.getState();
+      const resp = await state.logConn().get(`object/${this.objectType}`, {
+        id: await this.id,
+        fmt: "json2",
+        version: this.pinnedVersion,
+      });
+
+      this._fetchedData = await resp.json();
+    }
+    return this._fetchedData || [];
+  }
+
+  clearCache() {
+    this._fetchedData = undefined;
+  }
+
+  public async version() {
+    if (this.pinnedVersion !== undefined) {
+      return this.pinnedVersion;
+    } else {
+      const fetchedData = await this.fetchedData();
+      let maxVersion = undefined;
+      for (const record of fetchedData) {
+        const xactId = record[TRANSACTION_ID_FIELD];
+        if (maxVersion === undefined || (xactId ?? xactId > maxVersion)) {
+          maxVersion = xactId;
+        }
+      }
+      return maxVersion;
+    }
+  }
+}
+
+export interface EvalCase<Input, Expected> {
+  input: Input;
+  expected?: Expected;
+  metadata?: Metadata;
+}
+
 /**
  * An experiment is a collection of logged events, such as model inputs and outputs, which represent
  * a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -1654,7 +1782,7 @@ function validateAndSanitizeExperimentLogFullArgs(
  *
  * You should not create `Experiment` objects directly. Instead, use the `braintrust.init()` method.
  */
-export class Experiment {
+export class Experiment extends ObjectFetcher<ExperimentEvent> {
   private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>;
   public readonly dataset?: Dataset;
   private bgLogger: BackgroundLogger;
@@ -1666,6 +1794,7 @@ export class Experiment {
     lazyMetadata: LazyValue<ProjectExperimentMetadata>,
     dataset?: Dataset
   ) {
+    super("experiment", undefined);
     this.lazyMetadata = lazyMetadata;
     this.dataset = dataset;
 
@@ -1694,7 +1823,7 @@ export class Experiment {
     })();
   }
 
-  private async getState(): Promise<BraintrustState> {
+  protected async getState(): Promise<BraintrustState> {
     // Ensure the login state is populated by awaiting lazyMetadata.
     await this.lazyMetadata.get();
     return _state;
@@ -1770,6 +1899,30 @@ export class Experiment {
     });
   }
 
+  public async fetchBaseExperiment() {
+    const state = await this.getState();
+    const conn = state.apiConn();
+
+    try {
+      const resp = await conn.post("/api/base_experiment/get_id", {
+        id: await this.id,
+      });
+
+      const base = await resp.json();
+      return {
+        id: base["base_exp_id"],
+        name: base["base_exp_name"],
+      };
+    } catch (e) {
+      if (e instanceof FailedHTTPResponse && e.status === 400) {
+        // No base experiment
+        return null;
+      } else {
+        throw e;
+      }
+    }
+  }
+
   /**
    * Summarize the experiment, including the scores (compared to the closest reference experiment) and metadata.
    *
@@ -1801,14 +1954,10 @@ export class Experiment {
     let comparisonExperimentName = undefined;
     if (summarizeScores) {
       if (comparisonExperimentId === undefined) {
-        const conn = state.logConn();
-        const resp = await conn.get("/crud/base_experiments", {
-          id: await this.id,
-        });
-        const base_experiments = await resp.json();
-        if (base_experiments.length > 0) {
-          comparisonExperimentId = base_experiments[0]["base_exp_id"];
-          comparisonExperimentName = base_experiments[0]["base_exp_name"];
+        const baseExperiment = await this.fetchBaseExperiment();
+        if (baseExperiment !== null) {
+          comparisonExperimentId = baseExperiment.id;
+          comparisonExperimentName = baseExperiment.name;
         }
       }
 
@@ -1872,6 +2021,51 @@ export class Experiment {
       "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed"
     );
     return this.id;
+  }
+}
+
+/**
+ * A read-only view of an experiment, initialized by passing `open: true` to `init()`.
+ */
+export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
+  constructor(private readonly lazyMetadata: LazyValue<ObjectMetadata>) {
+    super("experiment", undefined);
+  }
+
+  public get id(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata.get()).id;
+    })();
+  }
+
+  public get name(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata.get()).name;
+    })();
+  }
+
+  protected async getState(): Promise<BraintrustState> {
+    // Ensure the login state is populated by awaiting lazyMetadata.
+    await this.lazyMetadata.get();
+    return _state;
+  }
+
+  public async *asDataset<
+    Input = unknown,
+    Expected = unknown,
+  >(): AsyncGenerator<EvalCase<Input, Expected>> {
+    const records = this.fetch();
+    for await (const record of records) {
+      if (record.root_span_id !== record.span_id) {
+        continue;
+      }
+
+      const { output, expected } = record;
+      yield {
+        input: record.input as Input,
+        expected: (expected ?? output) as Expected,
+      };
+    }
   }
 }
 
@@ -2088,18 +2282,16 @@ export class SpanImpl implements Span {
  *
  * You should not create `Dataset` objects directly. Instead, use the `braintrust.initDataset()` method.
  */
-export class Dataset {
+export class Dataset extends ObjectFetcher<DatasetRecord> {
   private readonly lazyMetadata: LazyValue<ProjectDatasetMetadata>;
-  private pinnedVersion?: string;
-  private _fetchedData?: any[] = undefined;
   private bgLogger: BackgroundLogger;
 
   constructor(
     lazyMetadata: LazyValue<ProjectDatasetMetadata>,
     pinnedVersion?: string
   ) {
+    super("dataset", pinnedVersion);
     this.lazyMetadata = lazyMetadata;
-    this.pinnedVersion = pinnedVersion;
     const logConn = new LazyValue(() =>
       this.getState().then((state) => state.logConn())
     );
@@ -2124,7 +2316,7 @@ export class Dataset {
     })();
   }
 
-  private async getState(): Promise<BraintrustState> {
+  protected async getState(): Promise<BraintrustState> {
     // Ensure the login state is populated by awaiting lazyMetadata.
     await this.lazyMetadata.get();
     return _state;
@@ -2227,91 +2419,6 @@ export class Dataset {
       datasetUrl,
       dataSummary,
     };
-  }
-
-  /**
-   * Fetch all records in the dataset.
-   *
-   * @example
-   * ```
-   * // Use an async iterator to fetch all records in the dataset.
-   * for await (const record of dataset.fetch()) {
-   *  console.log(record);
-   * }
-   *
-   * // You can also iterate over the dataset directly.
-   * for await (const record of dataset) {
-   *  console.log(record);
-   * }
-   * ```
-   *
-   * @returns An iterator over the dataset's records.
-   */
-  async *fetch(): AsyncGenerator<DatasetRecord> {
-    const records = await this.fetchedData();
-    for (const record of records) {
-      yield {
-        id: record.id,
-        input: record.input && JSON.parse(record.input),
-        output: record.input && JSON.parse(record.output),
-        metadata: record.metadata && JSON.parse(record.metadata),
-      };
-    }
-    this.clearCache();
-  }
-
-  /**
-   * Fetch all records in the dataset.
-   *
-   * @example
-   * ```
-   * // Use an async iterator to fetch all records in the dataset.
-   * for await (const record of dataset) {
-   *  console.log(record);
-   * }
-   * ```
-   */
-  [Symbol.asyncIterator]() {
-    return this.fetch();
-  }
-
-  async fetchedData() {
-    if (this._fetchedData === undefined) {
-      const state = await this.getState();
-      const resp = await state.logConn().get("object/dataset", {
-        id: await this.id,
-        fmt: "json",
-        version: this.pinnedVersion,
-      });
-
-      const text = await resp.text();
-      this._fetchedData = text
-        .split("\n")
-        .filter((x: string) => x.trim() !== "")
-        .map((x: string) => JSON.parse(x));
-    }
-
-    return this._fetchedData || [];
-  }
-
-  clearCache() {
-    this._fetchedData = undefined;
-  }
-
-  async version() {
-    if (this.pinnedVersion !== undefined) {
-      return this.pinnedVersion;
-    } else {
-      const fetchedData = await this.fetchedData();
-      let maxVersion = undefined;
-      for (const record of fetchedData) {
-        const xactId = record[TRANSACTION_ID_FIELD];
-        if (maxVersion === undefined || (xactId ?? xactId > maxVersion)) {
-          maxVersion = xactId;
-        }
-      }
-      return maxVersion;
-    }
   }
 
   /**

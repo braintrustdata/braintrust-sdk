@@ -5,21 +5,46 @@ import {
   ExperimentSummary,
   Metadata,
   Span,
-  init,
+  init as _initExperiment,
+  EvalCase,
+  InitOptions,
 } from "./logger";
 import { Score, SpanTypeAttribute } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
+import { isEmpty } from "./util";
 
-export interface EvalCase<Input, Expected> {
-  input: Input;
-  expected?: Expected;
-  metadata?: Metadata;
+export type BaseExperiment<Input, Expected> = {
+  _type: "BaseExperiment";
+  _phantom?: [Input, Expected];
+  name?: string;
+};
+
+/**
+ * Use this to specify that the dataset should actually be the data from a previous (base) experiment.
+ * If you do not specify a name, Braintrust will automatically figure out the best base experiment to
+ * use based on your git history (or fall back to timestamps).
+ *
+ * @param options
+ * @param options.name The name of the base experiment to use. If unspecified, Braintrust will automatically figure out the best base
+ * using your git history (or fall back to timestamps).
+ * @returns
+ */
+export function BaseExperiment<Input = unknown, Expected = unknown>(
+  options: {
+    name?: string;
+  } = {}
+): BaseExperiment<Input, Expected> {
+  return { _type: "BaseExperiment", ...options };
 }
 
 export type EvalData<Input, Expected> =
+  | EvalCase<Input, Expected>[]
   | (() => EvalCase<Input, Expected>[])
-  | (() => Promise<EvalCase<Input, Expected>[]>);
+  | (() => Promise<EvalCase<Input, Expected>[]>)
+  | AsyncGenerator<EvalCase<Input, Expected>>
+  | BaseExperiment<Input, Expected>
+  | (() => BaseExperiment<Input, Expected>);
 
 export type EvalTask<Input, Output> =
   | ((input: Input, hooks: EvalHooks) => Promise<Output>)
@@ -98,6 +123,16 @@ export type EvaluatorFile = {
   [evalName: string]: EvaluatorDef<any, any, any>;
 };
 
+function initExperiment<IsOpen extends boolean = false>(
+  projectName: string,
+  options: Readonly<InitOptions<IsOpen>> = {}
+) {
+  return _initExperiment(projectName, {
+    ...options,
+    setCurrent: false,
+  });
+}
+
 declare global {
   var _evals: EvaluatorFile;
   var _lazy_load: boolean;
@@ -108,23 +143,31 @@ globalThis._evals = {};
 export async function Eval<Input, Output, Expected>(
   name: string,
   evaluator: Evaluator<Input, Output, Expected>
-): Promise<void | ExperimentSummary> {
+): Promise<ExperimentSummary> {
   const evalName = makeEvalName(name, evaluator.experimentName);
   if (_evals[evalName]) {
     throw new Error(`Evaluator ${evalName} already exists`);
   }
   if (globalThis._lazy_load) {
     _evals[evalName] = { evalName, projectName: name, ...evaluator };
-    return;
+    // Better to return this empty object than have an annoying-to-use signature
+    return {
+      projectName: "_lazy_load",
+      experimentName: "_lazy_load",
+      projectUrl: "",
+      experimentUrl: "",
+      comparisonExperimentName: "",
+      scores: {},
+      metrics: {},
+    };
   }
 
   const progressReporter = new BarProgressReporter();
   try {
-    const experiment = init(name, {
+    const experiment = initExperiment(name, {
       experiment: evaluator.experimentName,
       metadata: evaluator.metadata,
       isPublic: evaluator.isPublic,
-      setCurrent: false,
     });
     try {
       const ret = await runEvaluator(
@@ -210,10 +253,43 @@ export async function runEvaluator(
   if (typeof evaluator.data === "string") {
     throw new Error("Unimplemented: string data paths");
   }
-  const dataResult = evaluator.data();
-  let data = null;
+  let dataResult =
+    typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
+
+  if ("_type" in dataResult) {
+    if (dataResult._type !== "BaseExperiment") {
+      // For some reason, the typesystem won't let me check if dataResult._type === "BaseExperiment"
+      throw new Error("Invalid _type");
+    }
+    if (!experiment) {
+      throw new Error(
+        "Cannot use BaseExperiment() without connecting to Braintrust (you most likely set --no-send-logs)"
+      );
+    }
+    let name = dataResult.name;
+    if (isEmpty(name)) {
+      const baseExperiment = await experiment.fetchBaseExperiment();
+      if (!baseExperiment) {
+        throw new Error("BaseExperiment() failed to fetch base experiment");
+      }
+      name = baseExperiment.name;
+    }
+    dataResult = initExperiment(evaluator.projectName, {
+      experiment: name,
+      open: true,
+    }).asDataset();
+  }
+
+  let data: EvalCase<unknown, unknown>[] = [];
   if (dataResult instanceof Promise) {
     data = await dataResult;
+  } else if (Symbol.asyncIterator in dataResult) {
+    // TODO: Eventually, we may want to support pushing the async generator logic
+    // down into the evaluator, so we can avoid materializing large datasets
+    data = [];
+    for await (const d of dataResult) {
+      data.push(d);
+    }
   } else {
     data = dataResult;
   }

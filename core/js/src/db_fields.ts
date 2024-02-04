@@ -9,9 +9,14 @@ export const MERGE_PATHS_FIELD = "_merge_paths";
 export const AUDIT_SOURCE_FIELD = "_audit_source";
 export const AUDIT_METADATA_FIELD = "_audit_metadata";
 export const VALID_SOURCES = ["app", "api", "external"] as const;
-export type Source = typeof VALID_SOURCES[number];
+export type Source = (typeof VALID_SOURCES)[number];
 
 export const PARENT_ID_FIELD = "_parent_id";
+
+// This is often a string, e.g. as a response to /logs2, but when loading data objects, ends up
+// being a BigInt. We should probably normalize it everywhere to be one or the other, but in the
+// meantime, let's at least enforce it as a single aliased type throughout the code.
+export type TransactionId = bigint;
 
 export const ALL_ROW_ID_FIELDS = [
   ID_FIELD,
