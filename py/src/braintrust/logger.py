@@ -1428,14 +1428,17 @@ class Experiment(ObjectFetcher):
 
     def fetch_base_experiment(self):
         state = self._get_state()
-        conn = state.log_conn()
-        resp = conn.get("/crud/base_experiments", params={"id": self.id})
+        conn = state.app_conn()
+
+        resp = conn.post("/api/base_experiment/get_id", json={"id": self.id})
+        if resp.status_code == 400:
+            # No base experiment
+            return None
+
         response_raise_for_status(resp)
-        base_experiments = resp.json()
-        if base_experiments:
-            return ExperimentIdentifier(
-                id=base_experiments[0]["base_exp_id"], name=base_experiments[0]["base_exp_name"]
-            )
+        base = resp.json()
+        if base:
+            return ExperimentIdentifier(id=base["base_exp_id"], name=base["base_exp_name"])
         else:
             return None
 

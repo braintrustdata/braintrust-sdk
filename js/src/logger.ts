@@ -1876,18 +1876,25 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
 
   public async fetchBaseExperiment() {
     const state = await this.getState();
-    const conn = state.logConn();
-    const resp = await conn.get("/crud/base_experiments", {
-      id: await this.id,
-    });
-    const base_experiments = await resp.json();
-    if (base_experiments.length > 0) {
+    const conn = state.apiConn();
+
+    try {
+      const resp = await conn.post("/api/base_experiment/get_id", {
+        id: await this.id,
+      });
+
+      const base = await resp.json();
       return {
-        id: base_experiments[0]["base_exp_id"],
-        name: base_experiments[0]["base_exp_name"],
+        id: base["base_exp_id"],
+        name: base["base_exp_name"],
       };
-    } else {
-      return null;
+    } catch (e) {
+      if (e instanceof FailedHTTPResponse && e.status === 400) {
+        // No base experiment
+        return null;
+      } else {
+        throw e;
+      }
     }
   }
 
