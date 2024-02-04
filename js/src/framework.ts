@@ -5,8 +5,9 @@ import {
   ExperimentSummary,
   Metadata,
   Span,
-  init,
+  init as _initExperiment,
   EvalCase,
+  InitOptions,
 } from "./logger";
 import { Score, SpanTypeAttribute } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
@@ -122,6 +123,16 @@ export type EvaluatorFile = {
   [evalName: string]: EvaluatorDef<any, any, any>;
 };
 
+function initExperiment<IsOpen extends boolean = false>(
+  projectName: string,
+  options: Readonly<InitOptions<IsOpen>> = {}
+) {
+  return _initExperiment(projectName, {
+    ...options,
+    setCurrent: false,
+  });
+}
+
 declare global {
   var _evals: EvaluatorFile;
   var _lazy_load: boolean;
@@ -153,11 +164,10 @@ export async function Eval<Input, Output, Expected>(
 
   const progressReporter = new BarProgressReporter();
   try {
-    const experiment = init(name, {
+    const experiment = initExperiment(name, {
       experiment: evaluator.experimentName,
       metadata: evaluator.metadata,
       isPublic: evaluator.isPublic,
-      setCurrent: false,
     });
     try {
       const ret = await runEvaluator(
@@ -264,10 +274,9 @@ export async function runEvaluator(
       }
       name = baseExperiment.name;
     }
-    dataResult = init(evaluator.projectName, {
+    dataResult = initExperiment(evaluator.projectName, {
       experiment: name,
       open: true,
-      setCurrent: false,
     }).asDataset();
   }
 
