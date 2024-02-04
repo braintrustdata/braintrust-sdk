@@ -24,7 +24,6 @@ import {
   isEmpty,
   LazyValue,
 } from "./util";
-import { EvalCase } from "./framework";
 
 export type Metadata = Record<string, unknown>;
 
@@ -1685,7 +1684,6 @@ class ObjectFetcher<RecordType> {
           ])
       ) as RecordType;
     }
-    this.clearCache();
   }
 
   [Symbol.iterator]() {
@@ -1731,9 +1729,10 @@ class ObjectFetcher<RecordType> {
   }
 }
 
-export interface ExperimentIdentifier {
-  name: string;
-  id: string;
+export interface EvalCase<Input, Expected> {
+  input: Input;
+  expected?: Expected;
+  metadata?: Metadata;
 }
 
 /**

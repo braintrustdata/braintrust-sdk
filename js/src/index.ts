@@ -50,7 +50,6 @@ configureNode();
 export * from "./logger";
 export {
   BaseExperiment,
-  EvalCase,
   Evaluator,
   EvalTask,
   Eval,

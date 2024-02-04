@@ -6,17 +6,12 @@ import {
   Metadata,
   Span,
   init,
+  EvalCase,
 } from "./logger";
 import { Score, SpanTypeAttribute } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
 import { isEmpty } from "./util";
-
-export interface EvalCase<Input, Expected> {
-  input: Input;
-  expected?: Expected;
-  metadata?: Metadata;
-}
 
 export type BaseExperiment<Input, Expected> = {
   _type: "BaseExperiment";
