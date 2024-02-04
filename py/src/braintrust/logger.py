@@ -1081,10 +1081,8 @@ def _validate_and_sanitize_experiment_log_full_args(event, has_dataset):
 
 
 class ObjectIterator:
-    def __init__(self, refetch_fn, json_fields, exclude_fields):
+    def __init__(self, refetch_fn):
         self.refetch_fn = refetch_fn
-        self.json_fields = json_fields
-        self.exclude_fields = exclude_fields
         self.idx = 0
 
     def __iter__(self):
@@ -1097,24 +1095,14 @@ class ObjectIterator:
         value = data[self.idx]
         self.idx += 1
 
-        return {
-            k: json.loads(v) if k in self.json_fields and v is not None else v
-            for k, v in value.items()
-            if k not in self.exclude_fields
-        }
+        return value
 
 
 class ObjectFetcher:
-    def __init__(self, object_type, json_fields, pinned_version=None):
+    def __init__(self, object_type, pinned_version=None):
         assert hasattr(self, "id"), "ObjectFetcher subclasses must have an 'id' attribute"
 
         self.object_type = object_type
-        self.json_fields = set()
-
-        self.json_fields.update(json_fields)
-        self.json_fields.update(["span_parents", "span_attributes"])
-        self.exclude_fields = set(["_object_delete"])
-
         self._pinned_version = pinned_version
 
         self._fetched_data = None
@@ -1133,7 +1121,7 @@ class ObjectFetcher:
 
         :returns: An iterator over the records.
         """
-        return ObjectIterator(self._refetch, self.json_fields, self.exclude_fields)
+        return ObjectIterator(self._refetch)
 
     def __iter__(self):
         return self.fetch()
@@ -1148,11 +1136,11 @@ class ObjectFetcher:
     def _refetch(self):
         if self._fetched_data is None:
             resp = _state.log_conn().get(
-                f"object/{self.object_type}", params={"id": self.id, "fmt": "json", "version": self._pinned_version}
+                f"object/{self.object_type}", params={"id": self.id, "fmt": "json2", "version": self._pinned_version}
             )
             response_raise_for_status(resp)
 
-            self._fetched_data = [json.loads(line) for line in resp.content.split(b"\n") if line.strip()]
+            self._fetched_data = resp.json()
 
         return self._fetched_data
 
@@ -1164,7 +1152,7 @@ class ObjectFetcher:
         if self._pinned_version is not None:
             return self._pinned_version
         else:
-            return max([int(record.get(TRANSACTION_ID_FIELD, 0)) for record in self.fetched_data] or [0])
+            return max([int(record.get(TRANSACTION_ID_FIELD, 0)) for record in self._fetched_data] or [0])
 
 
 @dataclasses.dataclass
@@ -1311,12 +1299,7 @@ class Experiment(ObjectFetcher):
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
         self.last_start_time = time.time()
 
-        ObjectFetcher.__init__(
-            self,
-            object_type="experiment",
-            json_fields=["input", "output", "expected", "metadata", "scores", "metrics"],
-            pinned_version=None,
-        )
+        ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
 
     @property
     def id(self):
@@ -1728,12 +1711,7 @@ class Dataset(ObjectFetcher):
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
 
-        ObjectFetcher.__init__(
-            self,
-            object_type="dataset",
-            json_fields=["input", "output", "metadata"],
-            pinned_version=None,
-        )
+        ObjectFetcher.__init__(self, object_type="dataset", pinned_version=None)
 
     @property
     def id(self):

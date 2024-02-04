@@ -14,6 +14,7 @@ import {
   AUDIT_METADATA_FIELD,
   GitMetadataSettings,
   mergeGitMetadataSettings,
+  TransactionId,
 } from "@braintrust/core";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -1654,13 +1655,15 @@ function validateAndSanitizeExperimentLogFullArgs(
   return event;
 }
 
+export type WithTransactionId<R> = R & {
+  [TRANSACTION_ID_FIELD]: TransactionId;
+};
+
 class ObjectFetcher<RecordType> {
-  private excludeFields: Set<string> = new Set(["_object_delete"]);
-  private _fetchedData: any[] | undefined = undefined;
+  private _fetchedData: WithTransactionId<RecordType>[] | undefined = undefined;
 
   constructor(
     private objectType: "dataset" | "experiment",
-    private jsonFields: Set<string>,
     private pinnedVersion: string | undefined
   ) {}
 
@@ -1672,17 +1675,10 @@ class ObjectFetcher<RecordType> {
     throw new Error("ObjectFetcher subclasses must have a 'getState' method");
   }
 
-  async *fetch(): AsyncGenerator<RecordType> {
+  async *fetch(): AsyncGenerator<WithTransactionId<RecordType>> {
     const records = await this.fetchedData();
     for (const record of records) {
-      yield Object.fromEntries(
-        Object.entries(record)
-          .filter(([k, _]) => !this.excludeFields.has(k))
-          .map(([k, v]) => [
-            k,
-            this.jsonFields.has(k) && typeof v === "string" ? JSON.parse(v) : v,
-          ])
-      ) as RecordType;
+      yield record;
     }
   }
 
@@ -1695,15 +1691,11 @@ class ObjectFetcher<RecordType> {
       const state = await this.getState();
       const resp = await state.logConn().get(`object/${this.objectType}`, {
         id: await this.id,
-        fmt: "json",
+        fmt: "json2",
         version: this.pinnedVersion,
       });
 
-      const text = await resp.text();
-      this._fetchedData = text
-        .split("\n")
-        .filter((x: string) => x.trim() !== "")
-        .map((x: string) => JSON.parse(x));
+      this._fetchedData = await resp.json();
     }
     return this._fetchedData || [];
   }
@@ -1759,11 +1751,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     lazyMetadata: LazyValue<ProjectExperimentMetadata>,
     dataset?: Dataset
   ) {
-    super(
-      "experiment",
-      new Set(["input", "output", "expected", "metadata", "scores", "metrics"]),
-      undefined
-    );
+    super("experiment", undefined);
     this.lazyMetadata = lazyMetadata;
     this.dataset = dataset;
 
@@ -2219,7 +2207,7 @@ export class Dataset extends ObjectFetcher<DatasetRecord> {
     lazyMetadata: LazyValue<ProjectDatasetMetadata>,
     pinnedVersion?: string
   ) {
-    super("dataset", new Set(["input", "output", "metadata"]), pinnedVersion);
+    super("dataset", pinnedVersion);
     this.lazyMetadata = lazyMetadata;
     const logConn = new LazyValue(() =>
       this.getState().then((state) => state.logConn())
