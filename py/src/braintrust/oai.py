@@ -241,15 +241,6 @@ class AsyncEmbeddingV1Wrapper(NamedWrapper):
         return await EmbeddingWrapper(None, self.__embedding.create).acreate(*args, **kwargs)
 
 
-class EmbeddingV1Wrapper(NamedWrapper):
-    def __init__(self, embedding):
-        self.__embedding = embedding
-        super().__init__(embedding)
-
-    def create(self, *args, **kwargs):
-        return EmbeddingWrapper(None, self.__embedding.create).create(*args, **kwargs)
-
-
 class ChatV1Wrapper(NamedWrapper):
     def __init__(self, chat):
         super().__init__(chat)
