@@ -535,7 +535,7 @@ def init(
     :param description: (Optional) An optional description of the experiment.
     :param dataset: (Optional) A dataset to associate with the experiment. The dataset must be initialized with `braintrust.init_dataset` before passing
     it into the experiment.
-    :param open: If the experiment already exists, open it instead of creating a new one.
+    :param update: If the experiment already exists, continue logging to it.
     :param base_experiment: An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this
     experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
     :param is_public: An optional parameter to control whether the experiment is publicly visible to anybody with the link or privately visible to only members of the organization. Defaults to private.
@@ -546,7 +546,7 @@ def init(
     :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
     :param git_metadata_settings: (Optional) Settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param set_current: If true (the default), set the global current-experiment to the newly-created one.
-    :param update: (Deprecated) If true, old alias for `open`. This parameter will be removed in a future version of braintrust.
+    :param open: If the experiment already exists, open it in read-only mode.
     :returns: The experiment object.
     """
 
