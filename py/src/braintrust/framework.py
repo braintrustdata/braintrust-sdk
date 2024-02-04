@@ -97,14 +97,8 @@ EvalScorer = Union[
 class BaseExperiment:
     """
     Use this to specify that the dataset should actually be the data from a previous (base) experiment.
-    Braintrust will automatically figure out the best base experiment to use based on your git history
-    (or fall back to timestamps).
-
-    If you instead want to specify a specific experiment, then use
-
-    ```
-    data=braintrust.init(project=project_name, experiment=experiment_name, open=True).as_dataset()
-    ```
+    If you do not specify a name, Braintrust will automatically figure out the best base experiment to
+    use based on your git history (or fall back to timestamps).
     """
 
     """

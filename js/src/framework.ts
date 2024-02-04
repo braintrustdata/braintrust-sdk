@@ -21,15 +21,8 @@ export type BaseExperiment<Input, Expected> = {
 
 /**
  * Use this to specify that the dataset should actually be the data from a previous (base) experiment.
- * Braintrust will automatically figure out the best base experiment to use based on your git history
- * (or fall back to timestamps).
-
- * If you instead want to specify a specific experiment, then use
- * ```typescript
- * ...
- *  data: init(project_name, { experiment: experimentName, open: true }).asDataset()
- * ...
- * ```
+ * If you do not specify a name, Braintrust will automatically figure out the best base experiment to
+ * use based on your git history (or fall back to timestamps).
  *
  * @param options
  * @param options.name The name of the base experiment to use. If unspecified, Braintrust will automatically figure out the best base
