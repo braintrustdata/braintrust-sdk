@@ -267,6 +267,7 @@ export async function runEvaluator(
     dataResult = init(evaluator.projectName, {
       experiment: name,
       open: true,
+      setCurrent: false,
     }).asDataset();
   }
 

@@ -586,7 +586,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
             )
         base_experiment = experiment.fetch_base_experiment()
         data_iterator = _init_experiment(
-            project=evaluator.project_name, experiment=base_experiment.name, open=True
+            project=evaluator.project_name, experiment=base_experiment.name, open=True, set_current=False
         ).as_dataset()
 
     if inspect.isfunction(data_iterator):
