@@ -968,7 +968,7 @@ type InitializedExperiment<IsOpen extends boolean | undefined> =
  * @param options.open If the experiment already exists, open it in read-only mode.
  * @returns The newly created Experiment.
  */
-export function init<IsOpen extends boolean>(
+export function init<IsOpen extends boolean = false>(
   project: string,
   options: Readonly<InitOptions<IsOpen>> = {}
 ): InitializedExperiment<IsOpen> {
