@@ -516,7 +516,7 @@ def init(
     experiment: Optional[str] = None,
     description: Optional[str] = None,
     dataset: Optional["Dataset"] = None,
-    update: bool = False,
+    open: bool = False,
     base_experiment: Optional[str] = None,
     is_public: bool = False,
     app_url: Optional[str] = None,
@@ -525,6 +525,7 @@ def init(
     metadata: Optional[Metadata] = None,
     git_metadata_settings: Optional[GitMetadataSettings] = None,
     set_current: bool = True,
+    update: Optional[bool] = None,
 ):
     """
     Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
@@ -545,8 +546,32 @@ def init(
     :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
     :param git_metadata_settings: (Optional) Settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param set_current: If true (the default), set the global current-experiment to the newly-created one.
+    :param open: If the experiment already exists, open it in read-only mode.
     :returns: The experiment object.
     """
+
+    if open:
+        if experiment is None:
+            raise ValueError("Cannot open an experiment without specifying its name")
+        if update:
+            raise ValueError("Cannot open and update an experiment at the same time")
+
+        def compute_metadata():
+            login(org_name=org_name, api_key=api_key, app_url=app_url)
+            args = {"experiment_name": experiment, "project_name": project, "org_name": _state.org_name}
+
+            response = _state.app_conn().post_json("api/experiment/get", args)
+            if len(response) == 0:
+                raise ValueError(f"Experiment {experiment} not found in project {project}.")
+
+            info = response[0]
+            return ObjectMetadata(
+                id=info["id"],
+                name=info["name"],
+                full_info=info,
+            )
+
+        return ReadonlyExperiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True))
 
     def compute_metadata():
         login(org_name=org_name, api_key=api_key, app_url=app_url)
@@ -1078,6 +1103,81 @@ def _validate_and_sanitize_experiment_log_full_args(event, has_dataset):
     return event
 
 
+class ObjectIterator:
+    def __init__(self, refetch_fn):
+        self.refetch_fn = refetch_fn
+        self.idx = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        data = self.refetch_fn()
+        if self.idx >= len(data):
+            raise StopIteration
+        value = data[self.idx]
+        self.idx += 1
+
+        return value
+
+
+class ObjectFetcher:
+    def __init__(self, object_type, pinned_version=None):
+        assert hasattr(self, "id"), "ObjectFetcher subclasses must have an 'id' attribute"
+
+        self.object_type = object_type
+        self._pinned_version = pinned_version
+
+        self._fetched_data = None
+
+    def fetch(self):
+        """
+        Fetch all records.
+
+        ```python
+        for record in object.fetch():
+            print(record)
+
+        # You can also iterate over the object directly.
+        for record in object:
+            print(record)
+
+        :returns: An iterator over the records.
+        """
+        return ObjectIterator(self._refetch)
+
+    def __iter__(self):
+        return self.fetch()
+
+    @property
+    def fetched_data(self):
+        eprint(
+            ".fetched_data is deprecated and will be removed in a future version of braintrust. Use .fetch() or the iterator instead"
+        )
+        return self._refetch()
+
+    def _refetch(self):
+        if self._fetched_data is None:
+            resp = _state.log_conn().get(
+                f"object/{self.object_type}", params={"id": self.id, "fmt": "json2", "version": self._pinned_version}
+            )
+            response_raise_for_status(resp)
+
+            self._fetched_data = resp.json()
+
+        return self._fetched_data
+
+    def _clear_cache(self):
+        self._fetched_data = None
+
+    @property
+    def version(self):
+        if self._pinned_version is not None:
+            return self._pinned_version
+        else:
+            return max([int(record.get(TRANSACTION_ID_FIELD, 0)) for record in self._fetched_data] or [0])
+
+
 @dataclasses.dataclass
 class ParentExperimentIds:
     project_id: str
@@ -1166,7 +1266,35 @@ def _log_feedback_impl(
         bg_logger.log(LazyValue(compute_record, use_mutex=False))
 
 
-class Experiment:
+@dataclasses.dataclass
+class ExperimentIdentifier:
+    id: str
+    name: str
+
+
+class ExperimentDatasetIterator:
+    def __init__(self, iterator):
+        self.iterator = iterator
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        while True:
+            value = next(self.iterator)
+            if value["root_span_id"] != value["span_id"]:
+                continue
+
+            output, expected = value.get("output"), value.get("expected")
+            return {
+                "input": value.get("input"),
+                "expected": expected if expected is not None else output,
+                # NOTE: We'll eventually want to track origin information here (and generalize
+                # the `dataset_record_id` field)
+            }
+
+
+class Experiment(ObjectFetcher):
     """
     An experiment is a collection of logged events, such as model inputs and outputs, which represent
     a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -1193,6 +1321,8 @@ class Experiment:
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
         self.last_start_time = time.time()
+
+        ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
 
     @property
     def id(self):
@@ -1316,6 +1446,22 @@ class Experiment:
             event=event,
         )
 
+    def fetch_base_experiment(self):
+        state = self._get_state()
+        conn = state.app_conn()
+
+        resp = conn.post("/api/base_experiment/get_id", json={"id": self.id})
+        if resp.status_code == 400:
+            # No base experiment
+            return None
+
+        response_raise_for_status(resp)
+        base = resp.json()
+        if base:
+            return ExperimentIdentifier(id=base["base_exp_id"], name=base["base_exp_name"])
+        else:
+            return None
+
     def summarize(self, summarize_scores=True, comparison_experiment_id=None):
         """
         Summarize the experiment, including the scores (compared to the closest reference experiment) and metadata.
@@ -1340,13 +1486,10 @@ class Experiment:
         if summarize_scores:
             # Get the comparison experiment
             if comparison_experiment_id is None:
-                conn = state.log_conn()
-                resp = conn.get("/crud/base_experiments", params={"id": self.id})
-                response_raise_for_status(resp)
-                base_experiments = resp.json()
-                if base_experiments:
-                    comparison_experiment_id = base_experiments[0]["base_exp_id"]
-                    comparison_experiment_name = base_experiments[0]["base_exp_name"]
+                base_experiment = self.fetch_base_experiment()
+                if base_experiment:
+                    comparison_experiment_id = base_experiment.id
+                    comparison_experiment_name = base_experiment.name
 
             if comparison_experiment_id is not None:
                 summary_items = state.log_conn().get_json(
@@ -1398,6 +1541,27 @@ class Experiment:
 
     def __exit__(self, type, value, callback):
         del type, value, callback
+
+
+class ReadonlyExperiment(ObjectFetcher):
+    """
+    A read-only view of an experiment, initialized by passing `open=True` to `init()`.
+    """
+
+    def __init__(
+        self,
+        lazy_metadata: LazyValue[ObjectMetadata],
+    ):
+        self._lazy_metadata = lazy_metadata
+
+        ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
+
+    @property
+    def id(self):
+        return self._lazy_metadata.get().id
+
+    def as_dataset(self):
+        return ExperimentDatasetIterator(self.fetch())
 
 
 class SpanImpl(Span):
@@ -1565,7 +1729,7 @@ class SpanImpl(Span):
         self.end()
 
 
-class Dataset:
+class Dataset(ObjectFetcher):
     """
     A dataset is a collection of records, such as model inputs and outputs, which represent
     data you can use to evaluate and fine-tune models. You can log production data to datasets,
@@ -1590,6 +1754,8 @@ class Dataset:
             return self._get_state().log_conn()
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
+
+        ObjectFetcher.__init__(self, object_type="dataset", pinned_version=None)
 
     @property
     def id(self):
@@ -1723,56 +1889,6 @@ class Dataset:
             dataset_url=dataset_url,
             data_summary=data_summary,
         )
-
-    def fetch(self):
-        """
-        Fetch all records in the dataset.
-
-        ```python
-        for record in dataset.fetch():
-            print(record)
-
-        # You can also iterate over the dataset directly.
-        for record in dataset:
-            print(record)
-        ```
-
-        :returns: An iterator over the records in the dataset.
-        """
-        for record in self.fetched_data:
-            yield {
-                "id": record.get("id"),
-                "input": json.loads(record.get("input") or "null"),
-                "output": json.loads(record.get("output") or "null"),
-                "metadata": json.loads(record.get("metadata") or "null"),
-            }
-
-        self._clear_cache()
-
-    def __iter__(self):
-        return self.fetch()
-
-    @property
-    def fetched_data(self):
-        if not self._fetched_data:
-            state = self._get_state()
-            resp = state.log_conn().get(
-                "object/dataset", params={"id": self.id, "fmt": "json", "version": self._pinned_version}
-            )
-            response_raise_for_status(resp)
-
-            self._fetched_data = [json.loads(line) for line in resp.content.split(b"\n") if line.strip()]
-        return self._fetched_data
-
-    def _clear_cache(self):
-        self._fetched_data = None
-
-    @property
-    def version(self):
-        if self._pinned_version is not None:
-            return self._pinned_version
-        else:
-            return max([int(record.get(TRANSACTION_ID_FIELD, 0)) for record in self.fetched_data] or [0])
 
     def close(self):
         """This function is deprecated. You can simply remove it from your code."""

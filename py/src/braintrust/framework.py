@@ -9,6 +9,7 @@ import traceback
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from enum import Enum
 from multiprocessing import cpu_count
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List, Optional, TypeVar, Union
 
@@ -93,6 +94,21 @@ EvalScorer = Union[
 
 
 @dataclasses.dataclass
+class BaseExperiment:
+    """
+    Use this to specify that the dataset should actually be the data from a previous (base) experiment.
+    If you do not specify a name, Braintrust will automatically figure out the best base experiment to
+    use based on your git history (or fall back to timestamps).
+    """
+
+    """
+    The name of the base experiment to use. If unspecified, Braintrust will automatically figure out the best base
+    using your git history (or fall back to timestamps).
+    """
+    name: Optional[str] = None
+
+
+@dataclasses.dataclass
 class Evaluator:
     """
     An evaluator is an abstraction that defines an evaluation dataset, a task to run on the dataset, and a set of
@@ -121,6 +137,8 @@ class Evaluator:
         Iterator[EvalCase],
         Awaitable[Iterator[EvalCase]],
         Callable[[], Union[Iterator[EvalCase], Awaitable[Iterator[EvalCase]]]],
+        BaseExperiment,
+        type,
     ]
 
     """
@@ -193,9 +211,11 @@ def report_evaluator_result(eval_name, results, summary, verbose, jsonl):
         )
 
         errors = [
-            result.exc_info
-            if verbose or jsonl
-            else "\n".join(traceback.format_exception_only(type(result.error), result.error))
+            (
+                result.exc_info
+                if verbose or jsonl
+                else "\n".join(traceback.format_exception_only(type(result.error), result.error))
+            )
             for result in failing_results
         ]
 
@@ -314,6 +334,7 @@ def Eval(
             try:
                 results, summary = await run_evaluator(experiment, evaluator, 0, [])
                 report_evaluator_result(evaluator.eval_name, results, summary, verbose=True, jsonl=False)
+                return summary
             finally:
                 experiment.flush()
 
@@ -490,7 +511,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
 
     async def run_evaluator_task(datum):
         if isinstance(datum, dict):
-            datum = EvalCase(**datum)
+            datum = EvalCase.from_dict(datum)
 
         metadata = {**(datum.metadata or {})}
         output = None
@@ -554,6 +575,20 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
         return EvalResult(output=output, metadata=metadata, scores=scores, error=error, exc_info=exc_info)
 
     data_iterator = evaluator.data
+
+    if inspect.isclass(data_iterator):
+        data_iterator = data_iterator()
+
+    if isinstance(data_iterator, BaseExperiment):
+        if experiment is None:
+            raise ValueError(
+                "Cannot use BaseExperiment() without connecting to Braintrust (you most likely set --no-send-logs)"
+            )
+        base_experiment = experiment.fetch_base_experiment()
+        data_iterator = _init_experiment(
+            project=evaluator.project_name, experiment=base_experiment.name, open=True, set_current=False
+        ).as_dataset()
+
     if inspect.isfunction(data_iterator):
         data_iterator = data_iterator()
 
@@ -589,4 +624,4 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
     return results, summary
 
 
-__all__ = ["Evaluator", "Eval", "Score", "EvalCase", "EvalHooks"]
+__all__ = ["Evaluator", "Eval", "Score", "EvalCase", "EvalHooks", "BaseExperiment"]
