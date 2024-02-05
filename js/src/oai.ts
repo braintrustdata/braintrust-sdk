@@ -261,9 +261,9 @@ function wrapEmbeddings<
     return traced(
       async (span) => {
         const result = await create(params, options);
-        const output = result.data[0];
         span.log({
-          output,
+          // TODO: Add this back gated behind a flag, possibly w/ JSON compression.
+          // output: result.data[0],
           metrics: {
             tokens: result.usage?.total_tokens,
             prompt_tokens: result.usage?.prompt_tokens,
