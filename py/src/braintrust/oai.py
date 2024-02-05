@@ -142,7 +142,8 @@ class EmbeddingWrapper:
                     "tokens": log_response["usage"]["total_tokens"],
                     "prompt_tokens": log_response["usage"]["prompt_tokens"],
                 },
-                output=log_response["data"],
+                # TODO: Add this back gated behind a flag, possibly w/ JSON compression.
+                # output=log_response["data"],
             )
             return raw_response
 
@@ -159,7 +160,8 @@ class EmbeddingWrapper:
                     "tokens": log_response["usage"]["total_tokens"],
                     "prompt_tokens": log_response["usage"]["prompt_tokens"],
                 },
-                output=log_response["data"],
+                # TODO: Add this back gated behind a flag, possibly w/ JSON compression.
+                # output=log_response["data"],
             )
             return raw_response
 
