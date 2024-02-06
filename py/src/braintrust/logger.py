@@ -416,8 +416,13 @@ class _BackgroundLogger:
             except queue.Empty:
                 pass
             # Unwrap all the lazily-computed values.
-            all_items = [item.get() for item in all_items]
-            all_items = list(reversed(merge_row_batch(all_items)))
+            try:
+                all_items = [item.get() for item in all_items]
+                all_items = list(reversed(merge_row_batch(all_items)))
+            except Exception as e:
+                print("Encountered error when constructing records to flush:")
+                traceback.print_exc()
+                all_items = []
 
             if len(all_items) == 0:
                 return
