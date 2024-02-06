@@ -261,9 +261,11 @@ function wrapEmbeddings<
     return traced(
       async (span) => {
         const result = await create(params, options);
-        const output = result.data[0];
+        const embedding_length = result.data[0].embedding.length;
         span.log({
-          output,
+          // TODO: Add a flag to control whether to log the full embedding vector,
+          // possibly w/ JSON compression.
+          output: { embedding_length },
           metrics: {
             tokens: result.usage?.total_tokens,
             prompt_tokens: result.usage?.prompt_tokens,

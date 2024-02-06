@@ -142,7 +142,9 @@ class EmbeddingWrapper:
                     "tokens": log_response["usage"]["total_tokens"],
                     "prompt_tokens": log_response["usage"]["prompt_tokens"],
                 },
-                output=log_response["data"],
+                # TODO: Add a flag to control whether to log the full embedding vector,
+                # possibly w/ JSON compression.
+                output={"embedding_length": len(log_response["data"][0]["embedding"])},
             )
             return raw_response
 
@@ -159,7 +161,9 @@ class EmbeddingWrapper:
                     "tokens": log_response["usage"]["total_tokens"],
                     "prompt_tokens": log_response["usage"]["prompt_tokens"],
                 },
-                output=log_response["data"],
+                # TODO: Add a flag to control whether to log the full embedding vector,
+                # possibly w/ JSON compression.
+                output={"embedding_length": len(log_response["data"][0]["embedding"])},
             )
             return raw_response
 
