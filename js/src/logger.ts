@@ -26,8 +26,6 @@ import {
   LazyValue,
 } from "./util";
 
-export type Metadata = Record<string, unknown>;
-
 export type SetCurrentArg = { setCurrent?: boolean };
 
 type StartSpanEventArgs = ExperimentLogPartialArgs & Partial<IdField>;
@@ -934,7 +932,7 @@ export type InitOptions<IsOpen extends boolean> = {
   appUrl?: string;
   apiKey?: string;
   orgName?: string;
-  metadata?: Metadata;
+  metadata?: Record<string, unknown>;
   gitMetadataSettings?: GitMetadataSettings;
   setCurrent?: boolean;
 } & InitOpenOption<IsOpen>;
@@ -1764,7 +1762,7 @@ class ObjectFetcher<RecordType> {
   }
 }
 
-export interface EvalCase<Input, Expected> {
+export interface EvalCase<Input, Expected, Metadata extends Object> {
   input: Input;
   expected?: Expected;
   metadata?: Metadata;
@@ -2053,7 +2051,8 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
   public async *asDataset<
     Input = unknown,
     Expected = unknown,
-  >(): AsyncGenerator<EvalCase<Input, Expected>> {
+    Metadata extends Object = Record<string, unknown>,
+  >(): AsyncGenerator<EvalCase<Input, Expected, Metadata>> {
     const records = this.fetch();
     for await (const record of records) {
       if (record.root_span_id !== record.span_id) {
