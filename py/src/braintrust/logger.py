@@ -27,7 +27,7 @@ from braintrust_core.db_fields import (
     VALID_SOURCES,
 )
 from braintrust_core.git_fields import GitMetadataSettings
-from braintrust_core.legacy_api import patch_legacy_record, make_legacy_record_string
+from braintrust_core.legacy_api import patch_legacy_dataset, make_legacy_record
 from braintrust_core.merge_row_batch import merge_row_batch
 from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
@@ -438,9 +438,8 @@ class _BackgroundLogger:
                     else:
                         break
 
-                    item_s = json.dumps(item)
-                    items.append(item_s)
-                    items_len += len(item_s)
+                    items.append(item)
+                    items_len += len(json.dumps(item))
 
                 if len(items) == 0:
                     break
@@ -458,19 +457,19 @@ class _BackgroundLogger:
 
     @staticmethod
     def _submit_logs_request(items, conn):
-        items_s = construct_json_array(items)
+        dataS = json.dumps(dict(data=items, api_version=2))
         for i in range(NUM_RETRIES):
             start_time = time.time()
 
-            resp = conn.post("/logs3", data=items_s)
+            resp = conn.post("/logs3", data=json.dumps(dict(data=items, api_version=2)))
             if not resp.ok:
-                resp = conn.post("/logs", data=construct_json_array([make_legacy_record_string(r) for r in items]))
+                resp = conn.post("/logs", data=json.dumps([make_legacy_record(r) for r in items]))
 
             if resp.ok:
                 return
             retrying_text = "" if i + 1 == NUM_RETRIES else " Retrying"
             _logger.warning(
-                f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(items_s)}. Error: {resp.status_code}: {resp.text}.{retrying_text}"
+                f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataS)}. Error: {resp.status_code}: {resp.text}.{retrying_text}"
             )
         if not resp.ok:
             _logger.warning(f"log request failed after {NUM_RETRIES} retries. Dropping batch")
@@ -655,6 +654,7 @@ def init_dataset(
     app_url: str = None,
     api_key: str = None,
     org_name: str = None,
+    include_output_alias: bool = True,
 ):
     """
     Create a new dataset in a specified project. If the project does not exist, it will be created.
@@ -669,6 +669,9 @@ def init_dataset(
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
     :returns: The dataset object.
     """
+
+    if include_output_alias:
+        eprint(f"""Dataset records currently include "output" as a (deprecated) alias for the "expected" field, but future versions of Braintrust will remove this alias. Please update your code to use "expected" and test it by calling `braintrust.init_dataset()` with `include_output_field=False`, which will become the default.""")
 
     def compute_metadata():
         login(org_name=org_name, api_key=api_key, app_url=app_url)
@@ -685,7 +688,7 @@ def init_dataset(
             dataset=ObjectMetadata(id=resp_dataset["id"], name=resp_dataset["name"], full_info=resp_dataset),
         )
 
-    return Dataset(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), version=version)
+    return Dataset(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), version=version, include_output_alias=include_output_alias)
 
 
 def init_logger(
@@ -1132,11 +1135,13 @@ class ObjectIterator:
 
 
 class ObjectFetcher:
-    def __init__(self, object_type, pinned_version=None):
+    def __init__(self, object_type, pinned_version=None, patch_legacy_record=None, add_alias_fields=None):
         assert hasattr(self, "id"), "ObjectFetcher subclasses must have an 'id' attribute"
 
         self.object_type = object_type
         self._pinned_version = pinned_version
+        self._patch_legacy_record = patch_legacy_record
+        self._add_alias_fields = add_alias_fields
 
         self._fetched_data = None
 
@@ -1168,20 +1173,29 @@ class ObjectFetcher:
 
     def _refetch(self):
         if self._fetched_data is None:
+            data = None
             try:
                 resp = _state.log_conn().get(
-                        f"object_v2/{self.object_type}", params={"id": self.id, "fmt": "json2", "version": self._pinned_version}
+                        f"object3/{self.object_type}", params={"id": self.id, "fmt": "json2", "version": self._pinned_version, "api_version": 2}
                 )
                 response_raise_for_status(resp)
-                self._fetched_data = resp.json()
+                data = resp.json()
             except Exception as e:
+                # When hitting old versions of the API where the "object3/" endpoint isn't available, fall back to
+                # the "object/" endpoint, which may require patching the incoming records. Remove this code once
+                # all APIs are updated.
                 resp = _state.log_conn().get(
-                        f"object/{self.object_type}", params={"id": self.id, "fmt": "json2", "version": self._pinned_version, "flag": "v2"}
+                        f"object/{self.object_type}", params={"id": self.id, "fmt": "json2", "version": self._pinned_version}
                 )
                 response_raise_for_status(resp)
-                # The `record_from_legacy_api` mutation is only necessary when loading dataset rows from old versions
-                # of the API where the "v2" flag isn't respected. Remove this once all endpoints are updated.
-                self._fetched_data = [patch_legacy_record(r) for r in resp.json()] if self.object_type == "dataset" else resp.json()
+                data = resp.json()
+                if self._patch_legacy_record:
+                    data = [self._patch_legacy_record(r) for r in data]
+
+            if self._add_alias_fields:
+                self._fetched_data = [self._add_alias_fields(r) for r in data]
+            else:
+                self._fetched_data = data
 
         return self._fetched_data
 
@@ -1756,6 +1770,11 @@ class SpanImpl(Span):
         self.end()
 
 
+def add_dataset_output_alias(r):
+    r["output"] = r.get("expected")
+    return r
+
+
 class Dataset(ObjectFetcher):
     """
     A dataset is a collection of records, such as model inputs and outputs, which represent
@@ -1765,7 +1784,7 @@ class Dataset(ObjectFetcher):
     You should not create `Dataset` objects directly. Instead, use the `braintrust.init_dataset()` method.
     """
 
-    def __init__(self, lazy_metadata: LazyValue[ProjectDatasetMetadata], version: Union[None, int, str] = None):
+    def __init__(self, lazy_metadata: LazyValue[ProjectDatasetMetadata], version: Union[None, int, str] = None, include_output_alias=True):
         self._lazy_metadata = lazy_metadata
         self.new_records = 0
         self._fetched_data = None
@@ -1782,7 +1801,8 @@ class Dataset(ObjectFetcher):
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
 
-        ObjectFetcher.__init__(self, object_type="dataset", pinned_version=None)
+        add_alias_fields = add_dataset_output_alias if include_output_alias else None
+        ObjectFetcher.__init__(self, object_type="dataset", pinned_version=None, patch_legacy_record=patch_legacy_dataset, add_alias_fields=add_alias_fields)
 
     @property
     def id(self):

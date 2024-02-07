@@ -1,9 +1,7 @@
 import json
 
 
-def patch_legacy_record(r):
-    if "dataset_id" not in r:
-        return r
+def patch_legacy_dataset(r):
     row = {**r}
     output = row.pop("output", None)
     if "expected" not in row:
@@ -11,13 +9,13 @@ def patch_legacy_record(r):
     return row
 
 
-def patch_legacy_record_string(s):
-    return json.dumps(patch_legacy_record(json.loads(s)))
-
-
-def make_legacy_record(r):
+def patch_legacy_record(r):
     if "dataset_id" not in r:
         return r
+    return patch_legacy_dataset(r)
+
+
+def make_legacy_dataset(r):
     row = {**r}
     expected = row.pop("expected", None)
     if "output" not in row:
@@ -25,5 +23,7 @@ def make_legacy_record(r):
     return row
 
 
-def make_legacy_record_string(s):
-    return json.dumps(make_legacy_record(json.loads(s)))
+def make_legacy_record(r):
+    if "dataset_id" not in r:
+        return r
+    return make_legacy_dataset(r)

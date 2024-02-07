@@ -15,7 +15,7 @@ import {
   GitMetadataSettings,
   mergeGitMetadataSettings,
   TransactionId,
-  makeLegacyRecordString,
+  makeLegacyRecord,
 } from "@braintrust/core";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -782,6 +782,7 @@ export interface DatasetRecord {
   input: any;
   expected: any;
   metadata: any;
+  output?: any;
 }
 
 interface LegacyDatasetRecord {
@@ -799,6 +800,13 @@ function patchLegacyDataset(r: LegacyDatasetRecord): DatasetRecord {
     expected: r.expected ? r.expected : r.output,
     metadata: r.metadata,
   };
+}
+
+function addDatasetOutputAlias(r: DatasetRecord): DatasetRecord {
+  return {
+    ...r,
+    output: r.expected,
+  }
 }
 
 // 6 MB (from our own testing).
@@ -873,9 +881,8 @@ class BackgroundLogger {
           break;
         }
 
-        const itemS = JSON.stringify(item);
-        items.push(itemS);
-        itemsLen += itemS.length;
+        items.push(item);
+        itemsLen += JSON.stringify(item).length;
       }
 
       if (items.length === 0) {
@@ -884,18 +891,18 @@ class BackgroundLogger {
 
       postPromises.push(
         (async () => {
-          const itemsS = constructJsonArray(items);
+          const dataS = JSON.stringify({ data: items, api_version: 2 });
           for (let i = 0; i < NumRetries; i++) {
             const startTime = now();
             try {
               try {
                 return (
-                  await (await this.logConn.get()).post_json("logs3", itemsS)
+                  await (await this.logConn.get()).post_json("logs3", dataS)
                 ).ids.map((res: any) => res.id);
               } catch (e) {
                 // Fallback to legacy API. Remove once all API endpoints are updated.
                 return (
-                  await (await this.logConn.get()).post_json("logs", constructJsonArray(items.map((r) => makeLegacyRecordString(r))))
+                  await (await this.logConn.get()).post_json("logs", JSON.stringify(items.map((r: any) => makeLegacyRecord(r))))
                 ).map((res: any) => res.id);
               }
             } catch (e) {
@@ -911,7 +918,7 @@ class BackgroundLogger {
                 `log request failed. Elapsed time: ${
                   (now() - startTime) / 1000
                 } seconds. Payload size: ${
-                  itemsS.length
+                  dataS.length
                 }. Error: ${errMsg}.${retryingText}`
               );
             }
@@ -1195,6 +1202,7 @@ type InitDatasetOptions = {
   appUrl?: string;
   apiKey?: string;
   orgName?: string;
+  includeOutputAlias?: boolean;
 };
 
 /**
@@ -1214,8 +1222,13 @@ export function initDataset(
   project: string,
   options: Readonly<InitDatasetOptions> = {}
 ) {
-  const { dataset, description, version, appUrl, apiKey, orgName } =
+  const { dataset, description, version, appUrl, apiKey, orgName, includeOutputAlias } =
     options || {};
+
+  const includeOutputAliasBool = includeOutputAlias || includeOutputAlias === undefined;
+  if (includeOutputAliasBool) {
+    console.warn(`Dataset records currently include "output" as a (deprecated) alias for the "expected" field, but future versions of Braintrust will remove this alias. Please update your code to use "expected" and test it by calling \`braintrust.initDataset()\` with \`{ includeOutputAlias: false }\`, which will become the default.`);
+  }
 
   const lazyMetadata: LazyValue<ProjectDatasetMetadata> = new LazyValue(
     async () => {
@@ -1250,7 +1263,7 @@ export function initDataset(
     }
   );
 
-  return new Dataset(lazyMetadata, version);
+  return new Dataset(lazyMetadata, version, includeOutputAliasBool);
 }
 
 /**
@@ -1733,7 +1746,8 @@ class ObjectFetcher<RecordType> {
   constructor(
     private objectType: "dataset" | "experiment",
     private pinnedVersion: string | undefined,
-    private patchLegacyRecord: ((r: any) => RecordType) | undefined
+    private patchLegacyRecord: ((r: any) => RecordType) | undefined,
+    private addAliasFields?: ((r: RecordType) => RecordType) | undefined,
   ) {}
 
   public get id(): Promise<string> {
@@ -1758,22 +1772,28 @@ class ObjectFetcher<RecordType> {
   async fetchedData() {
     if (this._fetchedData === undefined) {
       const state = await this.getState();
+      let data = undefined;
       try {
-        const resp = await state.logConn().get(`object_v2/${this.objectType}`, {
+        const resp = await state.logConn().get(`object3/${this.objectType}`, {
           id: await this.id,
           fmt: "json2",
           version: this.pinnedVersion,
+          api_version: "2",
         });
-        this._fetchedData = await resp.json();
+        data = await resp.json();
       } catch (e) {
+          // When hitting old versions of the API where the "object3/" endpoint isn't available, fall back to
+          // the "object/" endpoint, which may require patching the incoming records. Remove this code once
+          // all APIs are updated.
         const resp = await state.logConn().get(`object/${this.objectType}`, {
           id: await this.id,
           fmt: "json2",
           version: this.pinnedVersion,
-          flag: "v2",
         });
-        this._fetchedData = (await resp.json())?.map((r: any) => this.patchLegacyRecord ? this.patchLegacyRecord(r) : r);
+        const rawData = await resp.json();
+        data = this.patchLegacyRecord ? rawData?.map(this.patchLegacyRecord) : rawData;
       }
+      this._fetchedData = this.addAliasFields ? data?.map(this.addAliasFields) : data;
     }
     return this._fetchedData || [];
   }
@@ -2323,9 +2343,11 @@ export class Dataset extends ObjectFetcher<DatasetRecord> {
 
   constructor(
     lazyMetadata: LazyValue<ProjectDatasetMetadata>,
-    pinnedVersion?: string
+    pinnedVersion?: string,
+    includeOutputAlias: boolean = true,
   ) {
-    super("dataset", pinnedVersion, patchLegacyDataset);
+    const addAliasFields = includeOutputAlias ? addDatasetOutputAlias : undefined;
+    super("dataset", pinnedVersion, patchLegacyDataset, addAliasFields);
     this.lazyMetadata = lazyMetadata;
     const logConn = new LazyValue(() =>
       this.getState().then((state) => state.logConn())
@@ -2402,7 +2424,7 @@ export class Dataset extends ObjectFetcher<DatasetRecord> {
     const rowId = id || uuidv4();
     const args = new LazyValue(async () => ({
       id: rowId,
-      inputs: input,
+      input,
       expected: expected === undefined ? output : expected,
       project_id: (await this.project).id,
       dataset_id: await this.id,
@@ -2451,7 +2473,6 @@ export class Dataset extends ObjectFetcher<DatasetRecord> {
         "dataset-summary",
         {
           dataset_id: await this.id,
-          object_flag: "v2",
         },
         3
       );
