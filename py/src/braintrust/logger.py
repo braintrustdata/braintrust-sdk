@@ -32,6 +32,7 @@ from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
     SerializableDataClass,
     coalesce,
+    eprint,
     merge_dicts,
 )
 from requests.adapters import HTTPAdapter
@@ -44,7 +45,6 @@ from .util import (
     AugmentedHTTPError,
     LazyValue,
     encode_uri_component,
-    eprint,
     get_caller_location,
     response_raise_for_status,
 )
