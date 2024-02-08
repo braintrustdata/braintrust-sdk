@@ -1,6 +1,13 @@
 import dataclasses
 import json
+import sys
 from typing import Dict, Set, Tuple
+
+
+# Taken from
+# https://stackoverflow.com/questions/5574702/how-do-i-print-to-stderr-in-python.
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
 
 
 class SerializableDataClass:
