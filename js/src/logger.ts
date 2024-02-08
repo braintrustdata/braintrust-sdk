@@ -1762,11 +1762,11 @@ class ObjectFetcher<RecordType> {
   }
 }
 
-export interface EvalCase<Input, Expected, Metadata extends Object> {
+export type BaseMetadata = object;
+export type EvalCase<Input, Expected, Metadata> = {
   input: Input;
   expected?: Expected;
-  metadata?: Metadata;
-}
+} & (Metadata extends void ? {} : { metadata: Metadata });
 
 /**
  * An experiment is a collection of logged events, such as model inputs and outputs, which represent
@@ -2048,11 +2048,9 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     return _state;
   }
 
-  public async *asDataset<
-    Input = unknown,
-    Expected = unknown,
-    Metadata extends Object = Record<string, unknown>,
-  >(): AsyncGenerator<EvalCase<Input, Expected, Metadata>> {
+  public async *asDataset<Input, Expected>(): AsyncGenerator<
+    EvalCase<Input, Expected, void>
+  > {
     const records = this.fetch();
     for await (const record of records) {
       if (record.root_span_id !== record.span_id) {

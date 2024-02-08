@@ -7,13 +7,12 @@ import {
   init as _initExperiment,
   EvalCase,
   InitOptions,
+  BaseMetadata,
 } from "./logger";
 import { Score, SpanTypeAttribute } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
 import { isEmpty } from "./util";
-
-type BaseMetadata = object;
 
 export type BaseExperiment<Input, Expected, Metadata extends BaseMetadata> = {
   _type: "BaseExperiment";
@@ -273,7 +272,7 @@ function evaluateFilter(object: any, filter: Filter) {
 
 export async function runEvaluator(
   experiment: Experiment | null,
-  evaluator: EvaluatorDef<unknown, unknown, unknown, object>,
+  evaluator: EvaluatorDef<unknown, unknown, unknown, any>,
   progressReporter: ProgressReporter,
   filters: Filter[]
 ) {
@@ -307,7 +306,7 @@ export async function runEvaluator(
     }).asDataset();
   }
 
-  let data: EvalCase<unknown, unknown, object>[] = [];
+  let data: EvalCase<unknown, unknown, any>[] = [];
   if (dataResult instanceof Promise) {
     data = await dataResult;
   } else if (Symbol.asyncIterator in dataResult) {
@@ -330,7 +329,7 @@ export async function runEvaluator(
   progressReporter.start(evaluator.evalName, data.length);
 
   const evals = data.map(async (datum) => {
-    let metadata: object = { ...datum.metadata };
+    let metadata: object = { ...("metadata" in datum ? datum.metadata : {}) };
     let output: any = undefined;
     let error: unknown | undefined = undefined;
     let scores: Record<string, number | null> = {};
