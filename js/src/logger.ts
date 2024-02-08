@@ -1725,7 +1725,7 @@ class ObjectFetcher<RecordType> {
     }
   }
 
-  [Symbol.iterator]() {
+  [Symbol.asyncIterator](): AsyncIterator<WithTransactionId<RecordType>> {
     return this.fetch();
   }
 
