@@ -461,7 +461,7 @@ class _BackgroundLogger:
         for i in range(NUM_RETRIES):
             start_time = time.time()
 
-            resp = conn.post("/logs3", data=json.dumps(dict(data=items, api_version=2)))
+            resp = conn.post("/logs3", data=json.dumps(dict(rows=items, api_version=2)))
             if not resp.ok:
                 resp = conn.post("/logs", data=json.dumps([make_legacy_record(r) for r in items]))
 

@@ -891,7 +891,7 @@ class BackgroundLogger {
 
       postPromises.push(
         (async () => {
-          const dataS = JSON.stringify({ data: items, api_version: 2 });
+          const dataS = JSON.stringify({ rows: items, api_version: 2 });
           for (let i = 0; i < NumRetries; i++) {
             const startTime = now();
             try {
