@@ -32,6 +32,7 @@ from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
     SerializableDataClass,
     coalesce,
+    eprint,
     merge_dicts,
 )
 from braintrust_core.json import (
@@ -49,7 +50,6 @@ from .util import (
     AugmentedHTTPError,
     LazyValue,
     encode_uri_component,
-    eprint,
     get_caller_location,
     response_raise_for_status,
 )
@@ -560,11 +560,13 @@ def init(
     :returns: The experiment object.
     """
 
-    if open:
+    if open and update:
+        raise ValueError("Cannot open and update an experiment at the same time")
+
+    if open or update:
         if experiment is None:
-            raise ValueError("Cannot open an experiment without specifying its name")
-        if update:
-            raise ValueError("Cannot open and update an experiment at the same time")
+            action = 'open' if open else 'update'
+            raise ValueError(f"Cannot {action} an experiment without specifying its name")
 
         def compute_metadata():
             login(org_name=org_name, api_key=api_key, app_url=app_url)
@@ -575,13 +577,23 @@ def init(
                 raise ValueError(f"Experiment {experiment} not found in project {project}.")
 
             info = response[0]
-            return ObjectMetadata(
-                id=info["id"],
-                name=info["name"],
-                full_info=info,
+            return ProjectExperimentMetadata(
+                project=ObjectMetadata(id=info["project_id"], name='', full_info=dict()),
+                experiment=ObjectMetadata(
+                    id=info["id"],
+                    name=info["name"],
+                    full_info=info,
+                )
             )
 
-        return ReadonlyExperiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True))
+        lazy_metadata = LazyValue(compute_metadata, use_mutex=True)
+        if open:
+            return ReadonlyExperiment(lazy_metadata=lazy_metadata)
+        else:
+            ret = Experiment(lazy_metadata=lazy_metadata, dataset=dataset)
+            if set_current:
+                _state.current_experiment = ret
+            return ret
 
     def compute_metadata():
         login(org_name=org_name, api_key=api_key, app_url=app_url)
@@ -592,9 +604,6 @@ def init(
 
         if description is not None:
             args["description"] = description
-
-        if update:
-            args["update"] = update
 
         merged_git_metadata_settings = _state.git_metadata_settings
         if git_metadata_settings is not None:
@@ -1564,7 +1573,7 @@ class ReadonlyExperiment(ObjectFetcher):
 
     def __init__(
         self,
-        lazy_metadata: LazyValue[ObjectMetadata],
+        lazy_metadata: LazyValue[ProjectExperimentMetadata],
     ):
         self._lazy_metadata = lazy_metadata
 
@@ -1572,7 +1581,7 @@ class ReadonlyExperiment(ObjectFetcher):
 
     @property
     def id(self):
-        return self._lazy_metadata.get().id
+        return self._lazy_metadata.get().experiment.id
 
     def as_dataset(self):
         return ExperimentDatasetIterator(self.fetch())

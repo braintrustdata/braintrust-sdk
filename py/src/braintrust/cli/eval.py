@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from threading import Lock
 from typing import List
 
-from braintrust.util import eprint
+from braintrust_core.util import eprint
 
 from .. import login
 from ..framework import (
