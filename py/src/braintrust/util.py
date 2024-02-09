@@ -48,12 +48,6 @@ def get_caller_location():
     return None
 
 
-# Taken from
-# https://stackoverflow.com/questions/5574702/how-do-i-print-to-stderr-in-python.
-def eprint(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
-
-
 T = TypeVar("T")
 
 
