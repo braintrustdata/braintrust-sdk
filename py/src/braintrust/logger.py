@@ -654,7 +654,7 @@ def init_dataset(
     app_url: str = None,
     api_key: str = None,
     org_name: str = None,
-    include_output_alias: bool = True,
+    output_instead_of_expected: bool = True,
 ):
     """
     Create a new dataset in a specified project. If the project does not exist, it will be created.
@@ -667,11 +667,9 @@ def init_dataset(
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+    :param output_instead_of_expected: When set, records fetched from this dataset will contain an "output" field as an alias for "expected". This will default to False in a future version of Braintrust.
     :returns: The dataset object.
     """
-
-    if include_output_alias:
-        eprint(f"""Dataset records currently include "output" as a (deprecated) alias for the "expected" field, but future versions of Braintrust will remove this alias. Please update your code to use "expected" and test it by calling `braintrust.init_dataset()` with `include_output_field=False`, which will become the default.""")
 
     def compute_metadata():
         login(org_name=org_name, api_key=api_key, app_url=app_url)
@@ -688,7 +686,7 @@ def init_dataset(
             dataset=ObjectMetadata(id=resp_dataset["id"], name=resp_dataset["name"], full_info=resp_dataset),
         )
 
-    return Dataset(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), version=version, include_output_alias=include_output_alias)
+    return Dataset(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), version=version, output_instead_of_expected=output_instead_of_expected)
 
 
 def init_logger(
@@ -1135,13 +1133,13 @@ class ObjectIterator:
 
 
 class ObjectFetcher:
-    def __init__(self, object_type, pinned_version=None, patch_legacy_record=None, add_alias_fields=None):
+    def __init__(self, object_type, pinned_version=None, patch_legacy_record=None, fetched_record_mutation=None):
         assert hasattr(self, "id"), "ObjectFetcher subclasses must have an 'id' attribute"
 
         self.object_type = object_type
         self._pinned_version = pinned_version
         self._patch_legacy_record = patch_legacy_record
-        self._add_alias_fields = add_alias_fields
+        self._fetched_record_mutation = fetched_record_mutation
 
         self._fetched_data = None
 
@@ -1192,8 +1190,8 @@ class ObjectFetcher:
                 if self._patch_legacy_record:
                     data = [self._patch_legacy_record(r) for r in data]
 
-            if self._add_alias_fields:
-                self._fetched_data = [self._add_alias_fields(r) for r in data]
+            if self._fetched_record_mutation is not None:
+                self._fetched_data = [self._fetched_record_mutation(r) for r in data]
             else:
                 self._fetched_data = data
 
@@ -1784,7 +1782,7 @@ class Dataset(ObjectFetcher):
     You should not create `Dataset` objects directly. Instead, use the `braintrust.init_dataset()` method.
     """
 
-    def __init__(self, lazy_metadata: LazyValue[ProjectDatasetMetadata], version: Union[None, int, str] = None, include_output_alias=True):
+    def __init__(self, lazy_metadata: LazyValue[ProjectDatasetMetadata], version: Union[None, int, str] = None, output_instead_of_expected=True):
         self._lazy_metadata = lazy_metadata
         self.new_records = 0
         self._fetched_data = None
@@ -1801,8 +1799,11 @@ class Dataset(ObjectFetcher):
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
 
-        add_alias_fields = add_dataset_output_alias if include_output_alias else None
-        ObjectFetcher.__init__(self, object_type="dataset", pinned_version=None, patch_legacy_record=patch_legacy_dataset, add_alias_fields=add_alias_fields)
+        if output_instead_of_expected:
+            eprint(f"""Dataset records currently include "output" as a (deprecated) alias for the "expected" field, but future versions of Braintrust will remove this alias. Please update your code to use "expected" and test it by calling `braintrust.init_dataset()` with `output_instead_of_expected=False`, which will become the default.""")
+        fetched_record_mutation = make_legacy_dataset if output_instead_of_expected else None
+
+        ObjectFetcher.__init__(self, object_type="dataset", pinned_version=None, patch_legacy_record=patch_legacy_dataset, fetched_record_mutation=fetched_record_mutation)
 
     @property
     def id(self):

@@ -780,33 +780,27 @@ type BackgroundLogEvent =
 export interface DatasetRecord {
   id: string;
   input: any;
-  expected: any;
-  metadata: any;
-  output?: any;
-}
-
-interface LegacyDatasetRecord {
-  id: string;
-  input: any;
-  output?: any;
   expected?: any;
   metadata: any;
+  output?: any;
 }
 
-function patchLegacyDataset(r: LegacyDatasetRecord): DatasetRecord {
-  return {
-    id: r.id,
-    input: r.input,
-    expected: r.expected ? r.expected : r.output,
-    metadata: r.metadata,
+function patchLegacyDataset(r: DatasetRecord): DatasetRecord {
+  const row = {
+    ...r,
+    expected: r.expected !== undefined ? r.expected : r.output,
   };
+  delete row.output;
+  return row;
 }
 
-function addDatasetOutputAlias(r: DatasetRecord): DatasetRecord {
-  return {
+function makeLegacyDataset(r: DatasetRecord): DatasetRecord {
+  const row = {
     ...r,
     output: r.expected,
-  }
+  };
+  delete row.expected;
+  return row;
 }
 
 // 6 MB (from our own testing).
@@ -1202,7 +1196,7 @@ type InitDatasetOptions = {
   appUrl?: string;
   apiKey?: string;
   orgName?: string;
-  includeOutputAlias?: boolean;
+  outputInsteadOfExpected?: boolean;
 };
 
 /**
@@ -1216,19 +1210,15 @@ type InitDatasetOptions = {
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+ * @param options.outputInsteadOfExpected When set, records fetched from this dataset will contain an "output" field as an alias for "expected". This will default to false in a future version of Braintrust.
  * @returns The newly created Dataset.
  */
 export function initDataset(
   project: string,
   options: Readonly<InitDatasetOptions> = {}
 ) {
-  const { dataset, description, version, appUrl, apiKey, orgName, includeOutputAlias } =
+  const { dataset, description, version, appUrl, apiKey, orgName, outputInsteadOfExpected } =
     options || {};
-
-  const includeOutputAliasBool = includeOutputAlias || includeOutputAlias === undefined;
-  if (includeOutputAliasBool) {
-    console.warn(`Dataset records currently include "output" as a (deprecated) alias for the "expected" field, but future versions of Braintrust will remove this alias. Please update your code to use "expected" and test it by calling \`braintrust.initDataset()\` with \`{ includeOutputAlias: false }\`, which will become the default.`);
-  }
 
   const lazyMetadata: LazyValue<ProjectDatasetMetadata> = new LazyValue(
     async () => {
@@ -1263,7 +1253,7 @@ export function initDataset(
     }
   );
 
-  return new Dataset(lazyMetadata, version, includeOutputAliasBool);
+  return new Dataset(lazyMetadata, version, outputInsteadOfExpected);
 }
 
 /**
@@ -1746,8 +1736,8 @@ class ObjectFetcher<RecordType> {
   constructor(
     private objectType: "dataset" | "experiment",
     private pinnedVersion: string | undefined,
-    private patchLegacyRecord: ((r: any) => RecordType) | undefined,
-    private addAliasFields?: ((r: RecordType) => RecordType) | undefined,
+    private patchLegacyRecord?: ((r: RecordType) => RecordType),
+    private fetchedRecordMutation?: ((r: RecordType) => RecordType),
   ) {}
 
   public get id(): Promise<string> {
@@ -1793,7 +1783,7 @@ class ObjectFetcher<RecordType> {
         const rawData = await resp.json();
         data = this.patchLegacyRecord ? rawData?.map(this.patchLegacyRecord) : rawData;
       }
-      this._fetchedData = this.addAliasFields ? data?.map(this.addAliasFields) : data;
+      this._fetchedData = this.fetchedRecordMutation ? data?.map(this.fetchedRecordMutation) : data;
     }
     return this._fetchedData || [];
   }
@@ -1847,9 +1837,9 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
 
   constructor(
     lazyMetadata: LazyValue<ProjectExperimentMetadata>,
-    dataset?: Dataset
+    dataset?: Dataset,
   ) {
-    super("experiment", undefined, undefined);
+    super("experiment", undefined);
     this.lazyMetadata = lazyMetadata;
     this.dataset = dataset;
 
@@ -2084,7 +2074,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
  */
 export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
   constructor(private readonly lazyMetadata: LazyValue<ObjectMetadata>) {
-    super("experiment", undefined, undefined);
+    super("experiment", undefined);
   }
 
   public get id(): Promise<string> {
@@ -2344,10 +2334,15 @@ export class Dataset extends ObjectFetcher<DatasetRecord> {
   constructor(
     lazyMetadata: LazyValue<ProjectDatasetMetadata>,
     pinnedVersion?: string,
-    includeOutputAlias: boolean = true,
+    outputInsteadOfExpected?: boolean,
   ) {
-    const addAliasFields = includeOutputAlias ? addDatasetOutputAlias : undefined;
-    super("dataset", pinnedVersion, patchLegacyDataset, addAliasFields);
+    const outputInsteadOfExpectedBool = outputInsteadOfExpected || outputInsteadOfExpected === undefined;
+    if (outputInsteadOfExpectedBool) {
+      console.warn(`Dataset records currently include "output" as a (deprecated) alias for the "expected" field, but future versions of Braintrust will remove this alias. Please update your code to use "expected" and test it by calling \`braintrust.initDataset()\` with \`{ outputInsteadOfExpected: false }\`, which will become the default.`);
+    }
+    const fetchedRecordMutation = outputInsteadOfExpectedBool ? makeLegacyDataset : undefined;
+
+    super("dataset", pinnedVersion, patchLegacyDataset, fetchedRecordMutation);
     this.lazyMetadata = lazyMetadata;
     const logConn = new LazyValue(() =>
       this.getState().then((state) => state.logConn())
