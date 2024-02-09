@@ -1796,7 +1796,11 @@ class ObjectFetcher<RecordType> {
         const rawData = await resp.json();
         data = this.patchLegacyRecord ? rawData?.map(this.patchLegacyRecord) : rawData;
       }
-      this._fetchedData = this.fetchedRecordMutation ? data?.map(this.fetchedRecordMutation) : data;
+      if (this.fetchedRecordMutation) {
+        console.warn(`Dataset records currently include "output" as a (deprecated) alias for the "expected" field, but future versions of Braintrust will remove this alias. Please update your code to refer to the "expected" field and test by calling \`braintrust.initDataset()\` with \`{ outputInsteadOfExpected: false }\`, which will become the default.`);
+        data = data?.map(this.fetchedRecordMutation);
+      }
+      this._fetchedData = data;
     }
     return this._fetchedData || [];
   }
@@ -2350,11 +2354,7 @@ export class Dataset extends ObjectFetcher<DatasetRecord> {
     outputInsteadOfExpected?: boolean,
   ) {
     const outputInsteadOfExpectedBool = outputInsteadOfExpected || outputInsteadOfExpected === undefined;
-    if (outputInsteadOfExpectedBool) {
-      console.warn(`Dataset records currently include "output" as a (deprecated) alias for the "expected" field, but future versions of Braintrust will remove this alias. Please update your code to use "expected" and test it by calling \`braintrust.initDataset()\` with \`{ outputInsteadOfExpected: false }\`, which will become the default.`);
-    }
     const fetchedRecordMutation = outputInsteadOfExpectedBool ? makeLegacyDataset : undefined;
-
     super("dataset", pinnedVersion, patchLegacyDataset, fetchedRecordMutation);
     this.lazyMetadata = lazyMetadata;
     const logConn = new LazyValue(() =>

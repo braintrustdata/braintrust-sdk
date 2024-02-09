@@ -27,7 +27,7 @@ from braintrust_core.db_fields import (
     VALID_SOURCES,
 )
 from braintrust_core.git_fields import GitMetadataSettings
-from braintrust_core.legacy_api import patch_legacy_dataset, make_legacy_record
+from braintrust_core.legacy_api import patch_legacy_dataset, make_legacy_dataset, make_legacy_record
 from braintrust_core.merge_row_batch import merge_row_batch
 from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
@@ -1200,6 +1200,7 @@ class ObjectFetcher:
                     data = [self._patch_legacy_record(r) for r in data]
 
             if self._fetched_record_mutation is not None:
+                eprint(f"""Dataset records currently include "output" as a (deprecated) alias for the "expected" field, but future versions of Braintrust will remove this alias. Please update your code to refer to the "expected" field and test by calling `braintrust.init_dataset()` with `output_instead_of_expected=False`, which will become the default.""")
                 self._fetched_data = [self._fetched_record_mutation(r) for r in data]
             else:
                 self._fetched_data = data
@@ -1807,11 +1808,7 @@ class Dataset(ObjectFetcher):
             return self._get_state().log_conn()
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
-
-        if output_instead_of_expected:
-            eprint(f"""Dataset records currently include "output" as a (deprecated) alias for the "expected" field, but future versions of Braintrust will remove this alias. Please update your code to use "expected" and test it by calling `braintrust.init_dataset()` with `output_instead_of_expected=False`, which will become the default.""")
         fetched_record_mutation = make_legacy_dataset if output_instead_of_expected else None
-
         ObjectFetcher.__init__(self, object_type="dataset", pinned_version=None, patch_legacy_record=patch_legacy_dataset, fetched_record_mutation=fetched_record_mutation)
 
     @property
