@@ -115,17 +115,32 @@ export type BackgroundLogEvent =
   | LoggingEvent
   | CommentEvent;
 
-export type DatasetRecord = {
+export interface LegacyDatasetRecord {
   id: string;
   input: any;
+  output: any;
   metadata: any;
-} & ({ expected?: any } | { output?: any });
+};
 
-export type ObjectRecord =
-  | ExperimentEvent
-  | DatasetRecord;
+export interface DatasetRecord {
+  id: string;
+  input: any;
+  expected: any;
+  metadata: any;
+};
 
-export function patchLegacyDatasetRecord(r: DatasetRecord): DatasetRecord {
+export type BaseDatasetRecord = LegacyDatasetRecord | DatasetRecord;
+// export type DatasetRecord = {
+//   id: string;
+//   input: any;
+//   metadata: any;
+// } & ({ expected?: any } | { output?: any });
+
+// export type ObjectRecord =
+//   | ExperimentEvent
+//   | DatasetRecord;
+
+export function ensureDatasetRecord(r: BaseDatasetRecord): DatasetRecord {
   if (!("output" in r)) {
     return r;
   }
@@ -137,7 +152,7 @@ export function patchLegacyDatasetRecord(r: DatasetRecord): DatasetRecord {
   return row;
 }
 
-export function makeLegacyDatasetRecord(r: DatasetRecord): DatasetRecord {
+export function ensureLegacyDatasetRecord(r: BaseDatasetRecord): LegacyDatasetRecord {
   if (!("expected" in r)) {
     return r;
   }
@@ -148,6 +163,30 @@ export function makeLegacyDatasetRecord(r: DatasetRecord): DatasetRecord {
   delete row.expected;
   return row;
 }
+
+// export function patchLegacyDatasetRecord(r: LegacyDatasetRecord): DatasetRecord {
+//   if (!("output" in r)) {
+//     return r;
+//   }
+//   const row = {
+//     ...r,
+//     expected: r.output,
+//   };
+//   delete row.output;
+//   return row;
+// }
+
+// export function makeLegacyDatasetRecord(r: DatasetRecord): LegacyDatasetRecord {
+//   if (!("expected" in r)) {
+//     return r;
+//   }
+//   const row = {
+//     ...r,
+//     output: r.expected,
+//   };
+//   delete row.expected;
+//   return row;
+// }
 
 export function makeLegacyEvent(r: BackgroundLogEvent): BackgroundLogEvent {
   if (!("dataset_id" in r) || !("expected" in r)) {
