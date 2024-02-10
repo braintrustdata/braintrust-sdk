@@ -8,14 +8,32 @@ import {
   PARENT_ID_FIELD,
   mergeDicts,
   mergeRowBatch,
-  Source,
   VALID_SOURCES,
   AUDIT_SOURCE_FIELD,
   AUDIT_METADATA_FIELD,
   GitMetadataSettings,
   mergeGitMetadataSettings,
   TransactionId,
-  makeLegacyRecord,
+  ParentExperimentIds,
+  ParentProjectLogIds,
+  IdField,
+  InputField,
+  InputsField,
+  OtherExperimentLogFields,
+  ExperimentLogPartialArgs,
+  ExperimentLogFullArgs,
+  LogFeedbackFullArgs,
+  LogCommentFullArgs,
+  SanitizedExperimentLogPartialArgs,
+  ExperimentEvent,
+  DatasetEvent,
+  LoggingEvent,
+  CommentEvent,
+  BackgroundLogEvent,
+  DatasetRecord,
+  makeLegacyEvent,
+  makeLegacyDatasetRecord,
+  patchLegacyDatasetRecord,
 } from "@braintrust/core";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -681,128 +699,6 @@ function castLogger<ToB extends boolean, FromB extends boolean>(
   return logger as unknown as Logger<ToB>;
 }
 
-export type IdField = { id: string };
-export type InputField = { input: unknown };
-export type InputsField = { inputs: unknown };
-export type OtherExperimentLogFields = {
-  output: unknown;
-  expected: unknown;
-  scores: Record<string, number | null>;
-  metadata: Record<string, unknown>;
-  metrics: Record<string, unknown>;
-  datasetRecordId: string;
-};
-
-export type ExperimentLogPartialArgs = Partial<OtherExperimentLogFields> &
-  Partial<InputField | InputsField>;
-
-export type ExperimentLogFullArgs = Partial<
-  Omit<OtherExperimentLogFields, "output" | "scores">
-> &
-  Required<Pick<OtherExperimentLogFields, "output" | "scores">> &
-  Partial<InputField | InputsField> &
-  Partial<IdField>;
-
-export type LogFeedbackFullArgs = IdField &
-  Partial<
-    Omit<OtherExperimentLogFields, "output" | "metrics" | "datasetRecordId"> & {
-      comment: string;
-      source: Source;
-    }
-  >;
-
-export type LogCommentFullArgs = IdField & {
-  created: string;
-  origin: {
-    id: string;
-  };
-  comment: {
-    text: string;
-  };
-  [AUDIT_SOURCE_FIELD]: Source;
-  [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
-} & Omit<ParentExperimentIds | ParentProjectLogIds, "kind">;
-
-type SanitizedExperimentLogPartialArgs = Partial<OtherExperimentLogFields> &
-  Partial<InputField>;
-
-type ExperimentEvent = Partial<InputField> &
-  Partial<OtherExperimentLogFields> & {
-    id: string;
-    span_id?: string;
-    root_span_id?: string;
-    project_id: string;
-    experiment_id: string;
-    [IS_MERGE_FIELD]: boolean;
-  } & Partial<{
-    created: string;
-    span_parents: string[];
-    span_attributes: Record<string, unknown>;
-    context: Record<string, unknown>;
-    [PARENT_ID_FIELD]: string;
-    [AUDIT_SOURCE_FIELD]: Source;
-    [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
-  }>;
-
-interface DatasetEvent {
-  inputs?: unknown;
-  output?: unknown;
-  metadata?: unknown;
-  id: string;
-  project_id: string;
-  dataset_id: string;
-  created: string;
-}
-
-type LoggingEvent = Omit<ExperimentEvent, "experiment_id"> & {
-  org_id: string;
-  log_id: "g";
-};
-
-export type CommentEvent = IdField & {
-  created: string;
-  origin: {
-    id: string;
-  };
-  comment: {
-    text: string;
-  };
-  [AUDIT_SOURCE_FIELD]: Source;
-  [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
-} & Omit<ParentExperimentIds | ParentProjectLogIds, "kind">;
-
-type BackgroundLogEvent =
-  | ExperimentEvent
-  | DatasetEvent
-  | LoggingEvent
-  | CommentEvent;
-
-export interface DatasetRecord {
-  id: string;
-  input: any;
-  expected?: any;
-  metadata: any;
-  output?: any;
-}
-
-function patchLegacyDataset(r: DatasetRecord): DatasetRecord {
-  const row = {
-    ...r,
-    expected: r.expected !== undefined ? r.expected : r.output,
-  };
-  delete row.output;
-  return row;
-}
-
-function makeLegacyDataset(r: DatasetRecord): DatasetRecord {
-  const row = {
-    ...r,
-    output: r.expected,
-  };
-  delete row.expected;
-  return row;
-}
-
 // 6 MB (from our own testing).
 const MaxRequestSize = 6 * 1024 * 1024;
 
@@ -875,8 +771,9 @@ class BackgroundLogger {
           break;
         }
 
-        items.push(item);
-        itemsLen += JSON.stringify(item).length;
+        const itemS = JSON.stringify(item);
+        items.push(itemS);
+        itemsLen += itemS.length;
       }
 
       if (items.length === 0) {
@@ -885,7 +782,7 @@ class BackgroundLogger {
 
       postPromises.push(
         (async () => {
-          const dataS = JSON.stringify({ rows: items, api_version: 2 });
+          const dataS = `{"rows": ${constructJsonArray(items)}, "api_version": 2}`;
           for (let i = 0; i < NumRetries; i++) {
             const startTime = now();
             try {
@@ -895,8 +792,9 @@ class BackgroundLogger {
                 ).ids.map((res: any) => res.id);
               } catch (e) {
                 // Fallback to legacy API. Remove once all API endpoints are updated.
+                const legacyDataS = constructJsonArray(items.map((r: any) => JSON.stringify(makeLegacyEvent(JSON.parse(r)))));
                 return (
-                  await (await this.logConn.get()).post_json("logs", JSON.stringify(items.map((r: any) => makeLegacyRecord(r))))
+                  await (await this.logConn.get()).post_json("logs", legacyDataS)
                 ).map((res: any) => res.id);
               }
             } catch (e) {
@@ -1785,7 +1683,7 @@ class ObjectFetcher<RecordType> {
         });
         data = await resp.json();
       } catch (e) {
-          // When hitting old versions of the API where the "object3/" endpoint isn't available, fall back to
+          // DEPRECATION_NOTICE: When hitting old versions of the API where the "object3/" endpoint isn't available, we fall back to
           // the "object/" endpoint, which may require patching the incoming records. Remove this code once
           // all APIs are updated.
         const resp = await state.logConn().get(`object/${this.objectType}`, {
@@ -2131,19 +2029,6 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
   }
 }
 
-interface ParentExperimentIds {
-  kind: "experiment";
-  project_id: string;
-  experiment_id: string;
-}
-
-interface ParentProjectLogIds {
-  kind: "project_log";
-  org_id: string;
-  project_id: string;
-  log_id: "g";
-}
-
 let executionCounter = 0;
 
 /**
@@ -2353,9 +2238,9 @@ export class Dataset extends ObjectFetcher<DatasetRecord> {
     pinnedVersion?: string,
     outputInsteadOfExpected?: boolean,
   ) {
-    const outputInsteadOfExpectedBool = outputInsteadOfExpected || outputInsteadOfExpected === undefined;
-    const fetchedRecordMutation = outputInsteadOfExpectedBool ? makeLegacyDataset : undefined;
-    super("dataset", pinnedVersion, patchLegacyDataset, fetchedRecordMutation);
+    const outputInsteadOfExpectedBool = outputInsteadOfExpected ?? true;
+    const fetchedRecordMutation = outputInsteadOfExpectedBool ? makeLegacyDatasetRecord : undefined;
+    super("dataset", pinnedVersion, patchLegacyDatasetRecord, fetchedRecordMutation);
     this.lazyMetadata = lazyMetadata;
     const logConn = new LazyValue(() =>
       this.getState().then((state) => state.logConn())

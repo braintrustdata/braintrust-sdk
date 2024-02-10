@@ -1,6 +1,6 @@
 export * from "./db_fields";
 export * from "./merge_row_batch";
-export * from "./legacy_api";
+export * from "./object";
 export * from "./score";
 export * from "./util";
 export * from "./span_types";

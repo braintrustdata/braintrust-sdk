@@ -27,7 +27,7 @@ from braintrust_core.db_fields import (
     VALID_SOURCES,
 )
 from braintrust_core.git_fields import GitMetadataSettings
-from braintrust_core.legacy_api import patch_legacy_dataset, make_legacy_dataset, make_legacy_record
+from braintrust_core.object import patch_legacy_dataset_record, make_legacy_dataset_record, make_legacy_event
 from braintrust_core.merge_row_batch import merge_row_batch
 from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
@@ -463,7 +463,7 @@ class _BackgroundLogger:
 
             resp = conn.post("/logs3", data=json.dumps(dict(rows=items, api_version=2)))
             if not resp.ok:
-                resp = conn.post("/logs", data=json.dumps([make_legacy_record(r) for r in items]))
+                resp = conn.post("/logs", data=json.dumps([make_legacy_event(r) for r in items]))
 
             if resp.ok:
                 return
@@ -1808,8 +1808,8 @@ class Dataset(ObjectFetcher):
             return self._get_state().log_conn()
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
-        fetched_record_mutation = make_legacy_dataset if output_instead_of_expected else None
-        ObjectFetcher.__init__(self, object_type="dataset", pinned_version=None, patch_legacy_record=patch_legacy_dataset, fetched_record_mutation=fetched_record_mutation)
+        fetched_record_mutation = make_legacy_dataset_record if output_instead_of_expected else None
+        ObjectFetcher.__init__(self, object_type="dataset", pinned_version=None, patch_legacy_record=patch_legacy_dataset_record, fetched_record_mutation=fetched_record_mutation)
 
     @property
     def id(self):
