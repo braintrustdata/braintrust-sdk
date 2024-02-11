@@ -15,7 +15,11 @@ import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
 import { isEmpty } from "./util";
 
-export type BaseExperiment<Input, Expected, Metadata extends BaseMetadata=DefaultMetadataType> = {
+export type BaseExperiment<
+  Input,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+> = {
   _type: "BaseExperiment";
   _phantom?: [Input, Expected, Metadata];
   name?: string;
@@ -43,7 +47,11 @@ export function BaseExperiment<
   return { _type: "BaseExperiment", ...options };
 }
 
-export type EvalData<Input, Expected, Metadata extends BaseMetadata=DefaultMetadataType> =
+export type EvalData<
+  Input,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+> =
   | EvalCase<Input, Expected, Metadata>[]
   | (() => EvalCase<Input, Expected, Metadata>[])
   | (() => Promise<EvalCase<Input, Expected, Metadata>[]>)
@@ -65,7 +73,7 @@ export type EvalScorerArgs<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata=DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType,
 > = EvalCase<Input, Expected, Metadata> & {
   output: Output;
 };
@@ -74,7 +82,7 @@ export type EvalScorer<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata=DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType,
 > = (
   args: EvalScorerArgs<Input, Output, Expected, Metadata>
 ) => Score | Promise<Score>;
@@ -83,7 +91,7 @@ export interface Evaluator<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata=DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType,
 > {
   /**
    * A function that returns a list of inputs, expected outputs, and metadata.
@@ -135,7 +143,7 @@ export type EvaluatorDef<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata=DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType,
 > = {
   projectName: string;
   evalName: string;
