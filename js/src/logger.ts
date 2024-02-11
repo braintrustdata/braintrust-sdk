@@ -1173,7 +1173,7 @@ export function initDataset<IsLegacyDataset extends boolean = typeof DefaultIsLe
 /**
  * This function is deprecated. Use `initDataset` instead.
  */
-export function withDataset<R, IsLegacyDataset extends boolean = true>(
+export function withDataset<R, IsLegacyDataset extends boolean = typeof DefaultIsLegacyDataset>(
   project: string,
   callback: (dataset: Dataset<IsLegacyDataset>) => R,
   options: Readonly<InitDatasetOptions<IsLegacyDataset>> = {}
