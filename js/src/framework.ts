@@ -8,6 +8,7 @@ import {
   EvalCase,
   InitOptions,
   BaseMetadata,
+  DefaultMetadataType,
 } from "./logger";
 import { Score, SpanTypeAttribute } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
@@ -33,7 +34,7 @@ export type BaseExperiment<Input, Expected, Metadata extends BaseMetadata> = {
 export function BaseExperiment<
   Input = unknown,
   Expected = unknown,
-  Metadata extends BaseMetadata = Record<string, unknown>,
+  Metadata extends BaseMetadata = DefaultMetadataType,
 >(
   options: {
     name?: string;
@@ -165,7 +166,7 @@ export async function Eval<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata,
+  Metadata extends BaseMetadata = DefaultMetadataType,
 >(
   name: string,
   evaluator: Evaluator<Input, Output, Expected, Metadata>
