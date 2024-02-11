@@ -1779,7 +1779,7 @@ class ObjectFetcher<RecordType> {
   }
 }
 
-export type BaseMetadata = object | void;
+export type BaseMetadata = Record<string, unknown> | void;
 export type DefaultMetadataType = void;
 export type EvalCase<Input, Expected, Metadata> = {
   input: Input;
