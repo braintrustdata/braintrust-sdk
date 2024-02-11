@@ -115,33 +115,49 @@ export type BackgroundLogEvent =
   | LoggingEvent
   | CommentEvent;
 
-export interface LegacyDatasetRecord {
+export const DefaultIsLegacyDataset = true;
+
+interface LegacyDatasetRecord {
   id: string;
   input: any;
   output: any;
   metadata: any;
 };
 
-export interface DatasetRecord {
+interface NewDatasetRecord {
   id: string;
   input: any;
   expected: any;
   metadata: any;
 };
 
-export type BaseDatasetRecord = LegacyDatasetRecord | DatasetRecord;
-// export type DatasetRecord = {
-//   id: string;
-//   input: any;
-//   metadata: any;
-// } & ({ expected?: any } | { output?: any });
+export type DatasetRecord<IsLegacyDataset extends boolean = typeof DefaultIsLegacyDataset> =
+  IsLegacyDataset extends true ? LegacyDatasetRecord : NewDatasetRecord;
 
-// export type ObjectRecord =
-//   | ExperimentEvent
-//   | DatasetRecord;
+export type AnyDatasetRecord = DatasetRecord<boolean>;
 
-export function ensureDatasetRecord(r: BaseDatasetRecord): DatasetRecord {
-  if (!("output" in r)) {
+export function ensureDatasetRecord<IsLegacyDataset extends boolean = typeof DefaultIsLegacyDataset>(r: AnyDatasetRecord, legacy: IsLegacyDataset): DatasetRecord<IsLegacyDataset> {
+  if (legacy) {
+    return ensureLegacyDatasetRecord(r) as DatasetRecord<IsLegacyDataset>;
+  } else {
+    return ensureNewDatasetRecord(r) as DatasetRecord<IsLegacyDataset>;
+  }
+}
+
+export function ensureLegacyDatasetRecord(r: AnyDatasetRecord): DatasetRecord<true> {
+  if ("output" in r) {
+    return r;
+  }
+  const row = {
+    ...r,
+    output: r.expected,
+  };
+  delete row.expected;
+  return row;
+}
+
+export function ensureNewDatasetRecord(r: AnyDatasetRecord): DatasetRecord<false> {
+  if ("expected" in r) {
     return r;
   }
   const row = {
@@ -152,50 +168,14 @@ export function ensureDatasetRecord(r: BaseDatasetRecord): DatasetRecord {
   return row;
 }
 
-export function ensureLegacyDatasetRecord(r: BaseDatasetRecord): LegacyDatasetRecord {
-  if (!("expected" in r)) {
-    return r;
+export function makeLegacyEvent(e: BackgroundLogEvent): BackgroundLogEvent {
+  if (!("dataset_id" in e) || !("expected" in e)) {
+    return e;
   }
-  const row = {
-    ...r,
-    output: r.expected,
+  const event = {
+    ...e,
+    output: e.expected,
   };
-  delete row.expected;
-  return row;
-}
-
-// export function patchLegacyDatasetRecord(r: LegacyDatasetRecord): DatasetRecord {
-//   if (!("output" in r)) {
-//     return r;
-//   }
-//   const row = {
-//     ...r,
-//     expected: r.output,
-//   };
-//   delete row.output;
-//   return row;
-// }
-
-// export function makeLegacyDatasetRecord(r: DatasetRecord): LegacyDatasetRecord {
-//   if (!("expected" in r)) {
-//     return r;
-//   }
-//   const row = {
-//     ...r,
-//     output: r.expected,
-//   };
-//   delete row.expected;
-//   return row;
-// }
-
-export function makeLegacyEvent(r: BackgroundLogEvent): BackgroundLogEvent {
-  if (!("dataset_id" in r) || !("expected" in r)) {
-    return r;
-  }
-  const row = {
-    ...r,
-    output: r.expected,
-  };
-  delete row.expected;
-  return row;
+  delete event.expected;
+  return event;
 }
