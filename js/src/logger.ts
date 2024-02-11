@@ -985,15 +985,17 @@ export function init<IsOpen extends boolean = false>(
     gitMetadataSettings,
   } = options || {};
 
-  if (open) {
+  if (open && update) {
+    throw new Error("Cannot open and update an experiment at the same time");
+  }
+
+  if (open || update) {
     if (isEmpty(experiment)) {
-      throw new Error("Cannot open an experiment without specifying its name");
-    }
-    if (update) {
-      throw new Error("Cannot open and update an experiment at the same time");
+      const action = open ? "open" : "update";
+      throw new Error(`Cannot ${action} an experiment without specifying its name`);
     }
 
-    const lazyMetadata: LazyValue<ObjectMetadata> = new LazyValue(async () => {
+    const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(async () => {
       await login({
         orgName: orgName,
         apiKey,
@@ -1017,15 +1019,30 @@ export function init<IsOpen extends boolean = false>(
 
       const info = response[0];
       return {
-        id: info.id,
-        name: info.name,
-        fullInfo: info,
+        project: {
+            id: info.project_id,
+            name: "",
+            fullInfo: {},
+        },
+        experiment: {
+            id: info.id,
+            name: info.name,
+            fullInfo: info,
+        },
       };
     });
 
-    return new ReadonlyExperiment(
-      lazyMetadata
-    ) as InitializedExperiment<IsOpen>;
+    if (open) {
+      return new ReadonlyExperiment(
+        lazyMetadata
+      ) as InitializedExperiment<IsOpen>;
+    } else {
+        const ret = new Experiment(lazyMetadata, dataset);
+        if (options.setCurrent ?? true) {
+          _state.currentExperiment = ret;
+        }
+        return ret as InitializedExperiment<IsOpen>;
+    }
   }
 
   const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(
@@ -1046,10 +1063,6 @@ export function init<IsOpen extends boolean = false>(
 
       if (description) {
         args["description"] = description;
-      }
-
-      if (update) {
-        args["update"] = update;
       }
 
       let mergedGitMetadataSettings = {
@@ -1723,7 +1736,7 @@ class ObjectFetcher<RecordType> {
     }
   }
 
-  [Symbol.iterator]() {
+  [Symbol.asyncIterator](): AsyncIterator<WithTransactionId<RecordType>> {
     return this.fetch();
   }
 
@@ -2026,19 +2039,19 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
  * A read-only view of an experiment, initialized by passing `open: true` to `init()`.
  */
 export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
-  constructor(private readonly lazyMetadata: LazyValue<ObjectMetadata>) {
+  constructor(private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>) {
     super("experiment", undefined);
   }
 
   public get id(): Promise<string> {
     return (async () => {
-      return (await this.lazyMetadata.get()).id;
+      return (await this.lazyMetadata.get()).experiment.id;
     })();
   }
 
   public get name(): Promise<string> {
     return (async () => {
-      return (await this.lazyMetadata.get()).name;
+      return (await this.lazyMetadata.get()).experiment.name;
     })();
   }
 

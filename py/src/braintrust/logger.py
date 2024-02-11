@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import queue
+import sys
 import textwrap
 import threading
 import time
@@ -32,6 +33,7 @@ from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
     SerializableDataClass,
     coalesce,
+    eprint,
     merge_dicts,
 )
 from requests.adapters import HTTPAdapter
@@ -44,7 +46,6 @@ from .util import (
     AugmentedHTTPError,
     LazyValue,
     encode_uri_component,
-    eprint,
     get_caller_location,
     response_raise_for_status,
 )
@@ -340,6 +341,8 @@ _DEBUG_LOGGING_PAUSED = False
 
 class _BackgroundLogger:
     def __init__(self, log_conn: LazyValue[HTTPConnection]):
+        self._outfile = sys.stderr
+
         self.log_conn = log_conn
         self.flush_lock = threading.RLock()
         self.start_thread_lock = threading.RLock()
@@ -401,7 +404,7 @@ class _BackgroundLogger:
             try:
                 self.flush(**kwargs)
             except Exception:
-                traceback.print_exc()
+                traceback.print_exc(file=self._outfile)
 
     def flush(self, batch_size=100):
         # We cannot have multiple threads flushing in parallel, because the
@@ -419,8 +422,8 @@ class _BackgroundLogger:
                 all_items = [item.get() for item in all_items]
                 all_items = list(reversed(merge_row_batch(all_items)))
             except Exception as e:
-                print("Encountered error when constructing records to flush:")
-                traceback.print_exc()
+                print("Encountered error when constructing records to flush:", file=self._outfile)
+                traceback.print_exc(file=self._outfile)
                 all_items = []
 
             if len(all_items) == 0:
@@ -446,17 +449,17 @@ class _BackgroundLogger:
 
                 try:
                     post_promises.append(
-                        HTTP_REQUEST_THREAD_POOL.submit(_BackgroundLogger._submit_logs_request, items, conn)
+                        HTTP_REQUEST_THREAD_POOL.submit(_BackgroundLogger._submit_logs_request, items, conn, self._outfile)
                     )
                 except RuntimeError:
                     # If the thread pool has shut down, e.g. because the process is terminating, run the request the
                     # old fashioned way.
-                    _BackgroundLogger._submit_logs_request(items, conn)
+                    _BackgroundLogger._submit_logs_request(items, conn, self._outfile)
 
             concurrent.futures.wait(post_promises)
 
     @staticmethod
-    def _submit_logs_request(items, conn):
+    def _submit_logs_request(items, conn, outfile):
         items_s = construct_json_array(items)
         for i in range(NUM_RETRIES):
             start_time = time.time()
@@ -464,11 +467,12 @@ class _BackgroundLogger:
             if resp.ok:
                 return
             retrying_text = "" if i + 1 == NUM_RETRIES else " Retrying"
-            _logger.warning(
-                f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(items_s)}. Error: {resp.status_code}: {resp.text}.{retrying_text}"
+            print(
+                f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(items_s)}. Error: {resp.status_code}: {resp.text}.{retrying_text}",
+                file=outfile
             )
         if not resp.ok:
-            _logger.warning(f"log request failed after {NUM_RETRIES} retries. Dropping batch")
+            print(f"log request failed after {NUM_RETRIES} retries. Dropping batch", file=outfile)
 
 
 def _ensure_object(object_type, object_id, force=False):
@@ -555,11 +559,13 @@ def init(
     :returns: The experiment object.
     """
 
-    if open:
+    if open and update:
+        raise ValueError("Cannot open and update an experiment at the same time")
+
+    if open or update:
         if experiment is None:
-            raise ValueError("Cannot open an experiment without specifying its name")
-        if update:
-            raise ValueError("Cannot open and update an experiment at the same time")
+            action = 'open' if open else 'update'
+            raise ValueError(f"Cannot {action} an experiment without specifying its name")
 
         def compute_metadata():
             login(org_name=org_name, api_key=api_key, app_url=app_url)
@@ -570,13 +576,23 @@ def init(
                 raise ValueError(f"Experiment {experiment} not found in project {project}.")
 
             info = response[0]
-            return ObjectMetadata(
-                id=info["id"],
-                name=info["name"],
-                full_info=info,
+            return ProjectExperimentMetadata(
+                project=ObjectMetadata(id=info["project_id"], name='', full_info=dict()),
+                experiment=ObjectMetadata(
+                    id=info["id"],
+                    name=info["name"],
+                    full_info=info,
+                )
             )
 
-        return ReadonlyExperiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True))
+        lazy_metadata = LazyValue(compute_metadata, use_mutex=True)
+        if open:
+            return ReadonlyExperiment(lazy_metadata=lazy_metadata)
+        else:
+            ret = Experiment(lazy_metadata=lazy_metadata, dataset=dataset)
+            if set_current:
+                _state.current_experiment = ret
+            return ret
 
     def compute_metadata():
         login(org_name=org_name, api_key=api_key, app_url=app_url)
@@ -587,9 +603,6 @@ def init(
 
         if description is not None:
             args["description"] = description
-
-        if update:
-            args["update"] = update
 
         merged_git_metadata_settings = _state.git_metadata_settings
         if git_metadata_settings is not None:
@@ -1555,7 +1568,7 @@ class ReadonlyExperiment(ObjectFetcher):
 
     def __init__(
         self,
-        lazy_metadata: LazyValue[ObjectMetadata],
+        lazy_metadata: LazyValue[ProjectExperimentMetadata],
     ):
         self._lazy_metadata = lazy_metadata
 
@@ -1563,7 +1576,7 @@ class ReadonlyExperiment(ObjectFetcher):
 
     @property
     def id(self):
-        return self._lazy_metadata.get().id
+        return self._lazy_metadata.get().experiment.id
 
     def as_dataset(self):
         return ExperimentDatasetIterator(self.fetch())

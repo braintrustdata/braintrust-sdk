@@ -15,11 +15,12 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List
 
 from braintrust_core.score import Score, Scorer
 from braintrust_core.span_types import SpanTypeAttribute
-from braintrust_core.util import SerializableDataClass
+from braintrust_core.util import (
+    SerializableDataClass,
+    eprint,
+)
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
-
-from braintrust.util import eprint
 
 from .logger import NOOP_SPAN, Metadata, Span
 from .logger import init as _init_experiment
