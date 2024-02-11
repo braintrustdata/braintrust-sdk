@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import queue
+import sys
 import textwrap
 import threading
 import time
@@ -346,6 +347,8 @@ _DEBUG_LOGGING_PAUSED = False
 
 class _BackgroundLogger:
     def __init__(self, log_conn: LazyValue[HTTPConnection]):
+        self._outfile = sys.stderr
+
         self.log_conn = log_conn
         self.flush_lock = threading.RLock()
         self.start_thread_lock = threading.RLock()
@@ -407,7 +410,7 @@ class _BackgroundLogger:
             try:
                 self.flush(**kwargs)
             except Exception:
-                traceback.print_exc()
+                traceback.print_exc(file=self._outfile)
 
     def flush(self, batch_size=100):
         # We cannot have multiple threads flushing in parallel, because the
@@ -425,8 +428,8 @@ class _BackgroundLogger:
                 all_items = [item.get() for item in all_items]
                 all_items = list(reversed(merge_row_batch(all_items)))
             except Exception as e:
-                print("Encountered error when constructing records to flush:")
-                traceback.print_exc()
+                print("Encountered error when constructing records to flush:", file=self._outfile)
+                traceback.print_exc(file=self._outfile)
                 all_items = []
 
             if len(all_items) == 0:
@@ -452,19 +455,18 @@ class _BackgroundLogger:
 
                 try:
                     post_promises.append(
-                        HTTP_REQUEST_THREAD_POOL.submit(_BackgroundLogger._submit_logs_request, items, conn)
+                        HTTP_REQUEST_THREAD_POOL.submit(_BackgroundLogger._submit_logs_request, items, conn, self._outfile)
                     )
                 except RuntimeError:
                     # If the thread pool has shut down, e.g. because the process is terminating, run the request the
                     # old fashioned way.
-                    _BackgroundLogger._submit_logs_request(items, conn)
+                    _BackgroundLogger._submit_logs_request(items, conn, self._outfile)
 
             concurrent.futures.wait(post_promises)
 
     @staticmethod
-    def _submit_logs_request(items, conn):
+    def _submit_logs_request(items, conn, outfile):
         dataS = construct_logs3_data(items)
-        print(dataS)
         for i in range(NUM_RETRIES):
             start_time = time.time()
             resp = conn.post("/logs3", data=dataS)
@@ -474,11 +476,12 @@ class _BackgroundLogger:
             if resp.ok:
                 return
             retrying_text = "" if i + 1 == NUM_RETRIES else " Retrying"
-            _logger.warning(
-                f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataS)}. Error: {resp.status_code}: {resp.text}.{retrying_text}"
+            print(
+                f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataS)}. Error: {resp.status_code}: {resp.text}.{retrying_text}",
+                file=outfile
             )
         if not resp.ok:
-            _logger.warning(f"log request failed after {NUM_RETRIES} retries. Dropping batch")
+            print(f"log request failed after {NUM_RETRIES} retries. Dropping batch", file=outfile)
 
 
 def _ensure_object(object_type, object_id, force=False):
