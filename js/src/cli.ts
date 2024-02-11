@@ -216,7 +216,7 @@ async function initFile(
 interface EvaluatorState {
   [evaluator: string]: {
     sourceFile: string;
-    evaluator: EvaluatorDef<unknown, unknown, unknown, any>;
+    evaluator: EvaluatorDef<any, any, any, any>;
   };
 }
 

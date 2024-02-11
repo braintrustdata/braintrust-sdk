@@ -273,7 +273,7 @@ function evaluateFilter(object: any, filter: Filter) {
 
 export async function runEvaluator(
   experiment: Experiment | null,
-  evaluator: EvaluatorDef<unknown, unknown, unknown, any>,
+  evaluator: EvaluatorDef<any, any, any | void, any | void>,
   progressReporter: ProgressReporter,
   filters: Filter[]
 ) {
@@ -307,7 +307,7 @@ export async function runEvaluator(
     }).asDataset();
   }
 
-  let data: EvalCase<unknown, unknown, any>[] = [];
+  let data: EvalCase<any, any, any>[] = [];
   if (dataResult instanceof Promise) {
     data = await dataResult;
   } else if (Symbol.asyncIterator in dataResult) {
@@ -430,7 +430,7 @@ export async function runEvaluator(
         },
         event: {
           input: datum.input,
-          expected: datum.expected,
+          expected: "expected" in datum ? datum.expected : undefined,
         },
       });
     }

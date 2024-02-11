@@ -2077,11 +2077,19 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
         continue;
       }
 
-      const { output, expected } = record;
-      yield {
-        input: record.input as Input,
-        expected: (expected ?? output) as Expected,
-      };
+      const { output, expected: expectedRecord } = record;
+      const expected = (expectedRecord ?? output) as Expected;
+
+      if (isEmpty(expected)) {
+        yield {
+          input: record.input as Input,
+        } as EvalCase<Input, Expected, void>;
+      } else {
+        yield {
+          input: record.input as Input,
+          expected: expected,
+        } as unknown as EvalCase<Input, Expected, void>;
+      }
     }
   }
 }
