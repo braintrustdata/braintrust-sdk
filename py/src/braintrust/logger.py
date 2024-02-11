@@ -326,6 +326,11 @@ def construct_json_array(items):
     return "[" + ",".join(items) + "]"
 
 
+def construct_logs3_data(items):
+    rowsS = construct_json_array(items)
+    return '{"rows": ' + rowsS + ', "api_version": 2}'
+
+
 def _check_json_serializable(event):
     try:
         _ = json.dumps(event)
@@ -438,8 +443,9 @@ class _BackgroundLogger:
                     else:
                         break
 
-                    items.append(item)
-                    items_len += len(json.dumps(item))
+                    item_s = json.dumps(item)
+                    items.append(item_s)
+                    items_len += len(item_s)
 
                 if len(items) == 0:
                     break
@@ -457,14 +463,14 @@ class _BackgroundLogger:
 
     @staticmethod
     def _submit_logs_request(items, conn):
-        dataS = json.dumps(dict(data=items, api_version=2))
+        dataS = construct_logs3_data(items)
+        print(dataS)
         for i in range(NUM_RETRIES):
             start_time = time.time()
-
-            resp = conn.post("/logs3", data=json.dumps(dict(rows=items, api_version=2)))
+            resp = conn.post("/logs3", data=dataS)
             if not resp.ok:
-                resp = conn.post("/logs", data=json.dumps([make_legacy_event(r) for r in items]))
-
+                legacyDataS = construct_json_array([json.dumps(make_legacy_event(json.loads(r))) for r in items])
+                resp = conn.post("/logs", data=legacyDataS)
             if resp.ok:
                 return
             retrying_text = "" if i + 1 == NUM_RETRIES else " Retrying"

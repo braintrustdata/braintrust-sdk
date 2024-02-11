@@ -702,6 +702,10 @@ function constructJsonArray(items: string[]) {
   return `[${items.join(",")}]`;
 }
 
+function constructLogs3Data(items: string[]) {
+  return `{"rows": ${constructJsonArray(items)}, "api_version": 2}`;
+}
+
 const DefaultBatchSize = 100;
 const NumRetries = 3;
 
@@ -778,7 +782,7 @@ class BackgroundLogger {
 
       postPromises.push(
         (async () => {
-          const dataS = `{"rows": ${constructJsonArray(items)}, "api_version": 2}`;
+          const dataS = constructLogs3Data(items);
           for (let i = 0; i < NumRetries; i++) {
             const startTime = now();
             try {
