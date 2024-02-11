@@ -1783,8 +1783,8 @@ export type BaseMetadata = object | void;
 export type DefaultMetadataType = void;
 export type EvalCase<Input, Expected, Metadata> = {
   input: Input;
-  expected?: Expected;
-} & (Metadata extends void ? {} : { metadata: Metadata });
+} & (Expected extends void ? {} : { expected: Expected }) &
+  (Metadata extends void ? {} : { metadata: Metadata });
 
 /**
  * An experiment is a collection of logged events, such as model inputs and outputs, which represent
