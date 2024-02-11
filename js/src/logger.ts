@@ -26,8 +26,6 @@ import {
   LazyValue,
 } from "./util";
 
-export type Metadata = Record<string, unknown>;
-
 export type SetCurrentArg = { setCurrent?: boolean };
 
 type StartSpanEventArgs = ExperimentLogPartialArgs & Partial<IdField>;
@@ -934,7 +932,7 @@ export type InitOptions<IsOpen extends boolean> = {
   appUrl?: string;
   apiKey?: string;
   orgName?: string;
-  metadata?: Metadata;
+  metadata?: Record<string, unknown>;
   gitMetadataSettings?: GitMetadataSettings;
   setCurrent?: boolean;
 } & InitOpenOption<IsOpen>;
@@ -994,56 +992,60 @@ export function init<IsOpen extends boolean = false>(
   if (open || update) {
     if (isEmpty(experiment)) {
       const action = open ? "open" : "update";
-      throw new Error(`Cannot ${action} an experiment without specifying its name`);
+      throw new Error(
+        `Cannot ${action} an experiment without specifying its name`
+      );
     }
 
-    const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(async () => {
-      await login({
-        orgName: orgName,
-        apiKey,
-        appUrl,
-      });
-      const args: Record<string, unknown> = {
-        project_name: project,
-        org_name: _state.orgName,
-        experiment_name: experiment,
-      };
+    const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(
+      async () => {
+        await login({
+          orgName: orgName,
+          apiKey,
+          appUrl,
+        });
+        const args: Record<string, unknown> = {
+          project_name: project,
+          org_name: _state.orgName,
+          experiment_name: experiment,
+        };
 
-      const response = await _state
-        .apiConn()
-        .post_json("api/experiment/get", args);
+        const response = await _state
+          .apiConn()
+          .post_json("api/experiment/get", args);
 
-      if (response.length === 0) {
-        throw new Error(
-          `Experiment ${experiment} not found in project ${project}.`
-        );
-      }
+        if (response.length === 0) {
+          throw new Error(
+            `Experiment ${experiment} not found in project ${project}.`
+          );
+        }
 
-      const info = response[0];
-      return {
-        project: {
+        const info = response[0];
+        return {
+          project: {
             id: info.project_id,
             name: "",
             fullInfo: {},
-        },
-        experiment: {
+          },
+          experiment: {
             id: info.id,
             name: info.name,
             fullInfo: info,
-        },
-      };
-    });
+          },
+        };
+      }
+    );
 
     if (open) {
       return new ReadonlyExperiment(
         lazyMetadata
       ) as InitializedExperiment<IsOpen>;
     } else {
-        const ret = new Experiment(lazyMetadata, dataset);
-        if (options.setCurrent ?? true) {
-          _state.currentExperiment = ret;
-        }
-        return ret as InitializedExperiment<IsOpen>;
+      const ret = new Experiment(lazyMetadata, dataset);
+      if (options.setCurrent ?? true) {
+        _state.currentExperiment = ret;
+      }
+      return ret as InitializedExperiment<IsOpen>;
     }
   }
 
@@ -1777,11 +1779,12 @@ class ObjectFetcher<RecordType> {
   }
 }
 
-export interface EvalCase<Input, Expected> {
+export type BaseMetadata = Record<string, unknown> | void;
+export type DefaultMetadataType = void;
+export type EvalCase<Input, Expected, Metadata> = {
   input: Input;
-  expected?: Expected;
-  metadata?: Metadata;
-}
+} & (Expected extends void ? {} : { expected: Expected }) &
+  (Metadata extends void ? {} : { metadata: Metadata });
 
 /**
  * An experiment is a collection of logged events, such as model inputs and outputs, which represent
@@ -2041,7 +2044,9 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
  * A read-only view of an experiment, initialized by passing `open: true` to `init()`.
  */
 export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
-  constructor(private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>) {
+  constructor(
+    private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>
+  ) {
     super("experiment", undefined);
   }
 
@@ -2063,21 +2068,28 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     return _state;
   }
 
-  public async *asDataset<
-    Input = unknown,
-    Expected = unknown,
-  >(): AsyncGenerator<EvalCase<Input, Expected>> {
+  public async *asDataset<Input, Expected>(): AsyncGenerator<
+    EvalCase<Input, Expected, void>
+  > {
     const records = this.fetch();
     for await (const record of records) {
       if (record.root_span_id !== record.span_id) {
         continue;
       }
 
-      const { output, expected } = record;
-      yield {
-        input: record.input as Input,
-        expected: (expected ?? output) as Expected,
-      };
+      const { output, expected: expectedRecord } = record;
+      const expected = (expectedRecord ?? output) as Expected;
+
+      if (isEmpty(expected)) {
+        yield {
+          input: record.input as Input,
+        } as EvalCase<Input, Expected, void>;
+      } else {
+        yield {
+          input: record.input as Input,
+          expected: expected,
+        } as unknown as EvalCase<Input, Expected, void>;
+      }
     }
   }
 }
