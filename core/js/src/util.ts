@@ -21,3 +21,10 @@ export function mergeDicts(
   }
   return mergeInto;
 }
+
+export function capitalize(s: string, sep?: string) {
+  const items = sep ? s.split(sep) : [s];
+  return items
+    .map((s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s))
+    .join(sep || "");
+}
