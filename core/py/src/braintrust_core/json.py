@@ -2,8 +2,6 @@ import dataclasses
 import json
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel
-
 
 class JSONSerializationError(Exception):
     pass
@@ -28,8 +26,19 @@ def dump_object(obj: Any) -> Any:
     """Convert an object to a JSON-serializable object if it is an instance of `dataclasses.dataclass` or `pydantic.BaseModel`."""
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         return dataclasses.asdict(obj)
-    if isinstance(obj, BaseModel):
+
+    # Attempt to dump a Pydantic v2 `BaseModel`.
+    try:
         return obj.model_dump()
+    except (AttributeError, TypeError):
+        pass
+
+    # Attempt to dump a Pydantic v1 `BaseModel`.
+    try:
+        return obj.dict()
+    except (AttributeError, TypeError):
+        pass
+
     return obj
 
 
