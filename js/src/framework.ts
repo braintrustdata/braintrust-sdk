@@ -3,20 +3,25 @@ import {
   NOOP_SPAN,
   Experiment,
   ExperimentSummary,
-  Metadata,
   Span,
   init as _initExperiment,
   EvalCase,
   InitOptions,
+  BaseMetadata,
+  DefaultMetadataType,
 } from "./logger";
 import { Score, SpanTypeAttribute } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
 import { isEmpty } from "./util";
 
-export type BaseExperiment<Input, Expected> = {
+export type BaseExperiment<
+  Input,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+> = {
   _type: "BaseExperiment";
-  _phantom?: [Input, Expected];
+  _phantom?: [Input, Expected, Metadata];
   name?: string;
 };
 
@@ -30,21 +35,29 @@ export type BaseExperiment<Input, Expected> = {
  * using your git history (or fall back to timestamps).
  * @returns
  */
-export function BaseExperiment<Input = unknown, Expected = unknown>(
+export function BaseExperiment<
+  Input = unknown,
+  Expected = unknown,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+>(
   options: {
     name?: string;
   } = {}
-): BaseExperiment<Input, Expected> {
+): BaseExperiment<Input, Expected, Metadata> {
   return { _type: "BaseExperiment", ...options };
 }
 
-export type EvalData<Input, Expected> =
-  | EvalCase<Input, Expected>[]
-  | (() => EvalCase<Input, Expected>[])
-  | (() => Promise<EvalCase<Input, Expected>[]>)
-  | AsyncGenerator<EvalCase<Input, Expected>>
-  | BaseExperiment<Input, Expected>
-  | (() => BaseExperiment<Input, Expected>);
+export type EvalData<
+  Input,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+> =
+  | EvalCase<Input, Expected, Metadata>[]
+  | (() => EvalCase<Input, Expected, Metadata>[])
+  | (() => Promise<EvalCase<Input, Expected, Metadata>[]>)
+  | AsyncGenerator<EvalCase<Input, Expected, Metadata>>
+  | BaseExperiment<Input, Expected, Metadata>
+  | (() => BaseExperiment<Input, Expected, Metadata>);
 
 export type EvalTask<Input, Output> =
   | ((input: Input, hooks: EvalHooks) => Promise<Output>)
@@ -56,22 +69,34 @@ export interface EvalHooks {
 }
 
 // This happens to be compatible with ScorerArgs defined in @braintrust/core.
-export type EvalScorerArgs<Input, Output, Expected> = EvalCase<
+export type EvalScorerArgs<
   Input,
-  Expected
-> & {
+  Output,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+> = EvalCase<Input, Expected, Metadata> & {
   output: Output;
 };
 
-export type EvalScorer<Input, Output, Expected> = (
-  args: EvalScorerArgs<Input, Output, Expected>
+export type EvalScorer<
+  Input,
+  Output,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+> = (
+  args: EvalScorerArgs<Input, Output, Expected, Metadata>
 ) => Score | Promise<Score>;
 
-export interface Evaluator<Input, Output, Expected> {
+export interface Evaluator<
+  Input,
+  Output,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+> {
   /**
    * A function that returns a list of inputs, expected outputs, and metadata.
    */
-  data: EvalData<Input, Expected>;
+  data: EvalData<Input, Expected, Metadata>;
 
   /**
    * A function that takes an input and returns an output.
@@ -81,7 +106,7 @@ export interface Evaluator<Input, Output, Expected> {
   /**
    * A set of functions that take an input, output, and expected value and return a score.
    */
-  scores: EvalScorer<Input, Output, Expected>[];
+  scores: EvalScorer<Input, Output, Expected, Metadata>[];
 
   /**
    * An optional name for the experiment.
@@ -98,7 +123,7 @@ export interface Evaluator<Input, Output, Expected> {
   /**
    * Optional additional metadata for the experiment.
    */
-  metadata?: Metadata;
+  metadata?: Record<string, unknown>;
 
   /**
    * Whether the experiment should be public. Defaults to false.
@@ -114,13 +139,18 @@ function makeEvalName(projectName: string, experimentName?: string) {
   return out;
 }
 
-export type EvaluatorDef<Input, Output, Expected> = {
+export type EvaluatorDef<
+  Input,
+  Output,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+> = {
   projectName: string;
   evalName: string;
-} & Evaluator<Input, Output, Expected>;
+} & Evaluator<Input, Output, Expected, Metadata>;
 
 export type EvaluatorFile = {
-  [evalName: string]: EvaluatorDef<any, any, any>;
+  [evalName: string]: EvaluatorDef<any, any, any, any>;
 };
 
 function initExperiment<IsOpen extends boolean = false>(
@@ -140,9 +170,14 @@ declare global {
 
 globalThis._evals = {};
 
-export async function Eval<Input, Output, Expected>(
+export async function Eval<
+  Input,
+  Output,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+>(
   name: string,
-  evaluator: Evaluator<Input, Output, Expected>
+  evaluator: Evaluator<Input, Output, Expected, Metadata>
 ): Promise<ExperimentSummary> {
   const evalName = makeEvalName(name, evaluator.experimentName);
   if (_evals[evalName]) {
@@ -175,7 +210,7 @@ export async function Eval<Input, Output, Expected>(
         {
           evalName,
           projectName: name,
-          ...(evaluator as Evaluator<unknown, unknown, unknown>),
+          ...(evaluator as Evaluator<unknown, unknown, unknown, any>),
         },
         progressReporter,
         []
@@ -246,7 +281,7 @@ function evaluateFilter(object: any, filter: Filter) {
 
 export async function runEvaluator(
   experiment: Experiment | null,
-  evaluator: EvaluatorDef<unknown, unknown, unknown>,
+  evaluator: EvaluatorDef<any, any, any | void, any | void>,
   progressReporter: ProgressReporter,
   filters: Filter[]
 ) {
@@ -280,7 +315,7 @@ export async function runEvaluator(
     }).asDataset();
   }
 
-  let data: EvalCase<unknown, unknown>[] = [];
+  let data: EvalCase<any, any, any>[] = [];
   if (dataResult instanceof Promise) {
     data = await dataResult;
   } else if (Symbol.asyncIterator in dataResult) {
@@ -303,7 +338,7 @@ export async function runEvaluator(
   progressReporter.start(evaluator.evalName, data.length);
 
   const evals = data.map(async (datum) => {
-    let metadata: Metadata = { ...datum.metadata };
+    let metadata: object = { ...("metadata" in datum ? datum.metadata : {}) };
     let output: any = undefined;
     let error: unknown | undefined = undefined;
     let scores: Record<string, number | null> = {};
@@ -376,7 +411,9 @@ export async function runEvaluator(
           meta({ scores: scoreMetadata });
         }
 
-        rootSpan.log({ scores, metadata });
+        // Note: We're asserting here that any object can be cast as Record<string, unknown>, which should generally
+        // be true, but if we discover that it's not, we may want to update the definition of BaseMetadata.
+        rootSpan.log({ scores, metadata: metadata as Record<string, unknown> });
       } catch (e) {
         error = e;
       } finally {
@@ -401,7 +438,7 @@ export async function runEvaluator(
         },
         event: {
           input: datum.input,
-          expected: datum.expected,
+          expected: "expected" in datum ? datum.expected : undefined,
         },
       });
     }

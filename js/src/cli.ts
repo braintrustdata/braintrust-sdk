@@ -11,7 +11,6 @@ import { ArgumentParser } from "argparse";
 import { v4 as uuidv4 } from "uuid";
 import pluralize from "pluralize";
 import {
-  Metadata,
   login,
   init as initExperiment,
   _internalGetGlobalState,
@@ -113,7 +112,7 @@ function evaluateBuildResults(
 async function initLogger(
   projectName: string,
   experimentName?: string,
-  metadata?: Metadata
+  metadata?: Record<string, unknown>
 ) {
   const logger = initExperiment(projectName, {
     experiment: experimentName,
@@ -217,7 +216,7 @@ async function initFile(
 interface EvaluatorState {
   [evaluator: string]: {
     sourceFile: string;
-    evaluator: EvaluatorDef<unknown, unknown, unknown>;
+    evaluator: EvaluatorDef<any, any, any, any>;
   };
 }
 
