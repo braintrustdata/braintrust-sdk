@@ -2,6 +2,9 @@
   "name": "@braintrust/core",
   "version": "0.0.6",
   "description": "Shared core dependencies for Braintrust packages",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsup",
     "watch": "tsup --watch",

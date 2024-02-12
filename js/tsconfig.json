@@ -4,9 +4,9 @@
     "declaration": true,
     "outDir": "./dist",
     "lib": ["es6"],
-    "module": "nodenext",
+    "module": "commonjs",
     "target": "es6",
-    "moduleResolution": "nodenext",
+    "moduleResolution": "node",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true
