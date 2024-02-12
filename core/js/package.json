@@ -2,9 +2,6 @@
   "name": "@braintrust/core",
   "version": "0.0.6",
   "description": "Shared core dependencies for Braintrust packages",
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsup",
     "watch": "tsup --watch",
@@ -13,12 +10,23 @@
     "postpublish": "../../../scripts/node_postpublish_core.py"
   },
   "exports": {
-    "./package.json": "./package.json",
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "module": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "types": "./dist/main/index.d.ts",
+      "import": "./dist/main/index.mjs",
+      "module": "./dist/main/index.mjs",
+      "require": "./dist/main/index.js"
+    },
+    "./typespecs": {
+      "types": "./dist/typespecs/index.d.ts",
+      "import": "./dist/typespecs/index.mjs",
+      "module": "./dist/typespecs/index.mjs",
+      "require": "./dist/typespecs/index.js"
+    },
+    "./typespecs-stainless": {
+      "types": "./dist/typespecs-stainless/index.d.ts",
+      "import": "./dist/typespecs-stainless/index.mjs",
+      "module": "./dist/typespecs-stainless/index.mjs",
+      "require": "./dist/typespecs-stainless/index.js"
     }
   },
   "files": [
@@ -43,5 +51,9 @@
     "tsup": "^8.0.1",
     "tsx": "^3.14.0",
     "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^6.3.1",
+    "zod": "^3.22.4"
   }
 }
