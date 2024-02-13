@@ -172,7 +172,7 @@ export function ensureNewDatasetRecord(r: AnyDatasetRecord): DatasetRecord<false
 }
 
 export function makeLegacyEvent(e: BackgroundLogEvent): BackgroundLogEvent {
-  if (!("dataset_id" in e) || !e.dataset_id || !("expected" in e)) {
+  if (!("dataset_id" in e) || !("expected" in e)) {
     return e;
   }
 
@@ -189,5 +189,6 @@ export function makeLegacyEvent(e: BackgroundLogEvent): BackgroundLogEvent {
       }
     }
   }
+
   return event;
 }
