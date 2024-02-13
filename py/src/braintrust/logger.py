@@ -672,7 +672,7 @@ def init_dataset(
     app_url: str = None,
     api_key: str = None,
     org_name: str = None,
-    output_instead_of_expected: bool = None,
+    legacy: bool = None,
 ):
     """
     Create a new dataset in a specified project. If the project does not exist, it will be created.
@@ -685,7 +685,7 @@ def init_dataset(
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
-    :param output_instead_of_expected: Unless set to False, records will be fetched from this dataset in the legacy record format, with "output" as an alias for the "expected" field. This will default to False in a future version of Braintrust.
+    :param legacy: Unless set to False, records will be fetched from this dataset in the legacy record format, with "output" as an alias for the "expected" field. This will default to False in a future version of Braintrust.
     :returns: The dataset object.
     """
 
@@ -704,7 +704,7 @@ def init_dataset(
             dataset=ObjectMetadata(id=resp_dataset["id"], name=resp_dataset["name"], full_info=resp_dataset),
         )
 
-    return Dataset(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), version=version, legacy=output_instead_of_expected)
+    return Dataset(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), version=version, legacy=legacy)
 
 
 def init_logger(
@@ -1796,7 +1796,7 @@ class Dataset(ObjectFetcher):
         if legacy is None:
             legacy = DEFAULT_IS_LEGACY_DATASET
         if legacy:
-            eprint(f"""This dataset contains records with "output" as a (deprecated) alias for the "expected" field. Future versions of Braintrust will remove this alias, so please update your code to use the "expected" field. You can test your changes by using `braintrust.init_dataset()` with `output_instead_of_expected=False`, which will become the default.""")
+            eprint(f"""Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use `braintrust.init_dataset()` with `legacy=False`, which will become the default in a future version of Braintrust.""")
         mutate_record = lambda r: ensure_dataset_record(r, legacy)
 
         self._lazy_metadata = lazy_metadata

@@ -24,7 +24,7 @@ import {
   ExperimentEvent,
   BackgroundLogEvent,
   AnyDatasetRecord,
-  DefaultIsLegacyDataset,
+  DEFAULT_IS_LEGACY_DATASET,
   DatasetRecord,
   ensureDatasetRecord,
   makeLegacyEvent,
@@ -38,8 +38,6 @@ import {
   isEmpty,
   LazyValue,
 } from "./util";
-
-export { ParentExperimentIds, ParentProjectLogIds, IdField, ExperimentLogPartialArgs, ExperimentLogFullArgs, LogFeedbackFullArgs, SanitizedExperimentLogPartialArgs, ExperimentEvent, BackgroundLogEvent, DatasetRecord };
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -849,7 +847,7 @@ type InitOpenOption<IsOpen extends boolean> = {
 export type InitOptions<IsOpen extends boolean> = {
   experiment?: string;
   description?: string;
-  dataset?: Dataset<boolean>;
+  dataset?: AnyDataset;
   update?: boolean;
   baseExperiment?: string;
   isPublic?: boolean;
@@ -1103,7 +1101,7 @@ export function withLogger<IsAsyncFlush extends boolean = false, R = void>(
 }
 
 type InitLegacyOption<IsLegacyDataset extends boolean> = {
-  outputInsteadOfExpected?: IsLegacyDataset;
+  legacy?: IsLegacyDataset;
 };
 
 type InitDatasetOptions<IsLegacyDataset extends boolean> = {
@@ -1126,14 +1124,14 @@ type InitDatasetOptions<IsLegacyDataset extends boolean> = {
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
- * @param options.outputInsteadOfExpected Unless set to false, records will be fetched from this dataset in the legacy record format, with "output" as an alias for the "expected" field. This will default to false in a future version of Braintrust.
+ * @param options.legacy Unless set to false, records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This will default to false in a future version of Braintrust.
  * @returns The newly created Dataset.
  */
-export function initDataset<IsLegacyDataset extends boolean = typeof DefaultIsLegacyDataset>(
+export function initDataset<IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET>(
   project: string,
   options: Readonly<InitDatasetOptions<IsLegacyDataset>> = {}
 ): Dataset<IsLegacyDataset> {
-  const { dataset, description, version, appUrl, apiKey, orgName, outputInsteadOfExpected: legacy } =
+  const { dataset, description, version, appUrl, apiKey, orgName, legacy } =
     options || {};
 
   const lazyMetadata: LazyValue<ProjectDatasetMetadata> = new LazyValue(
@@ -1175,7 +1173,7 @@ export function initDataset<IsLegacyDataset extends boolean = typeof DefaultIsLe
 /**
  * This function is deprecated. Use `initDataset` instead.
  */
-export function withDataset<R, IsLegacyDataset extends boolean = typeof DefaultIsLegacyDataset>(
+export function withDataset<R, IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET>(
   project: string,
   callback: (dataset: Dataset<IsLegacyDataset>) => R,
   options: Readonly<InitDatasetOptions<IsLegacyDataset>> = {}
@@ -1744,7 +1742,7 @@ export type EvalCase<Input, Expected, Metadata> = {
  */
 export class Experiment extends ObjectFetcher<ExperimentEvent> {
   private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>;
-  public readonly dataset?: Dataset<boolean>;
+  public readonly dataset?: AnyDataset;
   private bgLogger: BackgroundLogger;
   private lastStartTime: number;
   // For type identification.
@@ -1752,7 +1750,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
 
   constructor(
     lazyMetadata: LazyValue<ProjectExperimentMetadata>,
-    dataset?: Dataset<boolean>,
+    dataset?: AnyDataset,
   ) {
     super("experiment", undefined);
     this.lazyMetadata = lazyMetadata;
@@ -2238,7 +2236,7 @@ export class SpanImpl implements Span {
  *
  * You should not create `Dataset` objects directly. Instead, use the `braintrust.initDataset()` method.
  */
-class Dataset<IsLegacyDataset extends boolean = typeof DefaultIsLegacyDataset> extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
+class Dataset<IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET> extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
   private readonly lazyMetadata: LazyValue<ProjectDatasetMetadata>;
   private bgLogger: BackgroundLogger;
 
@@ -2247,9 +2245,9 @@ class Dataset<IsLegacyDataset extends boolean = typeof DefaultIsLegacyDataset> e
     pinnedVersion?: string,
     legacy?: IsLegacyDataset,
   ) {
-    const isLegacyDataset = (legacy ?? DefaultIsLegacyDataset) as IsLegacyDataset;
+    const isLegacyDataset = (legacy ?? DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
     if (isLegacyDataset) {
-      console.warn(`This dataset contains records with "output" as a (deprecated) alias for the "expected" field. Future versions of Braintrust will remove this alias, so please update your code to use the "expected" field. You can test your changes by using \`braintrust.initDataset()\` with \`{ outputInsteadOfExpected: false }\`, which will become the default.`);
+      console.warn(`Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use \`braintrust.initDataset()\` with \`{ legacy: false }\`, which will become the default in a future version of Braintrust.`);
     }
     super("dataset", pinnedVersion, (r: AnyDatasetRecord) => ensureDatasetRecord(r, isLegacyDataset));
     this.lazyMetadata = lazyMetadata;
@@ -2408,6 +2406,8 @@ class Dataset<IsLegacyDataset extends boolean = typeof DefaultIsLegacyDataset> e
     return this.id;
   }
 }
+
+export type AnyDataset = Dataset<boolean>;
 
 /**
  * Summary of a score's performance.

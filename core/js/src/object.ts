@@ -115,7 +115,7 @@ export type BackgroundLogEvent =
   | LoggingEvent
   | CommentEvent;
 
-export const DefaultIsLegacyDataset = true;
+export const DEFAULT_IS_LEGACY_DATASET = true;
 
 interface LegacyDatasetRecord {
   id: string;
@@ -131,12 +131,12 @@ interface NewDatasetRecord {
   metadata: any;
 };
 
-export type DatasetRecord<IsLegacyDataset extends boolean = typeof DefaultIsLegacyDataset> =
+export type DatasetRecord<IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET> =
   IsLegacyDataset extends true ? LegacyDatasetRecord : NewDatasetRecord;
 
 export type AnyDatasetRecord = DatasetRecord<boolean>;
 
-export function ensureDatasetRecord<IsLegacyDataset extends boolean = typeof DefaultIsLegacyDataset>(r: AnyDatasetRecord, legacy: IsLegacyDataset): DatasetRecord<IsLegacyDataset> {
+export function ensureDatasetRecord<IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET>(r: AnyDatasetRecord, legacy: IsLegacyDataset): DatasetRecord<IsLegacyDataset> {
   if (legacy) {
     return ensureLegacyDatasetRecord(r) as DatasetRecord<IsLegacyDataset>;
   } else {
