@@ -1,5 +1,6 @@
 import {
   IS_MERGE_FIELD,
+  MERGE_PATHS_FIELD,
   PARENT_ID_FIELD,
   Source,
   AUDIT_SOURCE_FIELD,
@@ -90,6 +91,8 @@ export type DatasetEvent = {
   project_id: string;
   dataset_id: string;
   created: string;
+  // [IS_MERGE_FIELD]?: boolean;
+  // [MERGE_PATHS_FIELD]?: string[][];
 } & ({ expected?: unknown } | { output?: unknown });
 
 export type LoggingEvent = Omit<ExperimentEvent, "experiment_id"> & {
@@ -169,13 +172,22 @@ export function ensureNewDatasetRecord(r: AnyDatasetRecord): DatasetRecord<false
 }
 
 export function makeLegacyEvent(e: BackgroundLogEvent): BackgroundLogEvent {
-  if (!("dataset_id" in e) || !("expected" in e)) {
+  if (!("dataset_id" in e) || !e.dataset_id || !("expected" in e)) {
     return e;
   }
+
   const event = {
     ...e,
     output: e.expected,
   };
   delete event.expected;
+
+  if (MERGE_PATHS_FIELD in event) {
+    for (const path of (event[MERGE_PATHS_FIELD] || []) as string[][]) {
+      if (path.length > 0 && path[0] === "expected") {
+        path[0] = "output";
+      }
+    }
+  }
   return event;
 }
