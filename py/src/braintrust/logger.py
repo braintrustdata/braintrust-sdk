@@ -680,7 +680,7 @@ def init_experiment(*args, **kwargs):
 
 def init_dataset(
     project: Optional[str] = None,
-    dataset: Optional[str] = None,
+    name: Optional[str] = None,
     description: Optional[str] = None,
     version: Optional[Union[str, int]] = None,
     app_url: Optional[str] = None,
@@ -692,7 +692,7 @@ def init_dataset(
     Create a new dataset in a specified project. If the project does not exist, it will be created.
 
     :param project_name: The name of the project to create the dataset in. Must specify at least one of `project_name` or `project_id`.
-    :param dataset: The name of the dataset to create. If not specified, a name will be generated automatically.
+    :param name: The name of the dataset to create. If not specified, a name will be generated automatically.
     :param description: An optional description of the dataset.
     :param version: An optional version of the dataset (to read). If not specified, the latest version will be used.
     :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
@@ -707,7 +707,7 @@ def init_dataset(
         login(org_name=org_name, api_key=api_key, app_url=app_url)
         args = _populate_args(
             {"project_name": project, "project_id": project_id, "org_id": _state.org_id},
-            dataset_name=dataset,
+            dataset_name=name,
             description=description,
         )
         response = _state.app_conn().post_json("api/dataset/register", args)
