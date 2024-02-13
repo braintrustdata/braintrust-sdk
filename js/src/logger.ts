@@ -13,6 +13,7 @@ import {
   AUDIT_SOURCE_FIELD,
   AUDIT_METADATA_FIELD,
   GitMetadataSettings,
+  RepoInfo,
   mergeGitMetadataSettings,
   TransactionId,
 } from "@braintrust/core";
@@ -358,8 +359,8 @@ class HTTPConnection {
           typeof params === "string"
             ? params
             : params
-              ? JSON.stringify(params)
-              : undefined,
+            ? JSON.stringify(params)
+            : undefined,
         keepalive: true,
         ...rest,
       })
@@ -934,8 +935,15 @@ export type InitOptions<IsOpen extends boolean> = {
   orgName?: string;
   metadata?: Record<string, unknown>;
   gitMetadataSettings?: GitMetadataSettings;
+  projectId?: string;
+  baseExperimentId?: string;
+  repoInfo?: RepoInfo;
   setCurrent?: boolean;
 } & InitOpenOption<IsOpen>;
+
+export type FullInitOptions<IsOpen extends boolean> = {
+  project?: string;
+} & InitOptions<IsOpen>;
 
 type InitializedExperiment<IsOpen extends boolean | undefined> =
   IsOpen extends true ? ReadonlyExperiment : Experiment;
@@ -943,34 +951,62 @@ type InitializedExperiment<IsOpen extends boolean | undefined> =
 /**
  * Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
  *
- * @param project The name of the project to create the experiment in.
- * @param options Additional options for configuring init().
+ * @param options Options for configuring init().
+ * @param options.project The name of the project to create the experiment in. Must specify at least one of `project` or `projectId`.
  * @param options.experiment The name of the experiment to create. If not specified, a name will be generated automatically.
  * @param options.description An optional description of the experiment.
- * @param options.dataset (Optional) A dataset to associate with the experiment. You can pass in the name of the dataset (in the same project) or a
- * dataset object (from any project).
+ * @param options.dataset (Optional) A dataset to associate with the experiment. You can pass in the name of the dataset (in the same project) or a dataset object (from any project).
  * @param options.update If the experiment already exists, continue logging to it.
- * @param options.baseExperiment An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this
- * experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
+ * @param options.baseExperiment An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
  * @param options.isPublic An optional parameter to control whether the experiment is publicly visible to anybody with the link or privately visible to only members of the organization. Defaults to private.
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
- * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
- * key is specified, will prompt the user to login.
+ * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
- * @param options.metadata (Optional) A dictionary with additional data about the test example, model outputs, or just
- * about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
- * `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
- * JSON-serializable type, but its keys must be strings.
+ * @param options.metadata (Optional) A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
  * @param options.gitMetadataSettings (Optional) Settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
  * @param setCurrent If true (the default), set the global current-experiment to the newly-created one.
  * @param options.open If the experiment already exists, open it in read-only mode.
+ * @param options.projectId The id of the project to create the experiment in. This takes precedence over `project` if specified.
+ * @param options.baseExperimentId An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this. This takes precedence over `baseExperiment` if specified.
+ * @param options.repoInfo (Optional) Explicitly specify the git metadata for this experiment. This takes precedence over `gitMetadataSettings` if specified.
  * @returns The newly created Experiment.
  */
 export function init<IsOpen extends boolean = false>(
+  options: Readonly<FullInitOptions<IsOpen>>
+): InitializedExperiment<IsOpen>;
+
+/**
+ * Legacy form of `init` which accepts the project name as the first parameter,
+ * separately from the remaining options. See `init(options)` for full details.
+ */
+export function init<IsOpen extends boolean = false>(
   project: string,
-  options: Readonly<InitOptions<IsOpen>> = {}
+  options?: Readonly<InitOptions<IsOpen>>
+): InitializedExperiment<IsOpen>;
+
+/**
+ * Combined overload implementation of `init`. Do not call this directly.
+ * Instead, call `init(options)` or `init(project, options)`.
+ */
+export function init<IsOpen extends boolean = false>(
+  projectOrOptions: string | Readonly<FullInitOptions<IsOpen>>,
+  optionalOptions?: Readonly<InitOptions<IsOpen>>
 ): InitializedExperiment<IsOpen> {
+  const options = ((): Readonly<FullInitOptions<IsOpen>> => {
+    if (typeof projectOrOptions === "string") {
+      return { ...optionalOptions, project: projectOrOptions };
+    } else {
+      if (optionalOptions !== undefined) {
+        throw new Error(
+          "Cannot specify options struct as both parameters. Must call either init(project, options) or init(options)."
+        );
+      }
+      return projectOrOptions;
+    }
+  })();
+
   const {
+    project,
     experiment,
     description,
     dataset,
@@ -983,7 +1019,10 @@ export function init<IsOpen extends boolean = false>(
     orgName,
     metadata,
     gitMetadataSettings,
-  } = options || {};
+    projectId,
+    baseExperimentId,
+    repoInfo,
+  } = options;
 
   if (open && update) {
     throw new Error("Cannot open and update an experiment at the same time");
@@ -1006,6 +1045,7 @@ export function init<IsOpen extends boolean = false>(
         });
         const args: Record<string, unknown> = {
           project_name: project,
+          project_id: projectId,
           org_name: _state.orgName,
           experiment_name: experiment,
         };
@@ -1016,7 +1056,9 @@ export function init<IsOpen extends boolean = false>(
 
         if (response.length === 0) {
           throw new Error(
-            `Experiment ${experiment} not found in project ${project}.`
+            `Experiment ${experiment} not found in project ${
+              projectId ?? project
+            }.`
           );
         }
 
@@ -1058,6 +1100,7 @@ export function init<IsOpen extends boolean = false>(
       });
       const args: Record<string, unknown> = {
         project_name: project,
+        project_id: projectId,
         org_id: _state.orgId,
       };
 
@@ -1069,24 +1112,31 @@ export function init<IsOpen extends boolean = false>(
         args["description"] = description;
       }
 
-      let mergedGitMetadataSettings = {
-        ...(_state.gitMetadataSettings || {
-          collect: "all",
-        }),
-      };
-      if (gitMetadataSettings) {
-        mergedGitMetadataSettings = mergeGitMetadataSettings(
-          mergedGitMetadataSettings,
-          gitMetadataSettings
-        );
+      const repoInfoArg = await (async (): Promise<RepoInfo | undefined> => {
+        if (repoInfo) {
+          return repoInfo;
+        }
+        let mergedGitMetadataSettings = {
+          ...(_state.gitMetadataSettings || {
+            collect: "all",
+          }),
+        };
+        if (gitMetadataSettings) {
+          mergedGitMetadataSettings = mergeGitMetadataSettings(
+            mergedGitMetadataSettings,
+            gitMetadataSettings
+          );
+        }
+        return await iso.getRepoInfo(mergedGitMetadataSettings);
+      })();
+
+      if (repoInfoArg) {
+        args["repo_info"] = repoInfoArg;
       }
 
-      const repoStatus = await iso.getRepoStatus(gitMetadataSettings);
-      if (repoStatus) {
-        args["repo_info"] = repoStatus;
-      }
-
-      if (baseExperiment) {
+      if (baseExperimentId) {
+        args["base_exp_id"] = baseExperimentId;
+      } else if (baseExperiment) {
         args["base_experiment"] = baseExperiment;
       } else {
         args["ancestor_commits"] = await iso.getPastNAncestors();
@@ -1150,6 +1200,45 @@ export function init<IsOpen extends boolean = false>(
 }
 
 /**
+ * Alias for init(options).
+ */
+export function initExperiment<IsOpen extends boolean = false>(
+  options: Readonly<InitOptions<IsOpen>>
+): InitializedExperiment<IsOpen>;
+
+/**
+ * Alias for init(project, options).
+ */
+export function initExperiment<IsOpen extends boolean = false>(
+  project: string,
+  options?: Readonly<InitOptions<IsOpen>>
+): InitializedExperiment<IsOpen>;
+
+/**
+ * Combined overload implementation of `initExperiment`, which is an alias for
+ * `init`. Do not call this directly. Instead, call `initExperiment(options)` or
+ * `initExperiment(project, options)`.
+ */
+export function initExperiment<IsOpen extends boolean = false>(
+  projectOrOptions: string | Readonly<InitOptions<IsOpen>>,
+  optionalOptions?: Readonly<InitOptions<IsOpen>>
+): InitializedExperiment<IsOpen> {
+  const options = ((): Readonly<FullInitOptions<IsOpen>> => {
+    if (typeof projectOrOptions === "string") {
+      return { ...optionalOptions, project: projectOrOptions };
+    } else {
+      if (optionalOptions !== undefined) {
+        throw new Error(
+          "Cannot specify options struct as both parameters. Must call either init(project, options) or init(options)."
+        );
+      }
+      return projectOrOptions;
+    }
+  })();
+  return init(options);
+}
+
+/**
  * This function is deprecated. Use `init` instead.
  */
 export function withExperiment<R>(
@@ -1185,27 +1274,68 @@ type InitDatasetOptions = {
   appUrl?: string;
   apiKey?: string;
   orgName?: string;
+  projectId?: string;
 };
+
+type FullInitDatasetOptions = { project?: string } & InitDatasetOptions;
 
 /**
  * Create a new dataset in a specified project. If the project does not exist, it will be created.
  *
- * @param project The name of the project to create the dataset in.
- * @param options Additional options for configuring init().
+ * @param options Options for configuring initDataset().
+ * @param options.project The name of the project to create the dataset in. Must specify at least one of `project` or `projectId`.
  * @param options.dataset The name of the dataset to create. If not specified, a name will be generated automatically.
  * @param options.description An optional description of the dataset.
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
- * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
- * key is specified, will prompt the user to login.
+ * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+ * @param options.projectId The id of the project to create the dataset in. This takes precedence over `project` if specified.
  * @returns The newly created Dataset.
+ */
+export function initDataset(options: Readonly<FullInitDatasetOptions>): Dataset;
+
+/**
+ * Legacy form of `initDataset` which accepts the project name as the first
+ * parameter, separately from the remaining options. See
+ * `initDataset(options)` for full details.
  */
 export function initDataset(
   project: string,
-  options: Readonly<InitDatasetOptions> = {}
-) {
-  const { dataset, description, version, appUrl, apiKey, orgName } =
-    options || {};
+  options?: Readonly<InitDatasetOptions>
+): Dataset;
+
+/**
+ * Combined overload implementation of `initDataset`. Do not call this
+ * directly. Instead, call `initDataset(options)` or `initDataset(project,
+ * options)`.
+ */
+export function initDataset(
+  projectOrOptions: string | Readonly<FullInitDatasetOptions>,
+  optionalOptions?: Readonly<InitDatasetOptions>
+): Dataset {
+  const options = ((): Readonly<FullInitDatasetOptions> => {
+    if (typeof projectOrOptions === "string") {
+      return { ...optionalOptions, project: projectOrOptions };
+    } else {
+      if (optionalOptions !== undefined) {
+        throw new Error(
+          "Cannot specify options struct as both parameters. Must call either initDataset(project, options) or initDataset(options)."
+        );
+      }
+      return projectOrOptions;
+    }
+  })();
+
+  const {
+    project,
+    dataset,
+    description,
+    version,
+    appUrl,
+    apiKey,
+    orgName,
+    projectId,
+  } = options;
 
   const lazyMetadata: LazyValue<ProjectDatasetMetadata> = new LazyValue(
     async () => {
@@ -1218,6 +1348,7 @@ export function initDataset(
       const args: Record<string, unknown> = {
         org_id: _state.orgId,
         project_name: project,
+        project_id: projectId,
         dataset_name: dataset,
         description,
       };

@@ -6,7 +6,7 @@ import threading
 from functools import lru_cache as _cache
 from typing import List, Optional
 
-from braintrust_core.git_fields import GitMetadataSettings, RepoStatus
+from braintrust_core.git_fields import GitMetadataSettings, RepoInfo
 
 # https://stackoverflow.com/questions/48399498/git-executable-not-found-in-python
 os.environ["GIT_PYTHON_REFRESH"] = "quiet"
@@ -109,21 +109,21 @@ def truncate_to_byte_limit(input_string, byte_limit=65536):
     return encoded[:byte_limit].decode("utf-8", errors="ignore")
 
 
-def get_repo_status(settings: Optional[GitMetadataSettings] = None):
+def get_repo_info(settings: Optional[GitMetadataSettings] = None):
     if settings is None:
         settings = GitMetadataSettings()
 
     if settings.collect == "none":
         return None
 
-    repo = repo_status()
+    repo = repo_info()
     if repo is None or settings.collect == "all":
         return repo
 
-    return RepoStatus(**{k: v if k in settings.fields else None for k, v in repo.as_dict().items()})
+    return RepoInfo(**{k: v if k in settings.fields else None for k, v in repo.as_dict().items()})
 
 
-def repo_status():
+def repo_info():
     with _gitlock:
         repo = _current_repo()
         if repo is None:
@@ -152,7 +152,7 @@ def repo_status():
         if dirty:
             git_diff = attempt(lambda: truncate_to_byte_limit(repo.git.diff("HEAD")))
 
-        return RepoStatus(
+        return RepoInfo(
             commit=commit,
             branch=branch,
             tag=tag,

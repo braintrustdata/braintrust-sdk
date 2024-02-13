@@ -1,4 +1,4 @@
-export interface RepoStatus {
+export interface RepoInfo {
   commit?: string;
   branch?: string;
   tag?: string;
@@ -10,7 +10,7 @@ export interface RepoStatus {
   git_diff?: string;
 }
 
-export type GitFields = Array<keyof RepoStatus>;
+export type GitFields = Array<keyof RepoInfo>;
 export type CollectMetadata = "all" | "none" | "some";
 export type GitMetadataSettings = {
   collect: CollectMetadata;
