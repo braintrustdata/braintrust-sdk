@@ -20,6 +20,7 @@ from multiprocessing import cpu_count
 from typing import Any, Dict, Optional, Union
 
 import requests
+from braintrust_core.bt_json import bt_dumps
 from braintrust_core.db_fields import (
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
@@ -35,11 +36,6 @@ from braintrust_core.util import (
     coalesce,
     eprint,
     merge_dicts,
-)
-from braintrust_core.json import (
-    check_json_serializable,
-    make_dict_values_json_serializable,
-    make_json_serializable,
 )
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -333,8 +329,8 @@ def construct_json_array(items):
 
 def _check_json_serializable(event):
     try:
-        check_json_serializable(event)
-    except JSONSerializationError as e:
+        _ = bt_dumps(event)
+    except TypeError as e:
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
 
@@ -445,7 +441,7 @@ class _BackgroundLogger:
                     else:
                         break
 
-                    item_s = json.dumps(item)
+                    item_s = bt_dumps(item)
                     items.append(item_s)
                     items_len += len(item_s)
 
@@ -907,13 +903,15 @@ def get_span_parent_object() -> Union["Logger", "Experiment", Span]:
 def _try_log_input_output(span, f_sig, f_args, f_kwargs, output):
     bound_args = f_sig.bind(*f_args, **f_kwargs).arguments
 
+    input_serializable = bound_args
     try:
-        input_serializable = make_dict_values_json_serializable(bound_args)
+        _check_json_serializable(bound_args)
     except Exception as e:
         input_serializable = "<input not json-serializable>: " + str(e)
 
+    output_serializable = output
     try:
-        output_serializable = make_json_serializable(output)
+        _check_json_serializable(output)
     except Exception as e:
         output_serializable = "<output not json-serializable>: " + str(e)
 
@@ -1052,11 +1050,6 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
     if forbidden_keys:
         raise ValueError(f"The following keys may are not permitted: {forbidden_keys}")
 
-    for key in ("input", "output", "expected"):
-        if key not in event:
-            continue
-        event[key] = make_json_serializable(event[key])
-
     scores = event.get("scores")
     if scores:
         for name, score in scores.items():
@@ -1082,7 +1075,6 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
         for key in metadata.keys():
             if not isinstance(key, str):
                 raise ValueError("metadata keys must be strings")
-        event["metadata"] = make_dict_values_json_serializable(metadata)
 
     metrics = event.get("metrics")
     if metrics:
@@ -1844,11 +1836,11 @@ class Dataset(ObjectFetcher):
         partial_args = _populate_args(
             {
                 "id": row_id,
-                "inputs": make_json_serializable(input),
-                "output": make_json_serializable(output),
+                "inputs": input,
+                "output": output,
                 "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             },
-            metadata=make_dict_values_json_serializable(metadata),
+            metadata=metadata,
         )
         _check_json_serializable(partial_args)
 
