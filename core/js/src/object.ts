@@ -8,7 +8,6 @@ import {
 } from "./db_fields";
 
 export type IdField = { id: string };
-
 export type InputField = { input: unknown };
 export type InputsField = { inputs: unknown };
 export type OtherExperimentLogFields = {
@@ -91,8 +90,6 @@ export type DatasetEvent = {
   project_id: string;
   dataset_id: string;
   created: string;
-  // [IS_MERGE_FIELD]?: boolean;
-  // [MERGE_PATHS_FIELD]?: string[][];
 } & ({ expected?: unknown } | { output?: unknown });
 
 export type LoggingEvent = Omit<ExperimentEvent, "experiment_id"> & {
