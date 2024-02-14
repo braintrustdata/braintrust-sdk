@@ -1644,7 +1644,7 @@ export type WithTransactionId<R> = R & {
   [TRANSACTION_ID_FIELD]: TransactionId;
 };
 
-class ObjectFetcher<RecordType> {
+class ObjectFetcher<RecordType> implements AsyncIterable<WithTransactionId<RecordType>> {
   private _fetchedData: WithTransactionId<RecordType>[] | undefined = undefined;
 
   constructor(
