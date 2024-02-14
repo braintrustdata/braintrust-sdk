@@ -28,8 +28,8 @@ from braintrust_core.db_fields import (
     VALID_SOURCES,
 )
 from braintrust_core.git_fields import GitMetadataSettings, RepoInfo
-from braintrust_core.object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
 from braintrust_core.merge_row_batch import merge_row_batch
+from braintrust_core.object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
 from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
     SerializableDataClass,
@@ -480,7 +480,7 @@ class _BackgroundLogger:
             retrying_text = "" if i + 1 == NUM_RETRIES else " Retrying"
             print(
                 f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataS)}. Error: {resp.status_code}: {resp.text}.{retrying_text}",
-                file=outfile
+                file=outfile,
             )
         if not resp.ok:
             print(f"log request failed after {NUM_RETRIES} retries. Dropping batch", file=outfile)
@@ -1216,7 +1216,8 @@ class ObjectFetcher:
             data = None
             try:
                 resp = _state.log_conn().get(
-                        f"object3/{self.object_type}", params={"id": self.id, "fmt": "json2", "version": self._pinned_version, "api_version": 2}
+                    f"object3/{self.object_type}",
+                    params={"id": self.id, "fmt": "json2", "version": self._pinned_version, "api_version": 2},
                 )
                 response_raise_for_status(resp)
                 data = resp.json()
@@ -1225,7 +1226,8 @@ class ObjectFetcher:
                 # the "object/" endpoint, which may require patching the incoming records. Remove this code once
                 # all APIs are updated.
                 resp = _state.log_conn().get(
-                        f"object/{self.object_type}", params={"id": self.id, "fmt": "json2", "version": self._pinned_version}
+                    f"object/{self.object_type}",
+                    params={"id": self.id, "fmt": "json2", "version": self._pinned_version},
                 )
                 response_raise_for_status(resp)
                 data = resp.json()
@@ -1817,9 +1819,16 @@ class Dataset(ObjectFetcher):
     You should not create `Dataset` objects directly. Instead, use the `braintrust.init_dataset()` method.
     """
 
-    def __init__(self, lazy_metadata: LazyValue[ProjectDatasetMetadata], version: Union[None, int, str] = None, legacy: bool = DEFAULT_IS_LEGACY_DATASET):
+    def __init__(
+        self,
+        lazy_metadata: LazyValue[ProjectDatasetMetadata],
+        version: Union[None, int, str] = None,
+        legacy: bool = DEFAULT_IS_LEGACY_DATASET,
+    ):
         if legacy:
-            eprint(f"""Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use `braintrust.init_dataset()` with `use_output=False`, which will become the default in a future version of Braintrust.""")
+            eprint(
+                f"""Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use `braintrust.init_dataset()` with `use_output=False`, which will become the default in a future version of Braintrust."""
+            )
         mutate_record = lambda r: ensure_dataset_record(r, legacy)
 
         self._lazy_metadata = lazy_metadata

@@ -789,9 +789,15 @@ class BackgroundLogger {
                 ).ids.map((res: any) => res.id);
               } catch (e) {
                 // Fallback to legacy API. Remove once all API endpoints are updated.
-                const legacyDataS = constructJsonArray(items.map((r: any) => JSON.stringify(makeLegacyEvent(JSON.parse(r)))));
+                const legacyDataS = constructJsonArray(
+                  items.map((r: any) =>
+                    JSON.stringify(makeLegacyEvent(JSON.parse(r)))
+                  )
+                );
                 return (
-                  await (await this.logConn.get()).post_json("logs", legacyDataS)
+                  await (
+                    await this.logConn.get()
+                  ).post_json("logs", legacyDataS)
                 ).map((res: any) => res.id);
               }
             } catch (e) {
@@ -1203,7 +1209,9 @@ type InitDatasetOptions<IsLegacyDataset extends boolean> = {
   projectId?: string;
 } & UseOutputOption<IsLegacyDataset>;
 
-type FullInitDatasetOptions<IsLegacyDataset extends boolean> = { project?: string } & InitDatasetOptions<IsLegacyDataset>;
+type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
+  project?: string;
+} & InitDatasetOptions<IsLegacyDataset>;
 
 /**
  * Create a new dataset in a specified project. If the project does not exist, it will be created.
@@ -1219,15 +1227,20 @@ type FullInitDatasetOptions<IsLegacyDataset extends boolean> = { project?: strin
  * @param options.useOutput If true (the default), records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This will default to false in a future version of Braintrust.
  * @returns The newly created Dataset.
  */
-export function initDataset<IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET>(
-    options: Readonly<FullInitDatasetOptions<IsLegacyDataset>>): Dataset<IsLegacyDataset>;
+export function initDataset<
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+>(
+  options: Readonly<FullInitDatasetOptions<IsLegacyDataset>>
+): Dataset<IsLegacyDataset>;
 
 /**
  * Legacy form of `initDataset` which accepts the project name as the first
  * parameter, separately from the remaining options. See
  * `initDataset(options)` for full details.
  */
-export function initDataset<IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET>(
+export function initDataset<
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+>(
   project: string,
   options?: Readonly<InitDatasetOptions<IsLegacyDataset>>
 ): Dataset<IsLegacyDataset>;
@@ -1237,7 +1250,9 @@ export function initDataset<IsLegacyDataset extends boolean = typeof DEFAULT_IS_
  * directly. Instead, call `initDataset(options)` or `initDataset(project,
  * options)`.
  */
-export function initDataset<IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET>(
+export function initDataset<
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+>(
   projectOrOptions: string | Readonly<FullInitDatasetOptions<IsLegacyDataset>>,
   optionalOptions?: Readonly<InitDatasetOptions<IsLegacyDataset>>
 ): Dataset<IsLegacyDataset> {
@@ -1306,7 +1321,10 @@ export function initDataset<IsLegacyDataset extends boolean = typeof DEFAULT_IS_
 /**
  * This function is deprecated. Use `initDataset` instead.
  */
-export function withDataset<R, IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET>(
+export function withDataset<
+  R,
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+>(
   project: string,
   callback: (dataset: Dataset<IsLegacyDataset>) => R,
   options: Readonly<InitDatasetOptions<IsLegacyDataset>> = {}
@@ -1777,13 +1795,15 @@ export type WithTransactionId<R> = R & {
   [TRANSACTION_ID_FIELD]: TransactionId;
 };
 
-class ObjectFetcher<RecordType> implements AsyncIterable<WithTransactionId<RecordType>> {
+class ObjectFetcher<RecordType>
+  implements AsyncIterable<WithTransactionId<RecordType>>
+{
   private _fetchedData: WithTransactionId<RecordType>[] | undefined = undefined;
 
   constructor(
     private objectType: "dataset" | "experiment",
     private pinnedVersion: string | undefined,
-    private mutateRecord?: ((r: any) => RecordType),
+    private mutateRecord?: (r: any) => RecordType
   ) {}
 
   public get id(): Promise<string> {
@@ -1818,9 +1838,9 @@ class ObjectFetcher<RecordType> implements AsyncIterable<WithTransactionId<Recor
         });
         data = await resp.json();
       } catch (e) {
-          // DEPRECATION_NOTICE: When hitting old versions of the API where the "object3/" endpoint isn't available, we fall back to
-          // the "object/" endpoint, which may require patching the incoming records. Remove this code once
-          // all APIs are updated.
+        // DEPRECATION_NOTICE: When hitting old versions of the API where the "object3/" endpoint isn't available, we fall back to
+        // the "object/" endpoint, which may require patching the incoming records. Remove this code once
+        // all APIs are updated.
         const resp = await state.logConn().get(`object/${this.objectType}`, {
           id: await this.id,
           fmt: "json2",
@@ -1828,7 +1848,9 @@ class ObjectFetcher<RecordType> implements AsyncIterable<WithTransactionId<Recor
         });
         data = await resp.json();
       }
-      this._fetchedData = this.mutateRecord ? data?.map(this.mutateRecord) : data;
+      this._fetchedData = this.mutateRecord
+        ? data?.map(this.mutateRecord)
+        : data;
     }
     return this._fetchedData || [];
   }
@@ -1883,7 +1905,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
 
   constructor(
     lazyMetadata: LazyValue<ProjectExperimentMetadata>,
-    dataset?: AnyDataset,
+    dataset?: AnyDataset
   ) {
     super("experiment", undefined);
     this.lazyMetadata = lazyMetadata;
@@ -2369,20 +2391,27 @@ export class SpanImpl implements Span {
  *
  * You should not create `Dataset` objects directly. Instead, use the `braintrust.initDataset()` method.
  */
-class Dataset<IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET> extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
+class Dataset<
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+> extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
   private readonly lazyMetadata: LazyValue<ProjectDatasetMetadata>;
   private bgLogger: BackgroundLogger;
 
   constructor(
     lazyMetadata: LazyValue<ProjectDatasetMetadata>,
     pinnedVersion?: string,
-    legacy?: IsLegacyDataset,
+    legacy?: IsLegacyDataset
   ) {
-    const isLegacyDataset = (legacy ?? DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
+    const isLegacyDataset = (legacy ??
+      DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
     if (isLegacyDataset) {
-      console.warn(`Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use \`braintrust.initDataset()\` with \`{ useOutput: false }\`, which will become the default in a future version of Braintrust.`);
+      console.warn(
+        `Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use \`braintrust.initDataset()\` with \`{ useOutput: false }\`, which will become the default in a future version of Braintrust.`
+      );
     }
-    super("dataset", pinnedVersion, (r: AnyDatasetRecord) => ensureDatasetRecord(r, isLegacyDataset));
+    super("dataset", pinnedVersion, (r: AnyDatasetRecord) =>
+      ensureDatasetRecord(r, isLegacyDataset)
+    );
     this.lazyMetadata = lazyMetadata;
     const logConn = new LazyValue(() =>
       this.getState().then((state) => state.logConn())
