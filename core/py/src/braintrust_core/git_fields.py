@@ -5,18 +5,18 @@ from .util import SerializableDataClass
 
 
 @dataclass
-class RepoStatus(SerializableDataClass):
+class RepoInfo(SerializableDataClass):
     """Information about the current HEAD of the repo."""
 
-    commit: Optional[str]
-    branch: Optional[str]
-    tag: Optional[str]
-    dirty: Optional[bool]
-    author_name: Optional[str]
-    author_email: Optional[str]
-    commit_message: Optional[str]
-    commit_time: Optional[str]
-    git_diff: Optional[str]
+    commit: Optional[str] = None
+    branch: Optional[str] = None
+    tag: Optional[str] = None
+    dirty: Optional[bool] = None
+    author_name: Optional[str] = None
+    author_email: Optional[str] = None
+    commit_message: Optional[str] = None
+    commit_time: Optional[str] = None
+    git_diff: Optional[str] = None
 
 
 @dataclass

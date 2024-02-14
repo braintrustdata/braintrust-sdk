@@ -1,4 +1,4 @@
-import { GitMetadataSettings, RepoStatus } from "@braintrust/core";
+import { GitMetadataSettings, RepoInfo } from "@braintrust/core";
 import { simpleGit } from "simple-git";
 
 const COMMON_BASE_BRANCHES = ["main", "master", "develop"];
@@ -145,17 +145,17 @@ function truncateToByteLimit(s: string, byteLimit: number = 65536): string {
   return new TextDecoder().decode(truncated);
 }
 
-export async function getRepoStatus(settings?: GitMetadataSettings) {
+export async function getRepoInfo(settings?: GitMetadataSettings) {
   if (settings && settings.collect === "none") {
     return undefined;
   }
 
-  const repo = await repoStatus();
+  const repo = await repoInfo();
   if (!repo || !settings || settings.collect === "all") {
     return repo;
   }
 
-  let sanitized: RepoStatus = {};
+  let sanitized: RepoInfo = {};
   settings.fields?.forEach((field) => {
     sanitized = { ...sanitized, [field]: repo[field] };
   });
@@ -163,7 +163,7 @@ export async function getRepoStatus(settings?: GitMetadataSettings) {
   return sanitized;
 }
 
-async function repoStatus() {
+async function repoInfo() {
   const git = await currentRepo();
   if (git === null) {
     return undefined;

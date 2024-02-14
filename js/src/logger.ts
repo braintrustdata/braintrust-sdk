@@ -12,6 +12,7 @@ import {
   AUDIT_SOURCE_FIELD,
   AUDIT_METADATA_FIELD,
   GitMetadataSettings,
+  RepoInfo,
   mergeGitMetadataSettings,
   TransactionId,
   ParentExperimentIds,
@@ -371,8 +372,8 @@ class HTTPConnection {
           typeof params === "string"
             ? params
             : params
-              ? JSON.stringify(params)
-              : undefined,
+            ? JSON.stringify(params)
+            : undefined,
         keepalive: true,
         ...rest,
       })
@@ -788,9 +789,15 @@ class BackgroundLogger {
                 ).ids.map((res: any) => res.id);
               } catch (e) {
                 // Fallback to legacy API. Remove once all API endpoints are updated.
-                const legacyDataS = constructJsonArray(items.map((r: any) => JSON.stringify(makeLegacyEvent(JSON.parse(r)))));
+                const legacyDataS = constructJsonArray(
+                  items.map((r: any) =>
+                    JSON.stringify(makeLegacyEvent(JSON.parse(r)))
+                  )
+                );
                 return (
-                  await (await this.logConn.get()).post_json("logs", legacyDataS)
+                  await (
+                    await this.logConn.get()
+                  ).post_json("logs", legacyDataS)
                 ).map((res: any) => res.id);
               }
             } catch (e) {
@@ -856,8 +863,15 @@ export type InitOptions<IsOpen extends boolean> = {
   orgName?: string;
   metadata?: Record<string, unknown>;
   gitMetadataSettings?: GitMetadataSettings;
+  projectId?: string;
+  baseExperimentId?: string;
+  repoInfo?: RepoInfo;
   setCurrent?: boolean;
 } & InitOpenOption<IsOpen>;
+
+export type FullInitOptions<IsOpen extends boolean> = {
+  project?: string;
+} & InitOptions<IsOpen>;
 
 type InitializedExperiment<IsOpen extends boolean | undefined> =
   IsOpen extends true ? ReadonlyExperiment : Experiment;
@@ -865,34 +879,62 @@ type InitializedExperiment<IsOpen extends boolean | undefined> =
 /**
  * Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
  *
- * @param project The name of the project to create the experiment in.
- * @param options Additional options for configuring init().
+ * @param options Options for configuring init().
+ * @param options.project The name of the project to create the experiment in. Must specify at least one of `project` or `projectId`.
  * @param options.experiment The name of the experiment to create. If not specified, a name will be generated automatically.
  * @param options.description An optional description of the experiment.
- * @param options.dataset (Optional) A dataset to associate with the experiment. You can pass in the name of the dataset (in the same project) or a
- * dataset object (from any project).
+ * @param options.dataset (Optional) A dataset to associate with the experiment. You can pass in the name of the dataset (in the same project) or a dataset object (from any project).
  * @param options.update If the experiment already exists, continue logging to it.
- * @param options.baseExperiment An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this
- * experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
+ * @param options.baseExperiment An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
  * @param options.isPublic An optional parameter to control whether the experiment is publicly visible to anybody with the link or privately visible to only members of the organization. Defaults to private.
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
- * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
- * key is specified, will prompt the user to login.
+ * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
- * @param options.metadata (Optional) A dictionary with additional data about the test example, model outputs, or just
- * about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
- * `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
- * JSON-serializable type, but its keys must be strings.
+ * @param options.metadata (Optional) A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
  * @param options.gitMetadataSettings (Optional) Settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
  * @param setCurrent If true (the default), set the global current-experiment to the newly-created one.
  * @param options.open If the experiment already exists, open it in read-only mode.
+ * @param options.projectId The id of the project to create the experiment in. This takes precedence over `project` if specified.
+ * @param options.baseExperimentId An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this. This takes precedence over `baseExperiment` if specified.
+ * @param options.repoInfo (Optional) Explicitly specify the git metadata for this experiment. This takes precedence over `gitMetadataSettings` if specified.
  * @returns The newly created Experiment.
  */
 export function init<IsOpen extends boolean = false>(
+  options: Readonly<FullInitOptions<IsOpen>>
+): InitializedExperiment<IsOpen>;
+
+/**
+ * Legacy form of `init` which accepts the project name as the first parameter,
+ * separately from the remaining options. See `init(options)` for full details.
+ */
+export function init<IsOpen extends boolean = false>(
   project: string,
-  options: Readonly<InitOptions<IsOpen>> = {}
+  options?: Readonly<InitOptions<IsOpen>>
+): InitializedExperiment<IsOpen>;
+
+/**
+ * Combined overload implementation of `init`. Do not call this directly.
+ * Instead, call `init(options)` or `init(project, options)`.
+ */
+export function init<IsOpen extends boolean = false>(
+  projectOrOptions: string | Readonly<FullInitOptions<IsOpen>>,
+  optionalOptions?: Readonly<InitOptions<IsOpen>>
 ): InitializedExperiment<IsOpen> {
+  const options = ((): Readonly<FullInitOptions<IsOpen>> => {
+    if (typeof projectOrOptions === "string") {
+      return { ...optionalOptions, project: projectOrOptions };
+    } else {
+      if (optionalOptions !== undefined) {
+        throw new Error(
+          "Cannot specify options struct as both parameters. Must call either init(project, options) or init(options)."
+        );
+      }
+      return projectOrOptions;
+    }
+  })();
+
   const {
+    project,
     experiment,
     description,
     dataset,
@@ -905,7 +947,10 @@ export function init<IsOpen extends boolean = false>(
     orgName,
     metadata,
     gitMetadataSettings,
-  } = options || {};
+    projectId,
+    baseExperimentId,
+    repoInfo,
+  } = options;
 
   if (open && update) {
     throw new Error("Cannot open and update an experiment at the same time");
@@ -928,6 +973,7 @@ export function init<IsOpen extends boolean = false>(
         });
         const args: Record<string, unknown> = {
           project_name: project,
+          project_id: projectId,
           org_name: _state.orgName,
           experiment_name: experiment,
         };
@@ -938,7 +984,9 @@ export function init<IsOpen extends boolean = false>(
 
         if (response.length === 0) {
           throw new Error(
-            `Experiment ${experiment} not found in project ${project}.`
+            `Experiment ${experiment} not found in project ${
+              projectId ?? project
+            }.`
           );
         }
 
@@ -980,6 +1028,7 @@ export function init<IsOpen extends boolean = false>(
       });
       const args: Record<string, unknown> = {
         project_name: project,
+        project_id: projectId,
         org_id: _state.orgId,
       };
 
@@ -991,24 +1040,31 @@ export function init<IsOpen extends boolean = false>(
         args["description"] = description;
       }
 
-      let mergedGitMetadataSettings = {
-        ...(_state.gitMetadataSettings || {
-          collect: "all",
-        }),
-      };
-      if (gitMetadataSettings) {
-        mergedGitMetadataSettings = mergeGitMetadataSettings(
-          mergedGitMetadataSettings,
-          gitMetadataSettings
-        );
+      const repoInfoArg = await (async (): Promise<RepoInfo | undefined> => {
+        if (repoInfo) {
+          return repoInfo;
+        }
+        let mergedGitMetadataSettings = {
+          ...(_state.gitMetadataSettings || {
+            collect: "all",
+          }),
+        };
+        if (gitMetadataSettings) {
+          mergedGitMetadataSettings = mergeGitMetadataSettings(
+            mergedGitMetadataSettings,
+            gitMetadataSettings
+          );
+        }
+        return await iso.getRepoInfo(mergedGitMetadataSettings);
+      })();
+
+      if (repoInfoArg) {
+        args["repo_info"] = repoInfoArg;
       }
 
-      const repoStatus = await iso.getRepoStatus(gitMetadataSettings);
-      if (repoStatus) {
-        args["repo_info"] = repoStatus;
-      }
-
-      if (baseExperiment) {
+      if (baseExperimentId) {
+        args["base_exp_id"] = baseExperimentId;
+      } else if (baseExperiment) {
         args["base_experiment"] = baseExperiment;
       } else {
         args["ancestor_commits"] = await iso.getPastNAncestors();
@@ -1072,6 +1128,45 @@ export function init<IsOpen extends boolean = false>(
 }
 
 /**
+ * Alias for init(options).
+ */
+export function initExperiment<IsOpen extends boolean = false>(
+  options: Readonly<InitOptions<IsOpen>>
+): InitializedExperiment<IsOpen>;
+
+/**
+ * Alias for init(project, options).
+ */
+export function initExperiment<IsOpen extends boolean = false>(
+  project: string,
+  options?: Readonly<InitOptions<IsOpen>>
+): InitializedExperiment<IsOpen>;
+
+/**
+ * Combined overload implementation of `initExperiment`, which is an alias for
+ * `init`. Do not call this directly. Instead, call `initExperiment(options)` or
+ * `initExperiment(project, options)`.
+ */
+export function initExperiment<IsOpen extends boolean = false>(
+  projectOrOptions: string | Readonly<InitOptions<IsOpen>>,
+  optionalOptions?: Readonly<InitOptions<IsOpen>>
+): InitializedExperiment<IsOpen> {
+  const options = ((): Readonly<FullInitOptions<IsOpen>> => {
+    if (typeof projectOrOptions === "string") {
+      return { ...optionalOptions, project: projectOrOptions };
+    } else {
+      if (optionalOptions !== undefined) {
+        throw new Error(
+          "Cannot specify options struct as both parameters. Must call either init(project, options) or init(options)."
+        );
+      }
+      return projectOrOptions;
+    }
+  })();
+  return init(options);
+}
+
+/**
  * This function is deprecated. Use `init` instead.
  */
 export function withExperiment<R>(
@@ -1111,28 +1206,80 @@ type InitDatasetOptions<IsLegacyDataset extends boolean> = {
   appUrl?: string;
   apiKey?: string;
   orgName?: string;
+  projectId?: string;
 } & UseOutputOption<IsLegacyDataset>;
+
+type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
+  project?: string;
+} & InitDatasetOptions<IsLegacyDataset>;
 
 /**
  * Create a new dataset in a specified project. If the project does not exist, it will be created.
  *
- * @param project The name of the project to create the dataset in.
- * @param options Additional options for configuring init().
+ * @param options Options for configuring initDataset().
+ * @param options.project The name of the project to create the dataset in. Must specify at least one of `project` or `projectId`.
  * @param options.dataset The name of the dataset to create. If not specified, a name will be generated automatically.
  * @param options.description An optional description of the dataset.
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
- * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
- * key is specified, will prompt the user to login.
+ * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+ * @param options.projectId The id of the project to create the dataset in. This takes precedence over `project` if specified.
  * @param options.useOutput If true (the default), records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This will default to false in a future version of Braintrust.
  * @returns The newly created Dataset.
  */
-export function initDataset<IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET>(
+export function initDataset<
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+>(
+  options: Readonly<FullInitDatasetOptions<IsLegacyDataset>>
+): Dataset<IsLegacyDataset>;
+
+/**
+ * Legacy form of `initDataset` which accepts the project name as the first
+ * parameter, separately from the remaining options. See
+ * `initDataset(options)` for full details.
+ */
+export function initDataset<
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+>(
   project: string,
-  options: Readonly<InitDatasetOptions<IsLegacyDataset>> = {}
+  options?: Readonly<InitDatasetOptions<IsLegacyDataset>>
+): Dataset<IsLegacyDataset>;
+
+/**
+ * Combined overload implementation of `initDataset`. Do not call this
+ * directly. Instead, call `initDataset(options)` or `initDataset(project,
+ * options)`.
+ */
+export function initDataset<
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+>(
+  projectOrOptions: string | Readonly<FullInitDatasetOptions<IsLegacyDataset>>,
+  optionalOptions?: Readonly<InitDatasetOptions<IsLegacyDataset>>
 ): Dataset<IsLegacyDataset> {
-  const { dataset, description, version, appUrl, apiKey, orgName, useOutput: legacy } =
-    options || {};
+  const options = ((): Readonly<FullInitDatasetOptions<IsLegacyDataset>> => {
+    if (typeof projectOrOptions === "string") {
+      return { ...optionalOptions, project: projectOrOptions };
+    } else {
+      if (optionalOptions !== undefined) {
+        throw new Error(
+          "Cannot specify options struct as both parameters. Must call either initDataset(project, options) or initDataset(options)."
+        );
+      }
+      return projectOrOptions;
+    }
+  })();
+
+  const {
+    project,
+    dataset,
+    description,
+    version,
+    appUrl,
+    apiKey,
+    orgName,
+    projectId,
+    useOutput: legacy,
+  } = options;
 
   const lazyMetadata: LazyValue<ProjectDatasetMetadata> = new LazyValue(
     async () => {
@@ -1145,6 +1292,7 @@ export function initDataset<IsLegacyDataset extends boolean = typeof DEFAULT_IS_
       const args: Record<string, unknown> = {
         org_id: _state.orgId,
         project_name: project,
+        project_id: projectId,
         dataset_name: dataset,
         description,
       };
@@ -1173,7 +1321,10 @@ export function initDataset<IsLegacyDataset extends boolean = typeof DEFAULT_IS_
 /**
  * This function is deprecated. Use `initDataset` instead.
  */
-export function withDataset<R, IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET>(
+export function withDataset<
+  R,
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+>(
   project: string,
   callback: (dataset: Dataset<IsLegacyDataset>) => R,
   options: Readonly<InitDatasetOptions<IsLegacyDataset>> = {}
@@ -1644,13 +1795,15 @@ export type WithTransactionId<R> = R & {
   [TRANSACTION_ID_FIELD]: TransactionId;
 };
 
-class ObjectFetcher<RecordType> implements AsyncIterable<WithTransactionId<RecordType>> {
+class ObjectFetcher<RecordType>
+  implements AsyncIterable<WithTransactionId<RecordType>>
+{
   private _fetchedData: WithTransactionId<RecordType>[] | undefined = undefined;
 
   constructor(
     private objectType: "dataset" | "experiment",
     private pinnedVersion: string | undefined,
-    private mutateRecord?: ((r: any) => RecordType),
+    private mutateRecord?: (r: any) => RecordType
   ) {}
 
   public get id(): Promise<string> {
@@ -1685,9 +1838,9 @@ class ObjectFetcher<RecordType> implements AsyncIterable<WithTransactionId<Recor
         });
         data = await resp.json();
       } catch (e) {
-          // DEPRECATION_NOTICE: When hitting old versions of the API where the "object3/" endpoint isn't available, we fall back to
-          // the "object/" endpoint, which may require patching the incoming records. Remove this code once
-          // all APIs are updated.
+        // DEPRECATION_NOTICE: When hitting old versions of the API where the "object3/" endpoint isn't available, we fall back to
+        // the "object/" endpoint, which may require patching the incoming records. Remove this code once
+        // all APIs are updated.
         const resp = await state.logConn().get(`object/${this.objectType}`, {
           id: await this.id,
           fmt: "json2",
@@ -1695,7 +1848,9 @@ class ObjectFetcher<RecordType> implements AsyncIterable<WithTransactionId<Recor
         });
         data = await resp.json();
       }
-      this._fetchedData = this.mutateRecord ? data?.map(this.mutateRecord) : data;
+      this._fetchedData = this.mutateRecord
+        ? data?.map(this.mutateRecord)
+        : data;
     }
     return this._fetchedData || [];
   }
@@ -1750,7 +1905,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
 
   constructor(
     lazyMetadata: LazyValue<ProjectExperimentMetadata>,
-    dataset?: AnyDataset,
+    dataset?: AnyDataset
   ) {
     super("experiment", undefined);
     this.lazyMetadata = lazyMetadata;
@@ -2236,20 +2391,27 @@ export class SpanImpl implements Span {
  *
  * You should not create `Dataset` objects directly. Instead, use the `braintrust.initDataset()` method.
  */
-class Dataset<IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET> extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
+class Dataset<
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+> extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
   private readonly lazyMetadata: LazyValue<ProjectDatasetMetadata>;
   private bgLogger: BackgroundLogger;
 
   constructor(
     lazyMetadata: LazyValue<ProjectDatasetMetadata>,
     pinnedVersion?: string,
-    legacy?: IsLegacyDataset,
+    legacy?: IsLegacyDataset
   ) {
-    const isLegacyDataset = (legacy ?? DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
+    const isLegacyDataset = (legacy ??
+      DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
     if (isLegacyDataset) {
-      console.warn(`Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use \`braintrust.initDataset()\` with \`{ useOutput: false }\`, which will become the default in a future version of Braintrust.`);
+      console.warn(
+        `Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use \`braintrust.initDataset()\` with \`{ useOutput: false }\`, which will become the default in a future version of Braintrust.`
+      );
     }
-    super("dataset", pinnedVersion, (r: AnyDatasetRecord) => ensureDatasetRecord(r, isLegacyDataset));
+    super("dataset", pinnedVersion, (r: AnyDatasetRecord) =>
+      ensureDatasetRecord(r, isLegacyDataset)
+    );
     this.lazyMetadata = lazyMetadata;
     const logConn = new LazyValue(() =>
       this.getState().then((state) => state.logConn())

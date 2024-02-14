@@ -27,9 +27,9 @@ from braintrust_core.db_fields import (
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
-from braintrust_core.git_fields import GitMetadataSettings
-from braintrust_core.object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
+from braintrust_core.git_fields import GitMetadataSettings, RepoInfo
 from braintrust_core.merge_row_batch import merge_row_batch
+from braintrust_core.object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
 from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
     SerializableDataClass,
@@ -41,7 +41,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from .cache import CACHE_PATH, EXPERIMENTS_PATH, LOGIN_INFO_PATH
-from .gitutil import get_past_n_ancestors, get_repo_status
+from .gitutil import get_past_n_ancestors, get_repo_info
 from .util import (
     GLOBAL_PROJECT,
     AugmentedHTTPError,
@@ -455,7 +455,9 @@ class _BackgroundLogger:
 
                 try:
                     post_promises.append(
-                        HTTP_REQUEST_THREAD_POOL.submit(_BackgroundLogger._submit_logs_request, items, conn, self._outfile)
+                        HTTP_REQUEST_THREAD_POOL.submit(
+                            _BackgroundLogger._submit_logs_request, items, conn, self._outfile
+                        )
                     )
                 except RuntimeError:
                     # If the thread pool has shut down, e.g. because the process is terminating, run the request the
@@ -478,7 +480,7 @@ class _BackgroundLogger:
             retrying_text = "" if i + 1 == NUM_RETRIES else " Retrying"
             print(
                 f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataS)}. Error: {resp.status_code}: {resp.text}.{retrying_text}",
-                file=outfile
+                file=outfile,
             )
         if not resp.ok:
             print(f"log request failed after {NUM_RETRIES} retries. Dropping batch", file=outfile)
@@ -530,7 +532,7 @@ class OrgProjectMetadata:
 
 
 def init(
-    project: str,
+    project: Optional[str] = None,
     experiment: Optional[str] = None,
     description: Optional[str] = None,
     dataset: Optional["Dataset"] = None,
@@ -544,18 +546,20 @@ def init(
     git_metadata_settings: Optional[GitMetadataSettings] = None,
     set_current: bool = True,
     update: Optional[bool] = None,
+    project_id: Optional[str] = None,
+    base_experiment_id: Optional[str] = None,
+    repo_info: Optional[RepoInfo] = None,
 ):
     """
     Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
 
-    :param project: The name of the project to create the experiment in.
+    :param project: The name of the project to create the experiment in. Must specify at least one of `project` or `project_id`.
     :param experiment: The name of the experiment to create. If not specified, a name will be generated automatically.
     :param description: (Optional) An optional description of the experiment.
     :param dataset: (Optional) A dataset to associate with the experiment. The dataset must be initialized with `braintrust.init_dataset` before passing
     it into the experiment.
     :param update: If the experiment already exists, continue logging to it.
-    :param base_experiment: An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this
-    experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
+    :param base_experiment: An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
     :param is_public: An optional parameter to control whether the experiment is publicly visible to anybody with the link or privately visible to only members of the organization. Defaults to private.
     :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
@@ -565,6 +569,9 @@ def init(
     :param git_metadata_settings: (Optional) Settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param set_current: If true (the default), set the global current-experiment to the newly-created one.
     :param open: If the experiment already exists, open it in read-only mode.
+    :param project_id: The id of the project to create the experiment in. This takes precedence over `project` if specified.
+    :param base_experiment_id: An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this. This takes precedence over `base_experiment` if specified.
+    :param repo_info: (Optional) Explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
     :returns: The experiment object.
     """
 
@@ -573,12 +580,17 @@ def init(
 
     if open or update:
         if experiment is None:
-            action = 'open' if open else 'update'
+            action = "open" if open else "update"
             raise ValueError(f"Cannot {action} an experiment without specifying its name")
 
         def compute_metadata():
             login(org_name=org_name, api_key=api_key, app_url=app_url)
-            args = {"experiment_name": experiment, "project_name": project, "org_name": _state.org_name}
+            args = {
+                "experiment_name": experiment,
+                "project_name": project,
+                "project_id": project_id,
+                "org_name": _state.org_name,
+            }
 
             response = _state.app_conn().post_json("api/experiment/get", args)
             if len(response) == 0:
@@ -586,12 +598,12 @@ def init(
 
             info = response[0]
             return ProjectExperimentMetadata(
-                project=ObjectMetadata(id=info["project_id"], name='', full_info=dict()),
+                project=ObjectMetadata(id=info["project_id"], name="", full_info=dict()),
                 experiment=ObjectMetadata(
                     id=info["id"],
                     name=info["name"],
                     full_info=info,
-                )
+                ),
             )
 
         lazy_metadata = LazyValue(compute_metadata, use_mutex=True)
@@ -605,7 +617,7 @@ def init(
 
     def compute_metadata():
         login(org_name=org_name, api_key=api_key, app_url=app_url)
-        args = {"project_name": project, "org_id": _state.org_id}
+        args = {"project_name": project, "project_id": project_id, "org_id": _state.org_id}
 
         if experiment is not None:
             args["experiment_name"] = experiment
@@ -613,17 +625,22 @@ def init(
         if description is not None:
             args["description"] = description
 
-        merged_git_metadata_settings = _state.git_metadata_settings
-        if git_metadata_settings is not None:
-            merged_git_metadata_settings = GitMetadataSettings.merge(
-                merged_git_metadata_settings, git_metadata_settings
-            )
+        if repo_info:
+            repo_info_arg = repo_info
+        else:
+            merged_git_metadata_settings = _state.git_metadata_settings
+            if git_metadata_settings is not None:
+                merged_git_metadata_settings = GitMetadataSettings.merge(
+                    merged_git_metadata_settings, git_metadata_settings
+                )
+            repo_info_arg = get_repo_info(merged_git_metadata_settings)
 
-        repo_status = get_repo_status(merged_git_metadata_settings)
-        if repo_status:
-            args["repo_info"] = repo_status.as_dict()
+        if repo_info:
+            args["repo_info"] = repo_info_arg.as_dict()
 
-        if base_experiment is not None:
+        if base_experiment_id is not None:
+            args["base_exp_id"] = base_experiment_id
+        elif base_experiment is not None:
             args["base_experiment"] = base_experiment
         else:
             args["ancestor_commits"] = list(get_past_n_ancestors())
@@ -664,20 +681,27 @@ def init(
     return ret
 
 
+def init_experiment(*args, **kwargs):
+    """Alias for `init`"""
+
+    return init(*args, **kwargs)
+
+
 def init_dataset(
-    project: str,
-    name: str = None,
-    description: str = None,
-    version: "str | int" = None,
-    app_url: str = None,
-    api_key: str = None,
-    org_name: str = None,
+    project: Optional[str] = None,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    version: Optional[Union[str, int]] = None,
+    app_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    org_name: Optional[str] = None,
+    project_id: Optional[str] = None,
     use_output: bool = DEFAULT_IS_LEGACY_DATASET,
 ):
     """
     Create a new dataset in a specified project. If the project does not exist, it will be created.
 
-    :param project: The name of the project to create the dataset in.
+    :param project_name: The name of the project to create the dataset in. Must specify at least one of `project_name` or `project_id`.
     :param name: The name of the dataset to create. If not specified, a name will be generated automatically.
     :param description: An optional description of the dataset.
     :param version: An optional version of the dataset (to read). If not specified, the latest version will be used.
@@ -685,6 +709,7 @@ def init_dataset(
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+    :param project_id: The id of the project to create the dataset in. This takes precedence over `project` if specified.
     :param use_output: If True (the default), records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This will default to False in a future version of Braintrust.
     :returns: The dataset object.
     """
@@ -692,7 +717,7 @@ def init_dataset(
     def compute_metadata():
         login(org_name=org_name, api_key=api_key, app_url=app_url)
         args = _populate_args(
-            {"project_name": project, "org_id": _state.org_id},
+            {"project_name": project, "project_id": project_id, "org_id": _state.org_id},
             dataset_name=name,
             description=description,
         )
@@ -708,12 +733,12 @@ def init_dataset(
 
 
 def init_logger(
-    project: str = None,
-    project_id: str = None,
+    project: Optional[str] = None,
+    project_id: Optional[str] = None,
     async_flush: bool = True,
-    app_url: str = None,
-    api_key: str = None,
-    org_name: str = None,
+    app_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    org_name: Optional[str] = None,
     force_login: bool = False,
     set_current: bool = True,
 ):
@@ -1191,7 +1216,8 @@ class ObjectFetcher:
             data = None
             try:
                 resp = _state.log_conn().get(
-                        f"object3/{self.object_type}", params={"id": self.id, "fmt": "json2", "version": self._pinned_version, "api_version": 2}
+                    f"object3/{self.object_type}",
+                    params={"id": self.id, "fmt": "json2", "version": self._pinned_version, "api_version": 2},
                 )
                 response_raise_for_status(resp)
                 data = resp.json()
@@ -1200,7 +1226,8 @@ class ObjectFetcher:
                 # the "object/" endpoint, which may require patching the incoming records. Remove this code once
                 # all APIs are updated.
                 resp = _state.log_conn().get(
-                        f"object/{self.object_type}", params={"id": self.id, "fmt": "json2", "version": self._pinned_version}
+                    f"object/{self.object_type}",
+                    params={"id": self.id, "fmt": "json2", "version": self._pinned_version},
                 )
                 response_raise_for_status(resp)
                 data = resp.json()
@@ -1792,9 +1819,16 @@ class Dataset(ObjectFetcher):
     You should not create `Dataset` objects directly. Instead, use the `braintrust.init_dataset()` method.
     """
 
-    def __init__(self, lazy_metadata: LazyValue[ProjectDatasetMetadata], version: Union[None, int, str] = None, legacy: bool = DEFAULT_IS_LEGACY_DATASET):
+    def __init__(
+        self,
+        lazy_metadata: LazyValue[ProjectDatasetMetadata],
+        version: Union[None, int, str] = None,
+        legacy: bool = DEFAULT_IS_LEGACY_DATASET,
+    ):
         if legacy:
-            eprint(f"""Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use `braintrust.init_dataset()` with `use_output=False`, which will become the default in a future version of Braintrust.""")
+            eprint(
+                f"""Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use `braintrust.init_dataset()` with `use_output=False`, which will become the default in a future version of Braintrust."""
+            )
         mutate_record = lambda r: ensure_dataset_record(r, legacy)
 
         self._lazy_metadata = lazy_metadata
