@@ -55,5 +55,18 @@ export {
   Eval,
   EvalScorerArgs,
 } from "./framework";
-
 export * from "./oai";
+export {
+  ParentExperimentIds,
+  ParentProjectLogIds,
+  IdField,
+  InputField,
+  InputsField,
+  OtherExperimentLogFields,
+  ExperimentLogPartialArgs,
+  ExperimentLogFullArgs,
+  LogFeedbackFullArgs,
+  LogCommentFullArgs,
+  CommentEvent,
+  DatasetRecord,
+} from "@braintrust/core";

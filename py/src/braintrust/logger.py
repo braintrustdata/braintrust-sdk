@@ -29,6 +29,7 @@ from braintrust_core.db_fields import (
     VALID_SOURCES,
 )
 from braintrust_core.git_fields import GitMetadataSettings
+from braintrust_core.object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
 from braintrust_core.merge_row_batch import merge_row_batch
 from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
@@ -327,6 +328,11 @@ def construct_json_array(items):
     return "[" + ",".join(items) + "]"
 
 
+def construct_logs3_data(items):
+    rowsS = construct_json_array(items)
+    return '{"rows": ' + rowsS + ', "api_version": 2}'
+
+
 def _check_json_serializable(event):
     try:
         _ = bt_dumps(event)
@@ -461,15 +467,18 @@ class _BackgroundLogger:
 
     @staticmethod
     def _submit_logs_request(items, conn, outfile):
-        items_s = construct_json_array(items)
+        dataS = construct_logs3_data(items)
         for i in range(NUM_RETRIES):
             start_time = time.time()
-            resp = conn.post("/logs", data=items_s)
+            resp = conn.post("/logs3", data=dataS)
+            if not resp.ok:
+                legacyDataS = construct_json_array([json.dumps(make_legacy_event(json.loads(r))) for r in items])
+                resp = conn.post("/logs", data=legacyDataS)
             if resp.ok:
                 return
             retrying_text = "" if i + 1 == NUM_RETRIES else " Retrying"
             print(
-                f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(items_s)}. Error: {resp.status_code}: {resp.text}.{retrying_text}",
+                f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataS)}. Error: {resp.status_code}: {resp.text}.{retrying_text}",
                 file=outfile
             )
         if not resp.ok:
@@ -664,6 +673,7 @@ def init_dataset(
     app_url: str = None,
     api_key: str = None,
     org_name: str = None,
+    use_output: bool = DEFAULT_IS_LEGACY_DATASET,
 ):
     """
     Create a new dataset in a specified project. If the project does not exist, it will be created.
@@ -676,6 +686,7 @@ def init_dataset(
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+    :param use_output: If True (the default), records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This will default to False in a future version of Braintrust.
     :returns: The dataset object.
     """
 
@@ -694,7 +705,7 @@ def init_dataset(
             dataset=ObjectMetadata(id=resp_dataset["id"], name=resp_dataset["name"], full_info=resp_dataset),
         )
 
-    return Dataset(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), version=version)
+    return Dataset(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), version=version, legacy=use_output)
 
 
 def init_logger(
@@ -1141,11 +1152,12 @@ class ObjectIterator:
 
 
 class ObjectFetcher:
-    def __init__(self, object_type, pinned_version=None):
+    def __init__(self, object_type, pinned_version=None, mutate_record=None):
         assert hasattr(self, "id"), "ObjectFetcher subclasses must have an 'id' attribute"
 
         self.object_type = object_type
         self._pinned_version = pinned_version
+        self._mutate_record = mutate_record
 
         self._fetched_data = None
 
@@ -1177,12 +1189,27 @@ class ObjectFetcher:
 
     def _refetch(self):
         if self._fetched_data is None:
-            resp = _state.log_conn().get(
-                f"object/{self.object_type}", params={"id": self.id, "fmt": "json2", "version": self._pinned_version}
-            )
-            response_raise_for_status(resp)
+            data = None
+            try:
+                resp = _state.log_conn().get(
+                        f"object3/{self.object_type}", params={"id": self.id, "fmt": "json2", "version": self._pinned_version, "api_version": 2}
+                )
+                response_raise_for_status(resp)
+                data = resp.json()
+            except Exception as e:
+                # DEPRECATION_NOTICE: When hitting old versions of the API where the "object3/" endpoint isn't available, fall back to
+                # the "object/" endpoint, which may require patching the incoming records. Remove this code once
+                # all APIs are updated.
+                resp = _state.log_conn().get(
+                        f"object/{self.object_type}", params={"id": self.id, "fmt": "json2", "version": self._pinned_version}
+                )
+                response_raise_for_status(resp)
+                data = resp.json()
 
-            self._fetched_data = resp.json()
+            if self._mutate_record is not None:
+                self._fetched_data = [self._mutate_record(r) for r in data]
+            else:
+                self._fetched_data = data
 
         return self._fetched_data
 
@@ -1766,7 +1793,11 @@ class Dataset(ObjectFetcher):
     You should not create `Dataset` objects directly. Instead, use the `braintrust.init_dataset()` method.
     """
 
-    def __init__(self, lazy_metadata: LazyValue[ProjectDatasetMetadata], version: Union[None, int, str] = None):
+    def __init__(self, lazy_metadata: LazyValue[ProjectDatasetMetadata], version: Union[None, int, str] = None, legacy: bool = DEFAULT_IS_LEGACY_DATASET):
+        if legacy:
+            eprint(f"""Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use `braintrust.init_dataset()` with `use_output=False`, which will become the default in a future version of Braintrust.""")
+        mutate_record = lambda r: ensure_dataset_record(r, legacy)
+
         self._lazy_metadata = lazy_metadata
         self.new_records = 0
         self._fetched_data = None
@@ -1782,8 +1813,7 @@ class Dataset(ObjectFetcher):
             return self._get_state().log_conn()
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
-
-        ObjectFetcher.__init__(self, object_type="dataset", pinned_version=None)
+        ObjectFetcher.__init__(self, object_type="dataset", pinned_version=None, mutate_record=mutate_record)
 
     @property
     def id(self):
@@ -1810,18 +1840,19 @@ class Dataset(ObjectFetcher):
         self._lazy_metadata.get()
         return _state
 
-    def insert(self, input, output, metadata=None, id=None):
+    def insert(self, input, expected=None, metadata=None, id=None, output=None):
         """
         Insert a single record to the dataset. The record will be batched and uploaded behind the scenes. If you pass in an `id`,
         and a record with that `id` already exists, it will be overwritten (upsert).
 
         :param input: The argument that uniquely define an input case (an arbitrary, JSON serializable object).
-        :param output: The output of your application, including post-processing (an arbitrary, JSON serializable object).
+        :param expected: The output of your application, including post-processing (an arbitrary, JSON serializable object).
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just
         about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
         `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
         JSON-serializable type, but its keys must be strings.
         :param id: (Optional) a unique identifier for the event. If you don't provide one, Braintrust will generate one for you.
+        :param output: (Deprecated) The output of your application. Use `expected` instead.
         :returns: The `id` of the logged record.
         """
         if metadata:
@@ -1831,13 +1862,16 @@ class Dataset(ObjectFetcher):
                 if not isinstance(key, str):
                     raise ValueError("metadata keys must be strings")
 
+        if expected is not None and output is not None:
+            raise ValueError("Only one of expected or output (deprecated) can be specified. Prefer expected.")
+
         row_id = id or str(uuid.uuid4())
         # Validate the non-lazily-computed part of the record-to-log.
         partial_args = _populate_args(
             {
                 "id": row_id,
                 "inputs": input,
-                "output": output,
+                "expected": expected if expected is not None else output,
                 "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             },
             metadata=metadata,
