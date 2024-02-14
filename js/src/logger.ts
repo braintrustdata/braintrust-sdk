@@ -8,7 +8,6 @@ import {
   PARENT_ID_FIELD,
   mergeDicts,
   mergeRowBatch,
-  Source,
   VALID_SOURCES,
   AUDIT_SOURCE_FIELD,
   AUDIT_METADATA_FIELD,
@@ -16,6 +15,20 @@ import {
   RepoInfo,
   mergeGitMetadataSettings,
   TransactionId,
+  ParentExperimentIds,
+  ParentProjectLogIds,
+  IdField,
+  ExperimentLogPartialArgs,
+  ExperimentLogFullArgs,
+  LogFeedbackFullArgs,
+  SanitizedExperimentLogPartialArgs,
+  ExperimentEvent,
+  BackgroundLogEvent,
+  AnyDatasetRecord,
+  DEFAULT_IS_LEGACY_DATASET,
+  DatasetRecord,
+  ensureDatasetRecord,
+  makeLegacyEvent,
 } from "@braintrust/core";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -679,114 +692,15 @@ function castLogger<ToB extends boolean, FromB extends boolean>(
   return logger as unknown as Logger<ToB>;
 }
 
-export type IdField = { id: string };
-export type InputField = { input: unknown };
-export type InputsField = { inputs: unknown };
-export type OtherExperimentLogFields = {
-  output: unknown;
-  expected: unknown;
-  scores: Record<string, number | null>;
-  metadata: Record<string, unknown>;
-  metrics: Record<string, unknown>;
-  datasetRecordId: string;
-};
-
-export type ExperimentLogPartialArgs = Partial<OtherExperimentLogFields> &
-  Partial<InputField | InputsField>;
-
-export type ExperimentLogFullArgs = Partial<
-  Omit<OtherExperimentLogFields, "output" | "scores">
-> &
-  Required<Pick<OtherExperimentLogFields, "output" | "scores">> &
-  Partial<InputField | InputsField> &
-  Partial<IdField>;
-
-export type LogFeedbackFullArgs = IdField &
-  Partial<
-    Omit<OtherExperimentLogFields, "output" | "metrics" | "datasetRecordId"> & {
-      comment: string;
-      source: Source;
-    }
-  >;
-
-export type LogCommentFullArgs = IdField & {
-  created: string;
-  origin: {
-    id: string;
-  };
-  comment: {
-    text: string;
-  };
-  [AUDIT_SOURCE_FIELD]: Source;
-  [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
-} & Omit<ParentExperimentIds | ParentProjectLogIds, "kind">;
-
-type SanitizedExperimentLogPartialArgs = Partial<OtherExperimentLogFields> &
-  Partial<InputField>;
-
-type ExperimentEvent = Partial<InputField> &
-  Partial<OtherExperimentLogFields> & {
-    id: string;
-    span_id?: string;
-    root_span_id?: string;
-    project_id: string;
-    experiment_id: string;
-    [IS_MERGE_FIELD]: boolean;
-  } & Partial<{
-    created: string;
-    span_parents: string[];
-    span_attributes: Record<string, unknown>;
-    context: Record<string, unknown>;
-    [PARENT_ID_FIELD]: string;
-    [AUDIT_SOURCE_FIELD]: Source;
-    [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
-  }>;
-
-interface DatasetEvent {
-  inputs?: unknown;
-  output?: unknown;
-  metadata?: unknown;
-  id: string;
-  project_id: string;
-  dataset_id: string;
-  created: string;
-}
-
-type LoggingEvent = Omit<ExperimentEvent, "experiment_id"> & {
-  org_id: string;
-  log_id: "g";
-};
-
-export type CommentEvent = IdField & {
-  created: string;
-  origin: {
-    id: string;
-  };
-  comment: {
-    text: string;
-  };
-  [AUDIT_SOURCE_FIELD]: Source;
-  [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
-} & Omit<ParentExperimentIds | ParentProjectLogIds, "kind">;
-
-type BackgroundLogEvent =
-  | ExperimentEvent
-  | DatasetEvent
-  | LoggingEvent
-  | CommentEvent;
-
-export interface DatasetRecord {
-  id: string;
-  input: any;
-  output: any;
-  metadata: any;
-}
-
 // 6 MB (from our own testing).
 const MaxRequestSize = 6 * 1024 * 1024;
 
 function constructJsonArray(items: string[]) {
   return `[${items.join(",")}]`;
+}
+
+function constructLogs3Data(items: string[]) {
+  return `{"rows": ${constructJsonArray(items)}, "api_version": 2}`;
 }
 
 const DefaultBatchSize = 100;
@@ -865,13 +779,21 @@ class BackgroundLogger {
 
       postPromises.push(
         (async () => {
-          const itemsS = constructJsonArray(items);
+          const dataS = constructLogs3Data(items);
           for (let i = 0; i < NumRetries; i++) {
             const startTime = now();
             try {
-              return (
-                await (await this.logConn.get()).post_json("logs", itemsS)
-              ).map((res: any) => res.id);
+              try {
+                return (
+                  await (await this.logConn.get()).post_json("logs3", dataS)
+                ).ids.map((res: any) => res.id);
+              } catch (e) {
+                // Fallback to legacy API. Remove once all API endpoints are updated.
+                const legacyDataS = constructJsonArray(items.map((r: any) => JSON.stringify(makeLegacyEvent(JSON.parse(r)))));
+                return (
+                  await (await this.logConn.get()).post_json("logs", legacyDataS)
+                ).map((res: any) => res.id);
+              }
             } catch (e) {
               const retryingText = i + 1 === NumRetries ? "" : " Retrying";
               const errMsg = (() => {
@@ -885,7 +807,7 @@ class BackgroundLogger {
                 `log request failed. Elapsed time: ${
                   (now() - startTime) / 1000
                 } seconds. Payload size: ${
-                  itemsS.length
+                  dataS.length
                 }. Error: ${errMsg}.${retryingText}`
               );
             }
@@ -926,7 +848,7 @@ type InitOpenOption<IsOpen extends boolean> = {
 export type InitOptions<IsOpen extends boolean> = {
   experiment?: string;
   description?: string;
-  dataset?: Dataset;
+  dataset?: AnyDataset;
   update?: boolean;
   baseExperiment?: string;
   isPublic?: boolean;
@@ -1267,7 +1189,11 @@ export function withLogger<IsAsyncFlush extends boolean = false, R = void>(
   return callback(logger);
 }
 
-type InitDatasetOptions = {
+type UseOutputOption<IsLegacyDataset extends boolean> = {
+  useOutput?: IsLegacyDataset;
+};
+
+type InitDatasetOptions<IsLegacyDataset extends boolean> = {
   dataset?: string;
   description?: string;
   version?: string;
@@ -1275,9 +1201,9 @@ type InitDatasetOptions = {
   apiKey?: string;
   orgName?: string;
   projectId?: string;
-};
+} & UseOutputOption<IsLegacyDataset>;
 
-type FullInitDatasetOptions = { project?: string } & InitDatasetOptions;
+type FullInitDatasetOptions<IsLegacyDataset extends boolean> = { project?: string } & InitDatasetOptions<IsLegacyDataset>;
 
 /**
  * Create a new dataset in a specified project. If the project does not exist, it will be created.
@@ -1290,30 +1216,32 @@ type FullInitDatasetOptions = { project?: string } & InitDatasetOptions;
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
  * @param options.projectId The id of the project to create the dataset in. This takes precedence over `project` if specified.
+ * @param options.useOutput If true (the default), records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This will default to false in a future version of Braintrust.
  * @returns The newly created Dataset.
  */
-export function initDataset(options: Readonly<FullInitDatasetOptions>): Dataset;
+export function initDataset<IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET>(
+    options: Readonly<FullInitDatasetOptions<IsLegacyDataset>>): Dataset<IsLegacyDataset>;
 
 /**
  * Legacy form of `initDataset` which accepts the project name as the first
  * parameter, separately from the remaining options. See
  * `initDataset(options)` for full details.
  */
-export function initDataset(
+export function initDataset<IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET>(
   project: string,
-  options?: Readonly<InitDatasetOptions>
-): Dataset;
+  options?: Readonly<InitDatasetOptions<IsLegacyDataset>>
+): Dataset<IsLegacyDataset>;
 
 /**
  * Combined overload implementation of `initDataset`. Do not call this
  * directly. Instead, call `initDataset(options)` or `initDataset(project,
  * options)`.
  */
-export function initDataset(
-  projectOrOptions: string | Readonly<FullInitDatasetOptions>,
-  optionalOptions?: Readonly<InitDatasetOptions>
-): Dataset {
-  const options = ((): Readonly<FullInitDatasetOptions> => {
+export function initDataset<IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET>(
+  projectOrOptions: string | Readonly<FullInitDatasetOptions<IsLegacyDataset>>,
+  optionalOptions?: Readonly<InitDatasetOptions<IsLegacyDataset>>
+): Dataset<IsLegacyDataset> {
+  const options = ((): Readonly<FullInitDatasetOptions<IsLegacyDataset>> => {
     if (typeof projectOrOptions === "string") {
       return { ...optionalOptions, project: projectOrOptions };
     } else {
@@ -1335,6 +1263,7 @@ export function initDataset(
     apiKey,
     orgName,
     projectId,
+    useOutput: legacy,
   } = options;
 
   const lazyMetadata: LazyValue<ProjectDatasetMetadata> = new LazyValue(
@@ -1371,21 +1300,21 @@ export function initDataset(
     }
   );
 
-  return new Dataset(lazyMetadata, version);
+  return new Dataset(lazyMetadata, version, legacy);
 }
 
 /**
  * This function is deprecated. Use `initDataset` instead.
  */
-export function withDataset<R>(
+export function withDataset<R, IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET>(
   project: string,
-  callback: (dataset: Dataset) => R,
-  options: Readonly<InitDatasetOptions> = {}
+  callback: (dataset: Dataset<IsLegacyDataset>) => R,
+  options: Readonly<InitDatasetOptions<IsLegacyDataset>> = {}
 ): R {
   console.warn(
     "withDataset is deprecated and will be removed in a future version of braintrust. Simply create the dataset with `initDataset`."
   );
-  const dataset = initDataset(project, options);
+  const dataset = initDataset<IsLegacyDataset>(project, options);
   return callback(dataset);
 }
 
@@ -1848,12 +1777,13 @@ export type WithTransactionId<R> = R & {
   [TRANSACTION_ID_FIELD]: TransactionId;
 };
 
-class ObjectFetcher<RecordType> {
+class ObjectFetcher<RecordType> implements AsyncIterable<WithTransactionId<RecordType>> {
   private _fetchedData: WithTransactionId<RecordType>[] | undefined = undefined;
 
   constructor(
     private objectType: "dataset" | "experiment",
-    private pinnedVersion: string | undefined
+    private pinnedVersion: string | undefined,
+    private mutateRecord?: ((r: any) => RecordType),
   ) {}
 
   public get id(): Promise<string> {
@@ -1878,13 +1808,27 @@ class ObjectFetcher<RecordType> {
   async fetchedData() {
     if (this._fetchedData === undefined) {
       const state = await this.getState();
-      const resp = await state.logConn().get(`object/${this.objectType}`, {
-        id: await this.id,
-        fmt: "json2",
-        version: this.pinnedVersion,
-      });
-
-      this._fetchedData = await resp.json();
+      let data = undefined;
+      try {
+        const resp = await state.logConn().get(`object3/${this.objectType}`, {
+          id: await this.id,
+          fmt: "json2",
+          version: this.pinnedVersion,
+          api_version: "2",
+        });
+        data = await resp.json();
+      } catch (e) {
+          // DEPRECATION_NOTICE: When hitting old versions of the API where the "object3/" endpoint isn't available, we fall back to
+          // the "object/" endpoint, which may require patching the incoming records. Remove this code once
+          // all APIs are updated.
+        const resp = await state.logConn().get(`object/${this.objectType}`, {
+          id: await this.id,
+          fmt: "json2",
+          version: this.pinnedVersion,
+        });
+        data = await resp.json();
+      }
+      this._fetchedData = this.mutateRecord ? data?.map(this.mutateRecord) : data;
     }
     return this._fetchedData || [];
   }
@@ -1931,7 +1875,7 @@ export type EvalCase<Input, Expected, Metadata> = {
  */
 export class Experiment extends ObjectFetcher<ExperimentEvent> {
   private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>;
-  public readonly dataset?: Dataset;
+  public readonly dataset?: AnyDataset;
   private bgLogger: BackgroundLogger;
   private lastStartTime: number;
   // For type identification.
@@ -1939,7 +1883,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
 
   constructor(
     lazyMetadata: LazyValue<ProjectExperimentMetadata>,
-    dataset?: Dataset
+    dataset?: AnyDataset,
   ) {
     super("experiment", undefined);
     this.lazyMetadata = lazyMetadata;
@@ -2225,19 +2169,6 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
   }
 }
 
-interface ParentExperimentIds {
-  kind: "experiment";
-  project_id: string;
-  experiment_id: string;
-}
-
-interface ParentProjectLogIds {
-  kind: "project_log";
-  org_id: string;
-  project_id: string;
-  log_id: "g";
-}
-
 let executionCounter = 0;
 
 /**
@@ -2432,21 +2363,26 @@ export class SpanImpl implements Span {
 }
 
 /**
- * A dataset is a collection of records, such as model inputs and outputs, which represent
+ * A dataset is a collection of records, such as model inputs and expected outputs, which represent
  * data you can use to evaluate and fine-tune models. You can log production data to datasets,
  * curate them with interesting examples, edit/delete records, and run evaluations against them.
  *
  * You should not create `Dataset` objects directly. Instead, use the `braintrust.initDataset()` method.
  */
-export class Dataset extends ObjectFetcher<DatasetRecord> {
+class Dataset<IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET> extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
   private readonly lazyMetadata: LazyValue<ProjectDatasetMetadata>;
   private bgLogger: BackgroundLogger;
 
   constructor(
     lazyMetadata: LazyValue<ProjectDatasetMetadata>,
-    pinnedVersion?: string
+    pinnedVersion?: string,
+    legacy?: IsLegacyDataset,
   ) {
-    super("dataset", pinnedVersion);
+    const isLegacyDataset = (legacy ?? DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
+    if (isLegacyDataset) {
+      console.warn(`Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use \`braintrust.initDataset()\` with \`{ useOutput: false }\`, which will become the default in a future version of Braintrust.`);
+    }
+    super("dataset", pinnedVersion, (r: AnyDatasetRecord) => ensureDatasetRecord(r, isLegacyDataset));
     this.lazyMetadata = lazyMetadata;
     const logConn = new LazyValue(() =>
       this.getState().then((state) => state.logConn())
@@ -2484,24 +2420,27 @@ export class Dataset extends ObjectFetcher<DatasetRecord> {
    *
    * @param event The event to log.
    * @param event.input The argument that uniquely define an input case (an arbitrary, JSON serializable object).
-   * @param event.output The output of your application, including post-processing (an arbitrary, JSON serializable object).
+   * @param event.expected The output of your application, including post-processing (an arbitrary, JSON serializable object).
    * @param event.metadata (Optional) a dictionary with additional data about the test example, model outputs, or just
    * about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
    * `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
    * JSON-serializable type, but its keys must be strings.
    * @param event.id (Optional) a unique identifier for the event. If you don't provide one, Braintrust will generate one for you.
+   * @param event.output: (Deprecated) The output of your application. Use `expected` instead.
    * @returns The `id` of the logged record.
    */
   public insert({
     input,
-    output,
+    expected,
     metadata,
     id,
+    output,
   }: {
     readonly input?: unknown;
-    readonly output: unknown;
+    readonly expected?: unknown;
     readonly metadata?: Record<string, unknown>;
     readonly id?: string;
+    readonly output?: unknown;
   }): string {
     if (metadata !== undefined) {
       for (const key of Object.keys(metadata)) {
@@ -2511,11 +2450,17 @@ export class Dataset extends ObjectFetcher<DatasetRecord> {
       }
     }
 
+    if (expected && output) {
+      throw new Error(
+        "Only one of expected or output (deprecated) can be specified. Prefer expected."
+      );
+    }
+
     const rowId = id || uuidv4();
     const args = new LazyValue(async () => ({
       id: rowId,
-      inputs: input,
-      output,
+      input,
+      expected: expected === undefined ? output : expected,
       project_id: (await this.project).id,
       dataset_id: await this.id,
       created: new Date().toISOString(),
@@ -2594,6 +2539,8 @@ export class Dataset extends ObjectFetcher<DatasetRecord> {
     return this.id;
   }
 }
+
+export type AnyDataset = Dataset<boolean>;
 
 /**
  * Summary of a score's performance.
