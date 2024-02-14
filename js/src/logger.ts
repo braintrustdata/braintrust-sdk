@@ -1100,8 +1100,8 @@ export function withLogger<IsAsyncFlush extends boolean = false, R = void>(
   return callback(logger);
 }
 
-type InitLegacyOption<IsLegacyDataset extends boolean> = {
-  legacy?: IsLegacyDataset;
+type UseOutputOption<IsLegacyDataset extends boolean> = {
+  useOutput?: IsLegacyDataset;
 };
 
 type InitDatasetOptions<IsLegacyDataset extends boolean> = {
@@ -1111,7 +1111,7 @@ type InitDatasetOptions<IsLegacyDataset extends boolean> = {
   appUrl?: string;
   apiKey?: string;
   orgName?: string;
-} & InitLegacyOption<IsLegacyDataset>;
+} & UseOutputOption<IsLegacyDataset>;
 
 /**
  * Create a new dataset in a specified project. If the project does not exist, it will be created.
@@ -1124,14 +1124,14 @@ type InitDatasetOptions<IsLegacyDataset extends boolean> = {
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
- * @param options.legacy Unless set to false, records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This will default to false in a future version of Braintrust.
+ * @param options.useOutput If true (the default), records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This will default to false in a future version of Braintrust.
  * @returns The newly created Dataset.
  */
 export function initDataset<IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET>(
   project: string,
   options: Readonly<InitDatasetOptions<IsLegacyDataset>> = {}
 ): Dataset<IsLegacyDataset> {
-  const { dataset, description, version, appUrl, apiKey, orgName, legacy } =
+  const { dataset, description, version, appUrl, apiKey, orgName, useOutput: legacy } =
     options || {};
 
   const lazyMetadata: LazyValue<ProjectDatasetMetadata> = new LazyValue(
@@ -2247,7 +2247,7 @@ class Dataset<IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
   ) {
     const isLegacyDataset = (legacy ?? DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
     if (isLegacyDataset) {
-      console.warn(`Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use \`braintrust.initDataset()\` with \`{ legacy: false }\`, which will become the default in a future version of Braintrust.`);
+      console.warn(`Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use \`braintrust.initDataset()\` with \`{ useOutput: false }\`, which will become the default in a future version of Braintrust.`);
     }
     super("dataset", pinnedVersion, (r: AnyDatasetRecord) => ensureDatasetRecord(r, isLegacyDataset));
     this.lazyMetadata = lazyMetadata;
