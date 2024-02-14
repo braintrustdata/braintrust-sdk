@@ -10,13 +10,6 @@ from requests import HTTPError
 GLOBAL_PROJECT = "Global"
 
 
-def encode_uri_component(name):
-    """Encode a single component of a URI. Slashes are encoded as well, so this
-    should not be used for multiple slash-separated URI components."""
-
-    return urllib.parse.quote(name, safe="")
-
-
 class AugmentedHTTPError(Exception):
     pass
 
