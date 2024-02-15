@@ -163,7 +163,7 @@ export class NoopSpan implements Span {
 
   public traced<R>(
     callback: (span: Span) => R,
-    _1: StartSpanArgs & SetCurrentArg
+    _1?: StartSpanArgs & SetCurrentArg
   ): R {
     return callback(this);
   }
