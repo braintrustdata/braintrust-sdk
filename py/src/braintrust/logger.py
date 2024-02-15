@@ -812,6 +812,18 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
 
     # Only permit one thread to login at a time
     with login_lock:
+        if not force_login and _state.logged_in:
+            # We have already logged in. If any provided login inputs disagree
+            # with our existing settings, raise an Exception warning the user to
+            # try again with `force_login=True`.
+            def check_updated_param(varname, arg, orig):
+                if arg is not None and orig is not None and arg != orig:
+                    raise Exception(f"Re-logging in with different {varname} ({arg}) than original ({orig}). To force re-login, pass `force_login=True`")
+            check_updated_param("app_url", app_url, _state.app_url)
+            check_updated_param("api_key", HTTPConnection.sanitize_token(api_key) if api_key else None, _state.login_token)
+            check_updated_param("org_name", org_name, _state.org_name)
+            return
+
         if app_url is None:
             app_url = os.environ.get("BRAINTRUST_APP_URL", "https://www.braintrustdata.com")
 
@@ -820,10 +832,6 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
 
         if org_name is None:
             org_name = os.environ.get("BRAINTRUST_ORG_NAME")
-
-        if not force_login and _state.logged_in:
-            # We have already logged in
-            return
 
         _state.reset_login_info()
 
