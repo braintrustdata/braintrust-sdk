@@ -1451,18 +1451,31 @@ export async function login(
     forceLogin?: boolean;
   } = {}
 ) {
+  let { forceLogin = false } = options || {};
+
+  if (_state.loggedIn && !forceLogin) {
+    // We have already logged in. If any provided login inputs disagree with our
+    // existing settings, raise an Exception warning the user to try again with
+    // `forceLogin: true`.
+    function checkUpdatedParam(varname: string, arg: string | undefined, orig: string | null) {
+      if (!isEmpty(arg) && !isEmpty(orig) && arg !== orig) {
+        throw new Error(
+            `Re-logging in with different ${varname} (${arg}) than original (${orig}). To force re-login, pass \`forceLogin: true\``
+        );
+      }
+    };
+    checkUpdatedParam("appUrl", options.appUrl, _state.appUrl);
+    checkUpdatedParam("apiKey", options.apiKey ? HTTPConnection.sanitize_token(options.apiKey) : undefined, _state.loginToken);
+    checkUpdatedParam("orgName", options.orgName, _state.orgName);
+    return;
+  }
+
   const {
     appUrl = iso.getEnv("BRAINTRUST_APP_URL") ||
       "https://www.braintrustdata.com",
     apiKey = iso.getEnv("BRAINTRUST_API_KEY"),
     orgName = iso.getEnv("BRAINTRUST_ORG_NAME"),
   } = options || {};
-
-  let { forceLogin = false } = options || {};
-
-  if (_state.loggedIn && !forceLogin) {
-    return;
-  }
 
   _state.resetLoginInfo();
 
