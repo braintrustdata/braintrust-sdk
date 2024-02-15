@@ -56,6 +56,7 @@ export type EvalData<
   | (() => EvalCase<Input, Expected, Metadata>[])
   | (() => Promise<EvalCase<Input, Expected, Metadata>[]>)
   | AsyncGenerator<EvalCase<Input, Expected, Metadata>>
+  | AsyncIterable<EvalCase<Input, Expected, Metadata>>
   | BaseExperiment<Input, Expected, Metadata>
   | (() => BaseExperiment<Input, Expected, Metadata>);
 
