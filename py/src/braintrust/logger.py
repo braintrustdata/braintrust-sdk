@@ -635,7 +635,7 @@ def init(
                 )
             repo_info_arg = get_repo_info(merged_git_metadata_settings)
 
-        if repo_info:
+        if repo_info_arg:
             args["repo_info"] = repo_info_arg.as_dict()
 
         if base_experiment_id is not None:
