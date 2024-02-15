@@ -19,7 +19,7 @@ class BraintrustJSONEncoder(json.JSONEncoder):
         except (AttributeError, TypeError):
             pass
 
-        return json.JSONEncoder().default(self, o)
+        return super().default(o)
 
 
 def bt_dumps(obj, **kwargs) -> str:
