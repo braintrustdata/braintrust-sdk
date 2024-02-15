@@ -20,6 +20,7 @@ from multiprocessing import cpu_count
 from typing import Any, Dict, Optional, Union
 
 import requests
+from braintrust_core.bt_json import bt_dumps
 from braintrust_core.db_fields import (
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
@@ -334,7 +335,7 @@ def construct_logs3_data(items):
 
 def _check_json_serializable(event):
     try:
-        _ = json.dumps(event)
+        _ = bt_dumps(event)
     except TypeError as e:
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
@@ -446,7 +447,7 @@ class _BackgroundLogger:
                     else:
                         break
 
-                    item_s = json.dumps(item)
+                    item_s = bt_dumps(item)
                     items.append(item_s)
                     items_len += len(item_s)
 
