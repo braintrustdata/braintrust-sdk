@@ -3,11 +3,10 @@ import os
 import re
 import subprocess
 import threading
-from dataclasses import dataclass
 from functools import lru_cache as _cache
-from typing import Optional
+from typing import List, Optional
 
-from braintrust_core.util import SerializableDataClass
+from braintrust_core.git_fields import GitMetadataSettings, RepoInfo
 
 # https://stackoverflow.com/questions/48399498/git-executable-not-found-in-python
 os.environ["GIT_PYTHON_REFRESH"] = "quiet"
@@ -15,21 +14,6 @@ import git
 
 _logger = logging.getLogger("braintrust.gitutil")
 _gitlock = threading.RLock()
-
-
-@dataclass
-class RepoStatus(SerializableDataClass):
-    """Information about the current HEAD of the repo."""
-
-    commit: Optional[str]
-    branch: Optional[str]
-    tag: Optional[str]
-    dirty: bool
-    author_name: Optional[str]
-    author_email: Optional[str]
-    commit_message: Optional[str]
-    commit_time: Optional[str]
-    git_diff: Optional[str]
 
 
 @_cache(1)
@@ -125,7 +109,21 @@ def truncate_to_byte_limit(input_string, byte_limit=65536):
     return encoded[:byte_limit].decode("utf-8", errors="ignore")
 
 
-def get_repo_status():
+def get_repo_info(settings: Optional[GitMetadataSettings] = None):
+    if settings is None:
+        settings = GitMetadataSettings()
+
+    if settings.collect == "none":
+        return None
+
+    repo = repo_info()
+    if repo is None or settings.collect == "all":
+        return repo
+
+    return RepoInfo(**{k: v if k in settings.fields else None for k, v in repo.as_dict().items()})
+
+
+def repo_info():
     with _gitlock:
         repo = _current_repo()
         if repo is None:
@@ -154,7 +152,7 @@ def get_repo_status():
         if dirty:
             git_diff = attempt(lambda: truncate_to_byte_limit(repo.git.diff("HEAD")))
 
-        return RepoStatus(
+        return RepoInfo(
             commit=commit,
             branch=branch,
             tag=tag,

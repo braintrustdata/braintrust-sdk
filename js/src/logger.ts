@@ -8,10 +8,27 @@ import {
   PARENT_ID_FIELD,
   mergeDicts,
   mergeRowBatch,
-  Source,
   VALID_SOURCES,
   AUDIT_SOURCE_FIELD,
   AUDIT_METADATA_FIELD,
+  GitMetadataSettings,
+  RepoInfo,
+  mergeGitMetadataSettings,
+  TransactionId,
+  ParentExperimentIds,
+  ParentProjectLogIds,
+  IdField,
+  ExperimentLogPartialArgs,
+  ExperimentLogFullArgs,
+  LogFeedbackFullArgs,
+  SanitizedExperimentLogPartialArgs,
+  ExperimentEvent,
+  BackgroundLogEvent,
+  AnyDatasetRecord,
+  DEFAULT_IS_LEGACY_DATASET,
+  DatasetRecord,
+  ensureDatasetRecord,
+  makeLegacyEvent,
 } from "@braintrust/core";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -20,9 +37,8 @@ import {
   GLOBAL_PROJECT,
   getCurrentUnixTimestamp,
   isEmpty,
+  LazyValue,
 } from "./util";
-
-export type Metadata = Record<string, unknown>;
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -97,7 +113,9 @@ export interface Span {
   ): R;
 
   /**
-   * Lower-level alternative to `traced`, which does not automatically end the span or mark it as current. Be sure to end the span with `span.end()` when it has finished.
+   * Lower-level alternative to `traced`. This allows you to start a span yourself, and can be useful in situations
+   * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
+   * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
    *
    * See `traced` for full details.
    *
@@ -145,7 +163,7 @@ export class NoopSpan implements Span {
 
   public traced<R>(
     callback: (span: Span) => R,
-    _1: StartSpanArgs & SetCurrentArg
+    _1?: StartSpanArgs & SetCurrentArg
   ): R {
     return callback(this);
   }
@@ -180,12 +198,13 @@ class BraintrustState {
   public currentLogger: Logger<false> | undefined;
   public currentSpan: IsoAsyncLocalStorage<Span>;
 
-  public apiUrl: string | null = null;
+  public appUrl: string | null = null;
   public loginToken: string | null = null;
   public orgId: string | null = null;
   public orgName: string | null = null;
   public logUrl: string | null = null;
   public loggedIn: boolean = false;
+  public gitMetadataSettings?: GitMetadataSettings;
 
   private _apiConn: HTTPConnection | null = null;
   private _logConn: HTTPConnection | null = null;
@@ -201,12 +220,13 @@ class BraintrustState {
   }
 
   public resetLoginInfo() {
-    this.apiUrl = null;
+    this.appUrl = null;
     this.loginToken = null;
     this.orgId = null;
     this.orgName = null;
     this.logUrl = null;
     this.loggedIn = false;
+    this.gitMetadataSettings = undefined;
 
     this._apiConn = null;
     this._logConn = null;
@@ -214,10 +234,10 @@ class BraintrustState {
 
   public apiConn(): HTTPConnection {
     if (!this._apiConn) {
-      if (!this.apiUrl) {
-        throw new Error("Must initialize apiUrl before requesting apiConn");
+      if (!this.appUrl) {
+        throw new Error("Must initialize appUrl before requesting apiConn");
       }
-      this._apiConn = new HTTPConnection(this.apiUrl);
+      this._apiConn = new HTTPConnection(this.appUrl);
     }
     return this._apiConn!;
   }
@@ -424,7 +444,7 @@ export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
 
 function logFeedbackImpl(
   bgLogger: BackgroundLogger,
-  parentIds: Promise<ParentExperimentIds | ParentProjectLogIds>,
+  parentIds: LazyValue<ParentExperimentIds | ParentProjectLogIds>,
   {
     id,
     expected,
@@ -457,27 +477,27 @@ function logFeedbackImpl(
     Object.entries(updateEvent).filter(([_, v]) => !isEmpty(v))
   );
 
-  const trueParentIds = (async () => {
-    const { kind, ...ids } = await parentIds;
+  const trueParentIds = new LazyValue(async () => {
+    const { kind, ...ids } = await parentIds.get();
     return ids;
-  })();
+  });
 
   if (Object.keys(updateEvent).length > 0) {
-    const record = (async () => {
+    const record = new LazyValue(async () => {
       return {
         id,
         ...updateEvent,
-        ...(await trueParentIds),
+        ...(await trueParentIds.get()),
         [AUDIT_SOURCE_FIELD]: source,
         [AUDIT_METADATA_FIELD]: metadata,
         [IS_MERGE_FIELD]: true,
       };
-    })();
+    });
     bgLogger.log([record]);
   }
 
   if (!isEmpty(comment)) {
-    const record = (async () => {
+    const record = new LazyValue(async () => {
       return {
         id: uuidv4(),
         created: new Date().toISOString(),
@@ -489,17 +509,17 @@ function logFeedbackImpl(
         comment: {
           text: comment,
         },
-        ...(await trueParentIds),
+        ...(await trueParentIds.get()),
         [AUDIT_SOURCE_FIELD]: source,
         [AUDIT_METADATA_FIELD]: metadata,
       };
-    })();
+    });
     bgLogger.log([record]);
   }
 }
 
 export class Logger<IsAsyncFlush extends boolean> {
-  private lazyMetadata: Promise<OrgProjectMetadata>;
+  private lazyMetadata: LazyValue<OrgProjectMetadata>;
   private logOptions: LogOptions<IsAsyncFlush>;
   private bgLogger: BackgroundLogger;
   private lastStartTime: number;
@@ -508,31 +528,33 @@ export class Logger<IsAsyncFlush extends boolean> {
   public kind: "logger" = "logger";
 
   constructor(
-    lazyMetadata: Promise<OrgProjectMetadata>,
+    lazyMetadata: LazyValue<OrgProjectMetadata>,
     logOptions: LogOptions<IsAsyncFlush> = {}
   ) {
     this.lazyMetadata = lazyMetadata;
     this.logOptions = logOptions;
-    const logConn = this.getState().then((state) => state.logConn());
+    const logConn = new LazyValue(() =>
+      this.getState().then((state) => state.logConn())
+    );
     this.bgLogger = new BackgroundLogger(logConn);
     this.lastStartTime = getCurrentUnixTimestamp();
   }
 
   public get org_id(): Promise<string> {
     return (async () => {
-      return (await this.lazyMetadata).org_id;
+      return (await this.lazyMetadata.get()).org_id;
     })();
   }
 
   public get project(): Promise<ObjectMetadata> {
     return (async () => {
-      return (await this.lazyMetadata).project;
+      return (await this.lazyMetadata.get()).project;
     })();
   }
 
   private async getState(): Promise<BraintrustState> {
     // Ensure the login state is populated by awaiting lazyMetadata.
-    await this.lazyMetadata;
+    await this.lazyMetadata.get();
     return _state;
   }
 
@@ -540,12 +562,12 @@ export class Logger<IsAsyncFlush extends boolean> {
    * Log a single event. The event will be batched and uploaded behind the scenes if `logOptions.asyncFlush` is true.
    *
    * @param event The event to log.
-   * @param event.input: The arguments that uniquely define a user input (an arbitrary, JSON serializable object).
-   * @param event.output: The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
-   * @param event.expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
-   * @param event.scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
+   * @param event.input: (Optional) the arguments that uniquely define a user input (an arbitrary, JSON serializable object).
+   * @param event.output: (Optional) the output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
+   * @param event.expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
+   * @param event.scores: (Optional) a dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
    * @param event.metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
-   * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
+   * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
    * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
    * :returns: The `id` of the logged event.
    */
@@ -610,14 +632,16 @@ export class Logger<IsAsyncFlush extends boolean> {
   }
 
   /**
-   * Lower-level alternative to `traced`, which does not automatically end the span or mark it as current.
+   * Lower-level alternative to `traced`. This allows you to start a span yourself, and can be useful in situations
+   * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
+   * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
    *
    * See `traced` for full details.
    */
   public startSpan(args?: StartSpanArgs): Span {
     const { name, ...argsRest } = args ?? {};
     return new SpanImpl({
-      parentIds: this.lazyParentIds(),
+      parentIds: new LazyValue(() => this.lazyParentIds()),
       bgLogger: this.bgLogger,
       name: name ?? "root",
       ...argsRest,
@@ -636,7 +660,11 @@ export class Logger<IsAsyncFlush extends boolean> {
    * @param event.source (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
    */
   public logFeedback(event: LogFeedbackFullArgs): void {
-    logFeedbackImpl(this.bgLogger, this.lazyParentIds(), event);
+    logFeedbackImpl(
+      this.bgLogger,
+      new LazyValue(() => this.lazyParentIds()),
+      event
+    );
   }
 
   /*
@@ -664,113 +692,15 @@ function castLogger<ToB extends boolean, FromB extends boolean>(
   return logger as unknown as Logger<ToB>;
 }
 
-export type IdField = { id: string };
-export type InputField = { input: unknown };
-export type InputsField = { inputs: unknown };
-export type OtherExperimentLogFields = {
-  output: unknown;
-  expected: unknown;
-  scores: Record<string, number | null>;
-  metadata: Record<string, unknown>;
-  metrics: Record<string, unknown>;
-  datasetRecordId: string;
-};
-
-export type ExperimentLogPartialArgs = Partial<OtherExperimentLogFields> &
-  Partial<InputField | InputsField>;
-
-export type ExperimentLogFullArgs = Partial<
-  Omit<OtherExperimentLogFields, "scores">
-> &
-  Required<Pick<OtherExperimentLogFields, "scores">> &
-  Partial<InputField | InputsField> &
-  Partial<IdField>;
-
-export type LogFeedbackFullArgs = IdField &
-  Partial<
-    Omit<OtherExperimentLogFields, "output" | "metrics" | "datasetRecordId"> & {
-      comment: string;
-      source: Source;
-    }
-  >;
-
-export type LogCommentFullArgs = IdField & {
-  created: string;
-  origin: {
-    id: string;
-  };
-  comment: {
-    text: string;
-  };
-  [AUDIT_SOURCE_FIELD]: Source;
-  [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
-} & Omit<ParentExperimentIds | ParentProjectLogIds, "kind">;
-
-type SanitizedExperimentLogPartialArgs = Partial<OtherExperimentLogFields> &
-  Partial<InputField>;
-
-type ExperimentEvent = Partial<InputField> &
-  Partial<OtherExperimentLogFields> & {
-    id: string;
-    span_id?: string;
-    root_span_id?: string;
-    project_id: string;
-    experiment_id: string;
-    [IS_MERGE_FIELD]: boolean;
-  } & Partial<{
-    created: string;
-    span_parents: string[];
-    span_attributes: Record<string, unknown>;
-    [PARENT_ID_FIELD]: string;
-    [AUDIT_SOURCE_FIELD]: Source;
-    [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
-  }>;
-
-interface DatasetEvent {
-  inputs?: unknown;
-  output?: unknown;
-  metadata?: unknown;
-  id: string;
-  project_id: string;
-  dataset_id: string;
-  created: string;
-}
-
-type LoggingEvent = Omit<ExperimentEvent, "experiment_id"> & {
-  org_id: string;
-  log_id: "g";
-};
-
-export type CommentEvent = IdField & {
-  created: string;
-  origin: {
-    id: string;
-  };
-  comment: {
-    text: string;
-  };
-  [AUDIT_SOURCE_FIELD]: Source;
-  [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
-} & Omit<ParentExperimentIds | ParentProjectLogIds, "kind">;
-
-type BackgroundLogEvent =
-  | ExperimentEvent
-  | DatasetEvent
-  | LoggingEvent
-  | CommentEvent;
-
-export interface DatasetRecord {
-  id: string;
-  input: any;
-  output: any;
-  metadata: any;
-}
-
 // 6 MB (from our own testing).
 const MaxRequestSize = 6 * 1024 * 1024;
 
 function constructJsonArray(items: string[]) {
   return `[${items.join(",")}]`;
+}
+
+function constructLogs3Data(items: string[]) {
+  return `{"rows": ${constructJsonArray(items)}, "api_version": 2}`;
 }
 
 const DefaultBatchSize = 100;
@@ -781,12 +711,12 @@ function now() {
 }
 
 class BackgroundLogger {
-  private logConn: Promise<HTTPConnection>;
-  private items: Promise<BackgroundLogEvent>[] = [];
+  private logConn: LazyValue<HTTPConnection>;
+  private items: LazyValue<BackgroundLogEvent>[] = [];
   private active_flush: Promise<string[]> = Promise.resolve([]);
   private active_flush_resolved = true;
 
-  constructor(logConn: Promise<HTTPConnection>) {
+  constructor(logConn: LazyValue<HTTPConnection>) {
     this.logConn = logConn;
 
     // Note that this will not run for explicit termination events, such as
@@ -797,7 +727,7 @@ class BackgroundLogger {
     });
   }
 
-  log(items: Promise<BackgroundLogEvent>[]) {
+  log(items: LazyValue<BackgroundLogEvent>[]) {
     this.items.push(...items);
 
     if (this.active_flush_resolved) {
@@ -812,10 +742,20 @@ class BackgroundLogger {
     // Since the merged rows are guaranteed to refer to independent rows,
     // publish order does not matter and we can flush all item batches
     // concurrently.
-    const itemPromises = this.items;
+    const itemLazyValues = this.items;
     this.items = [];
-    const allItems = mergeRowBatch(await Promise.all(itemPromises)).reverse();
-
+    const allItems = await (async () => {
+      try {
+        const itemPromises = itemLazyValues.map((x) => x.get());
+        return mergeRowBatch(await Promise.all(itemPromises)).reverse();
+      } catch (e) {
+        console.warn(
+          "Encountered error when constructing records to flush:\n",
+          e
+        );
+        return [];
+      }
+    })();
     let postPromises = [];
     while (true) {
       const items = [];
@@ -839,13 +779,27 @@ class BackgroundLogger {
 
       postPromises.push(
         (async () => {
-          const itemsS = constructJsonArray(items);
+          const dataS = constructLogs3Data(items);
           for (let i = 0; i < NumRetries; i++) {
             const startTime = now();
             try {
-              return (await (await this.logConn).post_json("logs", itemsS)).map(
-                (res: any) => res.id
-              );
+              try {
+                return (
+                  await (await this.logConn.get()).post_json("logs3", dataS)
+                ).ids.map((res: any) => res.id);
+              } catch (e) {
+                // Fallback to legacy API. Remove once all API endpoints are updated.
+                const legacyDataS = constructJsonArray(
+                  items.map((r: any) =>
+                    JSON.stringify(makeLegacyEvent(JSON.parse(r)))
+                  )
+                );
+                return (
+                  await (
+                    await this.logConn.get()
+                  ).post_json("logs", legacyDataS)
+                ).map((res: any) => res.id);
+              }
             } catch (e) {
               const retryingText = i + 1 === NumRetries ? "" : " Retrying";
               const errMsg = (() => {
@@ -859,7 +813,7 @@ class BackgroundLogger {
                 `log request failed. Elapsed time: ${
                   (now() - startTime) / 1000
                 } seconds. Payload size: ${
-                  itemsS.length
+                  dataS.length
                 }. Error: ${errMsg}.${retryingText}`
               );
             }
@@ -893,147 +847,323 @@ class BackgroundLogger {
   }
 }
 
-export type InitOptions = {
+type InitOpenOption<IsOpen extends boolean> = {
+  open?: IsOpen;
+};
+
+export type InitOptions<IsOpen extends boolean> = {
   experiment?: string;
   description?: string;
-  dataset?: Dataset;
+  dataset?: AnyDataset;
   update?: boolean;
   baseExperiment?: string;
   isPublic?: boolean;
-  apiUrl?: string;
+  appUrl?: string;
   apiKey?: string;
   orgName?: string;
-  metadata?: Metadata;
+  metadata?: Record<string, unknown>;
+  gitMetadataSettings?: GitMetadataSettings;
+  projectId?: string;
+  baseExperimentId?: string;
+  repoInfo?: RepoInfo;
   setCurrent?: boolean;
-};
+} & InitOpenOption<IsOpen>;
+
+export type FullInitOptions<IsOpen extends boolean> = {
+  project?: string;
+} & InitOptions<IsOpen>;
+
+type InitializedExperiment<IsOpen extends boolean | undefined> =
+  IsOpen extends true ? ReadonlyExperiment : Experiment;
 
 /**
  * Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
  *
- * @param project The name of the project to create the experiment in.
- * @param options Additional options for configuring init().
+ * @param options Options for configuring init().
+ * @param options.project The name of the project to create the experiment in. Must specify at least one of `project` or `projectId`.
  * @param options.experiment The name of the experiment to create. If not specified, a name will be generated automatically.
  * @param options.description An optional description of the experiment.
- * @param options.dataset (Optional) A dataset to associate with the experiment. You can pass in the name of the dataset (in the same project) or a
- * dataset object (from any project).
+ * @param options.dataset (Optional) A dataset to associate with the experiment. You can pass in the name of the dataset (in the same project) or a dataset object (from any project).
  * @param options.update If the experiment already exists, continue logging to it.
- * @param options.baseExperiment An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this
- * experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
+ * @param options.baseExperiment An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
  * @param options.isPublic An optional parameter to control whether the experiment is publicly visible to anybody with the link or privately visible to only members of the organization. Defaults to private.
- * @param options.apiUrl The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
- * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
- * key is specified, will prompt the user to login.
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
+ * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
- * @param options.metadata (Optional) A dictionary with additional data about the test example, model outputs, or just
- * about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
- * `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
- * JSON-serializable type, but its keys must be strings.
+ * @param options.metadata (Optional) A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
+ * @param options.gitMetadataSettings (Optional) Settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
  * @param setCurrent If true (the default), set the global current-experiment to the newly-created one.
+ * @param options.open If the experiment already exists, open it in read-only mode.
+ * @param options.projectId The id of the project to create the experiment in. This takes precedence over `project` if specified.
+ * @param options.baseExperimentId An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this. This takes precedence over `baseExperiment` if specified.
+ * @param options.repoInfo (Optional) Explicitly specify the git metadata for this experiment. This takes precedence over `gitMetadataSettings` if specified.
  * @returns The newly created Experiment.
  */
-export function init(
+export function init<IsOpen extends boolean = false>(
+  options: Readonly<FullInitOptions<IsOpen>>
+): InitializedExperiment<IsOpen>;
+
+/**
+ * Legacy form of `init` which accepts the project name as the first parameter,
+ * separately from the remaining options. See `init(options)` for full details.
+ */
+export function init<IsOpen extends boolean = false>(
   project: string,
-  options: Readonly<InitOptions> = {}
-): Experiment {
+  options?: Readonly<InitOptions<IsOpen>>
+): InitializedExperiment<IsOpen>;
+
+/**
+ * Combined overload implementation of `init`. Do not call this directly.
+ * Instead, call `init(options)` or `init(project, options)`.
+ */
+export function init<IsOpen extends boolean = false>(
+  projectOrOptions: string | Readonly<FullInitOptions<IsOpen>>,
+  optionalOptions?: Readonly<InitOptions<IsOpen>>
+): InitializedExperiment<IsOpen> {
+  const options = ((): Readonly<FullInitOptions<IsOpen>> => {
+    if (typeof projectOrOptions === "string") {
+      return { ...optionalOptions, project: projectOrOptions };
+    } else {
+      if (optionalOptions !== undefined) {
+        throw new Error(
+          "Cannot specify options struct as both parameters. Must call either init(project, options) or init(options)."
+        );
+      }
+      return projectOrOptions;
+    }
+  })();
+
   const {
+    project,
     experiment,
     description,
     dataset,
     baseExperiment,
     isPublic,
+    open,
     update,
-    apiUrl,
+    appUrl,
     apiKey,
     orgName,
     metadata,
-  } = options || {};
+    gitMetadataSettings,
+    projectId,
+    baseExperimentId,
+    repoInfo,
+  } = options;
 
-  const lazyMetadata: Promise<ProjectExperimentMetadata> = (async () => {
-    await login({
-      orgName: orgName,
-      apiKey,
-      apiUrl,
-    });
-    const args: Record<string, unknown> = {
-      project_name: project,
-      org_id: _state.orgId,
-    };
+  if (open && update) {
+    throw new Error("Cannot open and update an experiment at the same time");
+  }
 
-    if (experiment) {
-      args["experiment_name"] = experiment;
+  if (open || update) {
+    if (isEmpty(experiment)) {
+      const action = open ? "open" : "update";
+      throw new Error(
+        `Cannot ${action} an experiment without specifying its name`
+      );
     }
 
-    if (description) {
-      args["description"] = description;
-    }
+    const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(
+      async () => {
+        await login({
+          orgName: orgName,
+          apiKey,
+          appUrl,
+        });
+        const args: Record<string, unknown> = {
+          project_name: project,
+          project_id: projectId,
+          org_name: _state.orgName,
+          experiment_name: experiment,
+        };
 
-    if (update) {
-      args["update"] = update;
-    }
-
-    const repoStatus = await iso.getRepoStatus();
-    if (repoStatus) {
-      args["repo_info"] = repoStatus;
-    }
-
-    if (baseExperiment) {
-      args["base_experiment"] = baseExperiment;
-    } else {
-      args["ancestor_commits"] = await iso.getPastNAncestors();
-    }
-
-    if (dataset !== undefined) {
-      args["dataset_id"] = dataset.id;
-      args["dataset_version"] = await dataset.version();
-    }
-
-    if (isPublic !== undefined) {
-      args["public"] = isPublic;
-    }
-
-    if (metadata) {
-      args["metadata"] = metadata;
-    }
-
-    let response = null;
-    while (true) {
-      try {
-        response = await _state
+        const response = await _state
           .apiConn()
-          .post_json("api/experiment/register", args);
-        break;
-      } catch (e: any) {
-        if (
-          args["base_experiment"] &&
-          `${"data" in e && e.data}`.includes("base experiment")
-        ) {
-          console.warn(`Base experiment ${args["base_experiment"]} not found.`);
-          delete args["base_experiment"];
-        } else {
-          throw e;
+          .post_json("api/experiment/get", args);
+
+        if (response.length === 0) {
+          throw new Error(
+            `Experiment ${experiment} not found in project ${
+              projectId ?? project
+            }.`
+          );
+        }
+
+        const info = response[0];
+        return {
+          project: {
+            id: info.project_id,
+            name: "",
+            fullInfo: {},
+          },
+          experiment: {
+            id: info.id,
+            name: info.name,
+            fullInfo: info,
+          },
+        };
+      }
+    );
+
+    if (open) {
+      return new ReadonlyExperiment(
+        lazyMetadata
+      ) as InitializedExperiment<IsOpen>;
+    } else {
+      const ret = new Experiment(lazyMetadata, dataset);
+      if (options.setCurrent ?? true) {
+        _state.currentExperiment = ret;
+      }
+      return ret as InitializedExperiment<IsOpen>;
+    }
+  }
+
+  const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(
+    async () => {
+      await login({
+        orgName: orgName,
+        apiKey,
+        appUrl,
+      });
+      const args: Record<string, unknown> = {
+        project_name: project,
+        project_id: projectId,
+        org_id: _state.orgId,
+      };
+
+      if (experiment) {
+        args["experiment_name"] = experiment;
+      }
+
+      if (description) {
+        args["description"] = description;
+      }
+
+      const repoInfoArg = await (async (): Promise<RepoInfo | undefined> => {
+        if (repoInfo) {
+          return repoInfo;
+        }
+        let mergedGitMetadataSettings = {
+          ...(_state.gitMetadataSettings || {
+            collect: "all",
+          }),
+        };
+        if (gitMetadataSettings) {
+          mergedGitMetadataSettings = mergeGitMetadataSettings(
+            mergedGitMetadataSettings,
+            gitMetadataSettings
+          );
+        }
+        return await iso.getRepoInfo(mergedGitMetadataSettings);
+      })();
+
+      if (repoInfoArg) {
+        args["repo_info"] = repoInfoArg;
+      }
+
+      if (baseExperimentId) {
+        args["base_exp_id"] = baseExperimentId;
+      } else if (baseExperiment) {
+        args["base_experiment"] = baseExperiment;
+      } else {
+        args["ancestor_commits"] = await iso.getPastNAncestors();
+      }
+
+      if (dataset !== undefined) {
+        args["dataset_id"] = await dataset.id;
+        args["dataset_version"] = await dataset.version();
+      }
+
+      if (isPublic !== undefined) {
+        args["public"] = isPublic;
+      }
+
+      if (metadata) {
+        args["metadata"] = metadata;
+      }
+
+      let response = null;
+      while (true) {
+        try {
+          response = await _state
+            .apiConn()
+            .post_json("api/experiment/register", args);
+          break;
+        } catch (e: any) {
+          if (
+            args["base_experiment"] &&
+            `${"data" in e && e.data}`.includes("base experiment")
+          ) {
+            console.warn(
+              `Base experiment ${args["base_experiment"]} not found.`
+            );
+            delete args["base_experiment"];
+          } else {
+            throw e;
+          }
         }
       }
-    }
 
-    return {
-      project: {
-        id: response.project.id,
-        name: response.project.name,
-        fullInfo: response.project,
-      },
-      experiment: {
-        id: response.experiment.id,
-        name: response.experiment.name,
-        fullInfo: response.experiment,
-      },
-    };
-  })();
+      return {
+        project: {
+          id: response.project.id,
+          name: response.project.name,
+          fullInfo: response.project,
+        },
+        experiment: {
+          id: response.experiment.id,
+          name: response.experiment.name,
+          fullInfo: response.experiment,
+        },
+      };
+    }
+  );
 
   const ret = new Experiment(lazyMetadata, dataset);
   if (options.setCurrent ?? true) {
     _state.currentExperiment = ret;
   }
-  return ret;
+  return ret as InitializedExperiment<IsOpen>;
+}
+
+/**
+ * Alias for init(options).
+ */
+export function initExperiment<IsOpen extends boolean = false>(
+  options: Readonly<InitOptions<IsOpen>>
+): InitializedExperiment<IsOpen>;
+
+/**
+ * Alias for init(project, options).
+ */
+export function initExperiment<IsOpen extends boolean = false>(
+  project: string,
+  options?: Readonly<InitOptions<IsOpen>>
+): InitializedExperiment<IsOpen>;
+
+/**
+ * Combined overload implementation of `initExperiment`, which is an alias for
+ * `init`. Do not call this directly. Instead, call `initExperiment(options)` or
+ * `initExperiment(project, options)`.
+ */
+export function initExperiment<IsOpen extends boolean = false>(
+  projectOrOptions: string | Readonly<InitOptions<IsOpen>>,
+  optionalOptions?: Readonly<InitOptions<IsOpen>>
+): InitializedExperiment<IsOpen> {
+  const options = ((): Readonly<FullInitOptions<IsOpen>> => {
+    if (typeof projectOrOptions === "string") {
+      return { ...optionalOptions, project: projectOrOptions };
+    } else {
+      if (optionalOptions !== undefined) {
+        throw new Error(
+          "Cannot specify options struct as both parameters. Must call either init(project, options) or init(options)."
+        );
+      }
+      return projectOrOptions;
+    }
+  })();
+  return init(options);
 }
 
 /**
@@ -1042,7 +1172,7 @@ export function init(
 export function withExperiment<R>(
   project: string,
   callback: (experiment: Experiment) => R,
-  options: Readonly<InitOptions & SetCurrentArg> = {}
+  options: Readonly<InitOptions<false> & SetCurrentArg> = {}
 ): R {
   console.warn(
     "withExperiment is deprecated and will be removed in a future version of braintrust. Simply create the experiment with `init`."
@@ -1065,81 +1195,144 @@ export function withLogger<IsAsyncFlush extends boolean = false, R = void>(
   return callback(logger);
 }
 
-type InitDatasetOptions = {
+type UseOutputOption<IsLegacyDataset extends boolean> = {
+  useOutput?: IsLegacyDataset;
+};
+
+type InitDatasetOptions<IsLegacyDataset extends boolean> = {
   dataset?: string;
   description?: string;
   version?: string;
-  apiUrl?: string;
+  appUrl?: string;
   apiKey?: string;
   orgName?: string;
-};
+  projectId?: string;
+} & UseOutputOption<IsLegacyDataset>;
+
+type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
+  project?: string;
+} & InitDatasetOptions<IsLegacyDataset>;
 
 /**
  * Create a new dataset in a specified project. If the project does not exist, it will be created.
  *
- * @param project The name of the project to create the dataset in.
- * @param options Additional options for configuring init().
+ * @param options Options for configuring initDataset().
+ * @param options.project The name of the project to create the dataset in. Must specify at least one of `project` or `projectId`.
  * @param options.dataset The name of the dataset to create. If not specified, a name will be generated automatically.
  * @param options.description An optional description of the dataset.
- * @param options.apiUrl The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
- * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
- * key is specified, will prompt the user to login.
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
+ * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+ * @param options.projectId The id of the project to create the dataset in. This takes precedence over `project` if specified.
+ * @param options.useOutput If true (the default), records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This will default to false in a future version of Braintrust.
  * @returns The newly created Dataset.
  */
-export function initDataset(
+export function initDataset<
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+>(
+  options: Readonly<FullInitDatasetOptions<IsLegacyDataset>>
+): Dataset<IsLegacyDataset>;
+
+/**
+ * Legacy form of `initDataset` which accepts the project name as the first
+ * parameter, separately from the remaining options. See
+ * `initDataset(options)` for full details.
+ */
+export function initDataset<
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+>(
   project: string,
-  options: Readonly<InitDatasetOptions> = {}
-) {
-  const { dataset, description, version, apiUrl, apiKey, orgName } =
-    options || {};
+  options?: Readonly<InitDatasetOptions<IsLegacyDataset>>
+): Dataset<IsLegacyDataset>;
 
-  const lazyMetadata: Promise<ProjectDatasetMetadata> = (async () => {
-    await login({
-      orgName: orgName,
-      apiKey,
-      apiUrl,
-    });
-
-    const args: Record<string, unknown> = {
-      org_id: _state.orgId,
-      project_name: project,
-      dataset_name: dataset,
-      description,
-    };
-    const response = await _state
-      .apiConn()
-      .post_json("api/dataset/register", args);
-
-    return {
-      project: {
-        id: response.project.id,
-        name: response.project.name,
-        fullInfo: response.project,
-      },
-      dataset: {
-        id: response.dataset.id,
-        name: response.dataset.name,
-        fullInfo: response.dataset,
-      },
-    };
+/**
+ * Combined overload implementation of `initDataset`. Do not call this
+ * directly. Instead, call `initDataset(options)` or `initDataset(project,
+ * options)`.
+ */
+export function initDataset<
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+>(
+  projectOrOptions: string | Readonly<FullInitDatasetOptions<IsLegacyDataset>>,
+  optionalOptions?: Readonly<InitDatasetOptions<IsLegacyDataset>>
+): Dataset<IsLegacyDataset> {
+  const options = ((): Readonly<FullInitDatasetOptions<IsLegacyDataset>> => {
+    if (typeof projectOrOptions === "string") {
+      return { ...optionalOptions, project: projectOrOptions };
+    } else {
+      if (optionalOptions !== undefined) {
+        throw new Error(
+          "Cannot specify options struct as both parameters. Must call either initDataset(project, options) or initDataset(options)."
+        );
+      }
+      return projectOrOptions;
+    }
   })();
 
-  return new Dataset(lazyMetadata, version);
+  const {
+    project,
+    dataset,
+    description,
+    version,
+    appUrl,
+    apiKey,
+    orgName,
+    projectId,
+    useOutput: legacy,
+  } = options;
+
+  const lazyMetadata: LazyValue<ProjectDatasetMetadata> = new LazyValue(
+    async () => {
+      await login({
+        orgName: orgName,
+        apiKey,
+        appUrl,
+      });
+
+      const args: Record<string, unknown> = {
+        org_id: _state.orgId,
+        project_name: project,
+        project_id: projectId,
+        dataset_name: dataset,
+        description,
+      };
+      const response = await _state
+        .apiConn()
+        .post_json("api/dataset/register", args);
+
+      return {
+        project: {
+          id: response.project.id,
+          name: response.project.name,
+          fullInfo: response.project,
+        },
+        dataset: {
+          id: response.dataset.id,
+          name: response.dataset.name,
+          fullInfo: response.dataset,
+        },
+      };
+    }
+  );
+
+  return new Dataset(lazyMetadata, version, legacy);
 }
 
 /**
  * This function is deprecated. Use `initDataset` instead.
  */
-export function withDataset<R>(
+export function withDataset<
+  R,
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+>(
   project: string,
-  callback: (dataset: Dataset) => R,
-  options: Readonly<InitDatasetOptions> = {}
+  callback: (dataset: Dataset<IsLegacyDataset>) => R,
+  options: Readonly<InitDatasetOptions<IsLegacyDataset>> = {}
 ): R {
   console.warn(
     "withDataset is deprecated and will be removed in a future version of braintrust. Simply create the dataset with `initDataset`."
   );
-  const dataset = initDataset(project, options);
+  const dataset = initDataset<IsLegacyDataset>(project, options);
   return callback(dataset);
 }
 
@@ -1150,7 +1343,7 @@ type AsyncFlushArg<IsAsyncFlush> = {
 type InitLoggerOptions<IsAsyncFlush> = {
   projectName?: string;
   projectId?: string;
-  apiUrl?: string;
+  appUrl?: string;
   apiKey?: string;
   orgName?: string;
   forceLogin?: boolean;
@@ -1164,7 +1357,7 @@ type InitLoggerOptions<IsAsyncFlush> = {
  * @param options.projectName The name of the project to log into. If unspecified, will default to the Global project.
  * @param options.projectId The id of the project to log into. This takes precedence over projectName if specified.
  * @param options.asyncFlush If true, will log asynchronously in the background. Otherwise, will log synchronously. (false by default, to support serverless environments)
- * @param options.apiUrl The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -1179,54 +1372,56 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
     projectName,
     projectId,
     asyncFlush,
-    apiUrl,
+    appUrl,
     apiKey,
     orgName,
     forceLogin,
   } = options || {};
 
-  const lazyMetadata: Promise<OrgProjectMetadata> = (async () => {
-    await login({
-      orgName: orgName,
-      apiKey,
-      apiUrl,
-      forceLogin,
-    });
-    const org_id = _state.orgId!;
-    if (projectId === undefined) {
-      const response = await _state
-        .apiConn()
-        .post_json("api/project/register", {
-          project_name: projectName || GLOBAL_PROJECT,
-          org_id,
-        });
-      return {
-        org_id,
-        project: {
-          id: response.project.id,
-          name: response.project.name,
-          fullInfo: response.project,
-        },
-      };
-    } else if (projectName === undefined) {
-      const response = await _state.apiConn().get_json("api/project", {
-        id: projectId,
+  const lazyMetadata: LazyValue<OrgProjectMetadata> = new LazyValue(
+    async () => {
+      await login({
+        orgName: orgName,
+        apiKey,
+        appUrl,
+        forceLogin,
       });
-      return {
-        org_id,
-        project: {
+      const org_id = _state.orgId!;
+      if (projectId === undefined) {
+        const response = await _state
+          .apiConn()
+          .post_json("api/project/register", {
+            project_name: projectName || GLOBAL_PROJECT,
+            org_id,
+          });
+        return {
+          org_id,
+          project: {
+            id: response.project.id,
+            name: response.project.name,
+            fullInfo: response.project,
+          },
+        };
+      } else if (projectName === undefined) {
+        const response = await _state.apiConn().get_json("api/project", {
           id: projectId,
-          name: response.name,
-          fullInfo: response.project,
-        },
-      };
-    } else {
-      return {
-        org_id,
-        project: { id: projectId, name: projectName, fullInfo: {} },
-      };
+        });
+        return {
+          org_id,
+          project: {
+            id: projectId,
+            name: response.name,
+            fullInfo: response.project,
+          },
+        };
+      } else {
+        return {
+          org_id,
+          project: { id: projectId, name: projectName, fullInfo: {} },
+        };
+      }
     }
-  })();
+  );
 
   const ret = new Logger<IsAsyncFlush>(lazyMetadata, {
     asyncFlush,
@@ -1242,7 +1437,7 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
  * https://www.braintrustdata.com/app/token. This method is called automatically by `init()`.
  *
  * @param options Options for configuring login().
- * @param options.apiUrl The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -1250,34 +1445,47 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
  */
 export async function login(
   options: {
-    apiUrl?: string;
+    appUrl?: string;
     apiKey?: string;
     orgName?: string;
     forceLogin?: boolean;
   } = {}
 ) {
+  let { forceLogin = false } = options || {};
+
+  if (_state.loggedIn && !forceLogin) {
+    // We have already logged in. If any provided login inputs disagree with our
+    // existing settings, raise an Exception warning the user to try again with
+    // `forceLogin: true`.
+    function checkUpdatedParam(varname: string, arg: string | undefined, orig: string | null) {
+      if (!isEmpty(arg) && !isEmpty(orig) && arg !== orig) {
+        throw new Error(
+            `Re-logging in with different ${varname} (${arg}) than original (${orig}). To force re-login, pass \`forceLogin: true\``
+        );
+      }
+    };
+    checkUpdatedParam("appUrl", options.appUrl, _state.appUrl);
+    checkUpdatedParam("apiKey", options.apiKey ? HTTPConnection.sanitize_token(options.apiKey) : undefined, _state.loginToken);
+    checkUpdatedParam("orgName", options.orgName, _state.orgName);
+    return;
+  }
+
   const {
-    apiUrl = iso.getEnv("BRAINTRUST_API_URL") ||
+    appUrl = iso.getEnv("BRAINTRUST_APP_URL") ||
       "https://www.braintrustdata.com",
     apiKey = iso.getEnv("BRAINTRUST_API_KEY"),
     orgName = iso.getEnv("BRAINTRUST_ORG_NAME"),
   } = options || {};
 
-  let { forceLogin = false } = options || {};
-
-  if (_state.loggedIn && !forceLogin) {
-    return;
-  }
-
   _state.resetLoginInfo();
 
-  _state.apiUrl = apiUrl;
+  _state.appUrl = appUrl;
 
   let conn = null;
 
   if (apiKey !== undefined) {
     const resp = await checkResponse(
-      await fetch(_urljoin(_state.apiUrl, `/api/apikey/login`), {
+      await fetch(_urljoin(_state.appUrl, `/api/apikey/login`), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1441,7 +1649,11 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
 }
 
 /**
- * Lower-level alternative to `traced`, which does not automatically end the span or mark it as current. See `traced` for full details.
+ * Lower-level alternative to `traced`. This allows you to start a span yourself, and can be useful in situations
+ * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
+ * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
+ *
+ * See `traced` for full details.
  */
 export function startSpan<IsAsyncFlush extends boolean = false>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush>
@@ -1475,7 +1687,8 @@ function _check_org_info(org_info: any, org_name: string | undefined) {
     if (org_name === undefined || org.name === org_name) {
       _state.orgId = org.id;
       _state.orgName = org.name;
-      _state.logUrl = iso.getEnv("BRAINTRUST_LOG_URL") ?? org.api_url;
+      _state.logUrl = iso.getEnv("BRAINTRUST_API_URL") ?? org.api_url;
+      _state.gitMetadataSettings = org.git_metadata || undefined;
       break;
     }
   }
@@ -1562,7 +1775,10 @@ function validateAndSanitizeExperimentLogFullArgs(
   hasDataset: boolean
 ): ExperimentLogFullArgs {
   if (
-    ("input" in event && event.input && "inputs" in event && event.inputs) ||
+    ("input" in event &&
+      !isEmpty(event.input) &&
+      "inputs" in event &&
+      !isEmpty(event.inputs)) ||
     (!("input" in event) && !("inputs" in event))
   ) {
     throw new Error(
@@ -1570,7 +1786,10 @@ function validateAndSanitizeExperimentLogFullArgs(
     );
   }
 
-  if (!event.scores) {
+  if (isEmpty(event.output)) {
+    throw new Error("output must be specified");
+  }
+  if (isEmpty(event.scores)) {
     throw new Error("scores must be specified");
   }
 
@@ -1585,6 +1804,98 @@ function validateAndSanitizeExperimentLogFullArgs(
   return event;
 }
 
+export type WithTransactionId<R> = R & {
+  [TRANSACTION_ID_FIELD]: TransactionId;
+};
+
+class ObjectFetcher<RecordType>
+  implements AsyncIterable<WithTransactionId<RecordType>>
+{
+  private _fetchedData: WithTransactionId<RecordType>[] | undefined = undefined;
+
+  constructor(
+    private objectType: "dataset" | "experiment",
+    private pinnedVersion: string | undefined,
+    private mutateRecord?: (r: any) => RecordType
+  ) {}
+
+  public get id(): Promise<string> {
+    throw new Error("ObjectFetcher subclasses must have an 'id' attribute");
+  }
+
+  protected async getState(): Promise<BraintrustState> {
+    throw new Error("ObjectFetcher subclasses must have a 'getState' method");
+  }
+
+  async *fetch(): AsyncGenerator<WithTransactionId<RecordType>> {
+    const records = await this.fetchedData();
+    for (const record of records) {
+      yield record;
+    }
+  }
+
+  [Symbol.asyncIterator](): AsyncIterator<WithTransactionId<RecordType>> {
+    return this.fetch();
+  }
+
+  async fetchedData() {
+    if (this._fetchedData === undefined) {
+      const state = await this.getState();
+      let data = undefined;
+      try {
+        const resp = await state.logConn().get(`object3/${this.objectType}`, {
+          id: await this.id,
+          fmt: "json2",
+          version: this.pinnedVersion,
+          api_version: "2",
+        });
+        data = await resp.json();
+      } catch (e) {
+        // DEPRECATION_NOTICE: When hitting old versions of the API where the "object3/" endpoint isn't available, we fall back to
+        // the "object/" endpoint, which may require patching the incoming records. Remove this code once
+        // all APIs are updated.
+        const resp = await state.logConn().get(`object/${this.objectType}`, {
+          id: await this.id,
+          fmt: "json2",
+          version: this.pinnedVersion,
+        });
+        data = await resp.json();
+      }
+      this._fetchedData = this.mutateRecord
+        ? data?.map(this.mutateRecord)
+        : data;
+    }
+    return this._fetchedData || [];
+  }
+
+  clearCache() {
+    this._fetchedData = undefined;
+  }
+
+  public async version() {
+    if (this.pinnedVersion !== undefined) {
+      return this.pinnedVersion;
+    } else {
+      const fetchedData = await this.fetchedData();
+      let maxVersion = undefined;
+      for (const record of fetchedData) {
+        const xactId = record[TRANSACTION_ID_FIELD];
+        if (maxVersion === undefined || (xactId ?? xactId > maxVersion)) {
+          maxVersion = xactId;
+        }
+      }
+      return maxVersion;
+    }
+  }
+}
+
+export type BaseMetadata = Record<string, unknown> | void;
+export type DefaultMetadataType = void;
+export type EvalCase<Input, Expected, Metadata> = {
+  input: Input;
+} & (Expected extends void ? {} : { expected: Expected }) &
+  (Metadata extends void ? {} : { metadata: Metadata });
+
 /**
  * An experiment is a collection of logged events, such as model inputs and outputs, which represent
  * a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -1597,47 +1908,50 @@ function validateAndSanitizeExperimentLogFullArgs(
  *
  * You should not create `Experiment` objects directly. Instead, use the `braintrust.init()` method.
  */
-export class Experiment {
-  private readonly lazyMetadata: Promise<ProjectExperimentMetadata>;
-  public readonly dataset?: Dataset;
+export class Experiment extends ObjectFetcher<ExperimentEvent> {
+  private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>;
+  public readonly dataset?: AnyDataset;
   private bgLogger: BackgroundLogger;
   private lastStartTime: number;
   // For type identification.
   public kind: "experiment" = "experiment";
 
   constructor(
-    lazyMetadata: Promise<ProjectExperimentMetadata>,
-    dataset?: Dataset
+    lazyMetadata: LazyValue<ProjectExperimentMetadata>,
+    dataset?: AnyDataset
   ) {
+    super("experiment", undefined);
     this.lazyMetadata = lazyMetadata;
     this.dataset = dataset;
 
-    const logConn = this.getState().then((state) => state.logConn());
+    const logConn = new LazyValue(() =>
+      this.getState().then((state) => state.logConn())
+    );
     this.bgLogger = new BackgroundLogger(logConn);
     this.lastStartTime = getCurrentUnixTimestamp();
   }
 
   public get id(): Promise<string> {
     return (async () => {
-      return (await this.lazyMetadata).experiment.id;
+      return (await this.lazyMetadata.get()).experiment.id;
     })();
   }
 
   public get name(): Promise<string> {
     return (async () => {
-      return (await this.lazyMetadata).experiment.name;
+      return (await this.lazyMetadata.get()).experiment.name;
     })();
   }
 
   public get project(): Promise<ObjectMetadata> {
     return (async () => {
-      return (await this.lazyMetadata).project;
+      return (await this.lazyMetadata.get()).project;
     })();
   }
 
-  private async getState(): Promise<BraintrustState> {
+  protected async getState(): Promise<BraintrustState> {
     // Ensure the login state is populated by awaiting lazyMetadata.
-    await this.lazyMetadata;
+    await this.lazyMetadata.get();
     return _state;
   }
 
@@ -1647,10 +1961,10 @@ export class Experiment {
    * @param event The event to log.
    * @param event.input: The arguments that uniquely define a test case (an arbitrary, JSON serializable object). Later on, Braintrust will use the `input` to know whether two test cases are the same between experiments, so they should not contain experiment-specific state. A simple rule of thumb is that if you run the same experiment twice, the `input` should be identical.
    * @param event.output: The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
-   * @param event.expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
+   * @param event.expected: (Optional) The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
    * @param event.scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments.
    * @param event.metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
-   * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
+   * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
    * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
    * @param event.dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
    * @param event.inputs: (Deprecated) the same as `input` (will be removed in a future version).
@@ -1695,18 +2009,44 @@ export class Experiment {
   }
 
   /**
-   * Lower-level alternative to `traced`, which does not automatically end the span or mark it as current.
+   * Lower-level alternative to `traced`. This allows you to start a span yourself, and can be useful in situations
+   * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
+   * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
    *
    * See `traced` for full details.
    */
   public startSpan(args?: StartSpanArgs): Span {
     const { name, ...argsRest } = args ?? {};
     return new SpanImpl({
-      parentIds: this.lazyParentIds(),
+      parentIds: new LazyValue(() => this.lazyParentIds()),
       bgLogger: this.bgLogger,
       name: name ?? "root",
       ...argsRest,
     });
+  }
+
+  public async fetchBaseExperiment() {
+    const state = await this.getState();
+    const conn = state.apiConn();
+
+    try {
+      const resp = await conn.post("/api/base_experiment/get_id", {
+        id: await this.id,
+      });
+
+      const base = await resp.json();
+      return {
+        id: base["base_exp_id"],
+        name: base["base_exp_name"],
+      };
+    } catch (e) {
+      if (e instanceof FailedHTTPResponse && e.status === 400) {
+        // No base experiment
+        return null;
+      } else {
+        throw e;
+      }
+    }
   }
 
   /**
@@ -1728,7 +2068,7 @@ export class Experiment {
 
     await this.bgLogger.flush();
     const state = await this.getState();
-    const projectUrl = `${state.apiUrl}/app/${encodeURIComponent(
+    const projectUrl = `${state.appUrl}/app/${encodeURIComponent(
       state.orgName!
     )}/p/${encodeURIComponent((await this.project).name)}`;
     const experimentUrl = `${projectUrl}/${encodeURIComponent(
@@ -1740,14 +2080,10 @@ export class Experiment {
     let comparisonExperimentName = undefined;
     if (summarizeScores) {
       if (comparisonExperimentId === undefined) {
-        const conn = state.logConn();
-        const resp = await conn.get("/crud/base_experiments", {
-          id: await this.id,
-        });
-        const base_experiments = await resp.json();
-        if (base_experiments.length > 0) {
-          comparisonExperimentId = base_experiments[0]["base_exp_id"];
-          comparisonExperimentName = base_experiments[0]["base_exp_name"];
+        const baseExperiment = await this.fetchBaseExperiment();
+        if (baseExperiment !== null) {
+          comparisonExperimentId = baseExperiment.id;
+          comparisonExperimentName = baseExperiment.name;
         }
       }
 
@@ -1789,7 +2125,11 @@ export class Experiment {
    * @param event.source (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
    */
   public logFeedback(event: LogFeedbackFullArgs): void {
-    logFeedbackImpl(this.bgLogger, this.lazyParentIds(), event);
+    logFeedbackImpl(
+      this.bgLogger,
+      new LazyValue(() => this.lazyParentIds()),
+      event
+    );
   }
 
   /**
@@ -1810,18 +2150,61 @@ export class Experiment {
   }
 }
 
-interface ParentExperimentIds {
-  kind: "experiment";
-  project_id: string;
-  experiment_id: string;
+/**
+ * A read-only view of an experiment, initialized by passing `open: true` to `init()`.
+ */
+export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
+  constructor(
+    private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>
+  ) {
+    super("experiment", undefined);
+  }
+
+  public get id(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata.get()).experiment.id;
+    })();
+  }
+
+  public get name(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata.get()).experiment.name;
+    })();
+  }
+
+  protected async getState(): Promise<BraintrustState> {
+    // Ensure the login state is populated by awaiting lazyMetadata.
+    await this.lazyMetadata.get();
+    return _state;
+  }
+
+  public async *asDataset<Input, Expected>(): AsyncGenerator<
+    EvalCase<Input, Expected, void>
+  > {
+    const records = this.fetch();
+    for await (const record of records) {
+      if (record.root_span_id !== record.span_id) {
+        continue;
+      }
+
+      const { output, expected: expectedRecord } = record;
+      const expected = (expectedRecord ?? output) as Expected;
+
+      if (isEmpty(expected)) {
+        yield {
+          input: record.input as Input,
+        } as EvalCase<Input, Expected, void>;
+      } else {
+        yield {
+          input: record.input as Input,
+          expected: expected,
+        } as unknown as EvalCase<Input, Expected, void>;
+      }
+    }
+  }
 }
 
-interface ParentProjectLogIds {
-  kind: "project_log";
-  org_id: string;
-  project_id: string;
-  log_id: "g";
-}
+let executionCounter = 0;
 
 /**
  * Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
@@ -1837,7 +2220,7 @@ export class SpanImpl implements Span {
   private loggedEndTime: number | undefined;
 
   // These fields are logged to every span row.
-  private parentIds: Promise<ParentExperimentIds | ParentProjectLogIds>;
+  private parentIds: LazyValue<ParentExperimentIds | ParentProjectLogIds>;
   private readonly rowIds: {
     id: string;
     span_id: string;
@@ -1851,7 +2234,7 @@ export class SpanImpl implements Span {
   // should only be specified for non-root spans.
   constructor(
     args: {
-      parentIds: Promise<ParentExperimentIds | ParentProjectLogIds>;
+      parentIds: LazyValue<ParentExperimentIds | ParentProjectLogIds>;
       bgLogger: BackgroundLogger;
     } & Omit<StartSpanArgs, "parentId"> &
       (
@@ -1884,9 +2267,13 @@ export class SpanImpl implements Span {
     this.internalData = {
       metrics: {
         start: args.startTime ?? getCurrentUnixTimestamp(),
-        ...callerLocation,
       },
-      span_attributes: { ...args.spanAttributes, name },
+      context: { ...callerLocation },
+      span_attributes: {
+        ...args.spanAttributes,
+        name,
+        exec_counter: executionCounter++,
+      },
       created: new Date().toISOString(),
     };
 
@@ -1940,19 +2327,19 @@ export class SpanImpl implements Span {
       this.loggedEndTime = sanitizedAndInternalData.metrics?.end as number;
     }
 
-    const parentIds = (async () => {
-      const { kind, ...ids } = await this.parentIds;
+    const parentIds = new LazyValue(async () => {
+      const { kind, ...ids } = await this.parentIds.get();
       return ids;
-    })();
+    });
 
-    const record = (async () => {
+    const record = new LazyValue(async () => {
       return {
         ...sanitizedAndInternalData,
         ...this.rowIds,
-        ...(await parentIds),
+        ...(await parentIds.get()),
         [IS_MERGE_FIELD]: this.isMerge,
       };
-    })();
+    });
     this.bgLogger.log([record]);
   }
 
@@ -2011,49 +2398,61 @@ export class SpanImpl implements Span {
 }
 
 /**
- * A dataset is a collection of records, such as model inputs and outputs, which represent
+ * A dataset is a collection of records, such as model inputs and expected outputs, which represent
  * data you can use to evaluate and fine-tune models. You can log production data to datasets,
  * curate them with interesting examples, edit/delete records, and run evaluations against them.
  *
  * You should not create `Dataset` objects directly. Instead, use the `braintrust.initDataset()` method.
  */
-export class Dataset {
-  private readonly lazyMetadata: Promise<ProjectDatasetMetadata>;
-  private pinnedVersion?: string;
-  private _fetchedData?: any[] = undefined;
+class Dataset<
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+> extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
+  private readonly lazyMetadata: LazyValue<ProjectDatasetMetadata>;
   private bgLogger: BackgroundLogger;
 
   constructor(
-    lazyMetadata: Promise<ProjectDatasetMetadata>,
-    pinnedVersion?: string
+    lazyMetadata: LazyValue<ProjectDatasetMetadata>,
+    pinnedVersion?: string,
+    legacy?: IsLegacyDataset
   ) {
+    const isLegacyDataset = (legacy ??
+      DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
+    if (isLegacyDataset) {
+      console.warn(
+        `Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use \`braintrust.initDataset()\` with \`{ useOutput: false }\`, which will become the default in a future version of Braintrust.`
+      );
+    }
+    super("dataset", pinnedVersion, (r: AnyDatasetRecord) =>
+      ensureDatasetRecord(r, isLegacyDataset)
+    );
     this.lazyMetadata = lazyMetadata;
-    this.pinnedVersion = pinnedVersion;
-    const logConn = this.getState().then((state) => state.logConn());
+    const logConn = new LazyValue(() =>
+      this.getState().then((state) => state.logConn())
+    );
     this.bgLogger = new BackgroundLogger(logConn);
   }
 
   public get id(): Promise<string> {
     return (async () => {
-      return (await this.lazyMetadata).dataset.id;
+      return (await this.lazyMetadata.get()).dataset.id;
     })();
   }
 
   public get name(): Promise<string> {
     return (async () => {
-      return (await this.lazyMetadata).dataset.name;
+      return (await this.lazyMetadata.get()).dataset.name;
     })();
   }
 
   public get project(): Promise<ObjectMetadata> {
     return (async () => {
-      return (await this.lazyMetadata).project;
+      return (await this.lazyMetadata.get()).project;
     })();
   }
 
-  private async getState(): Promise<BraintrustState> {
+  protected async getState(): Promise<BraintrustState> {
     // Ensure the login state is populated by awaiting lazyMetadata.
-    await this.lazyMetadata;
+    await this.lazyMetadata.get();
     return _state;
   }
 
@@ -2063,24 +2462,27 @@ export class Dataset {
    *
    * @param event The event to log.
    * @param event.input The argument that uniquely define an input case (an arbitrary, JSON serializable object).
-   * @param event.output The output of your application, including post-processing (an arbitrary, JSON serializable object).
+   * @param event.expected The output of your application, including post-processing (an arbitrary, JSON serializable object).
    * @param event.metadata (Optional) a dictionary with additional data about the test example, model outputs, or just
    * about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
    * `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
    * JSON-serializable type, but its keys must be strings.
    * @param event.id (Optional) a unique identifier for the event. If you don't provide one, Braintrust will generate one for you.
+   * @param event.output: (Deprecated) The output of your application. Use `expected` instead.
    * @returns The `id` of the logged record.
    */
   public insert({
     input,
-    output,
+    expected,
     metadata,
     id,
+    output,
   }: {
     readonly input?: unknown;
-    readonly output: unknown;
+    readonly expected?: unknown;
     readonly metadata?: Record<string, unknown>;
     readonly id?: string;
+    readonly output?: unknown;
   }): string {
     if (metadata !== undefined) {
       for (const key of Object.keys(metadata)) {
@@ -2090,29 +2492,35 @@ export class Dataset {
       }
     }
 
+    if (expected && output) {
+      throw new Error(
+        "Only one of expected or output (deprecated) can be specified. Prefer expected."
+      );
+    }
+
     const rowId = id || uuidv4();
-    const args = (async () => ({
+    const args = new LazyValue(async () => ({
       id: rowId,
-      inputs: input,
-      output,
+      input,
+      expected: expected === undefined ? output : expected,
       project_id: (await this.project).id,
       dataset_id: await this.id,
       created: new Date().toISOString(),
       metadata,
-    }))();
+    }));
 
     this.bgLogger.log([args]);
     return rowId;
   }
 
   public delete(id: string): string {
-    const args = (async () => ({
+    const args = new LazyValue(async () => ({
       id,
       project_id: (await this.project).id,
       dataset_id: await this.id,
       created: new Date().toISOString(),
       _object_delete: true,
-    }))();
+    }));
 
     this.bgLogger.log([args]);
     return id;
@@ -2131,7 +2539,7 @@ export class Dataset {
 
     await this.bgLogger.flush();
     const state = await this.getState();
-    const projectUrl = `${state.apiUrl}/app/${encodeURIComponent(
+    const projectUrl = `${state.appUrl}/app/${encodeURIComponent(
       state.orgName!
     )}/p/${encodeURIComponent((await this.project).name)}`;
     const datasetUrl = `${projectUrl}/d/${encodeURIComponent(await this.name)}`;
@@ -2157,91 +2565,6 @@ export class Dataset {
   }
 
   /**
-   * Fetch all records in the dataset.
-   *
-   * @example
-   * ```
-   * // Use an async iterator to fetch all records in the dataset.
-   * for await (const record of dataset.fetch()) {
-   *  console.log(record);
-   * }
-   *
-   * // You can also iterate over the dataset directly.
-   * for await (const record of dataset) {
-   *  console.log(record);
-   * }
-   * ```
-   *
-   * @returns An iterator over the dataset's records.
-   */
-  async *fetch(): AsyncGenerator<DatasetRecord> {
-    const records = await this.fetchedData();
-    for (const record of records) {
-      yield {
-        id: record.id,
-        input: record.input && JSON.parse(record.input),
-        output: record.input && JSON.parse(record.output),
-        metadata: record.metadata && JSON.parse(record.metadata),
-      };
-    }
-    this.clearCache();
-  }
-
-  /**
-   * Fetch all records in the dataset.
-   *
-   * @example
-   * ```
-   * // Use an async iterator to fetch all records in the dataset.
-   * for await (const record of dataset) {
-   *  console.log(record);
-   * }
-   * ```
-   */
-  [Symbol.asyncIterator]() {
-    return this.fetch();
-  }
-
-  async fetchedData() {
-    if (this._fetchedData === undefined) {
-      const state = await this.getState();
-      const resp = await state.logConn().get("object/dataset", {
-        id: await this.id,
-        fmt: "json",
-        version: this.pinnedVersion,
-      });
-
-      const text = await resp.text();
-      this._fetchedData = text
-        .split("\n")
-        .filter((x: string) => x.trim() !== "")
-        .map((x: string) => JSON.parse(x));
-    }
-
-    return this._fetchedData || [];
-  }
-
-  clearCache() {
-    this._fetchedData = undefined;
-  }
-
-  async version() {
-    if (this.pinnedVersion !== undefined) {
-      return this.pinnedVersion;
-    } else {
-      const fetchedData = await this.fetchedData();
-      let maxVersion = undefined;
-      for (const record of fetchedData) {
-        const xactId = record[TRANSACTION_ID_FIELD];
-        if (maxVersion === undefined || (xactId ?? xactId > maxVersion)) {
-          maxVersion = xactId;
-        }
-      }
-      return maxVersion;
-    }
-  }
-
-  /**
    * Flush any pending rows to the server.
    */
   async flush(): Promise<void> {
@@ -2258,6 +2581,8 @@ export class Dataset {
     return this.id;
   }
 }
+
+export type AnyDataset = Dataset<boolean>;
 
 /**
  * Summary of a score's performance.

@@ -1,5 +1,7 @@
 import time
 
+from braintrust_core.span_types import SpanTypeAttribute
+
 from .logger import current_span
 
 
@@ -20,7 +22,9 @@ class ChatCompletionWrapper:
         params = self._parse_params(kwargs)
         stream = kwargs.get("stream", False)
 
-        span = current_span().start_span(name="OpenAI Chat Completion", **params)
+        span = current_span().start_span(
+            name="OpenAI Chat Completion", span_attributes={"type": SpanTypeAttribute.LLM}, **params
+        )
         should_end = True
         try:
             start = time.time()
@@ -66,7 +70,9 @@ class ChatCompletionWrapper:
         params = self._parse_params(kwargs)
         stream = kwargs.get("stream", False)
 
-        span = current_span().start_span(name="OpenAI Chat Completion", **params)
+        span = current_span().start_span(
+            name="OpenAI Chat Completion", span_attributes={"type": SpanTypeAttribute.LLM}, **params
+        )
         should_end = True
         try:
             start = time.time()
@@ -126,7 +132,9 @@ class EmbeddingWrapper:
     def create(self, *args, **kwargs):
         params = self._parse_params(kwargs)
 
-        with current_span().start_span(name="OpenAI Embedding", **params) as span:
+        with current_span().start_span(
+            name="OpenAI Embedding", span_attributes={"type": SpanTypeAttribute.LLM}, **params
+        ) as span:
             raw_response = self.create_fn(*args, **kwargs)
             log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
             span.log(
@@ -134,14 +142,18 @@ class EmbeddingWrapper:
                     "tokens": log_response["usage"]["total_tokens"],
                     "prompt_tokens": log_response["usage"]["prompt_tokens"],
                 },
-                output=log_response["data"],
+                # TODO: Add a flag to control whether to log the full embedding vector,
+                # possibly w/ JSON compression.
+                output={"embedding_length": len(log_response["data"][0]["embedding"])},
             )
             return raw_response
 
     async def acreate(self, *args, **kwargs):
         params = self._parse_params(kwargs)
 
-        with current_span().start_span(name="OpenAI Embedding", **params) as span:
+        with current_span().start_span(
+            name="OpenAI Embedding", span_attributes={"type": SpanTypeAttribute.LLM}, **params
+        ) as span:
             raw_response = await self.acreate_fn(*args, **kwargs)
             log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
             span.log(
@@ -149,7 +161,9 @@ class EmbeddingWrapper:
                     "tokens": log_response["usage"]["total_tokens"],
                     "prompt_tokens": log_response["usage"]["prompt_tokens"],
                 },
-                output=log_response["data"],
+                # TODO: Add a flag to control whether to log the full embedding vector,
+                # possibly w/ JSON compression.
+                output={"embedding_length": len(log_response["data"][0]["embedding"])},
             )
             return raw_response
 
@@ -229,15 +243,6 @@ class AsyncEmbeddingV1Wrapper(NamedWrapper):
 
     async def create(self, *args, **kwargs):
         return await EmbeddingWrapper(None, self.__embedding.create).acreate(*args, **kwargs)
-
-
-class EmbeddingV1Wrapper(NamedWrapper):
-    def __init__(self, embedding):
-        self.__embedding = embedding
-        super().__init__(embedding)
-
-    def create(self, *args, **kwargs):
-        return EmbeddingWrapper(None, self.__embedding.create).create(*args, **kwargs)
 
 
 class ChatV1Wrapper(NamedWrapper):

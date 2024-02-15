@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from threading import Lock
 from typing import List
 
-from braintrust.util import eprint
+from braintrust_core.util import eprint
 
 from .. import login
 from ..framework import (
@@ -202,7 +202,7 @@ def run(args):
         login(
             api_key=args.api_key,
             org_name=args.org_name,
-            api_url=args.api_url,
+            app_url=args.app_url,
         )
 
     if args.watch:
@@ -228,8 +228,8 @@ def build_parser(subparsers, parent_parser):
         help="The name of a specific organization to connect to. This is useful if you belong to multiple.",
     )
     parser.add_argument(
-        "--api-url",
-        help="Specify a custom braintrust api url. Defaults to https://www.braintrustdata.com. This is only necessary if you are using an experimental version of Braintrust",
+        "--app-url",
+        help="Specify a custom braintrust app url. Defaults to https://www.braintrustdata.com. This is only necessary if you are using an experimental version of Braintrust",
     )
     parser.add_argument(
         "--watch",

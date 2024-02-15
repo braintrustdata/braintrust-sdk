@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import queue
+import sys
 import textwrap
 import threading
 import time
@@ -19,6 +20,7 @@ from multiprocessing import cpu_count
 from typing import Any, Dict, Optional, Union
 
 import requests
+from braintrust_core.bt_json import bt_dumps
 from braintrust_core.db_fields import (
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
@@ -26,24 +28,26 @@ from braintrust_core.db_fields import (
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
+from braintrust_core.git_fields import GitMetadataSettings, RepoInfo
 from braintrust_core.merge_row_batch import merge_row_batch
+from braintrust_core.object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
+from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
     SerializableDataClass,
     coalesce,
+    encode_uri_component,
+    eprint,
     merge_dicts,
 )
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from .cache import CACHE_PATH, EXPERIMENTS_PATH, LOGIN_INFO_PATH
-from .gitutil import get_past_n_ancestors, get_repo_status
-from .resource_manager import ResourceManager
+from .gitutil import get_past_n_ancestors, get_repo_info
 from .util import (
     GLOBAL_PROJECT,
     AugmentedHTTPError,
     LazyValue,
-    encode_uri_component,
-    eprint,
     get_caller_location,
     response_raise_for_status,
 )
@@ -178,23 +182,24 @@ class BraintrustState:
         self.reset_login_info()
 
     def reset_login_info(self):
-        self.api_url = None
+        self.app_url = None
         self.login_token = None
         self.org_id = None
         self.org_name = None
         self.log_url = None
         self.logged_in = False
+        self.git_metadata_settings = None
 
-        self._api_conn = None
+        self._app_conn = None
         self._log_conn = None
         self._user_info = None
 
-    def api_conn(self):
-        if not self._api_conn:
-            if not self.api_url:
-                raise RuntimeError("Must initialize api_url before requesting api_conn")
-            self._api_conn = HTTPConnection(self.api_url)
-        return self._api_conn
+    def app_conn(self):
+        if not self._app_conn:
+            if not self.app_url:
+                raise RuntimeError("Must initialize app_url before requesting app_conn")
+            self._app_conn = HTTPConnection(self.app_url)
+        return self._app_conn
 
     def log_conn(self):
         if not self._log_conn:
@@ -304,7 +309,7 @@ def log_conn():
 
 
 def api_conn():
-    return _state.api_conn()
+    return _state.app_conn()
 
 
 def user_info():
@@ -323,9 +328,14 @@ def construct_json_array(items):
     return "[" + ",".join(items) + "]"
 
 
+def construct_logs3_data(items):
+    rowsS = construct_json_array(items)
+    return '{"rows": ' + rowsS + ', "api_version": 2}'
+
+
 def _check_json_serializable(event):
     try:
-        _ = json.dumps(event)
+        _ = bt_dumps(event)
     except TypeError as e:
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
@@ -338,6 +348,8 @@ _DEBUG_LOGGING_PAUSED = False
 
 class _BackgroundLogger:
     def __init__(self, log_conn: LazyValue[HTTPConnection]):
+        self._outfile = sys.stderr
+
         self.log_conn = log_conn
         self.flush_lock = threading.RLock()
         self.start_thread_lock = threading.RLock()
@@ -399,7 +411,7 @@ class _BackgroundLogger:
             try:
                 self.flush(**kwargs)
             except Exception:
-                traceback.print_exc()
+                traceback.print_exc(file=self._outfile)
 
     def flush(self, batch_size=100):
         # We cannot have multiple threads flushing in parallel, because the
@@ -413,8 +425,13 @@ class _BackgroundLogger:
             except queue.Empty:
                 pass
             # Unwrap all the lazily-computed values.
-            all_items = [item.get() for item in all_items]
-            all_items = list(reversed(merge_row_batch(all_items)))
+            try:
+                all_items = [item.get() for item in all_items]
+                all_items = list(reversed(merge_row_batch(all_items)))
+            except Exception as e:
+                print("Encountered error when constructing records to flush:", file=self._outfile)
+                traceback.print_exc(file=self._outfile)
+                all_items = []
 
             if len(all_items) == 0:
                 return
@@ -430,7 +447,7 @@ class _BackgroundLogger:
                     else:
                         break
 
-                    item_s = json.dumps(item)
+                    item_s = bt_dumps(item)
                     items.append(item_s)
                     items_len += len(item_s)
 
@@ -439,29 +456,35 @@ class _BackgroundLogger:
 
                 try:
                     post_promises.append(
-                        HTTP_REQUEST_THREAD_POOL.submit(_BackgroundLogger._submit_logs_request, items, conn)
+                        HTTP_REQUEST_THREAD_POOL.submit(
+                            _BackgroundLogger._submit_logs_request, items, conn, self._outfile
+                        )
                     )
                 except RuntimeError:
                     # If the thread pool has shut down, e.g. because the process is terminating, run the request the
                     # old fashioned way.
-                    _BackgroundLogger._submit_logs_request(items, conn)
+                    _BackgroundLogger._submit_logs_request(items, conn, self._outfile)
 
             concurrent.futures.wait(post_promises)
 
     @staticmethod
-    def _submit_logs_request(items, conn):
-        items_s = construct_json_array(items)
+    def _submit_logs_request(items, conn, outfile):
+        dataS = construct_logs3_data(items)
         for i in range(NUM_RETRIES):
             start_time = time.time()
-            resp = conn.post("/logs", data=items_s)
+            resp = conn.post("/logs3", data=dataS)
+            if not resp.ok:
+                legacyDataS = construct_json_array([json.dumps(make_legacy_event(json.loads(r))) for r in items])
+                resp = conn.post("/logs", data=legacyDataS)
             if resp.ok:
                 return
             retrying_text = "" if i + 1 == NUM_RETRIES else " Retrying"
-            _logger.warning(
-                f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(items_s)}. Error: {resp.status_code}: {resp.text}.{retrying_text}"
+            print(
+                f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataS)}. Error: {resp.status_code}: {resp.text}.{retrying_text}",
+                file=outfile,
             )
         if not resp.ok:
-            _logger.warning(f"log request failed after {NUM_RETRIES} retries. Dropping batch")
+            print(f"log request failed after {NUM_RETRIES} retries. Dropping batch", file=outfile)
 
 
 def _ensure_object(object_type, object_id, force=False):
@@ -510,43 +533,92 @@ class OrgProjectMetadata:
 
 
 def init(
-    project: str,
+    project: Optional[str] = None,
     experiment: Optional[str] = None,
     description: Optional[str] = None,
     dataset: Optional["Dataset"] = None,
-    update: bool = False,
+    open: bool = False,
     base_experiment: Optional[str] = None,
     is_public: bool = False,
-    api_url: Optional[str] = None,
+    app_url: Optional[str] = None,
     api_key: Optional[str] = None,
     org_name: Optional[str] = None,
     metadata: Optional[Metadata] = None,
+    git_metadata_settings: Optional[GitMetadataSettings] = None,
     set_current: bool = True,
+    update: Optional[bool] = None,
+    project_id: Optional[str] = None,
+    base_experiment_id: Optional[str] = None,
+    repo_info: Optional[RepoInfo] = None,
 ):
     """
     Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
 
-    :param project: The name of the project to create the experiment in.
+    :param project: The name of the project to create the experiment in. Must specify at least one of `project` or `project_id`.
     :param experiment: The name of the experiment to create. If not specified, a name will be generated automatically.
     :param description: (Optional) An optional description of the experiment.
     :param dataset: (Optional) A dataset to associate with the experiment. The dataset must be initialized with `braintrust.init_dataset` before passing
     it into the experiment.
     :param update: If the experiment already exists, continue logging to it.
-    :param base_experiment: An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this
-    experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
+    :param base_experiment: An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
     :param is_public: An optional parameter to control whether the experiment is publicly visible to anybody with the link or privately visible to only members of the organization. Defaults to private.
-    :param api_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
     :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
+    :param git_metadata_settings: (Optional) Settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param set_current: If true (the default), set the global current-experiment to the newly-created one.
+    :param open: If the experiment already exists, open it in read-only mode.
+    :param project_id: The id of the project to create the experiment in. This takes precedence over `project` if specified.
+    :param base_experiment_id: An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this. This takes precedence over `base_experiment` if specified.
+    :param repo_info: (Optional) Explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
     :returns: The experiment object.
     """
 
+    if open and update:
+        raise ValueError("Cannot open and update an experiment at the same time")
+
+    if open or update:
+        if experiment is None:
+            action = "open" if open else "update"
+            raise ValueError(f"Cannot {action} an experiment without specifying its name")
+
+        def compute_metadata():
+            login(org_name=org_name, api_key=api_key, app_url=app_url)
+            args = {
+                "experiment_name": experiment,
+                "project_name": project,
+                "project_id": project_id,
+                "org_name": _state.org_name,
+            }
+
+            response = _state.app_conn().post_json("api/experiment/get", args)
+            if len(response) == 0:
+                raise ValueError(f"Experiment {experiment} not found in project {project}.")
+
+            info = response[0]
+            return ProjectExperimentMetadata(
+                project=ObjectMetadata(id=info["project_id"], name="", full_info=dict()),
+                experiment=ObjectMetadata(
+                    id=info["id"],
+                    name=info["name"],
+                    full_info=info,
+                ),
+            )
+
+        lazy_metadata = LazyValue(compute_metadata, use_mutex=True)
+        if open:
+            return ReadonlyExperiment(lazy_metadata=lazy_metadata)
+        else:
+            ret = Experiment(lazy_metadata=lazy_metadata, dataset=dataset)
+            if set_current:
+                _state.current_experiment = ret
+            return ret
+
     def compute_metadata():
-        login(org_name=org_name, api_key=api_key, api_url=api_url)
-        args = {"project_name": project, "org_id": _state.org_id}
+        login(org_name=org_name, api_key=api_key, app_url=app_url)
+        args = {"project_name": project, "project_id": project_id, "org_id": _state.org_id}
 
         if experiment is not None:
             args["experiment_name"] = experiment
@@ -554,14 +626,22 @@ def init(
         if description is not None:
             args["description"] = description
 
-        if update:
-            args["update"] = update
+        if repo_info:
+            repo_info_arg = repo_info
+        else:
+            merged_git_metadata_settings = _state.git_metadata_settings
+            if git_metadata_settings is not None:
+                merged_git_metadata_settings = GitMetadataSettings.merge(
+                    merged_git_metadata_settings, git_metadata_settings
+                )
+            repo_info_arg = get_repo_info(merged_git_metadata_settings)
 
-        repo_status = get_repo_status()
-        if repo_status:
-            args["repo_info"] = repo_status.as_dict()
+        if repo_info_arg:
+            args["repo_info"] = repo_info_arg.as_dict()
 
-        if base_experiment is not None:
+        if base_experiment_id is not None:
+            args["base_exp_id"] = base_experiment_id
+        elif base_experiment is not None:
             args["base_experiment"] = base_experiment
         else:
             args["ancestor_commits"] = list(get_past_n_ancestors())
@@ -578,7 +658,7 @@ def init(
 
         while True:
             try:
-                response = _state.api_conn().post_json("api/experiment/register", args)
+                response = _state.app_conn().post_json("api/experiment/register", args)
                 break
             except AugmentedHTTPError as e:
                 if args.get("base_experiment") is not None and "base experiment" in str(e):
@@ -602,37 +682,47 @@ def init(
     return ret
 
 
+def init_experiment(*args, **kwargs):
+    """Alias for `init`"""
+
+    return init(*args, **kwargs)
+
+
 def init_dataset(
-    project: str,
-    name: str = None,
-    description: str = None,
-    version: "str | int" = None,
-    api_url: str = None,
-    api_key: str = None,
-    org_name: str = None,
+    project: Optional[str] = None,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    version: Optional[Union[str, int]] = None,
+    app_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    org_name: Optional[str] = None,
+    project_id: Optional[str] = None,
+    use_output: bool = DEFAULT_IS_LEGACY_DATASET,
 ):
     """
     Create a new dataset in a specified project. If the project does not exist, it will be created.
 
-    :param project: The name of the project to create the dataset in.
+    :param project_name: The name of the project to create the dataset in. Must specify at least one of `project_name` or `project_id`.
     :param name: The name of the dataset to create. If not specified, a name will be generated automatically.
     :param description: An optional description of the dataset.
     :param version: An optional version of the dataset (to read). If not specified, the latest version will be used.
-    :param api_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+    :param project_id: The id of the project to create the dataset in. This takes precedence over `project` if specified.
+    :param use_output: If True (the default), records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This will default to False in a future version of Braintrust.
     :returns: The dataset object.
     """
 
     def compute_metadata():
-        login(org_name=org_name, api_key=api_key, api_url=api_url)
+        login(org_name=org_name, api_key=api_key, app_url=app_url)
         args = _populate_args(
-            {"project_name": project, "org_id": _state.org_id},
+            {"project_name": project, "project_id": project_id, "org_id": _state.org_id},
             dataset_name=name,
             description=description,
         )
-        response = _state.api_conn().post_json("api/dataset/register", args)
+        response = _state.app_conn().post_json("api/dataset/register", args)
         resp_project = response["project"]
         resp_dataset = response["dataset"]
         return ProjectDatasetMetadata(
@@ -640,16 +730,16 @@ def init_dataset(
             dataset=ObjectMetadata(id=resp_dataset["id"], name=resp_dataset["name"], full_info=resp_dataset),
         )
 
-    return Dataset(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), version=version)
+    return Dataset(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), version=version, legacy=use_output)
 
 
 def init_logger(
-    project: str = None,
-    project_id: str = None,
+    project: Optional[str] = None,
+    project_id: Optional[str] = None,
     async_flush: bool = True,
-    api_url: str = None,
-    api_key: str = None,
-    org_name: str = None,
+    app_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    org_name: Optional[str] = None,
     force_login: bool = False,
     set_current: bool = True,
 ):
@@ -659,7 +749,7 @@ def init_logger(
     :param project: The name of the project to log into. If unspecified, will default to the Global project.
     :param project_id: The id of the project to log into. This takes precedence over project if specified.
     :param async_flush: If true (the default), log events will be batched and sent asynchronously in a background thread. If false, log events will be sent synchronously. Set to false in serverless environments.
-    :param api_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+    :param app_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -669,10 +759,10 @@ def init_logger(
     """
 
     def compute_metadata():
-        login(org_name=org_name, api_key=api_key, api_url=api_url, force_login=force_login)
+        login(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login)
         org_id = _state.org_id
         if project_id is None:
-            response = _state.api_conn().post_json(
+            response = _state.app_conn().post_json(
                 "api/project/register",
                 {
                     "project_name": project or GLOBAL_PROJECT,
@@ -685,7 +775,7 @@ def init_logger(
                 project=ObjectMetadata(id=resp_project["id"], name=resp_project["name"], full_info=resp_project),
             )
         elif project is None:
-            response = _state.api_conn().get_json("api/project", {"id": project_id})
+            response = _state.app_conn().get_json("api/project", {"id": project_id})
             return OrgProjectMetadata(
                 org_id=org_id, project=ObjectMetadata(id=project_id, name=response["name"], full_info=response)
             )
@@ -706,12 +796,12 @@ def init_logger(
 login_lock = threading.RLock()
 
 
-def login(api_url=None, api_key=None, org_name=None, force_login=False):
+def login(app_url=None, api_key=None, org_name=None, force_login=False):
     """
     Log into Braintrust. This will prompt you for your API token, which you can find at
     https://www.braintrustdata.com/app/token. This method is called automatically by `init()`.
 
-    :param api_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -722,8 +812,20 @@ def login(api_url=None, api_key=None, org_name=None, force_login=False):
 
     # Only permit one thread to login at a time
     with login_lock:
-        if api_url is None:
-            api_url = os.environ.get("BRAINTRUST_API_URL", "https://www.braintrustdata.com")
+        if not force_login and _state.logged_in:
+            # We have already logged in. If any provided login inputs disagree
+            # with our existing settings, raise an Exception warning the user to
+            # try again with `force_login=True`.
+            def check_updated_param(varname, arg, orig):
+                if arg is not None and orig is not None and arg != orig:
+                    raise Exception(f"Re-logging in with different {varname} ({arg}) than original ({orig}). To force re-login, pass `force_login=True`")
+            check_updated_param("app_url", app_url, _state.app_url)
+            check_updated_param("api_key", HTTPConnection.sanitize_token(api_key) if api_key else None, _state.login_token)
+            check_updated_param("org_name", org_name, _state.org_name)
+            return
+
+        if app_url is None:
+            app_url = os.environ.get("BRAINTRUST_APP_URL", "https://www.braintrustdata.com")
 
         if api_key is None:
             api_key = os.environ.get("BRAINTRUST_API_KEY")
@@ -731,19 +833,15 @@ def login(api_url=None, api_key=None, org_name=None, force_login=False):
         if org_name is None:
             org_name = os.environ.get("BRAINTRUST_ORG_NAME")
 
-        if not force_login and _state.logged_in:
-            # We have already logged in
-            return
-
         _state.reset_login_info()
 
-        _state.api_url = api_url
+        _state.app_url = app_url
 
         os.makedirs(CACHE_PATH, exist_ok=True)
 
         conn = None
         if api_key is not None:
-            resp = requests.post(_urljoin(_state.api_url, "/api/apikey/login"), json={"token": api_key})
+            resp = requests.post(_urljoin(_state.app_url, "/api/apikey/login"), json={"token": api_key})
             if not resp.ok:
                 api_key_prefix = (
                     (" (" + api_key[:2] + "*" * (len(api_key) - 4) + api_key[-2:] + ")") if len(api_key) > 4 else ""
@@ -766,7 +864,7 @@ def login(api_url=None, api_key=None, org_name=None, force_login=False):
         conn.make_long_lived()
 
         # Set the same token in the API
-        _state.api_conn().set_token(conn.token)
+        _state.app_conn().set_token(conn.token)
         _state.login_token = conn.token
         _state.logged_in = True
 
@@ -888,6 +986,11 @@ def traced(*span_args, **span_kwargs):
 
         f_sig = inspect.signature(f)
 
+        if "span_attributes" not in span_kwargs:
+            span_kwargs["span_attributes"] = {}
+        if "type" not in span_kwargs["span_attributes"]:
+            span_kwargs["span_attributes"]["type"] = SpanTypeAttribute.FUNCTION
+
         @wraps(f)
         def wrapper_sync(*f_args, **f_kwargs):
             with start_span(*span_args, **span_kwargs) as span:
@@ -948,7 +1051,8 @@ def _check_org_info(org_info, org_name):
         if org_name is None or orgs["name"] == org_name:
             _state.org_id = orgs["id"]
             _state.org_name = orgs["name"]
-            _state.log_url = os.environ.get("BRAINTRUST_LOG_URL", orgs["api_url"])
+            _state.log_url = os.environ.get("BRAINTRUST_API_URL", orgs["api_url"])
+            _state.git_metadata_settings = GitMetadataSettings(**(orgs.get("git_metadata") or {}))
             break
 
     if _state.org_id is None:
@@ -1047,6 +1151,8 @@ def _validate_and_sanitize_experiment_log_full_args(event, has_dataset):
     if (input is not None and inputs is not None) or (input is None and inputs is None):
         raise ValueError("Exactly one of input or inputs (deprecated) must be specified. Prefer input.")
 
+    if event.get("output") is None:
+        raise ValueError("output must be specified")
     if event.get("scores") is None:
         raise ValueError("scores must be specified")
     elif not isinstance(event["scores"], dict):
@@ -1058,6 +1164,99 @@ def _validate_and_sanitize_experiment_log_full_args(event, has_dataset):
         raise ValueError("dataset_record_id cannot be specified when not using a dataset")
 
     return event
+
+
+class ObjectIterator:
+    def __init__(self, refetch_fn):
+        self.refetch_fn = refetch_fn
+        self.idx = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        data = self.refetch_fn()
+        if self.idx >= len(data):
+            raise StopIteration
+        value = data[self.idx]
+        self.idx += 1
+
+        return value
+
+
+class ObjectFetcher:
+    def __init__(self, object_type, pinned_version=None, mutate_record=None):
+        assert hasattr(self, "id"), "ObjectFetcher subclasses must have an 'id' attribute"
+
+        self.object_type = object_type
+        self._pinned_version = pinned_version
+        self._mutate_record = mutate_record
+
+        self._fetched_data = None
+
+    def fetch(self):
+        """
+        Fetch all records.
+
+        ```python
+        for record in object.fetch():
+            print(record)
+
+        # You can also iterate over the object directly.
+        for record in object:
+            print(record)
+
+        :returns: An iterator over the records.
+        """
+        return ObjectIterator(self._refetch)
+
+    def __iter__(self):
+        return self.fetch()
+
+    @property
+    def fetched_data(self):
+        eprint(
+            ".fetched_data is deprecated and will be removed in a future version of braintrust. Use .fetch() or the iterator instead"
+        )
+        return self._refetch()
+
+    def _refetch(self):
+        if self._fetched_data is None:
+            data = None
+            try:
+                resp = _state.log_conn().get(
+                    f"object3/{self.object_type}",
+                    params={"id": self.id, "fmt": "json2", "version": self._pinned_version, "api_version": 2},
+                )
+                response_raise_for_status(resp)
+                data = resp.json()
+            except Exception as e:
+                # DEPRECATION_NOTICE: When hitting old versions of the API where the "object3/" endpoint isn't available, fall back to
+                # the "object/" endpoint, which may require patching the incoming records. Remove this code once
+                # all APIs are updated.
+                resp = _state.log_conn().get(
+                    f"object/{self.object_type}",
+                    params={"id": self.id, "fmt": "json2", "version": self._pinned_version},
+                )
+                response_raise_for_status(resp)
+                data = resp.json()
+
+            if self._mutate_record is not None:
+                self._fetched_data = [self._mutate_record(r) for r in data]
+            else:
+                self._fetched_data = data
+
+        return self._fetched_data
+
+    def _clear_cache(self):
+        self._fetched_data = None
+
+    @property
+    def version(self):
+        if self._pinned_version is not None:
+            return self._pinned_version
+        else:
+            return max([int(record.get(TRANSACTION_ID_FIELD, 0)) for record in self._fetched_data] or [0])
 
 
 @dataclasses.dataclass
@@ -1148,7 +1347,35 @@ def _log_feedback_impl(
         bg_logger.log(LazyValue(compute_record, use_mutex=False))
 
 
-class Experiment:
+@dataclasses.dataclass
+class ExperimentIdentifier:
+    id: str
+    name: str
+
+
+class ExperimentDatasetIterator:
+    def __init__(self, iterator):
+        self.iterator = iterator
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        while True:
+            value = next(self.iterator)
+            if value["root_span_id"] != value["span_id"]:
+                continue
+
+            output, expected = value.get("output"), value.get("expected")
+            return {
+                "input": value.get("input"),
+                "expected": expected if expected is not None else output,
+                # NOTE: We'll eventually want to track origin information here (and generalize
+                # the `dataset_record_id` field)
+            }
+
+
+class Experiment(ObjectFetcher):
     """
     An experiment is a collection of logged events, such as model inputs and outputs, which represent
     a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -1175,6 +1402,8 @@ class Experiment:
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
         self.last_start_time = time.time()
+
+        ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
 
     @property
     def id(self):
@@ -1221,7 +1450,7 @@ class Experiment:
         :param expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
         :param scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments.
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
-        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
+        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
         :param dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
         :param inputs: (Deprecated) the same as `input` (will be removed in a future version).
@@ -1298,6 +1527,22 @@ class Experiment:
             event=event,
         )
 
+    def fetch_base_experiment(self):
+        state = self._get_state()
+        conn = state.app_conn()
+
+        resp = conn.post("/api/base_experiment/get_id", json={"id": self.id})
+        if resp.status_code == 400:
+            # No base experiment
+            return None
+
+        response_raise_for_status(resp)
+        base = resp.json()
+        if base:
+            return ExperimentIdentifier(id=base["base_exp_id"], name=base["base_exp_name"])
+        else:
+            return None
+
     def summarize(self, summarize_scores=True, comparison_experiment_id=None):
         """
         Summarize the experiment, including the scores (compared to the closest reference experiment) and metadata.
@@ -1312,7 +1557,7 @@ class Experiment:
 
         state = self._get_state()
         project_url = (
-            f"{state.api_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
+            f"{state.app_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
         )
         experiment_url = f"{project_url}/{encode_uri_component(self.name)}"
 
@@ -1322,13 +1567,10 @@ class Experiment:
         if summarize_scores:
             # Get the comparison experiment
             if comparison_experiment_id is None:
-                conn = state.log_conn()
-                resp = conn.get("/crud/base_experiments", params={"id": self.id})
-                response_raise_for_status(resp)
-                base_experiments = resp.json()
-                if base_experiments:
-                    comparison_experiment_id = base_experiments[0]["base_exp_id"]
-                    comparison_experiment_name = base_experiments[0]["base_exp_name"]
+                base_experiment = self.fetch_base_experiment()
+                if base_experiment:
+                    comparison_experiment_id = base_experiment.id
+                    comparison_experiment_name = base_experiment.name
 
             if comparison_experiment_id is not None:
                 summary_items = state.log_conn().get_json(
@@ -1382,6 +1624,31 @@ class Experiment:
         del type, value, callback
 
 
+class ReadonlyExperiment(ObjectFetcher):
+    """
+    A read-only view of an experiment, initialized by passing `open=True` to `init()`.
+    """
+
+    def __init__(
+        self,
+        lazy_metadata: LazyValue[ProjectExperimentMetadata],
+    ):
+        self._lazy_metadata = lazy_metadata
+
+        ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
+
+    @property
+    def id(self):
+        return self._lazy_metadata.get().experiment.id
+
+    def as_dataset(self):
+        return ExperimentDatasetIterator(self.fetch())
+
+
+_EXEC_COUNTER_LOCK = threading.Lock()
+_EXEC_COUNTER = 0
+
+
 class SpanImpl(Span):
     """Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
 
@@ -1422,14 +1689,20 @@ class SpanImpl(Span):
         # `internal_data` contains fields that are not part of the
         # "user-sanitized" set of fields which we want to log in just one of the
         # span rows.
+        global _EXEC_COUNTER
+        with _EXEC_COUNTER_LOCK:
+            _EXEC_COUNTER += 1
+            exec_counter = _EXEC_COUNTER
+
         self.internal_data = dict(
             metrics=dict(
                 start=start_time or time.time(),
-                **(caller_location or {}),
             ),
-            span_attributes=dict(**span_attributes, name=name),
+            span_attributes=dict(**span_attributes, name=name, exec_counter=exec_counter),
             created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         )
+        if caller_location:
+            self.internal_data["context"] = caller_location
 
         self.parent_ids = parent_ids
 
@@ -1546,7 +1819,7 @@ class SpanImpl(Span):
         self.end()
 
 
-class Dataset:
+class Dataset(ObjectFetcher):
     """
     A dataset is a collection of records, such as model inputs and outputs, which represent
     data you can use to evaluate and fine-tune models. You can log production data to datasets,
@@ -1555,7 +1828,18 @@ class Dataset:
     You should not create `Dataset` objects directly. Instead, use the `braintrust.init_dataset()` method.
     """
 
-    def __init__(self, lazy_metadata: LazyValue[ProjectDatasetMetadata], version: Union[None, int, str] = None):
+    def __init__(
+        self,
+        lazy_metadata: LazyValue[ProjectDatasetMetadata],
+        version: Union[None, int, str] = None,
+        legacy: bool = DEFAULT_IS_LEGACY_DATASET,
+    ):
+        if legacy:
+            eprint(
+                f"""Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use `braintrust.init_dataset()` with `use_output=False`, which will become the default in a future version of Braintrust."""
+            )
+        mutate_record = lambda r: ensure_dataset_record(r, legacy)
+
         self._lazy_metadata = lazy_metadata
         self.new_records = 0
         self._fetched_data = None
@@ -1571,6 +1855,7 @@ class Dataset:
             return self._get_state().log_conn()
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
+        ObjectFetcher.__init__(self, object_type="dataset", pinned_version=None, mutate_record=mutate_record)
 
     @property
     def id(self):
@@ -1597,18 +1882,19 @@ class Dataset:
         self._lazy_metadata.get()
         return _state
 
-    def insert(self, input, output, metadata=None, id=None):
+    def insert(self, input, expected=None, metadata=None, id=None, output=None):
         """
         Insert a single record to the dataset. The record will be batched and uploaded behind the scenes. If you pass in an `id`,
         and a record with that `id` already exists, it will be overwritten (upsert).
 
         :param input: The argument that uniquely define an input case (an arbitrary, JSON serializable object).
-        :param output: The output of your application, including post-processing (an arbitrary, JSON serializable object).
+        :param expected: The output of your application, including post-processing (an arbitrary, JSON serializable object).
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just
         about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
         `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
         JSON-serializable type, but its keys must be strings.
         :param id: (Optional) a unique identifier for the event. If you don't provide one, Braintrust will generate one for you.
+        :param output: (Deprecated) The output of your application. Use `expected` instead.
         :returns: The `id` of the logged record.
         """
         if metadata:
@@ -1618,13 +1904,16 @@ class Dataset:
                 if not isinstance(key, str):
                     raise ValueError("metadata keys must be strings")
 
+        if expected is not None and output is not None:
+            raise ValueError("Only one of expected or output (deprecated) can be specified. Prefer expected.")
+
         row_id = id or str(uuid.uuid4())
         # Validate the non-lazily-computed part of the record-to-log.
         partial_args = _populate_args(
             {
                 "id": row_id,
                 "inputs": input,
-                "output": output,
+                "expected": expected if expected is not None else output,
                 "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             },
             metadata=metadata,
@@ -1682,7 +1971,7 @@ class Dataset:
         self.bg_logger.flush()
         state = self._get_state()
         project_url = (
-            f"{state.api_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
+            f"{state.app_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
         )
         dataset_url = f"{project_url}/d/{encode_uri_component(self.name)}"
 
@@ -1704,56 +1993,6 @@ class Dataset:
             dataset_url=dataset_url,
             data_summary=data_summary,
         )
-
-    def fetch(self):
-        """
-        Fetch all records in the dataset.
-
-        ```python
-        for record in dataset.fetch():
-            print(record)
-
-        # You can also iterate over the dataset directly.
-        for record in dataset:
-            print(record)
-        ```
-
-        :returns: An iterator over the records in the dataset.
-        """
-        for record in self.fetched_data:
-            yield {
-                "id": record.get("id"),
-                "input": json.loads(record.get("input") or "null"),
-                "output": json.loads(record.get("output") or "null"),
-                "metadata": json.loads(record.get("metadata") or "null"),
-            }
-
-        self._clear_cache()
-
-    def __iter__(self):
-        return self.fetch()
-
-    @property
-    def fetched_data(self):
-        if not self._fetched_data:
-            state = self._get_state()
-            resp = state.log_conn().get(
-                "object/dataset", params={"id": self.id, "fmt": "json", "version": self._pinned_version}
-            )
-            response_raise_for_status(resp)
-
-            self._fetched_data = [json.loads(line) for line in resp.content.split(b"\n") if line.strip()]
-        return self._fetched_data
-
-    def _clear_cache(self):
-        self._fetched_data = None
-
-    @property
-    def version(self):
-        if self._pinned_version is not None:
-            return self._pinned_version
-        else:
-            return max([int(record.get(TRANSACTION_ID_FIELD, 0)) for record in self.fetched_data] or [0])
 
     def close(self):
         """This function is deprecated. You can simply remove it from your code."""
@@ -1785,7 +2024,7 @@ class Project:
         if self._id is None or self._name is None:
             with self.init_lock:
                 if self._id is None:
-                    response = _state.api_conn().post_json(
+                    response = _state.app_conn().post_json(
                         "api/project/register",
                         {
                             "project_name": self._name or GLOBAL_PROJECT,
@@ -1795,7 +2034,7 @@ class Project:
                     self._id = response["project"]["id"]
                     self._name = response["project"]["name"]
                 elif self._name is None:
-                    response = _state.api_conn().get_json("api/project", {"id": self._id})
+                    response = _state.app_conn().get_json("api/project", {"id": self._id})
                     self._name = response["name"]
 
         return self
@@ -1848,12 +2087,12 @@ class Logger:
         """
         Log a single event. The event will be batched and uploaded behind the scenes.
 
-        :param input: The arguments that uniquely define a user input(an arbitrary, JSON serializable object).
-        :param output: The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
-        :param expected: The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
-        :param scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
+        :param input: (Optional) the arguments that uniquely define a user input(an arbitrary, JSON serializable object).
+        :param output: (Optional) the output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
+        :param expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
+        :param scores: (Optional) a dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
-        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end", "caller_functionname", "caller_filename", "caller_lineno".
+        :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
         """
         span = self.start_span(

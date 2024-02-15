@@ -1,6 +1,14 @@
 import dataclasses
 import json
-from typing import Dict, List, Set, Tuple
+import sys
+import urllib.parse
+from typing import Dict, Set, Tuple
+
+
+# Taken from
+# https://stackoverflow.com/questions/5574702/how-do-i-print-to-stderr-in-python.
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
 
 
 class SerializableDataClass:
@@ -11,6 +19,14 @@ class SerializableDataClass:
     def as_json(self, **kwargs):
         """Serialize the object to JSON."""
         return json.dumps(self.as_dict(), **kwargs)
+
+    @classmethod
+    def from_dict(cls, d: Dict):
+        """Deserialize the object from a dictionary. This method
+        is shallow and will not call from_dict() on nested objects."""
+        fields = set(f.name for f in dataclasses.fields(cls))
+        filtered = {k: v for k, v in d.items() if k in fields}
+        return cls(**filtered)
 
 
 def coalesce(*args):
@@ -48,3 +64,12 @@ def merge_dicts(merge_into: Dict, merge_from: Dict):
     """Merges merge_from into merge_into, destructively updating merge_into."""
 
     return merge_dicts_with_paths(merge_into, merge_from, (), set())
+
+
+def encode_uri_component(name):
+    """Encode a single component of a URI. Slashes are encoded as well, so this
+    should not be used for multiple slash-separated URI components."""
+
+    return urllib.parse.quote(name, safe="")
+
+

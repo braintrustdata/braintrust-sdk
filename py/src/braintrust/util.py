@@ -10,13 +10,6 @@ from requests import HTTPError
 GLOBAL_PROJECT = "Global"
 
 
-def encode_uri_component(name):
-    """Encode a single component of a URI. Slashes are encoded as well, so this
-    should not be used for multiple slash-separated URI components."""
-
-    return urllib.parse.quote(name, safe="")
-
-
 class AugmentedHTTPError(Exception):
     pass
 
@@ -46,12 +39,6 @@ def get_caller_location():
                 caller_lineno=caller.lineno,
             )
     return None
-
-
-# Taken from
-# https://stackoverflow.com/questions/5574702/how-do-i-print-to-stderr-in-python.
-def eprint(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
 
 
 T = TypeVar("T")

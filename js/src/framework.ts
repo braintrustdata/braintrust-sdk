@@ -3,23 +3,62 @@ import {
   NOOP_SPAN,
   Experiment,
   ExperimentSummary,
-  Metadata,
   Span,
-  init,
+  init as _initExperiment,
+  EvalCase,
+  InitOptions,
+  BaseMetadata,
+  DefaultMetadataType,
 } from "./logger";
-import { Score } from "@braintrust/core";
+import { Score, SpanTypeAttribute } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
+import { isEmpty } from "./util";
 
-export interface EvalCase<Input, Expected> {
-  input: Input;
-  expected?: Expected;
-  metadata?: Metadata;
+export type BaseExperiment<
+  Input,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+> = {
+  _type: "BaseExperiment";
+  _phantom?: [Input, Expected, Metadata];
+  name?: string;
+};
+
+/**
+ * Use this to specify that the dataset should actually be the data from a previous (base) experiment.
+ * If you do not specify a name, Braintrust will automatically figure out the best base experiment to
+ * use based on your git history (or fall back to timestamps).
+ *
+ * @param options
+ * @param options.name The name of the base experiment to use. If unspecified, Braintrust will automatically figure out the best base
+ * using your git history (or fall back to timestamps).
+ * @returns
+ */
+export function BaseExperiment<
+  Input = unknown,
+  Expected = unknown,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+>(
+  options: {
+    name?: string;
+  } = {}
+): BaseExperiment<Input, Expected, Metadata> {
+  return { _type: "BaseExperiment", ...options };
 }
 
-export type EvalData<Input, Expected> =
-  | (() => EvalCase<Input, Expected>[])
-  | (() => Promise<EvalCase<Input, Expected>[]>);
+export type EvalData<
+  Input,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+> =
+  | EvalCase<Input, Expected, Metadata>[]
+  | (() => EvalCase<Input, Expected, Metadata>[])
+  | (() => Promise<EvalCase<Input, Expected, Metadata>[]>)
+  | AsyncGenerator<EvalCase<Input, Expected, Metadata>>
+  | AsyncIterable<EvalCase<Input, Expected, Metadata>>
+  | BaseExperiment<Input, Expected, Metadata>
+  | (() => BaseExperiment<Input, Expected, Metadata>);
 
 export type EvalTask<Input, Output> =
   | ((input: Input, hooks: EvalHooks) => Promise<Output>)
@@ -31,22 +70,34 @@ export interface EvalHooks {
 }
 
 // This happens to be compatible with ScorerArgs defined in @braintrust/core.
-export type EvalScorerArgs<Input, Output, Expected> = EvalCase<
+export type EvalScorerArgs<
   Input,
-  Expected
-> & {
+  Output,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+> = EvalCase<Input, Expected, Metadata> & {
   output: Output;
 };
 
-export type EvalScorer<Input, Output, Expected> = (
-  args: EvalScorerArgs<Input, Output, Expected>
+export type EvalScorer<
+  Input,
+  Output,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+> = (
+  args: EvalScorerArgs<Input, Output, Expected, Metadata>
 ) => Score | Promise<Score>;
 
-export interface Evaluator<Input, Output, Expected> {
+export interface Evaluator<
+  Input,
+  Output,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+> {
   /**
    * A function that returns a list of inputs, expected outputs, and metadata.
    */
-  data: EvalData<Input, Expected>;
+  data: EvalData<Input, Expected, Metadata>;
 
   /**
    * A function that takes an input and returns an output.
@@ -56,7 +107,7 @@ export interface Evaluator<Input, Output, Expected> {
   /**
    * A set of functions that take an input, output, and expected value and return a score.
    */
-  scores: EvalScorer<Input, Output, Expected>[];
+  scores: EvalScorer<Input, Output, Expected, Metadata>[];
 
   /**
    * An optional name for the experiment.
@@ -73,7 +124,7 @@ export interface Evaluator<Input, Output, Expected> {
   /**
    * Optional additional metadata for the experiment.
    */
-  metadata?: Metadata;
+  metadata?: Record<string, unknown>;
 
   /**
    * Whether the experiment should be public. Defaults to false.
@@ -89,14 +140,29 @@ function makeEvalName(projectName: string, experimentName?: string) {
   return out;
 }
 
-export type EvaluatorDef<Input, Output, Expected> = {
+export type EvaluatorDef<
+  Input,
+  Output,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+> = {
   projectName: string;
   evalName: string;
-} & Evaluator<Input, Output, Expected>;
+} & Evaluator<Input, Output, Expected, Metadata>;
 
 export type EvaluatorFile = {
-  [evalName: string]: EvaluatorDef<any, any, any>;
+  [evalName: string]: EvaluatorDef<any, any, any, any>;
 };
+
+function initExperiment<IsOpen extends boolean = false>(
+  projectName: string,
+  options: Readonly<InitOptions<IsOpen>> = {}
+) {
+  return _initExperiment(projectName, {
+    ...options,
+    setCurrent: false,
+  });
+}
 
 declare global {
   var _evals: EvaluatorFile;
@@ -105,26 +171,39 @@ declare global {
 
 globalThis._evals = {};
 
-export async function Eval<Input, Output, Expected>(
+export async function Eval<
+  Input,
+  Output,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+>(
   name: string,
-  evaluator: Evaluator<Input, Output, Expected>
-): Promise<void | ExperimentSummary> {
+  evaluator: Evaluator<Input, Output, Expected, Metadata>
+): Promise<ExperimentSummary> {
   const evalName = makeEvalName(name, evaluator.experimentName);
   if (_evals[evalName]) {
     throw new Error(`Evaluator ${evalName} already exists`);
   }
   if (globalThis._lazy_load) {
     _evals[evalName] = { evalName, projectName: name, ...evaluator };
-    return;
+    // Better to return this empty object than have an annoying-to-use signature
+    return {
+      projectName: "_lazy_load",
+      experimentName: "_lazy_load",
+      projectUrl: "",
+      experimentUrl: "",
+      comparisonExperimentName: "",
+      scores: {},
+      metrics: {},
+    };
   }
 
   const progressReporter = new BarProgressReporter();
   try {
-    const experiment = init(name, {
+    const experiment = initExperiment(name, {
       experiment: evaluator.experimentName,
       metadata: evaluator.metadata,
       isPublic: evaluator.isPublic,
-      setCurrent: false,
     });
     try {
       const ret = await runEvaluator(
@@ -132,7 +211,7 @@ export async function Eval<Input, Output, Expected>(
         {
           evalName,
           projectName: name,
-          ...(evaluator as Evaluator<unknown, unknown, unknown>),
+          ...(evaluator as Evaluator<unknown, unknown, unknown, any>),
         },
         progressReporter,
         []
@@ -203,127 +282,168 @@ function evaluateFilter(object: any, filter: Filter) {
 
 export async function runEvaluator(
   experiment: Experiment | null,
-  evaluator: EvaluatorDef<unknown, unknown, unknown>,
+  evaluator: EvaluatorDef<any, any, any | void, any | void>,
   progressReporter: ProgressReporter,
   filters: Filter[]
 ) {
   if (typeof evaluator.data === "string") {
     throw new Error("Unimplemented: string data paths");
   }
-  const dataResult = evaluator.data();
-  let data = null;
+  let dataResult =
+    typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
+
+  if ("_type" in dataResult) {
+    if (dataResult._type !== "BaseExperiment") {
+      // For some reason, the typesystem won't let me check if dataResult._type === "BaseExperiment"
+      throw new Error("Invalid _type");
+    }
+    if (!experiment) {
+      throw new Error(
+        "Cannot use BaseExperiment() without connecting to Braintrust (you most likely set --no-send-logs)"
+      );
+    }
+    let name = dataResult.name;
+    if (isEmpty(name)) {
+      const baseExperiment = await experiment.fetchBaseExperiment();
+      if (!baseExperiment) {
+        throw new Error("BaseExperiment() failed to fetch base experiment");
+      }
+      name = baseExperiment.name;
+    }
+    dataResult = initExperiment(evaluator.projectName, {
+      experiment: name,
+      open: true,
+    }).asDataset();
+  }
+
+  let data: EvalCase<any, any, any>[] = [];
   if (dataResult instanceof Promise) {
     data = await dataResult;
+  } else if (Symbol.asyncIterator in dataResult) {
+    // TODO: Eventually, we may want to support pushing the async generator logic
+    // down into the evaluator, so we can avoid materializing large datasets
+    data = [];
+    for await (const d of dataResult) {
+      data.push(d);
+    }
   } else {
     data = dataResult;
   }
 
-  data = data.filter((d) => filters.every((f) => evaluateFilter(d, f)));
+  data = data
+    .filter((d) => filters.every((f) => evaluateFilter(d, f)))
+    .flatMap((datum) =>
+      [...Array(evaluator.trialCount ?? 1).keys()].map(() => datum)
+    );
 
   progressReporter.start(evaluator.evalName, data.length);
 
-  const evals = data
-    .flatMap((datum) =>
-      [...Array(evaluator.trialCount ?? 1).keys()].map(() => datum)
-    )
-    .map(async (datum) => {
-      let metadata: Metadata = { ...datum.metadata };
-      let output: any = undefined;
-      let error: unknown | undefined = undefined;
-      let scores: Record<string, number | null> = {};
-      const callback = async (rootSpan: Span) => {
-        try {
-          const meta = (o: Record<string, unknown>) =>
-            (metadata = { ...metadata, ...o });
+  const evals = data.map(async (datum) => {
+    let metadata: object = { ...("metadata" in datum ? datum.metadata : {}) };
+    let output: any = undefined;
+    let error: unknown | undefined = undefined;
+    let scores: Record<string, number | null> = {};
+    const callback = async (rootSpan: Span) => {
+      try {
+        const meta = (o: Record<string, unknown>) =>
+          (metadata = { ...metadata, ...o });
 
-          await rootSpan.traced(
-            async (span: Span) => {
-              const outputResult = evaluator.task(datum.input, { meta, span });
-              if (outputResult instanceof Promise) {
-                output = await outputResult;
-              } else {
-                output = outputResult;
-              }
-              span.log({ input: datum.input, output });
-            },
-            { name: "task" }
-          );
-          rootSpan.log({ output });
+        await rootSpan.traced(
+          async (span: Span) => {
+            const outputResult = evaluator.task(datum.input, { meta, span });
+            if (outputResult instanceof Promise) {
+              output = await outputResult;
+            } else {
+              output = outputResult;
+            }
+            span.log({ input: datum.input, output });
+          },
+          { name: "task", spanAttributes: { type: SpanTypeAttribute.TASK } }
+        );
+        rootSpan.log({ output });
 
-          const scoringArgs = { ...datum, metadata, output };
-          const scoreResults = await Promise.all(
-            evaluator.scores.map(async (score, score_idx) => {
-              return rootSpan.traced(
-                async (span: Span) => {
-                  const scoreResult = score(scoringArgs);
-                  const result =
-                    scoreResult instanceof Promise
-                      ? await scoreResult
-                      : scoreResult;
-                  const {
-                    metadata: resultMetadata,
-                    name: _,
-                    ...resultRest
-                  } = result;
-                  span.log({
-                    output: resultRest,
-                    metadata: resultMetadata,
-                  });
-                  return result;
+        const scoringArgs = { ...datum, metadata, output };
+        const scoreResults = await Promise.all(
+          evaluator.scores.map(async (score, score_idx) => {
+            return rootSpan.traced(
+              async (span: Span) => {
+                const scoreResult = score(scoringArgs);
+                const result =
+                  scoreResult instanceof Promise
+                    ? await scoreResult
+                    : scoreResult;
+                const {
+                  metadata: resultMetadata,
+                  name: _,
+                  ...resultRest
+                } = result;
+                span.log({
+                  output: resultRest,
+                  metadata: resultMetadata,
+                });
+                return result;
+              },
+              {
+                name: score.name || `scorer_${score_idx}`,
+                spanAttributes: {
+                  type: SpanTypeAttribute.SCORE,
                 },
-                {
-                  name: score.name || `scorer_${score_idx}`,
-                  event: { input: scoringArgs },
-                }
-              );
-            })
-          );
+                event: { input: scoringArgs },
+              }
+            );
+          })
+        );
 
-          const scoreMetadata: Record<string, unknown> = {};
-          for (const scoreResult of scoreResults) {
-            scores[scoreResult.name] = scoreResult.score;
-            const metadata = {
-              ...scoreResult.metadata,
-            };
-            if (scoreResult.error !== undefined) {
-              metadata.error = scoreResult.error;
-            }
-            if (Object.keys(metadata).length > 0) {
-              scoreMetadata[scoreResult.name] = metadata;
-            }
+        const scoreMetadata: Record<string, unknown> = {};
+        for (const scoreResult of scoreResults) {
+          scores[scoreResult.name] = scoreResult.score;
+          const metadata = {
+            ...scoreResult.metadata,
+          };
+          if (scoreResult.error !== undefined) {
+            metadata.error = scoreResult.error;
           }
-
-          if (Object.keys(scoreMetadata).length > 0) {
-            meta({ scores: scoreMetadata });
+          if (Object.keys(metadata).length > 0) {
+            scoreMetadata[scoreResult.name] = metadata;
           }
-
-          rootSpan.log({ scores, metadata });
-        } catch (e) {
-          error = e;
-        } finally {
-          progressReporter.increment(evaluator.evalName);
         }
 
-        return {
-          output,
-          metadata,
-          scores,
-          error,
-        };
-      };
+        if (Object.keys(scoreMetadata).length > 0) {
+          meta({ scores: scoreMetadata });
+        }
 
-      if (!experiment) {
-        return await callback(NOOP_SPAN);
-      } else {
-        return await experiment.traced(callback, {
-          name: "eval",
-          event: {
-            input: datum.input,
-            expected: datum.expected,
-          },
-        });
+        // Note: We're asserting here that any object can be cast as Record<string, unknown>, which should generally
+        // be true, but if we discover that it's not, we may want to update the definition of BaseMetadata.
+        rootSpan.log({ scores, metadata: metadata as Record<string, unknown> });
+      } catch (e) {
+        error = e;
+      } finally {
+        progressReporter.increment(evaluator.evalName);
       }
-    });
+
+      return {
+        output,
+        metadata,
+        scores,
+        error,
+      };
+    };
+
+    if (!experiment) {
+      return await callback(NOOP_SPAN);
+    } else {
+      return await experiment.traced(callback, {
+        name: "eval",
+        spanAttributes: {
+          type: SpanTypeAttribute.EVAL,
+        },
+        event: {
+          input: datum.input,
+          expected: "expected" in datum ? datum.expected : undefined,
+        },
+      });
+    }
+  });
   const results = await Promise.all(evals);
   const summary = experiment ? await experiment.summarize() : null;
   return {
