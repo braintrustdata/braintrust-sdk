@@ -71,5 +71,3 @@ def encode_uri_component(name):
     should not be used for multiple slash-separated URI components."""
 
     return urllib.parse.quote(name, safe="")
-
-

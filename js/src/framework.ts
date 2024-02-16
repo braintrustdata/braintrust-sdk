@@ -18,7 +18,7 @@ import { isEmpty } from "./util";
 export type BaseExperiment<
   Input,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType
 > = {
   _type: "BaseExperiment";
   _phantom?: [Input, Expected, Metadata];
@@ -38,7 +38,7 @@ export type BaseExperiment<
 export function BaseExperiment<
   Input = unknown,
   Expected = unknown,
-  Metadata extends BaseMetadata = DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType
 >(
   options: {
     name?: string;
@@ -50,7 +50,7 @@ export function BaseExperiment<
 export type EvalData<
   Input,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType
 > =
   | EvalCase<Input, Expected, Metadata>[]
   | (() => EvalCase<Input, Expected, Metadata>[])
@@ -74,7 +74,7 @@ export type EvalScorerArgs<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType
 > = EvalCase<Input, Expected, Metadata> & {
   output: Output;
 };
@@ -83,7 +83,7 @@ export type EvalScorer<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType
 > = (
   args: EvalScorerArgs<Input, Output, Expected, Metadata>
 ) => Score | Promise<Score>;
@@ -92,7 +92,7 @@ export interface Evaluator<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType
 > {
   /**
    * A function that returns a list of inputs, expected outputs, and metadata.
@@ -144,7 +144,7 @@ export type EvaluatorDef<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType
 > = {
   projectName: string;
   evalName: string;
@@ -175,7 +175,7 @@ export async function Eval<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType
 >(
   name: string,
   evaluator: Evaluator<Input, Output, Expected, Metadata>
