@@ -809,14 +809,7 @@ class BackgroundLogger {
                   return `${e}`;
                 }
               })();
-              console.warn(
-                `log request failed. Elapsed time: ${
-                  (now() - startTime) / 1000
-                } seconds. Payload size: ${
-                  dataStr.length
-                }. Error: ${errMsg}.${retryingText}`
-              );
-            }
+              console.warn( `log request failed. Elapsed time: ${ (now() - startTime) / 1000 } seconds. Payload size: ${ dataStr.length }. Error: ${errMsg}.${retryingText}`); }
           }
           console.warn(
             `log request failed after ${NumRetries} retries. Dropping batch`
