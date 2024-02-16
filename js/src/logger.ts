@@ -779,13 +779,13 @@ class BackgroundLogger {
 
       postPromises.push(
         (async () => {
-          const dataS = constructLogs3Data(items);
+          const dataStr = constructLogs3Data(items);
           for (let i = 0; i < NumRetries; i++) {
             const startTime = now();
             try {
               try {
                 return (
-                  await (await this.logConn.get()).post_json("logs3", dataS)
+                  await (await this.logConn.get()).post_json("logs3", dataStr)
                 ).ids.map((res: any) => res.id);
               } catch (e) {
                 // Fallback to legacy API. Remove once all API endpoints are updated.
@@ -813,7 +813,7 @@ class BackgroundLogger {
                 `log request failed. Elapsed time: ${
                   (now() - startTime) / 1000
                 } seconds. Payload size: ${
-                  dataS.length
+                  dataStr.length
                 }. Error: ${errMsg}.${retryingText}`
               );
             }
@@ -1457,15 +1457,25 @@ export async function login(
     // We have already logged in. If any provided login inputs disagree with our
     // existing settings, raise an Exception warning the user to try again with
     // `forceLogin: true`.
-    function checkUpdatedParam(varname: string, arg: string | undefined, orig: string | null) {
+    function checkUpdatedParam(
+      varname: string,
+      arg: string | undefined,
+      orig: string | null
+    ) {
       if (!isEmpty(arg) && !isEmpty(orig) && arg !== orig) {
         throw new Error(
-            `Re-logging in with different ${varname} (${arg}) than original (${orig}). To force re-login, pass \`forceLogin: true\``
+          `Re-logging in with different ${varname} (${arg}) than original (${orig}). To force re-login, pass \`forceLogin: true\``
         );
       }
-    };
+    }
     checkUpdatedParam("appUrl", options.appUrl, _state.appUrl);
-    checkUpdatedParam("apiKey", options.apiKey ? HTTPConnection.sanitize_token(options.apiKey) : undefined, _state.loginToken);
+    checkUpdatedParam(
+      "apiKey",
+      options.apiKey
+        ? HTTPConnection.sanitize_token(options.apiKey)
+        : undefined,
+      _state.loginToken
+    );
     checkUpdatedParam("orgName", options.orgName, _state.orgName);
     return;
   }

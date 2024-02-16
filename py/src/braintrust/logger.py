@@ -469,10 +469,10 @@ class _BackgroundLogger:
 
     @staticmethod
     def _submit_logs_request(items, conn, outfile):
-        dataS = construct_logs3_data(items)
+        dataStr = construct_logs3_data(items)
         for i in range(NUM_RETRIES):
             start_time = time.time()
-            resp = conn.post("/logs3", data=dataS)
+            resp = conn.post("/logs3", data=dataStr)
             if not resp.ok:
                 legacyDataS = construct_json_array([json.dumps(make_legacy_event(json.loads(r))) for r in items])
                 resp = conn.post("/logs", data=legacyDataS)
@@ -480,7 +480,7 @@ class _BackgroundLogger:
                 return
             retrying_text = "" if i + 1 == NUM_RETRIES else " Retrying"
             print(
-                f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataS)}. Error: {resp.status_code}: {resp.text}.{retrying_text}",
+                f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataStr)}. Error: {resp.status_code}: {resp.text}.{retrying_text}",
                 file=outfile,
             )
         if not resp.ok:
@@ -818,9 +818,14 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
             # try again with `force_login=True`.
             def check_updated_param(varname, arg, orig):
                 if arg is not None and orig is not None and arg != orig:
-                    raise Exception(f"Re-logging in with different {varname} ({arg}) than original ({orig}). To force re-login, pass `force_login=True`")
+                    raise Exception(
+                        f"Re-logging in with different {varname} ({arg}) than original ({orig}). To force re-login, pass `force_login=True`"
+                    )
+
             check_updated_param("app_url", app_url, _state.app_url)
-            check_updated_param("api_key", HTTPConnection.sanitize_token(api_key) if api_key else None, _state.login_token)
+            check_updated_param(
+                "api_key", HTTPConnection.sanitize_token(api_key) if api_key else None, _state.login_token
+            )
             check_updated_param("org_name", org_name, _state.org_name)
             return
 
