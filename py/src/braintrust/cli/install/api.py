@@ -76,7 +76,7 @@ def build_parser(subparsers, parents):
     parser.add_argument(
         "--encrypt-database",
         help="Whether to encrypt the database",
-        default=None,
+        default="false",
         choices=[None, "true", "false"],
     )
 
