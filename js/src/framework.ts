@@ -339,11 +339,11 @@ export async function runEvaluator(
   progressReporter.start(evaluator.evalName, data.length);
 
   const evals = data.map(async (datum) => {
-    let metadata: object = { ...("metadata" in datum ? datum.metadata : {}) };
-    let output: any = undefined;
-    let error: unknown | undefined = undefined;
-    let scores: Record<string, number | null> = {};
     const callback = async (rootSpan: Span) => {
+      let metadata: object = { ...("metadata" in datum ? datum.metadata : {}) };
+      let output: any = undefined;
+      let error: unknown | undefined = undefined;
+      let scores: Record<string, number | null> = {};
       try {
         const meta = (o: Record<string, unknown>) =>
           (metadata = { ...metadata, ...o });
@@ -512,7 +512,8 @@ export function reportEvaluatorResult(
     if (!verbose && !jsonl) {
       console.error(warning("Add --verbose to see full stack traces."));
     }
-  } else if (summary) {
+  }
+  if (summary) {
     console.log(jsonl ? JSON.stringify(summary) : summary);
   } else {
     const scoresByName: { [name: string]: { total: number; count: number } } =
