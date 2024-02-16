@@ -12,6 +12,15 @@ PARAMS = {
     "OrgName": "org_name",
     "ProvisionedConcurrency": "provisioned_concurrency",
     "EncryptDatabase": "encrypt_database",
+    "APIHandlerMemorySize": "api_handler_memory_size",
+    "PublicSubnet1AZ": "public_subnet_1_az",
+    "PrivateSubnet1AZ": "private_subnet_1_az",
+    "PrivateSubnet2AZ": "private_subnet_2_az",
+    "PrivateSubnet3AZ": "private_subnet_3_az",
+    "PublicSubnet1CIDR": "public_subnet_1_cidr",
+    "PrivateSubnet1CIDR": "private_subnet_1_cidr",
+    "PrivateSubnet2CIDR": "private_subnet_2_cidr",
+    "PrivateSubnet3CIDR": "private_subnet_3_cidr",
 }
 
 DEFAULTS = {
@@ -61,6 +70,52 @@ def build_parser(subparsers, parents):
         help="The amount of provisioned concurrency",
         default=None,
         type=int,
+    )
+    parser.add_argument(
+        "--api-handler-memory-size",
+        help="The amount of memory to allocate to the API handler",
+        default=None,
+        type=int,
+    )
+    parser.add_argument(
+        "--public-subnet-1-az",
+        help="The availability zone for the public subnet",
+        default=None,
+    )
+    parser.add_argument(
+        "--private-subnet-1-az",
+        help="The availability zone for private subnet 1",
+        default=None,
+    )
+    parser.add_argument(
+        "--private-subnet-2-az",
+        help="The availability zone for private subnet 2",
+        default=None,
+    )
+    parser.add_argument(
+        "--private-subnet-3-az",
+        help="The availability zone for private subnet 3",
+        default=None,
+    )
+    parser.add_argument(
+        "--public-subnet-1-cidr",
+        help="The CIDR for the public subnet",
+        default=None,
+    )
+    parser.add_argument(
+        "--private-subnet-1-cidr",
+        help="The CIDR for private subnet 1",
+        default=None,
+    )
+    parser.add_argument(
+        "--private-subnet-2-cidr",
+        help="The CIDR for private subnet 2",
+        default=None,
+    )
+    parser.add_argument(
+        "--private-subnet-3-cidr",
+        help="The CIDR for private subnet 3",
+        default=None,
     )
 
     # PostgresUrl
