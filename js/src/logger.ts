@@ -569,11 +569,26 @@ export class Logger<IsAsyncFlush extends boolean> {
    * @param event.metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
    * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
    * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
+   * @param options Additional logging options
+   * @param options.allowLogConcurrentWithActiveSpan in rare cases where you need to log at the top level separately from an active span on the logger, set this to true.
    * :returns: The `id` of the logged event.
    */
   public log(
-    event: Readonly<StartSpanEventArgs>
+    event: Readonly<StartSpanEventArgs>,
+    options?: { allowLogConcurrentWithActiveSpan?: boolean }
   ): PromiseUnless<IsAsyncFlush, string> {
+    if (!options?.allowLogConcurrentWithActiveSpan) {
+      const checkCurrentSpan = currentSpan();
+      if (
+        checkCurrentSpan instanceof SpanImpl &&
+        checkCurrentSpan.parentObject === this
+      ) {
+        throw new Error(
+          "Cannot run toplevel Logger.log method while there is an active span. To log to the span, use Span.log"
+        );
+      }
+    }
+
     const span = this.startSpan({ startTime: this.lastStartTime, event });
     this.lastStartTime = span.end();
     const ret = span.id;
@@ -641,6 +656,7 @@ export class Logger<IsAsyncFlush extends boolean> {
   public startSpan(args?: StartSpanArgs): Span {
     const { name, ...argsRest } = args ?? {};
     return new SpanImpl({
+      parentObject: this,
       parentIds: new LazyValue(() => this.lazyParentIds()),
       bgLogger: this.bgLogger,
       name: name ?? "root",
@@ -779,13 +795,13 @@ class BackgroundLogger {
 
       postPromises.push(
         (async () => {
-          const dataS = constructLogs3Data(items);
+          const dataStr = constructLogs3Data(items);
           for (let i = 0; i < NumRetries; i++) {
             const startTime = now();
             try {
               try {
                 return (
-                  await (await this.logConn.get()).post_json("logs3", dataS)
+                  await (await this.logConn.get()).post_json("logs3", dataStr)
                 ).ids.map((res: any) => res.id);
               } catch (e) {
                 // Fallback to legacy API. Remove once all API endpoints are updated.
@@ -813,7 +829,7 @@ class BackgroundLogger {
                 `log request failed. Elapsed time: ${
                   (now() - startTime) / 1000
                 } seconds. Payload size: ${
-                  dataS.length
+                  dataStr.length
                 }. Error: ${errMsg}.${retryingText}`
               );
             }
@@ -1457,15 +1473,25 @@ export async function login(
     // We have already logged in. If any provided login inputs disagree with our
     // existing settings, raise an Exception warning the user to try again with
     // `forceLogin: true`.
-    function checkUpdatedParam(varname: string, arg: string | undefined, orig: string | null) {
+    function checkUpdatedParam(
+      varname: string,
+      arg: string | undefined,
+      orig: string | null
+    ) {
       if (!isEmpty(arg) && !isEmpty(orig) && arg !== orig) {
         throw new Error(
-            `Re-logging in with different ${varname} (${arg}) than original (${orig}). To force re-login, pass \`forceLogin: true\``
+          `Re-logging in with different ${varname} (${arg}) than original (${orig}). To force re-login, pass \`forceLogin: true\``
         );
       }
-    };
+    }
     checkUpdatedParam("appUrl", options.appUrl, _state.appUrl);
-    checkUpdatedParam("apiKey", options.apiKey ? HTTPConnection.sanitize_token(options.apiKey) : undefined, _state.loginToken);
+    checkUpdatedParam(
+      "apiKey",
+      options.apiKey
+        ? HTTPConnection.sanitize_token(options.apiKey)
+        : undefined,
+      _state.loginToken
+    );
     checkUpdatedParam("orgName", options.orgName, _state.orgName);
     return;
   }
@@ -1968,9 +1994,26 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
    * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
    * @param event.dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
    * @param event.inputs: (Deprecated) the same as `input` (will be removed in a future version).
+   * @param options Additional logging options
+   * @param options.allowLogConcurrentWithActiveSpan in rare cases where you need to log at the top level separately from an active span on the experiment, set this to true.
    * :returns: The `id` of the logged event.
    */
-  public log(event: Readonly<ExperimentLogFullArgs>): string {
+  public log(
+    event: Readonly<ExperimentLogFullArgs>,
+    options?: { allowLogConcurrentWithActiveSpan?: boolean }
+  ): string {
+    if (!options?.allowLogConcurrentWithActiveSpan) {
+      const checkCurrentSpan = currentSpan();
+      if (
+        checkCurrentSpan instanceof SpanImpl &&
+        checkCurrentSpan.parentObject === this
+      ) {
+        throw new Error(
+          "Cannot run toplevel Experiment.log method while there is an active span. To log to the span, use Span.log"
+        );
+      }
+    }
+
     event = validateAndSanitizeExperimentLogFullArgs(event, !!this.dataset);
     const span = this.startSpan({ startTime: this.lastStartTime, event });
     this.lastStartTime = span.end();
@@ -2018,6 +2061,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
   public startSpan(args?: StartSpanArgs): Span {
     const { name, ...argsRest } = args ?? {};
     return new SpanImpl({
+      parentObject: this,
       parentIds: new LazyValue(() => this.lazyParentIds()),
       bgLogger: this.bgLogger,
       name: name ?? "root",
@@ -2219,6 +2263,9 @@ export class SpanImpl implements Span {
   private isMerge: boolean;
   private loggedEndTime: number | undefined;
 
+  // For internal use only.
+  public parentObject: Experiment | Logger<any>;
+
   // These fields are logged to every span row.
   private parentIds: LazyValue<ParentExperimentIds | ParentProjectLogIds>;
   private readonly rowIds: {
@@ -2234,6 +2281,7 @@ export class SpanImpl implements Span {
   // should only be specified for non-root spans.
   constructor(
     args: {
+      parentObject: Experiment | Logger<any>;
       parentIds: LazyValue<ParentExperimentIds | ParentProjectLogIds>;
       bgLogger: BackgroundLogger;
     } & Omit<StartSpanArgs, "parentId"> &
@@ -2277,6 +2325,7 @@ export class SpanImpl implements Span {
       created: new Date().toISOString(),
     };
 
+    this.parentObject = args.parentObject;
     this.parentIds = args.parentIds;
 
     const id = args.event?.id ?? uuidv4();
@@ -2370,6 +2419,7 @@ export class SpanImpl implements Span {
 
   public startSpan(args?: Omit<StartSpanArgs, "parent_id">): Span {
     return new SpanImpl({
+      parentObject: this.parentObject,
       parentIds: this.parentIds,
       bgLogger: this.bgLogger,
       parentSpanInfo: {

@@ -469,10 +469,10 @@ class _BackgroundLogger:
 
     @staticmethod
     def _submit_logs_request(items, conn, outfile):
-        dataS = construct_logs3_data(items)
+        dataStr = construct_logs3_data(items)
         for i in range(NUM_RETRIES):
             start_time = time.time()
-            resp = conn.post("/logs3", data=dataS)
+            resp = conn.post("/logs3", data=dataStr)
             if not resp.ok:
                 legacyDataS = construct_json_array([json.dumps(make_legacy_event(json.loads(r))) for r in items])
                 resp = conn.post("/logs", data=legacyDataS)
@@ -480,7 +480,7 @@ class _BackgroundLogger:
                 return
             retrying_text = "" if i + 1 == NUM_RETRIES else " Retrying"
             print(
-                f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataS)}. Error: {resp.status_code}: {resp.text}.{retrying_text}",
+                f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataStr)}. Error: {resp.status_code}: {resp.text}.{retrying_text}",
                 file=outfile,
             )
         if not resp.ok:
@@ -818,9 +818,14 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
             # try again with `force_login=True`.
             def check_updated_param(varname, arg, orig):
                 if arg is not None and orig is not None and arg != orig:
-                    raise Exception(f"Re-logging in with different {varname} ({arg}) than original ({orig}). To force re-login, pass `force_login=True`")
+                    raise Exception(
+                        f"Re-logging in with different {varname} ({arg}) than original ({orig}). To force re-login, pass `force_login=True`"
+                    )
+
             check_updated_param("app_url", app_url, _state.app_url)
-            check_updated_param("api_key", HTTPConnection.sanitize_token(api_key) if api_key else None, _state.login_token)
+            check_updated_param(
+                "api_key", HTTPConnection.sanitize_token(api_key) if api_key else None, _state.login_token
+            )
             check_updated_param("org_name", org_name, _state.org_name)
             return
 
@@ -1441,6 +1446,7 @@ class Experiment(ObjectFetcher):
         id=None,
         dataset_record_id=None,
         inputs=None,
+        allow_log_concurrent_with_active_span=False,
     ):
         """
         Log a single event to the experiment. The event will be batched and uploaded behind the scenes.
@@ -1454,8 +1460,16 @@ class Experiment(ObjectFetcher):
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
         :param dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
         :param inputs: (Deprecated) the same as `input` (will be removed in a future version).
+        :param allow_log_concurrent_with_active_span: (Optional) in rare cases where you need to log at the top level separately from an active span on the experiment, set this to True.
         :returns: The `id` of the logged event.
         """
+        if not allow_log_concurrent_with_active_span:
+            check_current_span = current_span()
+            if getattr(check_current_span, "parent_object", None) == self:
+                raise Exception(
+                    "Cannot run toplevel Experiment.log method while there is an active span. To log to the span, use Span.log"
+                )
+
         event = _validate_and_sanitize_experiment_log_full_args(
             dict(
                 input=input,
@@ -1517,6 +1531,7 @@ class Experiment(ObjectFetcher):
         """
 
         return SpanImpl(
+            parent_object=self,
             parent_ids=self._lazy_parent_ids(),
             bg_logger=self.bg_logger,
             name=name,
@@ -1657,6 +1672,7 @@ class SpanImpl(Span):
 
     def __init__(
         self,
+        parent_object: Union["Experiment", "Logger"],
         parent_ids: LazyValue[Union[ParentExperimentIds, ParentProjectLogIds]],
         bg_logger,
         parent_span_info: Optional[ParentSpanInfo] = None,
@@ -1704,6 +1720,7 @@ class SpanImpl(Span):
         if caller_location:
             self.internal_data["context"] = caller_location
 
+        self.parent_object = parent_object
         self.parent_ids = parent_ids
 
         id = event.get("id", None)
@@ -1782,6 +1799,7 @@ class SpanImpl(Span):
 
     def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
         return SpanImpl(
+            parent_object=self.parent_object,
             parent_ids=self.parent_ids,
             bg_logger=self.bg_logger,
             parent_span_info=ParentSpanInfo(span_id=self.span_id, root_span_id=self.root_span_id),
@@ -2069,6 +2087,10 @@ class Logger:
     def project(self):
         return self._lazy_metadata.get().project
 
+    @property
+    def id(self):
+        return self.project.id
+
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
         self._lazy_metadata.get()
@@ -2083,6 +2105,7 @@ class Logger:
         metadata=None,
         metrics=None,
         id=None,
+        allow_log_concurrent_with_active_span=False,
     ):
         """
         Log a single event. The event will be batched and uploaded behind the scenes.
@@ -2094,7 +2117,15 @@ class Logger:
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
         :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
+        :param allow_log_concurrent_with_active_span: (Optional) in rare cases where you need to log at the top level separately from an active span on the logger, set this to True.
         """
+        if not allow_log_concurrent_with_active_span:
+            check_current_span = current_span()
+            if getattr(check_current_span, "parent_object", None) == self:
+                raise Exception(
+                    "Cannot run toplevel Logger.log method while there is an active span. To log to the span, use Span.log"
+                )
+
         span = self.start_span(
             start_time=self.last_start_time,
             input=input,
@@ -2159,6 +2190,7 @@ class Logger:
         """
 
         return SpanImpl(
+            parent_object=self,
             parent_ids=self._lazy_parent_ids(),
             bg_logger=self.bg_logger,
             name=name,
