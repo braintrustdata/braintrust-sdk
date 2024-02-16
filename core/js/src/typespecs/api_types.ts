@@ -458,8 +458,10 @@ function makeInsertEventSchemas<T extends z.AnyZodObject>(
     .merge(mergeEventSchema)
     .strict()
     .openapi(`Insert${eventSchemaName}EventMerge`);
-  const eventSchema = z.union([replaceVariantSchema, mergeVariantSchema]).describe(
-    `${capitalize(article)} ${eventDescription} event`).openapi(`Insert${eventSchemaName}Event`);
+  const eventSchema = z
+    .union([replaceVariantSchema, mergeVariantSchema])
+    .describe(`${capitalize(article)} ${eventDescription} event`)
+    .openapi(`Insert${eventSchemaName}Event`);
   const requestSchema = z
     .object({
       events: eventSchema
@@ -483,8 +485,10 @@ export const insertEventsResponseSchema = z
   .strict()
   .openapi("InsertEventsResponse");
 
-const { eventSchema: insertExperimentEventSchema,
-        requestSchema: insertExperimentEventsRequestSchema } = makeInsertEventSchemas(
+const {
+  eventSchema: insertExperimentEventSchema,
+  requestSchema: insertExperimentEventsRequestSchema,
+} = makeInsertEventSchemas(
   "experiment",
   z
     .object({
@@ -504,8 +508,10 @@ const { eventSchema: insertExperimentEventSchema,
     .strict()
 );
 
-const { eventSchema: insertDatasetEventSchema,
-        requestSchema: insertDatasetEventsRequestSchema } = makeInsertEventSchemas(
+const {
+  eventSchema: insertDatasetEventSchema,
+  requestSchema: insertDatasetEventsRequestSchema,
+} = makeInsertEventSchemas(
   "dataset",
   z
     .object({
@@ -518,8 +524,10 @@ const { eventSchema: insertDatasetEventSchema,
     .strict()
 );
 
-const { eventSchema: insertProjectLogsEventSchema,
-        requestSchema: insertProjectLogsEventsRequestSchema } = makeInsertEventSchemas(
+const {
+  eventSchema: insertProjectLogsEventSchema,
+  requestSchema: insertProjectLogsEventsRequestSchema,
+} = makeInsertEventSchemas(
   "project",
   z
     .object({
@@ -561,47 +569,55 @@ function makeFeedbackRequestSchema<T extends z.AnyZodObject>(
 
 const feedbackExperimentRequestBaseSchema =
   generateBaseEventFeedbackSchema("experiment");
-const feedbackExperimentItemSchema =
-    z.object({
-      id: feedbackExperimentRequestBaseSchema.shape.id,
-      scores: feedbackExperimentRequestBaseSchema.shape.scores,
-      expected: feedbackExperimentRequestBaseSchema.shape.expected,
-      comment: feedbackExperimentRequestBaseSchema.shape.comment,
-      metadata: feedbackExperimentRequestBaseSchema.shape.metadata,
-      source: feedbackExperimentRequestBaseSchema.shape.source,
-    })
-    .strict()
-    .openapi("FeedbackExperimentItem");
+const feedbackExperimentItemSchema = z
+  .object({
+    id: feedbackExperimentRequestBaseSchema.shape.id,
+    scores: feedbackExperimentRequestBaseSchema.shape.scores,
+    expected: feedbackExperimentRequestBaseSchema.shape.expected,
+    comment: feedbackExperimentRequestBaseSchema.shape.comment,
+    metadata: feedbackExperimentRequestBaseSchema.shape.metadata,
+    source: feedbackExperimentRequestBaseSchema.shape.source,
+  })
+  .strict()
+  .openapi("FeedbackExperimentItem");
 const feedbackExperimentRequestSchema = makeFeedbackRequestSchema(
-  "experiment", feedbackExperimentItemSchema);
+  "experiment",
+  feedbackExperimentItemSchema
+);
 
 const feedbackDatasetRequestBaseSchema =
   generateBaseEventFeedbackSchema("dataset");
-const feedbackDatasetItemSchema = z.object({
-      id: feedbackDatasetRequestBaseSchema.shape.id,
-      comment: feedbackDatasetRequestBaseSchema.shape.comment,
-      metadata: feedbackDatasetRequestBaseSchema.shape.metadata,
-      source: feedbackDatasetRequestBaseSchema.shape.source,
-    })
-    .strict()
-    .openapi("FeedbackDatasetItem");
+const feedbackDatasetItemSchema = z
+  .object({
+    id: feedbackDatasetRequestBaseSchema.shape.id,
+    comment: feedbackDatasetRequestBaseSchema.shape.comment,
+    metadata: feedbackDatasetRequestBaseSchema.shape.metadata,
+    source: feedbackDatasetRequestBaseSchema.shape.source,
+  })
+  .strict()
+  .openapi("FeedbackDatasetItem");
 const feedbackDatasetRequestSchema = makeFeedbackRequestSchema(
-  "dataset", feedbackDatasetItemSchema);
+  "dataset",
+  feedbackDatasetItemSchema
+);
 
 const feedbackProjectLogsRequestBaseSchema =
   generateBaseEventFeedbackSchema("project");
-const feedbackProjectLogsItemSchema = z.object({
-      id: feedbackProjectLogsRequestBaseSchema.shape.id,
-      scores: feedbackProjectLogsRequestBaseSchema.shape.scores,
-      expected: feedbackProjectLogsRequestBaseSchema.shape.expected,
-      comment: feedbackProjectLogsRequestBaseSchema.shape.comment,
-      metadata: feedbackProjectLogsRequestBaseSchema.shape.metadata,
-      source: feedbackProjectLogsRequestBaseSchema.shape.source,
-    })
-    .strict()
-    .openapi("FeedbackProjectLogsItem");
+const feedbackProjectLogsItemSchema = z
+  .object({
+    id: feedbackProjectLogsRequestBaseSchema.shape.id,
+    scores: feedbackProjectLogsRequestBaseSchema.shape.scores,
+    expected: feedbackProjectLogsRequestBaseSchema.shape.expected,
+    comment: feedbackProjectLogsRequestBaseSchema.shape.comment,
+    metadata: feedbackProjectLogsRequestBaseSchema.shape.metadata,
+    source: feedbackProjectLogsRequestBaseSchema.shape.source,
+  })
+  .strict()
+  .openapi("FeedbackProjectLogsItem");
 const feedbackProjectLogsRequestSchema = makeFeedbackRequestSchema(
-  "project", feedbackProjectLogsItemSchema);
+  "project",
+  feedbackProjectLogsItemSchema
+);
 
 // Section: exported schemas, grouped by object type.
 
@@ -641,71 +657,187 @@ function makeCrossObjectIndividualRequestSchema(objectType: ObjectType) {
   const eventObjectType = getEventObjectType(objectType);
   const eventDescription = getEventObjectDescription(objectType);
   const eventObjectSchema = eventObjectSchemas[eventObjectType];
-  const insertObject = z.object({
-      events: eventObjectSchema.insertEvent.array().nullish().describe(`A list of ${eventDescription} events to insert`),
-      feedback: eventObjectSchema.feedbackItem.array().nullish().describe(`A list of ${eventDescription} feedback items`),
-  }).strict();
-  return z.record(z.string().uuid(), insertObject).nullish()
-    .describe(`A mapping from ${objectType} id to a set of log events and feedback items to insert`);
+  const insertObject = z
+    .object({
+      events: eventObjectSchema.insertEvent
+        .array()
+        .nullish()
+        .describe(`A list of ${eventDescription} events to insert`),
+      feedback: eventObjectSchema.feedbackItem
+        .array()
+        .nullish()
+        .describe(`A list of ${eventDescription} feedback items`),
+    })
+    .strict();
+  return z
+    .record(z.string().uuid(), insertObject)
+    .nullish()
+    .describe(
+      `A mapping from ${objectType} id to a set of log events and feedback items to insert`
+    );
 }
 
 function makeCrossObjectIndividualResponseSchema(objectType: ObjectType) {
-  return z.record(z.string().uuid(), insertEventsResponseSchema).nullish()
-    .describe(`A mapping from ${objectType} id to row ids for inserted \`events\``);
+  return z
+    .record(z.string().uuid(), insertEventsResponseSchema)
+    .nullish()
+    .describe(
+      `A mapping from ${objectType} id to row ids for inserted \`events\``
+    );
 }
 
-export const crossObjectInsertRequestSchema = z.object({
+export const crossObjectInsertRequestSchema = z
+  .object({
     experiment: makeCrossObjectIndividualRequestSchema("experiment"),
     dataset: makeCrossObjectIndividualRequestSchema("dataset"),
     project_logs: makeCrossObjectIndividualRequestSchema("project"),
-}).strict().openapi("CrossObjectInsertRequest");
+  })
+  .strict()
+  .openapi("CrossObjectInsertRequest");
 
-export const crossObjectInsertResponseSchema = z.object({
+export const crossObjectInsertResponseSchema = z
+  .object({
     experiment: makeCrossObjectIndividualResponseSchema("experiment"),
     dataset: makeCrossObjectIndividualResponseSchema("dataset"),
     project_logs: makeCrossObjectIndividualResponseSchema("project"),
-}).strict().openapi("CrossObjectInsertResponse");
+  })
+  .strict()
+  .openapi("CrossObjectInsertResponse");
 
 // Section: Summarization operations.
 
-export const summarizeScoresParamSchema = z.boolean().describe("Whether to summarize the scores and metrics. If false (or omitted), only the metadata will be returned.");
+export const summarizeScoresParamSchema = z
+  .boolean()
+  .describe(
+    "Whether to summarize the scores and metrics. If false (or omitted), only the metadata will be returned."
+  );
 
-export const comparisonExperimentIdParamSchema = z.string().uuid().describe("The experiment to compare against, if summarizing scores and metrics. If omitted, will fall back to the `base_exp_id` stored in the experiment metadata, and then to the most recent experiment run in the same project. Must pass `summarize_scores=true` for this id to be used");
+export const comparisonExperimentIdParamSchema = z
+  .string()
+  .uuid()
+  .describe(
+    "The experiment to compare against, if summarizing scores and metrics. If omitted, will fall back to the `base_exp_id` stored in the experiment metadata, and then to the most recent experiment run in the same project. Must pass `summarize_scores=true` for this id to be used"
+  );
 
-export const summarizeDataParamSchema = z.boolean().describe("Whether to summarize the data. If false (or omitted), only the metadata will be returned.");
+export const summarizeDataParamSchema = z
+  .boolean()
+  .describe(
+    "Whether to summarize the data. If false (or omitted), only the metadata will be returned."
+  );
 
-const summarizeExperimentResponseSchema = z.object({
-    project_name: z.string().describe("Name of the project that the experiment belongs to"),
+const summarizeExperimentResponseSchema = z
+  .object({
+    project_name: z
+      .string()
+      .describe("Name of the project that the experiment belongs to"),
     experiment_name: z.string().describe("Name of the experiment"),
-    project_url: z.string().url().describe("URL to the project's page in the Braintrust app"),
-    experiment_url: z.string().url().describe("URL to the experiment's page in the Braintrust app"),
-    comparison_experiment_name: z.string().nullish().describe("The experiment which scores are baselined against"),
-    scores: z.record(z.object({
-        name: z.string().describe("Name of the score"),
-        score: z.number().min(0).max(1).describe("Average score across all examples"),
-        diff: z.number().min(-1).max(1).describe("Difference in score between the current and comparison experiment"),
-        improvements: z.number().int().min(0).describe("Number of improvements in the score"),
-        regressions: z.number().int().min(0).describe("Number of regressions in the score"),
-    }).describe("Summary of a score's performance").openapi("ScoreSummary")).nullish().describe("Summary of the experiment's scores"),
-    metrics: z.record(z.object({
-        name: z.string().describe("Name of the metric"),
-        metric: z.number().describe("Average metric across all examples"),
-        unit: z.string().describe("Unit label for the metric"),
-        diff: z.number().describe("Difference in metric between the current and comparison experiment"),
-        improvements: z.number().int().min(0).describe("Number of improvements in the metric"),
-        regressions: z.number().int().min(0).describe("Number of regressions in the metric"),
-    }).describe("Summary of a metric's performance").openapi("MetricSummary")).nullish().describe("Summary of the experiment's metrics"),
-}).strict().describe("Summary of an experiment").openapi("SummarizeExperimentResponse");
+    project_url: z
+      .string()
+      .url()
+      .describe("URL to the project's page in the Braintrust app"),
+    experiment_url: z
+      .string()
+      .url()
+      .describe("URL to the experiment's page in the Braintrust app"),
+    comparison_experiment_name: z
+      .string()
+      .nullish()
+      .describe("The experiment which scores are baselined against"),
+    scores: z
+      .record(
+        z
+          .object({
+            name: z.string().describe("Name of the score"),
+            score: z
+              .number()
+              .min(0)
+              .max(1)
+              .describe("Average score across all examples"),
+            diff: z
+              .number()
+              .min(-1)
+              .max(1)
+              .describe(
+                "Difference in score between the current and comparison experiment"
+              ),
+            improvements: z
+              .number()
+              .int()
+              .min(0)
+              .describe("Number of improvements in the score"),
+            regressions: z
+              .number()
+              .int()
+              .min(0)
+              .describe("Number of regressions in the score"),
+          })
+          .describe("Summary of a score's performance")
+          .openapi("ScoreSummary")
+      )
+      .nullish()
+      .describe("Summary of the experiment's scores"),
+    metrics: z
+      .record(
+        z
+          .object({
+            name: z.string().describe("Name of the metric"),
+            metric: z.number().describe("Average metric across all examples"),
+            unit: z.string().describe("Unit label for the metric"),
+            diff: z
+              .number()
+              .describe(
+                "Difference in metric between the current and comparison experiment"
+              ),
+            improvements: z
+              .number()
+              .int()
+              .min(0)
+              .describe("Number of improvements in the metric"),
+            regressions: z
+              .number()
+              .int()
+              .min(0)
+              .describe("Number of regressions in the metric"),
+          })
+          .describe("Summary of a metric's performance")
+          .openapi("MetricSummary")
+      )
+      .nullish()
+      .describe("Summary of the experiment's metrics"),
+  })
+  .strict()
+  .describe("Summary of an experiment")
+  .openapi("SummarizeExperimentResponse");
 
-const summarizeDatasetResponseSchema = z.object({
-    project_name: z.string().describe("Name of the project that the dataset belongs to"),
+const summarizeDatasetResponseSchema = z
+  .object({
+    project_name: z
+      .string()
+      .describe("Name of the project that the dataset belongs to"),
     dataset_name: z.string().describe("Name of the dataset"),
-    project_url: z.string().url().describe("URL to the project's page in the Braintrust app"),
-    dataset_url: z.string().url().describe("URL to the dataset's page in the Braintrust app"),
-    data_summary: z.object({
-        total_records: z.number().int().min(0).describe("Total number of records in the dataset"),
-    }).nullish().describe("Summary of a dataset's data").openapi("DataSummary"),
-}).strict().describe("Summary of a dataset").openapi("SummarizeDatasetResponse");
+    project_url: z
+      .string()
+      .url()
+      .describe("URL to the project's page in the Braintrust app"),
+    dataset_url: z
+      .string()
+      .url()
+      .describe("URL to the dataset's page in the Braintrust app"),
+    data_summary: z
+      .object({
+        total_records: z
+          .number()
+          .int()
+          .min(0)
+          .describe("Total number of records in the dataset"),
+      })
+      .nullish()
+      .describe("Summary of a dataset's data")
+      .openapi("DataSummary"),
+  })
+  .strict()
+  .describe("Summary of a dataset")
+  .openapi("SummarizeDatasetResponse");
 
 export const objectTypeSummarizeResponseSchemas = {
   experiment: summarizeExperimentResponseSchema,
