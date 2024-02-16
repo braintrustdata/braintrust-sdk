@@ -17,6 +17,7 @@ PARAMS = {
     "PrivateSubnet1AZ": "private_subnet_1_az",
     "PrivateSubnet2AZ": "private_subnet_2_az",
     "PrivateSubnet3AZ": "private_subnet_3_az",
+    "VPCCIDR": "vpc_cidr",
     "PublicSubnet1CIDR": "public_subnet_1_cidr",
     "PrivateSubnet1CIDR": "private_subnet_1_cidr",
     "PrivateSubnet2CIDR": "private_subnet_2_cidr",
