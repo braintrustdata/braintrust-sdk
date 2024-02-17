@@ -280,6 +280,13 @@ function evaluateFilter(object: any, filter: Filter) {
   return pattern.test(serializeJSONWithPlainString(key));
 }
 
+function scorerName(
+  scorer: EvalScorer<any, any, any, any>,
+  scorer_idx: number
+) {
+  return scorer.name || `scorer_${scorer_idx}`;
+}
+
 export async function runEvaluator(
   experiment: Experiment | null,
   evaluator: EvaluatorDef<any, any, any | void, any | void>,
@@ -340,7 +347,9 @@ export async function runEvaluator(
 
   const evals = data.map(async (datum) => {
     const callback = async (rootSpan: Span) => {
-      let metadata: object = { ...("metadata" in datum ? datum.metadata : {}) };
+      let metadata: Record<string, unknown> = {
+        ...("metadata" in datum ? datum.metadata : {}),
+      };
       let output: any = undefined;
       let error: unknown | undefined = undefined;
       let scores: Record<string, number | null> = {};
@@ -363,46 +372,61 @@ export async function runEvaluator(
         rootSpan.log({ output });
 
         const scoringArgs = { ...datum, metadata, output };
+        const scorerNames = evaluator.scores.map(scorerName);
         const scoreResults = await Promise.all(
           evaluator.scores.map(async (score, score_idx) => {
-            return rootSpan.traced(
-              async (span: Span) => {
-                const scoreResult = score(scoringArgs);
-                const result =
-                  scoreResult instanceof Promise
-                    ? await scoreResult
-                    : scoreResult;
-                const {
-                  metadata: resultMetadata,
-                  name: _,
-                  ...resultRest
-                } = result;
-                span.log({
-                  output: resultRest,
-                  metadata: resultMetadata,
-                });
-                return result;
-              },
-              {
-                name: score.name || `scorer_${score_idx}`,
-                spanAttributes: {
-                  type: SpanTypeAttribute.SCORE,
+            try {
+              const result = await rootSpan.traced(
+                async (span: Span) => {
+                  const scoreResult = score(scoringArgs);
+                  const result =
+                    scoreResult instanceof Promise
+                      ? await scoreResult
+                      : scoreResult;
+                  const {
+                    metadata: resultMetadata,
+                    name: _,
+                    ...resultRest
+                  } = result;
+                  span.log({
+                    output: resultRest,
+                    metadata: resultMetadata,
+                  });
+                  return result;
                 },
-                event: { input: scoringArgs },
-              }
-            );
+                {
+                  name: scorerNames[score_idx],
+                  spanAttributes: {
+                    type: SpanTypeAttribute.SCORE,
+                  },
+                  event: { input: scoringArgs },
+                }
+              );
+              return { kind: "score", value: result } as const;
+            } catch (e) {
+              return { kind: "error", value: e } as const;
+            }
           })
         );
+        // Resolve each promise on its own so that we can separate the passing
+        // from the failing ones.
+        const passingScorersAndResults: { name: string; score: Score }[] = [];
+        const failingScorersAndResults: { name: string; error: unknown }[] = [];
+        scoreResults.forEach((result, i) => {
+          const name = scorerNames[i];
+          if (result.kind === "score") {
+            passingScorersAndResults.push({ name, score: result.value });
+          } else {
+            failingScorersAndResults.push({ name, error: result.value });
+          }
+        });
 
         const scoreMetadata: Record<string, unknown> = {};
-        for (const scoreResult of scoreResults) {
+        for (const { score: scoreResult } of passingScorersAndResults) {
           scores[scoreResult.name] = scoreResult.score;
           const metadata = {
             ...scoreResult.metadata,
           };
-          if (scoreResult.error !== undefined) {
-            metadata.error = scoreResult.error;
-          }
           if (Object.keys(metadata).length > 0) {
             scoreMetadata[scoreResult.name] = metadata;
           }
@@ -412,9 +436,23 @@ export async function runEvaluator(
           meta({ scores: scoreMetadata });
         }
 
-        // Note: We're asserting here that any object can be cast as Record<string, unknown>, which should generally
-        // be true, but if we discover that it's not, we may want to update the definition of BaseMetadata.
-        rootSpan.log({ scores, metadata: metadata as Record<string, unknown> });
+        rootSpan.log({ scores, metadata: metadata });
+
+        if (failingScorersAndResults.length) {
+          const scorerErrors = Object.fromEntries(
+            failingScorersAndResults.map(({ name, error }) => [
+              name,
+              error instanceof Error ? error.stack : `${error}`,
+            ])
+          );
+          metadata["scorerErrors"] = scorerErrors;
+          const names = Object.keys(scorerErrors).join(", ");
+          const errors = failingScorersAndResults.map((item) => item.error);
+          throw new AggregateError(
+            errors,
+            `Found exceptions for the following scorers: ${names}`
+          );
+        }
       } catch (e) {
         error = e;
       } finally {
