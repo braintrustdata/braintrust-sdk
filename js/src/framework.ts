@@ -445,7 +445,7 @@ export async function runEvaluator(
               error instanceof Error ? error.stack : `${error}`,
             ])
           );
-          metadata["scorerErrors"] = scorerErrors;
+          metadata["scorer_errors"] = scorerErrors;
           const names = Object.keys(scorerErrors).join(", ");
           const errors = failingScorersAndResults.map((item) => item.error);
           throw new AggregateError(
