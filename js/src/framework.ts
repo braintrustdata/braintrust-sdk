@@ -381,7 +381,7 @@ export async function runEvaluator(
                   output: resultRest,
                   metadata: resultMetadata,
                   scores: {
-                    name: resultRest.score,
+                    [name]: resultRest.score,
                   },
                 });
                 return result;
