@@ -363,7 +363,7 @@ export async function runEvaluator(
         rootSpan.log({ output });
 
         const scoringArgs = { ...datum, metadata, output };
-        const scoreResults = await Promise.all(
+        await Promise.all(
           evaluator.scores.map(async (score, score_idx) => {
             return rootSpan.traced(
               async (span: Span) => {
@@ -374,12 +374,15 @@ export async function runEvaluator(
                     : scoreResult;
                 const {
                   metadata: resultMetadata,
-                  name: _,
+                  name,
                   ...resultRest
                 } = result;
                 span.log({
                   output: resultRest,
                   metadata: resultMetadata,
+                  scores: {
+                    name: resultRest.score,
+                  },
                 });
                 return result;
               },
@@ -393,28 +396,6 @@ export async function runEvaluator(
             );
           })
         );
-
-        const scoreMetadata: Record<string, unknown> = {};
-        for (const scoreResult of scoreResults) {
-          scores[scoreResult.name] = scoreResult.score;
-          const metadata = {
-            ...scoreResult.metadata,
-          };
-          if (scoreResult.error !== undefined) {
-            metadata.error = scoreResult.error;
-          }
-          if (Object.keys(metadata).length > 0) {
-            scoreMetadata[scoreResult.name] = metadata;
-          }
-        }
-
-        if (Object.keys(scoreMetadata).length > 0) {
-          meta({ scores: scoreMetadata });
-        }
-
-        // Note: We're asserting here that any object can be cast as Record<string, unknown>, which should generally
-        // be true, but if we discover that it's not, we may want to update the definition of BaseMetadata.
-        rootSpan.log({ scores, metadata: metadata as Record<string, unknown> });
       } catch (e) {
         error = e;
       } finally {
