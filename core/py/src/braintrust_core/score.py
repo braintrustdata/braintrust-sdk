@@ -2,7 +2,7 @@ import dataclasses
 from abc import ABC, abstractmethod
 from typing import Dict, Optional
 
-from .util import SerializableDataClass
+from .util import SerializableDataClass, eprint
 
 
 @dataclasses.dataclass
@@ -10,7 +10,7 @@ class Score(SerializableDataClass):
     name: str
     score: Optional[float]
     metadata: Dict[str, any] = dataclasses.field(default_factory=dict)
-    # Note: this field is deprecated, as errors are propagated up to the caller.
+    # DEPRECATION_NOTICE: this field is deprecated, as errors are propagated up to the caller.
     error: Exception = None
 
     def as_dict(self):
@@ -23,7 +23,7 @@ class Score(SerializableDataClass):
         if self.score is not None and (self.score < 0 or self.score > 1):
             raise ValueError(f"score ({self.score}) must be between 0 and 1")
         if self.error is not None:
-            print(
+            eprint(
                 "The error field is deprecated, as errors are now propagated to the caller. The field will be removed in a future version of the library"
             )
 
