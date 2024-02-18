@@ -2,7 +2,7 @@ import dataclasses
 from abc import ABC, abstractmethod
 from typing import Dict, Optional
 
-from .util import SerializableDataClass
+from .util import SerializableDataClass, eprint
 
 
 @dataclasses.dataclass
@@ -10,32 +10,30 @@ class Score(SerializableDataClass):
     name: str
     score: Optional[float]
     metadata: Dict[str, any] = dataclasses.field(default_factory=dict)
+    # DEPRECATION_NOTICE: this field is deprecated, as errors are propagated up to the caller.
     error: Exception = None
 
     def as_dict(self):
         return {
             "score": self.score,
             "metadata": self.metadata,
-            "error": repr(self.error) if self.error else None,
         }
 
     def __post_init__(self):
         if self.score is not None and (self.score < 0 or self.score > 1):
             raise ValueError(f"score ({self.score}) must be between 0 and 1")
+        if self.error is not None:
+            eprint(
+                "The error field is deprecated, as errors are now propagated to the caller. The field will be removed in a future version of the library"
+            )
 
 
 class Scorer(ABC):
     async def eval_async(self, output, expected=None, **kwargs):
-        try:
-            return await self._run_eval_async(output, expected, **kwargs)
-        except Exception as e:
-            return Score(name=self._name(), score=0, error=e)
+        return await self._run_eval_async(output, expected, **kwargs)
 
     def eval(self, output, expected=None, **kwargs):
-        try:
-            return self._run_eval_sync(output, expected, **kwargs)
-        except Exception as e:
-            return Score(name=self._name(), score=0, error=e)
+        return self._run_eval_sync(output, expected, **kwargs)
 
     def __call__(self, output, expected=None, **kwargs):
         return self.eval(output, expected, **kwargs)
