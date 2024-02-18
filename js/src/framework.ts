@@ -180,9 +180,9 @@ export async function Eval<
   name: string,
   evaluator: Evaluator<Input, Output, Expected, Metadata>
 ): Promise<ExperimentSummary> {
-  const evalName = makeEvalName(name, evaluator.experimentName);
+  let evalName = makeEvalName(name, evaluator.experimentName);
   if (_evals[evalName]) {
-    throw new Error(`Evaluator ${evalName} already exists`);
+    evalName = `${evalName}_${Object.keys(_evals).length}`;
   }
   if (globalThis._lazy_load) {
     _evals[evalName] = { evalName, projectName: name, ...evaluator };

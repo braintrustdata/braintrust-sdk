@@ -127,7 +127,7 @@ class Evaluator:
     project_name: str
 
     """
-    A name that uniquely defines this type of experiment. You do not need to change it each time the experiment runs, but you should not have other experiments in your code with the same name.
+    A name that describes the experiment. You do not need to change it each time the experiment runs.
     """
     eval_name: str
 
@@ -302,7 +302,7 @@ def Eval(
 
     global _evals
     if eval_name in _evals:
-        raise ValueError(f"Evaluator {eval_name} already exists")
+        eval_name = f"{eval_name}_{len(_evals)}"
 
     evaluator = Evaluator(
         eval_name=eval_name,
