@@ -19,6 +19,7 @@ from functools import partial, wraps
 from multiprocessing import cpu_count
 from typing import Any, Dict, Optional, Union
 
+import exceptiongroup
 import requests
 from braintrust_core.bt_json import bt_dumps
 from braintrust_core.db_fields import (
@@ -340,30 +341,40 @@ def _check_json_serializable(event):
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
 
-DEFAULT_BATCH_SIZE = 100
-NUM_RETRIES = 3
-
-_DEBUG_LOGGING_PAUSED = False
-
-
 class _BackgroundLogger:
     def __init__(self, log_conn: LazyValue[HTTPConnection]):
-        self._outfile = sys.stderr
-
         self.log_conn = log_conn
+        self.outfile = sys.stderr
         self.flush_lock = threading.RLock()
+
+        try:
+            self.sync_flush = bool(int(os.environ["BRAINTRUST_SYNC_FLUSH"]))
+        except:
+            self.sync_flush = False
+
+        try:
+            self.default_batch_size = int(os.environ["BRAINTRUST_DEFAULT_BATCH_SIZE"])
+        except:
+            self.default_batch_size = 100
+
+        try:
+            self.num_retries = int(os.environ["BRAINTRUST_NUM_RETRIES"])
+        except:
+            self.num_retries = 3
+
+        try:
+            queue_maxsize = int(os.environ["BRAINTRUST_QUEUE_SIZE"])
+        except:
+            # Don't limit the queue size if we're in 'sync_flush' mode, because
+            # otherwise logging could block indefinitely.
+            queue_maxsize = 0 if self.sync_flush else 1000
+
         self.start_thread_lock = threading.RLock()
         self.thread = threading.Thread(target=self._publisher, daemon=True)
         self.started = False
 
-        log_namespace = "braintrust"
-        self.logger = logging.getLogger(log_namespace)
-
-        try:
-            queue_size = int(os.environ.get("BRAINTRUST_QUEUE_SIZE"))
-        except Exception:
-            queue_size = 1000
-        self.queue = queue.Queue(maxsize=queue_size)
+        self.logger = logging.getLogger("braintrust")
+        self.queue = queue.Queue(maxsize=queue_maxsize)
         # Each time we put items in the queue, we increment a semaphore to
         # indicate to any consumer thread that it should attempt a flush.
         self.queue_filled_semaphore = threading.Semaphore(value=0)
@@ -393,50 +404,41 @@ class _BackgroundLogger:
         self.logger.info("Flushing final log events...")
         self.flush()
 
-    def _publisher(self, batch_size=None):
-        kwargs = {}
-        if batch_size is not None:
-            kwargs["batch_size"] = batch_size
-
+    def _publisher(self):
         while True:
             # Wait for some data on the queue before trying to flush.
             self.queue_filled_semaphore.acquire()
 
-            while _DEBUG_LOGGING_PAUSED:
-                _logger.warning(
-                    "Logging paused. Sleeping for 100ms and will try again. This flag should only be set for debugging purposes."
-                )
+            while self.sync_flush:
                 time.sleep(0.1)
 
             try:
-                self.flush(**kwargs)
-            except Exception:
-                traceback.print_exc(file=self._outfile)
+                self.flush()
+            except:
+                traceback.print_exc(file=self.outfile)
 
-    def flush(self, batch_size=100):
+    def flush(self, batch_size=None):
+        if batch_size is None:
+            batch_size = self.default_batch_size
+
         # We cannot have multiple threads flushing in parallel, because the
         # order of published elements would be undefined.
         with self.flush_lock:
             # Drain the queue.
-            all_items = []
+            wrapped_items = []
             try:
                 for _ in range(self.queue.qsize()):
-                    all_items.append(self.queue.get_nowait())
+                    wrapped_items.append(self.queue.get_nowait())
             except queue.Empty:
                 pass
-            # Unwrap all the lazily-computed values.
-            try:
-                all_items = [item.get() for item in all_items]
-                all_items = list(reversed(merge_row_batch(all_items)))
-            except Exception as e:
-                print("Encountered error when constructing records to flush:", file=self._outfile)
-                traceback.print_exc(file=self._outfile)
-                all_items = []
 
+            all_items = self._unwrap_lazy_values(wrapped_items)
             if len(all_items) == 0:
                 return
 
-            conn = self.log_conn.get()
+            # Since the merged rows are guaranteed to refer to independent rows,
+            # publish order does not matter and we can flush all item batches
+            # concurrently.
             post_promises = []
             while True:
                 items = []
@@ -455,22 +457,49 @@ class _BackgroundLogger:
                     break
 
                 try:
-                    post_promises.append(
-                        HTTP_REQUEST_THREAD_POOL.submit(
-                            _BackgroundLogger._submit_logs_request, items, conn, self._outfile
-                        )
-                    )
+                    post_promises.append(HTTP_REQUEST_THREAD_POOL.submit(self._submit_logs_request, items))
                 except RuntimeError:
                     # If the thread pool has shut down, e.g. because the process is terminating, run the request the
                     # old fashioned way.
-                    _BackgroundLogger._submit_logs_request(items, conn, self._outfile)
+                    self._submit_logs_request(items)
 
             concurrent.futures.wait(post_promises)
+            # Raise any exceptions from the promises as one group.
+            post_promise_exceptions = [f.exception() for f in post_promises if f.exception() is not None]
+            if post_promise_exceptions:
+                raise exceptiongroup.ExceptionGroup(
+                    f"Encountered the following errors while logging:", post_promise_exceptions
+                )
 
-    @staticmethod
-    def _submit_logs_request(items, conn, outfile):
+    def _unwrap_lazy_values(self, wrapped_items):
+        for i in range(self.num_retries):
+            try:
+                unwrapped_items = [item.get() for item in wrapped_items]
+                return merge_row_batch(unwrapped_items)
+            except Exception as e:
+                errmsg = "Encountered error when constructing records to flush"
+                is_retrying = i + 1 < self.num_retries
+                if is_retrying:
+                    errmsg += ". Retrying"
+
+                if not is_retrying and self.sync_flush:
+                    raise Exception(errmsg) from e
+                else:
+                    print(errmsg, file=self.outfile)
+                    traceback.print_exc(file=self.outfile)
+                    if is_retrying:
+                        time.sleep(0.1)
+
+        print(
+            f"Failed to construct log records to flush after {self.num_retries} retries. Dropping batch",
+            file=self.outfile,
+        )
+        return []
+
+    def _submit_logs_request(self, items):
+        conn = self.log_conn.get()
         dataStr = construct_logs3_data(items)
-        for i in range(NUM_RETRIES):
+        for i in range(self.num_retries):
             start_time = time.time()
             resp = conn.post("/logs3", data=dataStr)
             if not resp.ok:
@@ -478,13 +507,19 @@ class _BackgroundLogger:
                 resp = conn.post("/logs", data=legacyDataS)
             if resp.ok:
                 return
-            retrying_text = "" if i + 1 == NUM_RETRIES else " Retrying"
-            print(
-                f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataStr)}. Error: {resp.status_code}: {resp.text}.{retrying_text}",
-                file=outfile,
-            )
-        if not resp.ok:
-            print(f"log request failed after {NUM_RETRIES} retries. Dropping batch", file=outfile)
+
+            is_retrying = i + 1 < self.num_retries
+            retrying_text = "" if is_retrying else " Retrying"
+            errmsg = f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataStr)}.{retrying_text}\nError: {resp.status_code}: {resp.text}"
+
+            if not is_retrying and self.sync_flush:
+                raise Exception(errmsg)
+            else:
+                print(errmsg, file=self.outfile)
+                if is_retrying:
+                    time.sleep(0.1)
+
+        print(f"log request failed after {self.num_retries} retries. Dropping batch", file=self.outfile)
 
 
 def _ensure_object(object_type, object_id, force=False):
@@ -1191,8 +1226,6 @@ class ObjectIterator:
 
 class ObjectFetcher:
     def __init__(self, object_type, pinned_version=None, mutate_record=None):
-        assert hasattr(self, "id"), "ObjectFetcher subclasses must have an 'id' attribute"
-
         self.object_type = object_type
         self._pinned_version = pinned_version
         self._mutate_record = mutate_record
@@ -1226,10 +1259,11 @@ class ObjectFetcher:
         return self._refetch()
 
     def _refetch(self):
+        state = self._get_state()
         if self._fetched_data is None:
             data = None
             try:
-                resp = _state.log_conn().get(
+                resp = state.log_conn().get(
                     f"object3/{self.object_type}",
                     params={"id": self.id, "fmt": "json2", "version": self._pinned_version, "api_version": 2},
                 )
@@ -1239,7 +1273,7 @@ class ObjectFetcher:
                 # DEPRECATION_NOTICE: When hitting old versions of the API where the "object3/" endpoint isn't available, fall back to
                 # the "object/" endpoint, which may require patching the incoming records. Remove this code once
                 # all APIs are updated.
-                resp = _state.log_conn().get(
+                resp = state.log_conn().get(
                     f"object/{self.object_type}",
                     params={"id": self.id, "fmt": "json2", "version": self._pinned_version},
                 )
@@ -1655,6 +1689,11 @@ class ReadonlyExperiment(ObjectFetcher):
     @property
     def id(self):
         return self._lazy_metadata.get().experiment.id
+
+    def _get_state(self):
+        # Ensure the login state is populated by fetching the lazy_metadata.
+        self._lazy_metadata.get()
+        return _state
 
     def as_dataset(self):
         return ExperimentDatasetIterator(self.fetch())

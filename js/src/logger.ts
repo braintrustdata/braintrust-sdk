@@ -719,9 +719,6 @@ function constructLogs3Data(items: string[]) {
   return `{"rows": ${constructJsonArray(items)}, "api_version": 2}`;
 }
 
-const DefaultBatchSize = 100;
-const NumRetries = 3;
-
 function now() {
   return new Date().getTime();
 }
@@ -729,11 +726,32 @@ function now() {
 class BackgroundLogger {
   private logConn: LazyValue<HTTPConnection>;
   private items: LazyValue<BackgroundLogEvent>[] = [];
-  private active_flush: Promise<string[]> = Promise.resolve([]);
-  private active_flush_resolved = true;
+  private activeFlush: Promise<void> = Promise.resolve();
+  private activeFlushResolved = true;
+
+  public syncFlush: boolean = false;
+  public defaultBatchSize: number = 100;
+  public numRetries: number = 3;
 
   constructor(logConn: LazyValue<HTTPConnection>) {
     this.logConn = logConn;
+
+    const syncFlushEnv = Number(iso.getEnv("BRAINTRUST_SYNC_FLUSH"));
+    if (!isNaN(syncFlushEnv)) {
+      this.syncFlush = Boolean(syncFlushEnv);
+    }
+
+    const defaultBatchSizeEnv = Number(
+      iso.getEnv("BRAINTRUST_DEFAULT_BATCH_SIZE")
+    );
+    if (!isNaN(defaultBatchSizeEnv)) {
+      this.defaultBatchSize = defaultBatchSizeEnv;
+    }
+
+    const numRetriesEnv = Number(iso.getEnv("BRAINTRUST_NUM_RETRIES"));
+    if (!isNaN(numRetriesEnv)) {
+      this.numRetries = numRetriesEnv;
+    }
 
     // Note that this will not run for explicit termination events, such as
     // calls to `process.exit()` or uncaught exceptions. Thus it is a
@@ -745,36 +763,38 @@ class BackgroundLogger {
 
   log(items: LazyValue<BackgroundLogEvent>[]) {
     this.items.push(...items);
-
-    if (this.active_flush_resolved) {
-      this.active_flush_resolved = false;
-      this.active_flush = this.flush_once();
+    if (!this.syncFlush) {
+      this.triggerActiveFlush();
     }
   }
 
-  async flush_once(batchSize: number = DefaultBatchSize): Promise<string[]> {
-    this.active_flush_resolved = false;
+  async flush(): Promise<void> {
+    if (this.syncFlush) {
+      this.triggerActiveFlush();
+    }
+    await this.activeFlush;
+  }
+
+  private async flushOnce(args?: { batchSize?: number }): Promise<void> {
+    const batchSize = args?.batchSize ?? this.defaultBatchSize;
+
+    // Drain the queue.
+    const wrappedItems = this.items;
+    this.items = [];
+
+    const allItems = await this.unwrapLazyValues(wrappedItems);
+    if (allItems.length === 0) {
+      return;
+    }
 
     // Since the merged rows are guaranteed to refer to independent rows,
     // publish order does not matter and we can flush all item batches
     // concurrently.
-    const itemLazyValues = this.items;
-    this.items = [];
-    const allItems = await (async () => {
-      try {
-        const itemPromises = itemLazyValues.map((x) => x.get());
-        return mergeRowBatch(await Promise.all(itemPromises)).reverse();
-      } catch (e) {
-        console.warn(
-          "Encountered error when constructing records to flush:\n",
-          e
-        );
-        return [];
-      }
-    })();
-    let postPromises = [];
+    const postPromises: Promise<
+      { type: "success" } | { type: "error"; value: unknown }
+    >[] = [];
     while (true) {
-      const items = [];
+      const items: string[] = [];
       let itemsLen = 0;
       while (items.length < batchSize && itemsLen < MaxRequestSize / 2) {
         let item = null;
@@ -795,70 +815,123 @@ class BackgroundLogger {
 
       postPromises.push(
         (async () => {
-          const dataStr = constructLogs3Data(items);
-          for (let i = 0; i < NumRetries; i++) {
-            const startTime = now();
-            try {
-              try {
-                return (
-                  await (await this.logConn.get()).post_json("logs3", dataStr)
-                ).ids.map((res: any) => res.id);
-              } catch (e) {
-                // Fallback to legacy API. Remove once all API endpoints are updated.
-                const legacyDataS = constructJsonArray(
-                  items.map((r: any) =>
-                    JSON.stringify(makeLegacyEvent(JSON.parse(r)))
-                  )
-                );
-                return (
-                  await (
-                    await this.logConn.get()
-                  ).post_json("logs", legacyDataS)
-                ).map((res: any) => res.id);
-              }
-            } catch (e) {
-              const retryingText = i + 1 === NumRetries ? "" : " Retrying";
-              const errMsg = (() => {
-                if (e instanceof FailedHTTPResponse) {
-                  return `${e.status} (${e.text}): ${e.data}`;
-                } else {
-                  return `${e}`;
-                }
-              })();
-              console.warn(
-                `log request failed. Elapsed time: ${
-                  (now() - startTime) / 1000
-                } seconds. Payload size: ${
-                  dataStr.length
-                }. Error: ${errMsg}.${retryingText}`
-              );
-            }
+          try {
+            await this.submitLogsRequest(items);
+            return { type: "success" } as const;
+          } catch (e) {
+            return { type: "error", value: e } as const;
           }
-          console.warn(
-            `log request failed after ${NumRetries} retries. Dropping batch`
-          );
-          return [];
         })()
       );
     }
-    let ret = await Promise.all(postPromises);
+    const results = await Promise.all(postPromises);
+    const failingResultErrors = results
+      .map((r) => (r.type === "success" ? undefined : r.value))
+      .filter((r) => r !== undefined);
+    if (failingResultErrors.length) {
+      throw new AggregateError(
+        failingResultErrors,
+        `Encountered the following errors while logging:`
+      );
+    }
 
     // If more items were added while we were flushing, flush again
     if (this.items.length > 0) {
-      this.active_flush = this.flush_once();
-    } else {
-      this.active_flush_resolved = true;
+      await this.flushOnce(args);
     }
-
-    return ret;
   }
 
-  async flush(): Promise<void> {
-    while (true) {
-      await this.active_flush;
-      if (this.active_flush_resolved) {
-        break;
+  private async unwrapLazyValues(
+    wrappedItems: LazyValue<BackgroundLogEvent>[]
+  ): Promise<BackgroundLogEvent[]> {
+    for (let i = 0; i < this.numRetries; ++i) {
+      try {
+        const itemPromises = wrappedItems.map((x) => x.get());
+        return mergeRowBatch(await Promise.all(itemPromises));
+      } catch (e) {
+        let errmsg = "Encountered error when constructing records to flush";
+        const isRetrying = i + 1 < this.numRetries;
+        if (isRetrying) {
+          errmsg += ". Retrying";
+        }
+
+        console.warn(errmsg);
+        if (!isRetrying && this.syncFlush) {
+          throw e;
+        } else {
+          console.warn(e);
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
       }
+    }
+    console.warn(
+      `Failed to construct log records to flush after ${this.numRetries} retries. Dropping batch`
+    );
+    return [];
+  }
+
+  private async submitLogsRequest(items: string[]): Promise<void> {
+    const conn = await this.logConn.get();
+    const dataStr = constructLogs3Data(items);
+    for (let i = 0; i < this.numRetries; i++) {
+      const startTime = now();
+      let error: unknown = undefined;
+      try {
+        await conn.post_json("logs3", dataStr);
+      } catch (e) {
+        // Fallback to legacy API. Remove once all API endpoints are updated.
+        try {
+          const legacyDataS = constructJsonArray(
+            items.map((r: any) =>
+              JSON.stringify(makeLegacyEvent(JSON.parse(r)))
+            )
+          );
+          await conn.post_json("logs", legacyDataS);
+        } catch (e) {
+          error = e;
+        }
+      }
+      if (error === undefined) {
+        return;
+      }
+
+      const isRetrying = i + 1 < this.numRetries;
+      const retryingText = isRetrying ? "" : " Retrying";
+      const errorText = (() => {
+        if (error instanceof FailedHTTPResponse) {
+          return `${error.status} (${error.text}): ${error.data}`;
+        } else {
+          return `${error}`;
+        }
+      })();
+      const errMsg = `log request failed. Elapsed time: ${
+        (now() - startTime) / 1000
+      } seconds. Payload size: ${
+        dataStr.length
+      }.${retryingText}\nError: ${errorText}`;
+
+      if (!isRetrying && this.syncFlush) {
+        throw new Error(errMsg);
+      } else {
+        console.warn(errMsg);
+        if (isRetrying) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      }
+    }
+
+    console.warn(
+      `log request failed after ${this.numRetries} retries. Dropping batch`
+    );
+    return;
+  }
+
+  private triggerActiveFlush() {
+    if (this.activeFlushResolved) {
+      this.activeFlushResolved = false;
+      this.activeFlush = this.flushOnce().finally(() => {
+        this.activeFlushResolved = true;
+      });
     }
   }
 }
@@ -1937,7 +2010,7 @@ export type EvalCase<Input, Expected, Metadata> = {
 export class Experiment extends ObjectFetcher<ExperimentEvent> {
   private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>;
   public readonly dataset?: AnyDataset;
-  private bgLogger: BackgroundLogger;
+  public bgLogger: BackgroundLogger;
   private lastStartTime: number;
   // For type identification.
   public kind: "experiment" = "experiment";
