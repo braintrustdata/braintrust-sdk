@@ -356,7 +356,7 @@ const datasetEventSchema = z
     input: datasetEventBaseSchema.shape.input.describe(
       "The argument that uniquely define an input case (an arbitrary, JSON serializable object)"
     ),
-    output: datasetEventBaseSchema.shape.output.describe(
+    expected: datasetEventBaseSchema.shape.expected.describe(
       "The output of your application, including post-processing (an arbitrary, JSON serializable object)"
     ),
     metadata: datasetEventBaseSchema.shape.metadata,
@@ -516,7 +516,7 @@ const {
   z
     .object({
       input: datasetEventSchema.shape.input,
-      output: datasetEventSchema.shape.output,
+      expected: datasetEventSchema.shape.expected,
       metadata: datasetEventSchema.shape.metadata,
       id: datasetEventSchema.shape.id.nullish(),
       [OBJECT_DELETE_FIELD]: datasetEventBaseSchema.shape[OBJECT_DELETE_FIELD],
