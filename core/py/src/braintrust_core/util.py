@@ -1,6 +1,7 @@
 import dataclasses
 import json
 import sys
+import urllib.parse
 from typing import Dict, Set, Tuple
 
 
@@ -63,3 +64,10 @@ def merge_dicts(merge_into: Dict, merge_from: Dict):
     """Merges merge_from into merge_into, destructively updating merge_into."""
 
     return merge_dicts_with_paths(merge_into, merge_from, (), set())
+
+
+def encode_uri_component(name):
+    """Encode a single component of a URI. Slashes are encoded as well, so this
+    should not be used for multiple slash-separated URI components."""
+
+    return urllib.parse.quote(name, safe="")

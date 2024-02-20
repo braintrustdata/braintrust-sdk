@@ -18,7 +18,7 @@ import { isEmpty } from "./util";
 export type BaseExperiment<
   Input,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType
 > = {
   _type: "BaseExperiment";
   _phantom?: [Input, Expected, Metadata];
@@ -38,7 +38,7 @@ export type BaseExperiment<
 export function BaseExperiment<
   Input = unknown,
   Expected = unknown,
-  Metadata extends BaseMetadata = DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType
 >(
   options: {
     name?: string;
@@ -50,7 +50,7 @@ export function BaseExperiment<
 export type EvalData<
   Input,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType
 > =
   | EvalCase<Input, Expected, Metadata>[]
   | (() => EvalCase<Input, Expected, Metadata>[])
@@ -74,7 +74,7 @@ export type EvalScorerArgs<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType
 > = EvalCase<Input, Expected, Metadata> & {
   output: Output;
 };
@@ -83,7 +83,7 @@ export type EvalScorer<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType
 > = (
   args: EvalScorerArgs<Input, Output, Expected, Metadata>
 ) => Score | Promise<Score>;
@@ -92,7 +92,7 @@ export interface Evaluator<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType
 > {
   /**
    * A function that returns a list of inputs, expected outputs, and metadata.
@@ -144,7 +144,7 @@ export type EvaluatorDef<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType
 > = {
   projectName: string;
   evalName: string;
@@ -175,14 +175,14 @@ export async function Eval<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType,
+  Metadata extends BaseMetadata = DefaultMetadataType
 >(
   name: string,
   evaluator: Evaluator<Input, Output, Expected, Metadata>
 ): Promise<ExperimentSummary> {
-  const evalName = makeEvalName(name, evaluator.experimentName);
+  let evalName = makeEvalName(name, evaluator.experimentName);
   if (_evals[evalName]) {
-    throw new Error(`Evaluator ${evalName} already exists`);
+    evalName = `${evalName}_${Object.keys(_evals).length}`;
   }
   if (globalThis._lazy_load) {
     _evals[evalName] = { evalName, projectName: name, ...evaluator };
@@ -280,6 +280,13 @@ function evaluateFilter(object: any, filter: Filter) {
   return pattern.test(serializeJSONWithPlainString(key));
 }
 
+function scorerName(
+  scorer: EvalScorer<any, any, any, any>,
+  scorer_idx: number
+) {
+  return scorer.name || `scorer_${scorer_idx}`;
+}
+
 export async function runEvaluator(
   experiment: Experiment | null,
   evaluator: EvaluatorDef<any, any, any | void, any | void>,
@@ -339,11 +346,13 @@ export async function runEvaluator(
   progressReporter.start(evaluator.evalName, data.length);
 
   const evals = data.map(async (datum) => {
-    let metadata: object = { ...("metadata" in datum ? datum.metadata : {}) };
-    let output: any = undefined;
-    let error: unknown | undefined = undefined;
-    let scores: Record<string, number | null> = {};
     const callback = async (rootSpan: Span) => {
+      let metadata: Record<string, unknown> = {
+        ...("metadata" in datum ? datum.metadata : {}),
+      };
+      let output: any = undefined;
+      let error: unknown | undefined = undefined;
+      let scores: Record<string, number | null> = {};
       try {
         const meta = (o: Record<string, unknown>) =>
           (metadata = { ...metadata, ...o });
@@ -363,46 +372,61 @@ export async function runEvaluator(
         rootSpan.log({ output });
 
         const scoringArgs = { ...datum, metadata, output };
+        const scorerNames = evaluator.scores.map(scorerName);
         const scoreResults = await Promise.all(
           evaluator.scores.map(async (score, score_idx) => {
-            return rootSpan.traced(
-              async (span: Span) => {
-                const scoreResult = score(scoringArgs);
-                const result =
-                  scoreResult instanceof Promise
-                    ? await scoreResult
-                    : scoreResult;
-                const {
-                  metadata: resultMetadata,
-                  name: _,
-                  ...resultRest
-                } = result;
-                span.log({
-                  output: resultRest,
-                  metadata: resultMetadata,
-                });
-                return result;
-              },
-              {
-                name: score.name || `scorer_${score_idx}`,
-                spanAttributes: {
-                  type: SpanTypeAttribute.SCORE,
+            try {
+              const result = await rootSpan.traced(
+                async (span: Span) => {
+                  const scoreResult = score(scoringArgs);
+                  const result =
+                    scoreResult instanceof Promise
+                      ? await scoreResult
+                      : scoreResult;
+                  const {
+                    metadata: resultMetadata,
+                    name: _,
+                    ...resultRest
+                  } = result;
+                  span.log({
+                    output: resultRest,
+                    metadata: resultMetadata,
+                  });
+                  return result;
                 },
-                event: { input: scoringArgs },
-              }
-            );
+                {
+                  name: scorerNames[score_idx],
+                  spanAttributes: {
+                    type: SpanTypeAttribute.SCORE,
+                  },
+                  event: { input: scoringArgs },
+                }
+              );
+              return { kind: "score", value: result } as const;
+            } catch (e) {
+              return { kind: "error", value: e } as const;
+            }
           })
         );
+        // Resolve each promise on its own so that we can separate the passing
+        // from the failing ones.
+        const passingScorersAndResults: { name: string; score: Score }[] = [];
+        const failingScorersAndResults: { name: string; error: unknown }[] = [];
+        scoreResults.forEach((result, i) => {
+          const name = scorerNames[i];
+          if (result.kind === "score") {
+            passingScorersAndResults.push({ name, score: result.value });
+          } else {
+            failingScorersAndResults.push({ name, error: result.value });
+          }
+        });
 
         const scoreMetadata: Record<string, unknown> = {};
-        for (const scoreResult of scoreResults) {
+        for (const { score: scoreResult } of passingScorersAndResults) {
           scores[scoreResult.name] = scoreResult.score;
           const metadata = {
             ...scoreResult.metadata,
           };
-          if (scoreResult.error !== undefined) {
-            metadata.error = scoreResult.error;
-          }
           if (Object.keys(metadata).length > 0) {
             scoreMetadata[scoreResult.name] = metadata;
           }
@@ -412,9 +436,23 @@ export async function runEvaluator(
           meta({ scores: scoreMetadata });
         }
 
-        // Note: We're asserting here that any object can be cast as Record<string, unknown>, which should generally
-        // be true, but if we discover that it's not, we may want to update the definition of BaseMetadata.
-        rootSpan.log({ scores, metadata: metadata as Record<string, unknown> });
+        rootSpan.log({ scores, metadata: metadata });
+
+        if (failingScorersAndResults.length) {
+          const scorerErrors = Object.fromEntries(
+            failingScorersAndResults.map(({ name, error }) => [
+              name,
+              error instanceof Error ? error.stack : `${error}`,
+            ])
+          );
+          metadata["scorer_errors"] = scorerErrors;
+          const names = Object.keys(scorerErrors).join(", ");
+          const errors = failingScorersAndResults.map((item) => item.error);
+          throw new AggregateError(
+            errors,
+            `Found exceptions for the following scorers: ${names}`
+          );
+        }
       } catch (e) {
         error = e;
       } finally {
@@ -512,7 +550,8 @@ export function reportEvaluatorResult(
     if (!verbose && !jsonl) {
       console.error(warning("Add --verbose to see full stack traces."));
     }
-  } else if (summary) {
+  }
+  if (summary) {
     console.log(jsonl ? JSON.stringify(summary) : summary);
   } else {
     const scoresByName: { [name: string]: { total: number; count: number } } =

@@ -26,3 +26,7 @@ export type EventObjectType = ReturnType<typeof getEventObjectType>;
 export function getEventObjectDescription(objectType: ObjectType) {
   return getEventObjectType(objectType).replace("_", " ");
 }
+
+export function getEventObjectArticle(objectType: ObjectType) {
+  return objectType === "experiment" ? "an" : "a";
+}
