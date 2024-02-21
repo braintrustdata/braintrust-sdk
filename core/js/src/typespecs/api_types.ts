@@ -37,7 +37,7 @@ function generateBaseEventOpSchema(objectType: ObjectType) {
         `A unique identifier for the ${eventDescription} event. If you don't provide one, BrainTrust will generate one for you`
       ),
     [TRANSACTION_ID_FIELD]: z
-      .bigint()
+      .string()
       .describe(
         `The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the ${eventDescription} (see the \`version\` parameter)`
       ),
@@ -203,7 +203,7 @@ export const fetchLimitSchema = z
   );
 
 export const maxXactIdSchema = z
-  .bigint()
+  .string()
   .describe(
     [
       "Pagination cursor transaction ID, combined with `max_root_span_id`",
@@ -221,7 +221,7 @@ export const maxRootSpanIdSchema = z
   );
 
 export const versionSchema = z
-  .bigint()
+  .string()
   .describe(
     [
       "Retrieve a snapshot of events from a past time",

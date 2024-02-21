@@ -1903,10 +1903,10 @@ class ObjectFetcher<RecordType>
       return this.pinnedVersion;
     } else {
       const fetchedData = await this.fetchedData();
-      let maxVersion = undefined;
+      let maxVersion: string | undefined = undefined;
       for (const record of fetchedData) {
-        const xactId = record[TRANSACTION_ID_FIELD];
-        if (maxVersion === undefined || (xactId ?? xactId > maxVersion)) {
+        const xactId = String(record[TRANSACTION_ID_FIELD] ?? "0");
+        if (maxVersion === undefined || xactId > maxVersion) {
           maxVersion = xactId;
         }
       }
