@@ -202,23 +202,18 @@ export const fetchLimitSchema = z
     ].join("\n\n")
   );
 
+const fetchPaginationCursorDescription = [
+  "Together, `max_xact_id` and `max_root_span_id` form a pagination cursor",
+  `Since a paginated fetch query returns results in order from latest to earliest, the cursor for the next page can be found as the row with the minimum (earliest) value of the tuple \`(${TRANSACTION_ID_FIELD}, root_span_id)\`. See the documentation of \`limit\` for an overview of paginating fetch queries.`,
+].join("\n\n");
+
 export const maxXactIdSchema = z
   .bigint()
-  .describe(
-    [
-      "Pagination cursor transaction ID, combined with `max_root_span_id`",
-      `Given a previous fetch with a list of rows, you can determine \`max_xact_id\` as the maximum of the \`${TRANSACTION_ID_FIELD}\` field over all rows. See the documentation for \`limit\` for an overview of paginating fetch queries.`,
-    ].join("\n\n")
-  );
+  .describe(fetchPaginationCursorDescription);
 
 export const maxRootSpanIdSchema = z
   .string()
-  .describe(
-    [
-      "Pagination cursor transaction root span ID, combined with `max_xact_id`",
-      `Given a previous fetch with a list of rows, you can determine \`max_root_span_id\` as the maximum of the \`root_span_id\` field over all rows. See the documentation for \`limit\` for an overview of paginating fetch queries.`,
-    ].join("\n\n")
-  );
+  .describe(fetchPaginationCursorDescription);
 
 export const versionSchema = z
   .bigint()
@@ -356,7 +351,7 @@ const datasetEventSchema = z
     input: datasetEventBaseSchema.shape.input.describe(
       "The argument that uniquely define an input case (an arbitrary, JSON serializable object)"
     ),
-    output: datasetEventBaseSchema.shape.output.describe(
+    expected: datasetEventBaseSchema.shape.expected.describe(
       "The output of your application, including post-processing (an arbitrary, JSON serializable object)"
     ),
     metadata: datasetEventBaseSchema.shape.metadata,
@@ -516,7 +511,7 @@ const {
   z
     .object({
       input: datasetEventSchema.shape.input,
-      output: datasetEventSchema.shape.output,
+      expected: datasetEventSchema.shape.expected,
       metadata: datasetEventSchema.shape.metadata,
       id: datasetEventSchema.shape.id.nullish(),
       [OBJECT_DELETE_FIELD]: datasetEventBaseSchema.shape[OBJECT_DELETE_FIELD],
