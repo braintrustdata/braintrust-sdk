@@ -2,6 +2,7 @@ export interface Score {
   name: string;
   score: number | null;
   metadata?: Record<string, unknown>;
+  // DEPRECATION_NOTICE: this field is deprecated, as errors are propagated up to the caller.
   error?: unknown;
 }
 

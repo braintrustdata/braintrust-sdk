@@ -62,8 +62,8 @@ export type LogCommentFullArgs = IdField & {
   [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
 } & Omit<ParentExperimentIds | ParentProjectLogIds, "kind">;
 
-export type SanitizedExperimentLogPartialArgs = Partial<OtherExperimentLogFields> &
-  Partial<InputField>;
+export type SanitizedExperimentLogPartialArgs =
+  Partial<OtherExperimentLogFields> & Partial<InputField>;
 
 export type ExperimentEvent = Partial<InputField> &
   Partial<OtherExperimentLogFields> & {
@@ -122,21 +122,27 @@ interface LegacyDatasetRecord {
   input: any;
   output: any;
   metadata: any;
-};
+}
 
 interface NewDatasetRecord {
   id: string;
   input: any;
   expected: any;
   metadata: any;
-};
+}
 
-export type DatasetRecord<IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET> =
-  IsLegacyDataset extends true ? LegacyDatasetRecord : NewDatasetRecord;
+export type DatasetRecord<
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+> = IsLegacyDataset extends true ? LegacyDatasetRecord : NewDatasetRecord;
 
 export type AnyDatasetRecord = DatasetRecord<boolean>;
 
-export function ensureDatasetRecord<IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET>(r: AnyDatasetRecord, legacy: IsLegacyDataset): DatasetRecord<IsLegacyDataset> {
+export function ensureDatasetRecord<
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+>(
+  r: AnyDatasetRecord,
+  legacy: IsLegacyDataset
+): DatasetRecord<IsLegacyDataset> {
   if (legacy) {
     return ensureLegacyDatasetRecord(r) as DatasetRecord<IsLegacyDataset>;
   } else {
@@ -144,7 +150,9 @@ export function ensureDatasetRecord<IsLegacyDataset extends boolean = typeof DEF
   }
 }
 
-export function ensureLegacyDatasetRecord(r: AnyDatasetRecord): DatasetRecord<true> {
+export function ensureLegacyDatasetRecord(
+  r: AnyDatasetRecord
+): DatasetRecord<true> {
   if ("output" in r) {
     return r;
   }
@@ -156,7 +164,9 @@ export function ensureLegacyDatasetRecord(r: AnyDatasetRecord): DatasetRecord<tr
   return row;
 }
 
-export function ensureNewDatasetRecord(r: AnyDatasetRecord): DatasetRecord<false> {
+export function ensureNewDatasetRecord(
+  r: AnyDatasetRecord
+): DatasetRecord<false> {
   if ("expected" in r) {
     return r;
   }

@@ -13,6 +13,7 @@ from enum import Enum
 from multiprocessing import cpu_count
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List, Optional, TypeVar, Union
 
+import exceptiongroup
 from braintrust_core.score import Score, Scorer
 from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
@@ -126,7 +127,7 @@ class Evaluator:
     project_name: str
 
     """
-    A name that uniquely defines this type of experiment. You do not need to change it each time the experiment runs, but you should not have other experiments in your code with the same name.
+    A name that describes the experiment. You do not need to change it each time the experiment runs.
     """
     eval_name: str
 
@@ -223,7 +224,6 @@ def report_evaluator_result(eval_name, results, summary, verbose, jsonl):
         if jsonl:
             print(json.dumps({"eval_name": eval_name, "errors": errors}))
         else:
-            print(errors)
             info = "".join(errors).rstrip()
             eprint(f"{bcolors.FAIL}{info}{bcolors.ENDC}")
 
@@ -302,7 +302,7 @@ def Eval(
 
     global _evals
     if eval_name in _evals:
-        raise ValueError(f"Evaluator {eval_name} already exists")
+        eval_name = f"{eval_name}_{len(_evals)}"
 
     evaluator = Evaluator(
         eval_name=eval_name,
@@ -453,6 +453,21 @@ def set_thread_pool_max_workers(max_workers):
         obj.set_max_workers(max_workers)
 
 
+def _scorer_name(scorer, scorer_idx):
+    def helper():
+        if hasattr(scorer, "_name"):
+            return scorer._name()
+        elif hasattr(scorer, "__name__"):
+            return scorer.__name__
+        else:
+            return type(scorer).__name__
+
+    ret = helper()
+    if ret == "<lambda>":
+        ret = f"scorer_{scorer_idx}"
+    return ret
+
+
 async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int], filters: List[Filter]):
     #   if (typeof evaluator.data === "string") {
     #     throw new Error("Unimplemented: string data paths");
@@ -485,10 +500,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                     thread_pool.thread_pool(), run_f, args, kwargs, contextvars.copy_context()
                 )
 
-    async def await_or_run_scorer(root_span, scorer, scorer_idx, **kwargs):
-        name = scorer._name() if hasattr(scorer, "_name") else scorer.__name__
-        if name == "<lambda>":
-            name = f"scorer_{scorer_idx}"
+    async def await_or_run_scorer(root_span, scorer, name, **kwargs):
         with root_span.start_span(
             name=name, span_attributes={"type": SpanTypeAttribute.SCORE}, input=dict(**kwargs)
         ) as span:
@@ -546,19 +558,25 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                     scorer() if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer
                     for scorer in evaluator.scores
                 ]
+                scorer_names = [_scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
                 score_promises = [
-                    asyncio.create_task(await_or_run_scorer(root_span, score, idx, **datum.as_dict(), output=output))
-                    for idx, score in enumerate(scorers)
+                    asyncio.create_task(await_or_run_scorer(root_span, score, name, **datum.as_dict(), output=output))
+                    for score, name in zip(scorers, scorer_names)
                 ]
-                score_results = [await p for p in score_promises]
+                passing_scorers_and_results = []
+                failing_scorers_and_exceptions = []
+                for name, p in zip(scorer_names, score_promises):
+                    try:
+                        passing_scorers_and_results.append((name, await p))
+                    except Exception as e:
+                        exc_info = traceback.format_exc()
+                        failing_scorers_and_exceptions.append((name, e, exc_info))
                 score_metadata = {}
-                for scorer, score_result in zip(scorers, score_results):
+                for scorer_name, score_result in passing_scorers_and_results:
                     if not isinstance(score_result, Score):
-                        score_result = Score(name=scorer.__name__, score=score_result)
+                        score_result = Score(name=scorer_name, score=score_result)
                     scores[score_result.name] = score_result.score
                     m = {**(score_result.metadata or {})}
-                    if score_result.error is not None:
-                        m["error"] = str(score_result.error)
                     if len(m) > 0:
                         score_metadata[score_result.name] = m
 
@@ -567,6 +585,17 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
 
                 # XXX: We could probably log these as they are being produced
                 root_span.log(metadata=metadata, scores=scores)
+
+                if failing_scorers_and_exceptions:
+                    scorer_errors = {
+                        scorer_name: exc_info for scorer_name, _, exc_info in failing_scorers_and_exceptions
+                    }
+                    metadata["scorer_errors"] = scorer_errors
+                    names = ", ".join(scorer_errors.keys())
+                    exceptions = [x[1] for x in failing_scorers_and_exceptions]
+                    raise exceptiongroup.ExceptionGroup(
+                        f"Found exceptions for the following scorers: {names}", exceptions
+                    )
             except Exception as e:
                 error = e
                 # Python3.10 has a different set of arguments to format_exception than earlier versions,
