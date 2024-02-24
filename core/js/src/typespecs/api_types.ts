@@ -145,6 +145,12 @@ function generateBaseEventOpSchema(objectType: ObjectType) {
       .describe(
         `Pass \`${OBJECT_DELETE_FIELD}=true\` to mark the ${eventDescription} event deleted. Deleted events will not show up in subsequent fetches for this ${eventDescription}`
       ),
+    fetchEventDeleteField: z
+      .boolean()
+      .nullish()
+      .describe(
+        "True if the row is deleted (false if null/missing). In nearly all cases, this should be false, unless you are calling a paginated fetch query, which may return stale deleted rows"
+      ),
   });
 }
 
@@ -336,6 +342,8 @@ const experimentEventSchema = z
     span_parents: experimentEventBaseSchema.shape.span_parents,
     root_span_id: experimentEventBaseSchema.shape.root_span_id,
     span_attributes: experimentEventBaseSchema.shape.span_attributes,
+    [OBJECT_DELETE_FIELD]:
+      experimentEventBaseSchema.shape.fetchEventDeleteField,
   })
   .strict()
   .openapi("ExperimentEvent");
@@ -357,6 +365,7 @@ const datasetEventSchema = z
     metadata: datasetEventBaseSchema.shape.metadata,
     span_id: datasetEventBaseSchema.shape.span_id,
     root_span_id: datasetEventBaseSchema.shape.root_span_id,
+    [OBJECT_DELETE_FIELD]: datasetEventBaseSchema.shape.fetchEventDeleteField,
   })
   .strict()
   .openapi("DatasetEvent");
@@ -392,6 +401,8 @@ const projectLogsEventSchema = z
     span_parents: projectLogsEventBaseSchema.shape.span_parents,
     root_span_id: projectLogsEventBaseSchema.shape.root_span_id,
     span_attributes: projectLogsEventBaseSchema.shape.span_attributes,
+    [OBJECT_DELETE_FIELD]:
+      projectLogsEventBaseSchema.shape.fetchEventDeleteField,
   })
   .strict()
   .openapi("ProjectLogsEvent");
