@@ -321,10 +321,6 @@ def org_id():
     return _state.org_id
 
 
-# 6 MB (from our own testing).
-MAX_REQUEST_SIZE = 6 * 1024 * 1024
-
-
 def construct_json_array(items):
     return "[" + ",".join(items) + "]"
 
@@ -351,6 +347,12 @@ class _BackgroundLogger:
             self.sync_flush = bool(int(os.environ["BRAINTRUST_SYNC_FLUSH"]))
         except:
             self.sync_flush = False
+
+        try:
+            self.max_request_size = int(os.environ["BRAINTRUST_MAX_REQUEST_SIZE"])
+        except:
+            # 6 MB for the AWS lambda gateway (from our own testing).
+            self.max_request_size = 6 * 1024 * 1024
 
         try:
             self.default_batch_size = int(os.environ["BRAINTRUST_DEFAULT_BATCH_SIZE"])
@@ -443,7 +445,7 @@ class _BackgroundLogger:
             while True:
                 items = []
                 items_len = 0
-                while len(items) < batch_size and items_len < MAX_REQUEST_SIZE / 2:
+                while len(items) < batch_size and items_len < self.max_request_size / 2:
                     if len(all_items) > 0:
                         item = all_items.pop()
                     else:

@@ -708,9 +708,6 @@ function castLogger<ToB extends boolean, FromB extends boolean>(
   return logger as unknown as Logger<ToB>;
 }
 
-// 6 MB (from our own testing).
-const MaxRequestSize = 6 * 1024 * 1024;
-
 function constructJsonArray(items: string[]) {
   return `[${items.join(",")}]`;
 }
@@ -730,6 +727,8 @@ class BackgroundLogger {
   private activeFlushResolved = true;
 
   public syncFlush: boolean = false;
+  // 6 MB for the AWS lambda gateway (from our own testing).
+  public maxRequestSize: number = 6 * 1024 * 1024;
   public defaultBatchSize: number = 100;
   public numRetries: number = 3;
 
@@ -746,6 +745,11 @@ class BackgroundLogger {
     );
     if (!isNaN(defaultBatchSizeEnv)) {
       this.defaultBatchSize = defaultBatchSizeEnv;
+    }
+
+    const maxRequestSizeEnv = Number(iso.getEnv("BRAINTRUST_MAX_REQUEST_SIZE"));
+    if (!isNaN(maxRequestSizeEnv)) {
+      this.maxRequestSize = maxRequestSizeEnv;
     }
 
     const numRetriesEnv = Number(iso.getEnv("BRAINTRUST_NUM_RETRIES"));
@@ -796,7 +800,7 @@ class BackgroundLogger {
     while (true) {
       const items: string[] = [];
       let itemsLen = 0;
-      while (items.length < batchSize && itemsLen < MaxRequestSize / 2) {
+      while (items.length < batchSize && itemsLen < this.maxRequestSize / 2) {
         let item = null;
         if (allItems.length > 0) {
           item = allItems.pop();
