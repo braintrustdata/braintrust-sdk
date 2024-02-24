@@ -98,6 +98,12 @@ def build_parser(subparsers, parents):
         help="The availability zone for private subnet 3",
         default=None,
     )
+
+    parser.add_argument(
+        "--vpc-cidr",
+        help="The CIDR for the VPC",
+        default=None,
+    )
     parser.add_argument(
         "--public-subnet-1-cidr",
         help="The CIDR for the public subnet",
@@ -246,15 +252,17 @@ def main(args):
         _logger.info(
             f"Updating stack with name {args.name} with params: {param_updates} and template: {template_kwargs}"
         )
+
+        stack = cloudformation.describe_stacks(StackName=args.name)["Stacks"][0]
         cloudformation.update_stack(
             StackName=args.name,
             Parameters=[
                 {"ParameterKey": param, "ParameterValue": str(update)} for (param, update) in param_updates.items()
             ]
             + [
-                {"ParameterKey": param, "UsePreviousValue": True}
-                for param in PARAMS.keys()
-                if param not in param_updates
+                {"ParameterKey": param["ParameterKey"], "UsePreviousValue": True}
+                for param in stack["Parameters"]
+                if param["ParameterKey"] not in param_updates
             ],
             Capabilities=CAPABILITIES,
             **template_kwargs,
