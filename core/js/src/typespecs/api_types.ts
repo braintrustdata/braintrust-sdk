@@ -47,6 +47,7 @@ function generateBaseEventOpSchema(objectType: ObjectType) {
     input: customTypes.any,
     output: customTypes.any,
     expected: customTypes.any,
+    tags: z.array(z.string()).nullish().describe("A list of tags to log"),
     scores: z.record(z.number().min(0).max(1).nullish()).nullish(),
     metadata: z
       .record(customTypes.any)
@@ -330,7 +331,7 @@ const experimentEventSchema = z
       "A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments"
     ),
     metadata: experimentEventBaseSchema.shape.metadata,
-    tags: z.array(z.string()).nullish().describe("A list of tags to log"),
+    tags: experimentEventBaseSchema.shape.tags,
     metrics: experimentEventBaseSchema.shape.metrics,
     context: experimentEventBaseSchema.shape.context,
     span_id: experimentEventBaseSchema.shape.span_id,
@@ -356,7 +357,7 @@ const datasetEventSchema = z
       "The output of your application, including post-processing (an arbitrary, JSON serializable object)"
     ),
     metadata: datasetEventBaseSchema.shape.metadata,
-    tags: z.array(z.string()).nullish().describe("A list of tags to log"),
+    tags: datasetEventBaseSchema.shape.tags,
     span_id: datasetEventBaseSchema.shape.span_id,
     root_span_id: datasetEventBaseSchema.shape.root_span_id,
   })
@@ -388,7 +389,7 @@ const projectLogsEventSchema = z
       "A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs."
     ),
     metadata: projectLogsEventBaseSchema.shape.metadata,
-    tags: z.array(z.string()).nullish().describe("A list of tags to log"),
+    tags: projectLogsEventBaseSchema.shape.tags,
     metrics: projectLogsEventBaseSchema.shape.metrics,
     context: projectLogsEventBaseSchema.shape.context,
     span_id: projectLogsEventBaseSchema.shape.span_id,
