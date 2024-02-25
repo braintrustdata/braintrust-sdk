@@ -1297,7 +1297,7 @@ class ObjectFetcher:
         if self._pinned_version is not None:
             return self._pinned_version
         else:
-            return max([int(record.get(TRANSACTION_ID_FIELD, 0)) for record in self._refetch()] or [0])
+            return max([str(record.get(TRANSACTION_ID_FIELD, "0")) for record in self._refetch()] or ["0"])
 
 
 @dataclasses.dataclass
