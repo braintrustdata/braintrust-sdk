@@ -24,6 +24,8 @@ PARAMS = {
     "PrivateSubnet3CIDR": "private_subnet_3_cidr",
 }
 
+REMOVED_PARAMS = ["ThirdAZIndex"]
+
 DEFAULTS = {
     "ManagedKafka": "true",
     "DwType": "Postgres",
@@ -262,7 +264,7 @@ def main(args):
             + [
                 {"ParameterKey": param["ParameterKey"], "UsePreviousValue": True}
                 for param in stack["Parameters"]
-                if param["ParameterKey"] not in param_updates
+                if param["ParameterKey"] not in param_updates and param["ParameterKey"] not in REMOVED_PARAMS
             ],
             Capabilities=CAPABILITIES,
             **template_kwargs,
