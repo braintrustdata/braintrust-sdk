@@ -1345,21 +1345,22 @@ class RowIds:
 
 
 def _log_feedback_impl(
-    bg_logger, parent_ids, id, scores=None, expected=None, comment=None, metadata=None, source=None
+    bg_logger, parent_ids, id, scores=None, expected=None, tags=None, comment=None, metadata=None, source=None
 ):
     if source is None:
         source = "external"
     elif source not in VALID_SOURCES:
         raise ValueError(f"source must be one of {VALID_SOURCES}")
 
-    if scores is None and expected is None and comment is None:
-        raise ValueError("At least one of scores, expected, or comment must be specified")
+    if scores is None and expected is None and tags is None and comment is None:
+        raise ValueError("At least one of scores, expected, tags, or comment must be specified")
 
     update_event = _validate_and_sanitize_experiment_log_partial_args(
         event=dict(
             scores=scores,
             metadata=metadata,
             expected=expected,
+            tags=tags,
         )
     )
 
