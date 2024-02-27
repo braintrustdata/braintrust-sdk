@@ -37,7 +37,7 @@ function generateBaseEventOpSchema(objectType: ObjectType) {
         `A unique identifier for the ${eventDescription} event. If you don't provide one, BrainTrust will generate one for you`
       ),
     [TRANSACTION_ID_FIELD]: z
-      .bigint()
+      .string()
       .describe(
         `The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the ${eventDescription} (see the \`version\` parameter)`
       ),
@@ -47,6 +47,7 @@ function generateBaseEventOpSchema(objectType: ObjectType) {
     input: customTypes.any,
     output: customTypes.any,
     expected: customTypes.any,
+    tags: z.array(z.string()).nullish().describe("A list of tags to log"),
     scores: z.record(z.number().min(0).max(1).nullish()).nullish(),
     metadata: z
       .record(customTypes.any)
@@ -202,26 +203,21 @@ export const fetchLimitSchema = z
     ].join("\n\n")
   );
 
+const fetchPaginationCursorDescription = [
+  "Together, `max_xact_id` and `max_root_span_id` form a pagination cursor",
+  `Since a paginated fetch query returns results in order from latest to earliest, the cursor for the next page can be found as the row with the minimum (earliest) value of the tuple \`(${TRANSACTION_ID_FIELD}, root_span_id)\`. See the documentation of \`limit\` for an overview of paginating fetch queries.`,
+].join("\n\n");
+
 export const maxXactIdSchema = z
-  .bigint()
-  .describe(
-    [
-      "Pagination cursor transaction ID, combined with `max_root_span_id`",
-      `Given a previous fetch with a list of rows, you can determine \`max_xact_id\` as the maximum of the \`${TRANSACTION_ID_FIELD}\` field over all rows. See the documentation for \`limit\` for an overview of paginating fetch queries.`,
-    ].join("\n\n")
-  );
+  .string()
+  .describe(fetchPaginationCursorDescription);
 
 export const maxRootSpanIdSchema = z
   .string()
-  .describe(
-    [
-      "Pagination cursor transaction root span ID, combined with `max_xact_id`",
-      `Given a previous fetch with a list of rows, you can determine \`max_root_span_id\` as the maximum of the \`root_span_id\` field over all rows. See the documentation for \`limit\` for an overview of paginating fetch queries.`,
-    ].join("\n\n")
-  );
+  .describe(fetchPaginationCursorDescription);
 
 export const versionSchema = z
-  .bigint()
+  .string()
   .describe(
     [
       "Retrieve a snapshot of events from a past time",
@@ -335,6 +331,7 @@ const experimentEventSchema = z
       "A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments"
     ),
     metadata: experimentEventBaseSchema.shape.metadata,
+    tags: experimentEventBaseSchema.shape.tags,
     metrics: experimentEventBaseSchema.shape.metrics,
     context: experimentEventBaseSchema.shape.context,
     span_id: experimentEventBaseSchema.shape.span_id,
@@ -356,10 +353,11 @@ const datasetEventSchema = z
     input: datasetEventBaseSchema.shape.input.describe(
       "The argument that uniquely define an input case (an arbitrary, JSON serializable object)"
     ),
-    output: datasetEventBaseSchema.shape.output.describe(
+    expected: datasetEventBaseSchema.shape.expected.describe(
       "The output of your application, including post-processing (an arbitrary, JSON serializable object)"
     ),
     metadata: datasetEventBaseSchema.shape.metadata,
+    tags: datasetEventBaseSchema.shape.tags,
     span_id: datasetEventBaseSchema.shape.span_id,
     root_span_id: datasetEventBaseSchema.shape.root_span_id,
   })
@@ -391,6 +389,7 @@ const projectLogsEventSchema = z
       "A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs."
     ),
     metadata: projectLogsEventBaseSchema.shape.metadata,
+    tags: projectLogsEventBaseSchema.shape.tags,
     metrics: projectLogsEventBaseSchema.shape.metrics,
     context: projectLogsEventBaseSchema.shape.context,
     span_id: projectLogsEventBaseSchema.shape.span_id,
@@ -497,6 +496,7 @@ const {
       expected: experimentEventSchema.shape.expected,
       scores: experimentEventSchema.shape.scores,
       metadata: experimentEventSchema.shape.metadata,
+      tags: experimentEventSchema.shape.tags,
       metrics: experimentEventSchema.shape.metrics,
       context: experimentEventSchema.shape.context,
       span_attributes: experimentEventSchema.shape.span_attributes,
@@ -516,8 +516,9 @@ const {
   z
     .object({
       input: datasetEventSchema.shape.input,
-      output: datasetEventSchema.shape.output,
+      expected: datasetEventSchema.shape.expected,
       metadata: datasetEventSchema.shape.metadata,
+      tags: datasetEventSchema.shape.tags,
       id: datasetEventSchema.shape.id.nullish(),
       [OBJECT_DELETE_FIELD]: datasetEventBaseSchema.shape[OBJECT_DELETE_FIELD],
     })
@@ -536,6 +537,7 @@ const {
       expected: projectLogsEventSchema.shape.expected,
       scores: projectLogsEventSchema.shape.scores,
       metadata: projectLogsEventSchema.shape.metadata,
+      tags: projectLogsEventSchema.shape.tags,
       metrics: projectLogsEventSchema.shape.metrics,
       context: projectLogsEventSchema.shape.context,
       span_attributes: projectLogsEventSchema.shape.span_attributes,

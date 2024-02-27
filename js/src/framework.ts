@@ -180,9 +180,9 @@ export async function Eval<
   name: string,
   evaluator: Evaluator<Input, Output, Expected, Metadata>
 ): Promise<ExperimentSummary> {
-  const evalName = makeEvalName(name, evaluator.experimentName);
+  let evalName = makeEvalName(name, evaluator.experimentName);
   if (_evals[evalName]) {
-    throw new Error(`Evaluator ${evalName} already exists`);
+    evalName = `${evalName}_${Object.keys(_evals).length}`;
   }
   if (globalThis._lazy_load) {
     _evals[evalName] = { evalName, projectName: name, ...evaluator };
@@ -280,6 +280,13 @@ function evaluateFilter(object: any, filter: Filter) {
   return pattern.test(serializeJSONWithPlainString(key));
 }
 
+function scorerName(
+  scorer: EvalScorer<any, any, any, any>,
+  scorer_idx: number
+) {
+  return scorer.name || `scorer_${scorer_idx}`;
+}
+
 export async function runEvaluator(
   experiment: Experiment | null,
   evaluator: EvaluatorDef<any, any, any | void, any | void>,
@@ -339,11 +346,13 @@ export async function runEvaluator(
   progressReporter.start(evaluator.evalName, data.length);
 
   const evals = data.map(async (datum) => {
-    let metadata: object = { ...("metadata" in datum ? datum.metadata : {}) };
-    let output: any = undefined;
-    let error: unknown | undefined = undefined;
-    let scores: Record<string, number | null> = {};
     const callback = async (rootSpan: Span) => {
+      let metadata: Record<string, unknown> = {
+        ...("metadata" in datum ? datum.metadata : {}),
+      };
+      let output: any = undefined;
+      let error: unknown | undefined = undefined;
+      let scores: Record<string, number | null> = {};
       try {
         const meta = (o: Record<string, unknown>) =>
           (metadata = { ...metadata, ...o });
@@ -363,37 +372,40 @@ export async function runEvaluator(
         rootSpan.log({ output });
 
         const scoringArgs = { ...datum, metadata, output };
-        await Promise.all(
+        const scorerNames = evaluator.scores.map(scorerName);
+        const scoreResults = await Promise.all(
           evaluator.scores.map(async (score, score_idx) => {
-            return rootSpan.traced(
-              async (span: Span) => {
-                const scoreResult = score(scoringArgs);
-                const result =
-                  scoreResult instanceof Promise
-                    ? await scoreResult
-                    : scoreResult;
-                const {
-                  metadata: resultMetadata,
-                  name,
-                  ...resultRest
-                } = result;
-                span.log({
-                  output: resultRest,
-                  metadata: resultMetadata,
-                  scores: {
-                    [name]: resultRest.score,
-                  },
-                });
-                return result;
-              },
-              {
-                name: score.name || `scorer_${score_idx}`,
-                spanAttributes: {
-                  type: SpanTypeAttribute.SCORE,
+            try {
+              const result = await rootSpan.traced(
+                async (span: Span) => {
+                  const scoreResult = score(scoringArgs);
+                  const result =
+                    scoreResult instanceof Promise
+                      ? await scoreResult
+                      : scoreResult;
+                  const {
+                    metadata: resultMetadata,
+                    name: _,
+                    ...resultRest
+                  } = result;
+                  span.log({
+                    output: resultRest,
+                    metadata: resultMetadata,
+                  });
+                  return result;
                 },
-                event: { input: scoringArgs },
-              }
-            );
+                {
+                  name: scorerNames[score_idx],
+                  spanAttributes: {
+                    type: SpanTypeAttribute.SCORE,
+                  },
+                  event: { input: scoringArgs },
+                }
+              );
+              return { kind: "score", value: result } as const;
+            } catch (e) {
+              return { kind: "error", value: e } as const;
+            }
           })
         );
       } catch (e) {
@@ -493,7 +505,8 @@ export function reportEvaluatorResult(
     if (!verbose && !jsonl) {
       console.error(warning("Add --verbose to see full stack traces."));
     }
-  } else if (summary) {
+  }
+  if (summary) {
     console.log(jsonl ? JSON.stringify(summary) : summary);
   } else {
     const scoresByName: { [name: string]: { total: number; count: number } } =

@@ -13,10 +13,10 @@ export type Source = typeof VALID_SOURCES[number];
 
 export const PARENT_ID_FIELD = "_parent_id";
 
-// This is often a string, e.g. as a response to /logs2, but when loading data objects, ends up
-// being a BigInt. We should probably normalize it everywhere to be one or the other, but in the
-// meantime, let's at least enforce it as a single aliased type throughout the code.
-export type TransactionId = bigint;
+// While transaction ids are convertible to 64-bit integers (BigInts in JS), we
+// prefer to treat them as strings so they uniformly serialize/deserialize as
+// JSON.
+export type TransactionId = string;
 
 export const ALL_ROW_ID_FIELDS = [
   ID_FIELD,

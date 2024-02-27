@@ -11,11 +11,25 @@ _logger = logging.getLogger("braintrust.install.api")
 PARAMS = {
     "OrgName": "org_name",
     "ProvisionedConcurrency": "provisioned_concurrency",
+    "EncryptDatabase": "encrypt_database",
+    "APIHandlerMemorySize": "api_handler_memory_size",
+    "PublicSubnet1AZ": "public_subnet_1_az",
+    "PrivateSubnet1AZ": "private_subnet_1_az",
+    "PrivateSubnet2AZ": "private_subnet_2_az",
+    "PrivateSubnet3AZ": "private_subnet_3_az",
+    "VPCCIDR": "vpc_cidr",
+    "PublicSubnet1CIDR": "public_subnet_1_cidr",
+    "PrivateSubnet1CIDR": "private_subnet_1_cidr",
+    "PrivateSubnet2CIDR": "private_subnet_2_cidr",
+    "PrivateSubnet3CIDR": "private_subnet_3_cidr",
 }
+
+REMOVED_PARAMS = ["ThirdAZIndex"]
 
 DEFAULTS = {
     "ManagedKafka": "true",
     "DwType": "Postgres",
+    "EncryptDatabase": "false",
     "ProvisionedConcurrency": 0,
 }
 
@@ -60,6 +74,58 @@ def build_parser(subparsers, parents):
         default=None,
         type=int,
     )
+    parser.add_argument(
+        "--api-handler-memory-size",
+        help="The amount of memory to allocate to the API handler",
+        default=None,
+        type=int,
+    )
+    parser.add_argument(
+        "--public-subnet-1-az",
+        help="The availability zone for the public subnet",
+        default=None,
+    )
+    parser.add_argument(
+        "--private-subnet-1-az",
+        help="The availability zone for private subnet 1",
+        default=None,
+    )
+    parser.add_argument(
+        "--private-subnet-2-az",
+        help="The availability zone for private subnet 2",
+        default=None,
+    )
+    parser.add_argument(
+        "--private-subnet-3-az",
+        help="The availability zone for private subnet 3",
+        default=None,
+    )
+
+    parser.add_argument(
+        "--vpc-cidr",
+        help="The CIDR for the VPC",
+        default=None,
+    )
+    parser.add_argument(
+        "--public-subnet-1-cidr",
+        help="The CIDR for the public subnet",
+        default=None,
+    )
+    parser.add_argument(
+        "--private-subnet-1-cidr",
+        help="The CIDR for private subnet 1",
+        default=None,
+    )
+    parser.add_argument(
+        "--private-subnet-2-cidr",
+        help="The CIDR for private subnet 2",
+        default=None,
+    )
+    parser.add_argument(
+        "--private-subnet-3-cidr",
+        help="The CIDR for private subnet 3",
+        default=None,
+    )
 
     # PostgresUrl
     parser.add_argument(
@@ -70,6 +136,12 @@ def build_parser(subparsers, parents):
     )
     parser.add_argument(
         "--postgres-url", help="The postgres URL to use (if you are connecting to another VPC)", default=None
+    )
+    parser.add_argument(
+        "--encrypt-database",
+        help="Whether to encrypt the database",
+        default="false",
+        choices=[None, "true", "false"],
     )
 
     # ElastiCacheClusterId
@@ -182,15 +254,17 @@ def main(args):
         _logger.info(
             f"Updating stack with name {args.name} with params: {param_updates} and template: {template_kwargs}"
         )
+
+        stack = cloudformation.describe_stacks(StackName=args.name)["Stacks"][0]
         cloudformation.update_stack(
             StackName=args.name,
             Parameters=[
                 {"ParameterKey": param, "ParameterValue": str(update)} for (param, update) in param_updates.items()
             ]
             + [
-                {"ParameterKey": param, "UsePreviousValue": True}
-                for param in PARAMS.keys()
-                if param not in param_updates
+                {"ParameterKey": param["ParameterKey"], "UsePreviousValue": True}
+                for param in stack["Parameters"]
+                if param["ParameterKey"] not in param_updates and param["ParameterKey"] not in REMOVED_PARAMS
             ],
             Capabilities=CAPABILITIES,
             **template_kwargs,
