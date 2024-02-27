@@ -41,6 +41,7 @@ import {
 } from "./util";
 
 export type SetCurrentArg = { setCurrent?: boolean };
+export type StartTopLevelSpanArgs = { tags?: string[] };
 
 type StartSpanEventArgs = ExperimentLogPartialArgs & Partial<IdField>;
 
@@ -100,6 +101,7 @@ export interface Span {
    *
    * @param callback The function to be run under the span context.
    * @param args.name Optional name of the span. If not provided, a name will be inferred from the call stack.
+   * @param args.tags Optional tags to attach to the trace. Tags are used to filter and group spans in the Braintrust UI. Tags can only be set at the top-level of a trace.
    * @param args.span_attributes Optional additional attributes to attach to the span, such as a type name.
    * @param args.start_time Optional start time of the span, as a timestamp in seconds.
    * @param args.setCurrent If true (the default), the span will be marked as the currently-active span for the duration of the callback.
@@ -163,12 +165,12 @@ export class NoopSpan implements Span {
 
   public traced<R>(
     callback: (span: Span) => R,
-    _1?: StartSpanArgs & SetCurrentArg
+    _1?: StartSpanArgs & StartTopLevelSpanArgs & SetCurrentArg
   ): R {
     return callback(this);
   }
 
-  public startSpan(_1?: StartSpanArgs) {
+  public startSpan(_1?: StartSpanArgs & StartTopLevelSpanArgs) {
     return this;
   }
 
@@ -610,7 +612,7 @@ export class Logger<IsAsyncFlush extends boolean> {
    */
   public traced<R>(
     callback: (span: Span) => R,
-    args?: StartSpanArgs & SetCurrentArg
+    args?: StartSpanArgs & StartTopLevelSpanArgs & SetCurrentArg
   ): PromiseUnless<IsAsyncFlush, R> {
     const { setCurrent, ...argsRest } = args ?? {};
     const span = this.startSpan(argsRest);
@@ -653,7 +655,7 @@ export class Logger<IsAsyncFlush extends boolean> {
    *
    * See `traced` for full details.
    */
-  public startSpan(args?: StartSpanArgs): Span {
+  public startSpan(args?: StartSpanArgs & StartTopLevelSpanArgs): Span {
     const { name, ...argsRest } = args ?? {};
     return new SpanImpl({
       parentObject: this,
@@ -1723,7 +1725,10 @@ export function getSpanParentObject<IsAsyncFlush extends boolean>(
  */
 export function traced<IsAsyncFlush extends boolean = false, R = void>(
   callback: (span: Span) => R,
-  args?: StartSpanArgs & SetCurrentArg & AsyncFlushArg<IsAsyncFlush>
+  args?: StartSpanArgs &
+    StartTopLevelSpanArgs &
+    SetCurrentArg &
+    AsyncFlushArg<IsAsyncFlush>
 ): PromiseUnless<IsAsyncFlush, R> {
   const { span, parentObject } = startSpanReturnParent<IsAsyncFlush>(args);
   const ret = runFinally(
@@ -1759,13 +1764,13 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
  * See `traced` for full details.
  */
 export function startSpan<IsAsyncFlush extends boolean = false>(
-  args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush>
+  args?: StartSpanArgs & StartTopLevelSpanArgs & AsyncFlushArg<IsAsyncFlush>
 ): Span {
   return startSpanReturnParent<IsAsyncFlush>(args).span;
 }
 
 function startSpanReturnParent<IsAsyncFlush extends boolean = false>(
-  args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush>
+  args?: StartSpanArgs & StartTopLevelSpanArgs & AsyncFlushArg<IsAsyncFlush>
 ) {
   const parentObject = getSpanParentObject<IsAsyncFlush>({
     asyncFlush: args?.asyncFlush,
@@ -2104,7 +2109,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
    */
   public traced<R>(
     callback: (span: Span) => R,
-    args?: StartSpanArgs & SetCurrentArg
+    args?: StartSpanArgs & StartTopLevelSpanArgs & SetCurrentArg
   ): R {
     const { setCurrent, ...argsRest } = args ?? {};
     const span = this.startSpan(argsRest);
@@ -2135,7 +2140,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
    *
    * See `traced` for full details.
    */
-  public startSpan(args?: StartSpanArgs): Span {
+  public startSpan(args?: StartSpanArgs & StartTopLevelSpanArgs): Span {
     const { name, ...argsRest } = args ?? {};
     return new SpanImpl({
       parentObject: this,
@@ -2366,9 +2371,9 @@ export class SpanImpl implements Span {
         | {
             parentSpanInfo?: { span_id: string; root_span_id: string };
           }
-        | {
+        | ({
             parentId?: string;
-          }
+          } & StartTopLevelSpanArgs)
       )
   ) {
     this.loggedEndTime = undefined;
