@@ -1809,6 +1809,22 @@ function _urljoin(...parts: string[]): string {
   return parts.map((x) => x.replace(/^\//, "")).join("/");
 }
 
+function validateTags(tags: readonly string[]) {
+  if (!tags) {
+    return;
+  }
+  const seen = new Set<string>();
+  for (const tag of tags) {
+    if (typeof tag !== "string") {
+      throw new Error("tags must be strings");
+    }
+
+    if (seen.has(tag)) {
+      throw new Error(`duplicate tag: ${tag}`);
+    }
+  }
+}
+
 function validateAndSanitizeExperimentLogPartialArgs(
   event: ExperimentLogPartialArgs
 ): SanitizedExperimentLogPartialArgs {
@@ -1863,16 +1879,7 @@ function validateAndSanitizeExperimentLogPartialArgs(
   }
 
   if ("tags" in event && event.tags) {
-    const seen = new Set<string>();
-    for (const tag of event.tags) {
-      if (typeof tag !== "string") {
-        throw new Error("tags must be strings");
-      }
-
-      if (seen.has(tag)) {
-        throw new Error(`duplicate tag: ${tag}`);
-      }
-    }
+    validateTags(event.tags);
   }
 
   if ("inputs" in event) {
@@ -2471,6 +2478,14 @@ export class SpanImpl implements Span {
       return ids;
     });
 
+    if (
+      sanitizedAndInternalData.tags &&
+      sanitizedAndInternalData.tags.length > 0 &&
+      this.rowIds.span_id !== this.rowIds.root_span_id
+    ) {
+      throw new Error("Tags can only be logged to the root span");
+    }
+
     const record = new LazyValue(async () => {
       return {
         ...sanitizedAndInternalData,
@@ -2603,6 +2618,7 @@ class Dataset<
    * @param event The event to log.
    * @param event.input The argument that uniquely define an input case (an arbitrary, JSON serializable object).
    * @param event.expected The output of your application, including post-processing (an arbitrary, JSON serializable object).
+   * @param event.tags (Optional) a list of strings that you can use to filter and group records later.
    * @param event.metadata (Optional) a dictionary with additional data about the test example, model outputs, or just
    * about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
    * `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
@@ -2615,12 +2631,14 @@ class Dataset<
     input,
     expected,
     metadata,
+    tags,
     id,
     output,
   }: {
     readonly input?: unknown;
     readonly expected?: unknown;
     readonly metadata?: Record<string, unknown>;
+    readonly tags?: string[];
     readonly id?: string;
     readonly output?: unknown;
   }): string {
@@ -2638,11 +2656,16 @@ class Dataset<
       );
     }
 
+    if (tags) {
+      validateTags(tags);
+    }
+
     const rowId = id || uuidv4();
     const args = new LazyValue(async () => ({
       id: rowId,
       input,
       expected: expected === undefined ? output : expected,
+      tags,
       project_id: (await this.project).id,
       dataset_id: await this.id,
       created: new Date().toISOString(),
