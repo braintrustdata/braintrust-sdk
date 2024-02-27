@@ -2023,6 +2023,7 @@ export type BaseMetadata = Record<string, unknown> | void;
 export type DefaultMetadataType = void;
 export type EvalCase<Input, Expected, Metadata> = {
   input: Input;
+  tags?: string[];
 } & (Expected extends void ? {} : { expected: Expected }) &
   (Metadata extends void ? {} : { metadata: Metadata });
 
@@ -2341,11 +2342,13 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
       if (isEmpty(expected)) {
         yield {
           input: record.input as Input,
+          tags: record.tags,
         } as EvalCase<Input, Expected, void>;
       } else {
         yield {
           input: record.input as Input,
           expected: expected,
+          tags: record.tags,
         } as unknown as EvalCase<Input, Expected, void>;
       }
     }
