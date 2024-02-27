@@ -502,9 +502,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 )
 
     async def await_or_run_scorer(root_span, scorer, name, **kwargs):
-        with root_span.start_span(
-            name=name, span_attributes={"type": SpanTypeAttribute.SCORE}, input=dict(**kwargs)
-        ) as span:
+        with root_span.start_span(name=name, span_attributes={"type": SpanTypeAttribute.SCORE}) as span:
             score = scorer.eval_async if isinstance(scorer, Scorer) else scorer
 
             scorer_args = kwargs
@@ -513,6 +511,8 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
             scorer_accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values())
             if not scorer_accepts_kwargs:
                 scorer_args = {k: v for k, v in scorer_args.items() if k in signature.parameters}
+
+            span.log(input=scorer_args)
 
             result = await await_or_run(score, **scorer_args)
             if isinstance(result, Score):
