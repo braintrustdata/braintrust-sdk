@@ -1862,6 +1862,19 @@ function validateAndSanitizeExperimentLogPartialArgs(
     );
   }
 
+  if ("tags" in event && event.tags) {
+    const seen = new Set<string>();
+    for (const tag of event.tags) {
+      if (typeof tag !== "string") {
+        throw new Error("tags must be strings");
+      }
+
+      if (seen.has(tag)) {
+        throw new Error(`duplicate tag: ${tag}`);
+      }
+    }
+  }
+
   if ("inputs" in event) {
     const { inputs, ...rest } = event;
     return { input: inputs, ...rest };
