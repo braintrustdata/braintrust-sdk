@@ -385,12 +385,15 @@ export async function runEvaluator(
                       : scoreResult;
                   const {
                     metadata: resultMetadata,
-                    name: _,
+                    name,
                     ...resultRest
                   } = result;
                   span.log({
                     output: resultRest,
                     metadata: resultMetadata,
+                    scores: {
+                      [name]: resultRest.score,
+                    },
                   });
                   return result;
                 },
@@ -408,6 +411,34 @@ export async function runEvaluator(
             }
           })
         );
+        // Resolve each promise on its own so that we can separate the passing
+        // from the failing ones.
+        const passingScorersAndResults: { name: string; score: Score }[] = [];
+        const failingScorersAndResults: { name: string; error: unknown }[] = [];
+        scoreResults.forEach((result, i) => {
+          const name = scorerNames[i];
+          if (result.kind === "score") {
+            passingScorersAndResults.push({ name, score: result.value });
+          } else {
+            failingScorersAndResults.push({ name, error: result.value });
+          }
+        });
+
+        if (failingScorersAndResults.length) {
+          const scorerErrors = Object.fromEntries(
+            failingScorersAndResults.map(({ name, error }) => [
+              name,
+              error instanceof Error ? error.stack : `${error}`,
+            ])
+          );
+          metadata["scorer_errors"] = scorerErrors;
+          const names = Object.keys(scorerErrors).join(", ");
+          const errors = failingScorersAndResults.map((item) => item.error);
+          throw new AggregateError(
+            errors,
+            `Found exceptions for the following scorers: ${names}`
+          );
+        }
       } catch (e) {
         error = e;
       } finally {
