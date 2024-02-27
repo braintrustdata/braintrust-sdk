@@ -450,6 +450,7 @@ function logFeedbackImpl(
     expected,
     scores,
     metadata: inputMetadata,
+    tags,
     comment,
     source: inputSource,
   }: LogFeedbackFullArgs
@@ -460,9 +461,14 @@ function logFeedbackImpl(
     throw new Error(`source must be one of ${VALID_SOURCES}`);
   }
 
-  if (isEmpty(scores) && isEmpty(expected) && isEmpty(comment)) {
+  if (
+    isEmpty(scores) &&
+    isEmpty(expected) &&
+    isEmpty(tags) &&
+    isEmpty(comment)
+  ) {
     throw new Error(
-      "At least one of scores, expected, or comment must be specified"
+      "At least one of scores, expected, tags, or comment must be specified"
     );
   }
 
@@ -470,6 +476,7 @@ function logFeedbackImpl(
     scores,
     metadata: inputMetadata,
     expected,
+    tags,
   });
 
   let { metadata, ...updateEvent } = validatedEvent;
@@ -2637,8 +2644,8 @@ class Dataset<
   }: {
     readonly input?: unknown;
     readonly expected?: unknown;
-    readonly metadata?: Record<string, unknown>;
     readonly tags?: string[];
+    readonly metadata?: Record<string, unknown>;
     readonly id?: string;
     readonly output?: unknown;
   }): string {

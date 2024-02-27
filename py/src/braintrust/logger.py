@@ -1121,12 +1121,25 @@ def _populate_args(d, **kwargs):
     return d
 
 
+def validate_tags(tags):
+    if not tags:
+        return
+    seen = set()
+    for tag in tags:
+        if not isinstance(tag, str):
+            raise ValueError("tags must be strings")
+        if tag in seen:
+            raise ValueError(f"duplicate tag: {tag}")
+        seen.add(tag)
+
+
 def _validate_and_sanitize_experiment_log_partial_args(event):
     # Make sure only certain keys are specified.
     forbidden_keys = set(event.keys()) - {
         "input",
         "output",
         "expected",
+        "tags",
         "scores",
         "metadata",
         "metrics",
@@ -1173,6 +1186,10 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
         for value in metrics.values():
             if not isinstance(value, (int, float)):
                 raise ValueError("metric values must be numbers")
+
+    tags = event.get("tags")
+    if tags:
+        validate_tags(tags)
 
     input = event.get("input")
     inputs = event.get("inputs")
@@ -1411,6 +1428,7 @@ class ExperimentDatasetIterator:
             return {
                 "input": value.get("input"),
                 "expected": expected if expected is not None else output,
+                "tags": value.get("tags"),
                 # NOTE: We'll eventually want to track origin information here (and generalize
                 # the `dataset_record_id` field)
             }
@@ -1476,6 +1494,7 @@ class Experiment(ObjectFetcher):
         input=None,
         output=None,
         expected=None,
+        tags=None,
         scores=None,
         metadata=None,
         metrics=None,
@@ -1492,6 +1511,7 @@ class Experiment(ObjectFetcher):
         :param expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
         :param scores: A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments.
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
+        :param tags: (Optional) a list of strings that you can use to filter and group records later.
         :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
         :param dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
@@ -1511,6 +1531,7 @@ class Experiment(ObjectFetcher):
                 input=input,
                 output=output,
                 expected=expected,
+                tags=tags,
                 scores=scores,
                 metadata=metadata,
                 metrics=metrics,
@@ -1529,6 +1550,7 @@ class Experiment(ObjectFetcher):
         id,
         scores=None,
         expected=None,
+        tags=None,
         comment=None,
         metadata=None,
         source=None,
@@ -1539,6 +1561,7 @@ class Experiment(ObjectFetcher):
         :param id: The id of the event to log feedback for. This is the `id` returned by `log` or accessible as the `id` field of a span.
         :param scores: (Optional) a dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the event.
         :param expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not.
+        :param tags: (Optional) a list of strings that you can use to filter and group records later.
         :param comment: (Optional) an optional comment string to log about the event.
         :param metadata: (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
         :param source: (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
@@ -1549,6 +1572,7 @@ class Experiment(ObjectFetcher):
             id=id,
             scores=scores,
             expected=expected,
+            tags=tags,
             comment=comment,
             metadata=metadata,
             source=source,
@@ -1941,13 +1965,14 @@ class Dataset(ObjectFetcher):
         self._lazy_metadata.get()
         return _state
 
-    def insert(self, input, expected=None, metadata=None, id=None, output=None):
+    def insert(self, input, expected=None, tags=None, metadata=None, id=None, output=None):
         """
         Insert a single record to the dataset. The record will be batched and uploaded behind the scenes. If you pass in an `id`,
         and a record with that `id` already exists, it will be overwritten (upsert).
 
         :param input: The argument that uniquely define an input case (an arbitrary, JSON serializable object).
         :param expected: The output of your application, including post-processing (an arbitrary, JSON serializable object).
+        :param tags: (Optional) a list of strings that you can use to filter and group records later.
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just
         about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the
         `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
@@ -1973,6 +1998,7 @@ class Dataset(ObjectFetcher):
                 "id": row_id,
                 "inputs": input,
                 "expected": expected if expected is not None else output,
+                "tags": tags,
                 "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             },
             metadata=metadata,
@@ -2142,6 +2168,7 @@ class Logger:
         input=None,
         output=None,
         expected=None,
+        tags=None,
         scores=None,
         metadata=None,
         metrics=None,
@@ -2154,6 +2181,7 @@ class Logger:
         :param input: (Optional) the arguments that uniquely define a user input(an arbitrary, JSON serializable object).
         :param output: (Optional) the output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
         :param expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
+        :param tags: (Optional) a list of strings that you can use to filter and group records later.
         :param scores: (Optional) a dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
         :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
@@ -2172,6 +2200,7 @@ class Logger:
             input=input,
             output=output,
             expected=expected,
+            tags=tags,
             scores=scores,
             metadata=metadata,
             metrics=metrics,
@@ -2189,6 +2218,7 @@ class Logger:
         id,
         scores=None,
         expected=None,
+        tags=None,
         comment=None,
         metadata=None,
         source=None,
@@ -2199,6 +2229,7 @@ class Logger:
         :param id: The id of the event to log feedback for. This is the `id` returned by `log` or accessible as the `id` field of a span.
         :param scores: (Optional) a dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the event.
         :param expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not.
+        :param tags: (Optional) a list of strings that you can use to filter and group records later.
         :param comment: (Optional) an optional comment string to log about the event.
         :param metadata: (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
         :param source: (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
@@ -2209,6 +2240,7 @@ class Logger:
             id=id,
             scores=scores,
             expected=expected,
+            tags=tags,
             comment=comment,
             metadata=metadata,
             source=source,
