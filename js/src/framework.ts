@@ -365,9 +365,13 @@ export async function runEvaluator(
             } else {
               output = outputResult;
             }
-            span.log({ input: datum.input, output });
+            span.log({ output });
           },
-          { name: "task", spanAttributes: { type: SpanTypeAttribute.TASK } }
+          {
+            name: "task",
+            spanAttributes: { type: SpanTypeAttribute.TASK },
+            event: { input: datum.input },
+          }
         );
         rootSpan.log({ output });
 
@@ -478,6 +482,7 @@ export async function runEvaluator(
         event: {
           input: datum.input,
           expected: "expected" in datum ? datum.expected : undefined,
+          tags: datum.tags,
         },
       });
     }

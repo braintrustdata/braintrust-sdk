@@ -13,6 +13,7 @@ export type InputsField = { inputs: unknown };
 export type OtherExperimentLogFields = {
   output: unknown;
   expected: unknown;
+  tags: string[];
   scores: Record<string, number | null>;
   metadata: Record<string, unknown>;
   metrics: Record<string, unknown>;
@@ -85,6 +86,7 @@ export type ExperimentEvent = Partial<InputField> &
 
 export type DatasetEvent = {
   input?: unknown;
+  tags?: string[];
   metadata?: unknown;
   id: string;
   project_id: string;
@@ -128,6 +130,7 @@ interface NewDatasetRecord {
   id: string;
   input: any;
   expected: any;
+  tags: any;
   metadata: any;
 }
 
@@ -172,6 +175,7 @@ export function ensureNewDatasetRecord(
   }
   const row = {
     ...r,
+    tags: null,
     expected: r.output,
   };
   delete row.output;

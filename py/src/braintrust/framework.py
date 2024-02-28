@@ -48,12 +48,13 @@ class bcolors:
 class EvalCase(SerializableDataClass):
     """
     An evaluation case. This is a single input to the evaluation task, along with an optional expected
-    output and metadata.
+    output, metadata, and tags.
     """
 
     input: Input
     expected: Optional[Output] = None
     metadata: Optional[Metadata] = None
+    tags: Optional[List[str]] = None
 
 
 class EvalHooks(abc.ABC):
@@ -342,7 +343,7 @@ def Eval(
         if loop:
             return loop.create_task(run_to_completion())
         else:
-            asyncio.run(run_to_completion())
+            return asyncio.run(run_to_completion())
 
 
 @dataclasses.dataclass
@@ -534,7 +535,11 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
 
         if experiment:
             root_span = experiment.start_span(
-                "eval", span_attributes={"type": SpanTypeAttribute.EVAL}, input=datum.input, expected=datum.expected
+                "eval",
+                span_attributes={"type": SpanTypeAttribute.EVAL},
+                input=datum.input,
+                expected=datum.expected,
+                tags=datum.tags,
             )
         else:
             root_span = NOOP_SPAN
