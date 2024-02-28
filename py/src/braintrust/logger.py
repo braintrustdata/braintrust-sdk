@@ -1122,8 +1122,6 @@ def _populate_args(d, **kwargs):
 
 
 def validate_tags(tags):
-    if not tags:
-        return
     seen = set()
     for tag in tags:
         if not isinstance(tag, str):

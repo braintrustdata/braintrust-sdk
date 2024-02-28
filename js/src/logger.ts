@@ -1817,9 +1817,6 @@ function _urljoin(...parts: string[]): string {
 }
 
 function validateTags(tags: readonly string[]) {
-  if (!tags) {
-    return;
-  }
   const seen = new Set<string>();
   for (const tag of tags) {
     if (typeof tag !== "string") {

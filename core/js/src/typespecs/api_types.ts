@@ -167,6 +167,7 @@ function generateBaseEventFeedbackSchema(objectType: ObjectType) {
     expected: customTypes.any.describe(
       "The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not"
     ),
+    tags: z.array(z.string()).nullish().describe("A list of tags to log"),
     comment: z
       .string()
       .nullish()
