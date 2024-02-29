@@ -19,7 +19,8 @@ class BraintrustJSONEncoder(json.JSONEncoder):
         except (AttributeError, TypeError):
             pass
 
-        return super().default(o)
+        # When everything fails, just return the string representation of the object
+        return str(o)
 
 
 def bt_dumps(obj, **kwargs) -> str:
