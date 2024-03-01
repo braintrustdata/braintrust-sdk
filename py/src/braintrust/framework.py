@@ -518,7 +518,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
             if isinstance(result, Score):
                 result_rest = result.as_dict()
                 result_metadata = result_rest.pop("metadata", {})
-                span.log(output=result_rest, metadata=result_metadata)
+                span.log(output=result_rest, metadata=result_metadata, scores={name: result.score})
             else:
                 span.log(output=result)
             return result
@@ -556,7 +556,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                     hooks.set_span(span)
                     output = await await_or_run(evaluator.task, *task_args)
                     span.log(input=task_args[0], output=output)
-                root_span.log(output=output)
+                root_span.log(output=output, metadata=metadata)
 
                 # First, resolve the scorers if they are classes
                 scorers = [
@@ -576,20 +576,6 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                     except Exception as e:
                         exc_info = traceback.format_exc()
                         failing_scorers_and_exceptions.append((name, e, exc_info))
-                score_metadata = {}
-                for scorer_name, score_result in passing_scorers_and_results:
-                    if not isinstance(score_result, Score):
-                        score_result = Score(name=scorer_name, score=score_result)
-                    scores[score_result.name] = score_result.score
-                    m = {**(score_result.metadata or {})}
-                    if len(m) > 0:
-                        score_metadata[score_result.name] = m
-
-                if len(score_metadata) > 0:
-                    hooks.meta(scores=score_metadata)
-
-                # XXX: We could probably log these as they are being produced
-                root_span.log(metadata=metadata, scores=scores)
 
                 if failing_scorers_and_exceptions:
                     scorer_errors = {
