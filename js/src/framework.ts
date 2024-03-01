@@ -389,12 +389,15 @@ export async function runEvaluator(
                       : scoreResult;
                   const {
                     metadata: resultMetadata,
-                    name: _,
+                    name,
                     ...resultRest
                   } = result;
                   span.log({
                     output: resultRest,
                     metadata: resultMetadata,
+                    scores: {
+                      [name]: resultRest.score,
+                    },
                   });
                   return result;
                 },
@@ -424,23 +427,6 @@ export async function runEvaluator(
             failingScorersAndResults.push({ name, error: result.value });
           }
         });
-
-        const scoreMetadata: Record<string, unknown> = {};
-        for (const { score: scoreResult } of passingScorersAndResults) {
-          scores[scoreResult.name] = scoreResult.score;
-          const metadata = {
-            ...scoreResult.metadata,
-          };
-          if (Object.keys(metadata).length > 0) {
-            scoreMetadata[scoreResult.name] = metadata;
-          }
-        }
-
-        if (Object.keys(scoreMetadata).length > 0) {
-          meta({ scores: scoreMetadata });
-        }
-
-        rootSpan.log({ scores, metadata: metadata });
 
         if (failingScorersAndResults.length) {
           const scorerErrors = Object.fromEntries(
