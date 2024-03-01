@@ -347,7 +347,8 @@ class HTTPConnection {
         : {}
     ).toString();
     return await checkResponse(
-      await fetch(url, {
+      // Using toString() here makes it work with isomorphic fetch
+      await fetch(url.toString(), {
         headers: this.headers,
         keepalive: true,
       })
