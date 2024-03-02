@@ -373,7 +373,7 @@ export async function runEvaluator(
             event: { input: datum.input },
           }
         );
-        rootSpan.log({ output });
+        rootSpan.log({ output, metadata });
 
         const scoringArgs = { ...datum, metadata, output };
         const scorerNames = evaluator.scores.map(scorerName);
