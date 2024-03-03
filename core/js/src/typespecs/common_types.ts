@@ -15,18 +15,33 @@ export const jsonSchema: z.ZodType<Json> = z.lazy(() =>
 
 export const datetimeStringSchema = z.string().datetime({ offset: true });
 
-export const objectTypes = ["project", "experiment", "dataset"] as const;
-export type ObjectType = typeof objectTypes[number];
+export const objectTypes = z.enum([
+  "project",
+  "experiment",
+  "dataset",
+  "role",
+  "team",
+  "acl",
+  "user",
+]);
+export type ObjectType = z.infer<typeof objectTypes>;
 
-export function getEventObjectType(objectType: ObjectType) {
+export const objectTypesWithEvent = z.enum([
+  "project",
+  "experiment",
+  "dataset",
+]);
+export type ObjectTypeWithEvent = z.infer<typeof objectTypesWithEvent>;
+
+export function getEventObjectType(objectType: ObjectTypeWithEvent) {
   return objectType === "project" ? "project_logs" : objectType;
 }
 export type EventObjectType = ReturnType<typeof getEventObjectType>;
 
-export function getEventObjectDescription(objectType: ObjectType) {
+export function getEventObjectDescription(objectType: ObjectTypeWithEvent) {
   return getEventObjectType(objectType).replace("_", " ");
 }
 
-export function getEventObjectArticle(objectType: ObjectType) {
-  return objectType === "experiment" ? "an" : "a";
+export function getObjectArticle(objectType: ObjectType) {
+  return ["acl", "experiment"].includes(objectType) ? "an" : "a";
 }
