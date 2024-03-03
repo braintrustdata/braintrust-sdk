@@ -56,11 +56,6 @@ const userBaseSchema = generateBaseTableSchema("user");
 export const userSchema = z
   .object({
     id: userBaseSchema.shape.id,
-    auth_id: z
-      .string()
-      .uuid()
-      .nullish()
-      .describe("Internal authentication token used to identify the user"),
     given_name: z.string().nullish().describe("Given name of the user"),
     family_name: z.string().nullish().describe("Family name of the user"),
     email: z.string().nullish().describe("The user's email"),
@@ -95,8 +90,6 @@ export type Member = z.infer<typeof memberSchema>;
 export const meSchema = z
   .object({
     id: userSchema.shape.id,
-    // By filtering by auth_id equality, we will ensure this is not-null.
-    auth_id: userSchema.shape.auth_id.unwrap().unwrap(),
     organizations: z
       .object({
         id: memberSchema.shape.org_id,
@@ -262,6 +255,192 @@ export const experimentSchema = z
   .openapi("Experiment");
 export type Experiment = z.infer<typeof experimentSchema>;
 
+const privilegeEnum = z
+  .enum([
+    "create",
+    "read",
+    "update",
+    "delete",
+    "create_acls",
+    "read_acls",
+    "update_acls",
+    "delete_acls",
+  ])
+  .describe(
+    [
+      "Each privilege permits a certain type of operation on an object in the system",
+      "Privileges can be assigned to to objects on an individual basis, or grouped into roles",
+    ].join("\n\n")
+  );
+export type Privilege = z.infer<typeof privilegeEnum>;
+
+const roleBaseSchema = generateBaseTableSchema("role");
+export const roleSchema = z
+  .object({
+    id: roleBaseSchema.shape.id,
+    org_id: z
+      .string()
+      .uuid()
+      .nullish()
+      .describe(
+        [
+          "Unique id for the organization that the role belongs under",
+          "A null org_id indicates a system role, which may be assigned to anybody and inherited by any other role, but cannot be edited.",
+          "It is forbidden to change the org after creating a role",
+        ].join("\n\n")
+      ),
+    user_id: roleBaseSchema.shape.user_id,
+    created: roleBaseSchema.shape.created,
+    name: roleBaseSchema.shape.name,
+    description: roleBaseSchema.shape.description,
+    deleted_at: roleBaseSchema.shape.deleted_at,
+    member_privileges: z
+      .array(privilegeEnum)
+      .nullish()
+      .describe("Privileges which belong to this role"),
+    member_roles: z
+      .array(z.string().uuid())
+      .nullish()
+      .describe(
+        [
+          "Ids of the roles this role inherits from",
+          "An inheriting role has all the privileges contained in its member roles, as well as all of their inherited privileges",
+        ].join("\n\n")
+      ),
+  })
+  .strict()
+  .describe(
+    [
+      "A role is a collection of privileges which can be granted as part of an ACL",
+      "Roles can consist of individual privileges, as well as a set of roles they inherit from",
+    ].join("\n\n")
+  )
+  .openapi("Role");
+export type Role = z.infer<typeof roleSchema>;
+
+const teamBaseSchema = generateBaseTableSchema("team");
+export const teamSchema = z
+  .object({
+    id: teamBaseSchema.shape.id,
+    org_id: z
+      .string()
+      .uuid()
+      .describe(
+        [
+          "Unique id for the organization that the team belongs under",
+          "It is forbidden to change the org after creating a team",
+        ].join("\n\n")
+      ),
+    user_id: teamBaseSchema.shape.user_id,
+    created: teamBaseSchema.shape.created,
+    name: teamBaseSchema.shape.name,
+    description: teamBaseSchema.shape.description,
+    deleted_at: teamBaseSchema.shape.deleted_at,
+    member_users: z
+      .array(z.string().uuid())
+      .nullish()
+      .describe("Ids of users which belong to this team"),
+    member_teams: z
+      .array(z.string().uuid())
+      .nullish()
+      .describe(
+        [
+          "Ids of the teams this team inherits from",
+          "An inheriting team has all the users contained in its member teams, as well as all of their inherited users",
+        ].join("\n\n")
+      ),
+  })
+  .strict()
+  .describe(
+    [
+      "A team is a collection of users which can be assigned an ACL",
+      "Teams can consist of individual users, as well as a set of teams they inherit from",
+    ].join("\n\n")
+  )
+  .openapi("Team");
+export type Team = z.infer<typeof teamSchema>;
+
+export const aclObjectTypeEnum = z
+  .enum([
+    "organization",
+    "project",
+    "experiment",
+    "dataset",
+    "prompt",
+    "prompt_session",
+    "project_score",
+    "project_tag",
+    "team",
+    "role",
+  ])
+  .describe("The object type that the ACL applies to");
+export type AclObjectType = z.infer<typeof aclObjectTypeEnum>;
+
+const aclBaseSchema = generateBaseTableSchema("acl");
+export const aclObjectSchema = z
+  .object({
+    id: aclBaseSchema.shape.id,
+    object_type: aclObjectTypeEnum,
+    object_id: z
+      .string()
+      .uuid()
+      .describe("The id of the object the ACL applies to"),
+    _object_org_id: z
+      .string()
+      .uuid()
+      .describe("The organization the ACL's referred object belongs to"),
+    created: aclBaseSchema.shape.created,
+  })
+  .strict();
+const aclUserObjectSchema = z
+  .object({
+    user_id: z.string().uuid().describe("Id of the user the ACL applies to"),
+  })
+  .strict();
+const aclTeamObjectSchema = z
+  .object({
+    team_id: z.string().uuid().describe("Id of the team the ACL applies to"),
+  })
+  .strict();
+const aclPrivilegeObjectSchema = z
+  .object({
+    privilege: privilegeEnum.describe("Privilege the ACL grants"),
+  })
+  .strict();
+const aclRoleObjectSchema = z
+  .object({
+    role_id: z.string().uuid().describe("Role the ACL grants"),
+  })
+  .strict();
+
+export const aclSchema = z
+  .union([
+    aclObjectSchema
+      .merge(aclUserObjectSchema)
+      .merge(aclPrivilegeObjectSchema)
+      .openapi("UserPrivilegeAcl"),
+    aclObjectSchema
+      .merge(aclUserObjectSchema)
+      .merge(aclRoleObjectSchema)
+      .openapi("UserRoleAcl"),
+    aclObjectSchema
+      .merge(aclTeamObjectSchema)
+      .merge(aclPrivilegeObjectSchema)
+      .openapi("TeamPrivilegeAcl"),
+    aclObjectSchema
+      .merge(aclTeamObjectSchema)
+      .merge(aclRoleObjectSchema)
+      .openapi("TeamRoleAcl"),
+  ])
+  .describe(
+    [
+      "An ACL grants a certain privilege or role to a certain user or team on an object",
+      "ACLs are inherited across the object hierarchy. So for example, if a user has read privileges on a project, they will also have read privileges on any experiment, dataset, etc. created within that project",
+    ].join("\n\n")
+  )
+  .openapi("Acl");
+export type Acl = z.infer<typeof aclSchema>;
+
 // Section: Schemas for REST operations on app DB tables
 
 export const appLimitSchema = z
@@ -350,8 +529,11 @@ const createDatasetSchema = z
   .strict()
   .openapi("CreateDataset");
 
-const patchDatasetSchema = createDatasetSchema
-  .omit({ project_id: true })
+const patchDatasetSchema = z
+  .object({
+    name: datasetSchema.shape.name.nullish(),
+    description: datasetSchema.shape.description,
+  })
   .strict()
   .openapi("PatchDataset");
 
@@ -369,6 +551,74 @@ const patchPromptSchema = z
   })
   .strict()
   .openapi("PatchPrompt");
+
+const createRoleBaseSchema = generateBaseTableOpSchema("role");
+const createRoleSchema = z
+  .object({
+    name: roleSchema.shape.name,
+    description: roleSchema.shape.description,
+    member_privileges: roleSchema.shape.member_privileges,
+    member_roles: roleSchema.shape.member_roles,
+    org_name: createRoleBaseSchema.shape.org_name,
+  })
+  .strict()
+  .openapi("CreateRole");
+
+const patchRoleSchema = createRoleSchema
+  .omit({ name: true, org_name: true })
+  .merge(
+    z.object({
+      name: createRoleSchema.shape.name.nullish(),
+    })
+  )
+  .openapi("PatchRole");
+
+const createTeamBaseSchema = generateBaseTableOpSchema("team");
+const createTeamSchema = z
+  .object({
+    name: teamSchema.shape.name,
+    description: teamSchema.shape.description,
+    member_users: teamSchema.shape.member_users,
+    member_teams: teamSchema.shape.member_teams,
+    org_name: createTeamBaseSchema.shape.org_name,
+  })
+  .strict()
+  .openapi("CreateTeam");
+
+const patchTeamSchema = createTeamSchema
+  .omit({ name: true, org_name: true })
+  .merge(
+    z.object({
+      name: createTeamSchema.shape.name.nullish(),
+    })
+  )
+  .openapi("PatchTeam");
+
+const createAclObjectSchema = aclObjectSchema.omit({
+  id: true,
+  created: true,
+  _object_org_id: true,
+});
+const createAclSchema = z
+  .union([
+    createAclObjectSchema
+      .merge(aclUserObjectSchema)
+      .merge(aclPrivilegeObjectSchema)
+      .openapi("CreateUserPrivilegeAcl"),
+    createAclObjectSchema
+      .merge(aclUserObjectSchema)
+      .merge(aclRoleObjectSchema)
+      .openapi("CreateUserRoleAcl"),
+    createAclObjectSchema
+      .merge(aclTeamObjectSchema)
+      .merge(aclPrivilegeObjectSchema)
+      .openapi("CreateTeamPrivilegeAcl"),
+    createAclObjectSchema
+      .merge(aclTeamObjectSchema)
+      .merge(aclRoleObjectSchema)
+      .openapi("CreateTeamRoleAcl"),
+  ])
+  .openapi("CreateAcl");
 
 // Section: exported schemas, grouped by object type.
 
@@ -392,5 +642,25 @@ export const objectSchemas = {
     create: createPromptSchema,
     patch: patchPromptSchema,
     object: promptSchema,
+  },
+  role: {
+    create: createRoleSchema,
+    patch: patchRoleSchema,
+    object: roleSchema,
+  },
+  team: {
+    create: createTeamSchema,
+    patch: patchTeamSchema,
+    object: teamSchema,
+  },
+  acl: {
+    create: createAclSchema,
+    patch: undefined,
+    object: aclSchema,
+  },
+  user: {
+    create: undefined,
+    patch: undefined,
+    object: userSchema,
   },
 };
