@@ -2216,8 +2216,8 @@ class Prompt(Mapping):
         if not self.no_trace:
             ret["span_info"] = {
                 "metadata": {
-                    "variables": render_args,
                     "prompt": {
+                        "variables": render_args,
                         "id": self.id,
                         "project_id": self.project_id,
                         "version": self.version,
