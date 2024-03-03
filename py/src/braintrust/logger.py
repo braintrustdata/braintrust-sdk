@@ -1,3 +1,4 @@
+import abc
 import atexit
 import concurrent.futures
 import contextvars
@@ -19,6 +20,7 @@ from functools import partial, wraps
 from multiprocessing import cpu_count
 from typing import Any, Dict, Optional, Union
 
+import chevron
 import exceptiongroup
 import requests
 from braintrust_core.bt_json import bt_dumps
@@ -836,6 +838,7 @@ def load_prompt(
     project: Optional[str] = None,
     slug: Optional[str] = None,
     version: Optional[Union[str, int]] = None,
+    no_trace: bool = False,
     app_url: Optional[str] = None,
     api_key: Optional[str] = None,
     org_name: Optional[str] = None,
@@ -847,6 +850,7 @@ def load_prompt(
     :param project: The name of the project to load the prompt from. Must specify at least one of `project` or `project_id`.
     :param slug: The slug of the prompt to load.
     :param version: An optional version of the prompt (to read). If not specified, the latest version will be used.
+    :param no_trace: If true, do not include logging metadata for this prompt when render() is called.
     :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
@@ -863,14 +867,15 @@ def load_prompt(
                 "project_name": project,
                 "project_id": project_id,
                 "slug": slug,
+                "version": version,
                 "api_version": DATA_API_VERSION,
             },
         )
         response = _state.log_conn().post_json("prompt", args)
         resp_prompt = response[0]
-        return PromptSchema.from_dict(resp_prompt)
+        return PromptSchema.from_dict_deep(resp_prompt)
 
-    return Prompt(lazy_metadata=LazyValue(compute_metadata, use_mutex=True))
+    return Prompt(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), no_trace=no_trace)
 
 
 login_lock = threading.RLock()
@@ -2146,7 +2151,18 @@ class Dataset(ObjectFetcher):
         del type, value, callback
 
 
-class Prompt:
+class Mapping(abc.ABC):
+    def __iter__(self):
+        ...
+
+    def __len__(self):
+        ...
+
+    def __getitem__(self, x):
+        ...
+
+
+class Prompt(Mapping):
     """
     TODO
     """
@@ -2154,8 +2170,10 @@ class Prompt:
     def __init__(
         self,
         lazy_metadata: LazyValue[PromptSchema],
+        no_trace: bool,
     ):
         self._lazy_metadata = lazy_metadata
+        self.no_trace = no_trace
 
     @property
     def id(self):
@@ -2171,20 +2189,81 @@ class Prompt:
 
     @property
     def prompt(self):
-        return self._lazy_metadata.get().prompt_data["prompt"]
+        return self._lazy_metadata.get().prompt_data.prompt
+
+    @property
+    def version(self):
+        return self._lazy_metadata.get()._xact_id
 
     @property
     def options(self):
-        return self._lazy_metadata.get().prompt_data["options"]
+        return self._lazy_metadata.get().prompt_data.options
 
     # Capture all metadata attributes which aren't covered by existing methods.
     def __getattr__(self, name: str) -> Any:
         return getattr(self._lazy_metadata.get(), name)
 
-    def _get_state(self) -> BraintrustState:
-        # Ensure the login state is populated by fetching the lazy_metadata.
-        self._lazy_metadata.get()
-        return _state
+    def render(self, **render_args):
+        """
+        Render the prompt with the given formatting options.
+
+        :param render_args: The options to use when rendering the prompt.
+        :returns: The rendered prompt. This can be passed as kwargs to the OpenAI client.
+        """
+
+        ret = {**self.options}
+
+        if not self.no_trace:
+            ret["span_info"] = {
+                "metadata": {
+                    "variables": render_args,
+                    "prompt": {
+                        "id": self.id,
+                        "project_id": self.project_id,
+                        "version": self.version,
+                    },
+                }
+            }
+
+        if self.prompt.type == "completion":
+            ret["prompt"] = chevron.render(self.prompt.prompt, data=render_args)
+        elif self.prompt.type == "chat":
+            ret["messages"] = [
+                {
+                    **{k: v for (k, v) in m.as_dict().items() if v is not None},
+                    "content": chevron.render(m.content, data=render_args),
+                }
+                for m in self.prompt.messages
+            ]
+            ret["tools"] = (
+                json.loads(chevron.render(self.prompt.tools, data=render_args))
+                if self.prompt.tools is not None
+                else None
+            )
+
+        return ret
+
+    def __iter__(self):
+        meta_keys = list(self.options.keys())
+        if self.prompt.type == "completion":
+            meta_keys.append("prompt")
+        else:
+            meta_keys.append("chat", "tools")
+
+        return meta_keys
+
+    def __len__(self):
+        return len(self.__iter__())
+
+    def __getitem__(self, x):
+        if x == "prompt":
+            return self.prompt.prompt
+        elif x == "chat":
+            return self.prompt.messages
+        elif x == "tools":
+            return self.prompt.tools
+        else:
+            return self.options[x]
 
 
 class Project:

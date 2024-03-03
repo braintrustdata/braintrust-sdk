@@ -35,7 +35,7 @@ class PromptMessage(SerializableDataClass):
 @dataclass
 class PromptChatBlock(SerializableDataClass):
     messages: List[PromptMessage]
-    tools: str = None
+    tools: Optional[str] = None
     type: Literal["chat"] = "chat"
 
 
@@ -51,6 +51,7 @@ class PromptData(SerializableDataClass):
 @dataclass
 class PromptSchema(SerializableDataClass):
     id: str
+    project_id: str
     _xact_id: str
     name: str
     slug: str
