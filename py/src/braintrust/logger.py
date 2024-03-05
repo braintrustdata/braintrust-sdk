@@ -1300,7 +1300,7 @@ class ObjectFetcher:
             except (ValueError, AssertionError):
                 raise ValueError(f"version ({pinned_version}) must be a positive integer")
 
-        self._pinned_version = str(pinned_version)
+        self._pinned_version = str(pinned_version) if pinned_version is not None else None
         self._mutate_record = mutate_record
 
         self._fetched_data = None
