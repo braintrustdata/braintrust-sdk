@@ -2486,14 +2486,6 @@ export class SpanImpl implements Span {
       return ids;
     });
 
-    if (
-      sanitizedAndInternalData.tags &&
-      sanitizedAndInternalData.tags.length > 0 &&
-      this.rowIds.span_id !== this.rowIds.root_span_id
-    ) {
-      throw new Error("Tags can only be logged to the root span");
-    }
-
     const record = new LazyValue(async () => {
       return {
         ...sanitizedAndInternalData,
