@@ -520,7 +520,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 result_metadata = result_rest.pop("metadata", {})
                 span.log(output=result_rest, metadata=result_metadata, scores={name: result.score})
             else:
-                span.log(output=result)
+                span.log(output=result, scores={name: result})
             return result
 
     async def run_evaluator_task(datum):
