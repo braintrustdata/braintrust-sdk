@@ -582,6 +582,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                         scorer_name: exc_info for scorer_name, _, exc_info in failing_scorers_and_exceptions
                     }
                     metadata["scorer_errors"] = scorer_errors
+                    root_span.log(metadata=metadata)
                     names = ", ".join(scorer_errors.keys())
                     exceptions = [x[1] for x in failing_scorers_and_exceptions]
                     raise exceptiongroup.ExceptionGroup(

@@ -336,7 +336,7 @@ def construct_logs3_data(items):
 
 def _check_json_serializable(event):
     try:
-        _ = bt_dumps(event)
+        return bt_dumps(event)
     except TypeError as e:
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
@@ -1034,22 +1034,23 @@ def get_span_parent_object() -> Union["Logger", "Experiment", Span]:
     return NOOP_SPAN
 
 
-def _try_log_input_output(span, f_sig, f_args, f_kwargs, output):
+def _try_log_input(span, f_sig, f_args, f_kwargs):
     bound_args = f_sig.bind(*f_args, **f_kwargs).arguments
-
     input_serializable = bound_args
     try:
         _check_json_serializable(bound_args)
     except Exception as e:
         input_serializable = "<input not json-serializable>: " + str(e)
+    span.log(input=input_serializable)
 
+
+def _try_log_output(span, output):
     output_serializable = output
     try:
         _check_json_serializable(output)
     except Exception as e:
         output_serializable = "<output not json-serializable>: " + str(e)
-
-    span.log(input=input_serializable, output=output_serializable)
+    span.log(output=output_serializable)
 
 
 def traced(*span_args, **span_kwargs):
@@ -1084,17 +1085,21 @@ def traced(*span_args, **span_kwargs):
         @wraps(f)
         def wrapper_sync(*f_args, **f_kwargs):
             with start_span(*span_args, **span_kwargs) as span:
+                if trace_io:
+                    _try_log_input(span, f_sig, f_args, f_kwargs)
                 ret = f(*f_args, **f_kwargs)
                 if trace_io:
-                    _try_log_input_output(span, f_sig, f_args, f_kwargs, ret)
+                    _try_log_output(span, ret)
                 return ret
 
         @wraps(f)
         async def wrapper_async(*f_args, **f_kwargs):
             with start_span(*span_args, **span_kwargs) as span:
+                if trace_io:
+                    _try_log_input(span, f_sig, f_args, f_kwargs)
                 ret = await f(*f_args, **f_kwargs)
                 if trace_io:
-                    _try_log_input_output(span, f_sig, f_args, f_kwargs, ret)
+                    _try_log_output(span, ret)
                 return ret
 
         if inspect.iscoroutinefunction(f):
@@ -1898,10 +1903,17 @@ class SpanImpl(Span):
             **dataclasses.asdict(self.row_ids),
             **{IS_MERGE_FIELD: self._is_merge},
         )
-        _check_json_serializable(partial_record)
 
         if "metrics" in partial_record and "end" in partial_record["metrics"]:
             self._logged_end_time = partial_record["metrics"]["end"]
+
+        # We both check for serializability and round-trip `partial_record`
+        # through JSON in order to create a "deep copy". This has the benefit of
+        # cutting out any reference to user objects when the object is logged
+        # asynchronously, so that in case the objects are modified, the logging
+        # is unaffected.
+        serialized_partial_record = _check_json_serializable(partial_record)
+        partial_record = json.loads(serialized_partial_record)
 
         def compute_record():
             return dict(
