@@ -436,6 +436,7 @@ export async function runEvaluator(
             ])
           );
           metadata["scorer_errors"] = scorerErrors;
+          rootSpan.log({ metadata: { scorer_errors: scorerErrors } });
           const names = Object.keys(scorerErrors).join(", ");
           const errors = failingScorersAndResults.map((item) => item.error);
           throw new AggregateError(
