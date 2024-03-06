@@ -2248,7 +2248,7 @@ class Prompt(Mapping):
                 for m in self.prompt.messages
             ]
             ret["tools"] = (
-                json.loads(chevron.render(self.prompt.tools, data=render_args))
+                [json.loads(chevron.render(self.prompt.tools, data=render_args))]
                 if self.prompt.tools is not None
                 else None
             )
