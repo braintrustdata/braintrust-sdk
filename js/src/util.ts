@@ -35,7 +35,9 @@ export function isEmpty(a: unknown): a is null | undefined {
 // immediately consumes what is returned by `LazyValue.value()`).
 export class LazyValue<T> {
   private callable: () => Promise<T>;
-  private value: { hasComputed: true; val: T } | { hasComputed: false } = {
+  private value:
+    | { hasComputed: true; val: Promise<T> }
+    | { hasComputed: false } = {
     hasComputed: false,
   };
 
@@ -43,11 +45,11 @@ export class LazyValue<T> {
     this.callable = callable;
   }
 
-  async get(): Promise<T> {
+  get(): Promise<T> {
     if (this.value.hasComputed) {
       return this.value.val;
     }
-    this.value = { hasComputed: true, val: await this.callable() };
+    this.value = { hasComputed: true, val: this.callable() };
     return this.value.val;
   }
 }

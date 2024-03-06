@@ -26,11 +26,12 @@ from braintrust_core.db_fields import (
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
+    PARENT_ID_FIELD,
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
 from braintrust_core.git_fields import GitMetadataSettings, RepoInfo
-from braintrust_core.merge_row_batch import merge_row_batch
+from braintrust_core.merge_row_batch import batch_items, merge_row_batch
 from braintrust_core.object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
 from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
@@ -67,16 +68,6 @@ class Span(ABC):
     @abstractmethod
     def id(self) -> str:
         """Row ID of the span."""
-
-    @property
-    @abstractmethod
-    def span_id(self) -> str:
-        """Span ID of the span. This is used to link spans together."""
-
-    @property
-    @abstractmethod
-    def root_span_id(self) -> str:
-        """Span ID of the root span in the full trace."""
 
     @abstractmethod
     def log(self, **event):
@@ -139,14 +130,6 @@ class _NoopSpan(Span):
 
     @property
     def id(self):
-        return ""
-
-    @property
-    def span_id(self):
-        return ""
-
-    @property
-    def root_span_id(self):
         return ""
 
     def log(self, **event):
@@ -438,40 +421,30 @@ class _BackgroundLogger:
             if len(all_items) == 0:
                 return
 
-            # Since the merged rows are guaranteed to refer to independent rows,
-            # publish order does not matter and we can flush all item batches
-            # concurrently.
-            post_promises = []
-            while True:
-                items = []
-                items_len = 0
-                while len(items) < batch_size and items_len < self.max_request_size / 2:
-                    if len(all_items) > 0:
-                        item = all_items.pop()
-                    else:
-                        break
-
-                    item_s = bt_dumps(item)
-                    items.append(item_s)
-                    items_len += len(item_s)
-
-                if len(items) == 0:
-                    break
-
+            # Construct batches of records to flush in parallel and in sequence.
+            all_items_str = [[bt_dumps(item) for item in bucket] for bucket in all_items]
+            batch_sets = batch_items(
+                items=all_items_str, batch_max_num_items=batch_size, batch_max_num_bytes=self.max_request_size / 2
+            )
+            for batch_set in batch_sets:
+                post_promises = []
                 try:
-                    post_promises.append(HTTP_REQUEST_THREAD_POOL.submit(self._submit_logs_request, items))
+                    post_promises = [
+                        HTTP_REQUEST_THREAD_POOL.submit(self._submit_logs_request, batch) for batch in batch_set
+                    ]
                 except RuntimeError:
-                    # If the thread pool has shut down, e.g. because the process is terminating, run the request the
-                    # old fashioned way.
-                    self._submit_logs_request(items)
+                    # If the thread pool has shut down, e.g. because the process
+                    # is terminating, run the requests the old fashioned way.
+                    for batch in batch_set:
+                        self._submit_logs_request(batch)
 
-            concurrent.futures.wait(post_promises)
-            # Raise any exceptions from the promises as one group.
-            post_promise_exceptions = [f.exception() for f in post_promises if f.exception() is not None]
-            if post_promise_exceptions:
-                raise exceptiongroup.ExceptionGroup(
-                    f"Encountered the following errors while logging:", post_promise_exceptions
-                )
+                concurrent.futures.wait(post_promises)
+                # Raise any exceptions from the promises as one group.
+                post_promise_exceptions = [f.exception() for f in post_promises if f.exception() is not None]
+                if post_promise_exceptions:
+                    raise exceptiongroup.ExceptionGroup(
+                        f"Encountered the following errors while logging:", post_promise_exceptions
+                    )
 
     def _unwrap_lazy_values(self, wrapped_items):
         for i in range(self.num_retries):
@@ -1342,8 +1315,8 @@ class ParentSpanInfo:
 @dataclasses.dataclass
 class RowIds:
     id: str
-    span_id: str
-    root_span_id: str
+    span_id: Optional[str] = None
+    root_span_id: Optional[str] = None
     _parent_id: Optional[str] = None
 
 
@@ -1745,9 +1718,12 @@ class SpanImpl(Span):
         parent_ids: LazyValue[Union[ParentExperimentIds, ParentProjectLogIds]],
         bg_logger,
         parent_span_info: Optional[ParentSpanInfo] = None,
-        # This is similarly named, but semantically different than parent_span_info. parent_span_info
-        # very directly populates the span_parents field of the span, whereas parent_id is the plain-old
-        # id field of the parent span, and is resolved on the server, not in the SDK.
+        # This is similarly named, but semantically different than
+        # parent_span_info. parent_span_info very directly populates the
+        # span_parents field of the span, whereas parent_id is the plain-old id
+        # field of the parent span, and is resolved on the server, not in the
+        # SDK. Note that once we initialize a Span with `parent_id`, we cannot
+        # directly populate the parent info for any nested spans.
         parent_id=None,
         name=None,
         span_attributes={},
@@ -1795,18 +1771,19 @@ class SpanImpl(Span):
         id = event.get("id", None)
         if id is None:
             id = str(uuid.uuid4())
-        span_id = str(uuid.uuid4())
-        self.row_ids = RowIds(
-            id=id, span_id=span_id, root_span_id=parent_span_info.root_span_id if parent_span_info else span_id
-        )
+        self.row_ids = RowIds(id=id)
 
         if parent_span_info is not None and parent_id is not None:
             raise ValueError("Only one of parent_span_info and parent_id may be specified")
-
-        if parent_span_info:
-            self.internal_data.update(span_parents=[parent_span_info.span_id])
-        elif parent_id:
-            self.row_ids._parent_id = parent_id
+        if parent_id:
+            setattr(self.row_ids, PARENT_ID_FIELD, parent_id)
+        else:
+            self.row_ids.span_id = str(uuid.uuid4())
+            if parent_span_info:
+                self.row_ids.root_span_id = parent_span_info.root_span_id
+                self.internal_data.update(span_parents=[parent_span_info.span_id])
+            else:
+                self.row_ids.root_span_id = self.row_ids.span_id
 
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.
@@ -1818,6 +1795,7 @@ class SpanImpl(Span):
     def id(self):
         return self.row_ids.id
 
+    # Not part of the interface, but needed for some unit tests.
     @property
     def span_id(self):
         return self.row_ids.span_id
@@ -1836,10 +1814,11 @@ class SpanImpl(Span):
         sanitized_and_internal_data = {**self.internal_data}
         merge_dicts(sanitized_and_internal_data, sanitized)
         self.internal_data = {}
+
         # Validate the non-lazily-computed part of the record-to-log.
         partial_record = dict(
             **sanitized_and_internal_data,
-            **dataclasses.asdict(self.row_ids),
+            **{k: v for k, v in dataclasses.asdict(self.row_ids).items() if v is not None},
             **{IS_MERGE_FIELD: self._is_merge},
         )
 
@@ -1874,16 +1853,27 @@ class SpanImpl(Span):
         )
 
     def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
+        parent_span_info = None
+        if getattr(self.row_ids, PARENT_ID_FIELD) is not None:
+            # If we created this span with a parent_id reference, we must
+            # continue using parent_ids all the way down, since we don't have a
+            # root_span_id available.
+            parent_id = self.id
+        if parent_id is None:
+            # We can use direct parent info propagation.
+            assert self.row_ids.span_id is not None
+            assert self.row_ids.root_span_id is not None
+            parent_span_info = ParentSpanInfo(span_id=self.row_ids.span_id, root_span_id=self.row_ids.root_span_id)
         return SpanImpl(
             parent_object=self.parent_object,
             parent_ids=self.parent_ids,
             bg_logger=self.bg_logger,
-            parent_span_info=ParentSpanInfo(span_id=self.span_id, root_span_id=self.root_span_id),
+            parent_span_info=parent_span_info,
+            parent_id=parent_id,
             name=name,
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
-            parent_id=parent_id,
             event=event,
         )
 
