@@ -2474,7 +2474,7 @@ export class SpanImpl implements Span {
     // There should be no overlap between the dictionaries being merged,
     // except for `sanitized` and `internalData`, where the former overrides
     // the latter.
-    const sanitizedAndInternalData = { ...this.internalData };
+    let sanitizedAndInternalData = { ...this.internalData };
     mergeDicts(sanitizedAndInternalData, sanitized);
     this.internalData = {};
     if (sanitizedAndInternalData.metrics?.end) {
@@ -2493,6 +2493,16 @@ export class SpanImpl implements Span {
     ) {
       throw new Error("Tags can only be logged to the root span");
     }
+
+    // We both check for serializability and round-trip
+    // `sanitizedAndInternalData` through JSON in order to create a "deep copy".
+    // This has the benefit of cutting out any reference to user objects when
+    // the object is logged asynchronously, so that in case the objects are
+    // modified, the logging is unaffected.
+    const serializedSanitizedAndInternalData = JSON.stringify(
+      sanitizedAndInternalData
+    );
+    sanitizedAndInternalData = JSON.parse(serializedSanitizedAndInternalData);
 
     const record = new LazyValue(async () => {
       return {
