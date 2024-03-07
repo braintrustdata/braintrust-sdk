@@ -30,6 +30,7 @@ import {
   ensureDatasetRecord,
   makeLegacyEvent,
   constructJsonArray,
+  batchRecords,
 } from "@braintrust/core";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -802,30 +803,15 @@ class BackgroundLogger {
     const postPromises: Promise<
       { type: "success" } | { type: "error"; value: unknown }
     >[] = [];
-    while (true) {
-      const items: string[] = [];
-      let itemsLen = 0;
-      while (items.length < batchSize && itemsLen < this.maxRequestSize / 2) {
-        let item = null;
-        if (allItems.length > 0) {
-          item = allItems.pop();
-        } else {
-          break;
-        }
-
-        const itemS = JSON.stringify(item);
-        items.push(itemS);
-        itemsLen += itemS.length;
-      }
-
-      if (items.length === 0) {
-        break;
-      }
-
+    for (const batch of batchRecords(
+      allItems,
+      batchSize,
+      this.maxRequestSize
+    )) {
       postPromises.push(
         (async () => {
           try {
-            await this.submitLogsRequest(items);
+            await this.submitLogsRequest(batch);
             return { type: "success" } as const;
           } catch (e) {
             return { type: "error", value: e } as const;
