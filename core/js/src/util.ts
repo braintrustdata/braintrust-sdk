@@ -28,3 +28,36 @@ export function capitalize(s: string, sep?: string) {
     .map((s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s))
     .join(sep || "");
 }
+
+export function constructJsonArray(items: string[]) {
+  return `[${items.join(",")}]`;
+}
+
+export const batchRecords = function* (
+  allItems: unknown[],
+  batchSize: number,
+  maxRequestSize: number
+) {
+  while (true) {
+    const items: string[] = [];
+    let itemsLen = 0;
+    while (items.length < batchSize && itemsLen < maxRequestSize / 2) {
+      let item = null;
+      if (allItems.length > 0) {
+        item = allItems.pop();
+      } else {
+        break;
+      }
+
+      const itemS = JSON.stringify(item);
+      items.push(itemS);
+      itemsLen += itemS.length;
+    }
+
+    if (items.length === 0) {
+      break;
+    }
+
+    yield items;
+  }
+};
