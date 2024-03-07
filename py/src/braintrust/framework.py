@@ -89,10 +89,12 @@ class EvalScorerArgs(SerializableDataClass):
     metadata: Optional[Metadata] = None
 
 
+ScoreValue = Union[float, int, bool, None, Score]
+
 EvalScorer = Union[
     Scorer,
-    Callable[[Input, Output, Output], Optional[Score]],
-    Callable[[Input, Output, Output], Awaitable[Optional[Score]]],
+    Callable[[Input, Output, Output], Optional[ScoreValue]],
+    Callable[[Input, Output, Output], Awaitable[Optional[ScoreValue]]],
 ]
 
 
@@ -515,12 +517,12 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 scorer_args = {k: v for k, v in scorer_args.items() if k in signature.parameters}
 
             result = await await_or_run(score, **scorer_args)
-            if isinstance(result, Score):
-                result_rest = result.as_dict()
-                result_metadata = result_rest.pop("metadata", {})
-                span.log(output=result_rest, metadata=result_metadata, scores={name: result.score})
-            else:
-                span.log(output=result, scores={name: result})
+            if not isinstance(result, Score):
+                result = Score(name=name, score=result)
+
+            result_rest = result.as_dict()
+            result_metadata = result_rest.pop("metadata", {})
+            span.log(output=result_rest, metadata=result_metadata, scores={name: result.score})
             return result
 
     async def run_evaluator_task(datum):
@@ -572,6 +574,9 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 failing_scorers_and_exceptions = []
                 for name, p in zip(scorer_names, score_promises):
                     try:
+                        score = await p
+                        if score is None:
+                            continue
                         passing_scorers_and_results.append((name, await p))
                     except Exception as e:
                         exc_info = traceback.format_exc()

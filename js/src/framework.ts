@@ -394,7 +394,7 @@ export async function runEvaluator(
                     return null;
                   }
                   const result: Score =
-                    scoreValue === null || typeof scoreValue === "object"
+                    typeof scoreValue === "object"
                       ? scoreValue
                       : { name: scorerNames[score_idx], score: scoreValue };
                   const {
@@ -427,7 +427,10 @@ export async function runEvaluator(
         );
         // Resolve each promise on its own so that we can separate the passing
         // from the failing ones.
-        const passingScorersAndResults: { name: string; score: Score }[] = [];
+        const passingScorersAndResults: {
+          name: string;
+          score: Score | null;
+        }[] = [];
         const failingScorersAndResults: { name: string; error: unknown }[] = [];
         scoreResults.forEach((result, i) => {
           const name = scorerNames[i];
