@@ -7,11 +7,20 @@ from .util import SerializableDataClass, eprint
 
 @dataclasses.dataclass
 class Score(SerializableDataClass):
+    """A score for an evaluation. The score is a float between 0 and 1."""
+
     name: str
+    """The name of the score. This should be a unique name for the scorer."""
+
     score: Optional[float]
+    """The score for the evaluation. This should be a float between 0 and 1. If the score is None, the evaluation is considered to be skipped."""
+
     metadata: Dict[str, any] = dataclasses.field(default_factory=dict)
+    """Metadata for the score. This can be used to store additional information about the score."""
+
     # DEPRECATION_NOTICE: this field is deprecated, as errors are propagated up to the caller.
     error: Exception = None
+    """Deprecated: The error field is deprecated, as errors are now propagated to the caller. The field will be removed in a future version of the library."""
 
     def as_dict(self):
         return {
