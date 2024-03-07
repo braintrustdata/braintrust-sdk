@@ -29,6 +29,7 @@ import {
   DatasetRecord,
   ensureDatasetRecord,
   makeLegacyEvent,
+  constructJsonArray,
 } from "@braintrust/core";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -714,10 +715,6 @@ function castLogger<ToB extends boolean, FromB extends boolean>(
     );
   }
   return logger as unknown as Logger<ToB>;
-}
-
-function constructJsonArray(items: string[]) {
-  return `[${items.join(",")}]`;
 }
 
 function constructLogs3Data(items: string[]) {
