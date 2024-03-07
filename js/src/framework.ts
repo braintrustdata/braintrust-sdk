@@ -79,6 +79,8 @@ export type EvalScorerArgs<
   output: Output;
 };
 
+type ScoreValue = Score | number | null;
+
 export type EvalScorer<
   Input,
   Output,
@@ -86,7 +88,7 @@ export type EvalScorer<
   Metadata extends BaseMetadata = DefaultMetadataType
 > = (
   args: EvalScorerArgs<Input, Output, Expected, Metadata>
-) => Score | Promise<Score>;
+) => ScoreValue | Promise<ScoreValue>;
 
 export interface Evaluator<
   Input,
@@ -383,10 +385,18 @@ export async function runEvaluator(
               const result = await rootSpan.traced(
                 async (span: Span) => {
                   const scoreResult = score(scoringArgs);
-                  const result =
+                  const scoreValue =
                     scoreResult instanceof Promise
                       ? await scoreResult
                       : scoreResult;
+
+                  if (scoreValue === null) {
+                    return null;
+                  }
+                  const result: Score =
+                    scoreValue === null || typeof scoreValue === "object"
+                      ? scoreValue
+                      : { name: scorerNames[score_idx], score: scoreValue };
                   const {
                     metadata: resultMetadata,
                     name,

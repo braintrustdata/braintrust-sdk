@@ -91,8 +91,8 @@ class EvalScorerArgs(SerializableDataClass):
 
 EvalScorer = Union[
     Scorer,
-    Callable[[Input, Output, Output], Score],
-    Callable[[Input, Output, Output], Awaitable[Score]],
+    Callable[[Input, Output, Output], Optional[Score]],
+    Callable[[Input, Output, Output], Awaitable[Optional[Score]]],
 ]
 
 
