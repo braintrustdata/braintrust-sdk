@@ -33,6 +33,14 @@ export function constructJsonArray(items: string[]) {
   return `[${items.join(",")}]`;
 }
 
+export function mapAt<K, V>(m: Map<K, V>, k: K): V {
+  const ret = m.get(k);
+  if (ret === undefined) {
+    throw new Error(`Map does not contain key ${k}`);
+  }
+  return ret;
+}
+
 export const batchRecords = function* (
   allItems: unknown[],
   batchSize: number,
