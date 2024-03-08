@@ -49,6 +49,11 @@ export class LazyValue<T> {
     if (this.value.hasComputed) {
       return this.value.val;
     }
+    // Note that we do not want to await the Promise returned by the callable
+    // inside `get` before setting `hasComputed` to true, because that would
+    // allow multiple async tasks to invoke `.get` concurrently and potentially
+    // invoke `this.callable` multiple times. By keeping this method fully
+    // synchronous, we guarantee that `callable` is only invoked once.
     this.value = { hasComputed: true, val: this.callable() };
     return this.value.val;
   }
