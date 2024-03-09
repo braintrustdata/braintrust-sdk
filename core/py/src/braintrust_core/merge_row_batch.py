@@ -1,7 +1,7 @@
 from typing import Dict, List, Optional
 
 from .db_fields import IS_MERGE_FIELD, PARENT_ID_FIELD
-from .graph_util import AdjacencyListGraph, UndirectedGraph, topological_sort, undirected_connected_components
+from .graph_util import UndirectedGraph, topological_sort, undirected_connected_components
 from .util import merge_dicts
 
 
@@ -94,7 +94,7 @@ def merge_row_batch(rows: List[Dict]) -> List[List[Dict]]:
     row_to_label = {_generate_merged_row_key(r): i for i, r in enumerate(merged)}
 
     # Form a graph where edges go from parents to their children.
-    graph = {i: [] for i in range(len(merged))}
+    graph = {i: set() for i in range(len(merged))}
     for i, r in enumerate(merged):
         parent_id = r.get(PARENT_ID_FIELD)
         if not parent_id:
@@ -102,13 +102,13 @@ def merge_row_batch(rows: List[Dict]) -> List[List[Dict]]:
         parent_row_key = _generate_merged_row_key(r, use_parent_id_for_id=True)
         parent_label = row_to_label.get(parent_row_key)
         if parent_label is not None:
-            graph[parent_label].append(i)
+            graph[parent_label].add(i)
 
     # Group together all the connected components of the undirected graph to get
     # all groups of rows which each row in a group has a PARENT_ID_FIELD
     # relationship with at least one other row in the group.
     connected_components = undirected_connected_components(
-        UndirectedGraph(vertices=graph.keys(), edges=[(k, v) for k, vs in graph.items() for v in vs])
+        UndirectedGraph(vertices=set(graph.keys()), edges=set((k, v) for k, vs in graph.items() for v in vs))
     )
 
     # For each connected row group, run topological sort over that subgraph to

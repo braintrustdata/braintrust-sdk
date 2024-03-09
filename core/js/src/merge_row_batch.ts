@@ -61,7 +61,7 @@ export function mergeRowBatch<
   );
 
   const graph: AdjacencyListGraph = new Map(
-    Array.from({ length: merged.length }).map((_, i) => [i, []])
+    Array.from({ length: merged.length }).map((_, i) => [i, new Set()])
   );
   merged.forEach((r, i) => {
     const parentId = r[PARENT_ID_FIELD];
@@ -71,14 +71,19 @@ export function mergeRowBatch<
     const parentRowKey = generateMergedRowKey(r, true /* useParentIdForId */);
     const parentLabel = rowToLabel.get(parentRowKey);
     if (parentLabel !== undefined) {
-      mapAt(graph, parentLabel).push(i);
+      mapAt(graph, parentLabel).add(i);
     }
   });
 
   const connectedComponents = undirectedConnectedComponents({
-    vertices: [...graph.keys()],
-    edges: [...graph.entries()].flatMap(([k, vs]) =>
-      vs.map((v) => [k, v] as const)
+    vertices: new Set(graph.keys()),
+    edges: new Set(
+      [...graph.entries()].flatMap(([k, vs]) =>
+        [...vs].map((v) => {
+          const ret: [number, number] = [k, v];
+          return ret;
+        })
+      )
     ),
   });
   const buckets = connectedComponents.map((cc) =>
