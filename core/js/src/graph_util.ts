@@ -3,7 +3,7 @@
 import { mapAt } from "./util";
 
 export interface UndirectedGraph {
-  vertices: number[];
+  vertices: Set<number>;
   edges: Set<[number, number]>;
 }
 
@@ -73,7 +73,7 @@ export function undirectedConnectedComponents(
   graph: UndirectedGraph
 ): number[][] {
   const directedGraph: AdjacencyListGraph = new Map(
-    graph.vertices.map((v) => [v, new Set<number>()])
+    [...graph.vertices].map((v) => [v, new Set<number>()])
   );
   for (const [i, j] of graph.edges) {
     mapAt(directedGraph, i).add(j);
