@@ -2509,14 +2509,14 @@ export class SpanImpl implements Span {
     );
   }
 
-  public startSpan(args?: Omit<StartSpanArgs, "parent_id">): Span {
+  public startSpan(args?: StartSpanArgs): Span {
     // If we created this span with a parent_id reference, we must continue
     // using parent_ids all the way down, since we don't have a root_span_id
-    // available.
-    const parentId = this.rowIds[PARENT_ID_FIELD] ? this.id : undefined;
+    // available. Otherwise, we can use direct parent info propagation.
+    const parentId =
+      args?.parentId ?? (this.rowIds[PARENT_ID_FIELD] ? this.id : undefined);
     const parentSpanInfo = ((): ParentSpanInfo | undefined => {
       if (parentId) return undefined;
-      // We can use direct parent info propagation.
       if (!(this.rowIds.span_id && this.rowIds.root_span_id)) {
         throw new Error("Impossible");
       }

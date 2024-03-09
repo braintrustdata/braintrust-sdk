@@ -1852,18 +1852,18 @@ class SpanImpl(Span):
             **args,
         )
 
-    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, **event):
+    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
         # If we created this span with a parent_id reference, we must continue
         # using parent_ids all the way down, since we don't have a root_span_id
         # available. Otherwise, we can use direct parent info propagation.
-        if getattr(self.row_ids, PARENT_ID_FIELD) is not None:
+        if parent_id is None and getattr(self.row_ids, PARENT_ID_FIELD) is not None:
             parent_id = self.id
-            parent_span_info = None
-        else:
-            parent_id = None
+        if parent_id is None:
             assert self.row_ids.span_id is not None
             assert self.row_ids.root_span_id is not None
             parent_span_info = ParentSpanInfo(span_id=self.row_ids.span_id, root_span_id=self.row_ids.root_span_id)
+        else:
+            parent_span_info = None
         return SpanImpl(
             parent_object=self.parent_object,
             parent_ids=self.parent_ids,
