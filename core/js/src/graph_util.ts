@@ -9,10 +9,24 @@ export interface UndirectedGraph {
 
 export type AdjacencyListGraph = Map<number, Set<number>>;
 
+export type FirstVisitF = (
+  vertex: number,
+  args?: { parentVertex?: number }
+) => void;
+export type LastVisitF = (vertex: number, args?: {}) => void;
+
+type EventType = {
+  eventType: "first" | "last";
+  vertex: number;
+  extras: {
+    parentVertex?: number;
+  };
+};
+
 export function depthFirstSearch(args: {
   graph: AdjacencyListGraph;
-  firstVisitF?: (vertex: number) => void;
-  lastVisitF?: (vertex: number) => void;
+  firstVisitF?: FirstVisitF;
+  lastVisitF?: LastVisitF;
   visitationOrder?: number[];
 }) {
   const { graph, firstVisitF, lastVisitF } = args;
@@ -27,12 +41,11 @@ export function depthFirstSearch(args: {
 
   const firstVisitedVertices: Set<number> = new Set();
   const visitationOrder = args.visitationOrder ?? [...graph.keys()];
-  const events: { eventType: "first" | "last"; vertex: number }[] =
-    visitationOrder
-      .map((vertex) => ({ eventType: "first", vertex } as const))
-      .reverse();
+  const events: EventType[] = visitationOrder
+    .map((vertex) => ({ eventType: "first", vertex, extras: {} } as const))
+    .reverse();
   while (events.length) {
-    const { eventType, vertex } = events.pop()!;
+    const { eventType, vertex, extras } = events.pop()!;
 
     if (eventType === "last") {
       lastVisitF?.(vertex);
@@ -43,11 +56,15 @@ export function depthFirstSearch(args: {
       continue;
     }
     firstVisitedVertices.add(vertex);
-    firstVisitF?.(vertex);
+    firstVisitF?.(vertex, { parentVertex: extras.parentVertex });
 
-    events.push({ eventType: "last", vertex });
-    mapAt(graph, vertex).forEach((vertex) => {
-      events.push({ eventType: "first", vertex });
+    events.push({ eventType: "last", vertex, extras: {} });
+    mapAt(graph, vertex).forEach((child) => {
+      events.push({
+        eventType: "first",
+        vertex: child,
+        extras: { parentVertex: vertex },
+      });
     });
   }
 }
@@ -65,21 +82,13 @@ export function undirectedConnectedComponents(
 
   let labelCounter = 0;
   const vertexLabels: Map<number, number> = new Map();
-  const preorderTraversal: number[] = [];
-  function firstVisitF(vertex: number) {
-    let label =
-      preorderTraversal.length > 0 &&
-      mapAt(directedGraph, vertex).has(
-        preorderTraversal[preorderTraversal.length - 1]
-      )
-        ? vertexLabels.get(preorderTraversal[preorderTraversal.length - 1])
-        : undefined;
-    if (label === undefined) {
-      label = labelCounter++;
-    }
+  const firstVisitF: FirstVisitF = (vertex, args) => {
+    const label =
+      args?.parentVertex !== undefined
+        ? mapAt(vertexLabels, args?.parentVertex)
+        : labelCounter++;
     vertexLabels.set(vertex, label);
-    preorderTraversal.push(vertex);
-  }
+  };
 
   depthFirstSearch({ graph: directedGraph, firstVisitF });
   const output: number[][] = Array.from({ length: labelCounter }).map(() => []);
@@ -94,9 +103,9 @@ export function topologicalSort(
   visitationOrder?: number[]
 ): number[] {
   const reverseOrdering: number[] = [];
-  function lastVisitF(vertex: number) {
+  const lastVisitF: LastVisitF = (vertex) => {
     reverseOrdering.push(vertex);
-  }
+  };
   depthFirstSearch({ graph, lastVisitF, visitationOrder });
   return reverseOrdering.reverse();
 }

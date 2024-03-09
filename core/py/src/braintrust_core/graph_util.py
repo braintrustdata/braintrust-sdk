@@ -1,7 +1,7 @@
 # Generic graph algorithms.
 
 import dataclasses
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Protocol, Set, Tuple
 
 
 # An UndirectedGraph consists of a set of vertex labels and a set of edges
@@ -17,16 +17,36 @@ class UndirectedGraph:
 AdjacencyListGraph = Dict[int, Set[int]]
 
 
+class FirstVisitF(Protocol):
+    def __call__(vertex: int, *, parent_vertex: Optional[int], **kwargs) -> None:
+        """Extras:
+        - parent_vertex: the vertex which spawned the current vertex as its
+          child during the depth-first search. `parent_vertex` is guaranteed
+          to have been visited before the current one.
+        """
+        pass
+
+
+class LastVisitF(Protocol):
+    def __call__(vertex: int) -> None:
+        ...
+
+
 def depth_first_search(
     graph: AdjacencyListGraph,
-    first_visit_f: Optional[Callable[int, None]] = None,
-    last_visit_f: Optional[Callable[int, None]] = None,
+    first_visit_f: Optional[FirstVisitF] = None,
+    last_visit_f: Optional[LastVisitF] = None,
     visitation_order: Optional[List[int]] = None,
 ) -> None:
     """A general depth-first search algorithm over a directed graph. As it
     traverses the graph, it invokes user-provided hooks when a vertex is *first*
     visited (before visiting its children) and when it is *last* visited (after
     visiting all its children).
+
+    The first_visit_f and last_visit_f functions may be passed additional
+    information beyond the vertex being visited as kwargs. See their type
+    signatures for more details. For future proofing, you will likely want to
+    capture **kwargs as a catchall in your functions.
 
     An optional `visitation_order` can be specified, which controls the order in
     which vertices will be first visited (outside of visiting them through a
@@ -42,9 +62,9 @@ def depth_first_search(
 
     first_visited_vertices = set()
     visitation_order = visitation_order if visitation_order is not None else graph.keys()
-    events = list(reversed([("first", x) for x in visitation_order]))
+    events = list(reversed([("first", x, dict(parent_vertex=None)) for x in visitation_order]))
     while events:
-        event_type, vertex = events.pop()
+        event_type, vertex, extras = events.pop()
 
         if event_type == "last":
             if last_visit_f:
@@ -56,15 +76,15 @@ def depth_first_search(
             continue
         first_visited_vertices.add(vertex)
         if first_visit_f:
-            first_visit_f(vertex)
+            first_visit_f(vertex, parent_vertex=extras["parent_vertex"])
 
         # Add 'first' visitation events for all the children of the vertex to
         # the stack. But before this, add a 'last' visitation event for this
         # vertex, so that once we've completed all the children, we get the last
         # visitation event for this one.
-        events.append(("last", vertex))
+        events.append(("last", vertex, dict()))
         for child in graph[vertex]:
-            events.append(("first", child))
+            events.append(("first", child, dict(parent_vertex=vertex)))
 
 
 def undirected_connected_components(graph: UndirectedGraph) -> List[List[int]]:
@@ -75,10 +95,9 @@ def undirected_connected_components(graph: UndirectedGraph) -> List[List[int]]:
     # Perhaps the most performant way to implement this is via union find. But
     # in lieu of that, we can use a depth-first search over a direct-ified
     # version of the graph. Upon the first visit of each vertex, we assign it a
-    # label equal to the label of the preceding vertex, if it is a neighbor. If
-    # it has no neighbors, or the neighbors have not been labeled, we assign a
-    # new label. At the end, we can group together all the vertices with the
-    # same label.
+    # label equal to the label of the parent vertex. If there is no parent
+    # vertex, we assign a new label. At the end, we can group together all the
+    # vertices with the same label.
 
     directed_graph = {v: set() for v in graph.vertices}
     for i, j in graph.edges:
@@ -87,18 +106,15 @@ def undirected_connected_components(graph: UndirectedGraph) -> List[List[int]]:
 
     label_counter = 0
     vertex_labels = {}
-    preorder_traversal = []
 
-    def first_visit_f(vertex):
-        nonlocal label_counter
-
-        if preorder_traversal and preorder_traversal[-1] in directed_graph[vertex]:
-            label = vertex_labels.get(preorder_traversal[-1])
-        if label is None:
+    def first_visit_f(vertex, parent_vertex, **kwargs):
+        if parent_vertex is not None:
+            label = vertex_labels[parent_vertex]
+        else:
+            nonlocal label_counter
             label = label_counter
             label_counter += 1
         vertex_labels[vertex] = label
-        preorder_traversal.append(vertex)
 
     depth_first_search(directed_graph, first_visit_f=first_visit_f)
     output = [[] for _ in range(label_counter)]
@@ -123,7 +139,7 @@ def topological_sort(graph: AdjacencyListGraph, visitation_order: Optional[List[
     # the final ordering. Then we reverse the list at the end.
     reverse_ordering = []
 
-    def last_visit_f(vertex):
+    def last_visit_f(vertex, **kwargs):
         reverse_ordering.append(vertex)
 
     depth_first_search(graph, last_visit_f=last_visit_f, visitation_order=visitation_order)
