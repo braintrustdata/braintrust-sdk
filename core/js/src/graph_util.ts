@@ -33,7 +33,7 @@ export function depthFirstSearch(args: {
 
   for (const vs of graph.values()) {
     for (const v of vs.values()) {
-      if (!(v in graph)) {
+      if (!graph.has(v)) {
         throw new Error(`Outgoing vertex ${v} must be a key in the graph`);
       }
     }
