@@ -4,10 +4,10 @@ import { mapAt } from "./util";
 
 export interface UndirectedGraph {
   vertices: number[];
-  edges: Readonly<[number, number]>[];
+  edges: Set<[number, number]>;
 }
 
-export type AdjacencyListGraph = Map<number, number[]>;
+export type AdjacencyListGraph = Map<number, Set<number>>;
 
 export function depthFirstSearch(args: {
   graph: AdjacencyListGraph;
@@ -17,8 +17,8 @@ export function depthFirstSearch(args: {
 }) {
   const { graph, firstVisitF, lastVisitF } = args;
 
-  for (const vs of Object.values(graph)) {
-    for (const v of vs) {
+  for (const vs of graph.values()) {
+    for (const v of vs.values()) {
       if (!(v in graph)) {
         throw new Error(`Outgoing vertex ${v} must be a key in the graph`);
       }
@@ -56,27 +56,29 @@ export function undirectedConnectedComponents(
   graph: UndirectedGraph
 ): number[][] {
   const directedGraph: AdjacencyListGraph = new Map(
-    graph.vertices.map((v) => [v, []])
+    graph.vertices.map((v) => [v, new Set<number>()])
   );
   for (const [i, j] of graph.edges) {
-    mapAt(directedGraph, i).push(j);
-    mapAt(directedGraph, j).push(i);
+    mapAt(directedGraph, i).add(j);
+    mapAt(directedGraph, j).add(i);
   }
 
   let labelCounter = 0;
   const vertexLabels: Map<number, number> = new Map();
+  const preorderTraversal: number[] = [];
   function firstVisitF(vertex: number) {
-    let label: number | undefined = undefined;
-    for (const child of mapAt(directedGraph, vertex)) {
-      label = vertexLabels.get(child);
-      if (label !== undefined) {
-        break;
-      }
-    }
+    let label =
+      preorderTraversal.length > 0 &&
+      mapAt(directedGraph, vertex).has(
+        preorderTraversal[preorderTraversal.length - 1]
+      )
+        ? vertexLabels.get(preorderTraversal[preorderTraversal.length - 1])
+        : undefined;
     if (label === undefined) {
       label = labelCounter++;
     }
     vertexLabels.set(vertex, label);
+    preorderTraversal.push(vertex);
   }
 
   depthFirstSearch({ graph: directedGraph, firstVisitF });

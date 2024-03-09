@@ -1,20 +1,20 @@
 # Generic graph algorithms.
 
 import dataclasses
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 
 # An UndirectedGraph consists of a set of vertex labels and a set of edges
 # between vertices.
 @dataclasses.dataclass
 class UndirectedGraph:
-    vertices: List[int]
-    edges: List[Tuple[int, int]]
+    vertices: Set[int]
+    edges: Set[Tuple[int, int]]
 
 
 # An AdjacencyListGraph is a mapping from vertex label to the list of vertices
 # where there is a directed edge from the key to the value.
-AdjacencyListGraph = Dict[int, List[int]]
+AdjacencyListGraph = Dict[int, Set[int]]
 
 
 def depth_first_search(
@@ -75,30 +75,30 @@ def undirected_connected_components(graph: UndirectedGraph) -> List[List[int]]:
     # Perhaps the most performant way to implement this is via union find. But
     # in lieu of that, we can use a depth-first search over a direct-ified
     # version of the graph. Upon the first visit of each vertex, we assign it a
-    # label equal to the label of any of its neighbors. If it has no neighbors,
-    # or the neighbors have not been labeled, we assign a new label. At the end,
-    # we can group together all the vertices with the same label.
+    # label equal to the label of the preceding vertex, if it is a neighbor. If
+    # it has no neighbors, or the neighbors have not been labeled, we assign a
+    # new label. At the end, we can group together all the vertices with the
+    # same label.
 
-    directed_graph = {v: [] for v in graph.vertices}
+    directed_graph = {v: set() for v in graph.vertices}
     for i, j in graph.edges:
-        directed_graph[i].append(j)
-        directed_graph[j].append(i)
+        directed_graph[i].add(j)
+        directed_graph[j].add(i)
 
     label_counter = 0
     vertex_labels = {}
+    preorder_traversal = []
 
     def first_visit_f(vertex):
         nonlocal label_counter
 
-        label = None
-        for child in directed_graph[vertex]:
-            label = vertex_labels.get(child)
-            if label is not None:
-                break
+        if preorder_traversal and preorder_traversal[-1] in directed_graph[vertex]:
+            label = vertex_labels.get(preorder_traversal[-1])
         if label is None:
             label = label_counter
             label_counter += 1
         vertex_labels[vertex] = label
+        preorder_traversal.append(vertex)
 
     depth_first_search(directed_graph, first_visit_f=first_visit_f)
     output = [[] for _ in range(label_counter)]
