@@ -1804,12 +1804,15 @@ class SpanImpl(Span):
             _EXEC_COUNTER += 1
             exec_counter = _EXEC_COUNTER
 
+        type_arg = dict()
+        if type is not None:
+            type_arg = dict(type=type)
         self.internal_data = dict(
             metrics=dict(
                 start=start_time or time.time(),
             ),
             # Set type first, in case they override it in `span_attributes`.
-            span_attributes=dict(type=type, **span_attributes, name=name, exec_counter=exec_counter),
+            span_attributes=dict(**type_arg, **span_attributes, name=name, exec_counter=exec_counter),
             created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         )
         if caller_location:
