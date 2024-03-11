@@ -31,6 +31,8 @@ import {
   makeLegacyEvent,
   constructJsonArray,
   batchRecords,
+  SpanTypeAttribute,
+  SpanType,
 } from "@braintrust/core";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -48,6 +50,7 @@ type StartSpanEventArgs = ExperimentLogPartialArgs & Partial<IdField>;
 
 export type StartSpanArgs = {
   name?: string;
+  type?: SpanType;
   spanAttributes?: Record<any, any>;
   startTime?: number;
   parentId?: string;
@@ -102,6 +105,7 @@ export interface Span {
    *
    * @param callback The function to be run under the span context.
    * @param args.name Optional name of the span. If not provided, a name will be inferred from the call stack.
+   * @param args.type Optional type of the span. If not provided, the type will be unset.
    * @param args.span_attributes Optional additional attributes to attach to the span, such as a type name.
    * @param args.start_time Optional start time of the span, as a timestamp in seconds.
    * @param args.setCurrent If true (the default), the span will be marked as the currently-active span for the duration of the callback.
@@ -664,12 +668,13 @@ export class Logger<IsAsyncFlush extends boolean> {
    * See `traced` for full details.
    */
   public startSpan(args?: StartSpanArgs): Span {
-    const { name, ...argsRest } = args ?? {};
+    const { name, type, ...argsRest } = args ?? {};
     return new SpanImpl({
       parentObject: this,
       parentIds: new LazyValue(() => this.lazyParentIds()),
       bgLogger: this.bgLogger,
       name: name ?? "root",
+      type: type ?? SpanTypeAttribute.TASK,
       ...argsRest,
     });
   }
@@ -2145,12 +2150,13 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
    * See `traced` for full details.
    */
   public startSpan(args?: StartSpanArgs): Span {
-    const { name, ...argsRest } = args ?? {};
+    const { name, type, ...argsRest } = args ?? {};
     return new SpanImpl({
       parentObject: this,
       parentIds: new LazyValue(() => this.lazyParentIds()),
       bgLogger: this.bgLogger,
       name: name ?? "root",
+      type: type ?? SpanTypeAttribute.TASK,
       ...argsRest,
     });
   }
@@ -2406,6 +2412,7 @@ export class SpanImpl implements Span {
       },
       context: { ...callerLocation },
       span_attributes: {
+        type: args.type,
         ...args.spanAttributes,
         name,
         exec_counter: executionCounter++,
