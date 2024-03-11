@@ -199,14 +199,14 @@ class BraintrustState:
         if not self._app_conn:
             if not self.app_url:
                 raise RuntimeError("Must initialize app_url before requesting app_conn")
-            self._app_conn = HTTPConnection(self.app_url)
+            self._app_conn = HTTPConnection(self.app_url, adapter=_http_adapter)
         return self._app_conn
 
     def log_conn(self):
         if not self._log_conn:
             if not self.log_url:
                 raise RuntimeError("Must initialize log_url before requesting log_conn")
-            self._log_conn = HTTPConnection(self.log_url)
+            self._log_conn = HTTPConnection(self.log_url, adapter=_http_adapter)
         return self._log_conn
 
     def user_info(self):
@@ -231,12 +231,33 @@ _internal_reset_global_state()
 _logger = logging.getLogger("braintrust")
 
 
+_http_adapter = None
+
+
+def set_http_adapter(adapter: HTTPAdapter):
+    """
+    Specify a custom HTTP adapter to use for all network requests. This is useful for setting custom retry policies, timeouts, etc.
+    Braintrust uses the `requests` library, so the adapter should be an instance of `requests.adapters.HTTPAdapter`.
+
+    :param adapter: The adapter to use.
+    """
+
+    global _http_adapter
+
+    _http_adapter = adapter
+
+    if _state._app_conn:
+        _state._app_conn._reset(adapter=adapter)
+    if _state._log_conn:
+        _state._log_conn._reset(adapter=adapter)
+
+
 class HTTPConnection:
-    def __init__(self, base_url):
+    def __init__(self, base_url, adapter=None):
         self.base_url = base_url
         self.token = None
 
-        self._reset(total=0)
+        self._reset(adapter=adapter, total=0)
 
     def ping(self):
         try:
@@ -259,11 +280,13 @@ class HTTPConnection:
         self.token = token
         self._set_session_token()
 
-    def _reset(self, **retry_kwargs):
+    def _reset(self, adapter=None, **retry_kwargs):
         self.session = requests.Session()
 
-        retry = Retry(**retry_kwargs)
-        adapter = HTTPAdapter(max_retries=retry)
+        if adapter is None:
+            retry = Retry(**retry_kwargs)
+            adapter = HTTPAdapter(max_retries=retry)
+
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
 
@@ -883,7 +906,9 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
 
         conn = None
         if api_key is not None:
-            resp = requests.post(_urljoin(_state.app_url, "/api/apikey/login"), json={"token": api_key})
+            app_conn = HTTPConnection(_state.app_url, adapter=_http_adapter)
+            app_conn.set_token(api_key)
+            resp = app_conn.post("api/apikey/login")
             if not resp.ok:
                 api_key_prefix = (
                     (" (" + api_key[:2] + "*" * (len(api_key) - 4) + api_key[-2:] + ")") if len(api_key) > 4 else ""
