@@ -35,7 +35,9 @@ export function isEmpty(a: unknown): a is null | undefined {
 // immediately consumes what is returned by `LazyValue.value()`).
 export class LazyValue<T> {
   private callable: () => Promise<T>;
-  private value: { hasComputed: true; val: T } | { hasComputed: false } = {
+  private value:
+    | { hasComputed: true; val: Promise<T> }
+    | { hasComputed: false } = {
     hasComputed: false,
   };
 
@@ -43,11 +45,16 @@ export class LazyValue<T> {
     this.callable = callable;
   }
 
-  async get(): Promise<T> {
+  get(): Promise<T> {
     if (this.value.hasComputed) {
       return this.value.val;
     }
-    this.value = { hasComputed: true, val: await this.callable() };
+    // Note that we do not want to await the Promise returned by the callable
+    // inside `get` before setting `hasComputed` to true, because that would
+    // allow multiple async tasks to invoke `.get` concurrently and potentially
+    // invoke `this.callable` multiple times. By keeping this method fully
+    // synchronous, we guarantee that `callable` is only invoked once.
+    this.value = { hasComputed: true, val: this.callable() };
     return this.value.val;
   }
 }
