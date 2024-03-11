@@ -1605,7 +1605,7 @@ class Experiment(ObjectFetcher):
     def start_span(
         self,
         name="root",
-        type=SpanTypeAttribute.TASK,
+        type=SpanTypeAttribute.EVAL,
         span_attributes={},
         start_time=None,
         set_current=None,
@@ -1812,7 +1812,7 @@ class SpanImpl(Span):
                 start=start_time or time.time(),
             ),
             # Set type first, in case they override it in `span_attributes`.
-            span_attributes=dict(**type_arg, **span_attributes, name=name, exec_counter=exec_counter),
+            span_attributes=dict(**{**type_arg, **span_attributes}, name=name, exec_counter=exec_counter),
             created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         )
         if caller_location:

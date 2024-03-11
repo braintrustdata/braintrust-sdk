@@ -2156,7 +2156,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
       parentIds: new LazyValue(() => this.lazyParentIds()),
       bgLogger: this.bgLogger,
       name: name ?? "root",
-      type: type ?? SpanTypeAttribute.TASK,
+      type: type ?? SpanTypeAttribute.EVAL,
       ...argsRest,
     });
   }
