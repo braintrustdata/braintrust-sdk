@@ -206,7 +206,7 @@ class BraintrustState:
         if not self._log_conn:
             if not self.log_url:
                 raise RuntimeError("Must initialize log_url before requesting log_conn")
-            self._log_conn = HTTPConnection(self.app_url, adapter=_http_adapter)
+            self._log_conn = HTTPConnection(self.log_url, adapter=_http_adapter)
         return self._log_conn
 
     def user_info(self):
