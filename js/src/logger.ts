@@ -30,7 +30,7 @@ import {
   ensureDatasetRecord,
   makeLegacyEvent,
   constructJsonArray,
-  batchRecords,
+  batchItems,
 } from "@braintrust/core";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -797,18 +797,18 @@ class BackgroundLogger {
       return;
     }
 
-    // Since the merged rows are guaranteed to refer to independent rows,
-    // publish order does not matter and we can flush all item batches
-    // concurrently.
-    const postPromises: Promise<
-      { type: "success" } | { type: "error"; value: unknown }
-    >[] = [];
-    for (const batch of batchRecords(
-      allItems,
-      batchSize,
-      this.maxRequestSize
-    )) {
-      postPromises.push(
+    // Construct batches of records to flush in parallel and in sequence.
+    const allItemsStr = allItems.map((bucket) =>
+      bucket.map((item) => JSON.stringify(item))
+    );
+    const batchSets = batchItems({
+      items: allItemsStr,
+      batchMaxNumItems: batchSize,
+      batchMaxNumBytes: this.maxRequestSize / 2,
+    });
+
+    for (const batchSet of batchSets) {
+      const postPromises = batchSet.map((batch) =>
         (async () => {
           try {
             await this.submitLogsRequest(batch);
@@ -818,16 +818,16 @@ class BackgroundLogger {
           }
         })()
       );
-    }
-    const results = await Promise.all(postPromises);
-    const failingResultErrors = results
-      .map((r) => (r.type === "success" ? undefined : r.value))
-      .filter((r) => r !== undefined);
-    if (failingResultErrors.length) {
-      throw new AggregateError(
-        failingResultErrors,
-        `Encountered the following errors while logging:`
-      );
+      const results = await Promise.all(postPromises);
+      const failingResultErrors = results
+        .map((r) => (r.type === "success" ? undefined : r.value))
+        .filter((r) => r !== undefined);
+      if (failingResultErrors.length) {
+        throw new AggregateError(
+          failingResultErrors,
+          `Encountered the following errors while logging:`
+        );
+      }
     }
 
     // If more items were added while we were flushing, flush again
@@ -838,7 +838,7 @@ class BackgroundLogger {
 
   private async unwrapLazyValues(
     wrappedItems: LazyValue<BackgroundLogEvent>[]
-  ): Promise<BackgroundLogEvent[]> {
+  ): Promise<BackgroundLogEvent[][]> {
     for (let i = 0; i < this.numRetries; ++i) {
       try {
         const itemPromises = wrappedItems.map((x) => x.get());

@@ -30,7 +30,7 @@ from braintrust_core.db_fields import (
     VALID_SOURCES,
 )
 from braintrust_core.git_fields import GitMetadataSettings, RepoInfo
-from braintrust_core.merge_row_batch import merge_row_batch
+from braintrust_core.merge_row_batch import batch_items, merge_row_batch
 from braintrust_core.object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
 from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
@@ -461,40 +461,30 @@ class _BackgroundLogger:
             if len(all_items) == 0:
                 return
 
-            # Since the merged rows are guaranteed to refer to independent rows,
-            # publish order does not matter and we can flush all item batches
-            # concurrently.
-            post_promises = []
-            while True:
-                items = []
-                items_len = 0
-                while len(items) < batch_size and items_len < self.max_request_size / 2:
-                    if len(all_items) > 0:
-                        item = all_items.pop()
-                    else:
-                        break
-
-                    item_s = bt_dumps(item)
-                    items.append(item_s)
-                    items_len += len(item_s)
-
-                if len(items) == 0:
-                    break
-
+            # Construct batches of records to flush in parallel and in sequence.
+            all_items_str = [[bt_dumps(item) for item in bucket] for bucket in all_items]
+            batch_sets = batch_items(
+                items=all_items_str, batch_max_num_items=batch_size, batch_max_num_bytes=self.max_request_size / 2
+            )
+            for batch_set in batch_sets:
+                post_promises = []
                 try:
-                    post_promises.append(HTTP_REQUEST_THREAD_POOL.submit(self._submit_logs_request, items))
+                    post_promises = [
+                        HTTP_REQUEST_THREAD_POOL.submit(self._submit_logs_request, batch) for batch in batch_set
+                    ]
                 except RuntimeError:
-                    # If the thread pool has shut down, e.g. because the process is terminating, run the request the
-                    # old fashioned way.
-                    self._submit_logs_request(items)
+                    # If the thread pool has shut down, e.g. because the process
+                    # is terminating, run the requests the old fashioned way.
+                    for batch in batch_set:
+                        self._submit_logs_request(batch)
 
-            concurrent.futures.wait(post_promises)
-            # Raise any exceptions from the promises as one group.
-            post_promise_exceptions = [f.exception() for f in post_promises if f.exception() is not None]
-            if post_promise_exceptions:
-                raise exceptiongroup.ExceptionGroup(
-                    f"Encountered the following errors while logging:", post_promise_exceptions
-                )
+                concurrent.futures.wait(post_promises)
+                # Raise any exceptions from the promises as one group.
+                post_promise_exceptions = [f.exception() for f in post_promises if f.exception() is not None]
+                if post_promise_exceptions:
+                    raise exceptiongroup.ExceptionGroup(
+                        f"Encountered the following errors while logging:", post_promise_exceptions
+                    )
 
     def _unwrap_lazy_values(self, wrapped_items):
         for i in range(self.num_retries):
