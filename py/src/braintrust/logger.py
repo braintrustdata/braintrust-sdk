@@ -93,12 +93,15 @@ class Span(ABC):
         """
 
     @abstractmethod
-    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
+    def start_span(
+        self, name=None, type=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event
+    ):
         """Create a new span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `Span.log` will be merged into one logical row.
 
         We recommend running spans within context managers (`with start_span(...) as span`) to automatically mark them as current and ensure they are ended. Only spans run within a context manager will be marked current, so they can be accessed using `braintrust.current_span()`. If you wish to start a span outside a context manager, be sure to end it with `span.end()`.
 
         :param name: Optional name of the span. If not provided, a name will be inferred from the call stack.
+        :param type: Optional type of the span. If not provided, the type will be unset.
         :param span_attributes: Optional additional attributes to attach to the span, such as a type name.
         :param start_time: Optional start time of the span, as a timestamp in seconds.
         :param set_current: If true (the default), the span will be marked as the currently-active span for the duration of the context manager.
@@ -155,7 +158,9 @@ class _NoopSpan(Span):
     def log_feedback(self, **event):
         pass
 
-    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
+    def start_span(
+        self, name=None, type=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event
+    ):
         return self
 
     def end(self, end_time=None):
@@ -1031,7 +1036,7 @@ def traced(*span_args, **span_kwargs):
 
         if "span_attributes" not in span_kwargs:
             span_kwargs["span_attributes"] = {}
-        if "type" not in span_kwargs["span_attributes"]:
+        if "type" not in span_kwargs["span_attributes"] and "type" not in span_kwargs:
             span_kwargs["span_attributes"]["type"] = SpanTypeAttribute.FUNCTION
 
         @wraps(f)
@@ -1067,7 +1072,15 @@ def traced(*span_args, **span_kwargs):
         return partial(decorator, span_args, span_kwargs)
 
 
-def start_span(name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event) -> Span:
+def start_span(
+    name=None,
+    type: SpanTypeAttribute = None,
+    span_attributes={},
+    start_time=None,
+    set_current=None,
+    parent_id=None,
+    **event,
+) -> Span:
     """Lower-level alternative to `@traced` for starting a span at the toplevel. It creates a span under the first active object (using the same precedence order as `@traced`) or returns a no-op span object.
 
     We recommend running spans bound to a context manager (`with start_span`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a context manager, be sure to terminate it with `span.end()`.
@@ -1080,6 +1093,7 @@ def start_span(name=None, span_attributes={}, start_time=None, set_current=None,
         name = coalesce(name, "root")
     return parent_object.start_span(
         name=name,
+        type=type,
         span_attributes=span_attributes,
         start_time=start_time,
         set_current=set_current,
@@ -1588,7 +1602,16 @@ class Experiment(ObjectFetcher):
 
         return LazyValue(compute_parent_ids, use_mutex=False)
 
-    def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
+    def start_span(
+        self,
+        name="root",
+        type=SpanTypeAttribute.TASK,
+        span_attributes={},
+        start_time=None,
+        set_current=None,
+        parent_id=None,
+        **event,
+    ):
         """Create a new toplevel span underneath the experiment. The name defaults to "root".
 
         See `Span.start_span` for full details
@@ -1599,6 +1622,7 @@ class Experiment(ObjectFetcher):
             parent_ids=self._lazy_parent_ids(),
             bg_logger=self.bg_logger,
             name=name,
+            type=type,
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
@@ -1750,6 +1774,7 @@ class SpanImpl(Span):
         # id field of the parent span, and is resolved on the server, not in the SDK.
         parent_id=None,
         name=None,
+        type=None,
         span_attributes={},
         start_time=None,
         set_current=None,
@@ -1783,7 +1808,8 @@ class SpanImpl(Span):
             metrics=dict(
                 start=start_time or time.time(),
             ),
-            span_attributes=dict(**span_attributes, name=name, exec_counter=exec_counter),
+            # Set type first, in case they override it in `span_attributes`.
+            span_attributes=dict(type=type, **span_attributes, name=name, exec_counter=exec_counter),
             created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         )
         if caller_location:
@@ -1873,13 +1899,16 @@ class SpanImpl(Span):
             **args,
         )
 
-    def start_span(self, name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
+    def start_span(
+        self, name=None, type=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event
+    ):
         return SpanImpl(
             parent_object=self.parent_object,
             parent_ids=self.parent_ids,
             bg_logger=self.bg_logger,
             parent_span_info=ParentSpanInfo(span_id=self.span_id, root_span_id=self.root_span_id),
             name=name,
+            type=type,
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
@@ -2267,7 +2296,16 @@ class Logger:
 
         return LazyValue(compute_parent_ids, use_mutex=False)
 
-    def start_span(self, name="root", span_attributes={}, start_time=None, set_current=None, parent_id=None, **event):
+    def start_span(
+        self,
+        name="root",
+        type=SpanTypeAttribute.TASK,
+        span_attributes={},
+        start_time=None,
+        set_current=None,
+        parent_id=None,
+        **event,
+    ):
         """Create a new toplevel span underneath the logger. The name parameter defaults to "root".
 
         See `Span.start_span` for full details
@@ -2278,6 +2316,7 @@ class Logger:
             parent_ids=self._lazy_parent_ids(),
             bg_logger=self.bg_logger,
             name=name,
+            type=type,
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
