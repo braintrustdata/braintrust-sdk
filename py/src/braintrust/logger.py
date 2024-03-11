@@ -206,7 +206,7 @@ class BraintrustState:
         if not self._log_conn:
             if not self.log_url:
                 raise RuntimeError("Must initialize log_url before requesting log_conn")
-            self._app_conn = HTTPConnection(self.app_url, adapter=_http_adapter)
+            self._log_conn = HTTPConnection(self.app_url, adapter=_http_adapter)
         return self._log_conn
 
     def user_info(self):
@@ -234,7 +234,14 @@ _logger = logging.getLogger("braintrust")
 _http_adapter = None
 
 
-def set_http_adapter(adapter):
+def set_http_adapter(adapter: HTTPAdapter):
+    """
+    Specify a custom HTTP adapter to use for all network requests. This is useful for setting custom retry policies, timeouts, etc.
+    Braintrust uses the `requests` library, so the adapter should be an instance of `requests.adapters.HTTPAdapter`.
+
+    :param adapter: The adapter to use.
+    """
+
     global _http_adapter
 
     _http_adapter = adapter
@@ -899,7 +906,9 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
 
         conn = None
         if api_key is not None:
-            resp = requests.post(_urljoin(_state.app_url, "/api/apikey/login"), json={"token": api_key})
+            app_conn = HTTPConnection(_state.app_url, adapter=_http_adapter)
+            app_conn.set_token(api_key)
+            resp = app_conn.post("api/apikey/login")
             if not resp.ok:
                 api_key_prefix = (
                     (" (" + api_key[:2] + "*" * (len(api_key) - 4) + api_key[-2:] + ")") if len(api_key) > 4 else ""
