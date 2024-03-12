@@ -401,6 +401,26 @@ const projectLogsEventSchema = z
   .strict()
   .openapi("ProjectLogsEvent");
 
+const promptEventBaseSchema = generateBaseEventOpSchema("prompt");
+const promptEventSchema = z
+  .object({
+    id: promptEventBaseSchema.shape.id,
+    [TRANSACTION_ID_FIELD]: promptEventBaseSchema.shape[TRANSACTION_ID_FIELD],
+    created: promptEventBaseSchema.shape.created,
+    org_id: projectSchema.shape.org_id,
+    project_id: projectSchema.shape.id,
+    log_id: z
+      .literal("p")
+      .describe("A literal 'p' which identifies the log as a prompt entry"),
+    name: z.string().describe("The name of the prompt"),
+    slug: z.string().describe("The slug of the prompt"),
+    description: z.string().describe("The description of the prompt"),
+    prompt_data: customTypes.any,
+    tags: promptEventBaseSchema.shape.tags,
+  })
+  .strict()
+  .openapi("PromptEvent");
+
 // Section: inserting data objects.
 
 // Merge system control fields.
@@ -549,6 +569,24 @@ const {
     .strict()
 );
 
+const {
+  eventSchema: insertPromptEventSchema,
+  requestSchema: insertPromptEventsRequestSchema,
+} = makeInsertEventSchemas(
+  "prompt",
+  z
+    .object({
+      name: promptEventSchema.shape.name,
+      slug: promptEventSchema.shape.slug,
+      description: promptEventSchema.shape.description,
+      prompt_data: promptEventSchema.shape.prompt_data,
+      tags: promptEventSchema.shape.tags,
+      id: promptEventSchema.shape.id.nullish(),
+      [OBJECT_DELETE_FIELD]: promptEventBaseSchema.shape[OBJECT_DELETE_FIELD],
+    })
+    .strict()
+);
+
 // Section: logging feedback.
 
 function makeFeedbackRequestSchema<T extends z.AnyZodObject>(
@@ -622,6 +660,22 @@ const feedbackProjectLogsRequestSchema = makeFeedbackRequestSchema(
   feedbackProjectLogsItemSchema
 );
 
+const feedbackPromptRequestBaseSchema =
+  generateBaseEventFeedbackSchema("prompt");
+const feedbackPromptItemSchema = z
+  .object({
+    id: feedbackPromptRequestBaseSchema.shape.id,
+    comment: feedbackPromptRequestBaseSchema.shape.comment,
+    metadata: feedbackPromptRequestBaseSchema.shape.metadata,
+    source: feedbackPromptRequestBaseSchema.shape.source,
+  })
+  .strict()
+  .openapi("FeedbackPromptItem");
+const feedbackPromptRequestSchema = makeFeedbackRequestSchema(
+  "prompt",
+  feedbackPromptItemSchema
+);
+
 // Section: exported schemas, grouped by object type.
 
 export const eventObjectSchemas = {
@@ -651,6 +705,13 @@ export const eventObjectSchemas = {
     insertRequest: insertProjectLogsEventsRequestSchema,
     feedbackItem: feedbackProjectLogsItemSchema,
     feedbackRequest: feedbackProjectLogsRequestSchema,
+  },
+  prompt: {
+    fetchResponse: makeFetchEventsResponseSchema("prompt", promptEventSchema),
+    insertEvent: insertPromptEventSchema,
+    insertRequest: insertPromptEventsRequestSchema,
+    feedbackItem: feedbackPromptItemSchema,
+    feedbackRequest: feedbackPromptRequestSchema,
   },
 } as const;
 
@@ -694,6 +755,7 @@ export const crossObjectInsertRequestSchema = z
     experiment: makeCrossObjectIndividualRequestSchema("experiment"),
     dataset: makeCrossObjectIndividualRequestSchema("dataset"),
     project_logs: makeCrossObjectIndividualRequestSchema("project"),
+    prompt: makeCrossObjectIndividualRequestSchema("prompt"),
   })
   .strict()
   .openapi("CrossObjectInsertRequest");
@@ -703,6 +765,7 @@ export const crossObjectInsertResponseSchema = z
     experiment: makeCrossObjectIndividualResponseSchema("experiment"),
     dataset: makeCrossObjectIndividualResponseSchema("dataset"),
     project_logs: makeCrossObjectIndividualResponseSchema("project"),
+    prompt: makeCrossObjectIndividualResponseSchema("prompt"),
   })
   .strict()
   .openapi("CrossObjectInsertResponse");

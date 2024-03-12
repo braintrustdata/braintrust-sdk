@@ -158,6 +158,16 @@ export const datasetSchema = z
   .openapi("Dataset");
 export type Dataset = z.infer<typeof datasetSchema>;
 
+export const promptSchema = z.object({
+  id: z.string().uuid(),
+  project_id: z.string().uuid(),
+  name: z.string(),
+  slug: z.string(),
+  description: z.string().nullish(),
+  prompt_data: customTypes.any.nullish(), // NOTE: We should probably validate this
+  tags: z.array(z.string()).nullish(),
+});
+
 const repoInfoSchema = z
   .object({
     commit: z.string().nullish().describe("SHA of most recent commit"),
@@ -341,6 +351,28 @@ const patchDatasetSchema = createDatasetSchema
   .strict()
   .openapi("PatchDataset");
 
+const createPromptSchema = z
+  .object({
+    project_id: promptSchema.shape.project_id,
+    name: promptSchema.shape.name,
+    slug: promptSchema.shape.slug,
+    description: promptSchema.shape.description,
+    prompt_data: promptSchema.shape.prompt_data,
+    tags: promptSchema.shape.tags,
+  })
+  .strict()
+  .openapi("CreatePrompt");
+
+const patchPromptSchema = z
+  .object({
+    name: promptSchema.shape.name.nullish(),
+    description: promptSchema.shape.description.nullish(),
+    prompt_data: promptSchema.shape.prompt_data.nullish(),
+    tags: promptSchema.shape.tags.nullish(),
+  })
+  .strict()
+  .openapi("PatchPrompt");
+
 // Section: exported schemas, grouped by object type.
 
 export const objectSchemas = {
@@ -358,5 +390,10 @@ export const objectSchemas = {
     create: createProjectSchema,
     patch: patchProjectSchema,
     object: projectSchema,
+  },
+  prompts: {
+    create: createPromptSchema,
+    patch: patchPromptSchema,
+    object: promptSchema,
   },
 };
