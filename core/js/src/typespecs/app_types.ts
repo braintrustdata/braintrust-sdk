@@ -391,7 +391,7 @@ export const objectSchemas = {
     patch: patchProjectSchema,
     object: projectSchema,
   },
-  prompts: {
+  prompt: {
     create: createPromptSchema,
     patch: patchPromptSchema,
     object: promptSchema,

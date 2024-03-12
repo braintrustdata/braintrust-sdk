@@ -909,4 +909,5 @@ export const objectTypeSummarizeResponseSchemas = {
   experiment: summarizeExperimentResponseSchema,
   dataset: summarizeDatasetResponseSchema,
   project: undefined,
+  prompt: undefined,
 } as const;
