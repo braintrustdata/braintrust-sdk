@@ -288,7 +288,7 @@ export const fetchEventsRequestSchema = z
   .strict()
   .openapi("FetchEventsRequest");
 
-function makeFetchEventsResponseSchema<T extends z.AnyZodObject>(
+export function makeFetchEventsResponseSchema<T extends z.AnyZodObject>(
   objectType: ObjectType,
   eventSchema: T
 ) {
@@ -402,7 +402,7 @@ const projectLogsEventSchema = z
   .openapi("ProjectLogsEvent");
 
 const promptEventBaseSchema = generateBaseEventOpSchema("prompt");
-const promptEventSchema = z
+export const promptEventSchema = z
   .object({
     id: promptEventBaseSchema.shape.id,
     [TRANSACTION_ID_FIELD]: promptEventBaseSchema.shape[TRANSACTION_ID_FIELD],
@@ -707,7 +707,7 @@ export const eventObjectSchemas = {
     feedbackRequest: feedbackProjectLogsRequestSchema,
   },
   prompt: {
-    fetchResponse: makeFetchEventsResponseSchema("prompt", promptEventSchema),
+    fetchResponse: undefined,
     insertEvent: insertPromptEventSchema,
     insertRequest: insertPromptEventsRequestSchema,
     feedbackItem: feedbackPromptItemSchema,
