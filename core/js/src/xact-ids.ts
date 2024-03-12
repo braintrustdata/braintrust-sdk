@@ -1,22 +1,23 @@
 import { TransactionId } from "./db_fields";
 
-function modularMultiply(value: bigint, prime: bigint, mod = BigInt(2 ** 48)) {
-  return (value * prime) % mod;
-}
+const TOP_BITS = BigInt("0x0DE1") << BigInt(48);
+const MOD = BigInt(1) << BigInt(64);
+const COPRIME = BigInt("205891132094649");
+const COPRIME_INVERSE = BigInt("1522336535492693385");
 
-const coprime = BigInt(205891132094649);
-const coprimeInverse = BigInt(119861441465737);
-const topBits = BigInt("0x0DE1") << BigInt(48);
+function modularMultiply(value: bigint, prime: bigint) {
+  return (value * prime) % MOD;
+}
 
 export function prettifyXact(valueString: TransactionId): string {
   const value = BigInt(valueString);
-  const encoded = modularMultiply(value, coprime);
+  const encoded = modularMultiply(value, COPRIME);
   return encoded.toString(16).padStart(12, "0");
 }
 
 export function loadPrettyXact(encodedHex: string): TransactionId {
   const value = BigInt(`0x${encodedHex}`);
-  const multipliedInverse = modularMultiply(value, coprimeInverse);
-  const withTopBits = topBits | multipliedInverse;
+  const multipliedInverse = modularMultiply(value, COPRIME_INVERSE);
+  const withTopBits = TOP_BITS | multipliedInverse;
   return withTopBits.toString();
 }

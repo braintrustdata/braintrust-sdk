@@ -1,10 +1,14 @@
-def modular_multiply(value: int, prime: int, mod=2**48):
-    return (value * prime) % mod
-
-
-COPRIME = 205891132094649
-COPRIME_INVERSE = 119861441465737
+# COPRIME = 205891132094649
+# COPRIME_INVERSE = 119861441465737
 TOP_BITS = 0x0DE1 << 48
+
+MOD = 2**64
+COPRIME = 205891132094649
+COPRIME_INVERSE = 1522336535492693385
+
+
+def modular_multiply(value: int, prime: int):
+    return (value * prime) % MOD
 
 
 def prettify_xact(value: int | str) -> str:
