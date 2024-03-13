@@ -25,6 +25,7 @@ import {
 } from "../db_fields";
 
 import { SpanTypeAttribute } from "../span_types";
+import { promptDataSchema } from "./prompt";
 
 export const auditSourcesSchema = z.enum(VALID_SOURCES);
 
@@ -415,7 +416,7 @@ export const promptEventSchema = z
     name: z.string().describe("The name of the prompt"),
     slug: z.string().describe("The slug of the prompt"),
     description: z.string().describe("The description of the prompt"),
-    prompt_data: customTypes.any,
+    prompt_data: promptDataSchema.describe("The prompt and its parameters"),
     tags: promptEventBaseSchema.shape.tags,
   })
   .strict()

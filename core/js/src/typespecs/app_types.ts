@@ -6,6 +6,7 @@ extendZodWithOpenApi(z);
 
 import { datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
+import { promptDataSchema } from "./prompt";
 
 // Section: App DB table schemas
 
@@ -164,7 +165,7 @@ export const promptSchema = z.object({
   name: z.string(),
   slug: z.string(),
   description: z.string().nullish(),
-  prompt_data: customTypes.any.nullish(), // NOTE: We should probably validate this
+  prompt_data: promptDataSchema.nullish(),
   tags: z.array(z.string()).nullish(),
 });
 
