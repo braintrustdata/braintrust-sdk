@@ -859,15 +859,13 @@ def load_prompt(
         login(org_name=org_name, api_key=api_key, app_url=app_url)
         args = _populate_args(
             {
-                "org_id": _state.org_id,
                 "project_name": project,
                 "project_id": project_id,
                 "slug": slug,
                 "version": version,
-                "api_version": DATA_API_VERSION,
             },
         )
-        response = _state.log_conn().post_json("prompt", args)
+        response = _state.log_conn().get_json("/v1/prompt", args)
         resp_prompt = response[0]
         return PromptSchema.from_dict_deep(resp_prompt)
 
