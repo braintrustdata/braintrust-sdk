@@ -570,24 +570,6 @@ const {
     .strict()
 );
 
-const {
-  eventSchema: insertPromptEventSchema,
-  requestSchema: insertPromptEventsRequestSchema,
-} = makeInsertEventSchemas(
-  "prompt",
-  z
-    .object({
-      name: promptEventSchema.shape.name,
-      slug: promptEventSchema.shape.slug,
-      description: promptEventSchema.shape.description,
-      prompt_data: promptEventSchema.shape.prompt_data,
-      tags: promptEventSchema.shape.tags,
-      id: promptEventSchema.shape.id.nullish(),
-      [OBJECT_DELETE_FIELD]: promptEventBaseSchema.shape[OBJECT_DELETE_FIELD],
-    })
-    .strict()
-);
-
 // Section: logging feedback.
 
 function makeFeedbackRequestSchema<T extends z.AnyZodObject>(
@@ -709,8 +691,8 @@ export const eventObjectSchemas = {
   },
   prompt: {
     fetchResponse: undefined,
-    insertEvent: insertPromptEventSchema,
-    insertRequest: insertPromptEventsRequestSchema,
+    insertEvent: undefined,
+    insertRequest: undefined,
     feedbackItem: feedbackPromptItemSchema,
     feedbackRequest: feedbackPromptRequestSchema,
   },
@@ -724,10 +706,14 @@ function makeCrossObjectIndividualRequestSchema(objectType: ObjectType) {
   const eventObjectSchema = eventObjectSchemas[eventObjectType];
   const insertObject = z
     .object({
-      events: eventObjectSchema.insertEvent
-        .array()
-        .nullish()
-        .describe(`A list of ${eventDescription} events to insert`),
+      ...(eventObjectSchema.insertEvent
+        ? {
+            events: eventObjectSchema.insertEvent
+              .array()
+              .nullish()
+              .describe(`A list of ${eventDescription} events to insert`),
+          }
+        : {}),
       feedback: eventObjectSchema.feedbackItem
         .array()
         .nullish()
