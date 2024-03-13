@@ -6,7 +6,6 @@ extendZodWithOpenApi(z);
 
 import { datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
-import { makeFetchEventsResponseSchema, promptEventSchema } from "./api_types";
 
 // Section: App DB table schemas
 
