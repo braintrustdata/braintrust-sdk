@@ -44,8 +44,8 @@ PromptBlockData = Union[PromptCompletionBlock, PromptChatBlock]
 
 @dataclass
 class PromptData(SerializableDataClass):
-    prompt: Optional[PromptBlockData]
-    options: Dict
+    prompt: Optional[PromptBlockData] = None
+    options: Optional[Dict] = None
 
 
 @dataclass

@@ -2235,18 +2235,19 @@ class Prompt(Mapping):
 
     @property
     def options(self):
-        return self._lazy_metadata.get().prompt_data.options
+        return self._lazy_metadata.get().prompt_data.options or {}
 
     # Capture all metadata attributes which aren't covered by existing methods.
     def __getattr__(self, name: str) -> Any:
         return getattr(self._lazy_metadata.get(), name)
 
-    def render(self, **render_args):
+    def build(self, **build_args):
         """
-        Render the prompt with the given formatting options.
+        Build the prompt with the given formatting options. The args you pass in will
+        be forwarded to the mustache template that defines the prompt and rendered with
+        the `chevron` library.
 
-        :param render_args: The options to use when rendering the prompt.
-        :returns: The rendered prompt. This can be passed as kwargs to the OpenAI client.
+        :returns: A dictionary that includes the rendered prompt and arguments, that can be passed as kwargs to the OpenAI client.
         """
 
         ret = {
@@ -2258,7 +2259,7 @@ class Prompt(Mapping):
             ret["span_info"] = {
                 "metadata": {
                     "prompt": {
-                        "variables": render_args,
+                        "variables": build_args,
                         "id": self.id,
                         "project_id": self.project_id,
                         "version": self.version,
@@ -2267,17 +2268,17 @@ class Prompt(Mapping):
             }
 
         if self.prompt.type == "completion":
-            ret["prompt"] = chevron.render(self.prompt.prompt, data=render_args)
+            ret["prompt"] = chevron.render(self.prompt.prompt, data=build_args)
         elif self.prompt.type == "chat":
             ret["messages"] = [
                 {
                     **{k: v for (k, v) in m.as_dict().items() if v is not None},
-                    "content": chevron.render(m.content, data=render_args),
+                    "content": chevron.render(m.content, data=build_args),
                 }
                 for m in self.prompt.messages
             ]
             ret["tools"] = (
-                [json.loads(chevron.render(self.prompt.tools, data=render_args))]
+                [json.loads(chevron.render(self.prompt.tools, data=build_args))]
                 if self.prompt.tools is not None
                 else None
             )
