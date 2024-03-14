@@ -230,17 +230,20 @@ def set_http_adapter(adapter: HTTPAdapter):
     _http_adapter = adapter
 
     if _state._app_conn:
-        _state._app_conn._reset(adapter=adapter)
+        _state._app_conn._set_adapter(adapter=adapter)
+        _state._app_conn._reset()
     if _state._log_conn:
-        _state._log_conn._reset(adapter=adapter)
+        _state._app_conn._set_adapter(adapter=adapter)
+        _state._log_conn._reset()
 
 
 class HTTPConnection:
     def __init__(self, base_url, adapter=None):
         self.base_url = base_url
         self.token = None
+        self.adapter = adapter
 
-        self._reset(adapter=adapter, total=0)
+        self._reset(total=0)
 
     def ping(self):
         try:
@@ -263,9 +266,13 @@ class HTTPConnection:
         self.token = token
         self._set_session_token()
 
-    def _reset(self, adapter=None, **retry_kwargs):
+    def _set_adapter(self, adapter):
+        self.adapter = adapter
+
+    def _reset(self, **retry_kwargs):
         self.session = requests.Session()
 
+        adapter = self.adapter
         if adapter is None:
             retry = Retry(**retry_kwargs)
             adapter = HTTPAdapter(max_retries=retry)
