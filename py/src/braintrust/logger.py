@@ -35,7 +35,7 @@ from braintrust_core.db_fields import (
 from braintrust_core.git_fields import GitMetadataSettings, RepoInfo
 from braintrust_core.merge_row_batch import batch_items, merge_row_batch
 from braintrust_core.object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
-from braintrust_core.prompt import PromptSchema
+from braintrust_core.prompt import BRAINTRUST_PARAMS, PromptSchema
 from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
     SerializableDataClass,
@@ -866,7 +866,13 @@ def load_prompt(
             },
         )
         response = _state.log_conn().get_json("/v1/prompt", args)
-        resp_prompt = response[0]
+        if "objects" not in response or len(response["objects"]) == 0:
+            raise ValueError(f"Prompt {slug} not found in project {project}.")
+        elif len(response["objects"]) > 1:
+            raise ValueError(
+                f"Multiple prompts found with slug {slug} in project {project}. This should never happen."
+            )
+        resp_prompt = response["objects"][0]
         return PromptSchema.from_dict_deep(resp_prompt)
 
     return Prompt(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), no_trace=no_trace)
@@ -2236,7 +2242,10 @@ class Prompt(Mapping):
         :returns: The rendered prompt. This can be passed as kwargs to the OpenAI client.
         """
 
-        ret = {**self.options}
+        ret = {
+            **{k: v for (k, v) in self.options.get("params", {}).items() if k not in BRAINTRUST_PARAMS},
+            **({"model": self.options["model"]} if "model" in self.options else {}),
+        }
 
         if not self.no_trace:
             ret["span_info"] = {
