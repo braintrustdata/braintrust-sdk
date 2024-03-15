@@ -1979,7 +1979,7 @@ class SpanImpl(Span):
         )
 
     def start_span(
-        self, type=type, name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event
+        self, name=None, type=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event
     ):
         # If we created this span with a parent_id reference, we must continue
         # using parent_ids all the way down, since we don't have a root_span_id
