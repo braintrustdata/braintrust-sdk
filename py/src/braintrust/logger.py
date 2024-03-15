@@ -1,3 +1,4 @@
+import abc
 import atexit
 import concurrent.futures
 import contextvars
@@ -19,6 +20,7 @@ from functools import partial, wraps
 from multiprocessing import cpu_count
 from typing import Any, Dict, Optional, Union
 
+import chevron
 import exceptiongroup
 import requests
 from braintrust_core.bt_json import bt_dumps
@@ -33,6 +35,7 @@ from braintrust_core.db_fields import (
 from braintrust_core.git_fields import GitMetadataSettings, RepoInfo
 from braintrust_core.merge_row_batch import batch_items, merge_row_batch
 from braintrust_core.object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
+from braintrust_core.prompt import BRAINTRUST_PARAMS, PromptSchema
 from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
     SerializableDataClass,
@@ -55,6 +58,7 @@ from .util import (
 )
 
 Metadata = Dict[str, Any]
+DATA_API_VERSION = 2
 
 
 class Span(ABC):
@@ -340,7 +344,7 @@ def construct_json_array(items):
 
 def construct_logs3_data(items):
     rowsS = construct_json_array(items)
-    return '{"rows": ' + rowsS + ', "api_version": 2}'
+    return '{"rows": ' + rowsS + ', "api_version": ' + str(DATA_API_VERSION) + "}"
 
 
 def _check_json_serializable(event):
@@ -833,6 +837,54 @@ def init_logger(
     return ret
 
 
+def load_prompt(
+    project: Optional[str] = None,
+    slug: Optional[str] = None,
+    version: Optional[Union[str, int]] = None,
+    no_trace: bool = False,
+    app_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    org_name: Optional[str] = None,
+    project_id: Optional[str] = None,
+):
+    """
+    Loads a prompt from the specified project.
+
+    :param project: The name of the project to load the prompt from. Must specify at least one of `project` or `project_id`.
+    :param slug: The slug of the prompt to load.
+    :param version: An optional version of the prompt (to read). If not specified, the latest version will be used.
+    :param no_trace: If true, do not include logging metadata for this prompt when render() is called.
+    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
+    :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
+    key is specified, will prompt the user to login.
+    :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+    :param project_id: The id of the project to load the prompt from. This takes precedence over `project` if specified.
+    :returns: The prompt object.
+    """
+
+    def compute_metadata():
+        login(org_name=org_name, api_key=api_key, app_url=app_url)
+        args = _populate_args(
+            {
+                "project_name": project,
+                "project_id": project_id,
+                "slug": slug,
+                "version": version,
+            },
+        )
+        response = _state.log_conn().get_json("/v1/prompt", args)
+        if "objects" not in response or len(response["objects"]) == 0:
+            raise ValueError(f"Prompt {slug} not found in project {project}.")
+        elif len(response["objects"]) > 1:
+            raise ValueError(
+                f"Multiple prompts found with slug {slug} in project {project}. This should never happen."
+            )
+        resp_prompt = response["objects"][0]
+        return PromptSchema.from_dict_deep(resp_prompt)
+
+    return Prompt(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), no_trace=no_trace)
+
+
 login_lock = threading.RLock()
 
 
@@ -1254,7 +1306,15 @@ class ObjectIterator:
 class ObjectFetcher:
     def __init__(self, object_type, pinned_version=None, mutate_record=None):
         self.object_type = object_type
-        self._pinned_version = pinned_version
+
+        if pinned_version is not None:
+            try:
+                pv = int(pinned_version)
+                assert pv >= 0
+            except (ValueError, AssertionError):
+                raise ValueError(f"version ({pinned_version}) must be a positive integer")
+
+        self._pinned_version = str(pinned_version) if pinned_version is not None else None
         self._mutate_record = mutate_record
 
         self._fetched_data = None
@@ -1292,7 +1352,12 @@ class ObjectFetcher:
             try:
                 resp = state.log_conn().get(
                     f"object3/{self.object_type}",
-                    params={"id": self.id, "fmt": "json2", "version": self._pinned_version, "api_version": 2},
+                    params={
+                        "id": self.id,
+                        "fmt": "json2",
+                        "version": self._pinned_version,
+                        "api_version": DATA_API_VERSION,
+                    },
                 )
                 response_raise_for_status(resp)
                 data = resp.json()
@@ -1958,20 +2023,12 @@ class Dataset(ObjectFetcher):
 
         self._lazy_metadata = lazy_metadata
         self.new_records = 0
-        self._fetched_data = None
-        self._pinned_version = None
-        if version is not None:
-            try:
-                self._pinned_version = int(version)
-                assert self._pinned_version >= 0
-            except (ValueError, AssertionError):
-                raise ValueError(f"version ({version}) must be a positive integer")
 
         def compute_log_conn():
             return self._get_state().log_conn()
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
-        ObjectFetcher.__init__(self, object_type="dataset", pinned_version=None, mutate_record=mutate_record)
+        ObjectFetcher.__init__(self, object_type="dataset", pinned_version=version, mutate_record=mutate_record)
 
     @property
     def id(self):
@@ -2130,6 +2187,120 @@ class Dataset(ObjectFetcher):
 
     def __exit__(self, type, value, callback):
         del type, value, callback
+
+
+class Prompt:
+    """
+    A prompt object consists of prompt text, a model, and model parameters (such as temperature), which
+    can be used to generate completions or chat messages. The prompt object supports calling `.build()`
+    which uses mustache templating to render the prompt with the given formatting options and returns a
+    plain dictionary that includes the rendered prompt and arguments. The dictionary can be passed as
+    kwargs to the OpenAI client or modified as you see fit.
+
+    You should not create `Prompt` objects directly. Instead, use the `braintrust.load_prompt()` method.
+    """
+
+    def __init__(
+        self,
+        lazy_metadata: LazyValue[PromptSchema],
+        no_trace: bool,
+    ):
+        self._lazy_metadata = lazy_metadata
+        self.no_trace = no_trace
+
+    @property
+    def id(self):
+        return self._lazy_metadata.get().id
+
+    @property
+    def name(self):
+        return self._lazy_metadata.get().name
+
+    @property
+    def slug(self):
+        return self._lazy_metadata.get().slug
+
+    @property
+    def prompt(self):
+        return self._lazy_metadata.get().prompt_data.prompt
+
+    @property
+    def version(self):
+        return self._lazy_metadata.get()._xact_id
+
+    @property
+    def options(self):
+        return self._lazy_metadata.get().prompt_data.options or {}
+
+    # Capture all metadata attributes which aren't covered by existing methods.
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._lazy_metadata.get(), name)
+
+    def build(self, **build_args):
+        """
+        Build the prompt with the given formatting options. The args you pass in will
+        be forwarded to the mustache template that defines the prompt and rendered with
+        the `chevron` library.
+
+        :returns: A dictionary that includes the rendered prompt and arguments, that can be passed as kwargs to the OpenAI client.
+        """
+
+        ret = {
+            **{k: v for (k, v) in self.options.get("params", {}).items() if k not in BRAINTRUST_PARAMS},
+            **({"model": self.options["model"]} if "model" in self.options else {}),
+        }
+
+        if not self.no_trace:
+            ret["span_info"] = {
+                "metadata": {
+                    "prompt": {
+                        "variables": build_args,
+                        "id": self.id,
+                        "project_id": self.project_id,
+                        "version": self.version,
+                    },
+                }
+            }
+
+        if self.prompt.type == "completion":
+            ret["prompt"] = chevron.render(self.prompt.prompt, data=build_args)
+        elif self.prompt.type == "chat":
+            ret["messages"] = [
+                {
+                    **{k: v for (k, v) in m.as_dict().items() if v is not None},
+                    "content": chevron.render(m.content, data=build_args),
+                }
+                for m in self.prompt.messages
+            ]
+            ret["tools"] = (
+                [json.loads(chevron.render(self.prompt.tools, data=build_args))]
+                if self.prompt.tools is not None
+                else None
+            )
+
+        return ret
+
+    def __iter__(self):
+        meta_keys = list(self.options.keys())
+        if self.prompt.type == "completion":
+            meta_keys.append("prompt")
+        else:
+            meta_keys.append("chat", "tools")
+
+        return meta_keys
+
+    def __len__(self):
+        return len(self.__iter__())
+
+    def __getitem__(self, x):
+        if x == "prompt":
+            return self.prompt.prompt
+        elif x == "chat":
+            return self.prompt.messages
+        elif x == "tools":
+            return self.prompt.tools
+        else:
+            return self.options[x]
 
 
 class Project:

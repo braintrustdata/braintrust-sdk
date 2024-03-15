@@ -1,6 +1,7 @@
 import time
 
 from braintrust_core.span_types import SpanTypeAttribute
+from braintrust_core.util import merge_dicts
 
 from .logger import start_span
 
@@ -24,6 +25,7 @@ class ChatCompletionWrapper:
 
         span = start_span(name="OpenAI Chat Completion", span_attributes={"type": SpanTypeAttribute.LLM}, **params)
         should_end = True
+
         try:
             start = time.time()
             raw_response = self.create_fn(*args, **kwargs)
@@ -70,6 +72,7 @@ class ChatCompletionWrapper:
 
         span = start_span(name="OpenAI Chat Completion", span_attributes={"type": SpanTypeAttribute.LLM}, **params)
         should_end = True
+
         try:
             start = time.time()
             raw_response = await self.acreate_fn(*args, **kwargs)
@@ -112,12 +115,21 @@ class ChatCompletionWrapper:
 
     @classmethod
     def _parse_params(cls, params):
+        # First, destructively remove span_info
+        ret = params.pop("span_info", {})
+
+        # Then, copy the rest of the params
         params = {**params}
         messages = params.pop("messages", None)
-        return {
-            "input": messages,
-            "metadata": params,
-        }
+        merge_dicts(
+            ret,
+            {
+                "input": messages,
+                "metadata": params,
+            },
+        )
+
+        return ret
 
 
 class EmbeddingWrapper:
@@ -161,12 +173,21 @@ class EmbeddingWrapper:
 
     @classmethod
     def _parse_params(cls, params):
+        # First, destructively remove span_info
+        ret = params.pop("span_info", {})
+
         params = {**params}
         input = params.pop("input", None)
-        return {
-            "input": input,
-            "metadata": params,
-        }
+
+        merge_dicts(
+            ret,
+            {
+                "input": input,
+                "metadata": params,
+            },
+        )
+
+        return ret
 
 
 class ChatCompletionV0Wrapper(NamedWrapper):
