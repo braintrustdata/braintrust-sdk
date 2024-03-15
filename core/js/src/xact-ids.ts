@@ -12,7 +12,7 @@ function modularMultiply(value: bigint, prime: bigint) {
 export function prettifyXact(valueString: TransactionId): string {
   const value = BigInt(valueString);
   const encoded = modularMultiply(value, COPRIME);
-  return encoded.toString(16).padStart(12, "0");
+  return encoded.toString(16).padStart(16, "0");
 }
 
 export function loadPrettyXact(encodedHex: string): TransactionId {

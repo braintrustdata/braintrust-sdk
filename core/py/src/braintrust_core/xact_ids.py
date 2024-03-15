@@ -11,7 +11,7 @@ def modular_multiply(value: int, prime: int):
 
 def prettify_xact(value: int | str) -> str:
     encoded = modular_multiply(int(value), COPRIME)
-    return hex(encoded)[2:].rjust(12, "0")
+    return hex(encoded)[2:].rjust(16, "0")
 
 
 def load_pretty_xact(encoded_hex: str) -> str:
