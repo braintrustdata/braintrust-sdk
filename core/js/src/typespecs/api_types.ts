@@ -289,7 +289,7 @@ export const fetchEventsRequestSchema = z
   .strict()
   .openapi("FetchEventsRequest");
 
-export function makeFetchEventsResponseSchema<T extends z.AnyZodObject>(
+function makeFetchEventsResponseSchema<T extends z.AnyZodObject>(
   objectType: ObjectType,
   eventSchema: T
 ) {
