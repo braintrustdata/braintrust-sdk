@@ -2189,20 +2189,15 @@ class Dataset(ObjectFetcher):
         del type, value, callback
 
 
-class Mapping(abc.ABC):
-    def __iter__(self):
-        ...
-
-    def __len__(self):
-        ...
-
-    def __getitem__(self, x):
-        ...
-
-
-class Prompt(Mapping):
+class Prompt:
     """
-    TODO
+    A prompt object consists of prompt text, a model, and model parameters (such as temperature), which
+    can be used to generate completions or chat messages. The prompt object supports calling `.build()`
+    which uses mustache templating to render the prompt with the given formatting options and returns a
+    plain dictionary that includes the rendered prompt and arguments. The dictionary can be passed as
+    kwargs to the OpenAI client or modified as you see fit.
+
+    You should not create `Prompt` objects directly. Instead, use the `braintrust.load_prompt()` method.
     """
 
     def __init__(
