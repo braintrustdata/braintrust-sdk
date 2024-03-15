@@ -1,6 +1,7 @@
 import { SpanTypeAttribute } from "@braintrust/core";
-import { Span, startSpan, traced } from "./logger";
+import { CompiledPrompt, Span, startSpan, traced } from "./logger";
 import { getCurrentUnixTimestamp } from "./util";
+import { mergeDicts } from "@braintrust/core/src/util";
 
 interface BetaLike {
   chat: {
@@ -118,10 +119,14 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
   return proxy;
 }
 
+type SpanInfo = {
+  span_info?: CompiledPrompt<true>["span_info"];
+};
+
 type ChatParams = {
   messages: unknown;
   stream?: boolean | null;
-};
+} & SpanInfo;
 
 interface NonStreamingChatResponse {
   choices: any[];
@@ -191,18 +196,21 @@ function wrapChatCompletion<
   completion: (params: P, options?: unknown) => Promise<C>
 ): (params: P, options?: unknown) => Promise<any> {
   return async (params: P, options?: unknown) => {
-    const { messages, ...rest } = params;
+    const { messages, span_info, ...rest } = params;
     const span = startSpan({
       name: "OpenAI Chat Completion",
       spanAttributes: {
         type: SpanTypeAttribute.LLM,
       },
-      event: {
-        input: messages,
-        metadata: {
-          ...rest,
+      event: mergeDicts(
+        {
+          input: messages,
+          metadata: {
+            ...rest,
+          },
         },
-      },
+        span_info || {}
+      ),
     });
     if (params.stream) {
       const startTime = getCurrentUnixTimestamp();
@@ -239,7 +247,7 @@ function wrapChatCompletion<
 
 type EmbeddingCreateParams = {
   input: string;
-};
+} & SpanInfo;
 
 type CreateEmbeddingResponse = {
   data: { embedding: Array<number> }[];
@@ -258,7 +266,7 @@ function wrapEmbeddings<
   create: (params: P, options?: unknown) => Promise<C>
 ): (params: P, options?: unknown) => Promise<any> {
   return async (params: P, options?: unknown) => {
-    const { input, ...rest } = params;
+    const { input, span_info, ...rest } = params;
     return traced(
       async (span) => {
         const result = await create(params, options);
@@ -280,12 +288,15 @@ function wrapEmbeddings<
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
         },
-        event: {
-          input,
-          metadata: {
-            ...rest,
+        event: mergeDicts(
+          {
+            input,
+            metadata: {
+              ...rest,
+            },
           },
-        },
+          span_info || {}
+        ),
       }
     );
   };
