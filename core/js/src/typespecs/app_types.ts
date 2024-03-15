@@ -12,10 +12,10 @@ import { promptDataSchema } from "./prompt";
 
 function generateBaseTableSchema(
   objectName: string,
-  opts?: { underProject?: boolean }
+  opts?: { uniqueName?: boolean }
 ) {
   let nameDescription = `Name of the ${objectName}`;
-  if (opts?.underProject) {
+  if (opts?.uniqueName) {
     nameDescription += `. Within a project, ${objectName} names are unique`;
   }
 
@@ -143,7 +143,7 @@ export const projectSchema = z
 export type Project = z.infer<typeof projectSchema>;
 
 const datasetBaseSchema = generateBaseTableSchema("dataset", {
-  underProject: true,
+  uniqueName: true,
 });
 export const datasetSchema = z
   .object({
@@ -159,14 +159,17 @@ export const datasetSchema = z
   .openapi("Dataset");
 export type Dataset = z.infer<typeof datasetSchema>;
 
+const promptBaseSchema = generateBaseTableSchema("prompt");
 export const promptSchema = z.object({
-  id: z.string().uuid(),
-  project_id: z.string().uuid(),
-  name: z.string(),
-  slug: z.string(),
-  description: z.string().nullish(),
-  prompt_data: promptDataSchema.nullish(),
-  tags: z.array(z.string()).nullish(),
+  id: promptBaseSchema.shape.id,
+  project_id: promptBaseSchema.shape.project_id,
+  name: promptBaseSchema.shape.name,
+  slug: z.string().describe("Unique identifier for the prompt"),
+  description: promptBaseSchema.shape.description,
+  prompt_data: promptDataSchema
+    .nullish()
+    .describe("The prompt, model, and its parameters"),
+  tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
 });
 
 const repoInfoSchema = z
@@ -212,7 +215,7 @@ const repoInfoSchema = z
   .openapi("RepoInfo");
 
 const experimentBaseSchema = generateBaseTableSchema("experiment", {
-  underProject: true,
+  uniqueName: true,
 });
 export const experimentSchema = z
   .object({
@@ -352,15 +355,8 @@ const patchDatasetSchema = createDatasetSchema
   .strict()
   .openapi("PatchDataset");
 
-const createPromptSchema = z
-  .object({
-    project_id: promptSchema.shape.project_id,
-    name: promptSchema.shape.name,
-    slug: promptSchema.shape.slug,
-    description: promptSchema.shape.description,
-    prompt_data: promptSchema.shape.prompt_data,
-    tags: promptSchema.shape.tags,
-  })
+const createPromptSchema = promptSchema
+  .omit({ id: true })
   .strict()
   .openapi("CreatePrompt");
 

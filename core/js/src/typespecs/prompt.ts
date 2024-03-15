@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const roleSchema = z.enum([
+export const messageRoleSchema = z.enum([
   "system",
   "user",
   "assistant",
@@ -8,7 +8,7 @@ export const roleSchema = z.enum([
   "tool",
   "model",
 ]);
-export type Role = z.infer<typeof roleSchema>;
+export type MessageRole = z.infer<typeof messageRoleSchema>;
 
 export const functionCallSchema = z.object({
   name: z.string(),
@@ -26,7 +26,7 @@ const toolCallSchema = z.object({
 
 export const messageSchema = z.object({
   content: z.string().default(""),
-  role: roleSchema,
+  role: messageRoleSchema,
   name: z.string().optional(),
   function_call: z.union([z.string(), functionCallSchema]).optional(),
   tool_calls: z.array(toolCallSchema).optional(),
@@ -35,7 +35,7 @@ export const messageSchema = z.object({
 export const promptBlockDataSchema = z.union([
   z.object({
     type: z.literal("completion"),
-    content: z.string().default(""),
+    content: z.string(),
   }),
   z.object({
     type: z.literal("chat"),
@@ -108,15 +108,17 @@ export const promptOptionsSchema = z.object({
 
 export type PromptOptions = z.infer<typeof promptOptionsSchema>;
 
-export const promptDataSchema = z.object({
-  prompt: promptBlockDataSchema.nullish(),
-  options: promptOptionsSchema.nullish(),
-  origin: z
-    .object({
-      prompt_id: z.string().optional(),
-      prompt_version: z.string().optional(),
-    })
-    .nullish(),
-});
+export const promptDataSchema = z
+  .object({
+    prompt: promptBlockDataSchema.nullish(),
+    options: promptOptionsSchema.nullish(),
+    origin: z
+      .object({
+        prompt_id: z.string().optional(),
+        prompt_version: z.string().optional(),
+      })
+      .nullish(),
+  })
+  .openapi("PromptData");
 
 export type PromptData = z.infer<typeof promptDataSchema>;
