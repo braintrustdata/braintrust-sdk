@@ -31,6 +31,7 @@ export const messageSchema = z.object({
   function_call: z.union([z.string(), functionCallSchema]).optional(),
   tool_calls: z.array(toolCallSchema).optional(),
 });
+export type Message = z.infer<typeof messageSchema>;
 
 export const promptBlockDataSchema = z.union([
   z.object({
@@ -71,6 +72,8 @@ const openAIModelParamsSchema = z.object({
     .optional(),
 });
 
+export type OpenAIModelParams = z.infer<typeof openAIModelParamsSchema>;
+
 const anthropicModelParamsSchema = z.object({
   max_tokens: z.number(),
   temperature: z.number(),
@@ -100,6 +103,14 @@ export const modelParamsSchema = braintrustModelParamsSchema.and(
 );
 
 export type ModelParams = z.infer<typeof modelParamsSchema>;
+
+const anyModelParamsSchema = openAIModelParamsSchema
+  .and(anthropicModelParamsSchema)
+  .and(googleModelParamsSchema)
+  .and(braintrustModelParamsSchema);
+
+export type AnyModelParam = z.infer<typeof anyModelParamsSchema>;
+
 export const promptOptionsSchema = z.object({
   model: z.string().optional(),
   params: modelParamsSchema.optional(),
