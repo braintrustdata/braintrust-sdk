@@ -133,3 +133,14 @@ export const promptDataSchema = z
   .openapi("PromptData");
 
 export type PromptData = z.infer<typeof promptDataSchema>;
+
+export const promptSchema = z.object({
+  id: z.string(),
+  _xact_id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  description: z.string().nullable(),
+  prompt_data: promptDataSchema,
+  tags: z.array(z.string()).nullable(),
+});
+export type Prompt = z.infer<typeof promptSchema>;

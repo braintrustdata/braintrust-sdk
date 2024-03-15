@@ -160,7 +160,7 @@ export const datasetSchema = z
 export type Dataset = z.infer<typeof datasetSchema>;
 
 const promptBaseSchema = generateBaseTableSchema("prompt");
-export const promptSchema = z.object({
+export const promptRowSchema = z.object({
   id: promptBaseSchema.shape.id,
   project_id: promptBaseSchema.shape.project_id,
   name: promptBaseSchema.shape.name,
@@ -355,17 +355,17 @@ const patchDatasetSchema = createDatasetSchema
   .strict()
   .openapi("PatchDataset");
 
-const createPromptSchema = promptSchema
+const createPromptSchema = promptRowSchema
   .omit({ id: true })
   .strict()
   .openapi("CreatePrompt");
 
 const patchPromptSchema = z
   .object({
-    name: promptSchema.shape.name.nullish(),
-    description: promptSchema.shape.description.nullish(),
-    prompt_data: promptSchema.shape.prompt_data.nullish(),
-    tags: promptSchema.shape.tags.nullish(),
+    name: promptRowSchema.shape.name.nullish(),
+    description: promptRowSchema.shape.description.nullish(),
+    prompt_data: promptRowSchema.shape.prompt_data.nullish(),
+    tags: promptRowSchema.shape.tags.nullish(),
   })
   .strict()
   .openapi("PatchPrompt");
@@ -391,6 +391,6 @@ export const objectSchemas = {
   prompt: {
     create: createPromptSchema,
     patch: patchPromptSchema,
-    object: promptSchema,
+    object: promptRowSchema,
   },
 };
