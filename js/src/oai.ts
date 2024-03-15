@@ -208,7 +208,9 @@ function wrapChatCompletion<
     if (params.stream) {
       const startTime = getCurrentUnixTimestamp();
       const ret = (await completion(params, options)) as StreamingChatResponse;
-      return new WrapperStream(span, startTime, ret);
+      const wrapperStream = new WrapperStream(span, startTime, ret.iterator());
+      ret.iterator = () => wrapperStream[Symbol.asyncIterator]();
+      return ret;
     } else {
       try {
         const ret = (await completion(

@@ -1,3 +1,4 @@
+import abc
 import atexit
 import concurrent.futures
 import contextvars
@@ -19,6 +20,7 @@ from functools import partial, wraps
 from multiprocessing import cpu_count
 from typing import Any, Dict, Optional, Union
 
+import chevron
 import exceptiongroup
 import requests
 from braintrust_core.bt_json import bt_dumps
@@ -26,12 +28,14 @@ from braintrust_core.db_fields import (
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
+    PARENT_ID_FIELD,
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
 from braintrust_core.git_fields import GitMetadataSettings, RepoInfo
-from braintrust_core.merge_row_batch import merge_row_batch
+from braintrust_core.merge_row_batch import batch_items, merge_row_batch
 from braintrust_core.object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
+from braintrust_core.prompt import BRAINTRUST_PARAMS, PromptSchema
 from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
     SerializableDataClass,
@@ -54,6 +58,7 @@ from .util import (
 )
 
 Metadata = Dict[str, Any]
+DATA_API_VERSION = 2
 
 
 class Span(ABC):
@@ -67,16 +72,6 @@ class Span(ABC):
     @abstractmethod
     def id(self) -> str:
         """Row ID of the span."""
-
-    @property
-    @abstractmethod
-    def span_id(self) -> str:
-        """Span ID of the span. This is used to link spans together."""
-
-    @property
-    @abstractmethod
-    def root_span_id(self) -> str:
-        """Span ID of the root span in the full trace."""
 
     @abstractmethod
     def log(self, **event):
@@ -144,14 +139,6 @@ class _NoopSpan(Span):
     def id(self):
         return ""
 
-    @property
-    def span_id(self):
-        return ""
-
-    @property
-    def root_span_id(self):
-        return ""
-
     def log(self, **event):
         pass
 
@@ -204,14 +191,14 @@ class BraintrustState:
         if not self._app_conn:
             if not self.app_url:
                 raise RuntimeError("Must initialize app_url before requesting app_conn")
-            self._app_conn = HTTPConnection(self.app_url)
+            self._app_conn = HTTPConnection(self.app_url, adapter=_http_adapter)
         return self._app_conn
 
     def log_conn(self):
         if not self._log_conn:
             if not self.log_url:
                 raise RuntimeError("Must initialize log_url before requesting log_conn")
-            self._log_conn = HTTPConnection(self.log_url)
+            self._log_conn = HTTPConnection(self.log_url, adapter=_http_adapter)
         return self._log_conn
 
     def user_info(self):
@@ -236,10 +223,34 @@ _internal_reset_global_state()
 _logger = logging.getLogger("braintrust")
 
 
+_http_adapter = None
+
+
+def set_http_adapter(adapter: HTTPAdapter):
+    """
+    Specify a custom HTTP adapter to use for all network requests. This is useful for setting custom retry policies, timeouts, etc.
+    Braintrust uses the `requests` library, so the adapter should be an instance of `requests.adapters.HTTPAdapter`.
+
+    :param adapter: The adapter to use.
+    """
+
+    global _http_adapter
+
+    _http_adapter = adapter
+
+    if _state._app_conn:
+        _state._app_conn._set_adapter(adapter=adapter)
+        _state._app_conn._reset()
+    if _state._log_conn:
+        _state._app_conn._set_adapter(adapter=adapter)
+        _state._log_conn._reset()
+
+
 class HTTPConnection:
-    def __init__(self, base_url):
+    def __init__(self, base_url, adapter=None):
         self.base_url = base_url
         self.token = None
+        self.adapter = adapter
 
         self._reset(total=0)
 
@@ -264,11 +275,17 @@ class HTTPConnection:
         self.token = token
         self._set_session_token()
 
+    def _set_adapter(self, adapter):
+        self.adapter = adapter
+
     def _reset(self, **retry_kwargs):
         self.session = requests.Session()
 
-        retry = Retry(**retry_kwargs)
-        adapter = HTTPAdapter(max_retries=retry)
+        adapter = self.adapter
+        if adapter is None:
+            retry = Retry(**retry_kwargs)
+            adapter = HTTPAdapter(max_retries=retry)
+
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
 
@@ -332,7 +349,7 @@ def construct_json_array(items):
 
 def construct_logs3_data(items):
     rowsS = construct_json_array(items)
-    return '{"rows": ' + rowsS + ', "api_version": 2}'
+    return '{"rows": ' + rowsS + ', "api_version": ' + str(DATA_API_VERSION) + "}"
 
 
 def _check_json_serializable(event):
@@ -443,40 +460,30 @@ class _BackgroundLogger:
             if len(all_items) == 0:
                 return
 
-            # Since the merged rows are guaranteed to refer to independent rows,
-            # publish order does not matter and we can flush all item batches
-            # concurrently.
-            post_promises = []
-            while True:
-                items = []
-                items_len = 0
-                while len(items) < batch_size and items_len < self.max_request_size / 2:
-                    if len(all_items) > 0:
-                        item = all_items.pop()
-                    else:
-                        break
-
-                    item_s = bt_dumps(item)
-                    items.append(item_s)
-                    items_len += len(item_s)
-
-                if len(items) == 0:
-                    break
-
+            # Construct batches of records to flush in parallel and in sequence.
+            all_items_str = [[bt_dumps(item) for item in bucket] for bucket in all_items]
+            batch_sets = batch_items(
+                items=all_items_str, batch_max_num_items=batch_size, batch_max_num_bytes=self.max_request_size / 2
+            )
+            for batch_set in batch_sets:
+                post_promises = []
                 try:
-                    post_promises.append(HTTP_REQUEST_THREAD_POOL.submit(self._submit_logs_request, items))
+                    post_promises = [
+                        HTTP_REQUEST_THREAD_POOL.submit(self._submit_logs_request, batch) for batch in batch_set
+                    ]
                 except RuntimeError:
-                    # If the thread pool has shut down, e.g. because the process is terminating, run the request the
-                    # old fashioned way.
-                    self._submit_logs_request(items)
+                    # If the thread pool has shut down, e.g. because the process
+                    # is terminating, run the requests the old fashioned way.
+                    for batch in batch_set:
+                        self._submit_logs_request(batch)
 
-            concurrent.futures.wait(post_promises)
-            # Raise any exceptions from the promises as one group.
-            post_promise_exceptions = [f.exception() for f in post_promises if f.exception() is not None]
-            if post_promise_exceptions:
-                raise exceptiongroup.ExceptionGroup(
-                    f"Encountered the following errors while logging:", post_promise_exceptions
-                )
+                concurrent.futures.wait(post_promises)
+                # Raise any exceptions from the promises as one group.
+                post_promise_exceptions = [f.exception() for f in post_promises if f.exception() is not None]
+                if post_promise_exceptions:
+                    raise exceptiongroup.ExceptionGroup(
+                        f"Encountered the following errors while logging:", post_promise_exceptions
+                    )
 
     def _unwrap_lazy_values(self, wrapped_items):
         for i in range(self.num_retries):
@@ -835,6 +842,54 @@ def init_logger(
     return ret
 
 
+def load_prompt(
+    project: Optional[str] = None,
+    slug: Optional[str] = None,
+    version: Optional[Union[str, int]] = None,
+    no_trace: bool = False,
+    app_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    org_name: Optional[str] = None,
+    project_id: Optional[str] = None,
+):
+    """
+    Loads a prompt from the specified project.
+
+    :param project: The name of the project to load the prompt from. Must specify at least one of `project` or `project_id`.
+    :param slug: The slug of the prompt to load.
+    :param version: An optional version of the prompt (to read). If not specified, the latest version will be used.
+    :param no_trace: If true, do not include logging metadata for this prompt when render() is called.
+    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
+    :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
+    key is specified, will prompt the user to login.
+    :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+    :param project_id: The id of the project to load the prompt from. This takes precedence over `project` if specified.
+    :returns: The prompt object.
+    """
+
+    def compute_metadata():
+        login(org_name=org_name, api_key=api_key, app_url=app_url)
+        args = _populate_args(
+            {
+                "project_name": project,
+                "project_id": project_id,
+                "slug": slug,
+                "version": version,
+            },
+        )
+        response = _state.log_conn().get_json("/v1/prompt", args)
+        if "objects" not in response or len(response["objects"]) == 0:
+            raise ValueError(f"Prompt {slug} not found in project {project}.")
+        elif len(response["objects"]) > 1:
+            raise ValueError(
+                f"Multiple prompts found with slug {slug} in project {project}. This should never happen."
+            )
+        resp_prompt = response["objects"][0]
+        return PromptSchema.from_dict_deep(resp_prompt)
+
+    return Prompt(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), no_trace=no_trace)
+
+
 login_lock = threading.RLock()
 
 
@@ -888,7 +943,9 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
 
         conn = None
         if api_key is not None:
-            resp = requests.post(_urljoin(_state.app_url, "/api/apikey/login"), json={"token": api_key})
+            app_conn = HTTPConnection(_state.app_url, adapter=_http_adapter)
+            app_conn.set_token(api_key)
+            resp = app_conn.post("api/apikey/login")
             if not resp.ok:
                 api_key_prefix = (
                     (" (" + api_key[:2] + "*" * (len(api_key) - 4) + api_key[-2:] + ")") if len(api_key) > 4 else ""
@@ -1263,7 +1320,15 @@ class ObjectIterator:
 class ObjectFetcher:
     def __init__(self, object_type, pinned_version=None, mutate_record=None):
         self.object_type = object_type
-        self._pinned_version = pinned_version
+
+        if pinned_version is not None:
+            try:
+                pv = int(pinned_version)
+                assert pv >= 0
+            except (ValueError, AssertionError):
+                raise ValueError(f"version ({pinned_version}) must be a positive integer")
+
+        self._pinned_version = str(pinned_version) if pinned_version is not None else None
         self._mutate_record = mutate_record
 
         self._fetched_data = None
@@ -1301,7 +1366,12 @@ class ObjectFetcher:
             try:
                 resp = state.log_conn().get(
                     f"object3/{self.object_type}",
-                    params={"id": self.id, "fmt": "json2", "version": self._pinned_version, "api_version": 2},
+                    params={
+                        "id": self.id,
+                        "fmt": "json2",
+                        "version": self._pinned_version,
+                        "api_version": DATA_API_VERSION,
+                    },
                 )
                 response_raise_for_status(resp)
                 data = resp.json()
@@ -1356,8 +1426,8 @@ class ParentSpanInfo:
 @dataclasses.dataclass
 class RowIds:
     id: str
-    span_id: str
-    root_span_id: str
+    span_id: Optional[str] = None
+    root_span_id: Optional[str] = None
     _parent_id: Optional[str] = None
 
 
@@ -1769,9 +1839,12 @@ class SpanImpl(Span):
         parent_ids: LazyValue[Union[ParentExperimentIds, ParentProjectLogIds]],
         bg_logger,
         parent_span_info: Optional[ParentSpanInfo] = None,
-        # This is similarly named, but semantically different than parent_span_info. parent_span_info
-        # very directly populates the span_parents field of the span, whereas parent_id is the plain-old
-        # id field of the parent span, and is resolved on the server, not in the SDK.
+        # This is similarly named, but semantically different than
+        # parent_span_info. parent_span_info very directly populates the
+        # span_parents field of the span, whereas parent_id is the plain-old id
+        # field of the parent span, and is resolved on the server, not in the
+        # SDK. Note that once we initialize a Span with `parent_id`, we cannot
+        # directly populate the parent info for any nested spans.
         parent_id=None,
         name=None,
         type=None,
@@ -1824,18 +1897,19 @@ class SpanImpl(Span):
         id = event.get("id", None)
         if id is None:
             id = str(uuid.uuid4())
-        span_id = str(uuid.uuid4())
-        self.row_ids = RowIds(
-            id=id, span_id=span_id, root_span_id=parent_span_info.root_span_id if parent_span_info else span_id
-        )
+        self.row_ids = RowIds(id=id)
 
         if parent_span_info is not None and parent_id is not None:
             raise ValueError("Only one of parent_span_info and parent_id may be specified")
-
-        if parent_span_info:
-            self.internal_data.update(span_parents=[parent_span_info.span_id])
-        elif parent_id:
-            self.row_ids._parent_id = parent_id
+        if parent_id:
+            setattr(self.row_ids, PARENT_ID_FIELD, parent_id)
+        else:
+            self.row_ids.span_id = str(uuid.uuid4())
+            if parent_span_info:
+                self.row_ids.root_span_id = parent_span_info.root_span_id
+                self.internal_data.update(span_parents=[parent_span_info.span_id])
+            else:
+                self.row_ids.root_span_id = self.row_ids.span_id
 
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.
@@ -1847,6 +1921,7 @@ class SpanImpl(Span):
     def id(self):
         return self.row_ids.id
 
+    # Not part of the interface, but needed for some unit tests.
     @property
     def span_id(self):
         return self.row_ids.span_id
@@ -1865,10 +1940,11 @@ class SpanImpl(Span):
         sanitized_and_internal_data = {**self.internal_data}
         merge_dicts(sanitized_and_internal_data, sanitized)
         self.internal_data = {}
+
         # Validate the non-lazily-computed part of the record-to-log.
         partial_record = dict(
             **sanitized_and_internal_data,
-            **dataclasses.asdict(self.row_ids),
+            **{k: v for k, v in dataclasses.asdict(self.row_ids).items() if v is not None},
             **{IS_MERGE_FIELD: self._is_merge},
         )
 
@@ -1903,19 +1979,30 @@ class SpanImpl(Span):
         )
 
     def start_span(
-        self, name=None, type=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event
+        self, type=type, name=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event
     ):
+        # If we created this span with a parent_id reference, we must continue
+        # using parent_ids all the way down, since we don't have a root_span_id
+        # available. Otherwise, we can use direct parent info propagation.
+        if parent_id is None and getattr(self.row_ids, PARENT_ID_FIELD) is not None:
+            parent_id = self.id
+        if parent_id is None:
+            assert self.row_ids.span_id is not None
+            assert self.row_ids.root_span_id is not None
+            parent_span_info = ParentSpanInfo(span_id=self.row_ids.span_id, root_span_id=self.row_ids.root_span_id)
+        else:
+            parent_span_info = None
         return SpanImpl(
             parent_object=self.parent_object,
             parent_ids=self.parent_ids,
             bg_logger=self.bg_logger,
-            parent_span_info=ParentSpanInfo(span_id=self.span_id, root_span_id=self.root_span_id),
+            parent_span_info=parent_span_info,
+            parent_id=parent_id,
             name=name,
             type=type,
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
-            parent_id=parent_id,
             event=event,
         )
 
@@ -1968,20 +2055,12 @@ class Dataset(ObjectFetcher):
 
         self._lazy_metadata = lazy_metadata
         self.new_records = 0
-        self._fetched_data = None
-        self._pinned_version = None
-        if version is not None:
-            try:
-                self._pinned_version = int(version)
-                assert self._pinned_version >= 0
-            except (ValueError, AssertionError):
-                raise ValueError(f"version ({version}) must be a positive integer")
 
         def compute_log_conn():
             return self._get_state().log_conn()
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
-        ObjectFetcher.__init__(self, object_type="dataset", pinned_version=None, mutate_record=mutate_record)
+        ObjectFetcher.__init__(self, object_type="dataset", pinned_version=version, mutate_record=mutate_record)
 
     @property
     def id(self):
@@ -2140,6 +2219,120 @@ class Dataset(ObjectFetcher):
 
     def __exit__(self, type, value, callback):
         del type, value, callback
+
+
+class Prompt:
+    """
+    A prompt object consists of prompt text, a model, and model parameters (such as temperature), which
+    can be used to generate completions or chat messages. The prompt object supports calling `.build()`
+    which uses mustache templating to render the prompt with the given formatting options and returns a
+    plain dictionary that includes the rendered prompt and arguments. The dictionary can be passed as
+    kwargs to the OpenAI client or modified as you see fit.
+
+    You should not create `Prompt` objects directly. Instead, use the `braintrust.load_prompt()` method.
+    """
+
+    def __init__(
+        self,
+        lazy_metadata: LazyValue[PromptSchema],
+        no_trace: bool,
+    ):
+        self._lazy_metadata = lazy_metadata
+        self.no_trace = no_trace
+
+    @property
+    def id(self):
+        return self._lazy_metadata.get().id
+
+    @property
+    def name(self):
+        return self._lazy_metadata.get().name
+
+    @property
+    def slug(self):
+        return self._lazy_metadata.get().slug
+
+    @property
+    def prompt(self):
+        return self._lazy_metadata.get().prompt_data.prompt
+
+    @property
+    def version(self):
+        return self._lazy_metadata.get()._xact_id
+
+    @property
+    def options(self):
+        return self._lazy_metadata.get().prompt_data.options or {}
+
+    # Capture all metadata attributes which aren't covered by existing methods.
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._lazy_metadata.get(), name)
+
+    def build(self, **build_args):
+        """
+        Build the prompt with the given formatting options. The args you pass in will
+        be forwarded to the mustache template that defines the prompt and rendered with
+        the `chevron` library.
+
+        :returns: A dictionary that includes the rendered prompt and arguments, that can be passed as kwargs to the OpenAI client.
+        """
+
+        ret = {
+            **{k: v for (k, v) in self.options.get("params", {}).items() if k not in BRAINTRUST_PARAMS},
+            **({"model": self.options["model"]} if "model" in self.options else {}),
+        }
+
+        if not self.no_trace:
+            ret["span_info"] = {
+                "metadata": {
+                    "prompt": {
+                        "variables": build_args,
+                        "id": self.id,
+                        "project_id": self.project_id,
+                        "version": self.version,
+                    },
+                }
+            }
+
+        if self.prompt.type == "completion":
+            ret["prompt"] = chevron.render(self.prompt.prompt, data=build_args)
+        elif self.prompt.type == "chat":
+            ret["messages"] = [
+                {
+                    **{k: v for (k, v) in m.as_dict().items() if v is not None},
+                    "content": chevron.render(m.content, data=build_args),
+                }
+                for m in self.prompt.messages
+            ]
+            ret["tools"] = (
+                [json.loads(chevron.render(self.prompt.tools, data=build_args))]
+                if self.prompt.tools is not None
+                else None
+            )
+
+        return ret
+
+    def __iter__(self):
+        meta_keys = list(self.options.keys())
+        if self.prompt.type == "completion":
+            meta_keys.append("prompt")
+        else:
+            meta_keys.append("chat", "tools")
+
+        return meta_keys
+
+    def __len__(self):
+        return len(self.__iter__())
+
+    def __getitem__(self, x):
+        if x == "prompt":
+            return self.prompt.prompt
+        elif x == "chat":
+            return self.prompt.messages
+        elif x == "tools":
+            return self.prompt.tools
+        else:
+            return self.options[x]
 
 
 class Project:

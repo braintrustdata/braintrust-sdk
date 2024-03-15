@@ -30,9 +30,9 @@ import {
   ensureDatasetRecord,
   makeLegacyEvent,
   constructJsonArray,
-  batchRecords,
   SpanTypeAttribute,
   SpanType,
+  batchItems,
 } from "@braintrust/core";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -73,16 +73,6 @@ export interface Span {
    * Row ID of the span.
    */
   id: string;
-
-  /**
-   * Span ID of the span. This is used to link spans together.
-   */
-  span_id: string;
-
-  /**
-   * Span ID of the root span in the full trace.
-   */
-  root_span_id: string;
 
   /**
    * Incrementally update the current span with new data. The event will be batched and uploaded behind the scenes.
@@ -153,14 +143,10 @@ export interface Span {
  */
 export class NoopSpan implements Span {
   public id: string;
-  public span_id: string;
-  public root_span_id: string;
   public kind: "span" = "span";
 
   constructor() {
     this.id = "";
-    this.span_id = "";
-    this.root_span_id = "";
   }
 
   public log(_: ExperimentLogPartialArgs) {}
@@ -802,18 +788,18 @@ class BackgroundLogger {
       return;
     }
 
-    // Since the merged rows are guaranteed to refer to independent rows,
-    // publish order does not matter and we can flush all item batches
-    // concurrently.
-    const postPromises: Promise<
-      { type: "success" } | { type: "error"; value: unknown }
-    >[] = [];
-    for (const batch of batchRecords(
-      allItems,
-      batchSize,
-      this.maxRequestSize
-    )) {
-      postPromises.push(
+    // Construct batches of records to flush in parallel and in sequence.
+    const allItemsStr = allItems.map((bucket) =>
+      bucket.map((item) => JSON.stringify(item))
+    );
+    const batchSets = batchItems({
+      items: allItemsStr,
+      batchMaxNumItems: batchSize,
+      batchMaxNumBytes: this.maxRequestSize / 2,
+    });
+
+    for (const batchSet of batchSets) {
+      const postPromises = batchSet.map((batch) =>
         (async () => {
           try {
             await this.submitLogsRequest(batch);
@@ -823,16 +809,16 @@ class BackgroundLogger {
           }
         })()
       );
-    }
-    const results = await Promise.all(postPromises);
-    const failingResultErrors = results
-      .map((r) => (r.type === "success" ? undefined : r.value))
-      .filter((r) => r !== undefined);
-    if (failingResultErrors.length) {
-      throw new AggregateError(
-        failingResultErrors,
-        `Encountered the following errors while logging:`
-      );
+      const results = await Promise.all(postPromises);
+      const failingResultErrors = results
+        .map((r) => (r.type === "success" ? undefined : r.value))
+        .filter((r) => r !== undefined);
+      if (failingResultErrors.length) {
+        throw new AggregateError(
+          failingResultErrors,
+          `Encountered the following errors while logging:`
+        );
+      }
     }
 
     // If more items were added while we were flushing, flush again
@@ -843,7 +829,7 @@ class BackgroundLogger {
 
   private async unwrapLazyValues(
     wrappedItems: LazyValue<BackgroundLogEvent>[]
-  ): Promise<BackgroundLogEvent[]> {
+  ): Promise<BackgroundLogEvent[][]> {
     for (let i = 0; i < this.numRetries; ++i) {
       try {
         const itemPromises = wrappedItems.map((x) => x.get());
@@ -2344,6 +2330,8 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
 
 let executionCounter = 0;
 
+type ParentSpanInfo = { span_id: string; root_span_id: string };
+
 /**
  * Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
  *
@@ -2364,8 +2352,8 @@ export class SpanImpl implements Span {
   private parentIds: LazyValue<ParentExperimentIds | ParentProjectLogIds>;
   private readonly rowIds: {
     id: string;
-    span_id: string;
-    root_span_id: string;
+    span_id?: string;
+    root_span_id?: string;
     [PARENT_ID_FIELD]?: string;
   };
 
@@ -2381,7 +2369,7 @@ export class SpanImpl implements Span {
     } & Omit<StartSpanArgs, "parentId"> &
       (
         | {
-            parentSpanInfo?: { span_id: string; root_span_id: string };
+            parentSpanInfo?: ParentSpanInfo;
           }
         | {
             parentId?: string;
@@ -2424,19 +2412,26 @@ export class SpanImpl implements Span {
     this.parentIds = args.parentIds;
 
     const id = args.event?.id ?? uuidv4();
-    const span_id = uuidv4();
-    this.rowIds = {
-      id,
-      span_id,
-      root_span_id:
-        "parentSpanInfo" in args && args.parentSpanInfo?.root_span_id
-          ? args.parentSpanInfo.root_span_id
-          : span_id,
-    };
-    if ("parentSpanInfo" in args && args.parentSpanInfo?.span_id) {
-      this.internalData.span_parents = [args.parentSpanInfo.span_id];
-    } else if ("parentId" in args && !isEmpty(args.parentId)) {
-      this.rowIds[PARENT_ID_FIELD] = args.parentId;
+    this.rowIds = { id };
+
+    const parentSpanInfo =
+      "parentSpanInfo" in args ? args.parentSpanInfo : undefined;
+    const parentId = "parentId" in args ? args.parentId : undefined;
+    if (parentSpanInfo && parentId) {
+      throw new Error(
+        "Only one of parentSpanInfo and parentId may be specified"
+      );
+    }
+    if (parentId) {
+      this.rowIds[PARENT_ID_FIELD] = parentId;
+    } else {
+      this.rowIds.span_id = uuidv4();
+      if (parentSpanInfo) {
+        this.rowIds.root_span_id = parentSpanInfo.root_span_id;
+        this.internalData.span_parents = [parentSpanInfo.span_id];
+      } else {
+        this.rowIds.root_span_id = this.rowIds.span_id;
+      }
     }
 
     // The first log is a replacement, but subsequent logs to the same span
@@ -2451,14 +2446,6 @@ export class SpanImpl implements Span {
     return this.rowIds.id;
   }
 
-  public get span_id(): string {
-    return this.rowIds.span_id;
-  }
-
-  public get root_span_id(): string {
-    return this.rowIds.root_span_id;
-  }
-
   public log(event: ExperimentLogPartialArgs): void {
     const sanitized = validateAndSanitizeExperimentLogPartialArgs(event);
     // There should be no overlap between the dictionaries being merged,
@@ -2467,14 +2454,6 @@ export class SpanImpl implements Span {
     let sanitizedAndInternalData = { ...this.internalData };
     mergeDicts(sanitizedAndInternalData, sanitized);
     this.internalData = {};
-    if (sanitizedAndInternalData.metrics?.end) {
-      this.loggedEndTime = sanitizedAndInternalData.metrics?.end as number;
-    }
-
-    const parentIds = new LazyValue(async () => {
-      const { kind, ...ids } = await this.parentIds.get();
-      return ids;
-    });
 
     if (
       sanitizedAndInternalData.tags &&
@@ -2484,22 +2463,29 @@ export class SpanImpl implements Span {
       throw new Error("Tags can only be logged to the root span");
     }
 
-    // We both check for serializability and round-trip
-    // `sanitizedAndInternalData` through JSON in order to create a "deep copy".
-    // This has the benefit of cutting out any reference to user objects when
-    // the object is logged asynchronously, so that in case the objects are
-    // modified, the logging is unaffected.
-    const serializedSanitizedAndInternalData = JSON.stringify(
-      sanitizedAndInternalData
-    );
-    sanitizedAndInternalData = JSON.parse(serializedSanitizedAndInternalData);
+    let partialRecord = {
+      ...sanitizedAndInternalData,
+      ...this.rowIds,
+      [IS_MERGE_FIELD]: this.isMerge,
+    };
+
+    if (partialRecord.metrics?.end) {
+      this.loggedEndTime = partialRecord.metrics?.end as number;
+    }
+
+    // We both check for serializability and round-trip `partialRecord` through
+    // JSON in order to create a "deep copy". This has the benefit of cutting
+    // out any reference to user objects when the object is logged
+    // asynchronously, so that in case the objects are modified, the logging is
+    // unaffected.
+    const serializedPartialRecord = JSON.stringify(partialRecord);
+    partialRecord = JSON.parse(serializedPartialRecord);
 
     const record = new LazyValue(async () => {
+      const { kind, ...parentIds } = await this.parentIds.get();
       return {
-        ...sanitizedAndInternalData,
-        ...this.rowIds,
-        ...(await parentIds.get()),
-        [IS_MERGE_FIELD]: this.isMerge,
+        ...partialRecord,
+        ...parentIds,
       };
     });
     this.bgLogger.log([record]);
@@ -2530,15 +2516,28 @@ export class SpanImpl implements Span {
     );
   }
 
-  public startSpan(args?: Omit<StartSpanArgs, "parent_id">): Span {
+  public startSpan(args?: StartSpanArgs): Span {
+    // If we created this span with a parent_id reference, we must continue
+    // using parent_ids all the way down, since we don't have a root_span_id
+    // available. Otherwise, we can use direct parent info propagation.
+    const parentId =
+      args?.parentId ?? (this.rowIds[PARENT_ID_FIELD] ? this.id : undefined);
+    const parentSpanInfo = ((): ParentSpanInfo | undefined => {
+      if (parentId) return undefined;
+      if (!(this.rowIds.span_id && this.rowIds.root_span_id)) {
+        throw new Error("Impossible");
+      }
+      return {
+        span_id: this.rowIds.span_id,
+        root_span_id: this.rowIds.root_span_id,
+      };
+    })();
     return new SpanImpl({
       parentObject: this.parentObject,
       parentIds: this.parentIds,
       bgLogger: this.bgLogger,
-      parentSpanInfo: {
-        span_id: this.rowIds.span_id,
-        root_span_id: this.rowIds.root_span_id,
-      },
+      parentSpanInfo,
+      parentId,
       ...args,
     });
   }

@@ -33,31 +33,10 @@ export function constructJsonArray(items: string[]) {
   return `[${items.join(",")}]`;
 }
 
-export const batchRecords = function* (
-  allItems: unknown[],
-  batchSize: number,
-  maxRequestSize: number
-) {
-  while (true) {
-    const items: string[] = [];
-    let itemsLen = 0;
-    while (items.length < batchSize && itemsLen < maxRequestSize / 2) {
-      let item = null;
-      if (allItems.length > 0) {
-        item = allItems.pop();
-      } else {
-        break;
-      }
-
-      const itemS = JSON.stringify(item);
-      items.push(itemS);
-      itemsLen += itemS.length;
-    }
-
-    if (items.length === 0) {
-      break;
-    }
-
-    yield items;
+export function mapAt<K, V>(m: Map<K, V>, k: K): V {
+  const ret = m.get(k);
+  if (ret === undefined) {
+    throw new Error(`Map does not contain key ${k}`);
   }
-};
+  return ret;
+}
