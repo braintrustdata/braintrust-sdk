@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { promptRowSchema } from "./app_types";
 
 export const messageRoleSchema = z.enum([
   "system",
@@ -134,13 +135,9 @@ export const promptDataSchema = z
 
 export type PromptData = z.infer<typeof promptDataSchema>;
 
-export const promptSchema = z.object({
-  id: z.string(),
-  _xact_id: z.string(),
-  name: z.string(),
-  slug: z.string(),
-  description: z.string().nullable(),
-  prompt_data: promptDataSchema,
-  tags: z.array(z.string()).nullable(),
-});
+export const promptSchema = promptRowSchema.omit({ project_id: true }).and(
+  z.object({
+    _xact_id: z.string(),
+  })
+);
 export type Prompt = z.infer<typeof promptSchema>;
