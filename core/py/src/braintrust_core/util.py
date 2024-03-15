@@ -2,7 +2,7 @@ import dataclasses
 import json
 import sys
 import urllib.parse
-from typing import Dict, Set, Tuple
+from typing import Dict, List, Set, Tuple, Union, get_origin
 
 
 # Taken from
@@ -26,6 +26,44 @@ class SerializableDataClass:
         is shallow and will not call from_dict() on nested objects."""
         fields = set(f.name for f in dataclasses.fields(cls))
         filtered = {k: v for k, v in d.items() if k in fields}
+        return cls(**filtered)
+
+    @classmethod
+    def from_dict_deep(cls, d: Dict):
+        """Deserialize the object from a dictionary. This method
+        is deep and will call from_dict_deep() on nested objects."""
+        fields = {f.name: f for f in dataclasses.fields(cls)}
+        filtered = {}
+        for k, v in d.items():
+            if k not in fields:
+                continue
+
+            if (
+                isinstance(v, dict)
+                and isinstance(fields[k].type, type)
+                and issubclass(fields[k].type, SerializableDataClass)
+            ):
+                filtered[k] = fields[k].type.from_dict_deep(v)
+            elif get_origin(fields[k].type) == Union:
+                for t in fields[k].type.__args__:
+                    if isinstance(t, type) and issubclass(t, SerializableDataClass):
+                        try:
+                            filtered[k] = t.from_dict_deep(v)
+                            break
+                        except TypeError:
+                            pass
+                else:
+                    filtered[k] = v
+            elif (
+                isinstance(v, list)
+                and get_origin(fields[k].type) == list
+                and len(fields[k].type.__args__) == 1
+                and isinstance(fields[k].type.__args__[0], type)
+                and issubclass(fields[k].type.__args__[0], SerializableDataClass)
+            ):
+                filtered[k] = [fields[k].type.__args__[0].from_dict_deep(i) for i in v]
+            else:
+                filtered[k] = v
         return cls(**filtered)
 
 

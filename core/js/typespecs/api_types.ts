@@ -13,7 +13,7 @@ import {
   ObjectType,
 } from "./common_types";
 import { customTypes } from "./custom_types";
-import { capitalize } from "../src/util";
+import { capitalize } from "../util";
 
 import {
   TRANSACTION_ID_FIELD,
@@ -22,9 +22,10 @@ import {
   MERGE_PATHS_FIELD,
   PARENT_ID_FIELD,
   VALID_SOURCES,
-} from "../src/db_fields";
+} from "../db_fields";
 
-import { SpanTypeAttribute } from "../src/span_types";
+import { SpanTypeAttribute } from "../span_types";
+import { promptDataSchema } from "./prompt";
 
 export const auditSourcesSchema = z.enum(VALID_SOURCES);
 
@@ -401,6 +402,26 @@ const projectLogsEventSchema = z
   .strict()
   .openapi("ProjectLogsEvent");
 
+const promptEventBaseSchema = generateBaseEventOpSchema("prompt");
+export const promptEventSchema = z
+  .object({
+    id: promptEventBaseSchema.shape.id,
+    [TRANSACTION_ID_FIELD]: promptEventBaseSchema.shape[TRANSACTION_ID_FIELD],
+    created: promptEventBaseSchema.shape.created,
+    org_id: projectSchema.shape.org_id,
+    project_id: projectSchema.shape.id,
+    log_id: z
+      .literal("p")
+      .describe("A literal 'p' which identifies the log as a prompt entry"),
+    name: z.string().describe("The name of the prompt"),
+    slug: z.string().describe("The slug of the prompt"),
+    description: z.string().describe("The description of the prompt"),
+    prompt_data: promptDataSchema.describe("The prompt and its parameters"),
+    tags: promptEventBaseSchema.shape.tags,
+  })
+  .strict()
+  .openapi("PromptEvent");
+
 // Section: inserting data objects.
 
 // Merge system control fields.
@@ -622,6 +643,22 @@ const feedbackProjectLogsRequestSchema = makeFeedbackRequestSchema(
   feedbackProjectLogsItemSchema
 );
 
+const feedbackPromptRequestBaseSchema =
+  generateBaseEventFeedbackSchema("prompt");
+const feedbackPromptItemSchema = z
+  .object({
+    id: feedbackPromptRequestBaseSchema.shape.id,
+    comment: feedbackPromptRequestBaseSchema.shape.comment,
+    metadata: feedbackPromptRequestBaseSchema.shape.metadata,
+    source: feedbackPromptRequestBaseSchema.shape.source,
+  })
+  .strict()
+  .openapi("FeedbackPromptItem");
+const feedbackPromptRequestSchema = makeFeedbackRequestSchema(
+  "prompt",
+  feedbackPromptItemSchema
+);
+
 // Section: exported schemas, grouped by object type.
 
 export const eventObjectSchemas = {
@@ -652,6 +689,13 @@ export const eventObjectSchemas = {
     feedbackItem: feedbackProjectLogsItemSchema,
     feedbackRequest: feedbackProjectLogsRequestSchema,
   },
+  prompt: {
+    fetchResponse: undefined,
+    insertEvent: undefined,
+    insertRequest: undefined,
+    feedbackItem: feedbackPromptItemSchema,
+    feedbackRequest: feedbackPromptRequestSchema,
+  },
 } as const;
 
 // Section: Cross-object operation schemas.
@@ -662,10 +706,14 @@ function makeCrossObjectIndividualRequestSchema(objectType: ObjectType) {
   const eventObjectSchema = eventObjectSchemas[eventObjectType];
   const insertObject = z
     .object({
-      events: eventObjectSchema.insertEvent
-        .array()
-        .nullish()
-        .describe(`A list of ${eventDescription} events to insert`),
+      ...(eventObjectSchema.insertEvent
+        ? {
+            events: eventObjectSchema.insertEvent
+              .array()
+              .nullish()
+              .describe(`A list of ${eventDescription} events to insert`),
+          }
+        : {}),
       feedback: eventObjectSchema.feedbackItem
         .array()
         .nullish()
@@ -694,6 +742,7 @@ export const crossObjectInsertRequestSchema = z
     experiment: makeCrossObjectIndividualRequestSchema("experiment"),
     dataset: makeCrossObjectIndividualRequestSchema("dataset"),
     project_logs: makeCrossObjectIndividualRequestSchema("project"),
+    prompt: makeCrossObjectIndividualRequestSchema("prompt"),
   })
   .strict()
   .openapi("CrossObjectInsertRequest");
@@ -703,6 +752,7 @@ export const crossObjectInsertResponseSchema = z
     experiment: makeCrossObjectIndividualResponseSchema("experiment"),
     dataset: makeCrossObjectIndividualResponseSchema("dataset"),
     project_logs: makeCrossObjectIndividualResponseSchema("project"),
+    prompt: makeCrossObjectIndividualResponseSchema("prompt"),
   })
   .strict()
   .openapi("CrossObjectInsertResponse");
@@ -846,4 +896,5 @@ export const objectTypeSummarizeResponseSchemas = {
   experiment: summarizeExperimentResponseSchema,
   dataset: summarizeDatasetResponseSchema,
   project: undefined,
+  prompt: undefined,
 } as const;

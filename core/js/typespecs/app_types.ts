@@ -6,15 +6,16 @@ extendZodWithOpenApi(z);
 
 import { datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
+import { promptDataSchema } from "./prompt";
 
 // Section: App DB table schemas
 
 function generateBaseTableSchema(
   objectName: string,
-  opts?: { underProject?: boolean }
+  opts?: { uniqueName?: boolean }
 ) {
   let nameDescription = `Name of the ${objectName}`;
-  if (opts?.underProject) {
+  if (opts?.uniqueName) {
     nameDescription += `. Within a project, ${objectName} names are unique`;
   }
 
@@ -142,7 +143,7 @@ export const projectSchema = z
 export type Project = z.infer<typeof projectSchema>;
 
 const datasetBaseSchema = generateBaseTableSchema("dataset", {
-  underProject: true,
+  uniqueName: true,
 });
 export const datasetSchema = z
   .object({
@@ -157,6 +158,19 @@ export const datasetSchema = z
   .strict()
   .openapi("Dataset");
 export type Dataset = z.infer<typeof datasetSchema>;
+
+const promptBaseSchema = generateBaseTableSchema("prompt");
+export const promptSchema = z.object({
+  id: promptBaseSchema.shape.id,
+  project_id: promptBaseSchema.shape.project_id,
+  name: promptBaseSchema.shape.name,
+  slug: z.string().describe("Unique identifier for the prompt"),
+  description: promptBaseSchema.shape.description,
+  prompt_data: promptDataSchema
+    .nullish()
+    .describe("The prompt, model, and its parameters"),
+  tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
+});
 
 const repoInfoSchema = z
   .object({
@@ -201,7 +215,7 @@ const repoInfoSchema = z
   .openapi("RepoInfo");
 
 const experimentBaseSchema = generateBaseTableSchema("experiment", {
-  underProject: true,
+  uniqueName: true,
 });
 export const experimentSchema = z
   .object({
@@ -341,6 +355,21 @@ const patchDatasetSchema = createDatasetSchema
   .strict()
   .openapi("PatchDataset");
 
+const createPromptSchema = promptSchema
+  .omit({ id: true })
+  .strict()
+  .openapi("CreatePrompt");
+
+const patchPromptSchema = z
+  .object({
+    name: promptSchema.shape.name.nullish(),
+    description: promptSchema.shape.description.nullish(),
+    prompt_data: promptSchema.shape.prompt_data.nullish(),
+    tags: promptSchema.shape.tags.nullish(),
+  })
+  .strict()
+  .openapi("PatchPrompt");
+
 // Section: exported schemas, grouped by object type.
 
 export const objectSchemas = {
@@ -358,5 +387,10 @@ export const objectSchemas = {
     create: createProjectSchema,
     patch: patchProjectSchema,
     object: projectSchema,
+  },
+  prompt: {
+    create: createPromptSchema,
+    patch: patchPromptSchema,
+    object: promptSchema,
   },
 };

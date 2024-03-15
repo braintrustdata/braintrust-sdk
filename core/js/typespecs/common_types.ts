@@ -15,7 +15,12 @@ export const jsonSchema: z.ZodType<Json> = z.lazy(() =>
 
 export const datetimeStringSchema = z.string().datetime({ offset: true });
 
-export const objectTypes = ["project", "experiment", "dataset"] as const;
+export const objectTypes = [
+  "project",
+  "experiment",
+  "dataset",
+  "prompt",
+] as const;
 export type ObjectType = typeof objectTypes[number];
 
 export function getEventObjectType(objectType: ObjectType) {
