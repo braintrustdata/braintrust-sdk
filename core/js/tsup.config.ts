@@ -8,13 +8,13 @@ export default defineConfig([
     dts: true,
   },
   {
-    entry: ["src/typespecs/index.ts"],
+    entry: ["typespecs/index.ts"],
     format: ["cjs", "esm"],
     outDir: "dist/typespecs",
     dts: true,
   },
   {
-    entry: ["src/typespecs/index.ts"],
+    entry: ["typespecs/index.ts"],
     format: ["cjs", "esm"],
     outDir: "dist/typespecs-stainless",
     dts: true,

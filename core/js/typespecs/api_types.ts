@@ -13,7 +13,7 @@ import {
   ObjectType,
 } from "./common_types";
 import { customTypes } from "./custom_types";
-import { capitalize } from "../util";
+import { capitalize } from "../src/util";
 
 import {
   TRANSACTION_ID_FIELD,
@@ -22,9 +22,9 @@ import {
   MERGE_PATHS_FIELD,
   PARENT_ID_FIELD,
   VALID_SOURCES,
-} from "../db_fields";
+} from "../src/db_fields";
 
-import { SpanTypeAttribute } from "../span_types";
+import { SpanTypeAttribute } from "../src/span_types";
 import { promptDataSchema } from "./prompt";
 
 export const auditSourcesSchema = z.enum(VALID_SOURCES);
