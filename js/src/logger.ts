@@ -37,6 +37,8 @@ import {
   Message,
   PromptData,
   PromptRow,
+  Tools,
+  toolsSchema,
 } from "@braintrust/core/typespecs";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -2824,7 +2826,7 @@ export type CompiledPrompt<IsChat extends boolean> = Omit<
 } & (IsChat extends true
     ? {
         messages: Message[];
-        tools: unknown[];
+        tools?: Tools;
       }
     : IsChat extends false
     ? {
@@ -2933,21 +2935,21 @@ export class Prompt {
         );
       }
 
-      const wtf = prompt.messages;
       const messages = (prompt.messages || []).map((m) => ({
         ...m,
-        content: Mustache.render(m.content, buildArgs),
+        ...("content" in m && typeof m.content === "string"
+          ? { content: Mustache.render(m.content, buildArgs) }
+          : {}),
       }));
 
       return {
         ...params,
         ...spanInfo,
-        messages: (prompt.messages || []).map((m) => ({
-          ...m,
-          content: Mustache.render(m.content, buildArgs),
-        })),
+        messages: messages,
         ...(prompt.tools
-          ? JSON.parse(Mustache.render(prompt.tools, buildArgs))
+          ? toolsSchema.parse(
+              JSON.parse(Mustache.render(prompt.tools, buildArgs))
+            )
           : undefined),
       } as CompiledPrompt<IsChat>;
     } else {
