@@ -25,7 +25,6 @@ import {
 } from "../src/db_fields";
 
 import { SpanTypeAttribute } from "../src/span_types";
-import { promptDataSchema } from "./prompt";
 
 export const auditSourcesSchema = z.enum(VALID_SOURCES);
 
