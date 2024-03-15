@@ -378,7 +378,7 @@ class HTTPConnection {
 
   async get_json(
     object_type: string,
-    args: Record<string, string> | undefined = undefined,
+    args: Record<string, string | undefined> | undefined = undefined,
     retries: number = 0
   ) {
     const tries = retries + 1;
@@ -1361,7 +1361,7 @@ export function initDataset<
   const lazyMetadata: LazyValue<ProjectDatasetMetadata> = new LazyValue(
     async () => {
       await login({
-        orgName: orgName,
+        orgName,
         apiKey,
         appUrl,
       });
@@ -1507,6 +1507,61 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
     _state.currentLogger = ret as Logger<false>;
   }
   return ret;
+}
+
+interface LoadPromptOptions {
+  projectName?: string;
+  projectId?: string;
+  slug?: string;
+  version?: string;
+  noTrace?: boolean;
+  appUrl?: string;
+  apiKey?: string;
+  orgName?: string;
+}
+
+export function loadPrompt({
+  projectName,
+  projectId,
+  slug,
+  version,
+  noTrace = false,
+  appUrl,
+  apiKey,
+  orgName,
+}: LoadPromptOptions) {
+  const lazyMetadata: LazyValue<PromptRow> = new LazyValue(async () => {
+    await login({
+      orgName,
+      apiKey,
+      appUrl,
+    });
+
+    const args: Record<string, string | undefined> = {
+      project_name: projectName,
+      project_id: projectId,
+      slug,
+      version,
+    };
+
+    const response = await _state.logConn().get_json("v1/prompt", args);
+
+    if (!("objects" in response) || response.objects.length === 0) {
+      throw new Error(
+        `Prompt ${slug} not found in ${[projectName ?? projectId]}`
+      );
+    } else if (response.objects.length > 1) {
+      throw new Error(
+        `Multiple prompts found with slug ${slug} in project ${
+          projectName ?? projectId
+        }. This should never happen.`
+      );
+    }
+
+    return response["objects"][0];
+  });
+
+  return new Prompt(lazyMetadata, noTrace);
 }
 
 /**
@@ -2752,7 +2807,7 @@ class Dataset<
   }
 }
 
-export type CompiledPrompt = Omit<
+export type CompiledPrompt<IsChat extends boolean> = Omit<
   NonNullable<PromptData["options"]>["params"],
   "use_cache"
 > & { model?: NonNullable<PromptData["options"]>["model"] } & {
@@ -2766,15 +2821,16 @@ export type CompiledPrompt = Omit<
       };
     };
   };
-} & (
-    | {
-        content: string;
-      }
-    | {
+} & (IsChat extends true
+    ? {
         messages: Message[];
         tools: unknown[];
       }
-  );
+    : IsChat extends false
+    ? {
+        content: string;
+      }
+    : {});
 
 export class Prompt {
   constructor(
@@ -2831,9 +2887,10 @@ export class Prompt {
    *
    * @param buildArgs Args to forward along to the prompt template.
    */
-  public async build(
-    buildArgs: Record<string, unknown>
-  ): Promise<CompiledPrompt> {
+  public async build<IsChat extends boolean>(
+    buildArgs: Record<string, unknown>,
+    isChat: IsChat
+  ): Promise<CompiledPrompt<IsChat>> {
     const options = await this.options;
     const params = {
       ...Object.fromEntries(
@@ -2864,27 +2921,46 @@ export class Prompt {
         };
 
     const prompt = await this.prompt;
-    const promptData = !prompt
-      ? {}
-      : prompt.type === "completion"
-      ? {
-          prompt: Mustache.render(prompt.content, buildArgs),
-        }
-      : {
-          messages: prompt.messages.map((m) => ({
-            ...m,
-            content: Mustache.render(m.content, buildArgs),
-          })),
-          ...(prompt.tools
-            ? JSON.parse(Mustache.render(prompt.tools, buildArgs))
-            : undefined),
-        };
 
-    return {
-      ...params,
-      ...spanInfo,
-      ...promptData,
-    };
+    if (!prompt) {
+      throw new Error("Empty prompt");
+    }
+
+    if (isChat) {
+      if (prompt.type !== "chat") {
+        throw new Error(
+          "Prompt is a completion prompt. Use buildCompletion() instead"
+        );
+      }
+
+      const wtf = prompt.messages;
+      const messages = (prompt.messages || []).map((m) => ({
+        ...m,
+        content: Mustache.render(m.content, buildArgs),
+      }));
+
+      return {
+        ...params,
+        ...spanInfo,
+        messages: (prompt.messages || []).map((m) => ({
+          ...m,
+          content: Mustache.render(m.content, buildArgs),
+        })),
+        ...(prompt.tools
+          ? JSON.parse(Mustache.render(prompt.tools, buildArgs))
+          : undefined),
+      } as CompiledPrompt<IsChat>;
+    } else {
+      if (prompt.type !== "completion") {
+        throw new Error("Prompt is a chat prompt. Use buildChat() instead");
+      }
+
+      return {
+        ...params,
+        ...spanInfo,
+        content: Mustache.render(prompt.content, buildArgs),
+      } as CompiledPrompt<IsChat>;
+    }
   }
 }
 

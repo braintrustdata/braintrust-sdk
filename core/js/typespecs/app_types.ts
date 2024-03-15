@@ -8,7 +8,6 @@ import { datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { generateBaseEventOpSchema } from "./api_types";
-import { TRANSACTION_ID_FIELD } from "@lib/db_fields";
 
 // Section: App DB table schemas
 
@@ -176,6 +175,13 @@ export const promptRowSchema = z.object({
   tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
 });
 export type PromptRow = z.infer<typeof promptRowSchema>;
+
+export const promptSchema = promptRowSchema.omit({ project_id: true }).and(
+  z.object({
+    _xact_id: z.string(),
+  })
+);
+export type Prompt = z.infer<typeof promptSchema>;
 
 const repoInfoSchema = z
   .object({

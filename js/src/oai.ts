@@ -1,7 +1,6 @@
 import { SpanTypeAttribute } from "@braintrust/core";
 import { Span, startSpan, traced } from "./logger";
 import { getCurrentUnixTimestamp } from "./util";
-import { RequestOptions } from "https";
 
 interface BetaLike {
   chat: {

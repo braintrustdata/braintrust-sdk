@@ -839,13 +839,13 @@ def init_logger(
 
 def load_prompt(
     project: Optional[str] = None,
+    project_id: Optional[str] = None,
     slug: Optional[str] = None,
     version: Optional[Union[str, int]] = None,
     no_trace: bool = False,
     app_url: Optional[str] = None,
     api_key: Optional[str] = None,
     org_name: Optional[str] = None,
-    project_id: Optional[str] = None,
 ):
     """
     Loads a prompt from the specified project.
@@ -874,10 +874,10 @@ def load_prompt(
         )
         response = _state.log_conn().get_json("/v1/prompt", args)
         if "objects" not in response or len(response["objects"]) == 0:
-            raise ValueError(f"Prompt {slug} not found in project {project}.")
+            raise ValueError(f"Prompt {slug} not found in project {project or project_id}.")
         elif len(response["objects"]) > 1:
             raise ValueError(
-                f"Multiple prompts found with slug {slug} in project {project}. This should never happen."
+                f"Multiple prompts found with slug {slug} in project {project or project_id}. This should never happen."
             )
         resp_prompt = response["objects"][0]
         return PromptSchema.from_dict_deep(resp_prompt)
@@ -2263,7 +2263,7 @@ class Prompt:
             }
 
         if not self.prompt:
-            pass
+            raise ValueError("Empty prompt")
         elif self.prompt.type == "completion":
             ret["prompt"] = chevron.render(self.prompt.prompt, data=build_args)
         elif self.prompt.type == "chat":
