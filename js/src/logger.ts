@@ -38,6 +38,7 @@ import {
   PromptData,
   PromptRow,
   Tools,
+  promptRowSchema,
   toolsSchema,
 } from "@braintrust/core/typespecs";
 
@@ -1522,7 +1523,7 @@ interface LoadPromptOptions {
   orgName?: string;
 }
 
-export function loadPrompt({
+export async function loadPrompt({
   projectName,
   projectId,
   slug,
@@ -1532,38 +1533,36 @@ export function loadPrompt({
   apiKey,
   orgName,
 }: LoadPromptOptions) {
-  const lazyMetadata: LazyValue<PromptRow> = new LazyValue(async () => {
-    await login({
-      orgName,
-      apiKey,
-      appUrl,
-    });
-
-    const args: Record<string, string | undefined> = {
-      project_name: projectName,
-      project_id: projectId,
-      slug,
-      version,
-    };
-
-    const response = await _state.logConn().get_json("v1/prompt", args);
-
-    if (!("objects" in response) || response.objects.length === 0) {
-      throw new Error(
-        `Prompt ${slug} not found in ${[projectName ?? projectId]}`
-      );
-    } else if (response.objects.length > 1) {
-      throw new Error(
-        `Multiple prompts found with slug ${slug} in project ${
-          projectName ?? projectId
-        }. This should never happen.`
-      );
-    }
-
-    return response["objects"][0];
+  await login({
+    orgName,
+    apiKey,
+    appUrl,
   });
 
-  return new Prompt(lazyMetadata, noTrace);
+  const args: Record<string, string | undefined> = {
+    project_name: projectName,
+    project_id: projectId,
+    slug,
+    version,
+  };
+
+  const response = await _state.logConn().get_json("v1/prompt", args);
+
+  if (!("objects" in response) || response.objects.length === 0) {
+    throw new Error(
+      `Prompt ${slug} not found in ${[projectName ?? projectId]}`
+    );
+  } else if (response.objects.length > 1) {
+    throw new Error(
+      `Multiple prompts found with slug ${slug} in project ${
+        projectName ?? projectId
+      }. This should never happen.`
+    );
+  }
+
+  const metadata = promptRowSchema.parse(response["objects"][0]);
+
+  return new Prompt(metadata, noTrace);
 }
 
 /**
@@ -2809,10 +2808,10 @@ class Dataset<
   }
 }
 
-export type CompiledPrompt<IsChat extends boolean> = Omit<
+export type CompiledPrompt<Flavor extends "chat" | "completion"> = Omit<
   NonNullable<PromptData["options"]>["params"],
   "use_cache"
-> & { model?: NonNullable<PromptData["options"]>["model"] } & {
+> & { model: NonNullable<NonNullable<PromptData["options"]>["model"]> } & {
   span_info?: {
     metadata: {
       prompt: {
@@ -2823,63 +2822,46 @@ export type CompiledPrompt<IsChat extends boolean> = Omit<
       };
     };
   };
-} & (IsChat extends true
+} & (Flavor extends "chat"
     ? {
         messages: Message[];
         tools?: Tools;
       }
-    : IsChat extends false
+    : Flavor extends "completion"
     ? {
         content: string;
       }
     : {});
 
 export class Prompt {
-  constructor(
-    private lazyMetadata: LazyValue<PromptRow>,
-    private noTrace: boolean
-  ) {}
+  constructor(private metadata: PromptRow, private noTrace: boolean) {}
 
-  public get id(): Promise<string> {
-    return (async () => {
-      return (await this.lazyMetadata.get()).id;
-    })();
+  public get id(): string {
+    return this.metadata.id;
   }
 
-  public get projectId(): Promise<string> {
-    return (async () => {
-      return (await this.lazyMetadata.get()).project_id;
-    })();
+  public get projectId(): string {
+    return this.metadata.project_id;
   }
 
-  public get name(): Promise<string> {
-    return (async () => {
-      return (await this.lazyMetadata.get()).name;
-    })();
+  public get name(): string {
+    return this.metadata.name;
   }
 
-  public get slug(): Promise<string> {
-    return (async () => {
-      return (await this.lazyMetadata.get()).slug;
-    })();
+  public get slug(): string {
+    return this.metadata.slug;
   }
 
-  public get prompt(): Promise<PromptData["prompt"]> {
-    return (async () => {
-      return (await this.lazyMetadata.get()).prompt_data?.prompt;
-    })();
+  public get prompt(): PromptData["prompt"] {
+    return this.metadata.prompt_data?.prompt;
   }
 
-  public get version(): Promise<TransactionId> {
-    return (async () => {
-      return (await this.lazyMetadata.get())[TRANSACTION_ID_FIELD];
-    })();
+  public get version(): TransactionId {
+    return this.metadata[TRANSACTION_ID_FIELD];
   }
 
-  public get options(): Promise<NonNullable<PromptData["options"]>> {
-    return (async () => {
-      return (await this.lazyMetadata.get()).prompt_data?.options || {};
-    })();
+  public get options(): NonNullable<PromptData["options"]> {
+    return this.metadata.prompt_data?.options || {};
   }
 
   /**
@@ -2889,20 +2871,37 @@ export class Prompt {
    *
    * @param buildArgs Args to forward along to the prompt template.
    */
-  public async build<IsChat extends boolean>(
+  public build<Flavor extends "chat" | "completion" = "chat">(
     buildArgs: Record<string, unknown>,
-    isChat: IsChat
-  ): Promise<CompiledPrompt<IsChat>> {
-    const options = await this.options;
+    options: {
+      fallbacks?: Partial<CompiledPrompt<NonNullable<Flavor>>>;
+      flavor?: Flavor;
+    } = {}
+  ): CompiledPrompt<Flavor> {
+    return this.runBuild(buildArgs, {
+      fallbacks: options.fallbacks,
+      flavor: options.flavor ?? "chat",
+    }) as CompiledPrompt<Flavor>;
+  }
+
+  private runBuild<Flavor extends "chat" | "completion">(
+    buildArgs: Record<string, unknown>,
+    options: {
+      fallbacks?: Partial<CompiledPrompt<Flavor>>;
+      flavor: Flavor;
+    }
+  ): CompiledPrompt<Flavor> {
+    const { fallbacks, flavor } = options;
+
     const params = {
       ...Object.fromEntries(
-        Object.entries(options.params || {}).filter(
+        Object.entries(this.options.params || {}).filter(
           ([k, v]) => !BRAINTRUST_PARAMS.includes(k)
         )
       ),
-      ...(!isEmpty(options.model)
+      ...(!isEmpty(this.options.model)
         ? {
-            model: options.model,
+            model: this.options.model,
           }
         : {}),
     };
@@ -2914,21 +2913,21 @@ export class Prompt {
             metadata: {
               prompt: {
                 variables: buildArgs,
-                id: await this.id,
-                project_id: await this.projectId,
-                version: await this.version,
+                id: this.id,
+                project_id: this.projectId,
+                version: this.version,
               },
             },
           },
         };
 
-    const prompt = await this.prompt;
+    const prompt = this.prompt;
 
     if (!prompt) {
       throw new Error("Empty prompt");
     }
 
-    if (isChat) {
+    if (flavor === "chat") {
       if (prompt.type !== "chat") {
         throw new Error(
           "Prompt is a completion prompt. Use buildCompletion() instead"
@@ -2951,8 +2950,8 @@ export class Prompt {
               JSON.parse(Mustache.render(prompt.tools, buildArgs))
             )
           : undefined),
-      } as CompiledPrompt<IsChat>;
-    } else {
+      } as CompiledPrompt<Flavor>;
+    } else if (flavor === "completion") {
       if (prompt.type !== "completion") {
         throw new Error("Prompt is a chat prompt. Use buildChat() instead");
       }
@@ -2961,7 +2960,9 @@ export class Prompt {
         ...params,
         ...spanInfo,
         content: Mustache.render(prompt.content, buildArgs),
-      } as CompiledPrompt<IsChat>;
+      } as CompiledPrompt<Flavor>;
+    } else {
+      throw new Error("never!");
     }
   }
 }

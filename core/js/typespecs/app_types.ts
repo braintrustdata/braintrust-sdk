@@ -7,7 +7,6 @@ extendZodWithOpenApi(z);
 import { datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
-import { generateBaseEventOpSchema } from "./api_types";
 
 // Section: App DB table schemas
 
@@ -161,10 +160,14 @@ export const datasetSchema = z
 export type Dataset = z.infer<typeof datasetSchema>;
 
 const promptBaseSchema = generateBaseTableSchema("prompt");
-const promptEventBaseSchema = generateBaseEventOpSchema("prompt");
 export const promptRowSchema = z.object({
   id: promptBaseSchema.shape.id,
-  _xact_id: promptEventBaseSchema.shape._xact_id,
+  // This has to be copy/pasted because zod blows up when there are circular dependencies
+  _xact_id: z
+    .string()
+    .describe(
+      `The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the prompt (see the \`version\` parameter)`
+    ),
   project_id: promptBaseSchema.shape.project_id,
   name: promptBaseSchema.shape.name,
   slug: z.string().describe("Unique identifier for the prompt"),

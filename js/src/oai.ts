@@ -120,7 +120,7 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
 }
 
 type SpanInfo = {
-  span_info?: CompiledPrompt<true>["span_info"];
+  span_info?: CompiledPrompt<"chat">["span_info"];
 };
 
 type ChatParams = {
