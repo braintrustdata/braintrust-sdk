@@ -28,7 +28,7 @@ import { SpanTypeAttribute } from "../src/span_types";
 
 export const auditSourcesSchema = z.enum(VALID_SOURCES);
 
-export function generateBaseEventOpSchema(objectType: ObjectType) {
+function generateBaseEventOpSchema(objectType: ObjectType) {
   const eventDescription = getEventObjectDescription(objectType);
   return z.object({
     id: z

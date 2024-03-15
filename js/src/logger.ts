@@ -2747,12 +2747,6 @@ class Dataset<
 
 export type AnyDataset = Dataset<boolean>;
 
-/*
-class Prompt {
-  private readonly lazyMetadata: LazyValue<Prompt>
-}
-*/
-
 /**
  * Summary of a score's performance.
  * @property name Name of the score.

@@ -7,8 +7,6 @@ extendZodWithOpenApi(z);
 import { datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
-import { generateBaseEventOpSchema } from "./api_types";
-import { TRANSACTION_ID_FIELD } from "@lib/db_fields";
 
 // Section: App DB table schemas
 
@@ -162,12 +160,10 @@ export const datasetSchema = z
 export type Dataset = z.infer<typeof datasetSchema>;
 
 const promptBaseSchema = generateBaseTableSchema("prompt");
-const promptEventBaseSchema = generateBaseEventOpSchema("prompt");
-export const promptSchema = z.object({
+export const promptRowSchema = z.object({
   id: promptBaseSchema.shape.id,
   project_id: promptBaseSchema.shape.project_id,
   name: promptBaseSchema.shape.name,
-  [TRANSACTION_ID_FIELD]: promptEventBaseSchema.shape[TRANSACTION_ID_FIELD],
   slug: z.string().describe("Unique identifier for the prompt"),
   description: promptBaseSchema.shape.description,
   prompt_data: promptDataSchema
@@ -359,17 +355,17 @@ const patchDatasetSchema = createDatasetSchema
   .strict()
   .openapi("PatchDataset");
 
-const createPromptSchema = promptSchema
+const createPromptSchema = promptRowSchema
   .omit({ id: true })
   .strict()
   .openapi("CreatePrompt");
 
 const patchPromptSchema = z
   .object({
-    name: promptSchema.shape.name.nullish(),
-    description: promptSchema.shape.description.nullish(),
-    prompt_data: promptSchema.shape.prompt_data.nullish(),
-    tags: promptSchema.shape.tags.nullish(),
+    name: promptRowSchema.shape.name.nullish(),
+    description: promptRowSchema.shape.description.nullish(),
+    prompt_data: promptRowSchema.shape.prompt_data.nullish(),
+    tags: promptRowSchema.shape.tags.nullish(),
   })
   .strict()
   .openapi("PatchPrompt");
@@ -395,6 +391,6 @@ export const objectSchemas = {
   prompt: {
     create: createPromptSchema,
     patch: patchPromptSchema,
-    object: promptSchema,
+    object: promptRowSchema,
   },
 };
