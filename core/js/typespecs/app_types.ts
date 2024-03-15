@@ -7,6 +7,8 @@ extendZodWithOpenApi(z);
 import { datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
+import { generateBaseEventOpSchema } from "./api_types";
+import { TRANSACTION_ID_FIELD } from "@lib/db_fields";
 
 // Section: App DB table schemas
 
@@ -160,8 +162,10 @@ export const datasetSchema = z
 export type Dataset = z.infer<typeof datasetSchema>;
 
 const promptBaseSchema = generateBaseTableSchema("prompt");
+const promptEventBaseSchema = generateBaseEventOpSchema("prompt");
 export const promptRowSchema = z.object({
   id: promptBaseSchema.shape.id,
+  _xact_id: promptEventBaseSchema.shape._xact_id,
   project_id: promptBaseSchema.shape.project_id,
   name: promptBaseSchema.shape.name,
   slug: z.string().describe("Unique identifier for the prompt"),
@@ -171,6 +175,7 @@ export const promptRowSchema = z.object({
     .describe("The prompt, model, and its parameters"),
   tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
 });
+export type PromptRow = z.infer<typeof promptRowSchema>;
 
 const repoInfoSchema = z
   .object({

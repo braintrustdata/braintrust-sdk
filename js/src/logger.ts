@@ -32,6 +32,7 @@ import {
   constructJsonArray,
   batchItems,
 } from "@braintrust/core";
+import { PromptData, PromptRow } from "@braintrust/core/typespecs";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
 import {
@@ -2742,6 +2743,49 @@ class Dataset<
       "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed"
     );
     return this.id;
+  }
+}
+
+export class Prompt {
+  constructor(
+    private lazyMetadata: LazyValue<PromptRow>,
+    private noTrace: boolean
+  ) {}
+
+  public get id(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata.get()).id;
+    })();
+  }
+
+  public get name(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata.get()).name;
+    })();
+  }
+
+  public get slug(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata.get()).slug;
+    })();
+  }
+
+  public get prompt(): Promise<PromptData["prompt"]> {
+    return (async () => {
+      return (await this.lazyMetadata.get()).prompt_data?.prompt;
+    })();
+  }
+
+  public get version(): Promise<TransactionId> {
+    return (async () => {
+      return (await this.lazyMetadata.get())[TRANSACTION_ID_FIELD];
+    })();
+  }
+
+  public get options(): Promise<PromptData["options"]> {
+    return (async () => {
+      return (await this.lazyMetadata.get()).prompt_data?.options || {};
+    })();
   }
 }
 
