@@ -52,6 +52,8 @@ const braintrustModelParamsSchema = z.object({
   use_cache: z.boolean().optional(),
 });
 
+export const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
+
 const openAIModelParamsSchema = z.object({
   temperature: z.number(),
   top_p: z.number().optional(),

@@ -2262,7 +2262,9 @@ class Prompt:
                 }
             }
 
-        if self.prompt.type == "completion":
+        if not self.prompt:
+            pass
+        elif self.prompt.type == "completion":
             ret["prompt"] = chevron.render(self.prompt.prompt, data=build_args)
         elif self.prompt.type == "chat":
             ret["messages"] = [

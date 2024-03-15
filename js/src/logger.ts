@@ -32,7 +32,12 @@ import {
   constructJsonArray,
   batchItems,
 } from "@braintrust/core";
-import { PromptData, PromptRow } from "@braintrust/core/typespecs";
+import {
+  BRAINTRUST_PARAMS,
+  Message,
+  PromptData,
+  PromptRow,
+} from "@braintrust/core/typespecs";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
 import {
@@ -42,6 +47,7 @@ import {
   isEmpty,
   LazyValue,
 } from "./util";
+import Mustache from "mustache";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -2746,6 +2752,30 @@ class Dataset<
   }
 }
 
+export type CompiledPrompt = Omit<
+  NonNullable<PromptData["options"]>["params"],
+  "use_cache"
+> & { model?: NonNullable<PromptData["options"]>["model"] } & {
+  span_info?: {
+    metadata: {
+      prompt: {
+        variables: Record<string, unknown>;
+        id: string;
+        project_id: string;
+        version: string;
+      };
+    };
+  };
+} & (
+    | {
+        content: string;
+      }
+    | {
+        messages: Message[];
+        tools: unknown[];
+      }
+  );
+
 export class Prompt {
   constructor(
     private lazyMetadata: LazyValue<PromptRow>,
@@ -2755,6 +2785,12 @@ export class Prompt {
   public get id(): Promise<string> {
     return (async () => {
       return (await this.lazyMetadata.get()).id;
+    })();
+  }
+
+  public get projectId(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata.get()).project_id;
     })();
   }
 
@@ -2782,10 +2818,73 @@ export class Prompt {
     })();
   }
 
-  public get options(): Promise<PromptData["options"]> {
+  public get options(): Promise<NonNullable<PromptData["options"]>> {
     return (async () => {
       return (await this.lazyMetadata.get()).prompt_data?.options || {};
     })();
+  }
+
+  /**
+   * Build the prompt with the given formatting options. The args you pass in will
+   * be forwarded to the mustache template that defines the prompt and rendered with
+   * the `mustache-js` library.
+   *
+   * @param buildArgs Args to forward along to the prompt template.
+   */
+  public async build(
+    buildArgs: Record<string, unknown>
+  ): Promise<CompiledPrompt> {
+    const options = await this.options;
+    const params = {
+      ...Object.fromEntries(
+        Object.entries(options.params || {}).filter(
+          ([k, v]) => !BRAINTRUST_PARAMS.includes(k)
+        )
+      ),
+      ...(!isEmpty(options.model)
+        ? {
+            model: options.model,
+          }
+        : {}),
+    };
+
+    const spanInfo = this.noTrace
+      ? {}
+      : {
+          span_info: {
+            metadata: {
+              prompt: {
+                variables: buildArgs,
+                id: await this.id,
+                project_id: await this.projectId,
+                version: await this.version,
+              },
+            },
+          },
+        };
+
+    const prompt = await this.prompt;
+    const promptData = !prompt
+      ? {}
+      : prompt.type === "completion"
+      ? {
+          prompt: Mustache.render(prompt.content, buildArgs),
+        }
+      : {
+          messages: prompt.messages.map((m) => ({
+            ...m,
+            content: Mustache.render(m.content, buildArgs),
+          })),
+          ...(prompt.tools
+            ? JSON.parse(Mustache.render(prompt.tools, buildArgs))
+            : undefined),
+        };
+
+    return {
+      ...params,
+      ...spanInfo,
+      ...promptData,
+    };
   }
 }
 
