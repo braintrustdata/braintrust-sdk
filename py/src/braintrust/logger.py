@@ -2257,6 +2257,9 @@ class Prompt:
             **({"model": self.options["model"]} if "model" in self.options else {}),
         }
 
+        if ret.get("model") is None:
+            raise ValueError("No model specified. Either specify it in the prompt or as a default")
+
         if not self.no_trace:
             ret["span_info"] = {
                 "metadata": {
@@ -2272,7 +2275,7 @@ class Prompt:
         if not self.prompt:
             raise ValueError("Empty prompt")
         elif self.prompt.type == "completion":
-            ret["prompt"] = chevron.render(self.prompt.prompt, data=build_args)
+            ret["prompt"] = chevron.render(self.prompt.content, data=build_args)
         elif self.prompt.type == "chat":
             ret["messages"] = [
                 {

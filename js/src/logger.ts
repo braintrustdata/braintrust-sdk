@@ -33,6 +33,7 @@ import {
   batchItems,
 } from "@braintrust/core";
 import {
+  AnyModelParam,
   BRAINTRUST_PARAMS,
   Message,
   PromptData,
@@ -2846,7 +2847,7 @@ export type ChatPrompt = {
   tools?: Tools;
 };
 export type CompletionPrompt = {
-  content: string;
+  prompt: string;
 };
 
 export type CompiledPrompt<Flavor extends "chat" | "completion"> =
@@ -2868,7 +2869,7 @@ export type CompiledPrompt<Flavor extends "chat" | "completion"> =
       : {});
 
 export type DefaultPromptArgs = Partial<
-  CompiledPromptParams & ChatPrompt & CompletionPrompt
+  CompiledPromptParams & AnyModelParam & ChatPrompt & CompletionPrompt
 >;
 
 export class Prompt {
@@ -2948,7 +2949,7 @@ export class Prompt {
 
     if (!("model" in params) || isEmpty(params.model)) {
       throw new Error(
-        "Model not specified. Either specify it in the prompt or as a fallback"
+        "No model specified. Either specify it in the prompt or as a default"
       );
     }
 
@@ -3005,7 +3006,7 @@ export class Prompt {
       return {
         ...params,
         ...spanInfo,
-        content: Mustache.render(prompt.content, buildArgs),
+        prompt: Mustache.render(prompt.content, buildArgs),
       } as CompiledPrompt<Flavor>;
     } else {
       throw new Error("never!");
