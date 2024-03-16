@@ -2894,6 +2894,7 @@ export class Prompt {
     const { fallbacks, flavor } = options;
 
     const params = {
+      ...fallbacks,
       ...Object.fromEntries(
         Object.entries(this.options.params || {}).filter(
           ([k, v]) => !BRAINTRUST_PARAMS.includes(k)
@@ -2905,6 +2906,13 @@ export class Prompt {
           }
         : {}),
     };
+
+    if (!("model" in params) || isEmpty(params.model)) {
+      throw new Error(
+        "Model not specified. Either specify it in the prompt or as a fallback"
+      );
+    }
+    console.log("MODEL", params.model);
 
     const spanInfo = this.noTrace
       ? {}
