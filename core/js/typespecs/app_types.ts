@@ -179,11 +179,7 @@ export const promptRowSchema = z.object({
 });
 export type PromptRow = z.infer<typeof promptRowSchema>;
 
-export const promptSchema = promptRowSchema.omit({ project_id: true }).and(
-  z.object({
-    _xact_id: z.string(),
-  })
-);
+export const promptSchema = promptRowSchema.omit({ project_id: true });
 export type Prompt = z.infer<typeof promptSchema>;
 
 const repoInfoSchema = z
@@ -370,7 +366,7 @@ const patchDatasetSchema = createDatasetSchema
   .openapi("PatchDataset");
 
 const createPromptSchema = promptRowSchema
-  .omit({ id: true })
+  .omit({ id: true, _xact_id: true })
   .strict()
   .openapi("CreatePrompt");
 
