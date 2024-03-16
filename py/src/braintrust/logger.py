@@ -842,6 +842,7 @@ def load_prompt(
     project_id: Optional[str] = None,
     slug: Optional[str] = None,
     version: Optional[Union[str, int]] = None,
+    defaults: Optional[Dict[str, Any]] = None,
     no_trace: bool = False,
     app_url: Optional[str] = None,
     api_key: Optional[str] = None,
@@ -853,7 +854,8 @@ def load_prompt(
     :param project: The name of the project to load the prompt from. Must specify at least one of `project` or `project_id`.
     :param slug: The slug of the prompt to load.
     :param version: An optional version of the prompt (to read). If not specified, the latest version will be used.
-    :param no_trace: If true, do not include logging metadata for this prompt when render() is called.
+    :param defaults: (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
+    :param no_trace: If true, do not include logging metadata for this prompt when build() is called.
     :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
@@ -882,7 +884,9 @@ def load_prompt(
         resp_prompt = response["objects"][0]
         return PromptSchema.from_dict_deep(resp_prompt)
 
-    return Prompt(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), no_trace=no_trace)
+    return Prompt(
+        lazy_metadata=LazyValue(compute_metadata, use_mutex=True), defaults=defaults or {}, no_trace=no_trace
+    )
 
 
 login_lock = threading.RLock()
@@ -2193,8 +2197,8 @@ class Prompt:
     """
     A prompt object consists of prompt text, a model, and model parameters (such as temperature), which
     can be used to generate completions or chat messages. The prompt object supports calling `.build()`
-    which uses mustache templating to render the prompt with the given formatting options and returns a
-    plain dictionary that includes the rendered prompt and arguments. The dictionary can be passed as
+    which uses mustache templating to build the prompt with the given formatting options and returns a
+    plain dictionary that includes the built prompt and arguments. The dictionary can be passed as
     kwargs to the OpenAI client or modified as you see fit.
 
     You should not create `Prompt` objects directly. Instead, use the `braintrust.load_prompt()` method.
@@ -2203,9 +2207,11 @@ class Prompt:
     def __init__(
         self,
         lazy_metadata: LazyValue[PromptSchema],
+        defaults: Dict[str, Any],
         no_trace: bool,
     ):
         self._lazy_metadata = lazy_metadata
+        self.defaults = defaults
         self.no_trace = no_trace
 
     @property
@@ -2246,6 +2252,7 @@ class Prompt:
         """
 
         ret = {
+            **self.defaults,
             **{k: v for (k, v) in self.options.get("params", {}).items() if k not in BRAINTRUST_PARAMS},
             **({"model": self.options["model"]} if "model" in self.options else {}),
         }

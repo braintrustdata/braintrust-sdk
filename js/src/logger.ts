@@ -1517,17 +1517,45 @@ interface LoadPromptOptions {
   projectId?: string;
   slug?: string;
   version?: string;
+  defaults?: DefaultPromptArgs;
   noTrace?: boolean;
   appUrl?: string;
   apiKey?: string;
   orgName?: string;
 }
 
+/**
+ * Load a prompt from the specified project.
+ *
+ * @param options Options for configuring loadPrompt().
+ * @param options.projectName The name of the project to load the prompt from. Must specify at least one of `projectName` or `projectId`.
+ * @param options.projectId The id of the project to load the prompt from. This takes precedence over `projectName` if specified.
+ * @param options.slug The slug of the prompt to load.
+ * @param options.version An optional version of the prompt (to read). If not specified, the latest version will be used.
+ * @param options.defaults (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
+ * @param options.noTrace If true, do not include logging metadata for this prompt when build() is called.
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
+ * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
+ * key is specified, will prompt the user to login.
+ * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+ * @returns The prompt object.
+ * @throws If the prompt is not found.
+ * @throws If multiple prompts are found with the same slug in the same project (this should never happen).
+ *
+ * @example
+ * ```javascript
+ * const prompt = await loadPrompt({
+ *  projectName: "My Project",
+ *  slug: "my-prompt",
+ * });
+ * ```
+ */
 export async function loadPrompt({
   projectName,
   projectId,
   slug,
   version,
+  defaults,
   noTrace = false,
   appUrl,
   apiKey,
@@ -1562,7 +1590,7 @@ export async function loadPrompt({
 
   const metadata = promptRowSchema.parse(response["objects"][0]);
 
-  return new Prompt(metadata, noTrace);
+  return new Prompt(metadata, defaults || {}, noTrace);
 }
 
 /**
@@ -2808,33 +2836,47 @@ class Dataset<
   }
 }
 
-export type CompiledPrompt<Flavor extends "chat" | "completion"> = Omit<
+export type CompiledPromptParams = Omit<
   NonNullable<PromptData["options"]>["params"],
   "use_cache"
-> & { model: NonNullable<NonNullable<PromptData["options"]>["model"]> } & {
-  span_info?: {
-    metadata: {
-      prompt: {
-        variables: Record<string, unknown>;
-        id: string;
-        project_id: string;
-        version: string;
+> & { model: NonNullable<NonNullable<PromptData["options"]>["model"]> };
+
+export type ChatPrompt = {
+  messages: Message[];
+  tools?: Tools;
+};
+export type CompletionPrompt = {
+  content: string;
+};
+
+export type CompiledPrompt<Flavor extends "chat" | "completion"> =
+  CompiledPromptParams & {
+    span_info?: {
+      metadata: {
+        prompt: {
+          variables: Record<string, unknown>;
+          id: string;
+          project_id: string;
+          version: string;
+        };
       };
     };
-  };
-} & (Flavor extends "chat"
-    ? {
-        messages: Message[];
-        tools?: Tools;
-      }
-    : Flavor extends "completion"
-    ? {
-        content: string;
-      }
-    : {});
+  } & (Flavor extends "chat"
+      ? ChatPrompt
+      : Flavor extends "completion"
+      ? CompletionPrompt
+      : {});
+
+export type DefaultPromptArgs = Partial<
+  CompiledPromptParams & ChatPrompt & CompletionPrompt
+>;
 
 export class Prompt {
-  constructor(private metadata: PromptRow, private noTrace: boolean) {}
+  constructor(
+    private metadata: PromptRow,
+    private defaults: DefaultPromptArgs,
+    private noTrace: boolean
+  ) {}
 
   public get id(): string {
     return this.metadata.id;
@@ -2874,12 +2916,10 @@ export class Prompt {
   public build<Flavor extends "chat" | "completion" = "chat">(
     buildArgs: Record<string, unknown>,
     options: {
-      fallbacks?: Partial<CompiledPrompt<NonNullable<Flavor>>>;
       flavor?: Flavor;
     } = {}
   ): CompiledPrompt<Flavor> {
     return this.runBuild(buildArgs, {
-      fallbacks: options.fallbacks,
       flavor: options.flavor ?? "chat",
     }) as CompiledPrompt<Flavor>;
   }
@@ -2887,14 +2927,13 @@ export class Prompt {
   private runBuild<Flavor extends "chat" | "completion">(
     buildArgs: Record<string, unknown>,
     options: {
-      fallbacks?: Partial<CompiledPrompt<Flavor>>;
       flavor: Flavor;
     }
   ): CompiledPrompt<Flavor> {
-    const { fallbacks, flavor } = options;
+    const { flavor } = options;
 
     const params = {
-      ...fallbacks,
+      ...this.defaults,
       ...Object.fromEntries(
         Object.entries(this.options.params || {}).filter(
           ([k, v]) => !BRAINTRUST_PARAMS.includes(k)
@@ -2912,7 +2951,6 @@ export class Prompt {
         "Model not specified. Either specify it in the prompt or as a fallback"
       );
     }
-    console.log("MODEL", params.model);
 
     const spanInfo = this.noTrace
       ? {}
