@@ -25,11 +25,10 @@ import {
 } from "../src/db_fields";
 
 import { SpanTypeAttribute } from "../src/span_types";
-import { promptDataSchema } from "./prompt";
 
 export const auditSourcesSchema = z.enum(VALID_SOURCES);
 
-function generateBaseEventOpSchema(objectType: ObjectType) {
+export function generateBaseEventOpSchema(objectType: ObjectType) {
   const eventDescription = getEventObjectDescription(objectType);
   return z.object({
     id: z
@@ -401,26 +400,6 @@ const projectLogsEventSchema = z
   })
   .strict()
   .openapi("ProjectLogsEvent");
-
-const promptEventBaseSchema = generateBaseEventOpSchema("prompt");
-export const promptEventSchema = z
-  .object({
-    id: promptEventBaseSchema.shape.id,
-    [TRANSACTION_ID_FIELD]: promptEventBaseSchema.shape[TRANSACTION_ID_FIELD],
-    created: promptEventBaseSchema.shape.created,
-    org_id: projectSchema.shape.org_id,
-    project_id: projectSchema.shape.id,
-    log_id: z
-      .literal("p")
-      .describe("A literal 'p' which identifies the log as a prompt entry"),
-    name: z.string().describe("The name of the prompt"),
-    slug: z.string().describe("The slug of the prompt"),
-    description: z.string().describe("The description of the prompt"),
-    prompt_data: promptDataSchema.describe("The prompt and its parameters"),
-    tags: promptEventBaseSchema.shape.tags,
-  })
-  .strict()
-  .openapi("PromptEvent");
 
 // Section: inserting data objects.
 

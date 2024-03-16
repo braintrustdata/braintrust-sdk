@@ -32,6 +32,16 @@ import {
   constructJsonArray,
   batchItems,
 } from "@braintrust/core";
+import {
+  AnyModelParam,
+  BRAINTRUST_PARAMS,
+  Message,
+  PromptData,
+  PromptRow,
+  Tools,
+  promptRowSchema,
+  toolsSchema,
+} from "@braintrust/core/typespecs";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
 import {
@@ -41,6 +51,7 @@ import {
   isEmpty,
   LazyValue,
 } from "./util";
+import Mustache from "mustache";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -371,7 +382,7 @@ class HTTPConnection {
 
   async get_json(
     object_type: string,
-    args: Record<string, string> | undefined = undefined,
+    args: Record<string, string | undefined> | undefined = undefined,
     retries: number = 0
   ) {
     const tries = retries + 1;
@@ -1354,7 +1365,7 @@ export function initDataset<
   const lazyMetadata: LazyValue<ProjectDatasetMetadata> = new LazyValue(
     async () => {
       await login({
-        orgName: orgName,
+        orgName,
         apiKey,
         appUrl,
       });
@@ -1500,6 +1511,87 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
     _state.currentLogger = ret as Logger<false>;
   }
   return ret;
+}
+
+interface LoadPromptOptions {
+  projectName?: string;
+  projectId?: string;
+  slug?: string;
+  version?: string;
+  defaults?: DefaultPromptArgs;
+  noTrace?: boolean;
+  appUrl?: string;
+  apiKey?: string;
+  orgName?: string;
+}
+
+/**
+ * Load a prompt from the specified project.
+ *
+ * @param options Options for configuring loadPrompt().
+ * @param options.projectName The name of the project to load the prompt from. Must specify at least one of `projectName` or `projectId`.
+ * @param options.projectId The id of the project to load the prompt from. This takes precedence over `projectName` if specified.
+ * @param options.slug The slug of the prompt to load.
+ * @param options.version An optional version of the prompt (to read). If not specified, the latest version will be used.
+ * @param options.defaults (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
+ * @param options.noTrace If true, do not include logging metadata for this prompt when build() is called.
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
+ * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
+ * key is specified, will prompt the user to login.
+ * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+ * @returns The prompt object.
+ * @throws If the prompt is not found.
+ * @throws If multiple prompts are found with the same slug in the same project (this should never happen).
+ *
+ * @example
+ * ```javascript
+ * const prompt = await loadPrompt({
+ *  projectName: "My Project",
+ *  slug: "my-prompt",
+ * });
+ * ```
+ */
+export async function loadPrompt({
+  projectName,
+  projectId,
+  slug,
+  version,
+  defaults,
+  noTrace = false,
+  appUrl,
+  apiKey,
+  orgName,
+}: LoadPromptOptions) {
+  await login({
+    orgName,
+    apiKey,
+    appUrl,
+  });
+
+  const args: Record<string, string | undefined> = {
+    project_name: projectName,
+    project_id: projectId,
+    slug,
+    version,
+  };
+
+  const response = await _state.logConn().get_json("v1/prompt", args);
+
+  if (!("objects" in response) || response.objects.length === 0) {
+    throw new Error(
+      `Prompt ${slug} not found in ${[projectName ?? projectId]}`
+    );
+  } else if (response.objects.length > 1) {
+    throw new Error(
+      `Multiple prompts found with slug ${slug} in project ${
+        projectName ?? projectId
+      }. This should never happen.`
+    );
+  }
+
+  const metadata = promptRowSchema.parse(response["objects"][0]);
+
+  return new Prompt(metadata, defaults || {}, noTrace);
 }
 
 /**
@@ -2742,6 +2834,183 @@ class Dataset<
       "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed"
     );
     return this.id;
+  }
+}
+
+export type CompiledPromptParams = Omit<
+  NonNullable<PromptData["options"]>["params"],
+  "use_cache"
+> & { model: NonNullable<NonNullable<PromptData["options"]>["model"]> };
+
+export type ChatPrompt = {
+  messages: Message[];
+  tools?: Tools;
+};
+export type CompletionPrompt = {
+  prompt: string;
+};
+
+export type CompiledPrompt<Flavor extends "chat" | "completion"> =
+  CompiledPromptParams & {
+    span_info?: {
+      metadata: {
+        prompt: {
+          variables: Record<string, unknown>;
+          id: string;
+          project_id: string;
+          version: string;
+        };
+      };
+    };
+  } & (Flavor extends "chat"
+      ? ChatPrompt
+      : Flavor extends "completion"
+      ? CompletionPrompt
+      : {});
+
+export type DefaultPromptArgs = Partial<
+  CompiledPromptParams & AnyModelParam & ChatPrompt & CompletionPrompt
+>;
+
+export class Prompt {
+  constructor(
+    private metadata: PromptRow,
+    private defaults: DefaultPromptArgs,
+    private noTrace: boolean
+  ) {}
+
+  public get id(): string {
+    return this.metadata.id;
+  }
+
+  public get projectId(): string {
+    return this.metadata.project_id;
+  }
+
+  public get name(): string {
+    return this.metadata.name;
+  }
+
+  public get slug(): string {
+    return this.metadata.slug;
+  }
+
+  public get prompt(): PromptData["prompt"] {
+    return this.metadata.prompt_data?.prompt;
+  }
+
+  public get version(): TransactionId {
+    return this.metadata[TRANSACTION_ID_FIELD];
+  }
+
+  public get options(): NonNullable<PromptData["options"]> {
+    return this.metadata.prompt_data?.options || {};
+  }
+
+  /**
+   * Build the prompt with the given formatting options. The args you pass in will
+   * be forwarded to the mustache template that defines the prompt and rendered with
+   * the `mustache-js` library.
+   *
+   * @param buildArgs Args to forward along to the prompt template.
+   */
+  public build<Flavor extends "chat" | "completion" = "chat">(
+    buildArgs: Record<string, unknown>,
+    options: {
+      flavor?: Flavor;
+    } = {}
+  ): CompiledPrompt<Flavor> {
+    return this.runBuild(buildArgs, {
+      flavor: options.flavor ?? "chat",
+    }) as CompiledPrompt<Flavor>;
+  }
+
+  private runBuild<Flavor extends "chat" | "completion">(
+    buildArgs: Record<string, unknown>,
+    options: {
+      flavor: Flavor;
+    }
+  ): CompiledPrompt<Flavor> {
+    const { flavor } = options;
+
+    const params = {
+      ...this.defaults,
+      ...Object.fromEntries(
+        Object.entries(this.options.params || {}).filter(
+          ([k, v]) => !BRAINTRUST_PARAMS.includes(k)
+        )
+      ),
+      ...(!isEmpty(this.options.model)
+        ? {
+            model: this.options.model,
+          }
+        : {}),
+    };
+
+    if (!("model" in params) || isEmpty(params.model)) {
+      throw new Error(
+        "No model specified. Either specify it in the prompt or as a default"
+      );
+    }
+
+    const spanInfo = this.noTrace
+      ? {}
+      : {
+          span_info: {
+            metadata: {
+              prompt: {
+                variables: buildArgs,
+                id: this.id,
+                project_id: this.projectId,
+                version: this.version,
+              },
+            },
+          },
+        };
+
+    const prompt = this.prompt;
+
+    if (!prompt) {
+      throw new Error("Empty prompt");
+    }
+
+    if (flavor === "chat") {
+      if (prompt.type !== "chat") {
+        throw new Error(
+          "Prompt is a completion prompt. Use buildCompletion() instead"
+        );
+      }
+
+      const messages = (prompt.messages || []).map((m) => ({
+        ...m,
+        ...("content" in m && typeof m.content === "string"
+          ? { content: Mustache.render(m.content, buildArgs) }
+          : {}),
+      }));
+
+      return {
+        ...params,
+        ...spanInfo,
+        messages: messages,
+        ...(prompt.tools
+          ? toolsSchema.parse(
+              JSON.parse(Mustache.render(prompt.tools, buildArgs))
+            )
+          : undefined),
+      } as CompiledPrompt<Flavor>;
+    } else if (flavor === "completion") {
+      if (prompt.type !== "completion") {
+        throw new Error("Prompt is a chat prompt. Use buildChat() instead");
+      }
+
+      return {
+        ...params,
+        ...spanInfo,
+        prompt: Mustache.render(prompt.content, buildArgs),
+      } as CompiledPrompt<Flavor>;
+    } else {
+      throw new Error("never!");
+    }
   }
 }
 
