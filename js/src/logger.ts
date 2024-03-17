@@ -1562,6 +1562,14 @@ export async function loadPrompt({
   apiKey,
   orgName,
 }: LoadPromptOptions) {
+  if (isEmpty(projectName) && isEmpty(projectId)) {
+    throw new Error("Must specify either projectName or projectId");
+  }
+
+  if (isEmpty(slug)) {
+    throw new Error("Must specify slug");
+  }
+
   await login({
     orgName,
     apiKey,

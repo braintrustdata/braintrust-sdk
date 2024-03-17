@@ -10,13 +10,13 @@ export default defineConfig([
   {
     entry: ["typespecs/index.ts"],
     format: ["cjs", "esm"],
-    outDir: "dist/typespecs",
+    outDir: "typespecs/dist",
     dts: true,
   },
   {
     entry: ["typespecs/index.ts"],
     format: ["cjs", "esm"],
-    outDir: "dist/typespecs-stainless",
+    outDir: "typespecs-stainless/dist",
     dts: true,
     env: {
       BRAINTRUST_TYPESPECS_MODE: "stainless",

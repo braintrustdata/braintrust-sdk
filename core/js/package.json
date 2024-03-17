@@ -13,6 +13,7 @@
     "postpublish": "../../../scripts/node_postpublish_core.py"
   },
   "exports": {
+    "./package.json": "./package.json",
     ".": {
       "types": "./dist/main/index.d.ts",
       "import": "./dist/main/index.mjs",
@@ -20,20 +21,22 @@
       "require": "./dist/main/index.js"
     },
     "./typespecs": {
-      "types": "./dist/typespecs/index.d.ts",
-      "import": "./dist/typespecs/index.mjs",
-      "module": "./dist/typespecs/index.mjs",
-      "require": "./dist/typespecs/index.js"
+      "types": "./typespecs/dist/index.d.ts",
+      "import": "./typespecs/dist/index.mjs",
+      "module": "./typespecs/dist/index.mjs",
+      "require": "./typespecs/dist/index.js"
     },
     "./typespecs-stainless": {
-      "types": "./dist/typespecs-stainless/index.d.ts",
-      "import": "./dist/typespecs-stainless/index.mjs",
-      "module": "./dist/typespecs-stainless/index.mjs",
-      "require": "./dist/typespecs-stainless/index.js"
+      "types": "./typespecs-stainless/dist/index.d.ts",
+      "import": "./typespecs-stainless/dist/index.mjs",
+      "module": "./typespecs-stainless/dist/index.mjs",
+      "require": "./typespecs-stainless/dist/index.js"
     }
   },
   "files": [
-    "dist/**/*"
+    "dist/**/*",
+    "typespecs/dist/**/*",
+    "typespecs-stainless/dist/**/*"
   ],
   "license": "MIT",
   "publishConfig": {
