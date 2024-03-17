@@ -2,9 +2,9 @@
   "name": "@braintrust/core",
   "version": "0.0.6",
   "description": "Shared core dependencies for Braintrust packages",
-  "main": "./dist/main/index.js",
-  "module": "./dist/main/index.mjs",
-  "types": "./dist/main/index.d.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsup",
     "watch": "tsup --watch",
@@ -15,10 +15,10 @@
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "types": "./dist/main/index.d.ts",
-      "import": "./dist/main/index.mjs",
-      "module": "./dist/main/index.mjs",
-      "require": "./dist/main/index.js"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "module": "./dist/index.mjs",
+      "require": "./dist/index.js"
     },
     "./typespecs": {
       "types": "./typespecs/dist/index.d.ts",
