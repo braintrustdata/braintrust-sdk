@@ -31,6 +31,7 @@ DEFAULTS = {
     "DwType": "Postgres",
     "EncryptDatabase": "false",
     "ProvisionedConcurrency": 0,
+    "APIHandlerMemorySize": 10240,
 }
 
 CAPABILITIES = ["CAPABILITY_IAM", "CAPABILITY_AUTO_EXPAND"]
