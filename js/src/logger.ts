@@ -37,9 +37,9 @@ import {
   BRAINTRUST_PARAMS,
   Message,
   PromptData,
-  PromptRow,
   Tools,
-  promptRowSchema,
+  promptSchema,
+  Prompt as PromptRow,
   toolsSchema,
 } from "@braintrust/core/typespecs";
 
@@ -1589,7 +1589,7 @@ export async function loadPrompt({
     );
   }
 
-  const metadata = promptRowSchema.parse(response["objects"][0]);
+  const metadata = promptSchema.parse(response["objects"][0]);
 
   return new Prompt(metadata, defaults || {}, noTrace);
 }
