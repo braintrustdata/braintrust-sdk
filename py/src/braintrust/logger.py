@@ -864,6 +864,11 @@ def load_prompt(
     :returns: The prompt object.
     """
 
+    if not project and not project_id:
+        raise ValueError("Must specify at least one of project or project_id")
+    if not slug:
+        raise ValueError("Must specify slug")
+
     def compute_metadata():
         login(org_name=org_name, api_key=api_key, app_url=app_url)
         args = _populate_args(
@@ -878,6 +883,7 @@ def load_prompt(
         if "objects" not in response or len(response["objects"]) == 0:
             raise ValueError(f"Prompt {slug} not found in project {project or project_id}.")
         elif len(response["objects"]) > 1:
+            print(response["objects"])
             raise ValueError(
                 f"Multiple prompts found with slug {slug} in project {project or project_id}. This should never happen."
             )
