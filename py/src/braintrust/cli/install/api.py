@@ -207,16 +207,21 @@ def main(args):
 
     if not exists:
         _logger.info(f"Creating stack with name {args.name}")
+        params = [
+            {
+                "ParameterKey": k,
+                "ParameterValue": str(v),
+            }
+            for (k, v) in [
+                (param, args.__dict__[arg_name] or DEFAULTS.get(param, None)) for (param, arg_name) in PARAMS.items()
+            ]
+            if v is not None
+        ]
+        print(params)
         cloudformation.create_stack(
             StackName=args.name,
             TemplateURL=template,
-            Parameters=[
-                {
-                    "ParameterKey": param,
-                    "ParameterValue": str(args.__dict__[arg_name] or DEFAULTS.get(param, "")),
-                }
-                for (param, arg_name) in PARAMS.items()
-            ],
+            Parameters=params,
             Capabilities=CAPABILITIES,
         )
 
