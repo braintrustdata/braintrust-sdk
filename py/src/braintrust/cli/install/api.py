@@ -22,12 +22,12 @@ PARAMS = {
     "PrivateSubnet1CIDR": "private_subnet_1_cidr",
     "PrivateSubnet2CIDR": "private_subnet_2_cidr",
     "PrivateSubnet3CIDR": "private_subnet_3_cidr",
+    "ManagedClickhouse": "managed_clickhouse",
 }
 
 REMOVED_PARAMS = ["ThirdAZIndex"]
 
 DEFAULTS = {
-    "ManagedKafka": "true",
     "DwType": "Postgres",
     "EncryptDatabase": "false",
     "ProvisionedConcurrency": 0,
@@ -142,6 +142,14 @@ def build_parser(subparsers, parents):
         "--encrypt-database",
         help="Whether to encrypt the database",
         default="false",
+        choices=[None, "true", "false"],
+    )
+
+    # Clickhouse
+    parser.add_argument(
+        "--managed-clickhouse",
+        help="Spin up a Clickhouse Instance for faster analytics",
+        default=None,
         choices=[None, "true", "false"],
     )
 
