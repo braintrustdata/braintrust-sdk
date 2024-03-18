@@ -51,9 +51,18 @@ const chatCompletionMessageToolCallSchema = z.object({
   type: z.literal("function"),
 });
 
-const chatCompletionContentPartSchema = z.union([
+export const chatCompletionContentPartSchema = z.union([
   chatCompletionContentPartTextSchema,
   chatCompletionContentPartImageSchema,
+]);
+
+const chatCompletionContentPartsSchema = z.array(
+  chatCompletionContentPartSchema
+);
+
+export const chatCompletionContentSchema = z.union([
+  z.string().default(""),
+  chatCompletionContentPartsSchema,
 ]);
 
 const chatCompletionAssistantMessageParamSchema = z.object({
@@ -65,10 +74,7 @@ const chatCompletionAssistantMessageParamSchema = z.object({
 });
 
 const chatCompletionUserMessageParamSchema = z.object({
-  content: z.union([
-    z.string().default(""),
-    z.array(chatCompletionContentPartSchema),
-  ]),
+  content: chatCompletionContentSchema,
   role: z.literal("user"),
   name: z.string().optional(),
 });
