@@ -40,7 +40,7 @@ const chatCompletionFunctionMessageParamSchema = z.object({
   role: z.literal("function"),
 });
 
-const chatCompletionContentPartImageSchema = z.object({
+export const chatCompletionContentPartImageSchema = z.object({
   image_url: imageURLSchema,
   type: z.literal("image_url"),
 });
@@ -73,7 +73,7 @@ const chatCompletionAssistantMessageParamSchema = z.object({
   tool_calls: z.array(chatCompletionMessageToolCallSchema).optional(),
 });
 
-const chatCompletionUserMessageParamSchema = z.object({
+export const chatCompletionUserMessageParamSchema = z.object({
   content: chatCompletionContentSchema,
   role: z.literal("user"),
   name: z.string().optional(),
