@@ -91,6 +91,17 @@ export type EvalScorer<
   args: EvalScorerArgs<Input, Output, Expected, Metadata>
 ) => OneOrMoreScores | Promise<OneOrMoreScores>;
 
+export type EvalResult<
+  Input,
+  Output,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType
+> = EvalCase<Input, Expected, Metadata> & {
+  output: Output;
+  scores: Record<string, number | null>;
+  error: unknown;
+};
+
 export interface Evaluator<
   Input,
   Output,
@@ -182,7 +193,11 @@ export async function Eval<
 >(
   name: string,
   evaluator: Evaluator<Input, Output, Expected, Metadata>
-): Promise<ExperimentSummary> {
+): Promise<
+  ExperimentSummary & {
+    results: EvalResult<Input, Output, Expected, Metadata>[];
+  }
+> {
   let evalName = makeEvalName(name, evaluator.experimentName);
   if (_evals[evalName]) {
     evalName = `${evalName}_${Object.keys(_evals).length}`;
@@ -198,6 +213,7 @@ export async function Eval<
       comparisonExperimentName: "",
       scores: {},
       metrics: {},
+      results: [],
     };
   }
 
@@ -220,7 +236,10 @@ export async function Eval<
         []
       );
       reportEvaluatorResult(name, ret, { verbose: true, jsonl: false });
-      return ret.summary!;
+      return {
+        ...ret.summary!,
+        results: ret.results as EvalResult<Input, Output, Expected, Metadata>[],
+      };
     } finally {
       experiment.flush();
     }
@@ -295,7 +314,10 @@ export async function runEvaluator(
   evaluator: EvaluatorDef<any, any, any | void, any | void>,
   progressReporter: ProgressReporter,
   filters: Filter[]
-) {
+): Promise<{
+  results: EvalResult<any, any, any | void, any | void>[];
+  summary: ExperimentSummary | null;
+}> {
   if (typeof evaluator.data === "string") {
     throw new Error("Unimplemented: string data paths");
   }
@@ -500,7 +522,10 @@ export async function runEvaluator(
       }
 
       return {
+        input: datum.input,
+        ...("expected" in datum ? { expected: datum.expected } : {}),
         output,
+        tags: datum.tags,
         metadata,
         scores,
         error,
