@@ -10,7 +10,7 @@ import {
   BaseMetadata,
   DefaultMetadataType,
 } from "./logger";
-import { Score, SpanTypeAttribute } from "@braintrust/core";
+import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
 import { isEmpty } from "./util";
@@ -79,7 +79,8 @@ export type EvalScorerArgs<
   output: Output;
 };
 
-type ScoreValue = Score | number | null;
+type ScoreValue = Score | number;
+type OneOrMoreScores = ScoreValue | Array<ScoreValue> | null;
 
 export type EvalScorer<
   Input,
@@ -88,7 +89,7 @@ export type EvalScorer<
   Metadata extends BaseMetadata = DefaultMetadataType
 > = (
   args: EvalScorerArgs<Input, Output, Expected, Metadata>
-) => ScoreValue | Promise<ScoreValue>;
+) => OneOrMoreScores | Promise<OneOrMoreScores>;
 
 export interface Evaluator<
   Input,
@@ -382,7 +383,7 @@ export async function runEvaluator(
         const scoreResults = await Promise.all(
           evaluator.scores.map(async (score, score_idx) => {
             try {
-              const result = await rootSpan.traced(
+              const results = await rootSpan.traced(
                 async (span: Span) => {
                   const scoreResult = score(scoringArgs);
                   const scoreValue =
@@ -393,23 +394,53 @@ export async function runEvaluator(
                   if (scoreValue === null) {
                     return null;
                   }
-                  const result: Score =
+
+                  const scoreValues = Array.isArray(scoreValue)
+                    ? scoreValue
+                    : [scoreValue];
+
+                  const results: Score[] = scoreValues.map((scoreValue) =>
                     typeof scoreValue === "object"
                       ? scoreValue
-                      : { name: scorerNames[score_idx], score: scoreValue };
-                  const {
-                    metadata: resultMetadata,
-                    name,
-                    ...resultRest
-                  } = result;
+                      : { name: scorerNames[score_idx], score: scoreValue }
+                  );
+
+                  const getOtherFields = (s: Score) => {
+                    const { metadata, name, ...rest } = s;
+                    return rest;
+                  };
+
+                  const resultMetadata =
+                    results.length === 1
+                      ? results[0].metadata
+                      : results.reduce(
+                          (prev, s) =>
+                            mergeDicts(prev, {
+                              [s.name]: s.metadata,
+                            }),
+                          {}
+                        );
+
+                  const resultOutput =
+                    results.length === 1
+                      ? getOtherFields(results[0])
+                      : results.reduce(
+                          (prev, s) =>
+                            mergeDicts(prev, { [s.name]: getOtherFields(s) }),
+                          {}
+                        );
+
+                  const scores = results.reduce(
+                    (prev, s) => mergeDicts(prev, { [s.name]: s.score }),
+                    {}
+                  );
+
                   span.log({
-                    output: resultRest,
+                    output: resultOutput,
                     metadata: resultMetadata,
-                    scores: {
-                      [name]: resultRest.score,
-                    },
+                    scores: scores,
                   });
-                  return result;
+                  return results;
                 },
                 {
                   name: scorerNames[score_idx],
@@ -419,7 +450,7 @@ export async function runEvaluator(
                   event: { input: scoringArgs },
                 }
               );
-              return { kind: "score", value: result } as const;
+              return { kind: "score", value: results } as const;
             } catch (e) {
               return { kind: "error", value: e } as const;
             }
@@ -432,12 +463,17 @@ export async function runEvaluator(
           score: Score | null;
         }[] = [];
         const failingScorersAndResults: { name: string; error: unknown }[] = [];
-        scoreResults.forEach((result, i) => {
+        scoreResults.forEach((results, i) => {
           const name = scorerNames[i];
-          if (result.kind === "score") {
-            passingScorersAndResults.push({ name, score: result.value });
+          if (results.kind === "score" && results.value) {
+            (results.value || []).forEach((result) => {
+              passingScorersAndResults.push({
+                name: result.name,
+                score: result,
+              });
+            });
           } else {
-            failingScorersAndResults.push({ name, error: result.value });
+            failingScorersAndResults.push({ name, error: results.value });
           }
         });
 
