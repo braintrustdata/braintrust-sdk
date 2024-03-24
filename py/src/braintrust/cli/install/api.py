@@ -221,6 +221,7 @@ def main(args):
 
     if not exists:
         _logger.info(f"Creating stack with name {args.name}")
+
         params = [
             {
                 "ParameterKey": k,
@@ -231,7 +232,8 @@ def main(args):
             ]
             if v is not None
         ]
-        print(params)
+        _logger.info("Using params:", params)
+
         cloudformation.create_stack(
             StackName=args.name,
             TemplateURL=template,
