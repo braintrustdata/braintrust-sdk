@@ -484,10 +484,6 @@ async function runOnce(
     evalReports
   )) {
     const success = await reporter.reportRun(await Promise.all(results));
-    if (!success) {
-      console.error(error(`Reporter ${reporterName} failed.`));
-    }
-
     allSuccess = allSuccess && success;
   }
 
@@ -701,7 +697,7 @@ async function run(args: RunArgs) {
   }
 
   if (!success) {
-    process.exit(0); // XXX
+    process.exit(1);
   }
 }
 

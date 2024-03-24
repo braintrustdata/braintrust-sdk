@@ -561,7 +561,7 @@ export async function runEvaluator(
         const failingScorersAndResults: { name: string; error: unknown }[] = [];
         scoreResults.forEach((results, i) => {
           const name = scorerNames[i];
-          if (results.kind === "score" && results.value) {
+          if (results.kind === "score") {
             (results.value || []).forEach((result) => {
               passingScorersAndResults.push({
                 name: result.name,
