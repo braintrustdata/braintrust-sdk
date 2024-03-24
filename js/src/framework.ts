@@ -146,6 +146,48 @@ export interface Evaluator<
   isPublic?: boolean;
 }
 
+export type EvalResultWithSummary<
+  Input,
+  Output,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType
+> = ExperimentSummary & {
+  results: EvalResult<Input, Output, Expected, Metadata>[];
+};
+
+export interface ReporterOpts {
+  verbose: boolean;
+  jsonl: boolean;
+}
+
+export interface ReporterBody<EvalReport> {
+  /**
+   * A function that takes an evaluator and its result and returns a report.
+   *
+   * @param evaluator
+   * @param result
+   * @param opts
+   */
+  reportEval(
+    evaluator: EvaluatorDef<any, any, any, any>,
+    result: EvalResultWithSummary<any, any, any, any>,
+    opts: ReporterOpts
+  ): Promise<EvalReport> | EvalReport;
+
+  /**
+   * A function that takes all evaluator results and returns a boolean indicating
+   * whether the run was successful. If you return false, the `braintrust eval`
+   * command will exit with a non-zero status code.
+   *
+   * @param evalReports
+   */
+  reportRun(evalReports: EvalReport[]): boolean | Promise<boolean>;
+}
+
+export type ReporterDef<EvalReport> = {
+  name: string;
+} & ReporterBody<EvalReport>;
+
 function makeEvalName(projectName: string, experimentName?: string) {
   let out = projectName;
   if (experimentName) {
@@ -165,7 +207,13 @@ export type EvaluatorDef<
 } & Evaluator<Input, Output, Expected, Metadata>;
 
 export type EvaluatorFile = {
-  [evalName: string]: EvaluatorDef<any, any, any, any>;
+  evaluators: {
+    [evalName: string]: {
+      evaluator: EvaluatorDef<any, any, any, any>;
+      reporter?: ReporterDef<any> | string;
+    };
+  };
+  reporters: { [reporterName: string]: ReporterDef<any> };
 };
 
 function initExperiment<IsOpen extends boolean = false>(
@@ -183,27 +231,31 @@ declare global {
   var _lazy_load: boolean;
 }
 
-globalThis._evals = {};
+globalThis._evals = {
+  evaluators: {},
+  reporters: {},
+};
 
 export async function Eval<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType
+  Metadata extends BaseMetadata = DefaultMetadataType,
+  EvalReport = boolean
 >(
   name: string,
-  evaluator: Evaluator<Input, Output, Expected, Metadata>
-): Promise<
-  ExperimentSummary & {
-    results: EvalResult<Input, Output, Expected, Metadata>[];
-  }
-> {
+  evaluator: Evaluator<Input, Output, Expected, Metadata>,
+  reporter?: ReporterDef<EvalReport> | string
+): Promise<EvalResultWithSummary<Input, Output, Expected, Metadata>> {
   let evalName = makeEvalName(name, evaluator.experimentName);
-  if (_evals[evalName]) {
+  if (_evals.evaluators[evalName]) {
     evalName = `${evalName}_${Object.keys(_evals).length}`;
   }
   if (globalThis._lazy_load) {
-    _evals[evalName] = { evalName, projectName: name, ...evaluator };
+    _evals.evaluators[evalName] = {
+      evaluator: { evalName, projectName: name, ...evaluator },
+      reporter,
+    };
     // Better to return this empty object than have an annoying-to-use signature
     return {
       projectName: "_lazy_load",
@@ -218,6 +270,14 @@ export async function Eval<
   }
 
   const progressReporter = new BarProgressReporter();
+
+  if (typeof reporter === "string") {
+    throw new Error(
+      "Can only specify reporter names when running 'braintrust eval'"
+    );
+  }
+
+  const resolvedReporter = reporter || defaultReporter;
   try {
     const experiment = initExperiment(name, {
       experiment: evaluator.experimentName,
@@ -225,27 +285,44 @@ export async function Eval<
       isPublic: evaluator.isPublic,
     });
     try {
-      const ret = await runEvaluator(
+      const evalDef = {
+        evalName,
+        projectName: name,
+        ...(evaluator as Evaluator<unknown, unknown, unknown, any>),
+      };
+      const ret = (await runEvaluator(
         experiment,
-        {
-          evalName,
-          projectName: name,
-          ...(evaluator as Evaluator<unknown, unknown, unknown, any>),
-        },
+        evalDef,
         progressReporter,
         []
-      );
-      reportEvaluatorResult(name, ret, { verbose: true, jsonl: false });
-      return {
-        ...ret.summary!,
-        results: ret.results as EvalResult<Input, Output, Expected, Metadata>[],
-      };
+      )) as EvalResultWithSummary<Input, Output, Expected, Metadata>;
+      resolvedReporter.reportEval(evalDef, ret, {
+        verbose: true,
+        jsonl: false,
+      });
+      return ret;
     } finally {
       experiment.flush();
     }
   } finally {
     progressReporter.stop();
   }
+}
+
+export function Reporter<EvalReport>(
+  name: string,
+  reporter: ReporterBody<EvalReport>
+): ReporterDef<EvalReport> {
+  const ret = { name, ...reporter };
+  if (_evals.reporters[name]) {
+    throw new Error(`Reporter ${name} already exists`);
+  }
+
+  if (globalThis._lazy_load) {
+    _evals.reporters[name] = ret;
+  }
+
+  return ret;
 }
 
 export function getLoadedEvals() {
@@ -314,10 +391,7 @@ export async function runEvaluator(
   evaluator: EvaluatorDef<any, any, any | void, any | void>,
   progressReporter: ProgressReporter,
   filters: Filter[]
-): Promise<{
-  results: EvalResult<any, any, any | void, any | void>[];
-  summary: ExperimentSummary | null;
-}> {
+): Promise<EvalResultWithSummary<any, any, any | void, any | void>> {
   if (typeof evaluator.data === "string") {
     throw new Error("Unimplemented: string data paths");
   }
@@ -550,9 +624,10 @@ export async function runEvaluator(
   });
   const results = await Promise.all(evals);
   const summary = experiment ? await experiment.summarize() : null;
+
   return {
+    ...summary!,
     results,
-    summary,
   };
 }
 
@@ -567,83 +642,89 @@ export function logError(e: unknown, verbose: boolean) {
   }
 }
 
-export function reportEvaluatorResult(
-  evaluatorName: string | number,
-  evaluatorResult: {
-    results: { scores: Record<string, number | null>; error: unknown }[];
-    summary: unknown;
-  },
-  {
-    verbose,
-    jsonl,
-  }: {
-    verbose: boolean;
-    jsonl: boolean;
-  }
-) {
-  const { results, summary } = evaluatorResult;
-  const failingResults = results.filter(
-    (r: { error: unknown }) => r.error !== undefined
-  );
-
-  if (failingResults.length > 0) {
-    // TODO: We may want to support a non-strict mode (and make this the "strict" behavior), so that
-    // users can still log imperfect evaluations. In the meantime, they should handle these cases inside
-    // of their tasks.
-    console.error(
-      warning(
-        `Evaluator ${evaluatorName} failed with ${pluralize(
-          "error",
-          failingResults.length,
-          true
-        )}. This evaluation ("${evaluatorName}") will not be fully logged.`
-      )
+/**
+ * The default reporter for Braintrust evaluations. This reporter will log the results
+ * of each evaluation to the console, and will return false (i.e. fail) if any of the
+ * evaluations return an error.
+ */
+export const defaultReporter: ReporterDef<boolean> = {
+  name: "Braintrust default reporter",
+  async reportEval(
+    evaluator: EvaluatorDef<any, any, any, any>,
+    result: EvalResultWithSummary<any, any, any, any>,
+    { verbose, jsonl }: ReporterOpts
+  ) {
+    const { results, ...summary } = result;
+    const failingResults = results.filter(
+      (r: { error: unknown }) => r.error !== undefined
     );
-    if (jsonl) {
-      console.log(
-        JSON.stringify({
-          evaluatorName,
-          errors: failingResults.map(
-            (r) => `${r.error instanceof Error ? r.error.stack : r.error}`
-          ),
-        })
+
+    if (failingResults.length > 0) {
+      // TODO: We may want to support a non-strict mode (and make this the "strict" behavior), so that
+      // users can still log imperfect evaluations. In the meantime, they should handle these cases inside
+      // of their tasks.
+      console.error(
+        warning(
+          `Evaluator ${evaluator.evalName} failed with ${pluralize(
+            "error",
+            failingResults.length,
+            true
+          )}. This evaluation ("${
+            evaluator.evalName
+          }") will not be fully logged.`
+        )
       );
-    } else {
-      for (const result of failingResults) {
-        logError(result.error, verbose);
-      }
-    }
-    if (!verbose && !jsonl) {
-      console.error(warning("Add --verbose to see full stack traces."));
-    }
-  }
-  if (summary) {
-    console.log(jsonl ? JSON.stringify(summary) : summary);
-  } else {
-    const scoresByName: { [name: string]: { total: number; count: number } } =
-      {};
-    for (const result of results) {
-      for (const [name, score] of Object.entries(result.scores)) {
-        const { total, count } = scoresByName[name] || { total: 0, count: 0 };
-        if (score === null) {
-          continue;
+      if (jsonl) {
+        console.log(
+          JSON.stringify({
+            evaluatorName: evaluator.evalName,
+            errors: failingResults.map(
+              (r) => `${r.error instanceof Error ? r.error.stack : r.error}`
+            ),
+          })
+        );
+      } else {
+        for (const result of failingResults) {
+          logError(result.error, verbose);
         }
-        scoresByName[name] = { total: total + score, count: count + 1 };
+      }
+      if (!verbose && !jsonl) {
+        console.error(warning("Add --verbose to see full stack traces."));
       }
     }
+    if (summary) {
+      console.log(jsonl ? JSON.stringify(summary) : summary);
+    } else {
+      const scoresByName: { [name: string]: { total: number; count: number } } =
+        {};
+      for (const result of results) {
+        for (const [name, score] of Object.entries(result.scores)) {
+          const { total, count } = scoresByName[name] || { total: 0, count: 0 };
+          if (score === null) {
+            continue;
+          }
+          scoresByName[name] = { total: total + score, count: count + 1 };
+        }
+      }
 
-    const summary = {
-      scores: Object.fromEntries(
-        Object.entries(scoresByName).map(([name, { total, count }]) => [
-          name,
-          {
+      const summary = {
+        scores: Object.fromEntries(
+          Object.entries(scoresByName).map(([name, { total, count }]) => [
             name,
-            score: total / count,
-          },
-        ])
-      ),
-    };
+            {
+              name,
+              score: total / count,
+            },
+          ])
+        ),
+      };
 
-    console.log(jsonl ? JSON.stringify(summary) : summary);
-  }
-}
+      console.log(jsonl ? JSON.stringify(summary) : summary);
+    }
+
+    return failingResults.length === 0;
+  },
+  async reportRun(evalReports: boolean[]) {
+    return evalReports.every((r) => r);
+  },
+};

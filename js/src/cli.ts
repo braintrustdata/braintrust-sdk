@@ -27,14 +27,16 @@ import {
   EvaluatorDef,
   EvaluatorFile,
   Filter,
+  ReporterDef,
+  defaultReporter,
   error,
   logError,
   parseFilters,
-  reportEvaluatorResult,
   runEvaluator,
   warning,
 } from "./framework";
 import { configureNode } from "./node";
+import { isEmpty } from "./util";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript
@@ -84,18 +86,19 @@ function evalWithModuleContext<T>(inFile: string, evalFn: () => T): T {
   }
 }
 
-// XXX-TEST: We should add a Test to ensure that you can reference __dirname
-// and __filename in your evaluators.
 function evaluateBuildResults(
   inFile: string,
   buildResult: esbuild.BuildResult
-) {
+): EvaluatorFile | null {
   if (!buildResult.outputFiles) {
     return null;
   }
   const moduleText = buildResult.outputFiles[0].text;
   return evalWithModuleContext(inFile, () => {
-    globalThis._evals = {};
+    globalThis._evals = {
+      evaluators: {},
+      reporters: {},
+    };
     globalThis._lazy_load = true;
     globalThis.__inherited_braintrust_state = _internalGetGlobalState();
     const __filename = inFile;
@@ -125,6 +128,51 @@ async function initLogger(
   return logger;
 }
 
+function resolveReporter(
+  reporter: string | ReporterDef<any> | undefined,
+  reporters: Record<string, ReporterDef<any>>
+) {
+  if (typeof reporter === "string") {
+    if (!reporters[reporter]) {
+      throw new Error(`Reporter ${reporter} not found`);
+    }
+    return reporters[reporter];
+  } else if (!isEmpty(reporter)) {
+    return reporter;
+  } else if (Object.keys(reporters).length === 0) {
+    return defaultReporter;
+  } else if (Object.keys(reporters).length === 1) {
+    return reporters[Object.keys(reporters)[0]];
+  } else {
+    const reporterNames = Object.keys(reporters).join(", ");
+    throw new Error(
+      `Multiple reporters found (${reporterNames}). Please specify a reporter explicitly.`
+    );
+  }
+}
+
+type AllReports = Record<
+  string,
+  {
+    reporter: ReporterDef<any>;
+    results: (any | Promise<any>)[];
+  }
+>;
+
+function addReport(
+  evalReports: AllReports,
+  reporter: ReporterDef<any>,
+  report: any
+) {
+  if (!evalReports[reporter.name]) {
+    evalReports[reporter.name] = {
+      reporter,
+      results: [],
+    };
+  }
+  evalReports[reporter.name].results.push(report);
+}
+
 function buildWatchPluginForEvaluator(
   inFile: string,
   opts: EvaluatorOpts
@@ -150,7 +198,15 @@ function buildWatchPluginForEvaluator(
           return;
         }
 
-        for (const evaluator of Object.values(evalResult)) {
+        const evalReports: Record<
+          string,
+          {
+            reporter: ReporterDef<any>;
+            results: any[];
+          }
+        > = {};
+        for (const evaluatorDef of Object.values(evalResult.evaluators)) {
+          const { evaluator, reporter } = evaluatorDef;
           const logger = opts.noSendLogs
             ? null
             : await initLogger(
@@ -164,10 +220,30 @@ function buildWatchPluginForEvaluator(
             opts.progressReporter,
             opts.filters
           );
-          reportEvaluatorResult(evaluator.evalName, evaluatorResult, {
-            verbose: true,
-            jsonl: opts.jsonl,
-          });
+          const resolvedReporter = resolveReporter(
+            reporter,
+            globalThis._evals.reporters
+          );
+
+          const report = resolvedReporter.reportEval(
+            evaluator,
+            evaluatorResult,
+            {
+              verbose: opts.verbose,
+              jsonl: opts.jsonl,
+            }
+          );
+
+          addReport(evalReports, resolvedReporter, report);
+        }
+
+        for (const [reporterName, { reporter, results }] of Object.entries(
+          evalReports
+        )) {
+          const success = await reporter.reportRun(await Promise.all(results));
+          if (!success) {
+            console.error(error(`Reporter ${reporterName} failed.`));
+          }
         }
       });
     },
@@ -198,7 +274,10 @@ async function initFile(
             sourceFile: inFile,
           };
         }
-        const evaluator = evaluateBuildResults(inFile, result) || {};
+        const evaluator = evaluateBuildResults(inFile, result) || {
+          evaluators: {},
+          reporters: {},
+        };
         return { type: "success", result, evaluator, sourceFile: inFile };
       } catch (e) {
         return { type: "failure", error: e as Error, sourceFile: inFile };
@@ -214,9 +293,15 @@ async function initFile(
 }
 
 interface EvaluatorState {
-  [evaluator: string]: {
-    sourceFile: string;
-    evaluator: EvaluatorDef<any, any, any, any>;
+  evaluators: {
+    [evaluator: string]: {
+      sourceFile: string;
+      evaluator: EvaluatorDef<any, any, any, any>;
+      reporter: string | ReporterDef<any> | undefined;
+    };
+  };
+  reporters: {
+    [reporter: string]: ReporterDef<any>;
   };
 }
 
@@ -253,23 +338,43 @@ function updateEvaluators(
       continue;
     }
 
-    for (const [evalName, evaluator] of Object.entries(result.evaluator)) {
+    for (const [evalName, evaluator] of Object.entries(
+      result.evaluator.evaluators
+    )) {
       if (
-        evaluators[evalName] &&
-        (evaluators[evalName].sourceFile !== result.sourceFile ||
-          evaluators[evalName].evaluator !== evaluator)
+        evaluators.evaluators[evalName] &&
+        (evaluators.evaluators[evalName].sourceFile !== result.sourceFile ||
+          evaluators.evaluators[evalName] !== evaluator)
       ) {
         console.warn(
           warning(
-            `Evaluator ${evalName} already exists (in ${evaluators[evalName].sourceFile} and ${result.sourceFile}). Will skip ${evalName} in ${result.sourceFile}.`
+            `Evaluator ${evalName} already exists (in ${evaluators.evaluators[evalName].sourceFile} and ${result.sourceFile}). Will skip ${evalName} in ${result.sourceFile}.`
           )
         );
         continue;
       }
-      evaluators[evalName] = {
+      evaluators.evaluators[evalName] = {
         sourceFile: result.sourceFile,
-        evaluator,
+        evaluator: evaluator.evaluator,
+        reporter: evaluator.reporter,
       };
+    }
+
+    for (const [reporterName, reporter] of Object.entries(
+      result.evaluator.reporters
+    )) {
+      if (
+        evaluators.reporters[reporterName] &&
+        evaluators.reporters[reporterName] !== reporter
+      ) {
+        console.warn(
+          warning(
+            `Reporter ${reporterName} already exists. Will skip ${reporterName}.`
+          )
+        );
+        continue;
+      }
+      evaluators.reporters[reporterName] = reporter;
     }
   }
 }
@@ -308,48 +413,85 @@ async function runOnce(
 
   const buildResults = await Promise.all(buildPromises);
 
-  const evaluators: EvaluatorState = {};
+  const evaluators: EvaluatorState = {
+    evaluators: {},
+    reporters: {},
+  };
   updateEvaluators(evaluators, buildResults, opts);
 
-  const resultPromises = Object.values(evaluators).map(async (evaluator) => {
-    // TODO: For now, use the eval name as the project. However, we need to evolve
-    // the definition of a project and create a new concept called run, so that we
-    // can name the experiment/evaluation within the run the evaluator's name.
-    const logger = opts.noSendLogs
-      ? null
-      : await initLogger(
-          evaluator.evaluator.projectName,
-          evaluator.evaluator.experimentName,
-          evaluator.evaluator.metadata
+  const resultPromises = Object.values(evaluators.evaluators).map(
+    async (evaluator) => {
+      // TODO: For now, use the eval name as the project. However, we need to evolve
+      // the definition of a project and create a new concept called run, so that we
+      // can name the experiment/evaluation within the run the evaluator's name.
+      const logger = opts.noSendLogs
+        ? null
+        : await initLogger(
+            evaluator.evaluator.projectName,
+            evaluator.evaluator.experimentName,
+            evaluator.evaluator.metadata
+          );
+      try {
+        return await runEvaluator(
+          logger,
+          evaluator.evaluator,
+          opts.progressReporter,
+          opts.filters
         );
-    try {
-      return await runEvaluator(
-        logger,
-        evaluator.evaluator,
-        opts.progressReporter,
-        opts.filters
-      );
-    } finally {
-      if (logger) {
-        await logger.flush();
+      } finally {
+        if (logger) {
+          await logger.flush();
+        }
       }
     }
-  });
+  );
 
   console.error(`Processing ${resultPromises.length} evaluators...`);
   const allEvalsResults = await Promise.all(resultPromises);
   opts.progressReporter.stop();
   console.error("");
 
-  for (const [evaluator, idx] of Object.keys(evaluators).map((k, i) => [
-    k,
-    i,
-  ])) {
-    reportEvaluatorResult(evaluator, allEvalsResults[idx as number], {
-      verbose: opts.verbose,
-      jsonl: opts.jsonl,
-    });
+  const evalReports: Record<
+    string,
+    {
+      reporter: ReporterDef<any>;
+      results: [];
+    }
+  > = {};
+  for (const [evaluatorName, idx] of Object.keys(evaluators.evaluators).map(
+    (k, i) => [k, i]
+  )) {
+    const evaluator = evaluators.evaluators[evaluatorName];
+    const resolvedReporter = resolveReporter(
+      evaluator.reporter,
+      globalThis._evals.reporters
+    );
+
+    const report = resolvedReporter.reportEval(
+      evaluator.evaluator,
+      allEvalsResults[idx as number],
+      {
+        verbose: opts.verbose,
+        jsonl: opts.jsonl,
+      }
+    );
+
+    addReport(evalReports, resolvedReporter, report);
   }
+
+  let allSuccess = true;
+  for (const [reporterName, { reporter, results }] of Object.entries(
+    evalReports
+  )) {
+    const success = await reporter.reportRun(await Promise.all(results));
+    if (!success) {
+      console.error(error(`Reporter ${reporterName} failed.`));
+    }
+
+    allSuccess = allSuccess && success;
+  }
+
+  return allSuccess;
 }
 
 interface RunArgs {
@@ -537,6 +679,7 @@ async function run(args: RunArgs) {
 
   const handles = await initializeHandles(args, evaluatorOpts);
 
+  let success = true;
   try {
     if (!evaluatorOpts.noSendLogs) {
       await login({
@@ -548,13 +691,17 @@ async function run(args: RunArgs) {
     if (args.watch) {
       await runAndWatch(handles, evaluatorOpts);
     } else {
-      runOnce(handles, evaluatorOpts);
+      success = await runOnce(handles, evaluatorOpts);
     }
   } finally {
     // ESBuild can freeze up if you do not clean up the handles properly
     for (const handle of Object.values(handles)) {
       await handle.destroy();
     }
+  }
+
+  if (!success) {
+    process.exit(0); // XXX
   }
 }
 
