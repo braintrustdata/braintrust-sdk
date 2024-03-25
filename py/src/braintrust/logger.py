@@ -1945,7 +1945,7 @@ class SpanImpl(Span):
         # There should be no overlap between the dictionaries being merged,
         # except for `sanitized` and `internal_data`, where the former overrides
         # the latter.
-        sanitized_and_internal_data = {k: v for (k, v) in self.internal_data.items() if v is not None}
+        sanitized_and_internal_data = strip_nones(self.internal_data)
         merge_dicts(sanitized_and_internal_data, sanitized)
         self.internal_data = {}
 
@@ -2038,6 +2038,12 @@ class SpanImpl(Span):
             _state.current_span.reset(self._context_token)
 
         self.end()
+
+
+def strip_nones(d):
+    if not isinstance(d, dict):
+        return d
+    return {k: strip_nones(v) for (k, v) in d.items() if v is not None}
 
 
 class Dataset(ObjectFetcher):
