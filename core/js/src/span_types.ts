@@ -7,5 +7,4 @@ export enum SpanTypeAttribute {
   TOOL = "tool",
 }
 
-// Make SpanType any of the values of SpanTypeAttribute, eg llm, score, function, eval, task, tool
 export type SpanType = SpanTypeAttribute[keyof SpanTypeAttribute];

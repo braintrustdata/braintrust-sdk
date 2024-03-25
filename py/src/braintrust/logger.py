@@ -96,7 +96,8 @@ class Span(ABC):
         We recommend running spans within context managers (`with start_span(...) as span`) to automatically mark them as current and ensure they are ended. Only spans run within a context manager will be marked current, so they can be accessed using `braintrust.current_span()`. If you wish to start a span outside a context manager, be sure to end it with `span.end()`.
 
         :param name: Optional name of the span. If not provided, a name will be inferred from the call stack.
-        :param type: Optional type of the span. If not provided, the type will be unset.
+        :param type: Optional type of the span. Use the `SpanTypeAttribute` enum or just provide a string directly.
+        If not provided, the type will be unset.
         :param span_attributes: Optional additional attributes to attach to the span, such as a type name.
         :param start_time: Optional start time of the span, as a timestamp in seconds.
         :param set_current: If true (the default), the span will be marked as the currently-active span for the duration of the context manager.
@@ -1887,15 +1888,12 @@ class SpanImpl(Span):
             _EXEC_COUNTER += 1
             exec_counter = _EXEC_COUNTER
 
-        type_arg = dict()
-        if type is not None:
-            type_arg = dict(type=type)
         self.internal_data = dict(
             metrics=dict(
                 start=start_time or time.time(),
             ),
             # Set type first, in case they override it in `span_attributes`.
-            span_attributes=dict(**{**type_arg, **span_attributes}, name=name, exec_counter=exec_counter),
+            span_attributes=dict(**{"type": type, "name": name, **span_attributes}, exec_counter=exec_counter),
             created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         )
         if caller_location:
@@ -1947,7 +1945,7 @@ class SpanImpl(Span):
         # There should be no overlap between the dictionaries being merged,
         # except for `sanitized` and `internal_data`, where the former overrides
         # the latter.
-        sanitized_and_internal_data = {**self.internal_data}
+        sanitized_and_internal_data = {k: v for (k, v) in self.internal_data.items() if v is not None}
         merge_dicts(sanitized_and_internal_data, sanitized)
         self.internal_data = {}
 
