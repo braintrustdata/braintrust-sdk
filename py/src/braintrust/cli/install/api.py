@@ -12,6 +12,7 @@ PARAMS = {
     "OrgName": "org_name",
     "ProvisionedConcurrency": "provisioned_concurrency",
     "EncryptDatabase": "encrypt_database",
+    "PostgresAlternativeHost": "postgres_alternative_host",
     "APIHandlerMemorySize": "api_handler_memory_size",
     "PublicSubnet1AZ": "public_subnet_1_az",
     "PrivateSubnet1AZ": "private_subnet_1_az",
@@ -142,6 +143,11 @@ def build_parser(subparsers, parents):
         help="Whether to encrypt the database",
         default="false",
         choices=[None, "true", "false"],
+    )
+    parser.add_argument(
+        "--postgres-alternative-host",
+        help="Use an external host for postgres (but the same secrets)",
+        default=None,
     )
 
     # ElastiCacheClusterId

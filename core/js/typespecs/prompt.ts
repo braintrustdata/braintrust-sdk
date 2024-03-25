@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { chatCompletionMessageParamSchema } from "./openai/messages";
+
+export { toolsSchema } from "./openai/tools";
+export type { Tools } from "./openai/tools";
 
 export const messageRoleSchema = z.enum([
   "system",
@@ -10,27 +14,7 @@ export const messageRoleSchema = z.enum([
 ]);
 export type MessageRole = z.infer<typeof messageRoleSchema>;
 
-export const functionCallSchema = z.object({
-  name: z.string(),
-  arguments: z.string(),
-});
-
-const toolCallSchema = z.object({
-  id: z.string(),
-  function: z.object({
-    arguments: z.string(),
-    name: z.string(),
-  }),
-  type: z.literal("function"),
-});
-
-export const messageSchema = z.object({
-  content: z.string().default(""),
-  role: messageRoleSchema,
-  name: z.string().optional(),
-  function_call: z.union([z.string(), functionCallSchema]).optional(),
-  tool_calls: z.array(toolCallSchema).optional(),
-});
+export type Message = z.infer<typeof chatCompletionMessageParamSchema>;
 
 export const promptBlockDataSchema = z.union([
   z.object({
@@ -39,7 +23,7 @@ export const promptBlockDataSchema = z.union([
   }),
   z.object({
     type: z.literal("chat"),
-    messages: z.array(messageSchema),
+    messages: z.array(chatCompletionMessageParamSchema),
     tools: z.string().optional(),
   }),
 ]);
@@ -49,6 +33,8 @@ export type PromptBlockData = z.infer<typeof promptBlockDataSchema>;
 const braintrustModelParamsSchema = z.object({
   use_cache: z.boolean().optional(),
 });
+
+export const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
 const openAIModelParamsSchema = z.object({
   temperature: z.number(),
@@ -70,6 +56,8 @@ const openAIModelParamsSchema = z.object({
     ])
     .optional(),
 });
+
+export type OpenAIModelParams = z.infer<typeof openAIModelParamsSchema>;
 
 const anthropicModelParamsSchema = z.object({
   max_tokens: z.number(),
@@ -100,6 +88,14 @@ export const modelParamsSchema = braintrustModelParamsSchema.and(
 );
 
 export type ModelParams = z.infer<typeof modelParamsSchema>;
+
+const anyModelParamsSchema = openAIModelParamsSchema
+  .and(anthropicModelParamsSchema)
+  .and(googleModelParamsSchema)
+  .and(braintrustModelParamsSchema);
+
+export type AnyModelParam = z.infer<typeof anyModelParamsSchema>;
+
 export const promptOptionsSchema = z.object({
   model: z.string().optional(),
   params: modelParamsSchema.optional(),
