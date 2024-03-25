@@ -2088,7 +2088,7 @@ class ObjectFetcher<RecordType>
 
 export type BaseMetadata = Record<string, unknown> | void;
 export type DefaultMetadataType = void;
-export type EvalCase<Input, Expected, Metadata = DefaultMetadataType> = {
+export type EvalCase<Input, Expected, Metadata> = {
   input: Input;
   tags?: string[];
 } & (Expected extends void ? {} : { expected: Expected }) &
