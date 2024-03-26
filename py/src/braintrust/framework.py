@@ -577,7 +577,8 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                         score = await p
                         if score is None:
                             continue
-                        passing_scorers_and_results.append((name, await p))
+                        passing_scorers_and_results.append((name, score))
+                        scores[name] = score.score
                     except Exception as e:
                         exc_info = traceback.format_exc()
                         failing_scorers_and_exceptions.append((name, e, exc_info))
