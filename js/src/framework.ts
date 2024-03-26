@@ -240,7 +240,7 @@ globalThis._evals = {
 export async function Eval<
   Input,
   Output,
-  Expected,
+  Expected = void,
   Metadata extends BaseMetadata = DefaultMetadataType,
   EvalReport = boolean
 >(

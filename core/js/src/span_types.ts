@@ -6,3 +6,5 @@ export enum SpanTypeAttribute {
   TASK = "task",
   TOOL = "tool",
 }
+
+export type SpanType = SpanTypeAttribute[keyof SpanTypeAttribute];
