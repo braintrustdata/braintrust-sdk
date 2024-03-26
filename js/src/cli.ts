@@ -467,7 +467,6 @@ async function runOnce(
       globalThis._evals.reporters
     );
 
-    console.log(allEvalsResults[idx as number]);
     const report = resolvedReporter.reportEval(
       evaluator.evaluator,
       allEvalsResults[idx as number],
