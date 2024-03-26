@@ -151,7 +151,8 @@ export type EvalResultWithSummary<
   Output,
   Expected,
   Metadata extends BaseMetadata = DefaultMetadataType
-> = ExperimentSummary & {
+> = {
+  summary: ExperimentSummary | null;
   results: EvalResult<Input, Output, Expected, Metadata>[];
 };
 
@@ -258,13 +259,7 @@ export async function Eval<
     };
     // Better to return this empty object than have an annoying-to-use signature
     return {
-      projectName: "_lazy_load",
-      experimentName: "_lazy_load",
-      projectUrl: "",
-      experimentUrl: "",
-      comparisonExperimentName: "",
-      scores: {},
-      metrics: {},
+      summary: null,
       results: [],
     };
   }
@@ -567,6 +562,7 @@ export async function runEvaluator(
                 name: result.name,
                 score: result,
               });
+              scores[result.name] = result.score;
             });
           } else {
             failingScorersAndResults.push({ name, error: results.value });
@@ -626,7 +622,7 @@ export async function runEvaluator(
   const summary = experiment ? await experiment.summarize() : null;
 
   return {
-    ...summary!,
+    summary,
     results,
   };
 }
@@ -654,7 +650,7 @@ export const defaultReporter: ReporterDef<boolean> = {
     result: EvalResultWithSummary<any, any, any, any>,
     { verbose, jsonl }: ReporterOpts
   ) {
-    const { results, ...summary } = result;
+    const { results, summary } = result;
     const failingResults = results.filter(
       (r: { error: unknown }) => r.error !== undefined
     );
