@@ -329,37 +329,40 @@ def pluralize(n, singular, plural):
         return plural
 
 
-def report_evaluator_result(eval_name, result, verbose, jsonl):
+def report_failures(evaluator, failing_results, verbose, jsonl):
+    eprint(
+        f"{bcolors.FAIL}Evaluator {evaluator.eval_name} failed with {len(failing_results)} {pluralize(len(failing_results), 'error', 'errors')}{bcolors.ENDC}"
+    )
+
+    errors = [
+        (
+            result.exc_info
+            if verbose or jsonl
+            else "\n".join(traceback.format_exception_only(type(result.error), result.error))
+        )
+        for result in failing_results
+    ]
+
+    if jsonl:
+        print(json.dumps({"eval_name": evaluator.eval_name, "errors": errors}))
+    else:
+        info = "".join(errors).rstrip()
+        eprint(f"{bcolors.FAIL}{info}{bcolors.ENDC}")
+
+        eprint(f"{bcolors.FAIL}Add --verbose to see full stack traces.{bcolors.ENDC}")
+
+
+def report_evaluator_result(evaluator: Evaluator, result, verbose, jsonl):
     results = result.results
     summary = result.summary
 
     failing_results = [x for x in results if x.error]
     if len(failing_results) > 0:
-        eprint(
-            f"{bcolors.FAIL}Evaluator {eval_name} failed with {len(failing_results)} {pluralize(len(failing_results), 'error', 'errors')}{bcolors.ENDC}"
-        )
-
-        errors = [
-            (
-                result.exc_info
-                if verbose or jsonl
-                else "\n".join(traceback.format_exception_only(type(result.error), result.error))
-            )
-            for result in failing_results
-        ]
-
-        if jsonl:
-            print(json.dumps({"eval_name": eval_name, "errors": errors}))
-        else:
-            info = "".join(errors).rstrip()
-            eprint(f"{bcolors.FAIL}{info}{bcolors.ENDC}")
-
-            eprint(f"{bcolors.FAIL}Add --verbose to see full stack traces.{bcolors.ENDC}")
-
-        return False
+        report_failures(evaluator, failing_results, verbose=verbose, jsonl=jsonl)
     else:
         print(json.dumps(summary.as_dict()) if jsonl else f"{summary}")
-        return True
+
+    return len(failing_results) == 0
 
 
 default_reporter = ReporterDef(
@@ -794,36 +797,40 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
     if experiment:
         summary = experiment.summarize()
     else:
-        scores_by_name = defaultdict(lambda: (0, 0))
-        for result in results:
-            for name, score in result.scores.items():
-                curr = scores_by_name[name]
-                if curr is None:
-                    continue
-                scores_by_name[name] = (curr[0] + score, curr[1] + 1)
-        longest_score_name = max(len(name) for name in scores_by_name)
-        avg_scores = {
-            name: ScoreSummary(
-                name=name,
-                score=total / count,
-                diff=None,
-                improvements=None,
-                regressions=None,
-                _longest_score_name=longest_score_name,
-            )
-            for name, (total, count) in scores_by_name.items()
-        }
-        summary = ExperimentSummary(
-            experiment_name=evaluator.experiment_name,
-            project_name=evaluator.project_name,
-            project_url=None,
-            experiment_url=None,
-            comparison_experiment_name=None,
-            scores=avg_scores,
-            metrics={},
-        )
+        summary = build_local_summary(evaluator, results)
 
     return EvalResultWithSummary(results=results, summary=summary)
+
+
+def build_local_summary(evaluator, results):
+    scores_by_name = defaultdict(lambda: (0, 0))
+    for result in results:
+        for name, score in result.scores.items():
+            curr = scores_by_name[name]
+            if curr is None:
+                continue
+            scores_by_name[name] = (curr[0] + score, curr[1] + 1)
+    longest_score_name = max(len(name) for name in scores_by_name) if scores_by_name else 0
+    avg_scores = {
+        name: ScoreSummary(
+            name=name,
+            score=total / count,
+            diff=None,
+            improvements=None,
+            regressions=None,
+            _longest_score_name=longest_score_name,
+        )
+        for name, (total, count) in scores_by_name.items()
+    }
+    return ExperimentSummary(
+        experiment_name=evaluator.experiment_name,
+        project_name=evaluator.project_name,
+        project_url=None,
+        experiment_url=None,
+        comparison_experiment_name=None,
+        scores=avg_scores,
+        metrics={},
+    )
 
 
 __all__ = ["Evaluator", "Eval", "Score", "EvalCase", "EvalHooks", "BaseExperiment", "Reporter"]
