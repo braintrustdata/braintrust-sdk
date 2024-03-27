@@ -180,16 +180,16 @@ async def run_once(handles, evaluator_opts):
     eval_reports = {}
     for evaluator, result in zip(objects.evaluators.values(), eval_results):
         resolved_reporter = resolve_reporter(evaluator.reporter, objects.reporters)
-        resolved_reporter._call_report_eval(
+        report = resolved_reporter._call_report_eval(
             evaluator=evaluator.evaluator, result=result, verbose=evaluator_opts.verbose, jsonl=evaluator_opts.jsonl
         )
-        add_report(eval_reports, resolved_reporter, result)
+        add_report(eval_reports, resolved_reporter, report)
 
     all_success = True
     for report in eval_reports.values():
         reporter = report["reporter"]
-        results = report["results"]
-        if not reporter._call_report_run(results, verbose=evaluator_opts.verbose, jsonl=evaluator_opts.jsonl):
+        results = [await r for r in report["results"]]
+        if not await reporter._call_report_run(results, verbose=evaluator_opts.verbose, jsonl=evaluator_opts.jsonl):
             _logger.error(f"Reporter {reporter.name} failed")
             all_success = False
 

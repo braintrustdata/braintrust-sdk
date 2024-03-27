@@ -213,6 +213,45 @@ class EvalResultWithSummary(SerializableDataClass):
 EvalReport = TypeVar("EvalReport")
 
 
+async def await_or_run(event_loop, f, *args, **kwargs):
+    if inspect.iscoroutinefunction(f):
+        return await f(*args, **kwargs)
+    else:
+
+        def run_f(args, kwargs, ctx):
+            tokens = [(var, var.set(value)) for var, value in ctx.items()]
+            try:
+                return f(*args, **kwargs)
+            finally:
+                for var, tok in tokens:
+                    var.reset(tok)
+
+        with _THREAD_POOL_SINGLETON.get() as thread_pool:
+            return await event_loop.run_in_executor(
+                thread_pool.thread_pool(), run_f, args, kwargs, contextvars.copy_context()
+            )
+
+
+async def call_user_fn(event_loop, fn, **kwargs):
+    signature = inspect.signature(fn)
+    accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values())
+
+    positional_args = []
+    final_kwargs = {}
+
+    for name, param in signature.parameters.items():
+        if name in kwargs:
+            final_kwargs[name] = kwargs.pop(name)
+        else:
+            next_arg = list(kwargs.keys())[0]
+            final_kwargs[name] = kwargs.pop(next_arg)
+
+    if accepts_kwargs:
+        final_kwargs.update(kwargs)
+
+    return await await_or_run(event_loop, fn, *positional_args, **final_kwargs)
+
+
 @dataclasses.dataclass
 class ReporterDef(SerializableDataClass):
     """
@@ -235,31 +274,15 @@ class ReporterDef(SerializableDataClass):
     If you return false, the `braintrust eval` command will exit with a non-zero status code.
     """
 
-    def _call_report_eval(self, evaluator: Evaluator, result: EvalResultWithSummary, verbose: bool, jsonl: bool):
-        signature = inspect.signature(self.report_eval)
-        if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values()):
-            return self.report_eval(evaluator=evaluator, result=result, verbose=verbose, jsonl=jsonl)
-        else:
-            # Pass jsonl and verbose if they are in the signature
-            kwargs = {}
-            if "jsonl" in signature.parameters:
-                kwargs["jsonl"] = jsonl
-            if "verbose" in signature.parameters:
-                kwargs["verbose"] = verbose
-            return self.report_eval(evaluator, result, **kwargs)
+    async def _call_report_eval(self, evaluator: Evaluator, result: EvalResultWithSummary, verbose: bool, jsonl: bool):
+        event_loop = asyncio.get_event_loop()
+        return await call_user_fn(
+            event_loop, self.report_eval, evaluator=evaluator, result=result, verbose=verbose, jsonl=jsonl
+        )
 
-    def _call_report_run(self, results: List[EvalReport], verbose: bool, jsonl: bool):
-        signature = inspect.signature(self.report_run)
-        if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values()):
-            return self.report_run(results=results, verbose=verbose, jsonl=jsonl)
-        else:
-            # Pass jsonl and verbose if they are in the signature
-            kwargs = {}
-            if "jsonl" in signature.parameters:
-                kwargs["jsonl"] = jsonl
-            if "verbose" in signature.parameters:
-                kwargs["verbose"] = verbose
-            return self.report_run(results, **kwargs)
+    async def _call_report_run(self, results: List[EvalReport], verbose: bool, jsonl: bool):
+        event_loop = asyncio.get_event_loop()
+        return await call_user_fn(event_loop, self.report_run, results=results, verbose=verbose, jsonl=jsonl)
 
 
 @dataclasses.dataclass
@@ -626,24 +649,6 @@ def _scorer_name(scorer, scorer_idx):
 async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int], filters: List[Filter]):
     event_loop = asyncio.get_event_loop()
 
-    async def await_or_run(f, *args, **kwargs):
-        if inspect.iscoroutinefunction(f):
-            return await f(*args, **kwargs)
-        else:
-
-            def run_f(args, kwargs, ctx):
-                tokens = [(var, var.set(value)) for var, value in ctx.items()]
-                try:
-                    return f(*args, **kwargs)
-                finally:
-                    for var, tok in tokens:
-                        var.reset(tok)
-
-            with _THREAD_POOL_SINGLETON.get() as thread_pool:
-                return await event_loop.run_in_executor(
-                    thread_pool.thread_pool(), run_f, args, kwargs, contextvars.copy_context()
-                )
-
     async def await_or_run_scorer(root_span, scorer, name, **kwargs):
         with root_span.start_span(
             name=name, span_attributes={"type": SpanTypeAttribute.SCORE}, input=dict(**kwargs)
@@ -652,12 +657,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
 
             scorer_args = kwargs
 
-            signature = inspect.signature(score)
-            scorer_accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values())
-            if not scorer_accepts_kwargs:
-                scorer_args = {k: v for k, v in scorer_args.items() if k in signature.parameters}
-
-            result = await await_or_run(score, **scorer_args)
+            result = await call_user_fn(event_loop, score, **scorer_args)
             if not isinstance(result, Iterable):
                 result = [result]
 
@@ -709,7 +709,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
 
                 with root_span.start_span("task", span_attributes={"type": SpanTypeAttribute.TASK}) as span:
                     hooks.set_span(span)
-                    output = await await_or_run(evaluator.task, *task_args)
+                    output = await await_or_run(event_loop, evaluator.task, *task_args)
                     span.log(input=task_args[0], output=output)
                 root_span.log(output=output, metadata=metadata)
 

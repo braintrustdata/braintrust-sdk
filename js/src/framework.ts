@@ -180,9 +180,9 @@ export interface ReporterBody<EvalReport> {
    * whether the run was successful. If you return false, the `braintrust eval`
    * command will exit with a non-zero status code.
    *
-   * @param evalReports
+   * @param reports
    */
-  reportRun(evalReports: EvalReport[]): boolean | Promise<boolean>;
+  reportRun(reports: EvalReport[]): boolean | Promise<boolean>;
 }
 
 export type ReporterDef<EvalReport> = {
