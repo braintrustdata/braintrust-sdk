@@ -494,7 +494,10 @@ export async function runEvaluator(
                     typeof scoreValue === "object"
                       ? scoreValue
                       : {
-                          name: `${scorerNames[score_idx]}_${idx}`,
+                          name:
+                            scoreValues.length > 1
+                              ? `${scorerNames[score_idx]}_${idx}`
+                              : scorerNames[score_idx],
                           score: scoreValue,
                         }
                   );

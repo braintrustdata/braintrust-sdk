@@ -662,7 +662,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 result = [result]
 
             result = [
-                Score(name=f"{name}_{idx}", score=r) if not isinstance(r, Score) else r
+                Score(name=f"{name}_{idx}" if len(result) > 1 else name, score=r) if not isinstance(r, Score) else r
                 for (idx, r) in enumerate(result)
             ]
 
