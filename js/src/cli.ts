@@ -177,6 +177,10 @@ function buildWatchPluginForEvaluator(
   inFile: string,
   opts: EvaluatorOpts
 ): esbuild.Plugin {
+  const evaluators: EvaluatorState = {
+    evaluators: {},
+    reporters: {},
+  };
   const plugin = {
     name: "run-evalutator-on-end",
     setup(build: esbuild.PluginBuild) {
@@ -196,6 +200,22 @@ function buildWatchPluginForEvaluator(
         const evalResult = evaluateBuildResults(inFile, result);
         if (!evalResult) {
           return;
+        }
+
+        // Update the evaluators and reporters
+        for (const [evalName, evaluator] of Object.entries(
+          evalResult.evaluators
+        )) {
+          evaluators.evaluators[evalName] = {
+            sourceFile: inFile,
+            evaluator: evaluator.evaluator,
+            reporter: evaluator.reporter,
+          };
+        }
+        for (const [reporterName, reporter] of Object.entries(
+          evalResult.reporters
+        )) {
+          evaluators.reporters[reporterName] = reporter;
         }
 
         const evalReports: Record<
@@ -222,7 +242,7 @@ function buildWatchPluginForEvaluator(
           );
           const resolvedReporter = resolveReporter(
             reporter,
-            globalThis._evals.reporters
+            evaluators.reporters // Let these accumulate across all files.
           );
 
           const report = resolvedReporter.reportEval(
@@ -464,7 +484,7 @@ async function runOnce(
     const evaluator = evaluators.evaluators[evaluatorName];
     const resolvedReporter = resolveReporter(
       evaluator.reporter,
-      globalThis._evals.reporters
+      evaluators.reporters
     );
 
     const report = resolvedReporter.reportEval(
@@ -550,9 +570,18 @@ async function collectFiles(inputPath: string): Promise<string[]> {
 
   let files: string[] = [];
   if (!pathStat.isDirectory()) {
-    if (checkMatch(inputPath, INCLUDE, EXCLUDE)) {
-      files.push(inputPath);
+    // XXX IMPROVE THIS:
+    // - Allow the file to be included if specified by name
+    // - Print a warning if the file doesn't match
+    if (!checkMatch(inputPath, INCLUDE, EXCLUDE)) {
+      console.warn(
+        warning(
+          `Reading ${inputPath} because it was specified directly. Rename it to end in .eval.ts or ` +
+            `.eval.js to include it automatically when you specify a directory.`
+        )
+      );
     }
+    files.push(inputPath);
   } else {
     const walked = await util.promisify(fsWalk.walk)(inputPath, {
       deepFilter: (entry) => {

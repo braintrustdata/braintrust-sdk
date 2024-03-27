@@ -180,9 +180,9 @@ export interface ReporterBody<EvalReport> {
    * whether the run was successful. If you return false, the `braintrust eval`
    * command will exit with a non-zero status code.
    *
-   * @param evalReports
+   * @param reports
    */
-  reportRun(evalReports: EvalReport[]): boolean | Promise<boolean>;
+  reportRun(reports: EvalReport[]): boolean | Promise<boolean>;
 }
 
 export type ReporterDef<EvalReport> = {
@@ -268,7 +268,7 @@ export async function Eval<
 
   if (typeof reporter === "string") {
     throw new Error(
-      "Can only specify reporter names when running 'braintrust eval'"
+      "Must specify a reporter object, not a name. Can only specify reporter names when running 'braintrust eval'"
     );
   }
 
@@ -490,10 +490,13 @@ export async function runEvaluator(
                     ? scoreValue
                     : [scoreValue];
 
-                  const results: Score[] = scoreValues.map((scoreValue) =>
+                  const results: Score[] = scoreValues.map((scoreValue, idx) =>
                     typeof scoreValue === "object"
                       ? scoreValue
-                      : { name: scorerNames[score_idx], score: scoreValue }
+                      : {
+                          name: `${scorerNames[score_idx]}_${idx}`,
+                          score: scoreValue,
+                        }
                   );
 
                   const getOtherFields = (s: Score) => {
