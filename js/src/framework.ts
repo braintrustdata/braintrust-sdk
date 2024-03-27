@@ -152,7 +152,7 @@ export type EvalResultWithSummary<
   Expected,
   Metadata extends BaseMetadata = DefaultMetadataType
 > = {
-  summary: ExperimentSummary | null;
+  summary: ExperimentSummary;
   results: EvalResult<Input, Output, Expected, Metadata>[];
 };
 
@@ -259,7 +259,12 @@ export async function Eval<
     };
     // Better to return this empty object than have an annoying-to-use signature
     return {
-      summary: null,
+      summary: {
+        scores: {},
+        metrics: {},
+        projectName: "",
+        experimentName: "",
+      },
       results: [],
     };
   }
@@ -494,7 +499,10 @@ export async function runEvaluator(
                     typeof scoreValue === "object"
                       ? scoreValue
                       : {
-                          name: `${scorerNames[score_idx]}_${idx}`,
+                          name:
+                            scoreValues.length > 1
+                              ? `${scorerNames[score_idx]}_${idx}`
+                              : scorerNames[score_idx],
                           score: scoreValue,
                         }
                   );
@@ -622,7 +630,9 @@ export async function runEvaluator(
     }
   });
   const results = await Promise.all(evals);
-  const summary = experiment ? await experiment.summarize() : null;
+  const summary = experiment
+    ? await experiment.summarize()
+    : buildLocalSummary(evaluator, results);
 
   return {
     summary,
@@ -638,6 +648,79 @@ export function logError(e: unknown, verbose: boolean) {
     console.error(`${e}`);
   } else {
     console.error(e);
+  }
+}
+
+export function buildLocalSummary(
+  evaluator: EvaluatorDef<any, any, any, any>,
+  results: EvalResult<any, any, any, any>[]
+): ExperimentSummary {
+  const scoresByName: { [name: string]: { total: number; count: number } } = {};
+  for (const result of results) {
+    for (const [name, score] of Object.entries(result.scores)) {
+      const { total, count } = scoresByName[name] || { total: 0, count: 0 };
+      if (score === null) {
+        continue;
+      }
+      scoresByName[name] = { total: total + score, count: count + 1 };
+    }
+  }
+
+  return {
+    projectName: evaluator.projectName,
+    experimentName: evaluator.evalName,
+    scores: Object.fromEntries(
+      Object.entries(scoresByName).map(([name, { total, count }]) => [
+        name,
+        {
+          name,
+          score: total / count,
+        },
+      ])
+    ),
+  };
+}
+
+export function reportFailures<
+  Input,
+  Output,
+  Expected,
+  Metadata extends BaseMetadata
+>(
+  evaluator: EvaluatorDef<Input, Output, Expected, Metadata>,
+  failingResults: EvalResult<Input, Output, Expected, Metadata>[],
+  { verbose, jsonl }: ReporterOpts
+) {
+  if (failingResults.length > 0) {
+    // TODO: We may want to support a non-strict mode (and make this the "strict" behavior), so that
+    // users can still log imperfect evaluations. In the meantime, they should handle these cases inside
+    // of their tasks.
+    console.error(
+      warning(
+        `Evaluator ${evaluator.evalName} failed with ${pluralize(
+          "error",
+          failingResults.length,
+          true
+        )}. This evaluation ("${evaluator.evalName}") will not be fully logged.`
+      )
+    );
+    if (jsonl) {
+      console.log(
+        JSON.stringify({
+          evaluatorName: evaluator.evalName,
+          errors: failingResults.map(
+            (r) => `${r.error instanceof Error ? r.error.stack : r.error}`
+          ),
+        })
+      );
+    } else {
+      for (const result of failingResults) {
+        logError(result.error, verbose);
+      }
+    }
+    if (!verbose && !jsonl) {
+      console.error(warning("Add --verbose to see full stack traces."));
+    }
   }
 }
 
@@ -659,68 +742,10 @@ export const defaultReporter: ReporterDef<boolean> = {
     );
 
     if (failingResults.length > 0) {
-      // TODO: We may want to support a non-strict mode (and make this the "strict" behavior), so that
-      // users can still log imperfect evaluations. In the meantime, they should handle these cases inside
-      // of their tasks.
-      console.error(
-        warning(
-          `Evaluator ${evaluator.evalName} failed with ${pluralize(
-            "error",
-            failingResults.length,
-            true
-          )}. This evaluation ("${
-            evaluator.evalName
-          }") will not be fully logged.`
-        )
-      );
-      if (jsonl) {
-        console.log(
-          JSON.stringify({
-            evaluatorName: evaluator.evalName,
-            errors: failingResults.map(
-              (r) => `${r.error instanceof Error ? r.error.stack : r.error}`
-            ),
-          })
-        );
-      } else {
-        for (const result of failingResults) {
-          logError(result.error, verbose);
-        }
-      }
-      if (!verbose && !jsonl) {
-        console.error(warning("Add --verbose to see full stack traces."));
-      }
-    }
-    if (summary) {
-      console.log(jsonl ? JSON.stringify(summary) : summary);
-    } else {
-      const scoresByName: { [name: string]: { total: number; count: number } } =
-        {};
-      for (const result of results) {
-        for (const [name, score] of Object.entries(result.scores)) {
-          const { total, count } = scoresByName[name] || { total: 0, count: 0 };
-          if (score === null) {
-            continue;
-          }
-          scoresByName[name] = { total: total + score, count: count + 1 };
-        }
-      }
-
-      const summary = {
-        scores: Object.fromEntries(
-          Object.entries(scoresByName).map(([name, { total, count }]) => [
-            name,
-            {
-              name,
-              score: total / count,
-            },
-          ])
-        ),
-      };
-
-      console.log(jsonl ? JSON.stringify(summary) : summary);
+      reportFailures(evaluator, failingResults, { verbose, jsonl });
     }
 
+    console.log(jsonl ? JSON.stringify(summary) : summary);
     return failingResults.length === 0;
   },
   async reportRun(evalReports: boolean[]) {

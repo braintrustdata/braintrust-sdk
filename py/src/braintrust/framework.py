@@ -24,7 +24,7 @@ from braintrust_core.util import (
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 
-from .logger import NOOP_SPAN, ExperimentSummary, Metadata, Span
+from .logger import NOOP_SPAN, ExperimentSummary, Metadata, ScoreSummary, Span
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
 
@@ -206,7 +206,7 @@ class Evaluator:
 
 @dataclasses.dataclass
 class EvalResultWithSummary(SerializableDataClass):
-    summary: Optional[ExperimentSummary]
+    summary: ExperimentSummary
     results: List[EvalResult]
 
 
@@ -329,61 +329,46 @@ def pluralize(n, singular, plural):
         return plural
 
 
-def report_evaluator_result(eval_name, result, verbose, jsonl):
+def report_failures(evaluator, failing_results, verbose, jsonl):
+    eprint(
+        f"{bcolors.FAIL}Evaluator {evaluator.eval_name} failed with {len(failing_results)} {pluralize(len(failing_results), 'error', 'errors')}{bcolors.ENDC}"
+    )
+
+    errors = [
+        (
+            result.exc_info
+            if verbose or jsonl
+            else "\n".join(traceback.format_exception_only(type(result.error), result.error))
+        )
+        for result in failing_results
+    ]
+
+    if jsonl:
+        print(json.dumps({"eval_name": evaluator.eval_name, "errors": errors}))
+    else:
+        info = "".join(errors).rstrip()
+        eprint(f"{bcolors.FAIL}{info}{bcolors.ENDC}")
+
+        eprint(f"{bcolors.FAIL}Add --verbose to see full stack traces.{bcolors.ENDC}")
+
+
+def report_evaluator_result(evaluator: Evaluator, result, verbose, jsonl):
     results = result.results
     summary = result.summary
 
     failing_results = [x for x in results if x.error]
     if len(failing_results) > 0:
-        eprint(
-            f"{bcolors.FAIL}Evaluator {eval_name} failed with {len(failing_results)} {pluralize(len(failing_results), 'error', 'errors')}{bcolors.ENDC}"
-        )
-
-        errors = [
-            (
-                result.exc_info
-                if verbose or jsonl
-                else "\n".join(traceback.format_exception_only(type(result.error), result.error))
-            )
-            for result in failing_results
-        ]
-
-        if jsonl:
-            print(json.dumps({"eval_name": eval_name, "errors": errors}))
-        else:
-            info = "".join(errors).rstrip()
-            eprint(f"{bcolors.FAIL}{info}{bcolors.ENDC}")
-
-            eprint(f"{bcolors.FAIL}Add --verbose to see full stack traces.{bcolors.ENDC}")
-
-        return False
-
-    if summary:
-        print(json.dumps(summary.as_dict()) if jsonl else f"{summary}")
+        report_failures(evaluator, failing_results, verbose=verbose, jsonl=jsonl)
     else:
-        scores_by_name = defaultdict(lambda: (0, 0))
-        for result in results:
-            for name, score in result.scores.items():
-                curr = scores_by_name[name]
-                if curr is None:
-                    continue
-                scores_by_name[name] = (curr[0] + score, curr[1] + 1)
+        print(json.dumps(summary.as_dict()) if jsonl else f"{summary}")
 
-        if jsonl:
-            summary = {"scores": scores_by_name}
-            print(json.dumps(summary))
-        else:
-            print(f"Average scores for {eval_name}:")
-            for name, (total, count) in scores_by_name.items():
-                print(f"  {name}: {total / count}")
-
-    return True
+    return len(failing_results) == 0
 
 
 default_reporter = ReporterDef(
     name="default",
     report_eval=report_evaluator_result,
-    report_run=lambda results, verbose, jsonl: all(not x for x in results),
+    report_run=lambda results, verbose, jsonl: all(x for x in results),
 )
 
 
@@ -662,7 +647,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 result = [result]
 
             result = [
-                Score(name=f"{name}_{idx}", score=r) if not isinstance(r, Score) else r
+                Score(name=f"{name}_{idx}" if len(result) > 1 else name, score=r) if not isinstance(r, Score) else r
                 for (idx, r) in enumerate(result)
             ]
 
@@ -809,8 +794,43 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
     for task in std_tqdm(tasks, desc=f"{evaluator.eval_name} (tasks)", position=position, disable=position is None):
         results.append(await task)
 
-    summary = experiment.summarize() if experiment else None
+    if experiment:
+        summary = experiment.summarize()
+    else:
+        summary = build_local_summary(evaluator, results)
+
     return EvalResultWithSummary(results=results, summary=summary)
+
+
+def build_local_summary(evaluator, results):
+    scores_by_name = defaultdict(lambda: (0, 0))
+    for result in results:
+        for name, score in result.scores.items():
+            curr = scores_by_name[name]
+            if curr is None:
+                continue
+            scores_by_name[name] = (curr[0] + score, curr[1] + 1)
+    longest_score_name = max(len(name) for name in scores_by_name) if scores_by_name else 0
+    avg_scores = {
+        name: ScoreSummary(
+            name=name,
+            score=total / count,
+            diff=None,
+            improvements=None,
+            regressions=None,
+            _longest_score_name=longest_score_name,
+        )
+        for name, (total, count) in scores_by_name.items()
+    }
+    return ExperimentSummary(
+        experiment_name=evaluator.experiment_name,
+        project_name=evaluator.project_name,
+        project_url=None,
+        experiment_url=None,
+        comparison_experiment_name=None,
+        scores=avg_scores,
+        metrics={},
+    )
 
 
 __all__ = ["Evaluator", "Eval", "Score", "EvalCase", "EvalHooks", "BaseExperiment", "Reporter"]
