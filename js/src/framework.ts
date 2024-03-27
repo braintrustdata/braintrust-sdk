@@ -490,10 +490,13 @@ export async function runEvaluator(
                     ? scoreValue
                     : [scoreValue];
 
-                  const results: Score[] = scoreValues.map((scoreValue) =>
+                  const results: Score[] = scoreValues.map((scoreValue, idx) =>
                     typeof scoreValue === "object"
                       ? scoreValue
-                      : { name: scorerNames[score_idx], score: scoreValue }
+                      : {
+                          name: `${scorerNames[score_idx]}_${idx}`,
+                          score: scoreValue,
+                        }
                   );
 
                   const getOtherFields = (s: Score) => {

@@ -620,17 +620,20 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
             if not isinstance(result, Iterable):
                 result = [result]
 
-            result = [Score(name=name, score=r) if not isinstance(r, Score) else r for r in result]
+            result = [
+                Score(name=f"{name}_{idx}", score=r) if not isinstance(r, Score) else r
+                for (idx, r) in enumerate(result)
+            ]
 
             def get_other_fields(s):
                 return {k: v for k, v in s.as_dict().items() if k not in ["metadata", "name"]}
 
-            result_metadata = {name: r.metadata for r in result} if len(result) != 1 else result[0].metadata
+            result_metadata = {r.name: r.metadata for r in result} if len(result) != 1 else result[0].metadata
             result_output = (
-                {name: get_other_fields(r) for r in result} if len(result) != 1 else get_other_fields(result[0])
+                {r.name: get_other_fields(r) for r in result} if len(result) != 1 else get_other_fields(result[0])
             )
 
-            scores = {name: r.score for r in result}
+            scores = {r.name: r.score for r in result}
             span.log(output=result_output, metadata=result_metadata, scores=scores)
             return result
 
