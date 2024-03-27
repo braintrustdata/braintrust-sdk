@@ -383,7 +383,7 @@ def report_evaluator_result(eval_name, result, verbose, jsonl):
 default_reporter = ReporterDef(
     name="default",
     report_eval=report_evaluator_result,
-    report_run=lambda results, verbose, jsonl: all(not x for x in results),
+    report_run=lambda results, verbose, jsonl: all(x for x in results),
 )
 
 
