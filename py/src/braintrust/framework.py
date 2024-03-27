@@ -24,7 +24,7 @@ from braintrust_core.util import (
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 
-from .logger import NOOP_SPAN, ExperimentSummary, Metadata, Span
+from .logger import NOOP_SPAN, ExperimentSummary, Metadata, ScoreSummary, Span
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
 
@@ -206,7 +206,7 @@ class Evaluator:
 
 @dataclasses.dataclass
 class EvalResultWithSummary(SerializableDataClass):
-    summary: Optional[ExperimentSummary]
+    summary: ExperimentSummary
     results: List[EvalResult]
 
 
@@ -357,27 +357,9 @@ def report_evaluator_result(eval_name, result, verbose, jsonl):
             eprint(f"{bcolors.FAIL}Add --verbose to see full stack traces.{bcolors.ENDC}")
 
         return False
-
-    if summary:
-        print(json.dumps(summary.as_dict()) if jsonl else f"{summary}")
     else:
-        scores_by_name = defaultdict(lambda: (0, 0))
-        for result in results:
-            for name, score in result.scores.items():
-                curr = scores_by_name[name]
-                if curr is None:
-                    continue
-                scores_by_name[name] = (curr[0] + score, curr[1] + 1)
-
-        if jsonl:
-            summary = {"scores": scores_by_name}
-            print(json.dumps(summary))
-        else:
-            print(f"Average scores for {eval_name}:")
-            for name, (total, count) in scores_by_name.items():
-                print(f"  {name}: {total / count}")
-
-    return True
+        print(json.dumps(summary.as_dict()) if jsonl else f"{summary}")
+        return True
 
 
 default_reporter = ReporterDef(
@@ -809,7 +791,38 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
     for task in std_tqdm(tasks, desc=f"{evaluator.eval_name} (tasks)", position=position, disable=position is None):
         results.append(await task)
 
-    summary = experiment.summarize() if experiment else None
+    if experiment:
+        summary = experiment.summarize()
+    else:
+        scores_by_name = defaultdict(lambda: (0, 0))
+        for result in results:
+            for name, score in result.scores.items():
+                curr = scores_by_name[name]
+                if curr is None:
+                    continue
+                scores_by_name[name] = (curr[0] + score, curr[1] + 1)
+        longest_score_name = max(len(name) for name in scores_by_name)
+        avg_scores = {
+            name: ScoreSummary(
+                name=name,
+                score=total / count,
+                diff=None,
+                improvements=None,
+                regressions=None,
+                _longest_score_name=longest_score_name,
+            )
+            for name, (total, count) in scores_by_name.items()
+        }
+        summary = ExperimentSummary(
+            experiment_name=evaluator.experiment_name,
+            project_name=evaluator.project_name,
+            project_url=None,
+            experiment_url=None,
+            comparison_experiment_name=None,
+            scores=avg_scores,
+            metrics={},
+        )
+
     return EvalResultWithSummary(results=results, summary=summary)
 
 
