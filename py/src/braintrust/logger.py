@@ -177,6 +177,7 @@ class BraintrustState:
 
     def reset_login_info(self):
         self.app_url = None
+        self.app_public_url = None
         self.login_token = None
         self.org_id = None
         self.org_name = None
@@ -940,6 +941,8 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
         if app_url is None:
             app_url = os.environ.get("BRAINTRUST_APP_URL", "https://www.braintrustdata.com")
 
+        app_public_url = os.environ.get("BRAINTRUST_APP_PUBLIC_URL", app_url)
+
         if api_key is None:
             api_key = os.environ.get("BRAINTRUST_API_KEY")
 
@@ -949,6 +952,7 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
         _state.reset_login_info()
 
         _state.app_url = app_url
+        _state.app_public_url = app_public_url
 
         os.makedirs(CACHE_PATH, exist_ok=True)
 
@@ -1740,9 +1744,7 @@ class Experiment(ObjectFetcher):
         self.bg_logger.flush()
 
         state = self._get_state()
-        project_url = (
-            f"{state.app_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
-        )
+        project_url = f"{state.app_public_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
         experiment_url = f"{project_url}/{encode_uri_component(self.name)}"
 
         score_summary = {}
@@ -2191,9 +2193,7 @@ class Dataset(ObjectFetcher):
         # includes the new experiment.
         self.bg_logger.flush()
         state = self._get_state()
-        project_url = (
-            f"{state.app_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
-        )
+        project_url = f"{state.app_public_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
         dataset_url = f"{project_url}/d/{encode_uri_component(self.name)}"
 
         data_summary = None
