@@ -202,6 +202,7 @@ class BraintrustState {
   public currentSpan: IsoAsyncLocalStorage<Span>;
 
   public appUrl: string | null = null;
+  public appPublicUrl: string | null = null;
   public loginToken: string | null = null;
   public orgId: string | null = null;
   public orgName: string | null = null;
@@ -1662,9 +1663,12 @@ export async function login(
     orgName = iso.getEnv("BRAINTRUST_ORG_NAME"),
   } = options || {};
 
+  const appPublicUrl = iso.getEnv("BRAINTRUST_APP_PUBLIC_URL") || appUrl;
+
   _state.resetLoginInfo();
 
   _state.appUrl = appUrl;
+  _state.appPublicUrl = appPublicUrl;
 
   let conn = null;
 
@@ -2290,7 +2294,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
 
     await this.bgLogger.flush();
     const state = await this.getState();
-    const projectUrl = `${state.appUrl}/app/${encodeURIComponent(
+    const projectUrl = `${state.appPublicUrl}/app/${encodeURIComponent(
       state.orgName!
     )}/p/${encodeURIComponent((await this.project).name)}`;
     const experimentUrl = `${projectUrl}/${encodeURIComponent(
@@ -2809,7 +2813,7 @@ class Dataset<
 
     await this.bgLogger.flush();
     const state = await this.getState();
-    const projectUrl = `${state.appUrl}/app/${encodeURIComponent(
+    const projectUrl = `${state.appPublicUrl}/app/${encodeURIComponent(
       state.orgName!
     )}/p/${encodeURIComponent((await this.project).name)}`;
     const datasetUrl = `${projectUrl}/d/${encodeURIComponent(await this.name)}`;
