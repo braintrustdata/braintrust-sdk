@@ -235,6 +235,32 @@ class ReporterDef(SerializableDataClass):
     If you return false, the `braintrust eval` command will exit with a non-zero status code.
     """
 
+    def _call_report_eval(self, evaluator: Evaluator, result: EvalResultWithSummary, verbose: bool, jsonl: bool):
+        signature = inspect.signature(self.report_eval)
+        if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values()):
+            return self.report_eval(evaluator=evaluator, result=result, verbose=verbose, jsonl=jsonl)
+        else:
+            # Pass jsonl and verbose if they are in the signature
+            kwargs = {}
+            if "jsonl" in signature.parameters:
+                kwargs["jsonl"] = jsonl
+            if "verbose" in signature.parameters:
+                kwargs["verbose"] = verbose
+            return self.report_eval(evaluator, result, **kwargs)
+
+    def _call_report_run(self, results: List[EvalReport], verbose: bool, jsonl: bool):
+        signature = inspect.signature(self.report_run)
+        if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values()):
+            return self.report_run(results=results, verbose=verbose, jsonl=jsonl)
+        else:
+            # Pass jsonl and verbose if they are in the signature
+            kwargs = {}
+            if "jsonl" in signature.parameters:
+                kwargs["jsonl"] = jsonl
+            if "verbose" in signature.parameters:
+                kwargs["verbose"] = verbose
+            return self.report_run(results, **kwargs)
+
 
 @dataclasses.dataclass
 class EvaluatorInstance(SerializableDataClass):
@@ -246,6 +272,16 @@ class EvaluatorInstance(SerializableDataClass):
 class EvaluatorFile(SerializableDataClass):
     evaluators: Dict[str, EvaluatorInstance] = dataclasses.field(default_factory=dict)
     reporters: Dict[str, ReporterDef] = dataclasses.field(default_factory=dict)
+
+    def clear(self):
+        self.evaluators.clear()
+        self.reporters.clear()
+
+    def copy(self):
+        return EvaluatorFile(
+            evaluators={k: v for k, v in self.evaluators.items()},
+            reporters={k: v for k, v in self.reporters.items()},
+        )
 
 
 _evals = EvaluatorFile()
@@ -296,6 +332,9 @@ def report_evaluator_result(eval_name, result, verbose, jsonl):
             eprint(f"{bcolors.FAIL}{info}{bcolors.ENDC}")
 
             eprint(f"{bcolors.FAIL}Add --verbose to see full stack traces.{bcolors.ENDC}")
+
+        return False
+
     if summary:
         print(json.dumps(summary.as_dict()) if jsonl else f"{summary}")
     else:
@@ -315,11 +354,13 @@ def report_evaluator_result(eval_name, result, verbose, jsonl):
             for name, (total, count) in scores_by_name.items():
                 print(f"  {name}: {total / count}")
 
+    return True
+
 
 default_reporter = ReporterDef(
     name="default",
     report_eval=report_evaluator_result,
-    report_run=lambda results, verbose, jsonl: all(not x.error for x in results),
+    report_run=lambda results, verbose, jsonl: all(not x for x in results),
 )
 
 
@@ -394,7 +435,7 @@ def Eval(
     )
 
     if _lazy_load:
-        _evals[eval_name] = EvaluatorInstance(evaluator=evaluator, reporter=reporter)
+        _evals.evaluators[eval_name] = EvaluatorInstance(evaluator=evaluator, reporter=reporter)
     else:
         if reporter is not None and isinstance(reporter, str):
             raise ValueError(
@@ -772,4 +813,4 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
     return EvalResultWithSummary(results=results, summary=summary)
 
 
-__all__ = ["Evaluator", "Eval", "Score", "EvalCase", "EvalHooks", "BaseExperiment"]
+__all__ = ["Evaluator", "Eval", "Score", "EvalCase", "EvalHooks", "BaseExperiment", "Reporter"]
