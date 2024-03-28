@@ -54,6 +54,10 @@ export {
   EvalTask,
   Eval,
   EvalScorerArgs,
+  ReporterBody,
+  Reporter,
+  buildLocalSummary,
+  reportFailures,
 } from "./framework";
 export * from "./oai";
 export {
