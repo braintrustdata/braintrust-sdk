@@ -39,14 +39,10 @@ export type LogFeedbackFullArgs = IdField &
   >;
 
 export interface ParentExperimentIds {
-  kind: "experiment";
-  project_id: string;
   experiment_id: string;
 }
 
 export interface ParentProjectLogIds {
-  kind: "project_log";
-  org_id: string;
   project_id: string;
   log_id: "g";
 }
@@ -61,7 +57,7 @@ export type LogCommentFullArgs = IdField & {
   };
   [AUDIT_SOURCE_FIELD]: Source;
   [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
-} & Omit<ParentExperimentIds | ParentProjectLogIds, "kind">;
+} & (ParentExperimentIds | ParentProjectLogIds);
 
 export type SanitizedExperimentLogPartialArgs =
   Partial<OtherExperimentLogFields> & Partial<InputField>;
@@ -71,7 +67,6 @@ export type ExperimentEvent = Partial<InputField> &
     id: string;
     span_id?: string;
     root_span_id?: string;
-    project_id: string;
     experiment_id: string;
     [IS_MERGE_FIELD]: boolean;
   } & Partial<{
@@ -89,13 +84,12 @@ export type DatasetEvent = {
   tags?: string[];
   metadata?: unknown;
   id: string;
-  project_id: string;
   dataset_id: string;
   created: string;
 } & ({ expected?: unknown } | { output?: unknown });
 
 export type LoggingEvent = Omit<ExperimentEvent, "experiment_id"> & {
-  org_id: string;
+  project_id: string;
   log_id: "g";
 };
 
@@ -109,7 +103,7 @@ export type CommentEvent = IdField & {
   };
   [AUDIT_SOURCE_FIELD]: Source;
   [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
-} & Omit<ParentExperimentIds | ParentProjectLogIds, "kind">;
+} & (ParentExperimentIds | ParentProjectLogIds);
 
 export type BackgroundLogEvent =
   | ExperimentEvent

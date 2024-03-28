@@ -28,7 +28,6 @@ from braintrust_core.db_fields import (
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
-    PARENT_ID_FIELD,
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
@@ -36,6 +35,7 @@ from braintrust_core.git_fields import GitMetadataSettings, RepoInfo
 from braintrust_core.merge_row_batch import batch_items, merge_row_batch
 from braintrust_core.object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
 from braintrust_core.prompt import BRAINTRUST_PARAMS, PromptSchema
+from braintrust_core.span_parent_identifier import SpanParentComponents, SpanParentObjectType
 from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
     SerializableDataClass,
@@ -89,7 +89,15 @@ class Span(ABC):
 
     @abstractmethod
     def start_span(
-        self, name=None, type=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event
+        self,
+        name=None,
+        type=None,
+        span_attributes=None,
+        start_time=None,
+        set_current=None,
+        parent=None,
+        parent_id=None,
+        **event,
     ):
         """Create a new span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `Span.log` will be merged into one logical row.
 
@@ -101,8 +109,8 @@ class Span(ABC):
         :param span_attributes: Optional additional attributes to attach to the span, such as a type name.
         :param start_time: Optional start time of the span, as a timestamp in seconds.
         :param set_current: If true (the default), the span will be marked as the currently-active span for the duration of the context manager.
-        :param parent_id: Optional id of the parent span. If not provided, the current span will be used (depending on context). This is useful for adding
-        spans to an existing trace.
+        :param parent: Optional parent info string for the span. The string can be generated from `[Span,Experiment,Logger].export_as_parent`. If not provided, the current span will be used (depending on context). This is useful for adding spans to an existing trace.
+        :param parent_id: This option is deprecated and will be removed in a future version of Braintrust. Prefer to use `parent` instead.
         :param **event: Data to be logged. See `Experiment.log` for full details.
         :returns: The newly-created `Span`
         """
@@ -147,7 +155,15 @@ class _NoopSpan(Span):
         pass
 
     def start_span(
-        self, name=None, type=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event
+        self,
+        name=None,
+        type=None,
+        span_attributes=None,
+        start_time=None,
+        set_current=None,
+        parent=None,
+        parent_id=None,
+        **event,
     ):
         return self
 
@@ -173,6 +189,10 @@ class BraintrustState:
         self.current_experiment = None
         self.current_logger = None
         self.current_span = contextvars.ContextVar("braintrust_current_span", default=NOOP_SPAN)
+        # For operations not tied to a particular data object instance, we
+        # maintain a global _BackgroundLogger which is refreshed anytime we log
+        # in with different credentials.
+        self._global_bg_logger = None
         self.reset_login_info()
 
     def reset_login_info(self):
@@ -188,6 +208,7 @@ class BraintrustState:
         self._app_conn = None
         self._log_conn = None
         self._user_info = None
+        self._global_bg_logger_dirty = True
 
     def app_conn(self):
         if not self._app_conn:
@@ -211,6 +232,22 @@ class BraintrustState:
     def set_user_info_if_null(self, info):
         if not self._user_info:
             self._user_info = info
+
+    def global_bg_logger(self):
+        if self._global_bg_logger is None or self._global_bg_logger_dirty:
+
+            def get_log_conn():
+                login()
+                # Since marking the logger dirty only happens after actually
+                # re-logging in with different credentials, the login above will
+                # usually be a no-op and not re-mark the flag as dirty. But in
+                # case it did, set it back to non-dirty again.
+                self._global_bg_logger_dirty = False
+                return self.log_conn()
+
+            self._global_bg_logger = _BackgroundLogger(LazyValue(get_log_conn, use_mutex=True))
+            self._global_bg_logger_dirty = False
+        return self._global_bg_logger
 
 
 _state = None
@@ -1147,31 +1184,47 @@ def traced(*span_args, **span_kwargs):
 def start_span(
     name=None,
     type: SpanTypeAttribute = None,
-    span_attributes={},
+    span_attributes=None,
     start_time=None,
     set_current=None,
+    parent=None,
     parent_id=None,
     **event,
 ) -> Span:
-    """Lower-level alternative to `@traced` for starting a span at the toplevel. It creates a span under the first active object (using the same precedence order as `@traced`) or returns a no-op span object.
+    """Lower-level alternative to `@traced` for starting a span at the toplevel. It creates a span under the first active object (using the same precedence order as `@traced`), or if `parent` is specified, under the specified parent row, or returns a no-op span object.
 
     We recommend running spans bound to a context manager (`with start_span`) to automatically mark them as current and ensure they are terminated. If you wish to start a span outside a context manager, be sure to terminate it with `span.end()`.
 
     See `Span.start_span` for full details.
     """
 
-    parent_object = get_span_parent_object()
-    if not isinstance(parent_object, Span):
-        name = coalesce(name, "root")
-    return parent_object.start_span(
-        name=name,
-        type=type,
-        span_attributes=span_attributes,
-        start_time=start_time,
-        set_current=set_current,
-        parent_id=parent_id,
-        **event,
-    )
+    if parent:
+        assert not parent_id, "Cannot specify both `parent` and `parent_id`. Prefer `parent`"
+        components = SpanParentComponents.from_str(parent)
+        return SpanImpl(
+            parent_object=None,
+            parent_object_type=components.object_type,
+            parent_object_id=LazyValue(lambda: components.object_id, use_mutex=False),
+            parent_row_id=components.row_id,
+            bg_logger=_state.global_bg_logger(),
+            name=name,
+            type=type,
+            span_attributes=span_attributes,
+            start_time=start_time,
+            set_current=set_current,
+            event=event,
+        )
+    else:
+        return get_span_parent_object().start_span(
+            name=name,
+            type=type,
+            span_attributes=span_attributes,
+            start_time=start_time,
+            set_current=set_current,
+            parent=parent,
+            parent_id=parent_id,
+            **event,
+        )
 
 
 def _check_org_info(org_info, org_name):
@@ -1419,35 +1472,17 @@ class ObjectFetcher:
             return max([str(record.get(TRANSACTION_ID_FIELD, "0")) for record in self._refetch()] or ["0"])
 
 
-@dataclasses.dataclass
-class ParentExperimentIds:
-    project_id: str
-    experiment_id: str
-
-
-@dataclasses.dataclass
-class ParentProjectLogIds:
-    org_id: str
-    project_id: str
-    log_id: str
-
-
-@dataclasses.dataclass
-class ParentSpanInfo:
-    span_id: str
-    root_span_id: str
-
-
-@dataclasses.dataclass
-class RowIds:
-    id: str
-    span_id: Optional[str] = None
-    root_span_id: Optional[str] = None
-    _parent_id: Optional[str] = None
-
-
 def _log_feedback_impl(
-    bg_logger, parent_ids, id, scores=None, expected=None, tags=None, comment=None, metadata=None, source=None
+    bg_logger,
+    parent_object_type: SpanParentObjectType,
+    parent_object_id: LazyValue[str],
+    id,
+    scores=None,
+    expected=None,
+    tags=None,
+    comment=None,
+    metadata=None,
+    source=None,
 ):
     if source is None:
         source = "external"
@@ -1471,13 +1506,17 @@ def _log_feedback_impl(
     metadata = update_event.pop("metadata")
     update_event = {k: v for k, v in update_event.items() if v is not None}
 
+    parent_ids = lambda: SpanParentComponents(
+        object_type=parent_object_type, object_id=parent_object_id.get(), row_id=""
+    ).as_dict()
+
     if len(update_event) > 0:
 
         def compute_record():
             return dict(
                 id=id,
                 **update_event,
-                **dataclasses.asdict(parent_ids.get()),
+                **parent_ids(),
                 **{
                     AUDIT_SOURCE_FIELD: source,
                     AUDIT_METADATA_FIELD: metadata,
@@ -1501,11 +1540,45 @@ def _log_feedback_impl(
                 comment={
                     "text": comment,
                 },
-                **dataclasses.asdict(parent_ids.get()),
+                **parent_ids(),
                 **{AUDIT_SOURCE_FIELD: source, AUDIT_METADATA_FIELD: metadata},
             )
 
         bg_logger.log(LazyValue(compute_record, use_mutex=False))
+
+
+def _start_span_parent_args(
+    parent: Optional[str],
+    parent_id: Optional[str],
+    span_parent_object_type: SpanParentObjectType,
+    span_parent_object_id: LazyValue[str],
+):
+
+    assert not (parent and parent_id), "Cannot specify both `parent` and `parent_id`. Prefer `parent`"
+
+    if parent is not None:
+        parent_components = SpanParentComponents.from_str(parent)
+        assert (
+            span_parent_object_type == parent_components.object_type
+        ), f"Mismatch between expected span parent object type {span_parent_object_type} and provided type {parent_components.object_type}"
+
+        def compute_parent_object_id():
+            assert (
+                span_parent_object_id.get() == parent_components.object_id
+            ), f"Mismatch between expected span parent object id {span_parent_object_id.get()} and provided id {parent_components.object_id}"
+            return span_parent_object_id.get()
+
+        parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)
+        parent_row_id = parent_components.row_id
+    else:
+        parent_object_id = span_parent_object_id
+        parent_row_id = coalesce(parent_id, "")
+
+    return dict(
+        parent_object_type=span_parent_object_type,
+        parent_object_id=parent_object_id,
+        parent_row_id=parent_row_id,
+    )
 
 
 @dataclasses.dataclass
@@ -1564,6 +1637,7 @@ class Experiment(ObjectFetcher):
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
         self.last_start_time = time.time()
+        self._lazy_id = LazyValue(lambda: self.id, use_mutex=False)
 
         ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
 
@@ -1582,6 +1656,10 @@ class Experiment(ObjectFetcher):
     @property
     def project(self):
         return self._lazy_metadata.get().project
+
+    @staticmethod
+    def _span_parent_object_type():
+        return SpanParentObjectType.EXPERIMENT
 
     # Capture all metadata attributes which aren't covered by existing methods.
     def __getattr__(self, name: str) -> Any:
@@ -1671,7 +1749,8 @@ class Experiment(ObjectFetcher):
         """
         return _log_feedback_impl(
             bg_logger=self.bg_logger,
-            parent_ids=self._lazy_parent_ids(),
+            parent_object_type=self._span_parent_object_type(),
+            parent_object_id=self._lazy_id,
             id=id,
             scores=scores,
             expected=expected,
@@ -1681,37 +1760,36 @@ class Experiment(ObjectFetcher):
             source=source,
         )
 
-    def _lazy_parent_ids(self):
-        def compute_parent_ids():
-            return ParentExperimentIds(project_id=self.project.id, experiment_id=self.id)
-
-        return LazyValue(compute_parent_ids, use_mutex=False)
-
     def start_span(
         self,
-        name="root",
-        type=SpanTypeAttribute.EVAL,
-        span_attributes={},
+        name=None,
+        type=None,
+        span_attributes=None,
         start_time=None,
         set_current=None,
+        parent=None,
         parent_id=None,
         **event,
     ):
-        """Create a new toplevel span underneath the experiment. The name defaults to "root".
+        """Create a new toplevel span underneath the experiment. The name defaults to "root" and the span type to "eval".
 
         See `Span.start_span` for full details
         """
-
         return SpanImpl(
             parent_object=self,
-            parent_ids=self._lazy_parent_ids(),
+            **_start_span_parent_args(
+                parent=parent,
+                parent_id=parent_id,
+                span_parent_object_type=self._span_parent_object_type(),
+                span_parent_object_id=self._lazy_id,
+            ),
             bg_logger=self.bg_logger,
             name=name,
             type=type,
+            default_root_type=SpanTypeAttribute.EVAL,
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
-            parent_id=parent_id,
             event=event,
         )
 
@@ -1790,6 +1868,10 @@ class Experiment(ObjectFetcher):
             metrics=metric_summary,
         )
 
+    def export_as_parent(self) -> str:
+        """Return a serialized representation of the experiment that can be used to start subspans in other places. See `Span.start_span` for more details."""
+        return SpanParentComponents(object_type=self._span_parent_object_type(), object_id=self.id, row_id="").to_str()
+
     def close(self):
         """This function is deprecated. You can simply remove it from your code."""
 
@@ -1848,32 +1930,40 @@ class SpanImpl(Span):
 
     def __init__(
         self,
-        parent_object: Union["Experiment", "Logger"],
-        parent_ids: LazyValue[Union[ParentExperimentIds, ParentProjectLogIds]],
+        parent_object: Union["Logger", "Experiment", None],
+        parent_object_type: SpanParentObjectType,
+        parent_object_id: LazyValue[str],
+        parent_row_id: str,
         bg_logger,
-        parent_span_info: Optional[ParentSpanInfo] = None,
-        # This is similarly named, but semantically different than
-        # parent_span_info. parent_span_info very directly populates the
-        # span_parents field of the span, whereas parent_id is the plain-old id
-        # field of the parent span, and is resolved on the server, not in the
-        # SDK. Note that once we initialize a Span with `parent_id`, we cannot
-        # directly populate the parent info for any nested spans.
-        parent_id=None,
         name=None,
         type=None,
-        span_attributes={},
+        default_root_type=None,
+        span_attributes=None,
         start_time=None,
         set_current=None,
-        event={},
+        event=None,
     ):
+        if span_attributes is None:
+            span_attributes = {}
+        if event is None:
+            event = {}
+        if type is None and not parent_row_id:
+            type = default_root_type
+
         self.set_current = coalesce(set_current, True)
         self._logged_end_time = None
 
+        self.parent_object = parent_object
+        self.parent_object_type = parent_object_type
+        self.parent_object_id = parent_object_id
+        self.parent_row_id = parent_row_id
         self.bg_logger = bg_logger
 
         caller_location = get_caller_location()
         if name is None:
-            if caller_location:
+            if not parent_row_id:
+                name = "root"
+            elif caller_location:
                 filename = os.path.basename(caller_location["caller_filename"])
                 name = ":".join(
                     [caller_location["caller_functionname"]]
@@ -1901,25 +1991,9 @@ class SpanImpl(Span):
         if caller_location:
             self.internal_data["context"] = caller_location
 
-        self.parent_object = parent_object
-        self.parent_ids = parent_ids
-
-        id = event.get("id", None)
-        if id is None:
-            id = str(uuid.uuid4())
-        self.row_ids = RowIds(id=id)
-
-        if parent_span_info is not None and parent_id is not None:
-            raise ValueError("Only one of parent_span_info and parent_id may be specified")
-        if parent_id:
-            setattr(self.row_ids, PARENT_ID_FIELD, parent_id)
-        else:
-            self.row_ids.span_id = str(uuid.uuid4())
-            if parent_span_info:
-                self.row_ids.root_span_id = parent_span_info.root_span_id
-                self.internal_data.update(span_parents=[parent_span_info.span_id])
-            else:
-                self.row_ids.root_span_id = self.row_ids.span_id
+        self._id = event.get("id", None)
+        if self._id is None:
+            self._id = str(uuid.uuid4())
 
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.
@@ -1929,85 +2003,76 @@ class SpanImpl(Span):
 
     @property
     def id(self):
-        return self.row_ids.id
-
-    # Not part of the interface, but needed for some unit tests.
-    @property
-    def span_id(self):
-        return self.row_ids.span_id
-
-    @property
-    def root_span_id(self):
-        return self.row_ids.root_span_id
+        return self._id
 
     def log(self, **event):
-        sanitized = {
-            k: v for k, v in _validate_and_sanitize_experiment_log_partial_args(event).items() if v is not None
-        }
         # There should be no overlap between the dictionaries being merged,
         # except for `sanitized` and `internal_data`, where the former overrides
         # the latter.
-        sanitized_and_internal_data = strip_nones(self.internal_data)
-        merge_dicts(sanitized_and_internal_data, sanitized)
+        sanitized = _validate_and_sanitize_experiment_log_partial_args(event)
+        sanitized_and_internal_data = _strip_nones(self.internal_data, deep=True)
+        merge_dicts(sanitized_and_internal_data, _strip_nones(sanitized, deep=False))
         self.internal_data = {}
-
-        # Validate the non-lazily-computed part of the record-to-log.
-        partial_record = dict(
-            **sanitized_and_internal_data,
-            **{k: v for k, v in dataclasses.asdict(self.row_ids).items() if v is not None},
-            **{IS_MERGE_FIELD: self._is_merge},
-        )
-
-        if "metrics" in partial_record and "end" in partial_record["metrics"]:
-            self._logged_end_time = partial_record["metrics"]["end"]
 
         # We both check for serializability and round-trip `partial_record`
         # through JSON in order to create a "deep copy". This has the benefit of
         # cutting out any reference to user objects when the object is logged
         # asynchronously, so that in case the objects are modified, the logging
         # is unaffected.
+        partial_record = dict(
+            **sanitized_and_internal_data,
+            **{IS_MERGE_FIELD: self._is_merge},
+        )
         serialized_partial_record = _check_json_serializable(partial_record)
         partial_record = json.loads(serialized_partial_record)
+        if "metrics" in partial_record and "end" in partial_record["metrics"]:
+            self._logged_end_time = partial_record["metrics"]["end"]
+
+        if len(partial_record.get("tags", [])) > 0 and self.parent_row_id:
+            raise Exception("Tags can only be logged to the root span")
 
         def compute_record():
             return dict(
                 **partial_record,
-                **dataclasses.asdict(self.parent_ids.get()),
+                **SpanParentComponents(
+                    object_type=self.parent_object_type,
+                    object_id=self.parent_object_id.get(),
+                    row_id=self.parent_row_id,
+                ).as_dict(),
+                id=self.id,
             )
 
         self.bg_logger.log(LazyValue(compute_record, use_mutex=False))
 
     def log_feedback(self, **event):
-        args = dict(
-            **event,
-            id=self.id,
-        )
         return _log_feedback_impl(
             bg_logger=self.bg_logger,
-            parent_ids=self.parent_ids,
-            **args,
+            parent_object_type=self.parent_object_type,
+            parent_object_id=self.parent_object_id,
+            id=self.id,
+            **event,
         )
 
     def start_span(
-        self, name=None, type=None, span_attributes={}, start_time=None, set_current=None, parent_id=None, **event
+        self,
+        name=None,
+        type=None,
+        span_attributes=None,
+        start_time=None,
+        set_current=None,
+        parent=None,
+        parent_id=None,
+        **event,
     ):
-        # If we created this span with a parent_id reference, we must continue
-        # using parent_ids all the way down, since we don't have a root_span_id
-        # available. Otherwise, we can use direct parent info propagation.
-        if parent_id is None and getattr(self.row_ids, PARENT_ID_FIELD) is not None:
-            parent_id = self.id
-        if parent_id is None:
-            assert self.row_ids.span_id is not None
-            assert self.row_ids.root_span_id is not None
-            parent_span_info = ParentSpanInfo(span_id=self.row_ids.span_id, root_span_id=self.row_ids.root_span_id)
-        else:
-            parent_span_info = None
         return SpanImpl(
             parent_object=self.parent_object,
-            parent_ids=self.parent_ids,
+            **_start_span_parent_args(
+                parent=parent,
+                parent_id=coalesce(parent_id, None if parent else self.id),
+                span_parent_object_type=self.parent_object_type,
+                span_parent_object_id=self.parent_object_id,
+            ),
             bg_logger=self.bg_logger,
-            parent_span_info=parent_span_info,
-            parent_id=parent_id,
             name=name,
             type=type,
             span_attributes=span_attributes,
@@ -2025,8 +2090,19 @@ class SpanImpl(Span):
         self.log()
         return end_time
 
+    def export_as_parent(self) -> str:
+        """Return a serialized representation of the span that can be used to start subspans in other places. See `Span.start_span` for more details."""
+        return SpanParentComponents(
+            object_type=self.parent_object_type, object_id=self.parent_object_id.get(), row_id=self.id
+        ).to_str()
+
     def close(self, end_time=None):
         return self.end(end_time)
+
+    def flush(self):
+        """Flush any pending rows to the server."""
+
+        self.bg_logger.flush()
 
     def __enter__(self):
         if self.set_current:
@@ -2042,10 +2118,10 @@ class SpanImpl(Span):
         self.end()
 
 
-def strip_nones(d):
+def _strip_nones(d, deep: bool):
     if not isinstance(d, dict):
         return d
-    return {k: strip_nones(v) for (k, v) in d.items() if v is not None}
+    return {k: (_strip_nones(v, deep) if deep else v) for (k, v) in d.items() if v is not None}
 
 
 class Dataset(ObjectFetcher):
@@ -2146,7 +2222,6 @@ class Dataset(ObjectFetcher):
         def compute_args():
             return dict(
                 **partial_args,
-                project_id=self.project.id,
                 dataset_id=self.id,
             )
 
@@ -2175,7 +2250,6 @@ class Dataset(ObjectFetcher):
         def compute_args():
             return dict(
                 **partial_args,
-                project_id=self.project.id,
                 dataset_id=self.id,
             )
 
@@ -2403,6 +2477,7 @@ class Logger:
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
         self.last_start_time = time.time()
+        self._lazy_id = LazyValue(lambda: self.id, use_mutex=False)
 
     @property
     def org_id(self):
@@ -2415,6 +2490,10 @@ class Logger:
     @property
     def id(self):
         return self.project.id
+
+    @staticmethod
+    def _span_parent_object_type():
+        return SpanParentObjectType.PROJECT_LOGS
 
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
@@ -2494,7 +2573,8 @@ class Logger:
         """
         return _log_feedback_impl(
             bg_logger=self.bg_logger,
-            parent_ids=self._lazy_parent_ids(),
+            parent_object_type=self._span_parent_object_type(),
+            parent_object_id=self._lazy_id,
             id=id,
             scores=scores,
             expected=expected,
@@ -2504,43 +2584,42 @@ class Logger:
             source=source,
         )
 
-    def _lazy_parent_ids(self):
-        def compute_parent_ids():
-            return ParentProjectLogIds(
-                org_id=self.org_id,
-                project_id=self.project.id,
-                log_id="g",
-            )
-
-        return LazyValue(compute_parent_ids, use_mutex=False)
-
     def start_span(
         self,
-        name="root",
-        type=SpanTypeAttribute.TASK,
-        span_attributes={},
+        name=None,
+        type=None,
+        span_attributes=None,
         start_time=None,
         set_current=None,
+        parent=None,
         parent_id=None,
         **event,
     ):
-        """Create a new toplevel span underneath the logger. The name parameter defaults to "root".
+        """Create a new toplevel span underneath the logger. The name defaults to "root" and the span type to "task".
 
         See `Span.start_span` for full details
         """
-
         return SpanImpl(
             parent_object=self,
-            parent_ids=self._lazy_parent_ids(),
+            **_start_span_parent_args(
+                parent=parent,
+                parent_id=parent_id,
+                span_parent_object_type=self._span_parent_object_type(),
+                span_parent_object_id=self._lazy_id,
+            ),
             bg_logger=self.bg_logger,
             name=name,
             type=type,
+            default_root_type=SpanTypeAttribute.TASK,
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
-            parent_id=parent_id,
             event=event,
         )
+
+    def export_as_parent(self) -> str:
+        """Return a serialized representation of the logger that can be used to start subspans in other places. See `Span.start_span` for more details."""
+        return SpanParentComponents(object_type=self._span_parent_object_type(), object_id=self.id, row_id="").to_str()
 
     def __enter__(self):
         return self
