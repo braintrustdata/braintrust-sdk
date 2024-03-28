@@ -23,15 +23,16 @@ PARAMS = {
     "PrivateSubnet1CIDR": "private_subnet_1_cidr",
     "PrivateSubnet2CIDR": "private_subnet_2_cidr",
     "PrivateSubnet3CIDR": "private_subnet_3_cidr",
+    "ManagedClickhouse": "managed_clickhouse",
 }
 
 REMOVED_PARAMS = ["ThirdAZIndex"]
 
 DEFAULTS = {
-    "ManagedKafka": "true",
     "DwType": "Postgres",
     "EncryptDatabase": "false",
     "ProvisionedConcurrency": 0,
+    "APIHandlerMemorySize": 10240,
 }
 
 CAPABILITIES = ["CAPABILITY_IAM", "CAPABILITY_AUTO_EXPAND"]
@@ -150,6 +151,14 @@ def build_parser(subparsers, parents):
         default=None,
     )
 
+    # Clickhouse
+    parser.add_argument(
+        "--managed-clickhouse",
+        help="Spin up a Clickhouse Instance for faster analytics",
+        default=None,
+        choices=[None, "true", "false"],
+    )
+
     # ElastiCacheClusterId
     parser.add_argument("--elasticache-cluster-host", help="The ElastiCacheCluster host to use", default=None)
     parser.add_argument(
@@ -212,16 +221,23 @@ def main(args):
 
     if not exists:
         _logger.info(f"Creating stack with name {args.name}")
+
+        params = [
+            {
+                "ParameterKey": k,
+                "ParameterValue": str(v),
+            }
+            for (k, v) in [
+                (param, args.__dict__[arg_name] or DEFAULTS.get(param, None)) for (param, arg_name) in PARAMS.items()
+            ]
+            if v is not None
+        ]
+        _logger.info("Using params:", params)
+
         cloudformation.create_stack(
             StackName=args.name,
             TemplateURL=template,
-            Parameters=[
-                {
-                    "ParameterKey": param,
-                    "ParameterValue": str(args.__dict__[arg_name] or DEFAULTS.get(param, "")),
-                }
-                for (param, arg_name) in PARAMS.items()
-            ],
+            Parameters=params,
             Capabilities=CAPABILITIES,
         )
 
