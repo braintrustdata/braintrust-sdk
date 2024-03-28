@@ -211,10 +211,10 @@ export type EvaluatorFile = {
   evaluators: {
     [evalName: string]: {
       evaluator: EvaluatorDef<any, any, any, any>;
-      reporter?: ReporterDef<any> | string;
+      reporter?: ReporterDef<unknown> | string;
     };
   };
-  reporters: { [reporterName: string]: ReporterDef<any> };
+  reporters: { [reporterName: string]: ReporterDef<unknown> };
 };
 
 function initExperiment<IsOpen extends boolean = false>(
@@ -288,14 +288,9 @@ export async function Eval<
       const evalDef = {
         evalName,
         projectName: name,
-        ...(evaluator as Evaluator<unknown, unknown, unknown, any>),
+        ...evaluator,
       };
-      const ret = (await runEvaluator(
-        experiment,
-        evalDef,
-        progressReporter,
-        []
-      )) as EvalResultWithSummary<Input, Output, Expected, Metadata>;
+      const ret = await runEvaluator(experiment, evalDef, progressReporter, []);
       resolvedReporter.reportEval(evalDef, ret, {
         verbose: true,
         jsonl: false,
@@ -388,10 +383,10 @@ function scorerName(
 
 export async function runEvaluator(
   experiment: Experiment | null,
-  evaluator: EvaluatorDef<any, any, any | void, any | void>,
+  evaluator: EvaluatorDef<any, any, any, any>,
   progressReporter: ProgressReporter,
   filters: Filter[]
-): Promise<EvalResultWithSummary<any, any, any | void, any | void>> {
+): Promise<EvalResultWithSummary<any, any, any, any>> {
   if (typeof evaluator.data === "string") {
     throw new Error("Unimplemented: string data paths");
   }
