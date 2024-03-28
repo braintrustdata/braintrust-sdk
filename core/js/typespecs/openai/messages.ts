@@ -6,9 +6,37 @@ const chatCompletionSystemMessageParamSchema = z.object({
   name: z.string().optional(),
 });
 
-const chatCompletionContentPartTextSchema = z.object({
+export const chatCompletionContentPartTextSchema = z.object({
   text: z.string().default(""),
   type: z.literal("text"),
+});
+
+const imageURLSchema = z.object({
+  url: z.string(),
+  detail: z
+    .union([z.literal("auto"), z.literal("low"), z.literal("high")])
+    .optional(),
+});
+
+export const chatCompletionContentPartImageSchema = z.object({
+  image_url: imageURLSchema,
+  type: z.literal("image_url"),
+});
+
+export const chatCompletionContentPartSchema = z.union([
+  chatCompletionContentPartTextSchema,
+  chatCompletionContentPartImageSchema,
+]);
+
+export const chatCompletionContentSchema = z.union([
+  z.string().default(""),
+  z.array(chatCompletionContentPartSchema),
+]);
+
+const chatCompletionUserMessageParamSchema = z.object({
+  content: chatCompletionContentSchema,
+  role: z.literal("user"),
+  name: z.string().optional(),
 });
 
 const functionCallSchema = z.object({
@@ -19,13 +47,6 @@ const functionCallSchema = z.object({
 const functionSchema = z.object({
   arguments: z.string(),
   name: z.string(),
-});
-
-const imageURLSchema = z.object({
-  url: z.string(),
-  detail: z
-    .union([z.literal("auto"), z.literal("low"), z.literal("high")])
-    .optional(),
 });
 
 const chatCompletionToolMessageParamSchema = z.object({
@@ -40,21 +61,11 @@ const chatCompletionFunctionMessageParamSchema = z.object({
   role: z.literal("function"),
 });
 
-const chatCompletionContentPartImageSchema = z.object({
-  image_url: imageURLSchema,
-  type: z.literal("image_url"),
-});
-
 const chatCompletionMessageToolCallSchema = z.object({
   id: z.string(),
   function: functionSchema,
   type: z.literal("function"),
 });
-
-const chatCompletionContentPartSchema = z.union([
-  chatCompletionContentPartTextSchema,
-  chatCompletionContentPartImageSchema,
-]);
 
 const chatCompletionAssistantMessageParamSchema = z.object({
   role: z.literal("assistant"),
@@ -62,15 +73,6 @@ const chatCompletionAssistantMessageParamSchema = z.object({
   function_call: functionCallSchema.optional(),
   name: z.string().optional(),
   tool_calls: z.array(chatCompletionMessageToolCallSchema).optional(),
-});
-
-const chatCompletionUserMessageParamSchema = z.object({
-  content: z.union([
-    z.string().default(""),
-    z.array(chatCompletionContentPartSchema),
-  ]),
-  role: z.literal("user"),
-  name: z.string().optional(),
 });
 
 export const chatCompletionMessageParamSchema = z.union([
