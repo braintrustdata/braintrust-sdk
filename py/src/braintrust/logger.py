@@ -2322,7 +2322,9 @@ class Prompt:
             ret["messages"] = [
                 {
                     **{k: v for (k, v) in m.as_dict().items() if v is not None},
-                    "content": chevron.render(m.content, data=build_args),
+                    "content": chevron.render(m.content, data=build_args)
+                    if isinstance(m.content, str)
+                    else json.loads(chevron.render(json.dumps(m.content), data=build_args)),
                 }
                 for m in self.prompt.messages
             ]
