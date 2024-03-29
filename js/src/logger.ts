@@ -535,6 +535,7 @@ export class Logger<IsAsyncFlush extends boolean> {
   private logOptions: LogOptions<IsAsyncFlush>;
   private bgLogger: BackgroundLogger;
   private lastStartTime: number;
+  private calledStartSpan: boolean;
 
   // For type identification.
   public kind: "logger" = "logger";
@@ -550,6 +551,7 @@ export class Logger<IsAsyncFlush extends boolean> {
     );
     this.bgLogger = new BackgroundLogger(logConn);
     this.lastStartTime = getCurrentUnixTimestamp();
+    this.calledStartSpan = false;
   }
 
   public get org_id(): Promise<string> {
@@ -582,26 +584,20 @@ export class Logger<IsAsyncFlush extends boolean> {
    * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
    * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
    * @param options Additional logging options
-   * @param options.allowLogConcurrentWithActiveSpan in rare cases where you need to log at the top level separately from an active span on the logger, set this to true.
+   * @param options.allowConcurrentWithSpans in rare cases where you need to log at the top level separately from spans on the logger elsewhere, set this to true.
    * :returns: The `id` of the logged event.
    */
   public log(
     event: Readonly<StartSpanEventArgs>,
-    options?: { allowLogConcurrentWithActiveSpan?: boolean }
+    options?: { allowConcurrentWithSpans?: boolean }
   ): PromiseUnless<IsAsyncFlush, string> {
-    if (!options?.allowLogConcurrentWithActiveSpan) {
-      const checkCurrentSpan = currentSpan();
-      if (
-        checkCurrentSpan instanceof SpanImpl &&
-        checkCurrentSpan.parentObject === this
-      ) {
-        throw new Error(
-          "Cannot run toplevel Logger.log method while there is an active span. To log to the span, use Span.log"
-        );
-      }
+    if (this.calledStartSpan && !options?.allowConcurrentWithSpans) {
+      throw new Error(
+        "Cannot run toplevel Logger.log method while using spans. To log to the span, use Span.log"
+      );
     }
 
-    const span = this.startSpan({ startTime: this.lastStartTime, event });
+    const span = this.startSpanImpl({ startTime: this.lastStartTime, event });
     this.lastStartTime = span.end();
     const ret = span.id;
     type Ret = PromiseUnless<IsAsyncFlush, string>;
@@ -666,9 +662,13 @@ export class Logger<IsAsyncFlush extends boolean> {
    * See `traced` for full details.
    */
   public startSpan(args?: StartSpanArgs): Span {
+    this.calledStartSpan = true;
+    return this.startSpanImpl(args);
+  }
+
+  private startSpanImpl(args?: StartSpanArgs): Span {
     const { name, type, ...argsRest } = args ?? {};
     return new SpanImpl({
-      parentObject: this,
       parentIds: new LazyValue(() => this.lazyParentIds()),
       bgLogger: this.bgLogger,
       name: name ?? "root",
@@ -2120,6 +2120,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
   public readonly dataset?: AnyDataset;
   public bgLogger: BackgroundLogger;
   private lastStartTime: number;
+  private calledStartSpan: boolean;
   // For type identification.
   public kind: "experiment" = "experiment";
 
@@ -2136,6 +2137,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     );
     this.bgLogger = new BackgroundLogger(logConn);
     this.lastStartTime = getCurrentUnixTimestamp();
+    this.calledStartSpan = false;
   }
 
   public get id(): Promise<string> {
@@ -2176,27 +2178,21 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
    * @param event.dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
    * @param event.inputs: (Deprecated) the same as `input` (will be removed in a future version).
    * @param options Additional logging options
-   * @param options.allowLogConcurrentWithActiveSpan in rare cases where you need to log at the top level separately from an active span on the experiment, set this to true.
+   * @param options.allowConcurrentWithSpans in rare cases where you need to log at the top level separately from spans on the experiment elsewhere, set this to true.
    * :returns: The `id` of the logged event.
    */
   public log(
     event: Readonly<ExperimentLogFullArgs>,
-    options?: { allowLogConcurrentWithActiveSpan?: boolean }
+    options?: { allowConcurrentWithSpans?: boolean }
   ): string {
-    if (!options?.allowLogConcurrentWithActiveSpan) {
-      const checkCurrentSpan = currentSpan();
-      if (
-        checkCurrentSpan instanceof SpanImpl &&
-        checkCurrentSpan.parentObject === this
-      ) {
-        throw new Error(
-          "Cannot run toplevel Experiment.log method while there is an active span. To log to the span, use Span.log"
-        );
-      }
+    if (this.calledStartSpan && !options?.allowConcurrentWithSpans) {
+      throw new Error(
+        "Cannot run toplevel Experiment.log method while using spans. To log to the span, use Span.log"
+      );
     }
 
     event = validateAndSanitizeExperimentLogFullArgs(event, !!this.dataset);
-    const span = this.startSpan({ startTime: this.lastStartTime, event });
+    const span = this.startSpanImpl({ startTime: this.lastStartTime, event });
     this.lastStartTime = span.end();
     return span.id;
   }
@@ -2240,9 +2236,13 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
    * See `traced` for full details.
    */
   public startSpan(args?: StartSpanArgs): Span {
+    this.calledStartSpan = true;
+    return this.startSpanImpl(args);
+  }
+
+  private startSpanImpl(args?: StartSpanArgs): Span {
     const { name, type, ...argsRest } = args ?? {};
     return new SpanImpl({
-      parentObject: this,
       parentIds: new LazyValue(() => this.lazyParentIds()),
       bgLogger: this.bgLogger,
       name: name ?? "root",
@@ -2449,9 +2449,6 @@ export class SpanImpl implements Span {
   private isMerge: boolean;
   private loggedEndTime: number | undefined;
 
-  // For internal use only.
-  public parentObject: Experiment | Logger<any>;
-
   // These fields are logged to every span row.
   private parentIds: LazyValue<ParentExperimentIds | ParentProjectLogIds>;
   private readonly rowIds: {
@@ -2467,7 +2464,6 @@ export class SpanImpl implements Span {
   // should only be specified for non-root spans.
   constructor(
     args: {
-      parentObject: Experiment | Logger<any>;
       parentIds: LazyValue<ParentExperimentIds | ParentProjectLogIds>;
       bgLogger: BackgroundLogger;
     } & Omit<StartSpanArgs, "parentId"> &
@@ -2512,7 +2508,6 @@ export class SpanImpl implements Span {
       created: new Date().toISOString(),
     };
 
-    this.parentObject = args.parentObject;
     this.parentIds = args.parentIds;
 
     const id = args.event?.id ?? uuidv4();
@@ -2637,7 +2632,6 @@ export class SpanImpl implements Span {
       };
     })();
     return new SpanImpl({
-      parentObject: this.parentObject,
       parentIds: this.parentIds,
       bgLogger: this.bgLogger,
       parentSpanInfo,
