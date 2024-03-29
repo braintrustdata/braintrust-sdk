@@ -46,6 +46,12 @@ class SpanParentComponents:
     @staticmethod
     def from_str(s):
         items = s.split(_SEP)
+
+        if len(items) < 3:
+            raise Exception(
+                f"Serialized parent components string must have at least three components. Provided string {s} has has only {len(items)}"
+            )
+
         # We cannot guarantee there is no separator character in the
         # user-controllable `row_id`, but since we can guarantee there is no
         # separator character in the other fields, we can still safely determine

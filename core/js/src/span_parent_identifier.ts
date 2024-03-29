@@ -71,6 +71,13 @@ export class SpanParentComponents {
 
   public static fromStr(s: string): SpanParentComponents {
     const items: string[] = s.split(_SEP);
+
+    if (items.length < 3) {
+      throw new Error(
+        `Serialized parent components string must have at least three components. Provided string ${s} has only ${items.length}`
+      );
+    }
+
     return new SpanParentComponents({
       objectType: _PREFIX_TO_OBJECT_TYPE[items[0]],
       objectId: items[1],
