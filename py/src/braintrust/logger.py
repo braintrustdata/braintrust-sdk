@@ -1745,7 +1745,7 @@ class Experiment(ObjectFetcher):
 
         state = self._get_state()
         project_url = f"{state.app_public_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
-        experiment_url = f"{project_url}/{encode_uri_component(self.name)}"
+        experiment_url = f"{project_url}/experiments/{encode_uri_component(self.name)}"
 
         score_summary = {}
         metric_summary = {}
@@ -2194,7 +2194,7 @@ class Dataset(ObjectFetcher):
         self.bg_logger.flush()
         state = self._get_state()
         project_url = f"{state.app_public_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
-        dataset_url = f"{project_url}/d/{encode_uri_component(self.name)}"
+        dataset_url = f"{project_url}/datasets/{encode_uri_component(self.name)}"
 
         data_summary = None
         if summarize_data:
@@ -2566,11 +2566,11 @@ class ScoreSummary(SerializableDataClass):
     """Average score across all examples."""
     score: float
     """Difference in score between the current and reference experiment."""
-    diff: float
+    diff: Optional[float]
     """Number of improvements in the score."""
-    improvements: int
+    improvements: Optional[int]
     """Number of regressions in the score."""
-    regressions: int
+    regressions: Optional[int]
 
     # Used to help with formatting
     _longest_score_name: int
@@ -2578,15 +2578,19 @@ class ScoreSummary(SerializableDataClass):
     def __str__(self):
         # format with 2 decimal points and pad so that it's exactly 2 characters then 2 decimals
         score_pct = f"{self.score * 100:05.2f}%"
-        diff_pct = f"{abs(self.diff) * 100:05.2f}%"
-        diff_score = f"+{diff_pct}" if self.diff > 0 else f"-{diff_pct}" if self.diff < 0 else "-"
 
         # pad the name with spaces so that its length is self._longest_score_name + 2
         score_name = f"'{self.name}'".ljust(self._longest_score_name + 2)
 
-        return textwrap.dedent(
-            f"""{score_pct} ({diff_score}) {score_name} score\t({self.improvements} improvements, {self.regressions} regressions)"""
-        )
+        if self.diff is not None:
+            diff_pct = f"{abs(self.diff) * 100:05.2f}%"
+            diff_score = f"+{diff_pct}" if self.diff > 0 else f"-{diff_pct}" if self.diff < 0 else "-"
+
+            return textwrap.dedent(
+                f"""{score_pct} ({diff_score}) {score_name} score\t({self.improvements} improvements, {self.regressions} regressions)"""
+            )
+        else:
+            return textwrap.dedent(f"""{score_pct} {score_name} score""")
 
 
 @dataclasses.dataclass
@@ -2632,9 +2636,9 @@ class ExperimentSummary(SerializableDataClass):
     """Name of the experiment."""
     experiment_name: str
     """URL to the project's page in the Braintrust app."""
-    project_url: str
+    project_url: Optional[str]
     """URL to the experiment's page in the Braintrust app."""
-    experiment_url: str
+    experiment_url: Optional[str]
     """The experiment scores are baselined against."""
     comparison_experiment_name: Optional[str]
     """Summary of the experiment's scores."""
@@ -2652,9 +2656,13 @@ class ExperimentSummary(SerializableDataClass):
             + ("\n\n" if self.scores else "")
             + "\n".join([str(metric) for metric in self.metrics.values()])
             + ("\n\n" if self.metrics else "")
-            + textwrap.dedent(
-                f"""\
+            + (
+                textwrap.dedent(
+                    f"""\
         See results for {self.experiment_name} at {self.experiment_url}"""
+                )
+                if self.experiment_url is not None
+                else ""
             )
         )
 

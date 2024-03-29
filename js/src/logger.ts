@@ -2297,7 +2297,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     const projectUrl = `${state.appPublicUrl}/app/${encodeURIComponent(
       state.orgName!
     )}/p/${encodeURIComponent((await this.project).name)}`;
-    const experimentUrl = `${projectUrl}/${encodeURIComponent(
+    const experimentUrl = `${projectUrl}/experiments/${encodeURIComponent(
       await this.name
     )}`;
 
@@ -2334,8 +2334,8 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
       projectUrl: projectUrl,
       experimentUrl: experimentUrl,
       comparisonExperimentName: comparisonExperimentName,
-      scores,
-      metrics,
+      scores: scores ?? {},
+      metrics: metrics,
     };
   }
 
@@ -2816,7 +2816,9 @@ class Dataset<
     const projectUrl = `${state.appPublicUrl}/app/${encodeURIComponent(
       state.orgName!
     )}/p/${encodeURIComponent((await this.project).name)}`;
-    const datasetUrl = `${projectUrl}/d/${encodeURIComponent(await this.name)}`;
+    const datasetUrl = `${projectUrl}/datasets/${encodeURIComponent(
+      await this.name
+    )}`;
 
     let dataSummary = undefined;
     if (summarizeData) {
@@ -3056,9 +3058,9 @@ export type AnyDataset = Dataset<boolean>;
 export interface ScoreSummary {
   name: string;
   score: number;
-  diff: number;
-  improvements: number;
-  regressions: number;
+  diff?: number;
+  improvements?: number;
+  regressions?: number;
 }
 
 /**
@@ -3091,11 +3093,11 @@ export interface MetricSummary {
 export interface ExperimentSummary {
   projectName: string;
   experimentName: string;
-  projectUrl: string;
-  experimentUrl: string;
-  comparisonExperimentName: string | undefined;
-  scores: Record<string, ScoreSummary> | undefined;
-  metrics: Record<string, MetricSummary> | undefined;
+  projectUrl?: string;
+  experimentUrl?: string;
+  comparisonExperimentName?: string;
+  scores: Record<string, ScoreSummary>;
+  metrics?: Record<string, MetricSummary>;
 }
 
 /**
