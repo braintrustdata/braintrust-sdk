@@ -227,11 +227,17 @@ const experimentBaseSchema = generateBaseTableSchema("experiment", {
 export const experimentSchema = z
   .object({
     id: experimentBaseSchema.shape.id,
-    project_id: experimentBaseSchema.shape.project_id,
+    project_id: experimentBaseSchema.shape.project_id.nullish(),
+    project_name: projectSchema.shape.name.nullish(),
+    org_id: projectSchema.shape.org_id.nullish(),
     name: experimentBaseSchema.shape.name,
     description: experimentBaseSchema.shape.description,
     created: experimentBaseSchema.shape.created,
     repo_info: repoInfoSchema.nullish(),
+    ancestor_commits: z
+      .array(z.string())
+      .nullish()
+      .describe("Ancestor commit history, used to find the base experiment"),
     commit: z
       .string()
       .nullish()
@@ -331,6 +337,9 @@ const patchProjectSchema = z
 const createExperimentSchema = z
   .object({
     project_id: experimentSchema.shape.project_id,
+    project_name: experimentSchema.shape.project_name,
+    org_id: experimentSchema.shape.org_id,
+    ancestor_commits: experimentSchema.shape.ancestor_commits,
     name: experimentSchema.shape.name.nullish(),
     description: experimentSchema.shape.description,
     repo_info: experimentSchema.shape.repo_info,

@@ -181,7 +181,7 @@ class BraintrustState:
         self.login_token = None
         self.org_id = None
         self.org_name = None
-        self.log_url = None
+        self.log_url = os.environ.get("BRAINTRUST_API_URL")
         self.logged_in = False
         self.git_metadata_settings = None
 
@@ -709,7 +709,7 @@ def init(
 
         while True:
             try:
-                response = _state.app_conn().post_json("api/experiment/register", args)
+                response = _state.log_conn().post_json("v1/experiment", args)
                 break
             except AugmentedHTTPError as e:
                 if args.get("base_experiment") is not None and "base experiment" in str(e):
@@ -958,7 +958,8 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
 
         conn = None
         if api_key is not None:
-            app_conn = HTTPConnection(_state.app_url, adapter=_http_adapter)
+            # If the log_url is set, via BRAINTRUST_API_URL, then use that to login.
+            app_conn = HTTPConnection(_state.log_url or _state.app_url, adapter=_http_adapter)
             app_conn.set_token(api_key)
             resp = app_conn.post("api/apikey/login")
             if not resp.ok:
