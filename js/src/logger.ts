@@ -2297,7 +2297,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     const projectUrl = `${state.appPublicUrl}/app/${encodeURIComponent(
       state.orgName!
     )}/p/${encodeURIComponent((await this.project).name)}`;
-    const experimentUrl = `${projectUrl}/${encodeURIComponent(
+    const experimentUrl = `${projectUrl}/experiments/${encodeURIComponent(
       await this.name
     )}`;
 
@@ -2816,7 +2816,9 @@ class Dataset<
     const projectUrl = `${state.appPublicUrl}/app/${encodeURIComponent(
       state.orgName!
     )}/p/${encodeURIComponent((await this.project).name)}`;
-    const datasetUrl = `${projectUrl}/d/${encodeURIComponent(await this.name)}`;
+    const datasetUrl = `${projectUrl}/datasets/${encodeURIComponent(
+      await this.name
+    )}`;
 
     let dataSummary = undefined;
     if (summarizeData) {

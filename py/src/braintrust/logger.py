@@ -1745,7 +1745,7 @@ class Experiment(ObjectFetcher):
 
         state = self._get_state()
         project_url = f"{state.app_public_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
-        experiment_url = f"{project_url}/{encode_uri_component(self.name)}"
+        experiment_url = f"{project_url}/experiments/{encode_uri_component(self.name)}"
 
         score_summary = {}
         metric_summary = {}
@@ -2194,7 +2194,7 @@ class Dataset(ObjectFetcher):
         self.bg_logger.flush()
         state = self._get_state()
         project_url = f"{state.app_public_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
-        dataset_url = f"{project_url}/d/{encode_uri_component(self.name)}"
+        dataset_url = f"{project_url}/datasets/{encode_uri_component(self.name)}"
 
         data_summary = None
         if summarize_data:
