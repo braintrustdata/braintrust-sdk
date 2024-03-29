@@ -427,7 +427,7 @@ class _BackgroundLogger:
                     self.started = True
 
     def _finalize(self):
-        self.logger.info("Flushing final log events...")
+        self.logger.debug("Flushing final log events...")
         self.flush()
 
     def _publisher(self):
