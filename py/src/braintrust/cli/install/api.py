@@ -24,6 +24,7 @@ PARAMS = {
     "PrivateSubnet2CIDR": "private_subnet_2_cidr",
     "PrivateSubnet3CIDR": "private_subnet_3_cidr",
     "ManagedClickhouse": "managed_clickhouse",
+    "ClickhouseInstanceType": "clickhouse_instance_type",
 }
 
 REMOVED_PARAMS = ["ThirdAZIndex"]
@@ -137,9 +138,6 @@ def build_parser(subparsers, parents):
         choices=[None, "true", "false"],
     )
     parser.add_argument(
-        "--postgres-url", help="The postgres URL to use (if you are connecting to another VPC)", default=None
-    )
-    parser.add_argument(
         "--encrypt-database",
         help="Whether to encrypt the database",
         default="false",
@@ -158,6 +156,11 @@ def build_parser(subparsers, parents):
         default=None,
         choices=[None, "true", "false"],
     )
+    parser.add_argument(
+        "--clickhouse-instance-type",
+        help="The instance type for the Clickhouse instance",
+        default=None,
+    )
 
     # ElastiCacheClusterId
     parser.add_argument("--elasticache-cluster-host", help="The ElastiCacheCluster host to use", default=None)
@@ -168,6 +171,18 @@ def build_parser(subparsers, parents):
     # SecurityGroupId, SubnetIds
     parser.add_argument("--security-group-id", help="The security group ID to use", default=None)
     parser.add_argument("--subnet-ids", help="The subnet IDs to use", default=None)
+
+    # Advancd use only
+    parser.add_argument(
+        "--postgres-url",
+        help="[Advanced] The postgres URL to use (if you are connecting to another VPC)",
+        default=None,
+    )
+    parser.add_argument("--clickhouse-pg-url", help="[Advanced] The clickhouse PG URL to use", default=None)
+    parser.add_argument("--clickhouse-connect-url", help="[Advanced] The clickhouse connect URL to use", default=None)
+    parser.add_argument(
+        "--clickhouse-catchup-etl-arn", help="[Advanced] The clickhouse catchup ETL ARN to use", default=None
+    )
 
     parser.set_defaults(func=main)
 
@@ -195,6 +210,9 @@ def main(args):
         PARAMS["ElastiCacheClusterHost"] = "elasticache_cluster_host"
         PARAMS["ElastiCacheClusterPort"] = "elasticache_cluster_port"
         PARAMS["PostgresUrl"] = "postgres_url"
+        PARAMS["ClickhouseCatchupEtlArn"] = "clickhouse_catchup_etl_arn"
+        PARAMS["ClickhouseConnectUrl"] = "clickhouse_connect_url"
+        PARAMS["ClickhousePGUrl"] = "clickhouse_pg_url"
 
         if args.template is None:
             template = "https://braintrust-cf.s3.amazonaws.com/braintrust-latest-vpc.yaml"
