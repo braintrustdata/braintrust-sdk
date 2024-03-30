@@ -355,7 +355,14 @@ const patchDatasetSchema = createDatasetSchema
   .openapi("PatchDataset");
 
 const createPromptSchema = promptSchema
-  .omit({ id: true, _xact_id: true })
+  .omit({
+    id: true,
+    _xact_id: true,
+    org_id: true,
+    log_id: true,
+    created: true,
+    metadata: true,
+  })
   .openapi("CreatePrompt");
 
 const patchPromptSchema = z
