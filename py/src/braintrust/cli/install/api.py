@@ -14,6 +14,7 @@ PARAMS = {
     "EncryptDatabase": "encrypt_database",
     "PostgresAlternativeHost": "postgres_alternative_host",
     "APIHandlerMemorySize": "api_handler_memory_size",
+    "WhitelistedOrigins": "whitelisted_origins",
     "PublicSubnet1AZ": "public_subnet_1_az",
     "PrivateSubnet1AZ": "private_subnet_1_az",
     "PrivateSubnet2AZ": "private_subnet_2_az",
@@ -82,6 +83,11 @@ def build_parser(subparsers, parents):
         help="The amount of memory to allocate to the API handler",
         default=None,
         type=int,
+    )
+    parser.add_argument(
+        "--whitelisted-origins",
+        help="Comma-separated list of origins to whitelist",
+        default=None,
     )
     parser.add_argument(
         "--public-subnet-1-az",
