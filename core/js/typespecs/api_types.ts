@@ -285,7 +285,6 @@ export const fetchEventsRequestSchema = z
     filters: fetchFiltersSchema.nullish(),
     version: versionSchema.nullish(),
   })
-  .strict()
   .openapi("FetchEventsRequest");
 
 function makeFetchEventsResponseSchema<T extends z.AnyZodObject>(
@@ -300,7 +299,6 @@ function makeFetchEventsResponseSchema<T extends z.AnyZodObject>(
     .object({
       events: eventSchema.array().describe("A list of fetched events"),
     })
-    .strict()
     .openapi(`Fetch${eventName}EventsResponse`);
 }
 
@@ -340,7 +338,6 @@ const experimentEventSchema = z
     root_span_id: experimentEventBaseSchema.shape.root_span_id,
     span_attributes: experimentEventBaseSchema.shape.span_attributes,
   })
-  .strict()
   .openapi("ExperimentEvent");
 
 const datasetEventBaseSchema = generateBaseEventOpSchema("dataset");
@@ -362,7 +359,6 @@ const datasetEventSchema = z
     span_id: datasetEventBaseSchema.shape.span_id,
     root_span_id: datasetEventBaseSchema.shape.root_span_id,
   })
-  .strict()
   .openapi("DatasetEvent");
 
 const projectLogsEventBaseSchema = generateBaseEventOpSchema("project");
@@ -398,7 +394,6 @@ const projectLogsEventSchema = z
     root_span_id: projectLogsEventBaseSchema.shape.root_span_id,
     span_attributes: projectLogsEventBaseSchema.shape.span_attributes,
   })
-  .strict()
   .openapi("ProjectLogsEvent");
 
 // Section: inserting data objects.
@@ -452,11 +447,9 @@ function makeInsertEventSchemas<T extends z.AnyZodObject>(
   ).replace("_", "");
   const replaceVariantSchema = insertSchema
     .merge(replacementEventSchema)
-    .strict()
     .openapi(`Insert${eventSchemaName}EventReplace`);
   const mergeVariantSchema = insertSchema
     .merge(mergeEventSchema)
-    .strict()
     .openapi(`Insert${eventSchemaName}EventMerge`);
   const eventSchema = z
     .union([replaceVariantSchema, mergeVariantSchema])
@@ -468,7 +461,6 @@ function makeInsertEventSchemas<T extends z.AnyZodObject>(
         .array()
         .describe(`A list of ${eventDescription} events to insert`),
     })
-    .strict()
     .openapi(`Insert${eventSchemaName}EventRequest`);
   return { eventSchema, requestSchema };
 }
@@ -482,7 +474,6 @@ export const insertEventsResponseSchema = z
         "The ids of all rows that were inserted, aligning one-to-one with the rows provided as input"
       ),
   })
-  .strict()
   .openapi("InsertEventsResponse");
 
 const {
@@ -490,23 +481,20 @@ const {
   requestSchema: insertExperimentEventsRequestSchema,
 } = makeInsertEventSchemas(
   "experiment",
-  z
-    .object({
-      input: experimentEventSchema.shape.input,
-      output: experimentEventSchema.shape.output,
-      expected: experimentEventSchema.shape.expected,
-      scores: experimentEventSchema.shape.scores,
-      metadata: experimentEventSchema.shape.metadata,
-      tags: experimentEventSchema.shape.tags,
-      metrics: experimentEventSchema.shape.metrics,
-      context: experimentEventSchema.shape.context,
-      span_attributes: experimentEventSchema.shape.span_attributes,
-      id: experimentEventSchema.shape.id.nullish(),
-      dataset_record_id: experimentEventSchema.shape.dataset_record_id,
-      [OBJECT_DELETE_FIELD]:
-        experimentEventBaseSchema.shape[OBJECT_DELETE_FIELD],
-    })
-    .strict()
+  z.object({
+    input: experimentEventSchema.shape.input,
+    output: experimentEventSchema.shape.output,
+    expected: experimentEventSchema.shape.expected,
+    scores: experimentEventSchema.shape.scores,
+    metadata: experimentEventSchema.shape.metadata,
+    tags: experimentEventSchema.shape.tags,
+    metrics: experimentEventSchema.shape.metrics,
+    context: experimentEventSchema.shape.context,
+    span_attributes: experimentEventSchema.shape.span_attributes,
+    id: experimentEventSchema.shape.id.nullish(),
+    dataset_record_id: experimentEventSchema.shape.dataset_record_id,
+    [OBJECT_DELETE_FIELD]: experimentEventBaseSchema.shape[OBJECT_DELETE_FIELD],
+  })
 );
 
 const {
@@ -514,16 +502,14 @@ const {
   requestSchema: insertDatasetEventsRequestSchema,
 } = makeInsertEventSchemas(
   "dataset",
-  z
-    .object({
-      input: datasetEventSchema.shape.input,
-      expected: datasetEventSchema.shape.expected,
-      metadata: datasetEventSchema.shape.metadata,
-      tags: datasetEventSchema.shape.tags,
-      id: datasetEventSchema.shape.id.nullish(),
-      [OBJECT_DELETE_FIELD]: datasetEventBaseSchema.shape[OBJECT_DELETE_FIELD],
-    })
-    .strict()
+  z.object({
+    input: datasetEventSchema.shape.input,
+    expected: datasetEventSchema.shape.expected,
+    metadata: datasetEventSchema.shape.metadata,
+    tags: datasetEventSchema.shape.tags,
+    id: datasetEventSchema.shape.id.nullish(),
+    [OBJECT_DELETE_FIELD]: datasetEventBaseSchema.shape[OBJECT_DELETE_FIELD],
+  })
 );
 
 const {
@@ -531,22 +517,20 @@ const {
   requestSchema: insertProjectLogsEventsRequestSchema,
 } = makeInsertEventSchemas(
   "project",
-  z
-    .object({
-      input: projectLogsEventSchema.shape.input,
-      output: projectLogsEventSchema.shape.output,
-      expected: projectLogsEventSchema.shape.expected,
-      scores: projectLogsEventSchema.shape.scores,
-      metadata: projectLogsEventSchema.shape.metadata,
-      tags: projectLogsEventSchema.shape.tags,
-      metrics: projectLogsEventSchema.shape.metrics,
-      context: projectLogsEventSchema.shape.context,
-      span_attributes: projectLogsEventSchema.shape.span_attributes,
-      id: projectLogsEventSchema.shape.id.nullish(),
-      [OBJECT_DELETE_FIELD]:
-        projectLogsEventBaseSchema.shape[OBJECT_DELETE_FIELD],
-    })
-    .strict()
+  z.object({
+    input: projectLogsEventSchema.shape.input,
+    output: projectLogsEventSchema.shape.output,
+    expected: projectLogsEventSchema.shape.expected,
+    scores: projectLogsEventSchema.shape.scores,
+    metadata: projectLogsEventSchema.shape.metadata,
+    tags: projectLogsEventSchema.shape.tags,
+    metrics: projectLogsEventSchema.shape.metrics,
+    context: projectLogsEventSchema.shape.context,
+    span_attributes: projectLogsEventSchema.shape.span_attributes,
+    id: projectLogsEventSchema.shape.id.nullish(),
+    [OBJECT_DELETE_FIELD]:
+      projectLogsEventBaseSchema.shape[OBJECT_DELETE_FIELD],
+  })
 );
 
 // Section: logging feedback.
@@ -566,7 +550,6 @@ function makeFeedbackRequestSchema<T extends z.AnyZodObject>(
         .array()
         .describe(`A list of ${eventDescription} feedback items`),
     })
-    .strict()
     .openapi(`Feedback${eventSchemaName}EventRequest`);
 }
 
@@ -581,7 +564,6 @@ const feedbackExperimentItemSchema = z
     metadata: feedbackExperimentRequestBaseSchema.shape.metadata,
     source: feedbackExperimentRequestBaseSchema.shape.source,
   })
-  .strict()
   .openapi("FeedbackExperimentItem");
 const feedbackExperimentRequestSchema = makeFeedbackRequestSchema(
   "experiment",
@@ -597,7 +579,6 @@ const feedbackDatasetItemSchema = z
     metadata: feedbackDatasetRequestBaseSchema.shape.metadata,
     source: feedbackDatasetRequestBaseSchema.shape.source,
   })
-  .strict()
   .openapi("FeedbackDatasetItem");
 const feedbackDatasetRequestSchema = makeFeedbackRequestSchema(
   "dataset",
@@ -615,7 +596,6 @@ const feedbackProjectLogsItemSchema = z
     metadata: feedbackProjectLogsRequestBaseSchema.shape.metadata,
     source: feedbackProjectLogsRequestBaseSchema.shape.source,
   })
-  .strict()
   .openapi("FeedbackProjectLogsItem");
 const feedbackProjectLogsRequestSchema = makeFeedbackRequestSchema(
   "project",
@@ -631,7 +611,6 @@ const feedbackPromptItemSchema = z
     metadata: feedbackPromptRequestBaseSchema.shape.metadata,
     source: feedbackPromptRequestBaseSchema.shape.source,
   })
-  .strict()
   .openapi("FeedbackPromptItem");
 const feedbackPromptRequestSchema = makeFeedbackRequestSchema(
   "prompt",
@@ -683,22 +662,20 @@ function makeCrossObjectIndividualRequestSchema(objectType: ObjectType) {
   const eventObjectType = getEventObjectType(objectType);
   const eventDescription = getEventObjectDescription(objectType);
   const eventObjectSchema = eventObjectSchemas[eventObjectType];
-  const insertObject = z
-    .object({
-      ...(eventObjectSchema.insertEvent
-        ? {
-            events: eventObjectSchema.insertEvent
-              .array()
-              .nullish()
-              .describe(`A list of ${eventDescription} events to insert`),
-          }
-        : {}),
-      feedback: eventObjectSchema.feedbackItem
-        .array()
-        .nullish()
-        .describe(`A list of ${eventDescription} feedback items`),
-    })
-    .strict();
+  const insertObject = z.object({
+    ...(eventObjectSchema.insertEvent
+      ? {
+          events: eventObjectSchema.insertEvent
+            .array()
+            .nullish()
+            .describe(`A list of ${eventDescription} events to insert`),
+        }
+      : {}),
+    feedback: eventObjectSchema.feedbackItem
+      .array()
+      .nullish()
+      .describe(`A list of ${eventDescription} feedback items`),
+  });
   return z
     .record(z.string().uuid(), insertObject)
     .nullish()
@@ -723,7 +700,6 @@ export const crossObjectInsertRequestSchema = z
     project_logs: makeCrossObjectIndividualRequestSchema("project"),
     prompt: makeCrossObjectIndividualRequestSchema("prompt"),
   })
-  .strict()
   .openapi("CrossObjectInsertRequest");
 
 export const crossObjectInsertResponseSchema = z
@@ -733,7 +709,6 @@ export const crossObjectInsertResponseSchema = z
     project_logs: makeCrossObjectIndividualResponseSchema("project"),
     prompt: makeCrossObjectIndividualResponseSchema("prompt"),
   })
-  .strict()
   .openapi("CrossObjectInsertResponse");
 
 // Section: Summarization operations.
@@ -837,7 +812,6 @@ const summarizeExperimentResponseSchema = z
       .nullish()
       .describe("Summary of the experiment's metrics"),
   })
-  .strict()
   .describe("Summary of an experiment")
   .openapi("SummarizeExperimentResponse");
 
@@ -867,7 +841,6 @@ const summarizeDatasetResponseSchema = z
       .describe("Summary of a dataset's data")
       .openapi("DataSummary"),
   })
-  .strict()
   .describe("Summary of a dataset")
   .openapi("SummarizeDatasetResponse");
 

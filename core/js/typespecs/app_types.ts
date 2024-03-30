@@ -67,7 +67,6 @@ export const userSchema = z
     avatar_url: z.string().nullish().describe("URL of the user's Avatar image"),
     created: userBaseSchema.shape.created,
   })
-  .strict()
   .openapi("User");
 export type User = z.infer<typeof userSchema>;
 
@@ -79,7 +78,6 @@ export const organizationSchema = z
     api_url: z.string().nullish(),
     created: organizationBaseSchema.shape.created,
   })
-  .strict()
   .openapi("Organization");
 export type Organization = z.infer<typeof organizationSchema>;
 
@@ -88,7 +86,6 @@ export const memberSchema = z
     org_id: organizationSchema.shape.id,
     user_id: userSchema.shape.id,
   })
-  .strict()
   .openapi("Member");
 export type Member = z.infer<typeof memberSchema>;
 
@@ -104,7 +101,6 @@ export const meSchema = z
       })
       .array(),
   })
-  .strict()
   .openapi("Me");
 export type Me = z.infer<typeof meSchema>;
 
@@ -119,7 +115,6 @@ export const apiKeySchema = z
     user_id: userSchema.shape.id.nullish(),
     org_id: organizationSchema.shape.id.nullish(),
   })
-  .strict()
   .openapi("ApiKey");
 export type ApiKey = z.infer<typeof apiKeySchema>;
 
@@ -138,7 +133,6 @@ export const projectSchema = z
     deleted_at: projectBaseSchema.shape.deleted_at,
     user_id: projectBaseSchema.shape.user_id,
   })
-  .strict()
   .openapi("Project");
 export type Project = z.infer<typeof projectSchema>;
 
@@ -155,7 +149,6 @@ export const datasetSchema = z
     deleted_at: datasetBaseSchema.shape.deleted_at,
     user_id: datasetBaseSchema.shape.user_id,
   })
-  .strict()
   .openapi("Dataset");
 export type Dataset = z.infer<typeof datasetSchema>;
 
@@ -265,7 +258,6 @@ export const experimentSchema = z
     user_id: experimentBaseSchema.shape.user_id,
     metadata: experimentBaseSchema.shape.metadata,
   })
-  .strict()
   .openapi("Experiment");
 export type Experiment = z.infer<typeof experimentSchema>;
 
@@ -318,14 +310,12 @@ const createProjectSchema = z
     name: projectSchema.shape.name,
     org_name: createProjectBaseSchema.shape.org_name,
   })
-  .strict()
   .openapi("CreateProject");
 
 const patchProjectSchema = z
   .object({
     name: projectSchema.shape.name.nullish(),
   })
-  .strict()
   .openapi("PatchProject");
 
 const createExperimentSchema = z
@@ -340,12 +330,10 @@ const createExperimentSchema = z
     public: experimentSchema.shape.public.nullish(),
     metadata: experimentSchema.shape.metadata,
   })
-  .strict()
   .openapi("CreateExperiment");
 
 const patchExperimentSchema = createExperimentSchema
   .omit({ project_id: true })
-  .strict()
   .openapi("PatchExperiment");
 
 const createDatasetSchema = z
@@ -354,17 +342,14 @@ const createDatasetSchema = z
     name: datasetSchema.shape.name,
     description: datasetSchema.shape.description,
   })
-  .strict()
   .openapi("CreateDataset");
 
 const patchDatasetSchema = createDatasetSchema
   .omit({ project_id: true })
-  .strict()
   .openapi("PatchDataset");
 
 const createPromptSchema = promptSchema
   .omit({ id: true, _xact_id: true })
-  .strict()
   .openapi("CreatePrompt");
 
 const patchPromptSchema = z
@@ -374,7 +359,6 @@ const patchPromptSchema = z
     prompt_data: promptSchema.shape.prompt_data.nullish(),
     tags: promptSchema.shape.tags.nullish(),
   })
-  .strict()
   .openapi("PatchPrompt");
 
 // Section: exported schemas, grouped by object type.
