@@ -698,7 +698,6 @@ export const crossObjectInsertRequestSchema = z
     experiment: makeCrossObjectIndividualRequestSchema("experiment"),
     dataset: makeCrossObjectIndividualRequestSchema("dataset"),
     project_logs: makeCrossObjectIndividualRequestSchema("project"),
-    prompt: makeCrossObjectIndividualRequestSchema("prompt"),
   })
   .openapi("CrossObjectInsertRequest");
 
@@ -707,7 +706,6 @@ export const crossObjectInsertResponseSchema = z
     experiment: makeCrossObjectIndividualResponseSchema("experiment"),
     dataset: makeCrossObjectIndividualResponseSchema("dataset"),
     project_logs: makeCrossObjectIndividualResponseSchema("project"),
-    prompt: makeCrossObjectIndividualResponseSchema("prompt"),
   })
   .openapi("CrossObjectInsertResponse");
 
