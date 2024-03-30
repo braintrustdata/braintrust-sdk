@@ -2670,7 +2670,7 @@ export class SpanImpl implements Span {
  *
  * You should not create `Dataset` objects directly. Instead, use the `braintrust.initDataset()` method.
  */
-class Dataset<
+export class Dataset<
   IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
 > extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
   private readonly lazyMetadata: LazyValue<ProjectDatasetMetadata>;
