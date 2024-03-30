@@ -24,8 +24,26 @@ class ToolCall(SerializableDataClass):
 
 
 @dataclass
+class TextPart(SerializableDataClass):
+    text: str
+    type: Literal["text"] = "text"
+
+
+@dataclass
+class ImageURL(SerializableDataClass):
+    url: str
+    detail: Literal["auto", "low", "high"] = "auto"
+
+
+@dataclass
+class ImagePart(SerializableDataClass):
+    image_url: ImageURL
+    type: Literal["image_url"] = "image_url"
+
+
+@dataclass
 class PromptMessage(SerializableDataClass):
-    content: str
+    content: Union[str, List[Union[TextPart, ImagePart]]]
     role: Literal["system", "user", "assistant", "function", "tool", "model"]
     name: str = None
     function_call: Union[str, FunctionCall] = None
