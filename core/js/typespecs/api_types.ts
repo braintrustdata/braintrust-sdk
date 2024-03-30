@@ -30,7 +30,7 @@ export const auditSourcesSchema = z.enum(VALID_SOURCES);
 
 export function generateBaseEventOpSchema(objectType: ObjectType) {
   const eventDescription = getEventObjectDescription(objectType);
-  return z.object({
+  return z.strictObject({
     id: z
       .string()
       .describe(
@@ -56,7 +56,7 @@ export function generateBaseEventOpSchema(objectType: ObjectType) {
         "A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings"
       ),
     metrics: z
-      .object({
+      .strictObject({
         start: z
           .number()
           .nullish()
@@ -81,7 +81,7 @@ export function generateBaseEventOpSchema(objectType: ObjectType) {
         `Metrics are numerical measurements tracking the execution of the code that produced the ${eventDescription} event. Use "start" and "end" to track the time span over which the ${eventDescription} event was produced`
       ),
     context: z
-      .object({
+      .strictObject({
         caller_functionname: z
           .string()
           .nullish()
@@ -125,7 +125,7 @@ export function generateBaseEventOpSchema(objectType: ObjectType) {
         `The \`span_id\` of the root of the trace this ${eventDescription} event belongs to`
       ),
     span_attributes: z
-      .object({
+      .strictObject({
         name: z
           .string()
           .nullish()
@@ -152,7 +152,7 @@ export function generateBaseEventOpSchema(objectType: ObjectType) {
 function generateBaseEventFeedbackSchema(objectType: ObjectType) {
   const eventObjectType = getEventObjectType(objectType);
   const eventDescription = getEventObjectDescription(objectType);
-  return z.object({
+  return z.strictObject({
     id: z
       .string()
       .describe(
@@ -227,7 +227,7 @@ export const versionSchema = z
   );
 
 const pathTypeFilterSchema = z
-  .object({
+  .strictObject({
     type: z
       .literal("path_lookup")
       .describe("Denotes the type of filter as a path-lookup filter"),
@@ -247,7 +247,7 @@ const pathTypeFilterSchema = z
   .openapi("PathLookupFilter");
 
 const sqlTypeFilterSchema = z
-  .object({
+  .strictObject({
     type: z
       .literal("sql_filter")
       .describe("Denotes the type of filter as a sql-type filter"),
@@ -278,14 +278,13 @@ export const fetchFiltersSchema = pathTypeFilterSchema
   .openapi("FetchEventsFilters");
 
 export const fetchEventsRequestSchema = z
-  .object({
+  .strictObject({
     limit: fetchLimitSchema.nullish(),
     max_xact_id: maxXactIdSchema.nullish(),
     max_root_span_id: maxRootSpanIdSchema.nullish(),
     filters: fetchFiltersSchema.nullish(),
     version: versionSchema.nullish(),
   })
-  .strict()
   .openapi("FetchEventsRequest");
 
 function makeFetchEventsResponseSchema<T extends z.AnyZodObject>(
@@ -297,16 +296,15 @@ function makeFetchEventsResponseSchema<T extends z.AnyZodObject>(
     ""
   );
   return z
-    .object({
+    .strictObject({
       events: eventSchema.array().describe("A list of fetched events"),
     })
-    .strict()
     .openapi(`Fetch${eventName}EventsResponse`);
 }
 
 const experimentEventBaseSchema = generateBaseEventOpSchema("experiment");
 const experimentEventSchema = z
-  .object({
+  .strictObject({
     id: experimentEventBaseSchema.shape.id,
     dataset_record_id: z
       .string()
@@ -340,12 +338,11 @@ const experimentEventSchema = z
     root_span_id: experimentEventBaseSchema.shape.root_span_id,
     span_attributes: experimentEventBaseSchema.shape.span_attributes,
   })
-  .strict()
   .openapi("ExperimentEvent");
 
 const datasetEventBaseSchema = generateBaseEventOpSchema("dataset");
 const datasetEventSchema = z
-  .object({
+  .strictObject({
     id: datasetEventBaseSchema.shape.id,
     [TRANSACTION_ID_FIELD]: datasetEventBaseSchema.shape[TRANSACTION_ID_FIELD],
     created: datasetEventBaseSchema.shape.created,
@@ -362,12 +359,11 @@ const datasetEventSchema = z
     span_id: datasetEventBaseSchema.shape.span_id,
     root_span_id: datasetEventBaseSchema.shape.root_span_id,
   })
-  .strict()
   .openapi("DatasetEvent");
 
 const projectLogsEventBaseSchema = generateBaseEventOpSchema("project");
 const projectLogsEventSchema = z
-  .object({
+  .strictObject({
     id: projectLogsEventBaseSchema.shape.id,
     [TRANSACTION_ID_FIELD]:
       projectLogsEventBaseSchema.shape[TRANSACTION_ID_FIELD],
@@ -398,7 +394,6 @@ const projectLogsEventSchema = z
     root_span_id: projectLogsEventBaseSchema.shape.root_span_id,
     span_attributes: projectLogsEventBaseSchema.shape.span_attributes,
   })
-  .strict()
   .openapi("ProjectLogsEvent");
 
 // Section: inserting data objects.
@@ -410,7 +405,7 @@ const isMergeDescription = [
   'For example, say there is an existing row in the DB `{"id": "foo", "input": {"a": 5, "b": 10}}`. If we merge a new row as `{"_is_merge": true, "id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"a": 5, "b": 11, "c": 20}}`. If we replace the new row as `{"id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"b": 11, "c": 20}}`',
 ].join("\n\n");
 
-const mergeEventSchema = z.object({
+const mergeEventSchema = z.strictObject({
   [IS_MERGE_FIELD]: customTypes.literalTrue.describe(isMergeDescription),
   [MERGE_PATHS_FIELD]: z
     .string()
@@ -425,7 +420,7 @@ const mergeEventSchema = z.object({
     ),
 });
 
-const replacementEventSchema = z.object({
+const replacementEventSchema = z.strictObject({
   [IS_MERGE_FIELD]: customTypes.literalFalse
     .nullish()
     .describe(isMergeDescription),
@@ -452,29 +447,26 @@ function makeInsertEventSchemas<T extends z.AnyZodObject>(
   ).replace("_", "");
   const replaceVariantSchema = insertSchema
     .merge(replacementEventSchema)
-    .strict()
     .openapi(`Insert${eventSchemaName}EventReplace`);
   const mergeVariantSchema = insertSchema
     .merge(mergeEventSchema)
-    .strict()
     .openapi(`Insert${eventSchemaName}EventMerge`);
   const eventSchema = z
     .union([replaceVariantSchema, mergeVariantSchema])
     .describe(`${capitalize(article)} ${eventDescription} event`)
     .openapi(`Insert${eventSchemaName}Event`);
   const requestSchema = z
-    .object({
+    .strictObject({
       events: eventSchema
         .array()
         .describe(`A list of ${eventDescription} events to insert`),
     })
-    .strict()
     .openapi(`Insert${eventSchemaName}EventRequest`);
   return { eventSchema, requestSchema };
 }
 
 export const insertEventsResponseSchema = z
-  .object({
+  .strictObject({
     row_ids: z
       .string()
       .array()
@@ -482,7 +474,6 @@ export const insertEventsResponseSchema = z
         "The ids of all rows that were inserted, aligning one-to-one with the rows provided as input"
       ),
   })
-  .strict()
   .openapi("InsertEventsResponse");
 
 const {
@@ -490,23 +481,20 @@ const {
   requestSchema: insertExperimentEventsRequestSchema,
 } = makeInsertEventSchemas(
   "experiment",
-  z
-    .object({
-      input: experimentEventSchema.shape.input,
-      output: experimentEventSchema.shape.output,
-      expected: experimentEventSchema.shape.expected,
-      scores: experimentEventSchema.shape.scores,
-      metadata: experimentEventSchema.shape.metadata,
-      tags: experimentEventSchema.shape.tags,
-      metrics: experimentEventSchema.shape.metrics,
-      context: experimentEventSchema.shape.context,
-      span_attributes: experimentEventSchema.shape.span_attributes,
-      id: experimentEventSchema.shape.id.nullish(),
-      dataset_record_id: experimentEventSchema.shape.dataset_record_id,
-      [OBJECT_DELETE_FIELD]:
-        experimentEventBaseSchema.shape[OBJECT_DELETE_FIELD],
-    })
-    .strict()
+  z.strictObject({
+    input: experimentEventSchema.shape.input,
+    output: experimentEventSchema.shape.output,
+    expected: experimentEventSchema.shape.expected,
+    scores: experimentEventSchema.shape.scores,
+    metadata: experimentEventSchema.shape.metadata,
+    tags: experimentEventSchema.shape.tags,
+    metrics: experimentEventSchema.shape.metrics,
+    context: experimentEventSchema.shape.context,
+    span_attributes: experimentEventSchema.shape.span_attributes,
+    id: experimentEventSchema.shape.id.nullish(),
+    dataset_record_id: experimentEventSchema.shape.dataset_record_id,
+    [OBJECT_DELETE_FIELD]: experimentEventBaseSchema.shape[OBJECT_DELETE_FIELD],
+  })
 );
 
 const {
@@ -514,16 +502,14 @@ const {
   requestSchema: insertDatasetEventsRequestSchema,
 } = makeInsertEventSchemas(
   "dataset",
-  z
-    .object({
-      input: datasetEventSchema.shape.input,
-      expected: datasetEventSchema.shape.expected,
-      metadata: datasetEventSchema.shape.metadata,
-      tags: datasetEventSchema.shape.tags,
-      id: datasetEventSchema.shape.id.nullish(),
-      [OBJECT_DELETE_FIELD]: datasetEventBaseSchema.shape[OBJECT_DELETE_FIELD],
-    })
-    .strict()
+  z.strictObject({
+    input: datasetEventSchema.shape.input,
+    expected: datasetEventSchema.shape.expected,
+    metadata: datasetEventSchema.shape.metadata,
+    tags: datasetEventSchema.shape.tags,
+    id: datasetEventSchema.shape.id.nullish(),
+    [OBJECT_DELETE_FIELD]: datasetEventBaseSchema.shape[OBJECT_DELETE_FIELD],
+  })
 );
 
 const {
@@ -531,22 +517,20 @@ const {
   requestSchema: insertProjectLogsEventsRequestSchema,
 } = makeInsertEventSchemas(
   "project",
-  z
-    .object({
-      input: projectLogsEventSchema.shape.input,
-      output: projectLogsEventSchema.shape.output,
-      expected: projectLogsEventSchema.shape.expected,
-      scores: projectLogsEventSchema.shape.scores,
-      metadata: projectLogsEventSchema.shape.metadata,
-      tags: projectLogsEventSchema.shape.tags,
-      metrics: projectLogsEventSchema.shape.metrics,
-      context: projectLogsEventSchema.shape.context,
-      span_attributes: projectLogsEventSchema.shape.span_attributes,
-      id: projectLogsEventSchema.shape.id.nullish(),
-      [OBJECT_DELETE_FIELD]:
-        projectLogsEventBaseSchema.shape[OBJECT_DELETE_FIELD],
-    })
-    .strict()
+  z.strictObject({
+    input: projectLogsEventSchema.shape.input,
+    output: projectLogsEventSchema.shape.output,
+    expected: projectLogsEventSchema.shape.expected,
+    scores: projectLogsEventSchema.shape.scores,
+    metadata: projectLogsEventSchema.shape.metadata,
+    tags: projectLogsEventSchema.shape.tags,
+    metrics: projectLogsEventSchema.shape.metrics,
+    context: projectLogsEventSchema.shape.context,
+    span_attributes: projectLogsEventSchema.shape.span_attributes,
+    id: projectLogsEventSchema.shape.id.nullish(),
+    [OBJECT_DELETE_FIELD]:
+      projectLogsEventBaseSchema.shape[OBJECT_DELETE_FIELD],
+  })
 );
 
 // Section: logging feedback.
@@ -561,19 +545,18 @@ function makeFeedbackRequestSchema<T extends z.AnyZodObject>(
     "_"
   ).replace("_", "");
   return z
-    .object({
+    .strictObject({
       feedback: feedbackSchema
         .array()
         .describe(`A list of ${eventDescription} feedback items`),
     })
-    .strict()
     .openapi(`Feedback${eventSchemaName}EventRequest`);
 }
 
 const feedbackExperimentRequestBaseSchema =
   generateBaseEventFeedbackSchema("experiment");
 const feedbackExperimentItemSchema = z
-  .object({
+  .strictObject({
     id: feedbackExperimentRequestBaseSchema.shape.id,
     scores: feedbackExperimentRequestBaseSchema.shape.scores,
     expected: feedbackExperimentRequestBaseSchema.shape.expected,
@@ -581,7 +564,6 @@ const feedbackExperimentItemSchema = z
     metadata: feedbackExperimentRequestBaseSchema.shape.metadata,
     source: feedbackExperimentRequestBaseSchema.shape.source,
   })
-  .strict()
   .openapi("FeedbackExperimentItem");
 const feedbackExperimentRequestSchema = makeFeedbackRequestSchema(
   "experiment",
@@ -591,13 +573,12 @@ const feedbackExperimentRequestSchema = makeFeedbackRequestSchema(
 const feedbackDatasetRequestBaseSchema =
   generateBaseEventFeedbackSchema("dataset");
 const feedbackDatasetItemSchema = z
-  .object({
+  .strictObject({
     id: feedbackDatasetRequestBaseSchema.shape.id,
     comment: feedbackDatasetRequestBaseSchema.shape.comment,
     metadata: feedbackDatasetRequestBaseSchema.shape.metadata,
     source: feedbackDatasetRequestBaseSchema.shape.source,
   })
-  .strict()
   .openapi("FeedbackDatasetItem");
 const feedbackDatasetRequestSchema = makeFeedbackRequestSchema(
   "dataset",
@@ -607,7 +588,7 @@ const feedbackDatasetRequestSchema = makeFeedbackRequestSchema(
 const feedbackProjectLogsRequestBaseSchema =
   generateBaseEventFeedbackSchema("project");
 const feedbackProjectLogsItemSchema = z
-  .object({
+  .strictObject({
     id: feedbackProjectLogsRequestBaseSchema.shape.id,
     scores: feedbackProjectLogsRequestBaseSchema.shape.scores,
     expected: feedbackProjectLogsRequestBaseSchema.shape.expected,
@@ -615,7 +596,6 @@ const feedbackProjectLogsItemSchema = z
     metadata: feedbackProjectLogsRequestBaseSchema.shape.metadata,
     source: feedbackProjectLogsRequestBaseSchema.shape.source,
   })
-  .strict()
   .openapi("FeedbackProjectLogsItem");
 const feedbackProjectLogsRequestSchema = makeFeedbackRequestSchema(
   "project",
@@ -625,13 +605,12 @@ const feedbackProjectLogsRequestSchema = makeFeedbackRequestSchema(
 const feedbackPromptRequestBaseSchema =
   generateBaseEventFeedbackSchema("prompt");
 const feedbackPromptItemSchema = z
-  .object({
+  .strictObject({
     id: feedbackPromptRequestBaseSchema.shape.id,
     comment: feedbackPromptRequestBaseSchema.shape.comment,
     metadata: feedbackPromptRequestBaseSchema.shape.metadata,
     source: feedbackPromptRequestBaseSchema.shape.source,
   })
-  .strict()
   .openapi("FeedbackPromptItem");
 const feedbackPromptRequestSchema = makeFeedbackRequestSchema(
   "prompt",
@@ -683,22 +662,20 @@ function makeCrossObjectIndividualRequestSchema(objectType: ObjectType) {
   const eventObjectType = getEventObjectType(objectType);
   const eventDescription = getEventObjectDescription(objectType);
   const eventObjectSchema = eventObjectSchemas[eventObjectType];
-  const insertObject = z
-    .object({
-      ...(eventObjectSchema.insertEvent
-        ? {
-            events: eventObjectSchema.insertEvent
-              .array()
-              .nullish()
-              .describe(`A list of ${eventDescription} events to insert`),
-          }
-        : {}),
-      feedback: eventObjectSchema.feedbackItem
-        .array()
-        .nullish()
-        .describe(`A list of ${eventDescription} feedback items`),
-    })
-    .strict();
+  const insertObject = z.strictObject({
+    ...(eventObjectSchema.insertEvent
+      ? {
+          events: eventObjectSchema.insertEvent
+            .array()
+            .nullish()
+            .describe(`A list of ${eventDescription} events to insert`),
+        }
+      : {}),
+    feedback: eventObjectSchema.feedbackItem
+      .array()
+      .nullish()
+      .describe(`A list of ${eventDescription} feedback items`),
+  });
   return z
     .record(z.string().uuid(), insertObject)
     .nullish()
@@ -717,23 +694,21 @@ function makeCrossObjectIndividualResponseSchema(objectType: ObjectType) {
 }
 
 export const crossObjectInsertRequestSchema = z
-  .object({
+  .strictObject({
     experiment: makeCrossObjectIndividualRequestSchema("experiment"),
     dataset: makeCrossObjectIndividualRequestSchema("dataset"),
     project_logs: makeCrossObjectIndividualRequestSchema("project"),
     prompt: makeCrossObjectIndividualRequestSchema("prompt"),
   })
-  .strict()
   .openapi("CrossObjectInsertRequest");
 
 export const crossObjectInsertResponseSchema = z
-  .object({
+  .strictObject({
     experiment: makeCrossObjectIndividualResponseSchema("experiment"),
     dataset: makeCrossObjectIndividualResponseSchema("dataset"),
     project_logs: makeCrossObjectIndividualResponseSchema("project"),
     prompt: makeCrossObjectIndividualResponseSchema("prompt"),
   })
-  .strict()
   .openapi("CrossObjectInsertResponse");
 
 // Section: Summarization operations.
@@ -758,7 +733,7 @@ export const summarizeDataParamSchema = z
   );
 
 const summarizeExperimentResponseSchema = z
-  .object({
+  .strictObject({
     project_name: z
       .string()
       .describe("Name of the project that the experiment belongs to"),
@@ -778,7 +753,7 @@ const summarizeExperimentResponseSchema = z
     scores: z
       .record(
         z
-          .object({
+          .strictObject({
             name: z.string().describe("Name of the score"),
             score: z
               .number()
@@ -811,7 +786,7 @@ const summarizeExperimentResponseSchema = z
     metrics: z
       .record(
         z
-          .object({
+          .strictObject({
             name: z.string().describe("Name of the metric"),
             metric: z.number().describe("Average metric across all examples"),
             unit: z.string().describe("Unit label for the metric"),
@@ -837,12 +812,11 @@ const summarizeExperimentResponseSchema = z
       .nullish()
       .describe("Summary of the experiment's metrics"),
   })
-  .strict()
   .describe("Summary of an experiment")
   .openapi("SummarizeExperimentResponse");
 
 const summarizeDatasetResponseSchema = z
-  .object({
+  .strictObject({
     project_name: z
       .string()
       .describe("Name of the project that the dataset belongs to"),
@@ -856,7 +830,7 @@ const summarizeDatasetResponseSchema = z
       .url()
       .describe("URL to the dataset's page in the Braintrust app"),
     data_summary: z
-      .object({
+      .strictObject({
         total_records: z
           .number()
           .int()
@@ -867,7 +841,6 @@ const summarizeDatasetResponseSchema = z
       .describe("Summary of a dataset's data")
       .openapi("DataSummary"),
   })
-  .strict()
   .describe("Summary of a dataset")
   .openapi("SummarizeDatasetResponse");
 
