@@ -644,7 +644,7 @@ def init(
                 "org_name": _state.org_name,
             }
 
-            response = _state.app_conn().post_json("api/experiment/get", args)
+            response = _state.log_conn().post_json("api/experiment/get", args)
             if len(response) == 0:
                 raise ValueError(f"Experiment {experiment} not found in project {project}.")
 
@@ -709,7 +709,7 @@ def init(
 
         while True:
             try:
-                response = _state.log_conn().post_json("v1/experiment", args)
+                response = _state.log_conn().post_json("api/experiment/register", args)
                 break
             except AugmentedHTTPError as e:
                 if args.get("base_experiment") is not None and "base experiment" in str(e):
@@ -773,7 +773,7 @@ def init_dataset(
             dataset_name=name,
             description=description,
         )
-        response = _state.app_conn().post_json("api/dataset/register", args)
+        response = _state.log_conn().post_json("api/dataset/register", args)
         resp_project = response["project"]
         resp_dataset = response["dataset"]
         return ProjectDatasetMetadata(
@@ -813,7 +813,7 @@ def init_logger(
         login(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login)
         org_id = _state.org_id
         if project_id is None:
-            response = _state.app_conn().post_json(
+            response = _state.log_conn().post_json(
                 "api/project/register",
                 {
                     "project_name": project or GLOBAL_PROJECT,
@@ -826,7 +826,7 @@ def init_logger(
                 project=ObjectMetadata(id=resp_project["id"], name=resp_project["name"], full_info=resp_project),
             )
         elif project is None:
-            response = _state.app_conn().get_json("api/project", {"id": project_id})
+            response = _state.log_conn().get_json("api/project", {"id": project_id})
             return OrgProjectMetadata(
                 org_id=org_id, project=ObjectMetadata(id=project_id, name=response["name"], full_info=response)
             )
@@ -2368,7 +2368,7 @@ class Project:
         if self._id is None or self._name is None:
             with self.init_lock:
                 if self._id is None:
-                    response = _state.app_conn().post_json(
+                    response = _state.log_conn().post_json(
                         "api/project/register",
                         {
                             "project_name": self._name or GLOBAL_PROJECT,
@@ -2378,7 +2378,7 @@ class Project:
                     self._id = response["project"]["id"]
                     self._name = response["project"]["name"]
                 elif self._name is None:
-                    response = _state.app_conn().get_json("api/project", {"id": self._id})
+                    response = _state.log_conn().get_json("api/project", {"id": self._id})
                     self._name = response["name"]
 
         return self
