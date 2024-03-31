@@ -489,7 +489,9 @@ export async function runEvaluator(
                     for (const s of scoreValue) {
                       if (!(typeof s === "object" && !isEmpty(s))) {
                         throw new Error(
-                          `When returning an array of scores, each score must be a non-empty object. Got: ${s}`
+                          `When returning an array of scores, each score must be a non-empty object. Got: ${JSON.stringify(
+                            s
+                          )}`
                         );
                       }
                     }
