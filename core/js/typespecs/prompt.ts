@@ -31,11 +31,11 @@ export type ContentPartImage = z.infer<
 export type ContentPart = z.infer<typeof chatCompletionContentPartSchema>;
 
 export const promptBlockDataSchema = z.union([
-  z.object({
+  z.strictObject({
     type: z.literal("completion"),
     content: z.string(),
   }),
-  z.object({
+  z.strictObject({
     type: z.literal("chat"),
     messages: z.array(chatCompletionMessageParamSchema),
     tools: z.string().optional(),
@@ -44,28 +44,31 @@ export const promptBlockDataSchema = z.union([
 
 export type PromptBlockData = z.infer<typeof promptBlockDataSchema>;
 
-const braintrustModelParamsSchema = z.object({
+const braintrustModelParamsSchema = z.strictObject({
   use_cache: z.boolean().optional(),
 });
 
 export const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
-const openAIModelParamsSchema = z.object({
+const openAIModelParamsSchema = z.strictObject({
   temperature: z.number(),
   top_p: z.number().optional(),
   max_tokens: z.number().optional(),
   frequency_penalty: z.number().optional(),
   presence_penalty: z.number().optional(),
   response_format: z
-    .union([z.literal(null), z.object({ type: z.literal("json_object") })])
+    .union([
+      z.literal(null),
+      z.strictObject({ type: z.literal("json_object") }),
+    ])
     .optional(),
   tool_choice: z
     .union([
       z.literal("auto"),
       z.literal("none"),
-      z.object({
+      z.strictObject({
         type: z.literal("function"),
-        function: z.object({ name: z.string() }),
+        function: z.strictObject({ name: z.string() }),
       }),
     ])
     .optional(),
@@ -73,7 +76,7 @@ const openAIModelParamsSchema = z.object({
 
 export type OpenAIModelParams = z.infer<typeof openAIModelParamsSchema>;
 
-const anthropicModelParamsSchema = z.object({
+const anthropicModelParamsSchema = z.strictObject({
   max_tokens: z.number(),
   temperature: z.number(),
   top_p: z.number().optional(),
@@ -84,14 +87,14 @@ const anthropicModelParamsSchema = z.object({
     .describe("This is a legacy parameter that should not be used."),
 });
 
-const googleModelParamsSchema = z.object({
+const googleModelParamsSchema = z.strictObject({
   temperature: z.number(),
   maxOutputTokens: z.number().optional(),
   topP: z.number().optional(),
   topK: z.number().optional(),
 });
 
-const jsCompletionParamsSchema = z.object({});
+const jsCompletionParamsSchema = z.strictObject({});
 export const modelParamsSchema = braintrustModelParamsSchema.and(
   z.union([
     openAIModelParamsSchema,
@@ -110,7 +113,7 @@ const anyModelParamsSchema = openAIModelParamsSchema
 
 export type AnyModelParam = z.infer<typeof anyModelParamsSchema>;
 
-export const promptOptionsSchema = z.object({
+export const promptOptionsSchema = z.strictObject({
   model: z.string().optional(),
   params: modelParamsSchema.optional(),
   position: z.string().optional(),
@@ -119,11 +122,11 @@ export const promptOptionsSchema = z.object({
 export type PromptOptions = z.infer<typeof promptOptionsSchema>;
 
 export const promptDataSchema = z
-  .object({
+  .strictObject({
     prompt: promptBlockDataSchema.nullish(),
     options: promptOptionsSchema.nullish(),
     origin: z
-      .object({
+      .strictObject({
         prompt_id: z.string().optional(),
         prompt_version: z.string().optional(),
       })

@@ -2,13 +2,13 @@ import { z } from "zod";
 
 export const functionParametersSchema = z.record(z.unknown());
 
-export const functionDefinitionSchema = z.object({
+export const functionDefinitionSchema = z.strictObject({
   name: z.string(),
   description: z.string().optional(),
   parameters: functionParametersSchema.optional(),
 });
 
-export const chatCompletionToolSchema = z.object({
+export const chatCompletionToolSchema = z.strictObject({
   function: functionDefinitionSchema,
   type: z.literal("function"),
 });
