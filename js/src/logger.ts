@@ -2664,7 +2664,7 @@ export class SpanImpl implements Span {
  *
  * You should not create `Dataset` objects directly. Instead, use the `braintrust.initDataset()` method.
  */
-class Dataset<
+export class Dataset<
   IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
 > extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
   private readonly lazyMetadata: LazyValue<ProjectDatasetMetadata>;
@@ -2996,10 +2996,20 @@ export class Prompt {
         );
       }
 
+      const render = (template: string) =>
+        Mustache.render(template, buildArgs, undefined, {
+          escape: (v: any) => (typeof v === "string" ? v : JSON.stringify(v)),
+        });
+
       const messages = (prompt.messages || []).map((m) => ({
         ...m,
-        ...("content" in m && typeof m.content === "string"
-          ? { content: Mustache.render(m.content, buildArgs) }
+        ...("content" in m
+          ? {
+              content:
+                typeof m.content === "string"
+                  ? render(m.content)
+                  : JSON.parse(render(JSON.stringify(m.content))),
+            }
           : {}),
       }));
 
