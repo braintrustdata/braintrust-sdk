@@ -593,7 +593,7 @@ export class Logger<IsAsyncFlush extends boolean> {
   ): PromiseUnless<IsAsyncFlush, string> {
     if (this.calledStartSpan && !options?.allowConcurrentWithSpans) {
       throw new Error(
-        "Cannot run toplevel Logger.log method while using spans. To log to the span, use Span.log"
+        "Cannot run toplevel `log` method while using spans. To log to the span, call `traced` and then log with `span.log`"
       );
     }
 
@@ -2187,7 +2187,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
   ): string {
     if (this.calledStartSpan && !options?.allowConcurrentWithSpans) {
       throw new Error(
-        "Cannot run toplevel Experiment.log method while using spans. To log to the span, use Span.log"
+        "Cannot run toplevel `log` method while using spans. To log to the span, call `traced` and then log with `span.log`"
       );
     }
 
