@@ -846,9 +846,9 @@ def init_logger(
 
 def load_prompt(
     project: Optional[str] = None,
-    project_id: Optional[str] = None,
     slug: Optional[str] = None,
     version: Optional[Union[str, int]] = None,
+    project_id: Optional[str] = None,
     defaults: Optional[Dict[str, Any]] = None,
     no_trace: bool = False,
     app_url: Optional[str] = None,
@@ -861,6 +861,7 @@ def load_prompt(
     :param project: The name of the project to load the prompt from. Must specify at least one of `project` or `project_id`.
     :param slug: The slug of the prompt to load.
     :param version: An optional version of the prompt (to read). If not specified, the latest version will be used.
+    :param project_id: The id of the project to load the prompt from. This takes precedence over `project` if specified.
     :param defaults: (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
     :param no_trace: If true, do not include logging metadata for this prompt when build() is called.
     :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
