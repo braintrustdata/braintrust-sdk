@@ -1,24 +1,24 @@
 import { z } from "zod";
 
-const chatCompletionSystemMessageParamSchema = z.object({
+const chatCompletionSystemMessageParamSchema = z.strictObject({
   content: z.string().default(""),
   role: z.literal("system"),
   name: z.string().optional(),
 });
 
-export const chatCompletionContentPartTextSchema = z.object({
+export const chatCompletionContentPartTextSchema = z.strictObject({
   text: z.string().default(""),
   type: z.literal("text"),
 });
 
-const imageURLSchema = z.object({
+const imageURLSchema = z.strictObject({
   url: z.string(),
   detail: z
     .union([z.literal("auto"), z.literal("low"), z.literal("high")])
     .optional(),
 });
 
-export const chatCompletionContentPartImageSchema = z.object({
+export const chatCompletionContentPartImageSchema = z.strictObject({
   image_url: imageURLSchema,
   type: z.literal("image_url"),
 });
@@ -33,41 +33,41 @@ export const chatCompletionContentSchema = z.union([
   z.array(chatCompletionContentPartSchema),
 ]);
 
-const chatCompletionUserMessageParamSchema = z.object({
+const chatCompletionUserMessageParamSchema = z.strictObject({
   content: chatCompletionContentSchema,
   role: z.literal("user"),
   name: z.string().optional(),
 });
 
-const functionCallSchema = z.object({
+const functionCallSchema = z.strictObject({
   arguments: z.string(),
   name: z.string(),
 });
 
-const functionSchema = z.object({
+const functionSchema = z.strictObject({
   arguments: z.string(),
   name: z.string(),
 });
 
-const chatCompletionToolMessageParamSchema = z.object({
+const chatCompletionToolMessageParamSchema = z.strictObject({
   content: z.string().default(""),
   role: z.literal("tool"),
   tool_call_id: z.string(),
 });
 
-const chatCompletionFunctionMessageParamSchema = z.object({
+const chatCompletionFunctionMessageParamSchema = z.strictObject({
   content: z.string().default(""),
   name: z.string(),
   role: z.literal("function"),
 });
 
-const chatCompletionMessageToolCallSchema = z.object({
+const chatCompletionMessageToolCallSchema = z.strictObject({
   id: z.string(),
   function: functionSchema,
   type: z.literal("function"),
 });
 
-const chatCompletionAssistantMessageParamSchema = z.object({
+const chatCompletionAssistantMessageParamSchema = z.strictObject({
   role: z.literal("assistant"),
   content: z.string().nullish(),
   function_call: functionCallSchema.optional(),
