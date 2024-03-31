@@ -10,7 +10,7 @@
  * npm install braintrust
  * ```
  *
- * Then, create a file like `hello.eval.ts` with the following content.
+ * Then, create a file like `hello.eval.ts` with the following content:
  *
  * ```javascript
  * import { Eval } from "braintrust";
