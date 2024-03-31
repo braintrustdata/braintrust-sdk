@@ -642,9 +642,6 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
             scorer_args = kwargs
 
             result = await call_user_fn(event_loop, score, **scorer_args)
-            if result is None:
-                return None
-
             if isinstance(result, Iterable):
                 for s in result:
                     if not isinstance(s, Score):
