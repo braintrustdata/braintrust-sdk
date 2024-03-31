@@ -79,8 +79,7 @@ export type EvalScorerArgs<
   output: Output;
 };
 
-type ScoreValue = Score | number;
-type OneOrMoreScores = ScoreValue | Array<ScoreValue> | null;
+type OneOrMoreScores = Score | number | null | Array<Score>;
 
 export type EvalScorer<
   Input,
@@ -486,21 +485,26 @@ export async function runEvaluator(
                     return null;
                   }
 
-                  const scoreValues = Array.isArray(scoreValue)
-                    ? scoreValue
-                    : [scoreValue];
+                  if (Array.isArray(scoreValue)) {
+                    for (const s of scoreValue) {
+                      if (!(typeof s === "object" && !isEmpty(s))) {
+                        throw new Error(
+                          `When returning an array of scores, each score must be a non-empty object. Got: ${s}`
+                        );
+                      }
+                    }
+                  }
 
-                  const results: Score[] = scoreValues.map((scoreValue, idx) =>
-                    typeof scoreValue === "object"
-                      ? scoreValue
-                      : {
-                          name:
-                            scoreValues.length > 1
-                              ? `${scorerNames[score_idx]}_${idx}`
-                              : scorerNames[score_idx],
+                  const results = Array.isArray(scoreValue)
+                    ? scoreValue
+                    : typeof scoreValue === "object" && !isEmpty(scoreValue)
+                    ? [scoreValue]
+                    : [
+                        {
+                          name: scorerNames[score_idx],
                           score: scoreValue,
-                        }
-                  );
+                        },
+                      ];
 
                   const getOtherFields = (s: Score) => {
                     const { metadata, name, ...rest } = s;
