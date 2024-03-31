@@ -1565,6 +1565,7 @@ class Experiment(ObjectFetcher):
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
         self.last_start_time = time.time()
+        self._called_start_span = False
 
         ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
 
@@ -1605,7 +1606,7 @@ class Experiment(ObjectFetcher):
         id=None,
         dataset_record_id=None,
         inputs=None,
-        allow_log_concurrent_with_active_span=False,
+        allow_concurrent_with_spans=False,
     ):
         """
         Log a single event to the experiment. The event will be batched and uploaded behind the scenes.
@@ -1620,15 +1621,13 @@ class Experiment(ObjectFetcher):
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
         :param dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
         :param inputs: (Deprecated) the same as `input` (will be removed in a future version).
-        :param allow_log_concurrent_with_active_span: (Optional) in rare cases where you need to log at the top level separately from an active span on the experiment, set this to True.
+        :param allow_concurrent_with_spans: (Optional) in rare cases where you need to log at the top level separately from using spans on the experiment elsewhere, set this to True.
         :returns: The `id` of the logged event.
         """
-        if not allow_log_concurrent_with_active_span:
-            check_current_span = current_span()
-            if getattr(check_current_span, "parent_object", None) == self:
-                raise Exception(
-                    "Cannot run toplevel Experiment.log method while there is an active span. To log to the span, use Span.log"
-                )
+        if self._called_start_span and not allow_concurrent_with_spans:
+            raise Exception(
+                "Cannot run toplevel `log` method while using spans. To log to the span, call `experiment.start_span` and then log with `span.log`"
+            )
 
         event = _validate_and_sanitize_experiment_log_full_args(
             dict(
@@ -1645,7 +1644,7 @@ class Experiment(ObjectFetcher):
             ),
             self.dataset is not None,
         )
-        span = self.start_span(start_time=self.last_start_time, **event)
+        span = self._start_span_impl(start_time=self.last_start_time, **event)
         self.last_start_time = span.end()
         return span.id
 
@@ -1702,18 +1701,15 @@ class Experiment(ObjectFetcher):
 
         See `Span.start_span` for full details
         """
-
-        return SpanImpl(
-            parent_object=self,
-            parent_ids=self._lazy_parent_ids(),
-            bg_logger=self.bg_logger,
+        self._called_start_span = True
+        return self._start_span_impl(
             name=name,
             type=type,
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
             parent_id=parent_id,
-            event=event,
+            **event,
         )
 
     def fetch_base_experiment(self):
@@ -1804,6 +1800,28 @@ class Experiment(ObjectFetcher):
 
         self.bg_logger.flush()
 
+    def _start_span_impl(
+        self,
+        name="root",
+        type=SpanTypeAttribute.EVAL,
+        span_attributes={},
+        start_time=None,
+        set_current=None,
+        parent_id=None,
+        **event,
+    ):
+        return SpanImpl(
+            parent_ids=self._lazy_parent_ids(),
+            bg_logger=self.bg_logger,
+            name=name,
+            type=type,
+            span_attributes=span_attributes,
+            start_time=start_time,
+            set_current=set_current,
+            parent_id=parent_id,
+            event=event,
+        )
+
     def __enter__(self):
         return self
 
@@ -1849,7 +1867,6 @@ class SpanImpl(Span):
 
     def __init__(
         self,
-        parent_object: Union["Experiment", "Logger"],
         parent_ids: LazyValue[Union[ParentExperimentIds, ParentProjectLogIds]],
         bg_logger,
         parent_span_info: Optional[ParentSpanInfo] = None,
@@ -1902,7 +1919,6 @@ class SpanImpl(Span):
         if caller_location:
             self.internal_data["context"] = caller_location
 
-        self.parent_object = parent_object
         self.parent_ids = parent_ids
 
         id = event.get("id", None)
@@ -2004,7 +2020,6 @@ class SpanImpl(Span):
         else:
             parent_span_info = None
         return SpanImpl(
-            parent_object=self.parent_object,
             parent_ids=self.parent_ids,
             bg_logger=self.bg_logger,
             parent_span_info=parent_span_info,
@@ -2406,6 +2421,7 @@ class Logger:
 
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
         self.last_start_time = time.time()
+        self._called_start_span = False
 
     @property
     def org_id(self):
@@ -2434,7 +2450,7 @@ class Logger:
         metadata=None,
         metrics=None,
         id=None,
-        allow_log_concurrent_with_active_span=False,
+        allow_concurrent_with_spans=False,
     ):
         """
         Log a single event. The event will be batched and uploaded behind the scenes.
@@ -2447,16 +2463,14 @@ class Logger:
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
         :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
-        :param allow_log_concurrent_with_active_span: (Optional) in rare cases where you need to log at the top level separately from an active span on the logger, set this to True.
+        :param allow_concurrent_with_spans: (Optional) in rare cases where you need to log at the top level separately from using spans on the logger elsewhere, set this to True.
         """
-        if not allow_log_concurrent_with_active_span:
-            check_current_span = current_span()
-            if getattr(check_current_span, "parent_object", None) == self:
-                raise Exception(
-                    "Cannot run toplevel Logger.log method while there is an active span. To log to the span, use Span.log"
-                )
+        if self._called_start_span and not allow_concurrent_with_spans:
+            raise Exception(
+                "Cannot run toplevel `log` method while using spans. To log to the span, call `logger.start_span` and then log with `span.log`"
+            )
 
-        span = self.start_span(
+        span = self._start_span_impl(
             start_time=self.last_start_time,
             input=input,
             output=output,
@@ -2531,9 +2545,28 @@ class Logger:
 
         See `Span.start_span` for full details
         """
+        self._called_start_span = True
+        return self._start_span_impl(
+            name=name,
+            type=type,
+            span_attributes=span_attributes,
+            start_time=start_time,
+            set_current=set_current,
+            parent_id=parent_id,
+            **event,
+        )
 
+    def _start_span_impl(
+        self,
+        name="root",
+        type=SpanTypeAttribute.TASK,
+        span_attributes={},
+        start_time=None,
+        set_current=None,
+        parent_id=None,
+        **event,
+    ):
         return SpanImpl(
-            parent_object=self,
             parent_ids=self._lazy_parent_ids(),
             bg_logger=self.bg_logger,
             name=name,
