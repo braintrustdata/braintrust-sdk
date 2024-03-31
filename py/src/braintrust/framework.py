@@ -106,8 +106,7 @@ class EvalScorerArgs(SerializableDataClass):
     metadata: Optional[Metadata] = None
 
 
-ScoreValue = Union[float, int, bool, None, Score]
-OneOrMoreScores = Optional[Union[ScoreValue, List[ScoreValue]]]
+OneOrMoreScores = Union[float, int, bool, None, Score, List[Score]]
 
 EvalScorer = Union[
     Scorer,
@@ -643,13 +642,17 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
             scorer_args = kwargs
 
             result = await call_user_fn(event_loop, score, **scorer_args)
-            if not isinstance(result, Iterable):
+            if isinstance(result, Iterable):
+                for s in result:
+                    if not isinstance(s, Score):
+                        raise ValueError(
+                            f"When returning an array of scores, each score must be a non-empty object. Got: {s}"
+                        )
+                result = list(result)
+            elif isinstance(result, Score):
                 result = [result]
-
-            result = [
-                Score(name=f"{name}_{idx}" if len(result) > 1 else name, score=r) if not isinstance(r, Score) else r
-                for (idx, r) in enumerate(result)
-            ]
+            else:
+                result = [Score(name=name, score=result)]
 
             def get_other_fields(s):
                 return {k: v for k, v in s.as_dict().items() if k not in ["metadata", "name"]}

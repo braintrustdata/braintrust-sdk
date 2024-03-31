@@ -95,21 +95,19 @@ const googleModelParamsSchema = z.strictObject({
 });
 
 const jsCompletionParamsSchema = z.strictObject({});
-export const modelParamsSchema = braintrustModelParamsSchema.and(
-  z.union([
-    openAIModelParamsSchema,
-    anthropicModelParamsSchema,
-    googleModelParamsSchema,
-    jsCompletionParamsSchema,
-  ])
-);
+export const modelParamsSchema = z.union([
+  braintrustModelParamsSchema.merge(openAIModelParamsSchema),
+  braintrustModelParamsSchema.merge(anthropicModelParamsSchema),
+  braintrustModelParamsSchema.merge(googleModelParamsSchema),
+  braintrustModelParamsSchema.merge(jsCompletionParamsSchema),
+]);
 
 export type ModelParams = z.infer<typeof modelParamsSchema>;
 
 const anyModelParamsSchema = openAIModelParamsSchema
-  .and(anthropicModelParamsSchema)
-  .and(googleModelParamsSchema)
-  .and(braintrustModelParamsSchema);
+  .merge(anthropicModelParamsSchema)
+  .merge(googleModelParamsSchema)
+  .merge(braintrustModelParamsSchema);
 
 export type AnyModelParam = z.infer<typeof anyModelParamsSchema>;
 
