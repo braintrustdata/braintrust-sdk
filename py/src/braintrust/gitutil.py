@@ -23,6 +23,7 @@ _gitlock = threading.RLock()
 @_cache(1)
 def _current_repo():
     if git is None:
+        # If the git module is not available, we can't do anything.
         return None
 
     try:
