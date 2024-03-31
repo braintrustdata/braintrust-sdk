@@ -123,11 +123,11 @@ class BaseExperiment:
     use based on your git history (or fall back to timestamps).
     """
 
+    name: Optional[str] = None
     """
     The name of the base experiment to use. If unspecified, Braintrust will automatically figure out the best base
     using your git history (or fall back to timestamps).
     """
-    name: Optional[str] = None
 
 
 @dataclasses.dataclass
@@ -141,20 +141,16 @@ class Evaluator:
     create them using the `Eval()` method, which will register them so that `braintrust eval ...` can find them.
     """
 
+    project_name: str
     """
     The name of the project the eval falls under.
     """
-    project_name: str
 
+    eval_name: str
     """
     A name that describes the experiment. You do not need to change it each time the experiment runs.
     """
-    eval_name: str
 
-    """
-    Returns an iterator over the evaluation dataset. Each element of the iterator should be an `EvalCase` or a dict
-    with the same fields as an `EvalCase` (`input`, `expected`, `metadata`).
-    """
     data: Union[
         Iterator[EvalCase],
         Awaitable[Iterator[EvalCase]],
@@ -162,45 +158,49 @@ class Evaluator:
         BaseExperiment,
         type,
     ]
+    """
+    Returns an iterator over the evaluation dataset. Each element of the iterator should be an `EvalCase` or a dict
+    with the same fields as an `EvalCase` (`input`, `expected`, `metadata`).
+    """
 
-    """
-    Runs the evaluation task on a single input. The `hooks` object can be used to add metadata to the evaluation.
-    """
     task: Union[
         Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
         Callable[[Input], Union[Output, Awaitable[Output]]],
     ]
+    """
+    Runs the evaluation task on a single input. The `hooks` object can be used to add metadata to the evaluation.
+    """
 
+    scores: List[EvalScorer]
     """
     A list of scorers to evaluate the results of the task. Each scorer can be a Scorer object or a function
     that takes `input`, `output`, and `expected` arguments and returns a `Score` object. The function can be async.
     """
-    scores: List[EvalScorer]
 
+    experiment_name: Optional[str]
     """
     Optional experiment name. If not specified, a name will be generated automatically.
     """
-    experiment_name: Optional[str]
 
+    metadata: Optional[Metadata]
     """
     A dictionary with additional data about the test example, model outputs, or just about anything else that's
     relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`,
     example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
     JSON-serializable type, but its keys must be strings.
     """
-    metadata: Optional[Metadata]
 
+    trial_count: int = 1
     """
     The number of times to run the evaluator per input. This is useful for evaluating applications that
     have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the
     variance in the results.
     """
-    trial_count: int = 1
 
+    is_public: bool = False
     """
     Whether the experiment should be public. Defaults to false.
     """
-    is_public: bool = False
 
 
 @dataclasses.dataclass

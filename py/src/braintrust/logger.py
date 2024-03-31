@@ -2595,16 +2595,16 @@ class Logger:
 class ScoreSummary(SerializableDataClass):
     """Summary of a score's performance."""
 
-    """Name of the score."""
     name: str
-    """Average score across all examples."""
+    """Name of the score."""
     score: float
-    """Difference in score between the current and reference experiment."""
+    """Average score across all examples."""
     diff: Optional[float]
-    """Number of improvements in the score."""
+    """Difference in score between the current and reference experiment."""
     improvements: Optional[int]
-    """Number of regressions in the score."""
+    """Number of improvements in the score."""
     regressions: Optional[int]
+    """Number of regressions in the score."""
 
     # Used to help with formatting
     _longest_score_name: int
@@ -2631,18 +2631,18 @@ class ScoreSummary(SerializableDataClass):
 class MetricSummary(SerializableDataClass):
     """Summary of a metric's performance."""
 
-    """Name of the metric."""
     name: str
-    """Average metric across all examples."""
+    """Name of the metric."""
     metric: float
-    """Unit label for the metric."""
+    """Average metric across all examples."""
     unit: str
-    """Difference in metric between the current and reference experiment."""
+    """Unit label for the metric."""
     diff: float
-    """Number of improvements in the metric."""
+    """Difference in metric between the current and reference experiment."""
     improvements: int
-    """Number of regressions in the metric."""
+    """Number of improvements in the metric."""
     regressions: int
+    """Number of regressions in the metric."""
 
     # Used to help with formatting
     _longest_metric_name: int
@@ -2665,20 +2665,20 @@ class MetricSummary(SerializableDataClass):
 class ExperimentSummary(SerializableDataClass):
     """Summary of an experiment's scores and metadata."""
 
-    """Name of the project that the experiment belongs to."""
     project_name: str
-    """Name of the experiment."""
+    """Name of the project that the experiment belongs to."""
     experiment_name: str
-    """URL to the project's page in the Braintrust app."""
+    """Name of the experiment."""
     project_url: Optional[str]
-    """URL to the experiment's page in the Braintrust app."""
+    """URL to the project's page in the Braintrust app."""
     experiment_url: Optional[str]
-    """The experiment scores are baselined against."""
+    """URL to the experiment's page in the Braintrust app."""
     comparison_experiment_name: Optional[str]
-    """Summary of the experiment's scores."""
+    """The experiment scores are baselined against."""
     scores: Dict[str, ScoreSummary]
-    """Summary of the experiment's metrics."""
+    """Summary of the experiment's scores."""
     metrics: Dict[str, ScoreSummary]
+    """Summary of the experiment's metrics."""
 
     def __str__(self):
         comparison_line = ""
@@ -2705,10 +2705,10 @@ class ExperimentSummary(SerializableDataClass):
 class DataSummary(SerializableDataClass):
     """Summary of a dataset's data."""
 
-    """New or updated records added in this session."""
     new_records: int
-    """Total records in the dataset."""
+    """New or updated records added in this session."""
     total_records: int
+    """Total records in the dataset."""
 
     def __str__(self):
         return textwrap.dedent(f"""Total records: {self.total_records} ({self.new_records} new or updated records)""")
@@ -2718,16 +2718,16 @@ class DataSummary(SerializableDataClass):
 class DatasetSummary(SerializableDataClass):
     """Summary of a dataset's scores and metadata."""
 
-    """Name of the project that the dataset belongs to."""
     project_name: str
-    """Name of the dataset."""
+    """Name of the project that the dataset belongs to."""
     dataset_name: str
-    """URL to the project's page in the Braintrust app."""
+    """Name of the dataset."""
     project_url: str
-    """URL to the experiment's page in the Braintrust app."""
+    """URL to the project's page in the Braintrust app."""
     dataset_url: str
-    """Summary of the dataset's data."""
+    """URL to the experiment's page in the Braintrust app."""
     data_summary: int
+    """Summary of the dataset's data."""
 
     def __str__(self):
         return textwrap.dedent(
