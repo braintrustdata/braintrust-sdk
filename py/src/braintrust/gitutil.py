@@ -10,7 +10,11 @@ from braintrust_core.git_fields import GitMetadataSettings, RepoInfo
 
 # https://stackoverflow.com/questions/48399498/git-executable-not-found-in-python
 os.environ["GIT_PYTHON_REFRESH"] = "quiet"
-import git
+try:
+    raise ImportError
+    import git
+except ImportError:
+    git = None
 
 _logger = logging.getLogger("braintrust.gitutil")
 _gitlock = threading.RLock()
@@ -18,6 +22,9 @@ _gitlock = threading.RLock()
 
 @_cache(1)
 def _current_repo():
+    if git is None:
+        return None
+
     try:
         return git.Repo(search_parent_directories=True)
     except git.exc.InvalidGitRepositoryError:
