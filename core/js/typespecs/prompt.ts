@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { chatCompletionMessageParamSchema } from "./openai/messages";
+import {
+  chatCompletionContentPartSchema,
+  chatCompletionContentPartImageSchema,
+  chatCompletionContentPartTextSchema,
+  chatCompletionMessageParamSchema,
+} from "./openai/messages";
+export { chatCompletionContentPartImageSchema };
 
 export { toolsSchema } from "./openai/tools";
 export type { Tools } from "./openai/tools";
@@ -15,6 +21,14 @@ export const messageRoleSchema = z.enum([
 export type MessageRole = z.infer<typeof messageRoleSchema>;
 
 export type Message = z.infer<typeof chatCompletionMessageParamSchema>;
+export type Content = Message["content"];
+export type ContentPartText = z.infer<
+  typeof chatCompletionContentPartTextSchema
+>;
+export type ContentPartImage = z.infer<
+  typeof chatCompletionContentPartImageSchema
+>;
+export type ContentPart = z.infer<typeof chatCompletionContentPartSchema>;
 
 export const promptBlockDataSchema = z.union([
   z.object({
