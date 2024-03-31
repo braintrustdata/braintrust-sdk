@@ -1625,7 +1625,7 @@ class Experiment(ObjectFetcher):
         """
         if self._called_start_span and not allow_concurrent_with_spans:
             raise Exception(
-                "Cannot run toplevel `log` method while using spans. To log to the span, call `traced` and then log with `span.log`"
+                "Cannot run toplevel `log` method while using spans. To log to the span, call `experiment.start_span` and then log with `span.log`"
             )
 
         event = _validate_and_sanitize_experiment_log_full_args(
@@ -2466,7 +2466,7 @@ class Logger:
         """
         if self._called_start_span and not allow_concurrent_with_spans:
             raise Exception(
-                "Cannot run toplevel `log` method while using spans. To log to the span, call `traced` and then log with `span.log`"
+                "Cannot run toplevel `log` method while using spans. To log to the span, call `logger.start_span` and then log with `span.log`"
             )
 
         span = self._start_span_impl(
