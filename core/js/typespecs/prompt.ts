@@ -51,7 +51,7 @@ const braintrustModelParamsSchema = z.strictObject({
 export const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
 const openAIModelParamsSchema = z.strictObject({
-  temperature: z.number(),
+  temperature: z.number().optional(),
   top_p: z.number().optional(),
   max_tokens: z.number().optional(),
   frequency_penalty: z.number().optional(),
