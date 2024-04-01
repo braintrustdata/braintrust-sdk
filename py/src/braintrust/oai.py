@@ -14,6 +14,47 @@ class NamedWrapper:
         return getattr(self.__wrapped, name)
 
 
+def postprocess_streaming_results(all_results):
+    role = None
+    content = None
+    tool_calls = None
+    finish_reason = None
+    for result in all_results:
+        delta = result["choices"][0]["delta"]
+        if role is None:
+            role = delta.get("role")
+
+        if delta.get("finish_reason") is not None:
+            finish_reason = delta.get("finish_reason")
+
+        if delta.get("content") is not None:
+            content = (content or "") + delta.get("content")
+        if delta.get("tool_calls") is not None:
+            if tool_calls is None:
+                tool_calls = [
+                    {
+                        "id": delta["tool_calls"][0]["id"],
+                        "type": delta["tool_calls"][0]["type"],
+                        "function": delta["tool_calls"][0]["function"],
+                    }
+                ]
+            else:
+                tool_calls[0]["function"]["arguments"] += delta["tool_calls"][0]["function"]["arguments"]
+
+    return [
+        {
+            "index": 0,
+            "message": {
+                "role": role,
+                "content": content,
+                "tool_calls": tool_calls,
+            },
+            "logprobs": None,
+            "finish_reason": finish_reason,
+        }
+    ]
+
+
 class ChatCompletionWrapper:
     def __init__(self, create_fn, acreate_fn):
         self.create_fn = create_fn
@@ -45,7 +86,8 @@ class ChatCompletionWrapper:
                                 first = False
                             all_results.append(item if isinstance(item, dict) else item.dict())
                             yield item
-                        span.log(output=all_results)
+
+                        span.log(output=postprocess_streaming_results(all_results))
                     finally:
                         span.end()
 
@@ -93,7 +135,8 @@ class ChatCompletionWrapper:
                                 first = False
                             all_results.append(item if isinstance(item, dict) else item.dict())
                             yield item
-                        span.log(output=all_results)
+
+                        span.log(output=postprocess_streaming_results(all_results))
                     finally:
                         span.end()
 
