@@ -3,7 +3,7 @@ import { z } from "zod";
 const chatCompletionSystemMessageParamSchema = z.strictObject({
   content: z.string().default(""),
   role: z.literal("system"),
-  name: z.string().optional(),
+  name: z.string().nullish(),
 });
 
 export const chatCompletionContentPartTextSchema = z.strictObject({
@@ -15,7 +15,7 @@ const imageURLSchema = z.strictObject({
   url: z.string(),
   detail: z
     .union([z.literal("auto"), z.literal("low"), z.literal("high")])
-    .optional(),
+    .nullish(),
 });
 
 export const chatCompletionContentPartImageSchema = z.strictObject({
@@ -36,7 +36,7 @@ export const chatCompletionContentSchema = z.union([
 const chatCompletionUserMessageParamSchema = z.strictObject({
   content: chatCompletionContentSchema,
   role: z.literal("user"),
-  name: z.string().optional(),
+  name: z.string().nullish(),
 });
 
 const functionCallSchema = z.strictObject({
@@ -70,9 +70,9 @@ const chatCompletionMessageToolCallSchema = z.strictObject({
 const chatCompletionAssistantMessageParamSchema = z.strictObject({
   role: z.literal("assistant"),
   content: z.string().nullish(),
-  function_call: functionCallSchema.optional(),
-  name: z.string().optional(),
-  tool_calls: z.array(chatCompletionMessageToolCallSchema).optional(),
+  function_call: functionCallSchema.nullish(),
+  name: z.string().nullish(),
+  tool_calls: z.array(chatCompletionMessageToolCallSchema).nullish(),
 });
 
 export const chatCompletionMessageParamSchema = z.union([
