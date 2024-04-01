@@ -21,7 +21,7 @@ def postprocess_streaming_results(all_results):
     finish_reason = None
     for result in all_results:
         delta = result["choices"][0]["delta"]
-        if role is None:
+        if role is None and delta.get("role") is not None:
             role = delta.get("role")
 
         if delta.get("finish_reason") is not None:

@@ -312,6 +312,66 @@ function wrapEmbeddings<
   };
 }
 
+function postprocessStreamingResults(allResults: any[]): [
+  {
+    index: number;
+    message: any;
+    logprobs: null;
+    finish_reason?: string;
+  }
+] {
+  let role = undefined;
+  let content = undefined;
+  let tool_calls = undefined;
+  let finish_reason = undefined;
+  for (const result of allResults) {
+    const delta = result.choices?.[0]?.delta;
+    if (!delta) {
+      continue;
+    }
+
+    if (!role && delta.role) {
+      role = delta.role;
+    }
+
+    if (delta.finish_reason) {
+      finish_reason = delta.finish_reason;
+    }
+
+    if (delta.content) {
+      content = (content || "") + delta.content;
+    }
+
+    if (delta.tool_calls) {
+      if (!tool_calls) {
+        tool_calls = [
+          {
+            id: delta.tool_calls[0].id,
+            type: delta.tool_calls[0].type,
+            function: delta.tool_calls[0].function,
+          },
+        ];
+      } else {
+        tool_calls[0].function.arguments +=
+          delta.tool_calls[0].function.arguments;
+      }
+    }
+  }
+
+  return [
+    {
+      index: 0,
+      message: {
+        role,
+        content,
+        tool_calls,
+      },
+      logprobs: null,
+      finish_reason,
+    },
+  ];
+}
+
 class WrapperStream<Item> implements AsyncIterable<Item> {
   private span: Span;
   private iter: AsyncIterable<Item>;
@@ -342,7 +402,7 @@ class WrapperStream<Item> implements AsyncIterable<Item> {
         yield item;
       }
       this.span.log({
-        output: allResults,
+        output: postprocessStreamingResults(allResults),
       });
     } finally {
       this.span.end();
