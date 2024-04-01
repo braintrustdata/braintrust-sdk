@@ -1977,7 +1977,6 @@ class SpanImpl(Span):
         self.set_current = coalesce(set_current, True)
         self._logged_end_time = None
 
-        self.parent_object = parent_object
         self.parent_object_type = parent_object_type
         self.parent_object_id = parent_object_id
         self.parent_row_id = parent_row_id
