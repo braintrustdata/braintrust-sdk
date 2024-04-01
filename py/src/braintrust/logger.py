@@ -1214,6 +1214,10 @@ def _populate_args(d, **kwargs):
 
 
 def validate_tags(tags):
+    # Tag should be a list, set, or tuple, not a dict or string
+    if not isinstance(tags, (list, set, tuple)):
+        raise ValueError("tags must be a list, set, or tuple of strings")
+
     seen = set()
     for tag in tags:
         if not isinstance(tag, str):
