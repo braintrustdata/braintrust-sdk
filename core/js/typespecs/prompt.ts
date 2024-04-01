@@ -126,6 +126,7 @@ export const promptDataSchema = z
     origin: z
       .strictObject({
         prompt_id: z.string().optional(),
+        project_id: z.string().optional(),
         prompt_version: z.string().optional(),
       })
       .nullish(),
