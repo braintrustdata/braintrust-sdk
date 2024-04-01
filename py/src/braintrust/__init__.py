@@ -11,8 +11,7 @@ Install the library with pip.
 pip install braintrust
 ```
 
-Then, run a simple experiment with the following code (replace `YOUR_API_KEY` with
-your Braintrust API key):
+Then, create a file like `eval_hello.py` with the following content:
 
 ```python
 from braintrust import Eval
@@ -35,6 +34,12 @@ Eval(
   task=lambda input: "Hi " + input,  # Replace with your LLM call
   scores=[is_equal],
 )
+```
+
+Finally, run the script with `braintrust eval eval_hello.py`.
+
+```bash
+BRAINTRUST_API_KEY=<YOUR_BRAINTRUST_API_KEY> braintrust eval eval_hello.py
 ```
 
 ### API Reference
