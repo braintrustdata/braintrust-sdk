@@ -109,7 +109,7 @@ class Span(ABC):
         :param span_attributes: Optional additional attributes to attach to the span, such as a type name.
         :param start_time: Optional start time of the span, as a timestamp in seconds.
         :param set_current: If true (the default), the span will be marked as the currently-active span for the duration of the context manager.
-        :param parent: Optional parent info string for the span. The string can be generated from `[Span,Experiment,Logger].export_as_parent`. If not provided, the current span will be used (depending on context). This is useful for adding spans to an existing trace.
+        :param parent: Optional parent info string for the span. The string can be generated from `[Span,Experiment,Logger].export`. If not provided, the current span will be used (depending on context). This is useful for adding spans to an existing trace.
         :param parent_id: This option is deprecated and will be removed in a future version of Braintrust. Prefer to use `parent` instead.
         :param **event: Data to be logged. See `Experiment.log` for full details.
         :returns: The newly-created `Span`
@@ -1203,7 +1203,6 @@ def start_span(
         assert not parent_id, "Cannot specify both `parent` and `parent_id`. Prefer `parent`"
         components = SpanParentComponents.from_str(parent)
         return SpanImpl(
-            parent_object=None,
             parent_object_type=components.object_type,
             parent_object_id=LazyValue(lambda: components.object_id, use_mutex=False),
             parent_row_id=components.row_id,
@@ -1866,7 +1865,7 @@ class Experiment(ObjectFetcher):
             metrics=metric_summary,
         )
 
-    def export_as_parent(self) -> str:
+    def export(self) -> str:
         """Return a serialized representation of the experiment that can be used to start subspans in other places. See `Span.start_span` for more details."""
         return SpanParentComponents(object_type=self._span_parent_object_type(), object_id=self.id, row_id="").to_str()
 
@@ -2016,7 +2015,7 @@ class SpanImpl(Span):
         if caller_location:
             self.internal_data["context"] = caller_location
 
-        self._id = event.get("id", None)
+        self._id = event.get("id")
         if self._id is None:
             self._id = str(uuid.uuid4())
 
@@ -2114,7 +2113,7 @@ class SpanImpl(Span):
         self.log()
         return end_time
 
-    def export_as_parent(self) -> str:
+    def export(self) -> str:
         """Return a serialized representation of the span that can be used to start subspans in other places. See `Span.start_span` for more details."""
         return SpanParentComponents(
             object_type=self.parent_object_type, object_id=self.parent_object_id.get(), row_id=self.id
@@ -2664,7 +2663,7 @@ class Logger:
             event=event,
         )
 
-    def export_as_parent(self) -> str:
+    def export(self) -> str:
         """Return a serialized representation of the logger that can be used to start subspans in other places. See `Span.start_span` for more details."""
         return SpanParentComponents(object_type=self._span_parent_object_type(), object_id=self.id, row_id="").to_str()
 

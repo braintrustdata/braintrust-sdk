@@ -110,7 +110,7 @@ export interface Span {
    * @param args.span_attributes Optional additional attributes to attach to the span, such as a type name.
    * @param args.start_time Optional start time of the span, as a timestamp in seconds.
    * @param args.setCurrent If true (the default), the span will be marked as the currently-active span for the duration of the callback.
-   * @param args.parent Optional parent info string for the span. The string can be generated from `[Span,Experiment,Logger].exportAsParent`. If not provided, the current span will be used (depending on context). This is useful for adding spans to an existing trace.
+   * @param args.parent Optional parent info string for the span. The string can be generated from `[Span,Experiment,Logger].export`. If not provided, the current span will be used (depending on context). This is useful for adding spans to an existing trace.
    * @param parentId This option is deprecated and will be removed in a future version of Braintrust. Prefer to use `parent` instead.
    * @param args.event Data to be logged. See `Experiment.log` for full details.
    * @Returns The result of running `callback`.
@@ -788,7 +788,7 @@ export class Logger<IsAsyncFlush extends boolean> {
   /**
    * Return a serialized representation of the logger that can be used to start subspans in other places. See `Span.start_span` for more details.
    */
-  public async exportAsParent(): Promise<string> {
+  public async export(): Promise<string> {
     return new SpanParentComponents({
       objectType: this.spanParentObjectType(),
       objectId: await this.id,
@@ -2482,7 +2482,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
   /**
    * Return a serialized representation of the experiment that can be used to start subspans in other places. See `Span.start_span` for more details.
    */
-  public async exportAsParent(): Promise<string> {
+  public async export(): Promise<string> {
     return new SpanParentComponents({
       objectType: this.spanParentObjectType(),
       objectId: await this.id,
@@ -2744,7 +2744,7 @@ export class SpanImpl implements Span {
   /**
    * Return a serialized representation of the span that can be used to start subspans in other places. See `Span.start_span` for more details.
    */
-  public async exportAsParent(): Promise<string> {
+  public async export(): Promise<string> {
     return new SpanParentComponents({
       objectType: this.parentObjectType,
       objectId: await this.parentObjectId.get(),
