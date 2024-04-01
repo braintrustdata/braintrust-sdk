@@ -620,6 +620,7 @@ export class Logger<IsAsyncFlush extends boolean> {
   private bgLogger: BackgroundLogger;
   private lastStartTime: number;
   private lazyId: LazyValue<string>;
+  private calledStartSpan: boolean;
 
   // For type identification.
   public kind: "logger" = "logger";
@@ -636,6 +637,7 @@ export class Logger<IsAsyncFlush extends boolean> {
     this.bgLogger = new BackgroundLogger(logConn);
     this.lastStartTime = getCurrentUnixTimestamp();
     this.lazyId = new LazyValue(async () => await this.id);
+    this.calledStartSpan = false;
   }
 
   public get org_id(): Promise<string> {
@@ -676,26 +678,20 @@ export class Logger<IsAsyncFlush extends boolean> {
    * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
    * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
    * @param options Additional logging options
-   * @param options.allowLogConcurrentWithActiveSpan in rare cases where you need to log at the top level separately from an active span on the logger, set this to true.
+   * @param options.allowConcurrentWithSpans in rare cases where you need to log at the top level separately from spans on the logger elsewhere, set this to true.
    * :returns: The `id` of the logged event.
    */
   public log(
     event: Readonly<StartSpanEventArgs>,
-    options?: { allowLogConcurrentWithActiveSpan?: boolean }
+    options?: { allowConcurrentWithSpans?: boolean }
   ): PromiseUnless<IsAsyncFlush, string> {
-    if (!options?.allowLogConcurrentWithActiveSpan) {
-      const checkCurrentSpan = currentSpan();
-      if (
-        checkCurrentSpan instanceof SpanImpl &&
-        checkCurrentSpan.parentObject === this
-      ) {
-        throw new Error(
-          "Cannot run toplevel Logger.log method while there is an active span. To log to the span, use Span.log"
-        );
-      }
+    if (this.calledStartSpan && !options?.allowConcurrentWithSpans) {
+      throw new Error(
+        "Cannot run toplevel `log` method while using spans. To log to the span, call `logger.traced` and then log with `span.log`"
+      );
     }
 
-    const span = this.startSpan({ startTime: this.lastStartTime, event });
+    const span = this.startSpanImpl({ startTime: this.lastStartTime, event });
     this.lastStartTime = span.end();
     const ret = span.id;
     type Ret = PromiseUnless<IsAsyncFlush, string>;
@@ -751,16 +747,20 @@ export class Logger<IsAsyncFlush extends boolean> {
    * See `traced` for full details.
    */
   public startSpan(args?: StartSpanArgs): Span {
+    this.calledStartSpan = true;
+    return this.startSpanImpl(args);
+  }
+
+  private startSpanImpl(args?: StartSpanArgs): Span {
     return new SpanImpl({
-      parentObject: this,
       ...startSpanParentArgs({
         parent: args?.parent,
         parentId: args?.parentId,
         spanParentObjectType: this.spanParentObjectType(),
         spanParentObjectId: this.lazyId,
       }),
-      bgLogger: this.bgLogger,
       ...args,
+      bgLogger: this.bgLogger,
       defaultRootType: SpanTypeAttribute.TASK,
     });
   }
@@ -1921,7 +1921,6 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
       const components = SpanParentComponents.fromStr(args?.parent);
       const span = new SpanImpl({
         ...args,
-        parentObject: null,
         parentObjectType: components.objectType,
         parentObjectId: new LazyValue(async () => components.objectId),
         parentRowId: components.rowId,
@@ -2240,6 +2239,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
   public bgLogger: BackgroundLogger;
   private lastStartTime: number;
   private lazyId: LazyValue<string>;
+  private calledStartSpan: boolean;
 
   // For type identification.
   public kind: "experiment" = "experiment";
@@ -2258,6 +2258,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     this.bgLogger = new BackgroundLogger(logConn);
     this.lastStartTime = getCurrentUnixTimestamp();
     this.lazyId = new LazyValue(async () => await this.id);
+    this.calledStartSpan = false;
   }
 
   public get id(): Promise<string> {
@@ -2302,27 +2303,21 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
    * @param event.dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
    * @param event.inputs: (Deprecated) the same as `input` (will be removed in a future version).
    * @param options Additional logging options
-   * @param options.allowLogConcurrentWithActiveSpan in rare cases where you need to log at the top level separately from an active span on the experiment, set this to true.
+   * @param options.allowConcurrentWithSpans in rare cases where you need to log at the top level separately from spans on the experiment elsewhere, set this to true.
    * :returns: The `id` of the logged event.
    */
   public log(
     event: Readonly<ExperimentLogFullArgs>,
-    options?: { allowLogConcurrentWithActiveSpan?: boolean }
+    options?: { allowConcurrentWithSpans?: boolean }
   ): string {
-    if (!options?.allowLogConcurrentWithActiveSpan) {
-      const checkCurrentSpan = currentSpan();
-      if (
-        checkCurrentSpan instanceof SpanImpl &&
-        checkCurrentSpan.parentObject === this
-      ) {
-        throw new Error(
-          "Cannot run toplevel Experiment.log method while there is an active span. To log to the span, use Span.log"
-        );
-      }
+    if (this.calledStartSpan && !options?.allowConcurrentWithSpans) {
+      throw new Error(
+        "Cannot run toplevel `log` method while using spans. To log to the span, call `experiment.traced` and then log with `span.log`"
+      );
     }
 
     event = validateAndSanitizeExperimentLogFullArgs(event, !!this.dataset);
-    const span = this.startSpan({ startTime: this.lastStartTime, event });
+    const span = this.startSpanImpl({ startTime: this.lastStartTime, event });
     this.lastStartTime = span.end();
     return span.id;
   }
@@ -2358,16 +2353,20 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
    * See `traced` for full details.
    */
   public startSpan(args?: StartSpanArgs): Span {
+    this.calledStartSpan = true;
+    return this.startSpanImpl(args);
+  }
+
+  private startSpanImpl(args?: StartSpanArgs): Span {
     return new SpanImpl({
-      parentObject: this,
       ...startSpanParentArgs({
         parent: args?.parent,
         parentId: args?.parentId,
         spanParentObjectType: this.spanParentObjectType(),
         spanParentObjectId: this.lazyId,
       }),
-      bgLogger: this.bgLogger,
       ...args,
+      bgLogger: this.bgLogger,
       defaultRootType: SpanTypeAttribute.EVAL,
     });
   }
@@ -2581,7 +2580,6 @@ export class SpanImpl implements Span {
   private loggedEndTime: number | undefined;
 
   // For internal use only.
-  public parentObject: Experiment | Logger<any> | null;
   private parentObjectType: SpanParentObjectType;
   private parentObjectId: LazyValue<string>;
   private parentRowId: string;
@@ -2591,7 +2589,6 @@ export class SpanImpl implements Span {
 
   constructor(
     args: {
-      parentObject: Experiment | Logger<any> | null;
       parentObjectType: SpanParentObjectType;
       parentObjectId: LazyValue<string>;
       parentRowId: string;
@@ -2605,7 +2602,6 @@ export class SpanImpl implements Span {
       args.type ?? (args.parentRowId ? undefined : args.defaultRootType);
 
     this.loggedEndTime = undefined;
-    this.parentObject = args.parentObject;
     this.parentObjectType = args.parentObjectType;
     this.parentObjectId = args.parentObjectId;
     this.parentRowId = args.parentRowId;
@@ -2729,7 +2725,6 @@ export class SpanImpl implements Span {
         spanParentObjectType: this.parentObjectType,
         spanParentObjectId: this.parentObjectId,
       }),
-      parentObject: this.parentObject,
       bgLogger: this.bgLogger,
     });
   }
@@ -2773,7 +2768,7 @@ export class SpanImpl implements Span {
  *
  * You should not create `Dataset` objects directly. Instead, use the `braintrust.initDataset()` method.
  */
-class Dataset<
+export class Dataset<
   IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
 > extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
   private readonly lazyMetadata: LazyValue<ProjectDatasetMetadata>;
@@ -3103,10 +3098,20 @@ export class Prompt {
         );
       }
 
+      const render = (template: string) =>
+        Mustache.render(template, buildArgs, undefined, {
+          escape: (v: any) => (typeof v === "string" ? v : JSON.stringify(v)),
+        });
+
       const messages = (prompt.messages || []).map((m) => ({
         ...m,
-        ...("content" in m && typeof m.content === "string"
-          ? { content: Mustache.render(m.content, buildArgs) }
+        ...("content" in m
+          ? {
+              content:
+                typeof m.content === "string"
+                  ? render(m.content)
+                  : JSON.parse(render(JSON.stringify(m.content))),
+            }
           : {}),
       }));
 

@@ -464,7 +464,7 @@ class _BackgroundLogger:
                     self.started = True
 
     def _finalize(self):
-        self.logger.info("Flushing final log events...")
+        self.logger.debug("Flushing final log events...")
         self.flush()
 
     def _publisher(self):
@@ -883,9 +883,9 @@ def init_logger(
 
 def load_prompt(
     project: Optional[str] = None,
-    project_id: Optional[str] = None,
     slug: Optional[str] = None,
     version: Optional[Union[str, int]] = None,
+    project_id: Optional[str] = None,
     defaults: Optional[Dict[str, Any]] = None,
     no_trace: bool = False,
     app_url: Optional[str] = None,
@@ -898,6 +898,7 @@ def load_prompt(
     :param project: The name of the project to load the prompt from. Must specify at least one of `project` or `project_id`.
     :param slug: The slug of the prompt to load.
     :param version: An optional version of the prompt (to read). If not specified, the latest version will be used.
+    :param project_id: The id of the project to load the prompt from. This takes precedence over `project` if specified.
     :param defaults: (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
     :param no_trace: If true, do not include logging metadata for this prompt when build() is called.
     :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
@@ -1266,6 +1267,10 @@ def _populate_args(d, **kwargs):
 
 
 def validate_tags(tags):
+    # Tag should be a list, set, or tuple, not a dict or string
+    if not isinstance(tags, (list, set, tuple)):
+        raise ValueError("tags must be a list, set, or tuple of strings")
+
     seen = set()
     for tag in tags:
         if not isinstance(tag, str):
@@ -1638,6 +1643,7 @@ class Experiment(ObjectFetcher):
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
         self.last_start_time = time.time()
         self._lazy_id = LazyValue(lambda: self.id, use_mutex=False)
+        self._called_start_span = False
 
         ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
 
@@ -1682,7 +1688,7 @@ class Experiment(ObjectFetcher):
         id=None,
         dataset_record_id=None,
         inputs=None,
-        allow_log_concurrent_with_active_span=False,
+        allow_concurrent_with_spans=False,
     ):
         """
         Log a single event to the experiment. The event will be batched and uploaded behind the scenes.
@@ -1697,15 +1703,13 @@ class Experiment(ObjectFetcher):
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
         :param dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
         :param inputs: (Deprecated) the same as `input` (will be removed in a future version).
-        :param allow_log_concurrent_with_active_span: (Optional) in rare cases where you need to log at the top level separately from an active span on the experiment, set this to True.
+        :param allow_concurrent_with_spans: (Optional) in rare cases where you need to log at the top level separately from using spans on the experiment elsewhere, set this to True.
         :returns: The `id` of the logged event.
         """
-        if not allow_log_concurrent_with_active_span:
-            check_current_span = current_span()
-            if getattr(check_current_span, "parent_object", None) == self:
-                raise Exception(
-                    "Cannot run toplevel Experiment.log method while there is an active span. To log to the span, use Span.log"
-                )
+        if self._called_start_span and not allow_concurrent_with_spans:
+            raise Exception(
+                "Cannot run toplevel `log` method while using spans. To log to the span, call `experiment.start_span` and then log with `span.log`"
+            )
 
         event = _validate_and_sanitize_experiment_log_full_args(
             dict(
@@ -1722,7 +1726,7 @@ class Experiment(ObjectFetcher):
             ),
             self.dataset is not None,
         )
-        span = self.start_span(start_time=self.last_start_time, **event)
+        span = self._start_span_impl(start_time=self.last_start_time, **event)
         self.last_start_time = span.end()
         return span.id
 
@@ -1775,22 +1779,16 @@ class Experiment(ObjectFetcher):
 
         See `Span.start_span` for full details
         """
-        return SpanImpl(
-            parent_object=self,
-            **_start_span_parent_args(
-                parent=parent,
-                parent_id=parent_id,
-                span_parent_object_type=self._span_parent_object_type(),
-                span_parent_object_id=self._lazy_id,
-            ),
-            bg_logger=self.bg_logger,
+        self._called_start_span = True
+        return self._start_span_impl(
             name=name,
             type=type,
-            default_root_type=SpanTypeAttribute.EVAL,
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
-            event=event,
+            parent=parent,
+            parent_id=parent_id,
+            **event,
         )
 
     def fetch_base_experiment(self):
@@ -1885,6 +1883,34 @@ class Experiment(ObjectFetcher):
 
         self.bg_logger.flush()
 
+    def _start_span_impl(
+        self,
+        name=None,
+        type=None,
+        span_attributes=None,
+        start_time=None,
+        set_current=None,
+        parent=None,
+        parent_id=None,
+        **event,
+    ):
+        return SpanImpl(
+            **_start_span_parent_args(
+                parent=parent,
+                parent_id=parent_id,
+                span_parent_object_type=self._span_parent_object_type(),
+                span_parent_object_id=self._lazy_id,
+            ),
+            bg_logger=self.bg_logger,
+            name=name,
+            type=type,
+            default_root_type=SpanTypeAttribute.EVAL,
+            span_attributes=span_attributes,
+            start_time=start_time,
+            set_current=set_current,
+            event=event,
+        )
+
     def __enter__(self):
         return self
 
@@ -1930,7 +1956,6 @@ class SpanImpl(Span):
 
     def __init__(
         self,
-        parent_object: Union["Logger", "Experiment", None],
         parent_object_type: SpanParentObjectType,
         parent_object_id: LazyValue[str],
         parent_row_id: str,
@@ -2065,7 +2090,6 @@ class SpanImpl(Span):
         **event,
     ):
         return SpanImpl(
-            parent_object=self.parent_object,
             **_start_span_parent_args(
                 parent=parent,
                 parent_id=coalesce(parent_id, None if parent else self.id),
@@ -2396,7 +2420,9 @@ class Prompt:
             ret["messages"] = [
                 {
                     **{k: v for (k, v) in m.as_dict().items() if v is not None},
-                    "content": chevron.render(m.content, data=build_args),
+                    "content": chevron.render(m.content, data=build_args)
+                    if isinstance(m.content, str)
+                    else json.loads(chevron.render(json.dumps(m.content), data=build_args)),
                 }
                 for m in self.prompt.messages
             ]
@@ -2478,6 +2504,7 @@ class Logger:
         self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
         self.last_start_time = time.time()
         self._lazy_id = LazyValue(lambda: self.id, use_mutex=False)
+        self._called_start_span = False
 
     @property
     def org_id(self):
@@ -2510,7 +2537,7 @@ class Logger:
         metadata=None,
         metrics=None,
         id=None,
-        allow_log_concurrent_with_active_span=False,
+        allow_concurrent_with_spans=False,
     ):
         """
         Log a single event. The event will be batched and uploaded behind the scenes.
@@ -2523,16 +2550,14 @@ class Logger:
         :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
         :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
-        :param allow_log_concurrent_with_active_span: (Optional) in rare cases where you need to log at the top level separately from an active span on the logger, set this to True.
+        :param allow_concurrent_with_spans: (Optional) in rare cases where you need to log at the top level separately from using spans on the logger elsewhere, set this to True.
         """
-        if not allow_log_concurrent_with_active_span:
-            check_current_span = current_span()
-            if getattr(check_current_span, "parent_object", None) == self:
-                raise Exception(
-                    "Cannot run toplevel Logger.log method while there is an active span. To log to the span, use Span.log"
-                )
+        if self._called_start_span and not allow_concurrent_with_spans:
+            raise Exception(
+                "Cannot run toplevel `log` method while using spans. To log to the span, call `logger.start_span` and then log with `span.log`"
+            )
 
-        span = self.start_span(
+        span = self._start_span_impl(
             start_time=self.last_start_time,
             input=input,
             output=output,
@@ -2599,8 +2624,30 @@ class Logger:
 
         See `Span.start_span` for full details
         """
+        self._called_start_span = True
+        return self._start_span_impl(
+            name=name,
+            type=type,
+            span_attributes=span_attributes,
+            start_time=start_time,
+            set_current=set_current,
+            parent=parent,
+            parent_id=parent_id,
+            **event,
+        )
+
+    def _start_span_impl(
+        self,
+        name=None,
+        type=None,
+        span_attributes=None,
+        start_time=None,
+        set_current=None,
+        parent=None,
+        parent_id=None,
+        **event,
+    ):
         return SpanImpl(
-            parent_object=self,
             **_start_span_parent_args(
                 parent=parent,
                 parent_id=parent_id,
@@ -2638,16 +2685,16 @@ class Logger:
 class ScoreSummary(SerializableDataClass):
     """Summary of a score's performance."""
 
-    """Name of the score."""
     name: str
-    """Average score across all examples."""
+    """Name of the score."""
     score: float
-    """Difference in score between the current and reference experiment."""
+    """Average score across all examples."""
     diff: Optional[float]
-    """Number of improvements in the score."""
+    """Difference in score between the current and reference experiment."""
     improvements: Optional[int]
-    """Number of regressions in the score."""
+    """Number of improvements in the score."""
     regressions: Optional[int]
+    """Number of regressions in the score."""
 
     # Used to help with formatting
     _longest_score_name: int
@@ -2674,18 +2721,18 @@ class ScoreSummary(SerializableDataClass):
 class MetricSummary(SerializableDataClass):
     """Summary of a metric's performance."""
 
-    """Name of the metric."""
     name: str
-    """Average metric across all examples."""
+    """Name of the metric."""
     metric: float
-    """Unit label for the metric."""
+    """Average metric across all examples."""
     unit: str
-    """Difference in metric between the current and reference experiment."""
+    """Unit label for the metric."""
     diff: float
-    """Number of improvements in the metric."""
+    """Difference in metric between the current and reference experiment."""
     improvements: int
-    """Number of regressions in the metric."""
+    """Number of improvements in the metric."""
     regressions: int
+    """Number of regressions in the metric."""
 
     # Used to help with formatting
     _longest_metric_name: int
@@ -2708,20 +2755,20 @@ class MetricSummary(SerializableDataClass):
 class ExperimentSummary(SerializableDataClass):
     """Summary of an experiment's scores and metadata."""
 
-    """Name of the project that the experiment belongs to."""
     project_name: str
-    """Name of the experiment."""
+    """Name of the project that the experiment belongs to."""
     experiment_name: str
-    """URL to the project's page in the Braintrust app."""
+    """Name of the experiment."""
     project_url: Optional[str]
-    """URL to the experiment's page in the Braintrust app."""
+    """URL to the project's page in the Braintrust app."""
     experiment_url: Optional[str]
-    """The experiment scores are baselined against."""
+    """URL to the experiment's page in the Braintrust app."""
     comparison_experiment_name: Optional[str]
-    """Summary of the experiment's scores."""
+    """The experiment scores are baselined against."""
     scores: Dict[str, ScoreSummary]
-    """Summary of the experiment's metrics."""
+    """Summary of the experiment's scores."""
     metrics: Dict[str, ScoreSummary]
+    """Summary of the experiment's metrics."""
 
     def __str__(self):
         comparison_line = ""
@@ -2748,10 +2795,10 @@ class ExperimentSummary(SerializableDataClass):
 class DataSummary(SerializableDataClass):
     """Summary of a dataset's data."""
 
-    """New or updated records added in this session."""
     new_records: int
-    """Total records in the dataset."""
+    """New or updated records added in this session."""
     total_records: int
+    """Total records in the dataset."""
 
     def __str__(self):
         return textwrap.dedent(f"""Total records: {self.total_records} ({self.new_records} new or updated records)""")
@@ -2761,16 +2808,16 @@ class DataSummary(SerializableDataClass):
 class DatasetSummary(SerializableDataClass):
     """Summary of a dataset's scores and metadata."""
 
-    """Name of the project that the dataset belongs to."""
     project_name: str
-    """Name of the dataset."""
+    """Name of the project that the dataset belongs to."""
     dataset_name: str
-    """URL to the project's page in the Braintrust app."""
+    """Name of the dataset."""
     project_url: str
-    """URL to the experiment's page in the Braintrust app."""
+    """URL to the project's page in the Braintrust app."""
     dataset_url: str
-    """Summary of the dataset's data."""
+    """URL to the experiment's page in the Braintrust app."""
     data_summary: int
+    """Summary of the dataset's data."""
 
     def __str__(self):
         return textwrap.dedent(
