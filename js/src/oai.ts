@@ -179,7 +179,7 @@ function wrapBetaChatCompletion<
     });
     ret.on("chatCompletion", (completion: any) => {
       span.log({
-        output: completion.choices[0],
+        output: completion.choices,
       });
     });
     ret.on("end", () => {
@@ -238,7 +238,7 @@ function wrapChatCompletion<
           metadata: {
             ...rest,
           },
-          output: ret.choices[0],
+          output: ret.choices,
           metrics: {
             time_to_first_token: getCurrentUnixTimestamp() - startTime,
             tokens: ret.usage?.total_tokens,
