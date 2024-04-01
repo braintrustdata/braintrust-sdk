@@ -217,8 +217,8 @@ function wrapChatCompletion<
         span_info || {}
       ),
     });
+    const startTime = getCurrentUnixTimestamp();
     if (params.stream) {
-      const startTime = getCurrentUnixTimestamp();
       const ret = (await completion(
         params as P,
         options
@@ -240,6 +240,7 @@ function wrapChatCompletion<
           },
           output: ret.choices[0],
           metrics: {
+            time_to_first_token: getCurrentUnixTimestamp() - startTime,
             tokens: ret.usage?.total_tokens,
             prompt_tokens: ret.usage?.prompt_tokens,
             completion_tokens: ret.usage?.completion_tokens,

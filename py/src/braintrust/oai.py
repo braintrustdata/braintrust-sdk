@@ -55,6 +55,7 @@ class ChatCompletionWrapper:
                 log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
                 span.log(
                     metrics={
+                        "time_to_first_token": time.time() - start,
                         "tokens": log_response["usage"]["total_tokens"],
                         "prompt_tokens": log_response["usage"]["prompt_tokens"],
                         "completion_tokens": log_response["usage"]["completion_tokens"],
