@@ -45,7 +45,7 @@ class bcolors:
     UNDERLINE = "\033[4m"
 
 
-@dataclasses.dataclass(kw_only=True)
+@dataclasses.dataclass
 class EvalCase(SerializableDataClass):
     """
     An evaluation case. This is a single input to the evaluation task, along with an optional expected
@@ -60,16 +60,16 @@ class EvalCase(SerializableDataClass):
 
 # Inheritance doesn't quite work for dataclasses, so we redefine the fields
 # from EvalCase here.
-@dataclasses.dataclass(kw_only=True)
+@dataclasses.dataclass
 class EvalResult(SerializableDataClass):
     """The result of an evaluation. This includes the input, expected output, actual output, and metadata."""
 
     input: Input
+    output: Output
+    scores: Dict[str, Optional[float]]
     expected: Optional[Output] = None
     metadata: Optional[Metadata] = None
     tags: Optional[List[str]] = None
-    output: Output
-    scores: Dict[str, Optional[float]]
     error: Optional[Exception] = None
     exc_info: Optional[str] = None
 
