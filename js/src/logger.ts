@@ -5,7 +5,6 @@ import { v4 as uuidv4 } from "uuid";
 import {
   TRANSACTION_ID_FIELD,
   IS_MERGE_FIELD,
-  PARENT_ID_FIELD,
   mergeDicts,
   mergeRowBatch,
   VALID_SOURCES,
@@ -15,8 +14,6 @@ import {
   RepoInfo,
   mergeGitMetadataSettings,
   TransactionId,
-  ParentExperimentIds,
-  ParentProjectLogIds,
   IdField,
   ExperimentLogPartialArgs,
   ExperimentLogFullArgs,
@@ -33,6 +30,8 @@ import {
   SpanTypeAttribute,
   SpanType,
   batchItems,
+  SpanParentComponents,
+  SpanParentObjectType,
 } from "@braintrust/core";
 import {
   AnyModelParam,
@@ -64,6 +63,7 @@ export type StartSpanArgs = {
   type?: SpanType;
   spanAttributes?: Record<any, any>;
   startTime?: number;
+  parent?: string;
   parentId?: string;
   event?: StartSpanEventArgs;
 };
@@ -110,7 +110,8 @@ export interface Span {
    * @param args.span_attributes Optional additional attributes to attach to the span, such as a type name.
    * @param args.start_time Optional start time of the span, as a timestamp in seconds.
    * @param args.setCurrent If true (the default), the span will be marked as the currently-active span for the duration of the callback.
-   * @param args.parentId Optional id of the parent span. If not provided, the current span will be used (depending on context). This is useful for adding spans to an existing trace.
+   * @param args.parent Optional parent info string for the span. The string can be generated from `[Span,Experiment,Logger].export`. If not provided, the current span will be used (depending on context). This is useful for adding spans to an existing trace.
+   * @param parentId This option is deprecated and will be removed in a future version of Braintrust. Prefer to use `parent` instead.
    * @param args.event Data to be logged. See `Experiment.log` for full details.
    * @Returns The result of running `callback`.
    */
@@ -145,6 +146,11 @@ export interface Span {
    */
   close(args?: EndSpanArgs): number;
 
+  /**
+   * Flush any pending rows to the server.
+   */
+  flush(): Promise<void>;
+
   // For type identification.
   kind: "span";
 }
@@ -162,7 +168,7 @@ export class NoopSpan implements Span {
 
   public log(_: ExperimentLogPartialArgs) {}
 
-  public logFeedback(event: Omit<LogFeedbackFullArgs, "id">) {}
+  public logFeedback(_event: Omit<LogFeedbackFullArgs, "id">) {}
 
   public traced<R>(
     callback: (span: Span) => R,
@@ -182,6 +188,8 @@ export class NoopSpan implements Span {
   public close(args?: EndSpanArgs): number {
     return this.end(args);
   }
+
+  async flush(): Promise<void> {}
 }
 
 export const NOOP_SPAN = new NoopSpan();
@@ -200,6 +208,10 @@ class BraintrustState {
   // (safely) dynamically cast it whenever retrieving the logger.
   public currentLogger: Logger<false> | undefined;
   public currentSpan: IsoAsyncLocalStorage<Span>;
+  // For operations not tied to a particular data object instance, we maintain a
+  // global BackgroundLogger which is refreshed anytime we log in with different
+  // credentials.
+  private _globalBgLogger: BackgroundLogger | undefined = undefined;
 
   public appUrl: string | null = null;
   public appPublicUrl: string | null = null;
@@ -212,6 +224,7 @@ class BraintrustState {
 
   private _apiConn: HTTPConnection | null = null;
   private _logConn: HTTPConnection | null = null;
+  private _globalBgLoggerDirty: boolean = true;
 
   constructor() {
     this.id = uuidv4(); // This is for debugging
@@ -234,6 +247,7 @@ class BraintrustState {
 
     this._apiConn = null;
     this._logConn = null;
+    this._globalBgLoggerDirty = true;
   }
 
   public apiConn(): HTTPConnection {
@@ -254,6 +268,23 @@ class BraintrustState {
       this._logConn = new HTTPConnection(this.logUrl);
     }
     return this._logConn!;
+  }
+
+  public globalBgLogger(): BackgroundLogger {
+    if (this._globalBgLogger === undefined || this._globalBgLoggerDirty) {
+      const getLogConn = async () => {
+        await login();
+        // Since marking the logger dirty only happens after actually
+        // re-logging in with different credentials, the login above will
+        // usually be a no-op and not re-mark the flag as dirty. But in case
+        // it did, set it back to non-dirty again.
+        this._globalBgLoggerDirty = false;
+        return this.logConn();
+      };
+      this._globalBgLogger = new BackgroundLogger(new LazyValue(getLogConn));
+      this._globalBgLoggerDirty = false;
+    }
+    return this._globalBgLogger;
   }
 }
 
@@ -449,7 +480,8 @@ export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
 
 function logFeedbackImpl(
   bgLogger: BackgroundLogger,
-  parentIds: LazyValue<ParentExperimentIds | ParentProjectLogIds>,
+  parentObjectType: SpanParentObjectType,
+  parentObjectId: LazyValue<string>,
   {
     id,
     expected,
@@ -489,17 +521,19 @@ function logFeedbackImpl(
     Object.entries(updateEvent).filter(([_, v]) => !isEmpty(v))
   );
 
-  const trueParentIds = new LazyValue(async () => {
-    const { kind, ...ids } = await parentIds.get();
-    return ids;
-  });
+  const parentIds = async () =>
+    new SpanParentComponents({
+      objectType: parentObjectType,
+      objectId: await parentObjectId.get(),
+      rowId: "",
+    }).asDict();
 
   if (Object.keys(updateEvent).length > 0) {
     const record = new LazyValue(async () => {
       return {
         id,
         ...updateEvent,
-        ...(await trueParentIds.get()),
+        ...(await parentIds()),
         [AUDIT_SOURCE_FIELD]: source,
         [AUDIT_METADATA_FIELD]: metadata,
         [IS_MERGE_FIELD]: true,
@@ -521,7 +555,7 @@ function logFeedbackImpl(
         comment: {
           text: comment,
         },
-        ...(await trueParentIds.get()),
+        ...(await parentIds()),
         [AUDIT_SOURCE_FIELD]: source,
         [AUDIT_METADATA_FIELD]: metadata,
       };
@@ -530,11 +564,62 @@ function logFeedbackImpl(
   }
 }
 
+function startSpanParentArgs(args: {
+  parent?: string;
+  parentId?: string;
+  spanParentObjectType: SpanParentObjectType;
+  spanParentObjectId: LazyValue<string>;
+}): {
+  parentObjectType: SpanParentObjectType;
+  parentObjectId: LazyValue<string>;
+  parentRowId: string;
+} {
+  if (args.parent && args.parentId) {
+    throw new Error(
+      "Cannot specify both `parent` and `parentId`. Prefer `parent"
+    );
+  }
+
+  let parentObjectId: LazyValue<string> | undefined = undefined;
+  let parentRowId: string | undefined = undefined;
+  if (args.parent) {
+    const parentComponents = SpanParentComponents.fromStr(args.parent);
+    if (args.spanParentObjectType !== parentComponents.objectType) {
+      throw new Error(
+        `Mismatch between expected span parent object type ${args.spanParentObjectType} and provided type ${parentComponents.objectType}`
+      );
+    }
+
+    const computeParentObjectId = async () => {
+      if ((await args.spanParentObjectId.get()) !== parentComponents.objectId) {
+        throw new Error(
+          `Mismatch between expected span parent object id ${await args.spanParentObjectId.get()} and provided id ${
+            parentComponents.objectId
+          }`
+        );
+      }
+      return await args.spanParentObjectId.get();
+    };
+    parentObjectId = new LazyValue(computeParentObjectId);
+    parentRowId = parentComponents.rowId;
+  } else {
+    parentObjectId = args.spanParentObjectId;
+    parentRowId = args.parentId ?? "";
+  }
+
+  return {
+    parentObjectType: args.spanParentObjectType,
+    parentObjectId,
+    parentRowId,
+  };
+}
+
 export class Logger<IsAsyncFlush extends boolean> {
   private lazyMetadata: LazyValue<OrgProjectMetadata>;
   private logOptions: LogOptions<IsAsyncFlush>;
   private bgLogger: BackgroundLogger;
   private lastStartTime: number;
+  private lazyId: LazyValue<string>;
   private calledStartSpan: boolean;
 
   // For type identification.
@@ -551,6 +636,7 @@ export class Logger<IsAsyncFlush extends boolean> {
     );
     this.bgLogger = new BackgroundLogger(logConn);
     this.lastStartTime = getCurrentUnixTimestamp();
+    this.lazyId = new LazyValue(async () => await this.id);
     this.calledStartSpan = false;
   }
 
@@ -564,6 +650,14 @@ export class Logger<IsAsyncFlush extends boolean> {
     return (async () => {
       return (await this.lazyMetadata.get()).project;
     })();
+  }
+
+  public get id(): Promise<string> {
+    return (async () => (await this.project).id)();
+  }
+
+  private spanParentObjectType() {
+    return SpanParentObjectType.PROJECT_LOGS;
   }
 
   private async getState(): Promise<BraintrustState> {
@@ -645,15 +739,6 @@ export class Logger<IsAsyncFlush extends boolean> {
     }
   }
 
-  private async lazyParentIds(): Promise<ParentProjectLogIds> {
-    return {
-      kind: "project_log",
-      org_id: await this.org_id,
-      project_id: (await this.project).id,
-      log_id: "g",
-    };
-  }
-
   /**
    * Lower-level alternative to `traced`. This allows you to start a span yourself, and can be useful in situations
    * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
@@ -667,13 +752,16 @@ export class Logger<IsAsyncFlush extends boolean> {
   }
 
   private startSpanImpl(args?: StartSpanArgs): Span {
-    const { name, type, ...argsRest } = args ?? {};
     return new SpanImpl({
-      parentIds: new LazyValue(() => this.lazyParentIds()),
+      ...startSpanParentArgs({
+        parent: args?.parent,
+        parentId: args?.parentId,
+        spanParentObjectType: this.spanParentObjectType(),
+        spanParentObjectId: this.lazyId,
+      }),
+      ...args,
       bgLogger: this.bgLogger,
-      name: name ?? "root",
-      type: type ?? SpanTypeAttribute.TASK,
-      ...argsRest,
+      defaultRootType: SpanTypeAttribute.TASK,
     });
   }
 
@@ -691,9 +779,21 @@ export class Logger<IsAsyncFlush extends boolean> {
   public logFeedback(event: LogFeedbackFullArgs): void {
     logFeedbackImpl(
       this.bgLogger,
-      new LazyValue(() => this.lazyParentIds()),
+      this.spanParentObjectType(),
+      this.lazyId,
       event
     );
+  }
+
+  /**
+   * Return a serialized representation of the logger that can be used to start subspans in other places. See `Span.start_span` for more details.
+   */
+  public async export(): Promise<string> {
+    return new SpanParentComponents({
+      objectType: this.spanParentObjectType(),
+      objectId: await this.id,
+      rowId: "",
+    }).toStr();
   }
 
   /*
@@ -1803,7 +1903,7 @@ export function getSpanParentObject<IsAsyncFlush extends boolean>(
  *  * Currently-active experiment
  *  * Currently-active logger
  *
- * and creates a span under the first one that is active. If none of these are active, it returns a no-op span object.
+ * and creates a span under the first one that is active. Alternatively, if `parent` is specified, it creates a span under the specified parent row. If none of these are active, it returns a no-op span object.
  *
  * See `Span.traced` for full details.
  */
@@ -1811,7 +1911,34 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
   callback: (span: Span) => R,
   args?: StartSpanArgs & SetCurrentArg & AsyncFlushArg<IsAsyncFlush>
 ): PromiseUnless<IsAsyncFlush, R> {
-  const { span, parentObject } = startSpanReturnParent<IsAsyncFlush>(args);
+  const { span, isLogger } = ((): { span: Span; isLogger: boolean } => {
+    if (args?.parent) {
+      if (args?.parentId) {
+        throw new Error(
+          "Cannot specify both `parent` and `parent_id`. Prefer `parent`"
+        );
+      }
+      const components = SpanParentComponents.fromStr(args?.parent);
+      const span = new SpanImpl({
+        ...args,
+        parentObjectType: components.objectType,
+        parentObjectId: new LazyValue(async () => components.objectId),
+        parentRowId: components.rowId,
+        bgLogger: _state.globalBgLogger(),
+      });
+      return {
+        span,
+        isLogger: components.objectType === SpanParentObjectType.PROJECT_LOGS,
+      };
+    } else {
+      const parentObject = getSpanParentObject<IsAsyncFlush>({
+        asyncFlush: args?.asyncFlush,
+      });
+      const span = parentObject.startSpan(args);
+      return { span, isLogger: parentObject.kind === "logger" };
+    }
+  })();
+
   const ret = runFinally(
     () => {
       if (args?.setCurrent ?? true) {
@@ -1829,8 +1956,8 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
   } else {
     return (async () => {
       const awaitedRet = await ret;
-      if (parentObject.kind === "logger") {
-        await parentObject.flush();
+      if (isLogger) {
+        await span.flush();
       }
       return awaitedRet;
     })() as Ret;
@@ -1847,18 +1974,9 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
 export function startSpan<IsAsyncFlush extends boolean = false>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush>
 ): Span {
-  return startSpanReturnParent<IsAsyncFlush>(args).span;
-}
-
-function startSpanReturnParent<IsAsyncFlush extends boolean = false>(
-  args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush>
-) {
-  const parentObject = getSpanParentObject<IsAsyncFlush>({
+  return getSpanParentObject<IsAsyncFlush>({
     asyncFlush: args?.asyncFlush,
-  });
-  const { name: nameOpt, ...argsRest } = args ?? {};
-  const name = parentObject.kind === "span" ? nameOpt : nameOpt ?? "root";
-  return { span: parentObject.startSpan({ name, ...argsRest }), parentObject };
+  }).startSpan(args);
 }
 
 // Set the given span as current within the given callback and any asynchronous
@@ -2120,7 +2238,9 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
   public readonly dataset?: AnyDataset;
   public bgLogger: BackgroundLogger;
   private lastStartTime: number;
+  private lazyId: LazyValue<string>;
   private calledStartSpan: boolean;
+
   // For type identification.
   public kind: "experiment" = "experiment";
 
@@ -2137,6 +2257,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     );
     this.bgLogger = new BackgroundLogger(logConn);
     this.lastStartTime = getCurrentUnixTimestamp();
+    this.lazyId = new LazyValue(async () => await this.id);
     this.calledStartSpan = false;
   }
 
@@ -2156,6 +2277,10 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     return (async () => {
       return (await this.lazyMetadata.get()).project;
     })();
+  }
+
+  private spanParentObjectType() {
+    return SpanParentObjectType.EXPERIMENT;
   }
 
   protected async getState(): Promise<BraintrustState> {
@@ -2220,14 +2345,6 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     );
   }
 
-  private async lazyParentIds(): Promise<ParentExperimentIds> {
-    return {
-      kind: "experiment",
-      project_id: (await this.project).id,
-      experiment_id: await this.id,
-    };
-  }
-
   /**
    * Lower-level alternative to `traced`. This allows you to start a span yourself, and can be useful in situations
    * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
@@ -2241,13 +2358,16 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
   }
 
   private startSpanImpl(args?: StartSpanArgs): Span {
-    const { name, type, ...argsRest } = args ?? {};
     return new SpanImpl({
-      parentIds: new LazyValue(() => this.lazyParentIds()),
+      ...startSpanParentArgs({
+        parent: args?.parent,
+        parentId: args?.parentId,
+        spanParentObjectType: this.spanParentObjectType(),
+        spanParentObjectId: this.lazyId,
+      }),
+      ...args,
       bgLogger: this.bgLogger,
-      name: name ?? "root",
-      type: type ?? SpanTypeAttribute.EVAL,
-      ...argsRest,
+      defaultRootType: SpanTypeAttribute.EVAL,
     });
   }
 
@@ -2353,9 +2473,21 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
   public logFeedback(event: LogFeedbackFullArgs): void {
     logFeedbackImpl(
       this.bgLogger,
-      new LazyValue(() => this.lazyParentIds()),
+      this.spanParentObjectType(),
+      this.lazyId,
       event
     );
+  }
+
+  /**
+   * Return a serialized representation of the experiment that can be used to start subspans in other places. See `Span.start_span` for more details.
+   */
+  public async export(): Promise<string> {
+    return new SpanParentComponents({
+      objectType: this.spanParentObjectType(),
+      objectId: await this.id,
+      rowId: "",
+    }).toStr();
   }
 
   /**
@@ -2434,8 +2566,6 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
 
 let executionCounter = 0;
 
-type ParentSpanInfo = { span_id: string; root_span_id: string };
-
 /**
  * Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
  *
@@ -2449,40 +2579,38 @@ export class SpanImpl implements Span {
   private isMerge: boolean;
   private loggedEndTime: number | undefined;
 
-  // These fields are logged to every span row.
-  private parentIds: LazyValue<ParentExperimentIds | ParentProjectLogIds>;
-  private readonly rowIds: {
-    id: string;
-    span_id?: string;
-    root_span_id?: string;
-    [PARENT_ID_FIELD]?: string;
-  };
+  // For internal use only.
+  private parentObjectType: SpanParentObjectType;
+  private parentObjectId: LazyValue<string>;
+  private parentRowId: string;
+  private _id: string;
 
   public kind: "span" = "span";
 
-  // root_experiment should only be specified for a root span. parent_span
-  // should only be specified for non-root spans.
   constructor(
     args: {
-      parentIds: LazyValue<ParentExperimentIds | ParentProjectLogIds>;
+      parentObjectType: SpanParentObjectType;
+      parentObjectId: LazyValue<string>;
+      parentRowId: string;
       bgLogger: BackgroundLogger;
-    } & Omit<StartSpanArgs, "parentId"> &
-      (
-        | {
-            parentSpanInfo?: ParentSpanInfo;
-          }
-        | {
-            parentId?: string;
-          }
-      )
+      defaultRootType?: SpanType;
+    } & Omit<StartSpanArgs, "parent" & "parentId">
   ) {
-    this.loggedEndTime = undefined;
+    const spanAttributes = args.spanAttributes ?? {};
+    const event = args.event ?? {};
+    const type =
+      args.type ?? (args.parentRowId ? undefined : args.defaultRootType);
 
+    this.loggedEndTime = undefined;
+    this.parentObjectType = args.parentObjectType;
+    this.parentObjectId = args.parentObjectId;
+    this.parentRowId = args.parentRowId;
     this.bgLogger = args.bgLogger;
 
     const callerLocation = iso.getCallerLocation();
     const name = (() => {
       if (args.name) return args.name;
+      if (!args.parentRowId) return "root";
       if (callerLocation) {
         const pathComponents = callerLocation.caller_filename.split("/");
         const filename = pathComponents[pathComponents.length - 1];
@@ -2494,104 +2622,77 @@ export class SpanImpl implements Span {
       }
       return "subspan";
     })();
+
     this.internalData = {
       metrics: {
         start: args.startTime ?? getCurrentUnixTimestamp(),
       },
       context: { ...callerLocation },
       span_attributes: {
-        type: args.type,
-        ...args.spanAttributes,
         name,
+        type,
+        ...spanAttributes,
         exec_counter: executionCounter++,
       },
       created: new Date().toISOString(),
     };
 
-    this.parentIds = args.parentIds;
-
-    const id = args.event?.id ?? uuidv4();
-    this.rowIds = { id };
-
-    const parentSpanInfo =
-      "parentSpanInfo" in args ? args.parentSpanInfo : undefined;
-    const parentId = "parentId" in args ? args.parentId : undefined;
-    if (parentSpanInfo && parentId) {
-      throw new Error(
-        "Only one of parentSpanInfo and parentId may be specified"
-      );
-    }
-    if (parentId) {
-      this.rowIds[PARENT_ID_FIELD] = parentId;
-    } else {
-      this.rowIds.span_id = uuidv4();
-      if (parentSpanInfo) {
-        this.rowIds.root_span_id = parentSpanInfo.root_span_id;
-        this.internalData.span_parents = [parentSpanInfo.span_id];
-      } else {
-        this.rowIds.root_span_id = this.rowIds.span_id;
-      }
-    }
+    this._id = event.id ?? uuidv4();
 
     // The first log is a replacement, but subsequent logs to the same span
     // object will be merges.
     this.isMerge = false;
-    const { id: _id, ...eventRest } = args.event ?? {};
+    const { id: _id, ...eventRest } = event;
     this.log(eventRest);
     this.isMerge = true;
   }
 
   public get id(): string {
-    return this.rowIds.id;
+    return this._id;
   }
 
   public log(event: ExperimentLogPartialArgs): void {
-    const sanitized = validateAndSanitizeExperimentLogPartialArgs(event);
     // There should be no overlap between the dictionaries being merged,
     // except for `sanitized` and `internalData`, where the former overrides
     // the latter.
+    const sanitized = validateAndSanitizeExperimentLogPartialArgs(event);
     let sanitizedAndInternalData = { ...this.internalData };
     mergeDicts(sanitizedAndInternalData, sanitized);
     this.internalData = {};
-
-    if (
-      sanitizedAndInternalData.tags &&
-      sanitizedAndInternalData.tags.length > 0 &&
-      this.rowIds.span_id !== this.rowIds.root_span_id
-    ) {
-      throw new Error("Tags can only be logged to the root span");
-    }
-
-    let partialRecord = {
-      ...sanitizedAndInternalData,
-      ...this.rowIds,
-      [IS_MERGE_FIELD]: this.isMerge,
-    };
-
-    if (partialRecord.metrics?.end) {
-      this.loggedEndTime = partialRecord.metrics?.end as number;
-    }
 
     // We both check for serializability and round-trip `partialRecord` through
     // JSON in order to create a "deep copy". This has the benefit of cutting
     // out any reference to user objects when the object is logged
     // asynchronously, so that in case the objects are modified, the logging is
     // unaffected.
+    let partialRecord = {
+      ...sanitizedAndInternalData,
+      [IS_MERGE_FIELD]: this.isMerge,
+    };
     const serializedPartialRecord = JSON.stringify(partialRecord);
     partialRecord = JSON.parse(serializedPartialRecord);
+    if (partialRecord.metrics?.end) {
+      this.loggedEndTime = partialRecord.metrics?.end as number;
+    }
 
-    const record = new LazyValue(async () => {
-      const { kind, ...parentIds } = await this.parentIds.get();
-      return {
-        ...partialRecord,
-        ...parentIds,
-      };
+    if ((partialRecord.tags ?? []).length > 0 && this.parentRowId) {
+      throw new Error("Tags can only be logged to the root span");
+    }
+
+    const computeRecord = async () => ({
+      ...partialRecord,
+      ...new SpanParentComponents({
+        objectType: this.parentObjectType,
+        objectId: await this.parentObjectId.get(),
+        rowId: this.parentRowId,
+      }).asDict(),
+      id: this.id,
     });
-    this.bgLogger.log([record]);
+    this.bgLogger.log([new LazyValue(computeRecord)]);
   }
 
   public logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void {
-    logFeedbackImpl(this.bgLogger, this.parentIds, {
+    logFeedbackImpl(this.bgLogger, this.parentObjectType, this.parentObjectId, {
       ...event,
       id: this.id,
     });
@@ -2616,27 +2717,15 @@ export class SpanImpl implements Span {
   }
 
   public startSpan(args?: StartSpanArgs): Span {
-    // If we created this span with a parent_id reference, we must continue
-    // using parent_ids all the way down, since we don't have a root_span_id
-    // available. Otherwise, we can use direct parent info propagation.
-    const parentId =
-      args?.parentId ?? (this.rowIds[PARENT_ID_FIELD] ? this.id : undefined);
-    const parentSpanInfo = ((): ParentSpanInfo | undefined => {
-      if (parentId) return undefined;
-      if (!(this.rowIds.span_id && this.rowIds.root_span_id)) {
-        throw new Error("Impossible");
-      }
-      return {
-        span_id: this.rowIds.span_id,
-        root_span_id: this.rowIds.root_span_id,
-      };
-    })();
     return new SpanImpl({
-      parentIds: this.parentIds,
-      bgLogger: this.bgLogger,
-      parentSpanInfo,
-      parentId,
       ...args,
+      ...startSpanParentArgs({
+        parent: args?.parent,
+        parentId: args?.parentId ?? (args?.parent ? undefined : this.id),
+        spanParentObjectType: this.parentObjectType,
+        spanParentObjectId: this.parentObjectId,
+      }),
+      bgLogger: this.bgLogger,
     });
   }
 
@@ -2652,8 +2741,23 @@ export class SpanImpl implements Span {
     return endTime;
   }
 
+  /**
+   * Return a serialized representation of the span that can be used to start subspans in other places. See `Span.start_span` for more details.
+   */
+  public async export(): Promise<string> {
+    return new SpanParentComponents({
+      objectType: this.parentObjectType,
+      objectId: await this.parentObjectId.get(),
+      rowId: this.id,
+    }).toStr();
+  }
+
   public close(args?: EndSpanArgs): number {
     return this.end(args);
+  }
+
+  async flush(): Promise<void> {
+    return await this.bgLogger.flush();
   }
 }
 
@@ -2771,7 +2875,6 @@ export class Dataset<
       input,
       expected: expected === undefined ? output : expected,
       tags,
-      project_id: (await this.project).id,
       dataset_id: await this.id,
       created: new Date().toISOString(),
       metadata,
@@ -2784,7 +2887,6 @@ export class Dataset<
   public delete(id: string): string {
     const args = new LazyValue(async () => ({
       id,
-      project_id: (await this.project).id,
       dataset_id: await this.id,
       created: new Date().toISOString(),
       _object_delete: true,
@@ -2952,7 +3054,7 @@ export class Prompt {
       ...this.defaults,
       ...Object.fromEntries(
         Object.entries(this.options.params || {}).filter(
-          ([k, v]) => !BRAINTRUST_PARAMS.includes(k)
+          ([k, _v]) => !BRAINTRUST_PARAMS.includes(k)
         )
       ),
       ...(!isEmpty(this.options.model)
