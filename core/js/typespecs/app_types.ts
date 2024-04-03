@@ -387,8 +387,8 @@ export const aclObjectSchema = z.strictObject({
     .string()
     .uuid()
     .describe("The id of the object the ACL applies to"),
-  restrict_object_type: aclObjectTypeEnum
-    .nullish()
+  restrict_object_type: z
+    .optional(z.union([aclObjectTypeEnum, z.null()]))
     .describe(
       "Optionally restricts the permission grant to just the specified object type"
     ),
