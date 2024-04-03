@@ -3,14 +3,17 @@
 # around as an opaque string.
 
 import dataclasses
-from enum import StrEnum, auto
+from enum import Enum
 
 from .db_fields import PARENT_ID_FIELD
 
 
-class SpanParentObjectType(StrEnum):
-    EXPERIMENT = auto()
-    PROJECT_LOGS = auto()
+class SpanParentObjectType(Enum):
+    EXPERIMENT = "experiment"
+    PROJECT_LOGS = "project_logs"
+
+    def __str__(self):
+        return self.value
 
 
 _OBJECT_TYPE_TO_PREFIX = {

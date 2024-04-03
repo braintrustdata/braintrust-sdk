@@ -142,14 +142,19 @@ export interface Span {
   end(args?: EndSpanArgs): number;
 
   /**
-   * Alias for `end`.
+   * Return a serialized representation of the span that can be used to start subspans in other places. See `Span.traced` for more details.
    */
-  close(args?: EndSpanArgs): number;
+  export(): Promise<string | undefined>;
 
   /**
    * Flush any pending rows to the server.
    */
   flush(): Promise<void>;
+
+  /**
+   * Alias for `end`.
+   */
+  close(args?: EndSpanArgs): number;
 
   // For type identification.
   kind: "span";
@@ -185,11 +190,15 @@ export class NoopSpan implements Span {
     return args?.endTime ?? getCurrentUnixTimestamp();
   }
 
+  public async export(): Promise<string | undefined> {
+    return undefined;
+  }
+
+  public async flush(): Promise<void> {}
+
   public close(args?: EndSpanArgs): number {
     return this.end(args);
   }
-
-  async flush(): Promise<void> {}
 }
 
 export const NOOP_SPAN = new NoopSpan();
@@ -788,7 +797,7 @@ export class Logger<IsAsyncFlush extends boolean> {
   /**
    * Return a serialized representation of the logger that can be used to start subspans in other places. See `Span.start_span` for more details.
    */
-  public async export(): Promise<string> {
+  public async export(): Promise<string | undefined> {
     return new SpanParentComponents({
       objectType: this.spanParentObjectType(),
       objectId: await this.id,
@@ -2482,7 +2491,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
   /**
    * Return a serialized representation of the experiment that can be used to start subspans in other places. See `Span.start_span` for more details.
    */
-  public async export(): Promise<string> {
+  public async export(): Promise<string | undefined> {
     return new SpanParentComponents({
       objectType: this.spanParentObjectType(),
       objectId: await this.id,
@@ -2741,10 +2750,7 @@ export class SpanImpl implements Span {
     return endTime;
   }
 
-  /**
-   * Return a serialized representation of the span that can be used to start subspans in other places. See `Span.start_span` for more details.
-   */
-  public async export(): Promise<string> {
+  public async export(): Promise<string | undefined> {
     return new SpanParentComponents({
       objectType: this.parentObjectType,
       objectId: await this.parentObjectId.get(),
@@ -2752,12 +2758,12 @@ export class SpanImpl implements Span {
     }).toStr();
   }
 
-  public close(args?: EndSpanArgs): number {
-    return this.end(args);
-  }
-
   async flush(): Promise<void> {
     return await this.bgLogger.flush();
+  }
+
+  public close(args?: EndSpanArgs): number {
+    return this.end(args);
   }
 }
 
