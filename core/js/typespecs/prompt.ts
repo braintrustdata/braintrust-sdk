@@ -44,31 +44,28 @@ export const promptBlockDataSchema = z.union([
 
 export type PromptBlockData = z.infer<typeof promptBlockDataSchema>;
 
-const braintrustModelParamsSchema = z.strictObject({
+const braintrustModelParamsSchema = z.object({
   use_cache: z.boolean().optional(),
 });
 
 export const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
-const openAIModelParamsSchema = z.strictObject({
+const openAIModelParamsSchema = z.object({
   temperature: z.number().optional(),
   top_p: z.number().optional(),
   max_tokens: z.number().optional(),
   frequency_penalty: z.number().optional(),
   presence_penalty: z.number().optional(),
   response_format: z
-    .union([
-      z.literal(null),
-      z.strictObject({ type: z.literal("json_object") }),
-    ])
+    .union([z.literal(null), z.object({ type: z.literal("json_object") })])
     .optional(),
   tool_choice: z
     .union([
       z.literal("auto"),
       z.literal("none"),
-      z.strictObject({
+      z.object({
         type: z.literal("function"),
-        function: z.strictObject({ name: z.string() }),
+        function: z.object({ name: z.string() }),
       }),
     ])
     .optional(),
@@ -76,7 +73,7 @@ const openAIModelParamsSchema = z.strictObject({
 
 export type OpenAIModelParams = z.infer<typeof openAIModelParamsSchema>;
 
-const anthropicModelParamsSchema = z.strictObject({
+const anthropicModelParamsSchema = z.object({
   max_tokens: z.number(),
   temperature: z.number(),
   top_p: z.number().optional(),
@@ -87,14 +84,14 @@ const anthropicModelParamsSchema = z.strictObject({
     .describe("This is a legacy parameter that should not be used."),
 });
 
-const googleModelParamsSchema = z.strictObject({
+const googleModelParamsSchema = z.object({
   temperature: z.number(),
   maxOutputTokens: z.number().optional(),
   topP: z.number().optional(),
   topK: z.number().optional(),
 });
 
-const jsCompletionParamsSchema = z.strictObject({});
+const jsCompletionParamsSchema = z.object({});
 export const modelParamsSchema = z.union([
   braintrustModelParamsSchema.merge(openAIModelParamsSchema),
   braintrustModelParamsSchema.merge(anthropicModelParamsSchema),
@@ -111,7 +108,7 @@ const anyModelParamsSchema = openAIModelParamsSchema
 
 export type AnyModelParam = z.infer<typeof anyModelParamsSchema>;
 
-export const promptOptionsSchema = z.strictObject({
+export const promptOptionsSchema = z.object({
   model: z.string().optional(),
   params: modelParamsSchema.optional(),
   position: z.string().optional(),
