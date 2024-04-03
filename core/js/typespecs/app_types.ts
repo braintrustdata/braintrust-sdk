@@ -19,7 +19,7 @@ function generateBaseTableSchema(
     nameDescription += `. Within a project, ${objectName} names are unique`;
   }
 
-  return z.object({
+  return z.strictObject({
     id: z.string().uuid().describe(`Unique identifier for the ${objectName}`),
     project_id: z
       .string()
@@ -54,7 +54,7 @@ function generateBaseTableSchema(
 
 const userBaseSchema = generateBaseTableSchema("user");
 export const userSchema = z
-  .object({
+  .strictObject({
     id: userBaseSchema.shape.id,
     given_name: z.string().nullish().describe("Given name of the user"),
     family_name: z.string().nullish().describe("Family name of the user"),
@@ -62,48 +62,44 @@ export const userSchema = z
     avatar_url: z.string().nullish().describe("URL of the user's Avatar image"),
     created: userBaseSchema.shape.created,
   })
-  .strict()
   .openapi("User");
 export type User = z.infer<typeof userSchema>;
 
 const organizationBaseSchema = generateBaseTableSchema("organization");
 export const organizationSchema = z
-  .object({
+  .strictObject({
     id: organizationBaseSchema.shape.id,
     name: organizationBaseSchema.shape.name.nullish(),
     api_url: z.string().nullish(),
     created: organizationBaseSchema.shape.created,
   })
-  .strict()
   .openapi("Organization");
 export type Organization = z.infer<typeof organizationSchema>;
 
 export const memberSchema = z
-  .object({
+  .strictObject({
     org_id: organizationSchema.shape.id,
     user_id: userSchema.shape.id,
   })
-  .strict()
   .openapi("Member");
 export type Member = z.infer<typeof memberSchema>;
 
 export const meSchema = z
-  .object({
+  .strictObject({
     id: userSchema.shape.id,
     organizations: z
-      .object({
+      .strictObject({
         id: memberSchema.shape.org_id,
         name: organizationSchema.shape.name,
       })
       .array(),
   })
-  .strict()
   .openapi("Me");
 export type Me = z.infer<typeof meSchema>;
 
 const apiKeyBaseSchema = generateBaseTableSchema("api key");
 export const apiKeySchema = z
-  .object({
+  .strictObject({
     id: apiKeyBaseSchema.shape.id,
     created: apiKeyBaseSchema.shape.created,
     key_hash: z.string(),
@@ -112,13 +108,12 @@ export const apiKeySchema = z
     user_id: userSchema.shape.id.nullish(),
     org_id: organizationSchema.shape.id.nullish(),
   })
-  .strict()
   .openapi("ApiKey");
 export type ApiKey = z.infer<typeof apiKeySchema>;
 
 const projectBaseSchema = generateBaseTableSchema("project");
 export const projectSchema = z
-  .object({
+  .strictObject({
     id: projectBaseSchema.shape.id,
     org_id: z
       .string()
@@ -131,7 +126,6 @@ export const projectSchema = z
     deleted_at: projectBaseSchema.shape.deleted_at,
     user_id: projectBaseSchema.shape.user_id,
   })
-  .strict()
   .openapi("Project");
 export type Project = z.infer<typeof projectSchema>;
 
@@ -139,7 +133,7 @@ const datasetBaseSchema = generateBaseTableSchema("dataset", {
   uniqueName: true,
 });
 export const datasetSchema = z
-  .object({
+  .strictObject({
     id: datasetBaseSchema.shape.id,
     project_id: datasetBaseSchema.shape.project_id.nullish(),
     name: datasetBaseSchema.shape.name,
@@ -148,25 +142,37 @@ export const datasetSchema = z
     deleted_at: datasetBaseSchema.shape.deleted_at,
     user_id: datasetBaseSchema.shape.user_id,
   })
-  .strict()
   .openapi("Dataset");
 export type Dataset = z.infer<typeof datasetSchema>;
 
 const promptBaseSchema = generateBaseTableSchema("prompt");
-export const promptSchema = z.object({
+export const promptSchema = z.strictObject({
   id: promptBaseSchema.shape.id,
+  // This has to be copy/pasted because zod blows up when there are circular dependencies
+  _xact_id: z
+    .string()
+    .describe(
+      `The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the prompt (see the \`version\` parameter)`
+    ),
   project_id: promptBaseSchema.shape.project_id,
+  log_id: z
+    .literal("p")
+    .describe("A literal 'p' which identifies the object as a project prompt"),
+  org_id: organizationSchema.shape.id,
   name: promptBaseSchema.shape.name,
   slug: z.string().describe("Unique identifier for the prompt"),
   description: promptBaseSchema.shape.description,
+  created: promptBaseSchema.shape.created,
   prompt_data: promptDataSchema
     .nullish()
     .describe("The prompt, model, and its parameters"),
   tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
+  metadata: promptBaseSchema.shape.metadata,
 });
+export type Prompt = z.infer<typeof promptSchema>;
 
 const repoInfoSchema = z
-  .object({
+  .strictObject({
     commit: z.string().nullish().describe("SHA of most recent commit"),
     branch: z
       .string()
@@ -211,7 +217,7 @@ const experimentBaseSchema = generateBaseTableSchema("experiment", {
   uniqueName: true,
 });
 export const experimentSchema = z
-  .object({
+  .strictObject({
     id: experimentBaseSchema.shape.id,
     project_id: experimentBaseSchema.shape.project_id,
     name: experimentBaseSchema.shape.name,
@@ -251,7 +257,6 @@ export const experimentSchema = z
     user_id: experimentBaseSchema.shape.user_id,
     metadata: experimentBaseSchema.shape.metadata,
   })
-  .strict()
   .openapi("Experiment");
 export type Experiment = z.infer<typeof experimentSchema>;
 
@@ -450,7 +455,7 @@ export const appLimitSchema = z
   .describe("Limit the number of objects to return");
 
 function generateBaseTableOpSchema(objectName: string) {
-  return z.object({
+  return z.strictObject({
     org_name: z
       .string()
       .nullish()
@@ -486,22 +491,20 @@ export const endingBeforeSchema = z
 
 const createProjectBaseSchema = generateBaseTableOpSchema("project");
 const createProjectSchema = z
-  .object({
+  .strictObject({
     name: projectSchema.shape.name,
     org_name: createProjectBaseSchema.shape.org_name,
   })
-  .strict()
   .openapi("CreateProject");
 
 const patchProjectSchema = z
-  .object({
+  .strictObject({
     name: projectSchema.shape.name.nullish(),
   })
-  .strict()
   .openapi("PatchProject");
 
 const createExperimentSchema = z
-  .object({
+  .strictObject({
     project_id: experimentSchema.shape.project_id,
     name: experimentSchema.shape.name.nullish(),
     description: experimentSchema.shape.description,
@@ -512,25 +515,22 @@ const createExperimentSchema = z
     public: experimentSchema.shape.public.nullish(),
     metadata: experimentSchema.shape.metadata,
   })
-  .strict()
   .openapi("CreateExperiment");
 
 const patchExperimentSchema = createExperimentSchema
   .omit({ project_id: true })
-  .strict()
   .openapi("PatchExperiment");
 
 const createDatasetSchema = z
-  .object({
+  .strictObject({
     project_id: datasetSchema.shape.project_id,
     name: datasetSchema.shape.name,
     description: datasetSchema.shape.description,
   })
-  .strict()
   .openapi("CreateDataset");
 
 const patchDatasetSchema = z
-  .object({
+  .strictObject({
     name: datasetSchema.shape.name.nullish(),
     description: datasetSchema.shape.description,
   })
@@ -538,18 +538,23 @@ const patchDatasetSchema = z
   .openapi("PatchDataset");
 
 const createPromptSchema = promptSchema
-  .omit({ id: true })
-  .strict()
+  .omit({
+    id: true,
+    _xact_id: true,
+    org_id: true,
+    log_id: true,
+    created: true,
+    metadata: true,
+  })
   .openapi("CreatePrompt");
 
 const patchPromptSchema = z
-  .object({
+  .strictObject({
     name: promptSchema.shape.name.nullish(),
     description: promptSchema.shape.description.nullish(),
     prompt_data: promptSchema.shape.prompt_data.nullish(),
     tags: promptSchema.shape.tags.nullish(),
   })
-  .strict()
   .openapi("PatchPrompt");
 
 const createRoleBaseSchema = generateBaseTableOpSchema("role");

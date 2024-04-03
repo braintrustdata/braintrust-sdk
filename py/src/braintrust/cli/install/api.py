@@ -12,7 +12,9 @@ PARAMS = {
     "OrgName": "org_name",
     "ProvisionedConcurrency": "provisioned_concurrency",
     "EncryptDatabase": "encrypt_database",
+    "PostgresAlternativeHost": "postgres_alternative_host",
     "APIHandlerMemorySize": "api_handler_memory_size",
+    "WhitelistedOrigins": "whitelisted_origins",
     "PublicSubnet1AZ": "public_subnet_1_az",
     "PrivateSubnet1AZ": "private_subnet_1_az",
     "PrivateSubnet2AZ": "private_subnet_2_az",
@@ -22,15 +24,17 @@ PARAMS = {
     "PrivateSubnet1CIDR": "private_subnet_1_cidr",
     "PrivateSubnet2CIDR": "private_subnet_2_cidr",
     "PrivateSubnet3CIDR": "private_subnet_3_cidr",
+    "ManagedClickhouse": "managed_clickhouse",
+    "ClickhouseInstanceType": "clickhouse_instance_type",
 }
 
 REMOVED_PARAMS = ["ThirdAZIndex"]
 
 DEFAULTS = {
-    "ManagedKafka": "true",
     "DwType": "Postgres",
     "EncryptDatabase": "false",
     "ProvisionedConcurrency": 0,
+    "APIHandlerMemorySize": 10240,
 }
 
 CAPABILITIES = ["CAPABILITY_IAM", "CAPABILITY_AUTO_EXPAND"]
@@ -79,6 +83,11 @@ def build_parser(subparsers, parents):
         help="The amount of memory to allocate to the API handler",
         default=None,
         type=int,
+    )
+    parser.add_argument(
+        "--whitelisted-origins",
+        help="Comma-separated list of origins to whitelist",
+        default=None,
     )
     parser.add_argument(
         "--public-subnet-1-az",
@@ -135,13 +144,28 @@ def build_parser(subparsers, parents):
         choices=[None, "true", "false"],
     )
     parser.add_argument(
-        "--postgres-url", help="The postgres URL to use (if you are connecting to another VPC)", default=None
-    )
-    parser.add_argument(
         "--encrypt-database",
         help="Whether to encrypt the database",
         default="false",
         choices=[None, "true", "false"],
+    )
+    parser.add_argument(
+        "--postgres-alternative-host",
+        help="Use an external host for postgres (but the same secrets)",
+        default=None,
+    )
+
+    # Clickhouse
+    parser.add_argument(
+        "--managed-clickhouse",
+        help="Spin up a Clickhouse Instance for faster analytics",
+        default=None,
+        choices=[None, "true", "false"],
+    )
+    parser.add_argument(
+        "--clickhouse-instance-type",
+        help="The instance type for the Clickhouse instance",
+        default=None,
     )
 
     # ElastiCacheClusterId
@@ -153,6 +177,18 @@ def build_parser(subparsers, parents):
     # SecurityGroupId, SubnetIds
     parser.add_argument("--security-group-id", help="The security group ID to use", default=None)
     parser.add_argument("--subnet-ids", help="The subnet IDs to use", default=None)
+
+    # Advancd use only
+    parser.add_argument(
+        "--postgres-url",
+        help="[Advanced] The postgres URL to use (if you are connecting to another VPC)",
+        default=None,
+    )
+    parser.add_argument("--clickhouse-pg-url", help="[Advanced] The clickhouse PG URL to use", default=None)
+    parser.add_argument("--clickhouse-connect-url", help="[Advanced] The clickhouse connect URL to use", default=None)
+    parser.add_argument(
+        "--clickhouse-catchup-etl-arn", help="[Advanced] The clickhouse catchup ETL ARN to use", default=None
+    )
 
     parser.set_defaults(func=main)
 
@@ -180,6 +216,9 @@ def main(args):
         PARAMS["ElastiCacheClusterHost"] = "elasticache_cluster_host"
         PARAMS["ElastiCacheClusterPort"] = "elasticache_cluster_port"
         PARAMS["PostgresUrl"] = "postgres_url"
+        PARAMS["ClickhouseCatchupEtlArn"] = "clickhouse_catchup_etl_arn"
+        PARAMS["ClickhouseConnectUrl"] = "clickhouse_connect_url"
+        PARAMS["ClickhousePGUrl"] = "clickhouse_pg_url"
 
         if args.template is None:
             template = "https://braintrust-cf.s3.amazonaws.com/braintrust-latest-vpc.yaml"
@@ -206,16 +245,23 @@ def main(args):
 
     if not exists:
         _logger.info(f"Creating stack with name {args.name}")
+
+        params = [
+            {
+                "ParameterKey": k,
+                "ParameterValue": str(v),
+            }
+            for (k, v) in [
+                (param, args.__dict__[arg_name] or DEFAULTS.get(param, None)) for (param, arg_name) in PARAMS.items()
+            ]
+            if v is not None
+        ]
+        _logger.info("Using params:", params)
+
         cloudformation.create_stack(
             StackName=args.name,
             TemplateURL=template,
-            Parameters=[
-                {
-                    "ParameterKey": param,
-                    "ParameterValue": str(args.__dict__[arg_name] or DEFAULTS.get(param, "")),
-                }
-                for (param, arg_name) in PARAMS.items()
-            ],
+            Parameters=params,
             Capabilities=CAPABILITIES,
         )
 

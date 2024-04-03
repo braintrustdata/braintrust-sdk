@@ -10,8 +10,7 @@
  * npm install braintrust
  * ```
  *
- * Then, run a simple experiment with the following code (replace `YOUR_API_KEY` with
- * your Braintrust API key):
+ * Then, create a file like `hello.eval.ts` with the following content:
  *
  * ```javascript
  * import { Eval } from "braintrust";
@@ -40,6 +39,12 @@
  * });
  * ```
  *
+ * Finally, run the script with `npx braintrust eval hello.eval.ts`.
+ *
+ * ```bash
+ * BRAINTRUST_API_KEY=<YOUR_BRAINTRUST_API_KEY> npx braintrust eval hello.eval.ts
+ * ```
+ *
  * @module braintrust
  */
 
@@ -54,6 +59,10 @@ export {
   EvalTask,
   Eval,
   EvalScorerArgs,
+  ReporterBody,
+  Reporter,
+  buildLocalSummary,
+  reportFailures,
 } from "./framework";
 export * from "./oai";
 export {

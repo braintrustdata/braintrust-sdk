@@ -1,7 +1,7 @@
 import { SpanTypeAttribute } from "@braintrust/core";
-import { Span, startSpan, traced } from "./logger";
+import { CompiledPrompt, Span, startSpan, traced } from "./logger";
 import { getCurrentUnixTimestamp } from "./util";
-import { RequestOptions } from "https";
+import { mergeDicts } from "@braintrust/core";
 
 interface BetaLike {
   chat: {
@@ -119,6 +119,10 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
   return proxy;
 }
 
+type SpanInfo = {
+  span_info?: CompiledPrompt<"chat">["span_info"];
+};
+
 type ChatParams = {
   messages: unknown;
   stream?: boolean | null;
@@ -139,23 +143,27 @@ function wrapBetaChatCompletion<
   P extends ChatParams,
   C extends StreamingChatResponse
 >(completion: (params: P) => C): (params: P) => Promise<any> {
-  return (params: P) => {
+  return (allParams: P & SpanInfo) => {
+    const { span_info, ...params } = allParams;
     const { messages, ...rest } = params;
     const span = startSpan({
       name: "OpenAI Chat Completion",
       spanAttributes: {
         type: SpanTypeAttribute.LLM,
       },
-      event: {
-        input: messages,
-        metadata: {
-          ...rest,
+      event: mergeDicts(
+        {
+          input: messages,
+          metadata: {
+            ...rest,
+          },
         },
-      },
+        span_info || {}
+      ),
     });
     const startTime = getCurrentUnixTimestamp();
 
-    const ret = completion(params) as StreamingChatResponse;
+    const ret = completion(params as P) as StreamingChatResponse;
 
     let first = true;
     ret.on("chunk", (_chunk: any) => {
@@ -171,7 +179,7 @@ function wrapBetaChatCompletion<
     });
     ret.on("chatCompletion", (completion: any) => {
       span.log({
-        output: completion.choices[0],
+        output: completion.choices,
       });
     });
     ret.on("end", () => {
@@ -191,30 +199,37 @@ function wrapChatCompletion<
 >(
   completion: (params: P, options?: unknown) => Promise<C>
 ): (params: P, options?: unknown) => Promise<any> {
-  return async (params: P, options?: unknown) => {
+  return async (allParams: P & SpanInfo, options?: unknown) => {
+    const { span_info, ...params } = allParams;
     const { messages, ...rest } = params;
     const span = startSpan({
       name: "OpenAI Chat Completion",
       spanAttributes: {
         type: SpanTypeAttribute.LLM,
       },
-      event: {
-        input: messages,
-        metadata: {
-          ...rest,
+      event: mergeDicts(
+        {
+          input: messages,
+          metadata: {
+            ...rest,
+          },
         },
-      },
+        span_info || {}
+      ),
     });
+    const startTime = getCurrentUnixTimestamp();
     if (params.stream) {
-      const startTime = getCurrentUnixTimestamp();
-      const ret = (await completion(params, options)) as StreamingChatResponse;
+      const ret = (await completion(
+        params as P,
+        options
+      )) as StreamingChatResponse;
       const wrapperStream = new WrapperStream(span, startTime, ret.iterator());
       ret.iterator = () => wrapperStream[Symbol.asyncIterator]();
       return ret;
     } else {
       try {
         const ret = (await completion(
-          params,
+          params as P,
           options
         )) as NonStreamingChatResponse;
         const { messages, ...rest } = params;
@@ -223,8 +238,9 @@ function wrapChatCompletion<
           metadata: {
             ...rest,
           },
-          output: ret.choices[0],
+          output: ret.choices,
           metrics: {
+            time_to_first_token: getCurrentUnixTimestamp() - startTime,
             tokens: ret.usage?.total_tokens,
             prompt_tokens: ret.usage?.prompt_tokens,
             completion_tokens: ret.usage?.completion_tokens,
@@ -240,7 +256,7 @@ function wrapChatCompletion<
 
 type EmbeddingCreateParams = {
   input: string;
-};
+} & SpanInfo;
 
 type CreateEmbeddingResponse = {
   data: { embedding: Array<number> }[];
@@ -258,11 +274,12 @@ function wrapEmbeddings<
 >(
   create: (params: P, options?: unknown) => Promise<C>
 ): (params: P, options?: unknown) => Promise<any> {
-  return async (params: P, options?: unknown) => {
+  return async (allParams: P, options?: unknown) => {
+    const { span_info, ...params } = allParams;
     const { input, ...rest } = params;
     return traced(
       async (span) => {
-        const result = await create(params, options);
+        const result = await create(params as P, options);
         const embedding_length = result.data[0].embedding.length;
         span.log({
           // TODO: Add a flag to control whether to log the full embedding vector,
@@ -281,15 +298,78 @@ function wrapEmbeddings<
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
         },
-        event: {
-          input,
-          metadata: {
-            ...rest,
+        event: mergeDicts(
+          {
+            input,
+            metadata: {
+              ...rest,
+            },
           },
-        },
+          span_info || {}
+        ),
       }
     );
   };
+}
+
+function postprocessStreamingResults(allResults: any[]): [
+  {
+    index: number;
+    message: any;
+    logprobs: null;
+    finish_reason?: string;
+  }
+] {
+  let role = undefined;
+  let content = undefined;
+  let tool_calls = undefined;
+  let finish_reason = undefined;
+  for (const result of allResults) {
+    const delta = result.choices?.[0]?.delta;
+    if (!delta) {
+      continue;
+    }
+
+    if (!role && delta.role) {
+      role = delta.role;
+    }
+
+    if (delta.finish_reason) {
+      finish_reason = delta.finish_reason;
+    }
+
+    if (delta.content) {
+      content = (content || "") + delta.content;
+    }
+
+    if (delta.tool_calls) {
+      if (!tool_calls) {
+        tool_calls = [
+          {
+            id: delta.tool_calls[0].id,
+            type: delta.tool_calls[0].type,
+            function: delta.tool_calls[0].function,
+          },
+        ];
+      } else {
+        tool_calls[0].function.arguments +=
+          delta.tool_calls[0].function.arguments;
+      }
+    }
+  }
+
+  return [
+    {
+      index: 0,
+      message: {
+        role,
+        content,
+        tool_calls,
+      },
+      logprobs: null,
+      finish_reason,
+    },
+  ];
 }
 
 class WrapperStream<Item> implements AsyncIterable<Item> {
@@ -322,7 +402,7 @@ class WrapperStream<Item> implements AsyncIterable<Item> {
         yield item;
       }
       this.span.log({
-        output: allResults,
+        output: postprocessStreamingResults(allResults),
       });
     } finally {
       this.span.end();

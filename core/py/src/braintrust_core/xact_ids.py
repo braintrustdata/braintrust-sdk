@@ -9,7 +9,9 @@ def modular_multiply(value: int, prime: int):
     return (value * prime) % MOD
 
 
-def prettify_xact(value: int | str) -> str:
+# value : int | str
+# Cannot use a | because of python 3.8
+def prettify_xact(value) -> str:
     encoded = modular_multiply(int(value), COPRIME)
     return hex(encoded)[2:].rjust(16, "0")
 
