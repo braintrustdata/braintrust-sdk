@@ -1,5 +1,11 @@
 import { SpanTypeAttribute } from "@braintrust/core";
-import { CompiledPrompt, Span, startSpan, traced } from "./logger";
+import {
+  CompiledPrompt,
+  Span,
+  StartSpanArgs,
+  startSpan,
+  traced,
+} from "./logger";
 import { getCurrentUnixTimestamp } from "./util";
 import { mergeDicts } from "@braintrust/core";
 
@@ -144,23 +150,18 @@ function wrapBetaChatCompletion<
   C extends StreamingChatResponse
 >(completion: (params: P) => C): (params: P) => Promise<any> {
   return (allParams: P & SpanInfo) => {
-    const { span_info, ...params } = allParams;
-    const { messages, ...rest } = params;
-    const span = startSpan({
-      name: "OpenAI Chat Completion",
-      spanAttributes: {
-        type: SpanTypeAttribute.LLM,
-      },
-      event: mergeDicts(
+    const { span_info: _, ...params } = allParams;
+    const span = startSpan(
+      mergeDicts(
         {
-          input: messages,
-          metadata: {
-            ...rest,
+          name: "OpenAI Chat Completion",
+          spanAttributes: {
+            type: SpanTypeAttribute.LLM,
           },
         },
-        span_info || {}
-      ),
-    });
+        parseChatCompletionParams(allParams)
+      )
+    );
     const startTime = getCurrentUnixTimestamp();
 
     const ret = completion(params as P) as StreamingChatResponse;
@@ -200,26 +201,24 @@ function wrapChatCompletion<
   completion: (params: P, options?: unknown) => Promise<C>
 ): (params: P, options?: unknown) => Promise<any> {
   return async (allParams: P & SpanInfo, options?: unknown) => {
-    const { span_info, ...params } = allParams;
-    const { messages, ...rest } = params;
-    const span = startSpan({
-      name: "OpenAI Chat Completion",
-      spanAttributes: {
-        type: SpanTypeAttribute.LLM,
-      },
-      event: mergeDicts(
+    const { span_info: _, ...params } = allParams;
+    const span = startSpan(
+      mergeDicts(
         {
-          input: messages,
-          metadata: {
-            ...rest,
+          name: "OpenAI Chat Completion",
+          spanAttributes: {
+            type: SpanTypeAttribute.LLM,
           },
         },
-        span_info || {}
-      ),
-    });
+        parseChatCompletionParams(allParams)
+      )
+    );
     const startTime = getCurrentUnixTimestamp();
     if (params.stream) {
       const ret = (await completion(
+        // We could get rid of this type coercion if we could somehow enforce
+        // that `P extends ChatParams` BUT does not have the property
+        // `span_info`.
         params as P,
         options
       )) as StreamingChatResponse;
@@ -254,9 +253,24 @@ function wrapChatCompletion<
   };
 }
 
+function parseChatCompletionParams<P extends ChatParams>(
+  allParams: P & SpanInfo
+): StartSpanArgs {
+  const { span_info, ...params } = allParams;
+  const { metadata: spanInfoMetadata, ...spanInfoRest } = span_info ?? {};
+  let ret: StartSpanArgs = {
+    ...spanInfoRest,
+    event: {
+      metadata: spanInfoMetadata,
+    },
+  };
+  const { messages, ...paramsRest } = params;
+  return mergeDicts(ret, { event: { input: messages, metadata: paramsRest } });
+}
+
 type EmbeddingCreateParams = {
   input: string;
-} & SpanInfo;
+};
 
 type CreateEmbeddingResponse = {
   data: { embedding: Array<number> }[];
@@ -273,12 +287,14 @@ function wrapEmbeddings<
   C extends CreateEmbeddingResponse
 >(
   create: (params: P, options?: unknown) => Promise<C>
-): (params: P, options?: unknown) => Promise<any> {
-  return async (allParams: P, options?: unknown) => {
-    const { span_info, ...params } = allParams;
-    const { input, ...rest } = params;
+): (params: P & SpanInfo, options?: unknown) => Promise<any> {
+  return async (allParams: P & SpanInfo, options?: unknown) => {
+    const { span_info: _, ...params } = allParams;
     return traced(
       async (span) => {
+        // We could get rid of this type coercion if we could somehow enforce
+        // that `P extends EmbeddingCreateParams` BUT does not have the property
+        // `span_info`.
         const result = await create(params as P, options);
         const embedding_length = result.data[0].embedding.length;
         span.log({
@@ -293,23 +309,32 @@ function wrapEmbeddings<
 
         return result;
       },
-      {
-        name: "OpenAI Embedding",
-        spanAttributes: {
-          type: SpanTypeAttribute.LLM,
-        },
-        event: mergeDicts(
-          {
-            input,
-            metadata: {
-              ...rest,
-            },
+      mergeDicts(
+        {
+          name: "OpenAI Embedding",
+          spanAttributes: {
+            type: SpanTypeAttribute.LLM,
           },
-          span_info || {}
-        ),
-      }
+        },
+        parseEmbeddingParams(allParams)
+      )
     );
   };
+}
+
+function parseEmbeddingParams<P extends EmbeddingCreateParams>(
+  allParams: P & SpanInfo
+): StartSpanArgs {
+  const { span_info, ...params } = allParams;
+  const { metadata: spanInfoMetadata, ...spanInfoRest } = span_info ?? {};
+  let ret: StartSpanArgs = {
+    ...spanInfoRest,
+    event: {
+      metadata: spanInfoMetadata,
+    },
+  };
+  const { input, ...paramsRest } = params;
+  return mergeDicts(ret, { event: { input, metadata: paramsRest } });
 }
 
 function postprocessStreamingResults(allResults: any[]): [
