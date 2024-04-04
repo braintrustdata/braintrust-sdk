@@ -2978,6 +2978,8 @@ export type CompletionPrompt = {
 export type CompiledPrompt<Flavor extends "chat" | "completion"> =
   CompiledPromptParams & {
     span_info?: {
+      name?: string;
+      spanAttributes?: Record<any, any>;
       metadata: {
         prompt: {
           variables: Record<string, unknown>;

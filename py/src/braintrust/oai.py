@@ -64,7 +64,9 @@ class ChatCompletionWrapper:
         params = self._parse_params(kwargs)
         stream = kwargs.get("stream", False)
 
-        span = start_span(name="OpenAI Chat Completion", span_attributes={"type": SpanTypeAttribute.LLM}, **params)
+        span = start_span(
+            **merge_dicts(dict(name="Chat Completion", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+        )
         should_end = True
 
         try:
@@ -113,7 +115,9 @@ class ChatCompletionWrapper:
         params = self._parse_params(kwargs)
         stream = kwargs.get("stream", False)
 
-        span = start_span(name="OpenAI Chat Completion", span_attributes={"type": SpanTypeAttribute.LLM}, **params)
+        span = start_span(
+            **merge_dicts(dict(name="Chat Completion", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+        )
         should_end = True
 
         try:
@@ -165,15 +169,13 @@ class ChatCompletionWrapper:
         # Then, copy the rest of the params
         params = {**params}
         messages = params.pop("messages", None)
-        merge_dicts(
+        return merge_dicts(
             ret,
             {
                 "input": messages,
                 "metadata": params,
             },
         )
-
-        return ret
 
 
 class EmbeddingWrapper:
@@ -184,7 +186,9 @@ class EmbeddingWrapper:
     def create(self, *args, **kwargs):
         params = self._parse_params(kwargs)
 
-        with start_span(name="OpenAI Embedding", span_attributes={"type": SpanTypeAttribute.LLM}, **params) as span:
+        with start_span(
+            **merge_dicts(dict(name="Embedding", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+        ) as span:
             raw_response = self.create_fn(*args, **kwargs)
             log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
             span.log(
@@ -201,7 +205,9 @@ class EmbeddingWrapper:
     async def acreate(self, *args, **kwargs):
         params = self._parse_params(kwargs)
 
-        with start_span(name="OpenAI Embedding", span_attributes={"type": SpanTypeAttribute.LLM}, **params) as span:
+        with start_span(
+            **merge_dicts(dict(name="Embedding", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+        ) as span:
             raw_response = await self.acreate_fn(*args, **kwargs)
             log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
             span.log(
@@ -223,15 +229,13 @@ class EmbeddingWrapper:
         params = {**params}
         input = params.pop("input", None)
 
-        merge_dicts(
+        return merge_dicts(
             ret,
             {
                 "input": input,
                 "metadata": params,
             },
         )
-
-        return ret
 
 
 class ChatCompletionV0Wrapper(NamedWrapper):
