@@ -126,7 +126,7 @@ class Span(ABC):
         """
 
     @abstractmethod
-    def export(self) -> Optional[str]:
+    def export(self) -> str:
         """Return a serialized representation of the span that can be used to start subspans in other places. See `Span.start_span` for more details."""
 
     @abstractmethod
@@ -179,7 +179,7 @@ class _NoopSpan(Span):
         return end_time or time.time()
 
     def export(self):
-        return None
+        return ""
 
     def flush(self):
         pass
@@ -1574,7 +1574,7 @@ def _start_span_parent_args(
 
     assert not (parent and parent_id), "Cannot specify both `parent` and `parent_id`. Prefer `parent`"
 
-    if parent is not None:
+    if parent:
         parent_components = SpanParentComponents.from_str(parent)
         assert (
             span_parent_object_type == parent_components.object_type
@@ -1879,7 +1879,7 @@ class Experiment(ObjectFetcher):
             metrics=metric_summary,
         )
 
-    def export(self) -> Optional[str]:
+    def export(self) -> str:
         """Return a serialized representation of the experiment that can be used to start subspans in other places. See `Span.start_span` for more details."""
         return SpanParentComponents(object_type=self._span_parent_object_type(), object_id=self.id, row_id="").to_str()
 
@@ -2126,7 +2126,7 @@ class SpanImpl(Span):
         self.log()
         return end_time
 
-    def export(self) -> Optional[str]:
+    def export(self) -> str:
         return SpanParentComponents(
             object_type=self.parent_object_type, object_id=self.parent_object_id.get(), row_id=self.id
         ).to_str()
@@ -2675,7 +2675,7 @@ class Logger:
             event=event,
         )
 
-    def export(self) -> Optional[str]:
+    def export(self) -> str:
         """Return a serialized representation of the logger that can be used to start subspans in other places. See `Span.start_span` for more details."""
         return SpanParentComponents(object_type=self._span_parent_object_type(), object_id=self.id, row_id="").to_str()
 
