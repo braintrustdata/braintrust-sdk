@@ -311,7 +311,7 @@ function wrapEmbeddings<
       },
       mergeDicts(
         {
-          name: "OpenAI Embedding",
+          name: "Embedding",
           spanAttributes: {
             type: SpanTypeAttribute.LLM,
           },

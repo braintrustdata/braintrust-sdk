@@ -187,7 +187,7 @@ class EmbeddingWrapper:
         params = self._parse_params(kwargs)
 
         with start_span(
-            **merge_dicts(dict(name="OpenAI Embedding", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+            **merge_dicts(dict(name="Embedding", span_attributes={"type": SpanTypeAttribute.LLM}), params)
         ) as span:
             raw_response = self.create_fn(*args, **kwargs)
             log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
@@ -206,7 +206,7 @@ class EmbeddingWrapper:
         params = self._parse_params(kwargs)
 
         with start_span(
-            **merge_dicts(dict(name="OpenAI Embedding", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+            **merge_dicts(dict(name="Embedding", span_attributes={"type": SpanTypeAttribute.LLM}), params)
         ) as span:
             raw_response = await self.acreate_fn(*args, **kwargs)
             log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
