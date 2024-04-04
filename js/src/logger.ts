@@ -142,14 +142,19 @@ export interface Span {
   end(args?: EndSpanArgs): number;
 
   /**
-   * Alias for `end`.
+   * Return a serialized representation of the span that can be used to start subspans in other places. See `Span.traced` for more details.
    */
-  close(args?: EndSpanArgs): number;
+  export(): Promise<string>;
 
   /**
    * Flush any pending rows to the server.
    */
   flush(): Promise<void>;
+
+  /**
+   * Alias for `end`.
+   */
+  close(args?: EndSpanArgs): number;
 
   // For type identification.
   kind: "span";
@@ -185,11 +190,15 @@ export class NoopSpan implements Span {
     return args?.endTime ?? getCurrentUnixTimestamp();
   }
 
+  public async export(): Promise<string> {
+    return "";
+  }
+
+  public async flush(): Promise<void> {}
+
   public close(args?: EndSpanArgs): number {
     return this.end(args);
   }
-
-  async flush(): Promise<void> {}
 }
 
 export const NOOP_SPAN = new NoopSpan();
@@ -1911,33 +1920,7 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
   callback: (span: Span) => R,
   args?: StartSpanArgs & SetCurrentArg & AsyncFlushArg<IsAsyncFlush>
 ): PromiseUnless<IsAsyncFlush, R> {
-  const { span, isLogger } = ((): { span: Span; isLogger: boolean } => {
-    if (args?.parent) {
-      if (args?.parentId) {
-        throw new Error(
-          "Cannot specify both `parent` and `parent_id`. Prefer `parent`"
-        );
-      }
-      const components = SpanParentComponents.fromStr(args?.parent);
-      const span = new SpanImpl({
-        ...args,
-        parentObjectType: components.objectType,
-        parentObjectId: new LazyValue(async () => components.objectId),
-        parentRowId: components.rowId,
-        bgLogger: _state.globalBgLogger(),
-      });
-      return {
-        span,
-        isLogger: components.objectType === SpanParentObjectType.PROJECT_LOGS,
-      };
-    } else {
-      const parentObject = getSpanParentObject<IsAsyncFlush>({
-        asyncFlush: args?.asyncFlush,
-      });
-      const span = parentObject.startSpan(args);
-      return { span, isLogger: parentObject.kind === "logger" };
-    }
-  })();
+  const { span, isLogger } = startSpanAndIsLogger(args);
 
   const ret = runFinally(
     () => {
@@ -1974,9 +1957,37 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
 export function startSpan<IsAsyncFlush extends boolean = false>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush>
 ): Span {
-  return getSpanParentObject<IsAsyncFlush>({
-    asyncFlush: args?.asyncFlush,
-  }).startSpan(args);
+  return startSpanAndIsLogger(args).span;
+}
+
+function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
+  args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush>
+): { span: Span; isLogger: boolean } {
+  if (args?.parent) {
+    if (args?.parentId) {
+      throw new Error(
+        "Cannot specify both `parent` and `parent_id`. Prefer `parent`"
+      );
+    }
+    const components = SpanParentComponents.fromStr(args?.parent);
+    const span = new SpanImpl({
+      ...args,
+      parentObjectType: components.objectType,
+      parentObjectId: new LazyValue(async () => components.objectId),
+      parentRowId: components.rowId,
+      bgLogger: _state.globalBgLogger(),
+    });
+    return {
+      span,
+      isLogger: components.objectType === SpanParentObjectType.PROJECT_LOGS,
+    };
+  } else {
+    const parentObject = getSpanParentObject<IsAsyncFlush>({
+      asyncFlush: args?.asyncFlush,
+    });
+    const span = parentObject.startSpan(args);
+    return { span, isLogger: parentObject.kind === "logger" };
+  }
 }
 
 // Set the given span as current within the given callback and any asynchronous
@@ -2741,9 +2752,6 @@ export class SpanImpl implements Span {
     return endTime;
   }
 
-  /**
-   * Return a serialized representation of the span that can be used to start subspans in other places. See `Span.start_span` for more details.
-   */
   public async export(): Promise<string> {
     return new SpanParentComponents({
       objectType: this.parentObjectType,
@@ -2752,12 +2760,12 @@ export class SpanImpl implements Span {
     }).toStr();
   }
 
-  public close(args?: EndSpanArgs): number {
-    return this.end(args);
-  }
-
   async flush(): Promise<void> {
     return await this.bgLogger.flush();
+  }
+
+  public close(args?: EndSpanArgs): number {
+    return this.end(args);
   }
 }
 

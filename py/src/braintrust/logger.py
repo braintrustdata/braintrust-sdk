@@ -126,6 +126,14 @@ class Span(ABC):
         """
 
     @abstractmethod
+    def export(self) -> str:
+        """Return a serialized representation of the span that can be used to start subspans in other places. See `Span.start_span` for more details."""
+
+    @abstractmethod
+    def flush(self):
+        """Flush any pending rows to the server."""
+
+    @abstractmethod
     def close(self, end_time=None) -> float:
         """Alias for `end`."""
 
@@ -169,6 +177,12 @@ class _NoopSpan(Span):
 
     def end(self, end_time=None):
         return end_time or time.time()
+
+    def export(self):
+        return ""
+
+    def flush(self):
+        pass
 
     def close(self, end_time=None):
         return self.end(end_time)
@@ -1560,7 +1574,7 @@ def _start_span_parent_args(
 
     assert not (parent and parent_id), "Cannot specify both `parent` and `parent_id`. Prefer `parent`"
 
-    if parent is not None:
+    if parent:
         parent_components = SpanParentComponents.from_str(parent)
         assert (
             span_parent_object_type == parent_components.object_type
@@ -2113,7 +2127,6 @@ class SpanImpl(Span):
         return end_time
 
     def export(self) -> str:
-        """Return a serialized representation of the span that can be used to start subspans in other places. See `Span.start_span` for more details."""
         return SpanParentComponents(
             object_type=self.parent_object_type, object_id=self.parent_object_id.get(), row_id=self.id
         ).to_str()
