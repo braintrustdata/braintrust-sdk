@@ -217,10 +217,11 @@ class BraintrustState {
   // (safely) dynamically cast it whenever retrieving the logger.
   public currentLogger: Logger<false> | undefined;
   public currentSpan: IsoAsyncLocalStorage<Span>;
-  // For operations not tied to a particular data object instance, we maintain a
-  // global BackgroundLogger which is refreshed anytime we log in with different
-  // credentials.
-  private _globalBgLogger: BackgroundLogger | undefined = undefined;
+  // Any time we re-log in, we directly update the logConn inside the logger.
+  // This is preferable to replacing the whole logger, which would create the
+  // possibility of multiple loggers floating around, which may not log in a
+  // deterministic order.
+  private _globalBgLogger: BackgroundLogger;
 
   public appUrl: string | null = null;
   public appPublicUrl: string | null = null;
@@ -233,13 +234,21 @@ class BraintrustState {
 
   private _apiConn: HTTPConnection | null = null;
   private _logConn: HTTPConnection | null = null;
-  private _globalBgLoggerDirty: boolean = true;
 
   constructor() {
     this.id = uuidv4(); // This is for debugging
     this.currentExperiment = undefined;
     this.currentLogger = undefined;
     this.currentSpan = iso.newAsyncLocalStorage();
+
+    const defaultGetLogConn = async () => {
+      await login();
+      return this.logConn();
+    };
+    this._globalBgLogger = new BackgroundLogger(
+      new LazyValue(defaultGetLogConn)
+    );
+
     this.resetLoginInfo();
 
     globalThis.__inherited_braintrust_state = this;
@@ -256,7 +265,6 @@ class BraintrustState {
 
     this._apiConn = null;
     this._logConn = null;
-    this._globalBgLoggerDirty = true;
   }
 
   public apiConn(): HTTPConnection {
@@ -280,20 +288,12 @@ class BraintrustState {
   }
 
   public globalBgLogger(): BackgroundLogger {
-    if (this._globalBgLogger === undefined || this._globalBgLoggerDirty) {
-      const getLogConn = async () => {
-        await login();
-        // Since marking the logger dirty only happens after actually
-        // re-logging in with different credentials, the login above will
-        // usually be a no-op and not re-mark the flag as dirty. But in case
-        // it did, set it back to non-dirty again.
-        this._globalBgLoggerDirty = false;
-        return this.logConn();
-      };
-      this._globalBgLogger = new BackgroundLogger(new LazyValue(getLogConn));
-      this._globalBgLoggerDirty = false;
-    }
     return this._globalBgLogger;
+  }
+
+  // Should only be called by the login function.
+  public loginReplaceLogConn(logConn: HTTPConnection) {
+    this._globalBgLogger.internalReplaceLogConn(logConn);
   }
 }
 
@@ -488,7 +488,6 @@ export interface LogOptions<IsAsyncFlush> {
 export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
 
 function logFeedbackImpl(
-  bgLogger: BackgroundLogger,
   parentObjectType: SpanParentObjectType,
   parentObjectId: LazyValue<string>,
   {
@@ -548,7 +547,7 @@ function logFeedbackImpl(
         [IS_MERGE_FIELD]: true,
       };
     });
-    bgLogger.log([record]);
+    _state.globalBgLogger().log([record]);
   }
 
   if (!isEmpty(comment)) {
@@ -569,7 +568,7 @@ function logFeedbackImpl(
         [AUDIT_METADATA_FIELD]: metadata,
       };
     });
-    bgLogger.log([record]);
+    _state.globalBgLogger().log([record]);
   }
 }
 
@@ -626,7 +625,6 @@ function startSpanParentArgs(args: {
 export class Logger<IsAsyncFlush extends boolean> {
   private lazyMetadata: LazyValue<OrgProjectMetadata>;
   private logOptions: LogOptions<IsAsyncFlush>;
-  private bgLogger: BackgroundLogger;
   private lastStartTime: number;
   private lazyId: LazyValue<string>;
   private calledStartSpan: boolean;
@@ -640,10 +638,6 @@ export class Logger<IsAsyncFlush extends boolean> {
   ) {
     this.lazyMetadata = lazyMetadata;
     this.logOptions = logOptions;
-    const logConn = new LazyValue(() =>
-      this.getState().then((state) => state.logConn())
-    );
-    this.bgLogger = new BackgroundLogger(logConn);
     this.lastStartTime = getCurrentUnixTimestamp();
     this.lazyId = new LazyValue(async () => await this.id);
     this.calledStartSpan = false;
@@ -769,7 +763,6 @@ export class Logger<IsAsyncFlush extends boolean> {
         spanParentObjectId: this.lazyId,
       }),
       ...args,
-      bgLogger: this.bgLogger,
       defaultRootType: SpanTypeAttribute.TASK,
     });
   }
@@ -786,12 +779,7 @@ export class Logger<IsAsyncFlush extends boolean> {
    * @param event.source (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
    */
   public logFeedback(event: LogFeedbackFullArgs): void {
-    logFeedbackImpl(
-      this.bgLogger,
-      this.spanParentObjectType(),
-      this.lazyId,
-      event
-    );
+    logFeedbackImpl(this.spanParentObjectType(), this.lazyId, event);
   }
 
   /**
@@ -809,7 +797,7 @@ export class Logger<IsAsyncFlush extends boolean> {
    * Flush any pending logs to the server.
    */
   async flush(): Promise<void> {
-    return await this.bgLogger.flush();
+    return await _state.globalBgLogger().flush();
   }
 
   get asyncFlush(): IsAsyncFlush | undefined {
@@ -838,11 +826,16 @@ function now() {
   return new Date().getTime();
 }
 
+// We should only have one instance of this object in
+// 'BraintrustState._globalBgLogger'. Be careful about spawning multiple
+// instances of this class, because concurrent BackgroundLoggers will not log to
+// the backend in a deterministic order.
 class BackgroundLogger {
   private logConn: LazyValue<HTTPConnection>;
   private items: LazyValue<BackgroundLogEvent>[] = [];
   private activeFlush: Promise<void> = Promise.resolve();
   private activeFlushResolved = true;
+  private activeFlushError: unknown = undefined;
 
   public syncFlush: boolean = false;
   // 6 MB for the AWS lambda gateway (from our own testing).
@@ -895,6 +888,11 @@ class BackgroundLogger {
       this.triggerActiveFlush();
     }
     await this.activeFlush;
+    if (this.activeFlushError) {
+      const err = this.activeFlushError;
+      this.activeFlushError = undefined;
+      throw err;
+    }
   }
 
   private async flushOnce(args?: { batchSize?: number }): Promise<void> {
@@ -1036,10 +1034,22 @@ class BackgroundLogger {
   private triggerActiveFlush() {
     if (this.activeFlushResolved) {
       this.activeFlushResolved = false;
-      this.activeFlush = this.flushOnce().finally(() => {
-        this.activeFlushResolved = true;
-      });
+      this.activeFlushError = undefined;
+      this.activeFlush = (async () => {
+        try {
+          await this.flushOnce();
+        } catch (err) {
+          this.activeFlushError = err;
+        } finally {
+          this.activeFlushResolved = true;
+        }
+      })();
     }
+  }
+
+  // Should only be called by BraintrustState.
+  public internalReplaceLogConn(logConn: HTTPConnection) {
+    this.logConn = new LazyValue(async () => logConn);
   }
 }
 
@@ -1816,6 +1826,9 @@ export async function login(
   _state.apiConn().set_token(apiKey);
   _state.loginToken = conn.token;
   _state.loggedIn = true;
+
+  // Relpace the global logger's logConn with this one.
+  _state.loginReplaceLogConn(conn);
 }
 
 // XXX We should remove these global functions now
@@ -1960,6 +1973,13 @@ export function startSpan<IsAsyncFlush extends boolean = false>(
   return startSpanAndIsLogger(args).span;
 }
 
+/**
+ * Flush any pending rows to the server.
+ */
+export async function flush(): Promise<void> {
+  return await _state.globalBgLogger().flush();
+}
+
 function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush>
 ): { span: Span; isLogger: boolean } {
@@ -1975,7 +1995,6 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
       parentObjectType: components.objectType,
       parentObjectId: new LazyValue(async () => components.objectId),
       parentRowId: components.rowId,
-      bgLogger: _state.globalBgLogger(),
     });
     return {
       span,
@@ -2247,7 +2266,6 @@ export type EvalCase<Input, Expected, Metadata> = {
 export class Experiment extends ObjectFetcher<ExperimentEvent> {
   private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>;
   public readonly dataset?: AnyDataset;
-  public bgLogger: BackgroundLogger;
   private lastStartTime: number;
   private lazyId: LazyValue<string>;
   private calledStartSpan: boolean;
@@ -2262,11 +2280,6 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     super("experiment", undefined);
     this.lazyMetadata = lazyMetadata;
     this.dataset = dataset;
-
-    const logConn = new LazyValue(() =>
-      this.getState().then((state) => state.logConn())
-    );
-    this.bgLogger = new BackgroundLogger(logConn);
     this.lastStartTime = getCurrentUnixTimestamp();
     this.lazyId = new LazyValue(async () => await this.id);
     this.calledStartSpan = false;
@@ -2377,7 +2390,6 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
         spanParentObjectId: this.lazyId,
       }),
       ...args,
-      bgLogger: this.bgLogger,
       defaultRootType: SpanTypeAttribute.EVAL,
     });
   }
@@ -2423,7 +2435,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     let { summarizeScores = true, comparisonExperimentId = undefined } =
       options || {};
 
-    await this.bgLogger.flush();
+    await this.flush();
     const state = await this.getState();
     const projectUrl = `${state.appPublicUrl}/app/${encodeURIComponent(
       state.orgName!
@@ -2482,12 +2494,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
    * @param event.source (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
    */
   public logFeedback(event: LogFeedbackFullArgs): void {
-    logFeedbackImpl(
-      this.bgLogger,
-      this.spanParentObjectType(),
-      this.lazyId,
-      event
-    );
+    logFeedbackImpl(this.spanParentObjectType(), this.lazyId, event);
   }
 
   /**
@@ -2505,7 +2512,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
    * Flush any pending rows to the server.
    */
   async flush(): Promise<void> {
-    return await this.bgLogger.flush();
+    return await _state.globalBgLogger().flush();
   }
 
   /**
@@ -2583,7 +2590,6 @@ let executionCounter = 0;
  * We suggest using one of the various `traced` methods, instead of creating Spans directly. See `Span.startSpan` for full details.
  */
 export class SpanImpl implements Span {
-  private bgLogger: BackgroundLogger;
   // `internalData` contains fields that are not part of the "user-sanitized"
   // set of fields which we want to log in just one of the span rows.
   private internalData: Partial<ExperimentEvent>;
@@ -2603,7 +2609,6 @@ export class SpanImpl implements Span {
       parentObjectType: SpanParentObjectType;
       parentObjectId: LazyValue<string>;
       parentRowId: string;
-      bgLogger: BackgroundLogger;
       defaultRootType?: SpanType;
     } & Omit<StartSpanArgs, "parent" & "parentId">
   ) {
@@ -2616,7 +2621,6 @@ export class SpanImpl implements Span {
     this.parentObjectType = args.parentObjectType;
     this.parentObjectId = args.parentObjectId;
     this.parentRowId = args.parentRowId;
-    this.bgLogger = args.bgLogger;
 
     const callerLocation = iso.getCallerLocation();
     const name = (() => {
@@ -2699,11 +2703,11 @@ export class SpanImpl implements Span {
       }).asDict(),
       id: this.id,
     });
-    this.bgLogger.log([new LazyValue(computeRecord)]);
+    _state.globalBgLogger().log([new LazyValue(computeRecord)]);
   }
 
   public logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void {
-    logFeedbackImpl(this.bgLogger, this.parentObjectType, this.parentObjectId, {
+    logFeedbackImpl(this.parentObjectType, this.parentObjectId, {
       ...event,
       id: this.id,
     });
@@ -2736,7 +2740,6 @@ export class SpanImpl implements Span {
         spanParentObjectType: this.parentObjectType,
         spanParentObjectId: this.parentObjectId,
       }),
-      bgLogger: this.bgLogger,
     });
   }
 
@@ -2761,7 +2764,7 @@ export class SpanImpl implements Span {
   }
 
   async flush(): Promise<void> {
-    return await this.bgLogger.flush();
+    return await _state.globalBgLogger().flush();
   }
 
   public close(args?: EndSpanArgs): number {
@@ -2780,7 +2783,6 @@ export class Dataset<
   IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
 > extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
   private readonly lazyMetadata: LazyValue<ProjectDatasetMetadata>;
-  private bgLogger: BackgroundLogger;
 
   constructor(
     lazyMetadata: LazyValue<ProjectDatasetMetadata>,
@@ -2801,7 +2803,6 @@ export class Dataset<
     const logConn = new LazyValue(() =>
       this.getState().then((state) => state.logConn())
     );
-    this.bgLogger = new BackgroundLogger(logConn);
   }
 
   public get id(): Promise<string> {
@@ -2888,7 +2889,7 @@ export class Dataset<
       metadata,
     }));
 
-    this.bgLogger.log([args]);
+    _state.globalBgLogger().log([args]);
     return rowId;
   }
 
@@ -2900,7 +2901,7 @@ export class Dataset<
       _object_delete: true,
     }));
 
-    this.bgLogger.log([args]);
+    _state.globalBgLogger().log([args]);
     return id;
   }
 
@@ -2915,7 +2916,7 @@ export class Dataset<
   ): Promise<DatasetSummary> {
     let { summarizeData = true } = options || {};
 
-    await this.bgLogger.flush();
+    await this.flush();
     const state = await this.getState();
     const projectUrl = `${state.appPublicUrl}/app/${encodeURIComponent(
       state.orgName!
@@ -2948,7 +2949,7 @@ export class Dataset<
    * Flush any pending rows to the server.
    */
   async flush(): Promise<void> {
-    return await this.bgLogger.flush();
+    return await _state.globalBgLogger().flush();
   }
 
   /**
