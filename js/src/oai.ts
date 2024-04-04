@@ -154,7 +154,7 @@ function wrapBetaChatCompletion<
     const span = startSpan(
       mergeDicts(
         {
-          name: "OpenAI Chat Completion",
+          name: "Chat Completion",
           spanAttributes: {
             type: SpanTypeAttribute.LLM,
           },
@@ -205,7 +205,7 @@ function wrapChatCompletion<
     const span = startSpan(
       mergeDicts(
         {
-          name: "OpenAI Chat Completion",
+          name: "Chat Completion",
           spanAttributes: {
             type: SpanTypeAttribute.LLM,
           },

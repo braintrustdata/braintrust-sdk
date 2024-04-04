@@ -65,7 +65,7 @@ class ChatCompletionWrapper:
         stream = kwargs.get("stream", False)
 
         span = start_span(
-            **merge_dicts(dict(name="OpenAI Chat Completion", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+            **merge_dicts(dict(name="Chat Completion", span_attributes={"type": SpanTypeAttribute.LLM}), params)
         )
         should_end = True
 
@@ -116,7 +116,7 @@ class ChatCompletionWrapper:
         stream = kwargs.get("stream", False)
 
         span = start_span(
-            **merge_dicts(dict(name="OpenAI Chat Completion", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+            **merge_dicts(dict(name="Chat Completion", span_attributes={"type": SpanTypeAttribute.LLM}), params)
         )
         should_end = True
 
