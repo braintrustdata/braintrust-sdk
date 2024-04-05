@@ -2206,7 +2206,7 @@ class ObjectFetcher<RecordType>
         {
           version: this.pinnedVersion,
         },
-        { headers: { ["Accept-Encoding"]: "gzip" } }
+        { headers: { "Accept-Encoding": "identity" } }
       );
       const data = (await resp.json()).events;
       this._fetchedData = this.mutateRecord
