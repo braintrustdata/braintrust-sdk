@@ -1477,29 +1477,17 @@ class ObjectFetcher:
     def _refetch(self):
         state = self._get_state()
         if self._fetched_data is None:
-            data = None
-            try:
-                resp = state.log_conn().get(
-                    f"object3/{self.object_type}",
-                    params={
-                        "id": self.id,
-                        "fmt": "json2",
-                        "version": self._pinned_version,
-                        "api_version": DATA_API_VERSION,
-                    },
-                )
-                response_raise_for_status(resp)
-                data = resp.json()
-            except Exception as e:
-                # DEPRECATION_NOTICE: When hitting old versions of the API where the "object3/" endpoint isn't available, fall back to
-                # the "object/" endpoint, which may require patching the incoming records. Remove this code once
-                # all APIs are updated.
-                resp = state.log_conn().get(
-                    f"object/{self.object_type}",
-                    params={"id": self.id, "fmt": "json2", "version": self._pinned_version},
-                )
-                response_raise_for_status(resp)
-                data = resp.json()
+            resp = state.log_conn().get(
+                f"v1/{self.object_type}/{self.id}/fetch",
+                params={
+                    "version": self._pinned_version,
+                },
+                headers={
+                    "Accept-Encoding": "gzip",
+                },
+            )
+            response_raise_for_status(resp)
+            data = resp.json()["events"]
 
             if self._mutate_record is not None:
                 self._fetched_data = [self._mutate_record(r) for r in data]
