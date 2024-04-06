@@ -380,8 +380,10 @@ class HTTPConnection {
 
   async get(
     path: string,
-    params: Record<string, string | undefined> | undefined = undefined
+    params: Record<string, string | undefined> | undefined = undefined,
+    config?: RequestInit
   ) {
+    const { headers, ...rest } = config || {};
     const url = new URL(_urljoin(this.base_url, path));
     url.search = new URLSearchParams(
       params
@@ -393,8 +395,12 @@ class HTTPConnection {
     return await checkResponse(
       // Using toString() here makes it work with isomorphic fetch
       await fetch(url.toString(), {
-        headers: this.headers,
+        headers: {
+          ...this.headers,
+          ...headers,
+        },
         keepalive: true,
+        ...rest,
       })
     );
   }
@@ -2195,26 +2201,14 @@ class ObjectFetcher<RecordType>
   async fetchedData() {
     if (this._fetchedData === undefined) {
       const state = await this.getState();
-      let data = undefined;
-      try {
-        const resp = await state.logConn().get(`object3/${this.objectType}`, {
-          id: await this.id,
-          fmt: "json2",
+      const resp = await state.logConn().get(
+        `v1/${this.objectType}/${await this.id}/fetch`,
+        {
           version: this.pinnedVersion,
-          api_version: "2",
-        });
-        data = await resp.json();
-      } catch (e) {
-        // DEPRECATION_NOTICE: When hitting old versions of the API where the "object3/" endpoint isn't available, we fall back to
-        // the "object/" endpoint, which may require patching the incoming records. Remove this code once
-        // all APIs are updated.
-        const resp = await state.logConn().get(`object/${this.objectType}`, {
-          id: await this.id,
-          fmt: "json2",
-          version: this.pinnedVersion,
-        });
-        data = await resp.json();
-      }
+        },
+        { headers: { "Accept-Encoding": "identity" } }
+      );
+      const data = (await resp.json()).events;
       this._fetchedData = this.mutateRecord
         ? data?.map(this.mutateRecord)
         : data;
