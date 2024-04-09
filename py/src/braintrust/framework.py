@@ -244,6 +244,9 @@ async def call_user_fn(event_loop, fn, **kwargs):
     final_kwargs = {}
 
     for name, param in signature.parameters.items():
+        if param.kind == inspect.Parameter.VAR_KEYWORD:
+            continue
+
         if name in kwargs:
             final_kwargs[name] = kwargs.pop(name)
         else:
