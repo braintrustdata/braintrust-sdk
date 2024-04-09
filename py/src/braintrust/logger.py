@@ -722,7 +722,7 @@ def init(
 
             info = response[0]
             return ProjectExperimentMetadata(
-                project=ObjectMetadata(id=info["project_id"], name="", full_info=dict()),
+                project=ObjectMetadata(id=info["project_id"], name=project or "UNKNOWN_PROJECT", full_info=dict()),
                 experiment=ObjectMetadata(
                     id=info["id"],
                     name=info["name"],
@@ -963,7 +963,6 @@ def load_prompt(
         if "objects" not in response or len(response["objects"]) == 0:
             raise ValueError(f"Prompt {slug} not found in project {project or project_id}.")
         elif len(response["objects"]) > 1:
-            print(response["objects"])
             raise ValueError(
                 f"Multiple prompts found with slug {slug} in project {project or project_id}. This should never happen."
             )
@@ -1587,7 +1586,6 @@ def _start_span_parent_args(
     span_parent_object_type: SpanParentObjectType,
     span_parent_object_id: LazyValue[str],
 ):
-
     assert not (parent and parent_id), "Cannot specify both `parent` and `parent_id`. Prefer `parent`"
 
     if parent:

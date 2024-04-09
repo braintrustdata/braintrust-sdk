@@ -1206,7 +1206,7 @@ export function init<IsOpen extends boolean = false>(
         return {
           project: {
             id: info.project_id,
-            name: "",
+            name: project ?? "UNKNOWN_PROJECT",
             fullInfo: {},
           },
           experiment: {

@@ -143,6 +143,11 @@ export interface Evaluator<
    * Whether the experiment should be public. Defaults to false.
    */
   isPublic?: boolean;
+
+  /**
+   * Whether to update an existing experiment with `experiment_name` if one exists. Defaults to false.
+   */
+  update?: boolean;
 }
 
 export type EvalResultWithSummary<
@@ -282,6 +287,7 @@ export async function Eval<
       experiment: evaluator.experimentName,
       metadata: evaluator.metadata,
       isPublic: evaluator.isPublic,
+      update: evaluator.update,
     });
     try {
       const evalDef = {
