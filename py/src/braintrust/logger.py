@@ -702,11 +702,10 @@ def init(
     if open and update:
         raise ValueError("Cannot open and update an experiment at the same time")
 
-    if (open or update) and experiment is None:
-        action = "open" if open else "update"
-        raise ValueError(f"Cannot {action} an experiment without specifying its name")
-
-    if open:
+    if open or update:
+        if experiment is None:
+            action = "open" if open else "update"
+            raise ValueError(f"Cannot {action} an experiment without specifying its name")
 
         def compute_metadata():
             login(org_name=org_name, api_key=api_key, app_url=app_url)
@@ -723,7 +722,7 @@ def init(
 
             info = response[0]
             return ProjectExperimentMetadata(
-                project=ObjectMetadata(id=info["project_id"], name="", full_info=dict()),
+                project=ObjectMetadata(id=info["project_id"], name=project, full_info=dict()),
                 experiment=ObjectMetadata(
                     id=info["id"],
                     name=info["name"],
@@ -732,7 +731,13 @@ def init(
             )
 
         lazy_metadata = LazyValue(compute_metadata, use_mutex=True)
-        return ReadonlyExperiment(lazy_metadata=lazy_metadata)
+        if open:
+            return ReadonlyExperiment(lazy_metadata=lazy_metadata)
+        else:
+            ret = Experiment(lazy_metadata=lazy_metadata, dataset=dataset)
+            if set_current:
+                _state.current_experiment = ret
+            return ret
 
     def compute_metadata():
         login(org_name=org_name, api_key=api_key, app_url=app_url)
@@ -770,9 +775,6 @@ def init(
 
         if is_public is not None:
             args["public"] = is_public
-
-        if update is not None:
-            args["update"] = update
 
         if metadata is not None:
             args["metadata"] = metadata
