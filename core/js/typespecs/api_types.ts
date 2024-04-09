@@ -7,10 +7,11 @@ extendZodWithOpenApi(z);
 import { experimentSchema, datasetSchema, projectSchema } from "./app_types";
 import {
   datetimeStringSchema,
-  getEventObjectArticle,
+  getObjectArticle,
   getEventObjectType,
   getEventObjectDescription,
   ObjectType,
+  ObjectTypeWithEvent,
 } from "./common_types";
 import { customTypes } from "./custom_types";
 import { capitalize } from "../src/util";
@@ -28,7 +29,7 @@ import { SpanTypeAttribute } from "../src/span_types";
 
 export const auditSourcesSchema = z.enum(VALID_SOURCES);
 
-export function generateBaseEventOpSchema(objectType: ObjectType) {
+function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
   const eventDescription = getEventObjectDescription(objectType);
   return z.strictObject({
     id: z
@@ -149,7 +150,7 @@ export function generateBaseEventOpSchema(objectType: ObjectType) {
   });
 }
 
-function generateBaseEventFeedbackSchema(objectType: ObjectType) {
+function generateBaseEventFeedbackSchema(objectType: ObjectTypeWithEvent) {
   const eventObjectType = getEventObjectType(objectType);
   const eventDescription = getEventObjectDescription(objectType);
   return z.strictObject({
@@ -288,7 +289,7 @@ export const fetchEventsRequestSchema = z
   .openapi("FetchEventsRequest");
 
 function makeFetchEventsResponseSchema<T extends z.AnyZodObject>(
-  objectType: ObjectType,
+  objectType: ObjectTypeWithEvent,
   eventSchema: T
 ) {
   const eventName = capitalize(getEventObjectType(objectType), "_").replace(
@@ -436,11 +437,11 @@ const replacementEventSchema = z.strictObject({
 });
 
 function makeInsertEventSchemas<T extends z.AnyZodObject>(
-  objectType: ObjectType,
+  objectType: ObjectTypeWithEvent,
   insertSchema: T
 ) {
   const eventDescription = getEventObjectDescription(objectType);
-  const article = getEventObjectArticle(objectType);
+  const article = getObjectArticle(objectType);
   const eventSchemaName = capitalize(
     getEventObjectType(objectType),
     "_"
@@ -536,7 +537,7 @@ const {
 // Section: logging feedback.
 
 function makeFeedbackRequestSchema<T extends z.AnyZodObject>(
-  objectType: ObjectType,
+  objectType: ObjectTypeWithEvent,
   feedbackSchema: T
 ) {
   const eventDescription = getEventObjectDescription(objectType);
@@ -658,7 +659,9 @@ export const eventObjectSchemas = {
 
 // Section: Cross-object operation schemas.
 
-function makeCrossObjectIndividualRequestSchema(objectType: ObjectType) {
+function makeCrossObjectIndividualRequestSchema(
+  objectType: ObjectTypeWithEvent
+) {
   const eventObjectType = getEventObjectType(objectType);
   const eventDescription = getEventObjectDescription(objectType);
   const eventObjectSchema = eventObjectSchemas[eventObjectType];
@@ -847,4 +850,8 @@ export const objectTypeSummarizeResponseSchemas = {
   dataset: summarizeDatasetResponseSchema,
   project: undefined,
   prompt: undefined,
+  role: undefined,
+  team: undefined,
+  acl: undefined,
+  user: undefined,
 } as const;
