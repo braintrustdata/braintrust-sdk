@@ -1,6 +1,7 @@
 import abc
 import atexit
 import concurrent.futures
+import contextlib
 import contextvars
 import dataclasses
 import datetime
@@ -126,6 +127,14 @@ class Span(ABC):
         """
 
     @abstractmethod
+    def export(self) -> str:
+        """Return a serialized representation of the span that can be used to start subspans in other places. See `Span.start_span` for more details."""
+
+    @abstractmethod
+    def flush(self):
+        """Flush any pending rows to the server."""
+
+    @abstractmethod
     def close(self, end_time=None) -> float:
         """Alias for `end`."""
 
@@ -170,6 +179,12 @@ class _NoopSpan(Span):
     def end(self, end_time=None):
         return end_time or time.time()
 
+    def export(self):
+        return ""
+
+    def flush(self):
+        pass
+
     def close(self, end_time=None):
         return self.end(end_time)
 
@@ -189,10 +204,22 @@ class BraintrustState:
         self.current_experiment = None
         self.current_logger = None
         self.current_span = contextvars.ContextVar("braintrust_current_span", default=NOOP_SPAN)
-        # For operations not tied to a particular data object instance, we
-        # maintain a global _BackgroundLogger which is refreshed anytime we log
-        # in with different credentials.
-        self._global_bg_logger = None
+
+        def default_get_log_conn():
+            login()
+            return self.log_conn()
+
+        # Any time we re-log in, we directly update the log_conn inside the
+        # logger. This is preferable to replacing the whole logger, which would
+        # create the possibility of multiple loggers floating around.
+        self._global_bg_logger = _BackgroundLogger(LazyValue(default_get_log_conn, use_mutex=True))
+
+        # For unit-testing, tests may wish to temporarily override the global
+        # logger with a custom one. We allow this but keep the override variable
+        # thread-local to prevent the possibility that tests running on
+        # different threads unintentionally use the same override.
+        self._override_bg_logger = threading.local()
+
         self.reset_login_info()
 
     def reset_login_info(self):
@@ -208,7 +235,6 @@ class BraintrustState:
         self._app_conn = None
         self._log_conn = None
         self._user_info = None
-        self._global_bg_logger_dirty = True
 
     def app_conn(self):
         if not self._app_conn:
@@ -234,32 +260,14 @@ class BraintrustState:
             self._user_info = info
 
     def global_bg_logger(self):
-        if self._global_bg_logger is None or self._global_bg_logger_dirty:
+        return getattr(self._override_bg_logger, "logger", self._global_bg_logger)
 
-            def get_log_conn():
-                login()
-                # Since marking the logger dirty only happens after actually
-                # re-logging in with different credentials, the login above will
-                # usually be a no-op and not re-mark the flag as dirty. But in
-                # case it did, set it back to non-dirty again.
-                self._global_bg_logger_dirty = False
-                return self.log_conn()
-
-            self._global_bg_logger = _BackgroundLogger(LazyValue(get_log_conn, use_mutex=True))
-            self._global_bg_logger_dirty = False
-        return self._global_bg_logger
+    # Should only be called by the login function.
+    def login_replace_log_conn(self, log_conn: "HTTPConnection"):
+        self._global_bg_logger.internal_replace_log_conn(log_conn)
 
 
 _state = None
-
-
-def _internal_reset_global_state():
-    global _state
-    _state = BraintrustState()
-
-
-_internal_reset_global_state()
-_logger = logging.getLogger("braintrust")
 
 
 _http_adapter = None
@@ -398,6 +406,10 @@ def _check_json_serializable(event):
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
 
+# We should only have one instance of this object in
+# 'BraintrustState._global_bg_logger'. Be careful about spawning multiple
+# instances of this class, because concurrent _BackgroundLoggers will not log to
+# the backend in a deterministic order.
 class _BackgroundLogger:
     def __init__(self, log_conn: LazyValue[HTTPConnection]):
         self.log_conn = log_conn
@@ -574,6 +586,29 @@ class _BackgroundLogger:
 
         print(f"log request failed after {self.num_retries} retries. Dropping batch", file=self.outfile)
 
+    # Should only be called by BraintrustState.
+    def internal_replace_log_conn(self, log_conn: HTTPConnection):
+        self.log_conn = LazyValue(lambda: log_conn, use_mutex=False)
+
+
+def _internal_reset_global_state():
+    global _state
+    _state = BraintrustState()
+
+
+_internal_reset_global_state()
+_logger = logging.getLogger("braintrust")
+
+
+@contextlib.contextmanager
+def _internal_with_custom_background_logger():
+    custom_logger = _BackgroundLogger(LazyValue(lambda: _state.log_conn(), use_mutex=True))
+    _state._override_bg_logger.logger = custom_logger
+    try:
+        yield custom_logger
+    finally:
+        _state._override_bg_logger.logger = None
+
 
 def _ensure_object(object_type, object_id, force=False):
     experiment_path = EXPERIMENTS_PATH / f"{object_id}.parquet"
@@ -687,7 +722,7 @@ def init(
 
             info = response[0]
             return ProjectExperimentMetadata(
-                project=ObjectMetadata(id=info["project_id"], name="", full_info=dict()),
+                project=ObjectMetadata(id=info["project_id"], name=project or "UNKNOWN_PROJECT", full_info=dict()),
                 experiment=ObjectMetadata(
                     id=info["id"],
                     name=info["name"],
@@ -928,7 +963,6 @@ def load_prompt(
         if "objects" not in response or len(response["objects"]) == 0:
             raise ValueError(f"Prompt {slug} not found in project {project or project_id}.")
         elif len(response["objects"]) > 1:
-            print(response["objects"])
             raise ValueError(
                 f"Multiple prompts found with slug {slug} in project {project or project_id}. This should never happen."
             )
@@ -1024,6 +1058,9 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
         _state.app_conn().set_token(conn.token)
         _state.login_token = conn.token
         _state.logged_in = True
+
+        # Replace the global logger's log_conn with this one.
+        _state.login_replace_log_conn(conn)
 
 
 def log(**event):
@@ -1206,7 +1243,6 @@ def start_span(
             parent_object_type=components.object_type,
             parent_object_id=LazyValue(lambda: components.object_id, use_mutex=False),
             parent_row_id=components.row_id,
-            bg_logger=_state.global_bg_logger(),
             name=name,
             type=type,
             span_attributes=span_attributes,
@@ -1225,6 +1261,12 @@ def start_span(
             parent_id=parent_id,
             **event,
         )
+
+
+def flush():
+    """Flush any pending rows to the server."""
+
+    _state.global_bg_logger().flush()
 
 
 def _check_org_info(org_info, org_name):
@@ -1434,29 +1476,17 @@ class ObjectFetcher:
     def _refetch(self):
         state = self._get_state()
         if self._fetched_data is None:
-            data = None
-            try:
-                resp = state.log_conn().get(
-                    f"object3/{self.object_type}",
-                    params={
-                        "id": self.id,
-                        "fmt": "json2",
-                        "version": self._pinned_version,
-                        "api_version": DATA_API_VERSION,
-                    },
-                )
-                response_raise_for_status(resp)
-                data = resp.json()
-            except Exception as e:
-                # DEPRECATION_NOTICE: When hitting old versions of the API where the "object3/" endpoint isn't available, fall back to
-                # the "object/" endpoint, which may require patching the incoming records. Remove this code once
-                # all APIs are updated.
-                resp = state.log_conn().get(
-                    f"object/{self.object_type}",
-                    params={"id": self.id, "fmt": "json2", "version": self._pinned_version},
-                )
-                response_raise_for_status(resp)
-                data = resp.json()
+            resp = state.log_conn().get(
+                f"v1/{self.object_type}/{self.id}/fetch",
+                params={
+                    "version": self._pinned_version,
+                },
+                headers={
+                    "Accept-Encoding": "gzip",
+                },
+            )
+            response_raise_for_status(resp)
+            data = resp.json()["events"]
 
             if self._mutate_record is not None:
                 self._fetched_data = [self._mutate_record(r) for r in data]
@@ -1477,7 +1507,6 @@ class ObjectFetcher:
 
 
 def _log_feedback_impl(
-    bg_logger,
     parent_object_type: SpanParentObjectType,
     parent_object_id: LazyValue[str],
     id,
@@ -1528,7 +1557,7 @@ def _log_feedback_impl(
                 },
             )
 
-        bg_logger.log(LazyValue(compute_record, use_mutex=False))
+        _state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
 
     if comment is not None:
 
@@ -1548,7 +1577,7 @@ def _log_feedback_impl(
                 **{AUDIT_SOURCE_FIELD: source, AUDIT_METADATA_FIELD: metadata},
             )
 
-        bg_logger.log(LazyValue(compute_record, use_mutex=False))
+        _state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
 
 
 def _start_span_parent_args(
@@ -1557,10 +1586,9 @@ def _start_span_parent_args(
     span_parent_object_type: SpanParentObjectType,
     span_parent_object_id: LazyValue[str],
 ):
-
     assert not (parent and parent_id), "Cannot specify both `parent` and `parent_id`. Prefer `parent`"
 
-    if parent is not None:
+    if parent:
         parent_components = SpanParentComponents.from_str(parent)
         assert (
             span_parent_object_type == parent_components.object_type
@@ -1635,11 +1663,6 @@ class Experiment(ObjectFetcher):
     ):
         self._lazy_metadata = lazy_metadata
         self.dataset = dataset
-
-        def compute_log_conn():
-            return self._get_state().log_conn()
-
-        self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
         self.last_start_time = time.time()
         self._lazy_id = LazyValue(lambda: self.id, use_mutex=False)
         self._called_start_span = False
@@ -1751,7 +1774,6 @@ class Experiment(ObjectFetcher):
         :param source: (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
         """
         return _log_feedback_impl(
-            bg_logger=self.bg_logger,
             parent_object_type=self._span_parent_object_type(),
             parent_object_id=self._lazy_id,
             id=id,
@@ -1816,7 +1838,7 @@ class Experiment(ObjectFetcher):
         """
         # Flush our events to the API, and to the data warehouse, to ensure that the link we print
         # includes the new experiment.
-        self.bg_logger.flush()
+        self.flush()
 
         state = self._get_state()
         project_url = f"{state.app_public_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
@@ -1880,7 +1902,7 @@ class Experiment(ObjectFetcher):
     def flush(self):
         """Flush any pending rows to the server."""
 
-        self.bg_logger.flush()
+        _state.global_bg_logger().flush()
 
     def _start_span_impl(
         self,
@@ -1900,7 +1922,6 @@ class Experiment(ObjectFetcher):
                 span_parent_object_type=self._span_parent_object_type(),
                 span_parent_object_id=self._lazy_id,
             ),
-            bg_logger=self.bg_logger,
             name=name,
             type=type,
             default_root_type=SpanTypeAttribute.EVAL,
@@ -1958,7 +1979,6 @@ class SpanImpl(Span):
         parent_object_type: SpanParentObjectType,
         parent_object_id: LazyValue[str],
         parent_row_id: str,
-        bg_logger,
         name=None,
         type=None,
         default_root_type=None,
@@ -1980,7 +2000,6 @@ class SpanImpl(Span):
         self.parent_object_type = parent_object_type
         self.parent_object_id = parent_object_id
         self.parent_row_id = parent_row_id
-        self.bg_logger = bg_logger
 
         caller_location = get_caller_location()
         if name is None:
@@ -2065,11 +2084,10 @@ class SpanImpl(Span):
                 id=self.id,
             )
 
-        self.bg_logger.log(LazyValue(compute_record, use_mutex=False))
+        _state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
 
     def log_feedback(self, **event):
         return _log_feedback_impl(
-            bg_logger=self.bg_logger,
             parent_object_type=self.parent_object_type,
             parent_object_id=self.parent_object_id,
             id=self.id,
@@ -2094,7 +2112,6 @@ class SpanImpl(Span):
                 span_parent_object_type=self.parent_object_type,
                 span_parent_object_id=self.parent_object_id,
             ),
-            bg_logger=self.bg_logger,
             name=name,
             type=type,
             span_attributes=span_attributes,
@@ -2113,7 +2130,6 @@ class SpanImpl(Span):
         return end_time
 
     def export(self) -> str:
-        """Return a serialized representation of the span that can be used to start subspans in other places. See `Span.start_span` for more details."""
         return SpanParentComponents(
             object_type=self.parent_object_type, object_id=self.parent_object_id.get(), row_id=self.id
         ).to_str()
@@ -2124,7 +2140,7 @@ class SpanImpl(Span):
     def flush(self):
         """Flush any pending rows to the server."""
 
-        self.bg_logger.flush()
+        _state.global_bg_logger().flush()
 
     def __enter__(self):
         if self.set_current:
@@ -2170,10 +2186,6 @@ class Dataset(ObjectFetcher):
         self._lazy_metadata = lazy_metadata
         self.new_records = 0
 
-        def compute_log_conn():
-            return self._get_state().log_conn()
-
-        self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
         ObjectFetcher.__init__(self, object_type="dataset", pinned_version=version, mutate_record=mutate_record)
 
     @property
@@ -2249,7 +2261,7 @@ class Dataset(ObjectFetcher):
 
         self._clear_cache()  # We may be able to optimize this
         self.new_records += 1
-        self.bg_logger.log(LazyValue(compute_args, use_mutex=False))
+        _state.global_bg_logger().log(LazyValue(compute_args, use_mutex=False))
         return row_id
 
     def delete(self, id):
@@ -2275,7 +2287,7 @@ class Dataset(ObjectFetcher):
                 dataset_id=self.id,
             )
 
-        self.bg_logger.log(LazyValue(compute_args, use_mutex=False))
+        _state.global_bg_logger().log(LazyValue(compute_args, use_mutex=False))
         return id
 
     def summarize(self, summarize_data=True):
@@ -2287,7 +2299,7 @@ class Dataset(ObjectFetcher):
         """
         # Flush our events to the API, and to the data warehouse, to ensure that the link we print
         # includes the new experiment.
-        self.bg_logger.flush()
+        self.flush()
         state = self._get_state()
         project_url = f"{state.app_public_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
         dataset_url = f"{project_url}/datasets/{encode_uri_component(self.name)}"
@@ -2322,7 +2334,7 @@ class Dataset(ObjectFetcher):
     def flush(self):
         """Flush any pending rows to the server."""
 
-        self.bg_logger.flush()
+        _state.global_bg_logger().flush()
 
     def __enter__(self):
         return self
@@ -2495,11 +2507,6 @@ class Logger:
     def __init__(self, lazy_metadata: LazyValue[OrgProjectMetadata], async_flush: bool = True):
         self._lazy_metadata = lazy_metadata
         self.async_flush = async_flush
-
-        def compute_log_conn():
-            return self._get_state().log_conn()
-
-        self.bg_logger = _BackgroundLogger(log_conn=LazyValue(compute_log_conn, use_mutex=False))
         self.last_start_time = time.time()
         self._lazy_id = LazyValue(lambda: self.id, use_mutex=False)
         self._called_start_span = False
@@ -2569,7 +2576,7 @@ class Logger:
         self.last_start_time = span.end()
 
         if not self.async_flush:
-            self.bg_logger.flush()
+            self.flush()
 
         return span.id
 
@@ -2595,7 +2602,6 @@ class Logger:
         :param source: (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
         """
         return _log_feedback_impl(
-            bg_logger=self.bg_logger,
             parent_object_type=self._span_parent_object_type(),
             parent_object_id=self._lazy_id,
             id=id,
@@ -2652,7 +2658,6 @@ class Logger:
                 span_parent_object_type=self._span_parent_object_type(),
                 span_parent_object_id=self._lazy_id,
             ),
-            bg_logger=self.bg_logger,
             name=name,
             type=type,
             default_root_type=SpanTypeAttribute.TASK,
@@ -2676,7 +2681,7 @@ class Logger:
         """
         Flush any pending logs to the server.
         """
-        self.bg_logger.flush()
+        _state.global_bg_logger().flush()
 
 
 @dataclasses.dataclass
