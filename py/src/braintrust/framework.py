@@ -202,6 +202,11 @@ class Evaluator:
     Whether the experiment should be public. Defaults to false.
     """
 
+    update: bool = False
+    """
+    Whether to update an existing experiment with `experiment_name` if one exists. Defaults to false.
+    """
+
 
 @dataclasses.dataclass
 class EvalResultWithSummary(SerializableDataClass):
@@ -387,6 +392,7 @@ def Eval(
     trial_count: int = 1,
     metadata: Optional[Metadata] = None,
     is_public: bool = False,
+    update: bool = False,
     reporter: Optional[Union[ReporterDef, str]] = None,
 ):
     """
@@ -439,6 +445,7 @@ def Eval(
         trial_count=trial_count,
         metadata=metadata,
         is_public=is_public,
+        update=update,
     )
 
     if _lazy_load:
@@ -463,6 +470,7 @@ def Eval(
                 evaluator.experiment_name,
                 metadata=evaluator.metadata,
                 is_public=evaluator.is_public,
+                update=evaluator.update,
             )
             try:
                 ret = await run_evaluator(experiment, evaluator, 0, [])

@@ -1168,14 +1168,14 @@ export function init<IsOpen extends boolean = false>(
     throw new Error("Cannot open and update an experiment at the same time");
   }
 
-  if (open || update) {
-    if (isEmpty(experiment)) {
-      const action = open ? "open" : "update";
-      throw new Error(
-        `Cannot ${action} an experiment without specifying its name`
-      );
-    }
+  if ((open || update) && isEmpty(experiment)) {
+    const action = open ? "open" : "update";
+    throw new Error(
+      `Cannot ${action} an experiment without specifying its name`
+    );
+  }
 
+  if (open) {
     const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(
       async () => {
         await login({
@@ -1218,17 +1218,9 @@ export function init<IsOpen extends boolean = false>(
       }
     );
 
-    if (open) {
-      return new ReadonlyExperiment(
-        lazyMetadata
-      ) as InitializedExperiment<IsOpen>;
-    } else {
-      const ret = new Experiment(lazyMetadata, dataset);
-      if (options.setCurrent ?? true) {
-        _state.currentExperiment = ret;
-      }
-      return ret as InitializedExperiment<IsOpen>;
-    }
+    return new ReadonlyExperiment(
+      lazyMetadata
+    ) as InitializedExperiment<IsOpen>;
   }
 
   const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(
@@ -1289,6 +1281,10 @@ export function init<IsOpen extends boolean = false>(
 
       if (isPublic !== undefined) {
         args["public"] = isPublic;
+      }
+
+      if (update !== undefined) {
+        args["update"] = update;
       }
 
       if (metadata) {
