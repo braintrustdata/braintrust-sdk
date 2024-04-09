@@ -416,6 +416,9 @@ def Eval(
     )
     ```
 
+    If you're running in an async context, e.g. in a Jupyter notebook, then `Eval` returns a `Future` object that you
+    can `await`.
+
     :param name: The name of the evaluator. This corresponds to a project name in Braintrust.
     :param data: Returns an iterator over the evaluation dataset. Each element of the iterator should be a `EvalCase`.
     :param task: Runs the evaluation task on a single input. The `hooks` object can be used to add metadata to the evaluation.
@@ -430,7 +433,7 @@ def Eval(
     can be any JSON-serializable type, but its keys must be strings.
     :param is_public: (Optional) Whether the experiment should be public. Defaults to false.
     :param reporter: (Optional) A reporter that takes an evaluator and its result and returns a report.
-    :return: An `Evaluator` object.
+    :return: An `EvalResult` object, which contains all results and a summary.
     """
     eval_name = _make_eval_name(name, experiment_name)
 
