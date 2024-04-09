@@ -722,7 +722,7 @@ def init(
 
             info = response[0]
             return ProjectExperimentMetadata(
-                project=ObjectMetadata(id=info["project_id"], name=project, full_info=dict()),
+                project=ObjectMetadata(id=info["project_id"], name=project or "UNKNOWN_PROJECT", full_info=dict()),
                 experiment=ObjectMetadata(
                     id=info["id"],
                     name=info["name"],
