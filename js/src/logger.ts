@@ -1082,7 +1082,7 @@ export type InitOptions<IsOpen extends boolean> = {
 } & InitOpenOption<IsOpen>;
 
 export type FullInitOptions<IsOpen extends boolean> = {
-  project: string;
+  project?: string;
 } & InitOptions<IsOpen>;
 
 type InitializedExperiment<IsOpen extends boolean | undefined> =
@@ -1206,7 +1206,7 @@ export function init<IsOpen extends boolean = false>(
         return {
           project: {
             id: info.project_id,
-            name: project,
+            name: project ?? "unknown",
             fullInfo: {},
           },
           experiment: {
@@ -1343,7 +1343,7 @@ export function init<IsOpen extends boolean = false>(
  * Alias for init(options).
  */
 export function initExperiment<IsOpen extends boolean = false>(
-  options: Readonly<FullInitOptions<IsOpen>>
+  options: Readonly<InitOptions<IsOpen>>
 ): InitializedExperiment<IsOpen>;
 
 /**
@@ -1360,7 +1360,7 @@ export function initExperiment<IsOpen extends boolean = false>(
  * `initExperiment(project, options)`.
  */
 export function initExperiment<IsOpen extends boolean = false>(
-  projectOrOptions: string | Readonly<FullInitOptions<IsOpen>>,
+  projectOrOptions: string | Readonly<InitOptions<IsOpen>>,
   optionalOptions?: Readonly<InitOptions<IsOpen>>
 ): InitializedExperiment<IsOpen> {
   const options = ((): Readonly<FullInitOptions<IsOpen>> => {
