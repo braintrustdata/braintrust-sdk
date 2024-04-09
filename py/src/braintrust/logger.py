@@ -793,7 +793,7 @@ def init(
         resp_project = response["project"]
         resp_experiment = response["experiment"]
         return ProjectExperimentMetadata(
-            project=ObjectMetadata(id=resp_project["id"], name=resp_project["name"], full_info=resp_project),
+            project=ObjectMetadata(id=resp_project["id"], name=resp_project["name"], full_info=dict()),
             experiment=ObjectMetadata(
                 id=resp_experiment["id"], name=resp_experiment["name"], full_info=resp_experiment
             ),
@@ -849,7 +849,7 @@ def init_dataset(
         resp_project = response["project"]
         resp_dataset = response["dataset"]
         return ProjectDatasetMetadata(
-            project=ObjectMetadata(id=resp_project["id"], name=resp_project["name"], full_info=resp_project),
+            project=ObjectMetadata(id=resp_project["id"], name=resp_project["name"], full_info=dict()),
             dataset=ObjectMetadata(id=resp_dataset["id"], name=resp_dataset["name"], full_info=resp_dataset),
         )
 

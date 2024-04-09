@@ -12,6 +12,8 @@ VALID_SOURCES = ["app", "api", "external"]
 
 PARENT_ID_FIELD = "_parent_id"
 
+EVENT_TYPE_FIELD = "_event_type"
+
 ALL_ROW_ID_FIELDS = [
     ID_FIELD,
     TRANSACTION_ID_FIELD,

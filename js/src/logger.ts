@@ -1321,7 +1321,7 @@ export function init<IsOpen extends boolean = false>(
         project: {
           id: response.project.id,
           name: response.project.name,
-          fullInfo: response.project,
+          fullInfo: {},
         },
         experiment: {
           id: response.experiment.id,
@@ -1516,7 +1516,7 @@ export function initDataset<
         project: {
           id: response.project.id,
           name: response.project.name,
-          fullInfo: response.project,
+          fullInfo: {},
         },
         dataset: {
           id: response.dataset.id,

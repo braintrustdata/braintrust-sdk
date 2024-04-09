@@ -148,34 +148,46 @@ export const datasetSchema = z
     created: datasetBaseSchema.shape.created,
     deleted_at: datasetBaseSchema.shape.deleted_at,
     user_id: datasetBaseSchema.shape.user_id,
+    project_name: projectSchema.shape.name.nullish(),
+    org_id: organizationSchema.shape.id.nullish(),
+    org_name: organizationSchema.shape.name,
   })
   .openapi("Dataset");
 export type Dataset = z.infer<typeof datasetSchema>;
 
 const promptBaseSchema = generateBaseTableSchema("prompt");
-export const promptSchema = z.strictObject({
-  id: promptBaseSchema.shape.id,
-  // This has to be copy/pasted because zod blows up when there are circular dependencies
-  _xact_id: z
-    .string()
-    .describe(
-      `The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the prompt (see the \`version\` parameter)`
-    ),
-  project_id: promptBaseSchema.shape.project_id,
-  log_id: z
-    .literal("p")
-    .describe("A literal 'p' which identifies the object as a project prompt"),
-  org_id: organizationSchema.shape.id,
-  name: promptBaseSchema.shape.name,
-  slug: z.string().describe("Unique identifier for the prompt"),
-  description: promptBaseSchema.shape.description,
-  created: promptBaseSchema.shape.created,
-  prompt_data: promptDataSchema
-    .nullish()
-    .describe("The prompt, model, and its parameters"),
-  tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
-  metadata: promptBaseSchema.shape.metadata,
-});
+export const promptSchema = z
+  .strictObject({
+    id: promptBaseSchema.shape.id,
+    // This has to be copy/pasted because zod blows up when there are circular dependencies
+    _xact_id: z
+      .string()
+      .describe(
+        `The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the prompt (see the \`version\` parameter)`
+      ),
+    project_id: promptBaseSchema.shape.project_id,
+    log_id: z
+      .literal("p")
+      .describe(
+        "A literal 'p' which identifies the object as a project prompt"
+      ),
+    org_id: organizationSchema.shape.id,
+    name: promptBaseSchema.shape.name,
+    slug: z.string().describe("Unique identifier for the prompt"),
+    description: promptBaseSchema.shape.description,
+    created: promptBaseSchema.shape.created,
+    prompt_data: promptDataSchema
+      .nullish()
+      .describe("The prompt, model, and its parameters"),
+    tags: z
+      .array(z.string())
+      .nullish()
+      .describe("A list of tags for the prompt"),
+    metadata: promptBaseSchema.shape.metadata,
+    project_name: projectSchema.shape.name.nullish(),
+    org_name: organizationSchema.shape.name,
+  })
+  .openapi("Prompt");
 export type Prompt = z.infer<typeof promptSchema>;
 
 const repoInfoSchema = z
@@ -263,6 +275,9 @@ export const experimentSchema = z
       ),
     user_id: experimentBaseSchema.shape.user_id,
     metadata: experimentBaseSchema.shape.metadata,
+    project_name: projectSchema.shape.name,
+    org_id: organizationSchema.shape.id,
+    org_name: organizationSchema.shape.name,
   })
   .openapi("Experiment");
 export type Experiment = z.infer<typeof experimentSchema>;

@@ -16,6 +16,7 @@ import { customTypes } from "./custom_types";
 import { capitalize } from "../src/util";
 
 import {
+  EVENT_TYPE_FIELD,
   TRANSACTION_ID_FIELD,
   OBJECT_DELETE_FIELD,
   IS_MERGE_FIELD,
@@ -662,19 +663,28 @@ function makeCrossObjectIndividualRequestSchema(objectType: ObjectType) {
   const eventObjectType = getEventObjectType(objectType);
   const eventDescription = getEventObjectDescription(objectType);
   const eventObjectSchema = eventObjectSchemas[eventObjectType];
+  const eventName = capitalize(getEventObjectType(objectType), "_").replace(
+    "_",
+    ""
+  );
+  const insertEventSchema = eventObjectSchema.insertEvent;
+  const feedbackEventSchema = eventObjectSchema.feedbackItem
+    .merge(
+      z.object({
+        [EVENT_TYPE_FIELD]: z
+          .literal("feedback")
+          .describe("Identifies the event as a feedback item"),
+      })
+    )
+    .openapi(`Feedback${eventName}EventItem`);
+  const combinedEventSchema = insertEventSchema
+    ? z.union([insertEventSchema, feedbackEventSchema])
+    : feedbackEventSchema;
   const insertObject = z.strictObject({
-    ...(eventObjectSchema.insertEvent
-      ? {
-          events: eventObjectSchema.insertEvent
-            .array()
-            .nullish()
-            .describe(`A list of ${eventDescription} events to insert`),
-        }
-      : {}),
-    feedback: eventObjectSchema.feedbackItem
+    events: combinedEventSchema
       .array()
       .nullish()
-      .describe(`A list of ${eventDescription} feedback items`),
+      .describe(`A list of ${eventDescription} events to insert`),
   });
   return z
     .record(z.string().uuid(), insertObject)

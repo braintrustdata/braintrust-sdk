@@ -13,6 +13,8 @@ export type Source = typeof VALID_SOURCES[number];
 
 export const PARENT_ID_FIELD = "_parent_id";
 
+export const EVENT_TYPE_FIELD = "_event_type";
+
 // While transaction ids are convertible to 64-bit integers (BigInts in JS), we
 // prefer to treat them as strings so they uniformly serialize/deserialize as
 // JSON.
