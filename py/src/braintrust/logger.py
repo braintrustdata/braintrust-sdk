@@ -656,7 +656,7 @@ class OrgProjectMetadata:
 
 
 def init(
-    project: Optional[str] = None,
+    project: str,
     experiment: Optional[str] = None,
     description: Optional[str] = None,
     dataset: Optional["Dataset"] = None,
