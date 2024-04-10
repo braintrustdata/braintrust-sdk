@@ -734,7 +734,7 @@ async function main() {
   const [, ...args] = process.argv;
 
   const parser = new ArgumentParser({
-    description: "Argparse example",
+    description: "Braintrust CLI",
   });
 
   parser.add_argument("-v", "--version", { action: "version", version });
