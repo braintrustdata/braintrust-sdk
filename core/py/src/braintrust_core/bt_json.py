@@ -24,4 +24,4 @@ class BraintrustJSONEncoder(json.JSONEncoder):
 
 
 def bt_dumps(obj, **kwargs) -> str:
-    return json.dumps(obj, cls=BraintrustJSONEncoder, **kwargs)
+    return json.dumps(obj, cls=BraintrustJSONEncoder, allow_nan=False, **kwargs)
