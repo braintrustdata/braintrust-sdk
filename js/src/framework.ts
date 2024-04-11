@@ -386,6 +386,33 @@ function scorerName(
   return scorer.name || `scorer_${scorer_idx}`;
 }
 
+function arrayifyScoreValues(scoreValue: any, scorerName: string) {
+  if (Array.isArray(scoreValue)) {
+    for (const s of scoreValue) {
+      if (!(typeof s === "object" && !isEmpty(s))) {
+        throw new Error(
+          `When returning an array of scores, each score must be a non-empty object. Got: ${JSON.stringify(
+            s
+          )}`
+        );
+      }
+    }
+  }
+
+  const results = Array.isArray(scoreValue)
+    ? scoreValue
+    : typeof scoreValue === "object" && !isEmpty(scoreValue)
+    ? [scoreValue]
+    : [
+        {
+          name: scorerName,
+          score: scoreValue,
+        },
+      ];
+
+  return results;
+}
+
 export async function runEvaluator(
   experiment: Experiment | null,
   evaluator: EvaluatorDef<any, any, any, any>,
@@ -491,28 +518,7 @@ export async function runEvaluator(
                     return null;
                   }
 
-                  if (Array.isArray(scoreValue)) {
-                    for (const s of scoreValue) {
-                      if (!(typeof s === "object" && !isEmpty(s))) {
-                        throw new Error(
-                          `When returning an array of scores, each score must be a non-empty object. Got: ${JSON.stringify(
-                            s
-                          )}`
-                        );
-                      }
-                    }
-                  }
-
-                  const results = Array.isArray(scoreValue)
-                    ? scoreValue
-                    : typeof scoreValue === "object" && !isEmpty(scoreValue)
-                    ? [scoreValue]
-                    : [
-                        {
-                          name: scorerNames[score_idx],
-                          score: scoreValue,
-                        },
-                      ];
+                  const results = arrayifyScoreValues(scoreValue, scorerNames[score_idx]);
 
                   const getOtherFields = (s: Score) => {
                     const { metadata, name, ...rest } = s;
@@ -759,3 +765,37 @@ export const defaultReporter: ReporterDef<boolean> = {
     return evalReports.every((r) => r);
   },
 };
+
+/**
+ * A higher order scorer that makes it easier to build other higher order scorers. It takes a list of scorers and
+ * returns a single (async) scorer that calls the other scorers and returns a list of Score objects. This way, when
+ * you're building a higher order scorer, you don't need to worry about the dependent scorers returning numbers or nulls
+ * or Score objects or whatever. Just call the returned scorer, and you'll get back a list of Score objects.
+ */
+export function normalizeScorers<
+  Input,
+  Output,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+>(scorers: EvalScorer<Input, Output, Expected, Metadata>[]) {
+  return async function NormalizedScorer(
+    args: EvalScorerArgs<Input, Output, Expected, Metadata>,
+  ) {
+    const scores: Score[] = (
+      await Promise.all(
+        scorers.map(async (scorer, index) => {
+          const name = scorerName(scorer, index);
+          const oneOrMoreScores = await scorer(args);
+          const scoreValues = arrayifyScoreValues(oneOrMoreScores, name);
+          return scoreValues.map((scoreValue) => {
+            if (typeof scoreValue === "object" && scoreValue !== null) {
+              return scoreValue;
+            }
+            return { name, score: scoreValue };
+          });
+        }),
+      )
+    ).flat();
+    return scores;
+  };
+}
