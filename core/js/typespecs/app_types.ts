@@ -260,7 +260,7 @@ export const experimentSchema = z
   .openapi("Experiment");
 export type Experiment = z.infer<typeof experimentSchema>;
 
-const permissionEnum = z
+export const permissionEnum = z
   .enum([
     "create",
     "read",
