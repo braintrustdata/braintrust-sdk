@@ -80,6 +80,15 @@ const openAIModelParamsSchema = z
           .strip(),
       ])
       .optional(),
+    function_call: z.union([
+      z.literal("auto"),
+      z.literal("none"),
+      z.strictObject({
+        name: z.string(),
+      }),
+    ]),
+    n: z.number().optional(),
+    stop: z.array(z.string()).optional(),
   })
   .strip();
 
@@ -91,6 +100,7 @@ const anthropicModelParamsSchema = z
     temperature: z.number(),
     top_p: z.number().optional(),
     top_k: z.number().optional(),
+    stop_sequences: z.array(z.string()).optional(),
     max_tokens_to_sample: z
       .number()
       .optional()
