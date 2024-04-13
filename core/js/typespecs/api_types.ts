@@ -851,7 +851,7 @@ export const objectTypeSummarizeResponseSchemas = {
   project: undefined,
   prompt: undefined,
   role: undefined,
-  team: undefined,
+  group: undefined,
   acl: undefined,
   user: undefined,
 } as const;

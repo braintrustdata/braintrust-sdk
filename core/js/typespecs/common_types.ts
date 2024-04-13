@@ -21,7 +21,7 @@ export const objectTypes = z.enum([
   "dataset",
   "prompt",
   "role",
-  "team",
+  "group",
   "acl",
   "user",
 ]);
