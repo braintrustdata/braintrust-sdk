@@ -702,43 +702,6 @@ def init(
     if open and update:
         raise ValueError("Cannot open and update an experiment at the same time")
 
-    if open or update:
-        if experiment is None:
-            action = "open" if open else "update"
-            raise ValueError(f"Cannot {action} an experiment without specifying its name")
-
-        def compute_metadata():
-            login(org_name=org_name, api_key=api_key, app_url=app_url)
-            args = {
-                "experiment_name": experiment,
-                "project_name": project,
-                "project_id": project_id,
-                "org_name": _state.org_name,
-            }
-
-            response = _state.app_conn().post_json("api/experiment/get", args)
-            if len(response) == 0:
-                raise ValueError(f"Experiment {experiment} not found in project {project}.")
-
-            info = response[0]
-            return ProjectExperimentMetadata(
-                project=ObjectMetadata(id=info["project_id"], name=project or "UNKNOWN_PROJECT", full_info=dict()),
-                experiment=ObjectMetadata(
-                    id=info["id"],
-                    name=info["name"],
-                    full_info=info,
-                ),
-            )
-
-        lazy_metadata = LazyValue(compute_metadata, use_mutex=True)
-        if open:
-            return ReadonlyExperiment(lazy_metadata=lazy_metadata)
-        else:
-            ret = Experiment(lazy_metadata=lazy_metadata, dataset=dataset)
-            if set_current:
-                _state.current_experiment = ret
-            return ret
-
     def compute_metadata():
         login(org_name=org_name, api_key=api_key, app_url=app_url)
         args = {"project_name": project, "project_id": project_id, "org_id": _state.org_id}
@@ -798,6 +761,43 @@ def init(
                 id=resp_experiment["id"], name=resp_experiment["name"], full_info=resp_experiment
             ),
         )
+
+    if open or update:
+        if experiment is None:
+            action = "open" if open else "update"
+            raise ValueError(f"Cannot {action} an experiment without specifying its name")
+
+        def compute_metadata_existing_experiment():
+            login(org_name=org_name, api_key=api_key, app_url=app_url)
+            args = {
+                "experiment_name": experiment,
+                "project_name": project,
+                "project_id": project_id,
+                "org_name": _state.org_name,
+            }
+
+            response = _state.app_conn().post_json("api/experiment/get", args)
+            if len(response) == 0:
+                return compute_metadata()
+
+            info = response[0]
+            return ProjectExperimentMetadata(
+                project=ObjectMetadata(id=info["project_id"], name=project or "UNKNOWN_PROJECT", full_info=dict()),
+                experiment=ObjectMetadata(
+                    id=info["id"],
+                    name=info["name"],
+                    full_info=info,
+                ),
+            )
+
+        lazy_metadata = LazyValue(compute_metadata_existing_experiment, use_mutex=True)
+        if open:
+            return ReadonlyExperiment(lazy_metadata=lazy_metadata)
+        else:
+            ret = Experiment(lazy_metadata=lazy_metadata, dataset=dataset)
+            if set_current:
+                _state.current_experiment = ret
+            return ret
 
     ret = Experiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset)
     if set_current:
