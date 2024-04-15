@@ -1,10 +1,15 @@
 // Type definitions for operating on the api database.
 
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
-import { z } from "zod";
+import { object, z } from "zod";
 extendZodWithOpenApi(z);
 
-import { experimentSchema, datasetSchema, projectSchema } from "./app_types";
+import {
+  experimentSchema,
+  datasetSchema,
+  projectSchema,
+  promptSchema,
+} from "./app_types";
 import {
   datetimeStringSchema,
   getObjectArticle,
@@ -304,7 +309,7 @@ function makeFetchEventsResponseSchema<T extends z.AnyZodObject>(
 }
 
 const experimentEventBaseSchema = generateBaseEventOpSchema("experiment");
-const experimentEventSchema = z
+export const experimentEventSchema = z
   .strictObject({
     id: experimentEventBaseSchema.shape.id,
     dataset_record_id: z
@@ -361,6 +366,26 @@ const datasetEventSchema = z
     root_span_id: datasetEventBaseSchema.shape.root_span_id,
   })
   .openapi("DatasetEvent");
+
+const promptSessionEventBaseSchema =
+  generateBaseEventOpSchema("prompt_session");
+const promptSessionEventSchema = z
+  .strictObject({
+    id: promptSessionEventBaseSchema.shape.id,
+    [TRANSACTION_ID_FIELD]:
+      promptSessionEventBaseSchema.shape[TRANSACTION_ID_FIELD],
+    created: promptSessionEventBaseSchema.shape.created,
+    project_id: promptSchema.shape.project_id,
+    prompt_session_id: promptSchema.shape.id,
+    prompt_session_data: customTypes.any.describe(
+      "Data about the prompt session"
+    ),
+    prompt_data: customTypes.any.describe("Data about the prompt"),
+    object_data: customTypes.any.describe("Data about the mapped data"),
+    completion: customTypes.any.describe("Data about the completion"),
+    tags: promptSessionEventBaseSchema.shape.tags,
+  })
+  .openapi("PromptSessionEvent");
 
 const projectLogsEventBaseSchema = generateBaseEventOpSchema("project");
 const projectLogsEventSchema = z
@@ -618,10 +643,26 @@ const feedbackPromptRequestSchema = makeFeedbackRequestSchema(
   feedbackPromptItemSchema
 );
 
+const feedbackPromptSessionRequestBaseSchema =
+  generateBaseEventFeedbackSchema("prompt_session");
+const feedbackPromptSessionItemSchema = z
+  .strictObject({
+    id: feedbackPromptSessionRequestBaseSchema.shape.id,
+    comment: feedbackPromptSessionRequestBaseSchema.shape.comment,
+    metadata: feedbackPromptSessionRequestBaseSchema.shape.metadata,
+    source: feedbackPromptSessionRequestBaseSchema.shape.source,
+  })
+  .openapi("FeedbackPromptSessionItem");
+const feedbackPromptSessionRequestSchema = makeFeedbackRequestSchema(
+  "prompt_session",
+  feedbackPromptSessionItemSchema
+);
+
 // Section: exported schemas, grouped by object type.
 
 export const eventObjectSchemas = {
   experiment: {
+    event: experimentEventSchema,
     fetchResponse: makeFetchEventsResponseSchema(
       "experiment",
       experimentEventSchema
@@ -632,6 +673,7 @@ export const eventObjectSchemas = {
     feedbackRequest: feedbackExperimentRequestSchema,
   },
   dataset: {
+    event: datasetEventSchema,
     fetchResponse: makeFetchEventsResponseSchema("dataset", datasetEventSchema),
     insertEvent: insertDatasetEventSchema,
     insertRequest: insertDatasetEventsRequestSchema,
@@ -639,6 +681,7 @@ export const eventObjectSchemas = {
     feedbackRequest: feedbackDatasetRequestSchema,
   },
   project_logs: {
+    event: projectLogsEventSchema,
     fetchResponse: makeFetchEventsResponseSchema(
       "project",
       projectLogsEventSchema
@@ -649,11 +692,20 @@ export const eventObjectSchemas = {
     feedbackRequest: feedbackProjectLogsRequestSchema,
   },
   prompt: {
+    event: promptSchema,
     fetchResponse: undefined,
     insertEvent: undefined,
     insertRequest: undefined,
     feedbackItem: feedbackPromptItemSchema,
     feedbackRequest: feedbackPromptRequestSchema,
+  },
+  prompt_session: {
+    event: promptSessionEventSchema,
+    fetchResponse: undefined,
+    insertEvent: undefined,
+    insertRequest: undefined,
+    feedbackItem: feedbackPromptSessionItemSchema,
+    feedbackRequest: feedbackPromptRequestBaseSchema,
   },
 } as const;
 
