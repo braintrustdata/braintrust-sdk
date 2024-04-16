@@ -260,7 +260,7 @@ export const experimentSchema = z
   .openapi("Experiment");
 export type Experiment = z.infer<typeof experimentSchema>;
 
-const permissionEnum = z
+export const permissionEnum = z
   .enum([
     "create",
     "read",
@@ -482,6 +482,17 @@ export const endingBeforeSchema = z
     ].join("\n\n")
   )
   .openapi("EndingBefore");
+
+// Schema for filtering by object IDs.
+export function makeObjectIdsFilterSchema(objectName: string) {
+  return z
+    .string()
+    .uuid()
+    .describe(
+      `Filter search results to a particular set of ${objectName} IDs. To specify a list of IDs, include the query param multiple times`
+    )
+    .openapi(`${objectName}IdsFilter`);
+}
 
 const createProjectBaseSchema = generateBaseTableOpSchema("project");
 const createProjectSchema = z
