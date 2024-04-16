@@ -483,6 +483,17 @@ export const endingBeforeSchema = z
   )
   .openapi("EndingBefore");
 
+// Schema for filtering by object IDs.
+export function makeObjectIdsFilterSchema(objectName: string) {
+  return z
+    .string()
+    .uuid()
+    .describe(
+      `Filter search results to a particular set of ${objectName} IDs. To specify a list of IDs, include the query param multiple times`
+    )
+    .openapi(`${objectName}IdsFilter`);
+}
+
 const createProjectBaseSchema = generateBaseTableOpSchema("project");
 const createProjectSchema = z
   .strictObject({
