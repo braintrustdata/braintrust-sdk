@@ -491,7 +491,7 @@ export function makeObjectIdsFilterSchema(objectName: string) {
     .describe(
       `Filter search results to a particular set of ${objectName} IDs. To specify a list of IDs, include the query param multiple times`
     )
-    .openapi("ObjectIds");
+    .openapi(`${objectName}IdsFilter`);
 }
 
 const createProjectBaseSchema = generateBaseTableOpSchema("project");
