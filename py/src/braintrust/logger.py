@@ -678,7 +678,7 @@ def init(
     Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
 
     :param project: The name of the project to create the experiment in. Must specify at least one of `project` or `project_id`.
-    :param experiment: The name of the experiment to create. If not specified, a name will be generated automatically.
+    :param experiment: The name of the experiment to create. If not specified, a name will be generated automatically. If you use an existing experiment name, by default it will create a new experiment with that name as a prefix. If you want to update an existing experiment, you can set `update=True`. If you want to open an existing experiment in read-only mode, you can set `open=True`.
     :param description: (Optional) An optional description of the experiment.
     :param dataset: (Optional) A dataset to associate with the experiment. The dataset must be initialized with `braintrust.init_dataset` before passing
     it into the experiment.
@@ -2430,9 +2430,11 @@ class Prompt:
             ret["messages"] = [
                 {
                     **{k: v for (k, v) in m.as_dict().items() if v is not None},
-                    "content": chevron.render(m.content, data=build_args)
-                    if isinstance(m.content, str)
-                    else json.loads(chevron.render(json.dumps(m.content), data=build_args)),
+                    "content": (
+                        chevron.render(m.content, data=build_args)
+                        if isinstance(m.content, str)
+                        else json.loads(chevron.render(json.dumps(m.content), data=build_args))
+                    ),
                 }
                 for m in self.prompt.messages
             ]
