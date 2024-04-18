@@ -29,8 +29,7 @@ import {
   PARENT_ID_FIELD,
   VALID_SOURCES,
 } from "../src/db_fields";
-
-import { SpanTypeAttribute } from "../src/span_types";
+import { spanTypeAttributeValues } from "../src/span_types";
 
 export const auditSourcesSchema = z.enum(VALID_SOURCES);
 
@@ -151,7 +150,7 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
           .nullish()
           .describe("Name of the span, for display purposes only"),
         type: z
-          .nativeEnum(SpanTypeAttribute)
+          .enum(spanTypeAttributeValues)
           .nullish()
           .describe("Type of the span, for display purposes only"),
       })
