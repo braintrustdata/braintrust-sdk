@@ -1,7 +1,7 @@
 // Type definitions for operating on the api database.
 
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
-import { object, z } from "zod";
+import { z } from "zod";
 extendZodWithOpenApi(z);
 
 import {
@@ -323,7 +323,7 @@ function makeFetchEventsResponseSchema<T extends z.AnyZodObject>(
 }
 
 const experimentEventBaseSchema = generateBaseEventOpSchema("experiment");
-export const experimentEventSchema = z
+const experimentEventSchema = z
   .strictObject({
     id: experimentEventBaseSchema.shape.id,
     dataset_record_id: z
