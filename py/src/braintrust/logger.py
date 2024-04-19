@@ -661,7 +661,7 @@ def init(
     :param description: (Optional) An optional description of the experiment.
     :param dataset: (Optional) A dataset to associate with the experiment. The dataset must be initialized with `braintrust.init_dataset` before passing
     it into the experiment.
-    :param update: If the experiment already exists, continue logging to it.
+    :param update: If the experiment already exists, continue logging to it. If it does not exist, creates the experiment with the specified arguments.
     :param base_experiment: An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
     :param is_public: An optional parameter to control whether the experiment is publicly visible to anybody with the link or privately visible to only members of the organization. Defaults to private.
     :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
@@ -671,7 +671,7 @@ def init(
     :param metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
     :param git_metadata_settings: (Optional) Settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param set_current: If true (the default), set the global current-experiment to the newly-created one.
-    :param open: If the experiment already exists, open it in read-only mode.
+    :param open: If the experiment already exists, open it in read-only mode. Throws an error if the experiment does not already exist.
     :param project_id: The id of the project to create the experiment in. This takes precedence over `project` if specified.
     :param base_experiment_id: An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this. This takes precedence over `base_experiment` if specified.
     :param repo_info: (Optional) Explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
@@ -681,10 +681,9 @@ def init(
     if open and update:
         raise ValueError("Cannot open and update an experiment at the same time")
 
-    if open or update:
+    if open:
         if experiment is None:
-            action = "open" if open else "update"
-            raise ValueError(f"Cannot {action} an experiment without specifying its name")
+            raise ValueError(f"Cannot open an experiment without specifying its name")
 
         def compute_metadata():
             login(org_name=org_name, api_key=api_key, app_url=app_url)
@@ -710,17 +709,16 @@ def init(
             )
 
         lazy_metadata = LazyValue(compute_metadata, use_mutex=True)
-        if open:
-            return ReadonlyExperiment(lazy_metadata=lazy_metadata)
-        else:
-            ret = Experiment(lazy_metadata=lazy_metadata, dataset=dataset)
-            if set_current:
-                _state.current_experiment = ret
-            return ret
+        return ReadonlyExperiment(lazy_metadata=lazy_metadata)
 
     def compute_metadata():
         login(org_name=org_name, api_key=api_key, app_url=app_url)
-        args = {"project_name": project, "project_id": project_id, "org_id": _state.org_id}
+        args = {
+            "project_name": project,
+            "project_id": project_id,
+            "org_id": _state.org_id,
+            "update": update,
+        }
 
         if experiment is not None:
             args["experiment_name"] = experiment
