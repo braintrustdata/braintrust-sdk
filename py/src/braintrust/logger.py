@@ -48,7 +48,6 @@ from braintrust_core.util import (
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from .cache import CACHE_PATH, EXPERIMENTS_PATH, LOGIN_INFO_PATH
 from .gitutil import get_past_n_ancestors, get_repo_info
 from .util import (
     GLOBAL_PROJECT,
@@ -610,26 +609,6 @@ def _internal_with_custom_background_logger():
         _state._override_bg_logger.logger = None
 
 
-def _ensure_object(object_type, object_id, force=False):
-    experiment_path = EXPERIMENTS_PATH / f"{object_id}.parquet"
-
-    if force or not experiment_path.exists():
-        os.makedirs(EXPERIMENTS_PATH, exist_ok=True)
-        conn = _state.log_conn()
-        resp = conn.get(
-            f"object/{object_type}",
-            params={"id": object_id},
-            headers={
-                "Accept": "application/octet-stream",
-            },
-        )
-
-        with open(experiment_path, "wb") as f:
-            f.write(resp.content)
-
-    return experiment_path
-
-
 @dataclasses.dataclass
 class ObjectMetadata:
     id: str
@@ -1024,8 +1003,6 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
         _state.app_url = app_url
         _state.app_public_url = app_public_url
 
-        os.makedirs(CACHE_PATH, exist_ok=True)
-
         conn = None
         if api_key is not None:
             app_conn = HTTPConnection(_state.app_url, adapter=_http_adapter)
@@ -1285,12 +1262,6 @@ def _check_org_info(org_info, org_name):
         raise ValueError(
             f"Organization {org_name} not found. Must be one of {', '.join([x['name'] for x in org_info])}"
         )
-
-
-def _save_api_info(api_info):
-    os.makedirs(CACHE_PATH, exist_ok=True)
-    with open(LOGIN_INFO_PATH, "w") as f:
-        json.dump(api_info, f)
 
 
 def _urljoin(*parts):
