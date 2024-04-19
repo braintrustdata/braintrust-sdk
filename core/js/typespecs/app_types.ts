@@ -519,11 +519,17 @@ const createExperimentSchema = z
     dataset_version: experimentSchema.shape.dataset_version,
     public: experimentSchema.shape.public.nullish(),
     metadata: experimentSchema.shape.metadata,
+    ensure_new: z
+      .boolean()
+      .nullish()
+      .describe(
+        "Normally, creating an experiment with the same name as an existing experiment will return the existing one un-modified. But if `ensure_new` is true, registration will generate a new experiment with a unique name in case of a conflict."
+      ),
   })
   .openapi("CreateExperiment");
 
 const patchExperimentSchema = createExperimentSchema
-  .omit({ project_id: true })
+  .omit({ project_id: true, ensure_new: true })
   .openapi("PatchExperiment");
 
 const createDatasetSchema = z
