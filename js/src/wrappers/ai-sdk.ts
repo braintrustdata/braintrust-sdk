@@ -51,9 +51,10 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
         type: "llm",
       },
     });
+    const { prompt, mode, ...rest } = options;
+    const startTime = getCurrentUnixTimestamp();
+
     try {
-      const { prompt, mode, ...rest } = options;
-      const startTime = getCurrentUnixTimestamp();
       const ret = await this.model.doGenerate(options);
       span.log({
         input: prompt,
@@ -65,7 +66,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
             ? { tools: convertTools([mode.tool]) }
             : {}),
         },
-        output: ret.text ?? ret.toolCalls,
+        output: postProcessOutput(ret.text, ret.toolCalls, ret.finishReason),
         metrics: {
           time_to_first_token: getCurrentUnixTimestamp() - startTime,
           tokens: !isEmpty(ret.usage)
@@ -82,7 +83,122 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
   }
 
   async doStream(options: LanguageModelV1CallOptions) {
-    return this.model.doStream(options);
+    const { prompt, mode, ...rest } = options;
+    const startTime = getCurrentUnixTimestamp();
+
+    const span = startSpan({
+      name: "Chat Completion",
+      spanAttributes: {
+        type: "llm",
+      },
+    });
+
+    span.log({
+      input: prompt,
+      metadata: {
+        ...rest,
+        ...("tools" in mode && mode.tools
+          ? { tools: convertTools(mode.tools) }
+          : "tool" in mode && mode.tool
+          ? { tools: convertTools([mode.tool]) }
+          : {}),
+      },
+    });
+
+    let ended = false;
+    const end = () => {
+      if (!ended) {
+        span.end();
+        ended = true;
+      }
+    };
+
+    try {
+      const ret = await this.model.doStream(options);
+
+      let time_to_first_token: number | undefined = undefined;
+      let usage:
+        | {
+            promptTokens: number;
+            completionTokens: number;
+          }
+        | undefined = undefined;
+      let fullText: string | undefined = undefined;
+      let toolCalls: Record<string, LanguageModelV1FunctionToolCall> = {};
+      let finishReason: LanguageModelV1FinishReason | undefined = undefined;
+      return {
+        ...ret,
+        stream: ret.stream.pipeThrough(
+          new TransformStream<
+            LanguageModelV1StreamPart,
+            LanguageModelV1StreamPart
+          >({
+            transform(chunk, controller) {
+              if (time_to_first_token === undefined) {
+                time_to_first_token = getCurrentUnixTimestamp() - startTime;
+                span.log({ metrics: { time_to_first_token } });
+              }
+              switch (chunk.type) {
+                case "text-delta":
+                  if (fullText === undefined) {
+                    fullText = "";
+                  }
+                  fullText += chunk.textDelta;
+                  break;
+                case "tool-call":
+                  toolCalls[chunk.toolCallId] = {
+                    toolCallType: chunk.toolCallType,
+                    toolCallId: chunk.toolCallId,
+                    toolName: chunk.toolName,
+                    args: chunk.args,
+                  };
+                  break;
+                case "tool-call-delta":
+                  if (toolCalls[chunk.toolCallId] === undefined) {
+                    toolCalls[chunk.toolCallId] = {
+                      toolCallType: chunk.toolCallType,
+                      toolCallId: chunk.toolCallId,
+                      toolName: chunk.toolName,
+                      args: "",
+                    };
+                  }
+                  toolCalls[chunk.toolCallId].args += chunk.argsTextDelta;
+                  break;
+                case "finish":
+                  usage = chunk.usage;
+                  finishReason = chunk.finishReason;
+                  break;
+              }
+
+              controller.enqueue(chunk);
+            },
+            async flush(controller) {
+              span.log({
+                output: postProcessOutput(
+                  fullText,
+                  Object.keys(toolCalls).length > 0
+                    ? Object.values(toolCalls)
+                    : undefined,
+                  finishReason!
+                ),
+                metrics: {
+                  time_to_first_token: getCurrentUnixTimestamp() - startTime,
+                  tokens: !isEmpty(usage)
+                    ? usage.promptTokens + usage.completionTokens
+                    : undefined,
+                  prompt_tokens: usage?.promptTokens,
+                  completion_tokens: usage?.completionTokens,
+                },
+              });
+              end();
+              controller.terminate();
+            },
+          })
+        ),
+      };
+    } finally {
+      end();
+    }
   }
 }
 
@@ -94,6 +210,18 @@ function convertTools(tools: LanguageModelV1FunctionTool[]): Tools {
       function: rest,
     };
   });
+}
+
+function postProcessOutput(
+  text: string | undefined,
+  tool_calls: LanguageModelV1FunctionToolCall[] | undefined,
+  finish_reason: LanguageModelV1FinishReason
+) {
+  return {
+    text,
+    tool_calls,
+    finish_reason,
+  };
 }
 
 // NOTE: This type is copy-pasted from the ai-sdk so that Braintrust's SDK
