@@ -1096,7 +1096,7 @@ type InitializedExperiment<IsOpen extends boolean | undefined> =
  * @param options.experiment The name of the experiment to create. If not specified, a name will be generated automatically.
  * @param options.description An optional description of the experiment.
  * @param options.dataset (Optional) A dataset to associate with the experiment. You can pass in the name of the dataset (in the same project) or a dataset object (from any project).
- * @param options.update If the experiment already exists, continue logging to it.
+ * @param options.update If the experiment already exists, continue logging to it. If it does not exist, creates the experiment with the specified arguments.
  * @param options.baseExperiment An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
  * @param options.isPublic An optional parameter to control whether the experiment is publicly visible to anybody with the link or privately visible to only members of the organization. Defaults to private.
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
@@ -1105,7 +1105,7 @@ type InitializedExperiment<IsOpen extends boolean | undefined> =
  * @param options.metadata (Optional) A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
  * @param options.gitMetadataSettings (Optional) Settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
  * @param setCurrent If true (the default), set the global current-experiment to the newly-created one.
- * @param options.open If the experiment already exists, open it in read-only mode.
+ * @param options.open If the experiment already exists, open it in read-only mode. Throws an error if the experiment does not already exist.
  * @param options.projectId The id of the project to create the experiment in. This takes precedence over `project` if specified.
  * @param options.baseExperimentId An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this. This takes precedence over `baseExperiment` if specified.
  * @param options.repoInfo (Optional) Explicitly specify the git metadata for this experiment. This takes precedence over `gitMetadataSettings` if specified.
@@ -1168,12 +1168,9 @@ export function init<IsOpen extends boolean = false>(
     throw new Error("Cannot open and update an experiment at the same time");
   }
 
-  if (open || update) {
+  if (open) {
     if (isEmpty(experiment)) {
-      const action = open ? "open" : "update";
-      throw new Error(
-        `Cannot ${action} an experiment without specifying its name`
-      );
+      throw new Error(`Cannot open an experiment without specifying its name`);
     }
 
     const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(
@@ -1218,17 +1215,9 @@ export function init<IsOpen extends boolean = false>(
       }
     );
 
-    if (open) {
-      return new ReadonlyExperiment(
-        lazyMetadata
-      ) as InitializedExperiment<IsOpen>;
-    } else {
-      const ret = new Experiment(lazyMetadata, dataset);
-      if (options.setCurrent ?? true) {
-        _state.currentExperiment = ret;
-      }
-      return ret as InitializedExperiment<IsOpen>;
-    }
+    return new ReadonlyExperiment(
+      lazyMetadata
+    ) as InitializedExperiment<IsOpen>;
   }
 
   const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(
@@ -1242,6 +1231,7 @@ export function init<IsOpen extends boolean = false>(
         project_name: project,
         project_id: projectId,
         org_id: _state.orgId,
+        update,
       };
 
       if (experiment) {
