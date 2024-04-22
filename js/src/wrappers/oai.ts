@@ -5,8 +5,8 @@ import {
   StartSpanArgs,
   startSpan,
   traced,
-} from "./logger";
-import { getCurrentUnixTimestamp } from "./util";
+} from "../logger";
+import { getCurrentUnixTimestamp } from "../util";
 import { mergeDicts } from "@braintrust/core";
 
 interface BetaLike {
