@@ -217,7 +217,7 @@ function convertTools(tools: LanguageModelV1FunctionTool[]): Tools {
       type: tool.type,
       function: rest,
     };
-  });
+  }) as Tools;
 }
 
 function postProcessOutput(
