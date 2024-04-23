@@ -5,6 +5,7 @@ import {
   chatCompletionContentPartTextSchema,
   chatCompletionMessageParamSchema,
 } from "./openai/messages";
+export { ToolCall } from "./openai/messages";
 export { chatCompletionContentPartImageSchema };
 
 export { toolsSchema } from "./openai/tools";
