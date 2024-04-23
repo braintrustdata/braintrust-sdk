@@ -104,3 +104,5 @@ export const chatCompletionMessageParamSchema = z.union([
   chatCompletionToolMessageParamSchema,
   chatCompletionFunctionMessageParamSchema,
 ]);
+
+export type ToolCall = z.infer<typeof chatCompletionMessageToolCallSchema>;
