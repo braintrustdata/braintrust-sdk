@@ -64,7 +64,8 @@ export {
   buildLocalSummary,
   reportFailures,
 } from "./framework";
-export * from "./oai";
+export * from "./wrappers/oai";
+export * from "./wrappers/ai-sdk";
 export {
   ParentExperimentIds,
   ParentProjectLogIds,

@@ -1,3 +1,13 @@
+export const spanTypeAttributeValues = [
+  "llm",
+  "score",
+  "function",
+  "eval",
+  "task",
+  "tool",
+] as const;
+
+// DEPRECATED: Use `spanTypeAttributeValues` instead
 export enum SpanTypeAttribute {
   LLM = "llm",
   SCORE = "score",
@@ -7,4 +17,4 @@ export enum SpanTypeAttribute {
   TOOL = "tool",
 }
 
-export type SpanType = SpanTypeAttribute[keyof SpanTypeAttribute];
+export type SpanType = typeof spanTypeAttributeValues[number];

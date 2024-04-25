@@ -20,6 +20,7 @@ export const objectTypes = z.enum([
   "experiment",
   "dataset",
   "prompt",
+  "prompt_session",
   "role",
   "group",
   "acl",
@@ -32,6 +33,7 @@ export const objectTypesWithEvent = z.enum([
   "experiment",
   "dataset",
   "prompt",
+  "prompt_session",
 ]);
 export type ObjectTypeWithEvent = z.infer<typeof objectTypesWithEvent>;
 

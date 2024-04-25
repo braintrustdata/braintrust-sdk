@@ -2757,7 +2757,7 @@ class ExperimentSummary(SerializableDataClass):
     """The experiment scores are baselined against."""
     scores: Dict[str, ScoreSummary]
     """Summary of the experiment's scores."""
-    metrics: Dict[str, ScoreSummary]
+    metrics: Dict[str, MetricSummary]
     """Summary of the experiment's metrics."""
 
     def __str__(self):
