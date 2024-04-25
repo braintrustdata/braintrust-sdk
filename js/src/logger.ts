@@ -30,8 +30,9 @@ import {
   SpanTypeAttribute,
   SpanType,
   batchItems,
-  SpanParentComponents,
-  SpanParentObjectType,
+  SpanComponents,
+  SpanObjectType,
+  SpanRowIds,
 } from "@braintrust/core";
 import {
   AnyModelParam,
@@ -64,7 +65,6 @@ export type StartSpanArgs = {
   spanAttributes?: Record<any, any>;
   startTime?: number;
   parent?: string;
-  parentId?: string;
   event?: StartSpanEventArgs;
 };
 
@@ -111,7 +111,6 @@ export interface Span {
    * @param args.start_time Optional start time of the span, as a timestamp in seconds.
    * @param args.setCurrent If true (the default), the span will be marked as the currently-active span for the duration of the callback.
    * @param args.parent Optional parent info string for the span. The string can be generated from `[Span,Experiment,Logger].export`. If not provided, the current span will be used (depending on context). This is useful for adding spans to an existing trace.
-   * @param parentId This option is deprecated and will be removed in a future version of Braintrust. Prefer to use `parent` instead.
    * @param args.event Data to be logged. See `Experiment.log` for full details.
    * @Returns The result of running `callback`.
    */
@@ -494,7 +493,7 @@ export interface LogOptions<IsAsyncFlush> {
 export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
 
 function logFeedbackImpl(
-  parentObjectType: SpanParentObjectType,
+  parentObjectType: SpanObjectType,
   parentObjectId: LazyValue<string>,
   {
     id,
@@ -536,11 +535,10 @@ function logFeedbackImpl(
   );
 
   const parentIds = async () =>
-    new SpanParentComponents({
+    new SpanComponents({
       objectType: parentObjectType,
       objectId: await parentObjectId.get(),
-      rowId: "",
-    }).asDict();
+    }).objectIdFields();
 
   if (Object.keys(updateEvent).length > 0) {
     const record = new LazyValue(async () => {
@@ -578,53 +576,60 @@ function logFeedbackImpl(
   }
 }
 
-function startSpanParentArgs(args: {
-  parent?: string;
-  parentId?: string;
-  spanParentObjectType: SpanParentObjectType;
-  spanParentObjectId: LazyValue<string>;
-}): {
-  parentObjectType: SpanParentObjectType;
-  parentObjectId: LazyValue<string>;
-  parentRowId: string;
-} {
-  if (args.parent && args.parentId) {
-    throw new Error(
-      "Cannot specify both `parent` and `parentId`. Prefer `parent"
-    );
-  }
+interface ParentSpanIds {
+  spanId: string;
+  rootSpanId: string;
+}
 
-  let parentObjectId: LazyValue<string> | undefined = undefined;
-  let parentRowId: string | undefined = undefined;
+function startSpanParentArgs(args: {
+  parent: string | undefined;
+  parentObjectType: SpanObjectType;
+  parentObjectId: LazyValue<string>;
+  parentSpanIds: ParentSpanIds | undefined;
+}): {
+  parentObjectType: SpanObjectType;
+  parentObjectId: LazyValue<string>;
+  parentSpanIds: ParentSpanIds | undefined;
+} {
+  let argParentObjectId: LazyValue<string> | undefined = undefined;
+  let argParentSpanIds: ParentSpanIds | undefined = undefined;
   if (args.parent) {
-    const parentComponents = SpanParentComponents.fromStr(args.parent);
-    if (args.spanParentObjectType !== parentComponents.objectType) {
+    if (args.parentSpanIds) {
+      throw new Error("Cannot specify both parent and parentSpanIds");
+    }
+    const parentComponents = SpanComponents.fromStr(args.parent);
+    if (args.parentObjectType !== parentComponents.objectType) {
       throw new Error(
-        `Mismatch between expected span parent object type ${args.spanParentObjectType} and provided type ${parentComponents.objectType}`
+        `Mismatch between expected span parent object type ${args.parentObjectType} and provided type ${parentComponents.objectType}`
       );
     }
 
     const computeParentObjectId = async () => {
-      if ((await args.spanParentObjectId.get()) !== parentComponents.objectId) {
+      if ((await args.parentObjectId.get()) !== parentComponents.objectId) {
         throw new Error(
-          `Mismatch between expected span parent object id ${await args.spanParentObjectId.get()} and provided id ${
+          `Mismatch between expected span parent object id ${await args.parentObjectId.get()} and provided id ${
             parentComponents.objectId
           }`
         );
       }
-      return await args.spanParentObjectId.get();
+      return await args.parentObjectId.get();
     };
-    parentObjectId = new LazyValue(computeParentObjectId);
-    parentRowId = parentComponents.rowId;
+    argParentObjectId = new LazyValue(computeParentObjectId);
+    if (parentComponents.rowIds) {
+      argParentSpanIds = {
+        spanId: parentComponents.rowIds.spanId,
+        rootSpanId: parentComponents.rowIds.rootSpanId,
+      };
+    }
   } else {
-    parentObjectId = args.spanParentObjectId;
-    parentRowId = args.parentId ?? "";
+    argParentObjectId = args.parentObjectId;
+    argParentSpanIds = args.parentSpanIds;
   }
 
   return {
-    parentObjectType: args.spanParentObjectType,
-    parentObjectId,
-    parentRowId,
+    parentObjectType: args.parentObjectType,
+    parentObjectId: argParentObjectId,
+    parentSpanIds: argParentSpanIds,
   };
 }
 
@@ -665,14 +670,8 @@ export class Logger<IsAsyncFlush extends boolean> {
     return (async () => (await this.project).id)();
   }
 
-  private spanParentObjectType() {
-    return SpanParentObjectType.PROJECT_LOGS;
-  }
-
-  private async getState(): Promise<BraintrustState> {
-    // Ensure the login state is populated by awaiting lazyMetadata.
-    await this.lazyMetadata.get();
-    return _state;
+  private parentObjectType() {
+    return SpanObjectType.PROJECT_LOGS;
   }
 
   /**
@@ -764,9 +763,9 @@ export class Logger<IsAsyncFlush extends boolean> {
     return new SpanImpl({
       ...startSpanParentArgs({
         parent: args?.parent,
-        parentId: args?.parentId,
-        spanParentObjectType: this.spanParentObjectType(),
-        spanParentObjectId: this.lazyId,
+        parentObjectType: this.parentObjectType(),
+        parentObjectId: this.lazyId,
+        parentSpanIds: undefined,
       }),
       ...args,
       defaultRootType: SpanTypeAttribute.TASK,
@@ -785,17 +784,16 @@ export class Logger<IsAsyncFlush extends boolean> {
    * @param event.source (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
    */
   public logFeedback(event: LogFeedbackFullArgs): void {
-    logFeedbackImpl(this.spanParentObjectType(), this.lazyId, event);
+    logFeedbackImpl(this.parentObjectType(), this.lazyId, event);
   }
 
   /**
    * Return a serialized representation of the logger that can be used to start subspans in other places. See `Span.start_span` for more details.
    */
   public async export(): Promise<string> {
-    return new SpanParentComponents({
-      objectType: this.spanParentObjectType(),
+    return new SpanComponents({
+      objectType: this.parentObjectType(),
       objectId: await this.id,
-      rowId: "",
     }).toStr();
   }
 
@@ -1980,21 +1978,22 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush>
 ): { span: Span; isLogger: boolean } {
   if (args?.parent) {
-    if (args?.parentId) {
-      throw new Error(
-        "Cannot specify both `parent` and `parent_id`. Prefer `parent`"
-      );
-    }
-    const components = SpanParentComponents.fromStr(args?.parent);
+    const components = SpanComponents.fromStr(args?.parent);
+    const parentSpanIds: ParentSpanIds | undefined = components.rowIds
+      ? {
+          spanId: components.rowIds.spanId,
+          rootSpanId: components.rowIds.rootSpanId,
+        }
+      : undefined;
     const span = new SpanImpl({
       ...args,
       parentObjectType: components.objectType,
       parentObjectId: new LazyValue(async () => components.objectId),
-      parentRowId: components.rowId,
+      parentSpanIds,
     });
     return {
       span,
-      isLogger: components.objectType === SpanParentObjectType.PROJECT_LOGS,
+      isLogger: components.objectType === SpanObjectType.PROJECT_LOGS,
     };
   } else {
     const parentObject = getSpanParentObject<IsAsyncFlush>({
@@ -2287,8 +2286,8 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     })();
   }
 
-  private spanParentObjectType() {
-    return SpanParentObjectType.EXPERIMENT;
+  private parentObjectType() {
+    return SpanObjectType.EXPERIMENT;
   }
 
   protected async getState(): Promise<BraintrustState> {
@@ -2369,9 +2368,9 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     return new SpanImpl({
       ...startSpanParentArgs({
         parent: args?.parent,
-        parentId: args?.parentId,
-        spanParentObjectType: this.spanParentObjectType(),
-        spanParentObjectId: this.lazyId,
+        parentObjectType: this.parentObjectType(),
+        parentObjectId: this.lazyId,
+        parentSpanIds: undefined,
       }),
       ...args,
       defaultRootType: SpanTypeAttribute.EVAL,
@@ -2478,17 +2477,16 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
    * @param event.source (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
    */
   public logFeedback(event: LogFeedbackFullArgs): void {
-    logFeedbackImpl(this.spanParentObjectType(), this.lazyId, event);
+    logFeedbackImpl(this.parentObjectType(), this.lazyId, event);
   }
 
   /**
    * Return a serialized representation of the experiment that can be used to start subspans in other places. See `Span.start_span` for more details.
    */
   public async export(): Promise<string> {
-    return new SpanParentComponents({
-      objectType: this.spanParentObjectType(),
+    return new SpanComponents({
+      objectType: this.parentObjectType(),
       objectId: await this.id,
-      rowId: "",
     }).toStr();
   }
 
@@ -2581,35 +2579,36 @@ export class SpanImpl implements Span {
   private loggedEndTime: number | undefined;
 
   // For internal use only.
-  private parentObjectType: SpanParentObjectType;
+  private parentObjectType: SpanObjectType;
   private parentObjectId: LazyValue<string>;
-  private parentRowId: string;
   private _id: string;
+  private spanId: string;
+  private rootSpanId: string;
+  private spanParents: string[] | undefined;
 
   public kind: "span" = "span";
 
   constructor(
     args: {
-      parentObjectType: SpanParentObjectType;
+      parentObjectType: SpanObjectType;
       parentObjectId: LazyValue<string>;
-      parentRowId: string;
+      parentSpanIds: ParentSpanIds | undefined;
       defaultRootType?: SpanType;
-    } & Omit<StartSpanArgs, "parent" & "parentId">
+    } & Omit<StartSpanArgs, "parent">
   ) {
     const spanAttributes = args.spanAttributes ?? {};
     const event = args.event ?? {};
     const type =
-      args.type ?? (args.parentRowId ? undefined : args.defaultRootType);
+      args.type ?? (args.parentSpanIds ? undefined : args.defaultRootType);
 
     this.loggedEndTime = undefined;
     this.parentObjectType = args.parentObjectType;
     this.parentObjectId = args.parentObjectId;
-    this.parentRowId = args.parentRowId;
 
     const callerLocation = iso.getCallerLocation();
     const name = (() => {
       if (args.name) return args.name;
-      if (!args.parentRowId) return "root";
+      if (!args.parentSpanIds) return "root";
       if (callerLocation) {
         const pathComponents = callerLocation.caller_filename.split("/");
         const filename = pathComponents[pathComponents.length - 1];
@@ -2637,6 +2636,14 @@ export class SpanImpl implements Span {
     };
 
     this._id = event.id ?? uuidv4();
+    this.spanId = uuidv4();
+    if (args.parentSpanIds) {
+      this.rootSpanId = args.parentSpanIds.rootSpanId;
+      this.spanParents = [args.parentSpanIds.spanId];
+    } else {
+      this.rootSpanId = this.spanId;
+      this.spanParents = undefined;
+    }
 
     // The first log is a replacement, but subsequent logs to the same span
     // object will be merges.
@@ -2665,6 +2672,10 @@ export class SpanImpl implements Span {
     // asynchronously, so that in case the objects are modified, the logging is
     // unaffected.
     let partialRecord = {
+      id: this.id,
+      span_id: this.spanId,
+      root_span_id: this.rootSpanId,
+      span_parents: this.spanParents,
       ...sanitizedAndInternalData,
       [IS_MERGE_FIELD]: this.isMerge,
     };
@@ -2674,18 +2685,16 @@ export class SpanImpl implements Span {
       this.loggedEndTime = partialRecord.metrics?.end as number;
     }
 
-    if ((partialRecord.tags ?? []).length > 0 && this.parentRowId) {
+    if ((partialRecord.tags ?? []).length > 0 && this.spanParents?.length) {
       throw new Error("Tags can only be logged to the root span");
     }
 
     const computeRecord = async () => ({
       ...partialRecord,
-      ...new SpanParentComponents({
+      ...new SpanComponents({
         objectType: this.parentObjectType,
         objectId: await this.parentObjectId.get(),
-        rowId: this.parentRowId,
-      }).asDict(),
-      id: this.id,
+      }).objectIdFields(),
     });
     _state.globalBgLogger().log([new LazyValue(computeRecord)]);
   }
@@ -2716,13 +2725,16 @@ export class SpanImpl implements Span {
   }
 
   public startSpan(args?: StartSpanArgs): Span {
+    const parentSpanIds: ParentSpanIds | undefined = args?.parent
+      ? undefined
+      : { spanId: this.spanId, rootSpanId: this.rootSpanId };
     return new SpanImpl({
       ...args,
       ...startSpanParentArgs({
         parent: args?.parent,
-        parentId: args?.parentId ?? (args?.parent ? undefined : this.id),
-        spanParentObjectType: this.parentObjectType,
-        spanParentObjectId: this.parentObjectId,
+        parentObjectType: this.parentObjectType,
+        parentObjectId: this.parentObjectId,
+        parentSpanIds,
       }),
     });
   }
@@ -2740,10 +2752,14 @@ export class SpanImpl implements Span {
   }
 
   public async export(): Promise<string> {
-    return new SpanParentComponents({
+    return new SpanComponents({
       objectType: this.parentObjectType,
       objectId: await this.parentObjectId.get(),
-      rowId: this.id,
+      rowIds: new SpanRowIds({
+        rowId: this.id,
+        spanId: this.spanId,
+        rootSpanId: this.rootSpanId,
+      }),
     }).toStr();
   }
 
@@ -2784,9 +2800,6 @@ export class Dataset<
       ensureDatasetRecord(r, isLegacyDataset)
     );
     this.lazyMetadata = lazyMetadata;
-    const logConn = new LazyValue(() =>
-      this.getState().then((state) => state.logConn())
-    );
   }
 
   public get id(): Promise<string> {
