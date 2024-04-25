@@ -3128,9 +3128,11 @@ export class Prompt {
         ...spanInfo,
         messages: messages,
         ...(prompt.tools
-          ? toolsSchema.parse(
-              JSON.parse(Mustache.render(prompt.tools, buildArgs))
-            )
+          ? {
+              tools: toolsSchema.parse(
+                JSON.parse(Mustache.render(prompt.tools, buildArgs))
+              ),
+            }
           : undefined),
       } as CompiledPrompt<Flavor>;
     } else if (flavor === "completion") {
