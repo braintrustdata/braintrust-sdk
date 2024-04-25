@@ -485,9 +485,9 @@ export const endingBeforeSchema = z
 
 // Schema for filtering by object IDs.
 export function makeObjectIdsFilterSchema(objectName: string) {
+  const item = z.string().uuid();
   return z
-    .string()
-    .uuid()
+    .union([item, item.array()])
     .describe(
       `Filter search results to a particular set of ${objectName} IDs. To specify a list of IDs, include the query param multiple times`
     )
@@ -675,5 +675,10 @@ export const objectSchemas = {
     create: undefined,
     patch: undefined,
     object: userSchema,
+  },
+  prompt_session: {
+    create: undefined,
+    patch: undefined,
+    object: undefined,
   },
 };
