@@ -24,8 +24,10 @@ PARAMS = {
     "PrivateSubnet1CIDR": "private_subnet_1_cidr",
     "PrivateSubnet2CIDR": "private_subnet_2_cidr",
     "PrivateSubnet3CIDR": "private_subnet_3_cidr",
+    "ManagedPostgres": "managed_postgres",
     "ManagedClickhouse": "managed_clickhouse",
     "ClickhouseInstanceType": "clickhouse_instance_type",
+    "PostgresVersion": "postgres_version",
 }
 
 REMOVED_PARAMS = ["ThirdAZIndex"]
@@ -150,6 +152,11 @@ def build_parser(subparsers, parents):
         choices=[None, "true", "false"],
     )
     parser.add_argument(
+        "--postgres-version",
+        help="The version of the postgres instance",
+        default=None,
+    )
+    parser.add_argument(
         "--postgres-alternative-host",
         help="Use an external host for postgres (but the same secrets)",
         default=None,
@@ -256,7 +263,7 @@ def main(args):
             ]
             if v is not None
         ]
-        _logger.info("Using params:", params)
+        _logger.info(f"Using params: {params}")
 
         cloudformation.create_stack(
             StackName=args.name,
