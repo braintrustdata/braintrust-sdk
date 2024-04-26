@@ -64,11 +64,8 @@ const openAIModelParamsSchema = z
     frequency_penalty: z.number().optional(),
     presence_penalty: z.number().optional(),
     response_format: z
-      .union([
-        z.literal(null),
-        z.strictObject({ type: z.literal("json_object") }).strip(),
-      ])
-      .optional(),
+      .strictObject({ type: z.literal("json_object") })
+      .nullish(),
     tool_choice: z
       .union([
         z.literal("auto"),
@@ -81,13 +78,15 @@ const openAIModelParamsSchema = z
           .strip(),
       ])
       .optional(),
-    function_call: z.union([
-      z.literal("auto"),
-      z.literal("none"),
-      z.strictObject({
-        name: z.string(),
-      }),
-    ]),
+    function_call: z
+      .union([
+        z.literal("auto"),
+        z.literal("none"),
+        z.strictObject({
+          name: z.string(),
+        }),
+      ])
+      .optional(),
     n: z.number().optional(),
     stop: z.array(z.string()).optional(),
   })
