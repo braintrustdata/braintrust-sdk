@@ -178,7 +178,7 @@ function buildWatchPluginForEvaluator(
   opts: EvaluatorOpts
 ): esbuild.Plugin {
   const evaluators: EvaluatorState = {
-    evaluators: {},
+    evaluators: [],
     reporters: {},
   };
   const plugin = {
@@ -202,15 +202,17 @@ function buildWatchPluginForEvaluator(
           return;
         }
 
+        evaluators.evaluators = evaluators.evaluators.filter(
+          (e) => e.sourceFile !== inFile
+        );
+
         // Update the evaluators and reporters
-        for (const [evalName, evaluator] of Object.entries(
-          evalResult.evaluators
-        )) {
-          evaluators.evaluators[evalName] = {
+        for (const evaluator of Object.values(evalResult.evaluators)) {
+          evaluators.evaluators.push({
             sourceFile: inFile,
             evaluator: evaluator.evaluator,
             reporter: evaluator.reporter,
-          };
+          });
         }
         for (const [reporterName, reporter] of Object.entries(
           evalResult.reporters
@@ -314,12 +316,10 @@ async function initFile(
 
 interface EvaluatorState {
   evaluators: {
-    [evaluator: string]: {
-      sourceFile: string;
-      evaluator: EvaluatorDef<any, any, any, any>;
-      reporter: string | ReporterDef<any> | undefined;
-    };
-  };
+    sourceFile: string;
+    evaluator: EvaluatorDef<any, any, any, any>;
+    reporter: string | ReporterDef<any> | undefined;
+  }[];
   reporters: {
     [reporter: string]: ReporterDef<any>;
   };
@@ -333,6 +333,7 @@ interface EvaluatorOpts {
   noSendLogs: boolean;
   terminateOnFailure: boolean;
   watch: boolean;
+  list: boolean;
   jsonl: boolean;
   filters: Filter[];
   progressReporter: ProgressReporter;
@@ -358,26 +359,12 @@ function updateEvaluators(
       continue;
     }
 
-    for (const [evalName, evaluator] of Object.entries(
-      result.evaluator.evaluators
-    )) {
-      if (
-        evaluators.evaluators[evalName] &&
-        (evaluators.evaluators[evalName].sourceFile !== result.sourceFile ||
-          evaluators.evaluators[evalName] !== evaluator)
-      ) {
-        console.warn(
-          warning(
-            `Evaluator ${evalName} already exists (in ${evaluators.evaluators[evalName].sourceFile} and ${result.sourceFile}). Will skip ${evalName} in ${result.sourceFile}.`
-          )
-        );
-        continue;
-      }
-      evaluators.evaluators[evalName] = {
+    for (const evaluator of Object.values(result.evaluator.evaluators)) {
+      evaluators.evaluators.push({
         sourceFile: result.sourceFile,
         evaluator: evaluator.evaluator,
         reporter: evaluator.reporter,
-      };
+      });
     }
 
     for (const [reporterName, reporter] of Object.entries(
@@ -389,7 +376,7 @@ function updateEvaluators(
       ) {
         console.warn(
           warning(
-            `Reporter ${reporterName} already exists. Will skip ${reporterName}.`
+            `Reporter '${reporterName}' already exists. Will skip '${reporterName}' from ${result.sourceFile}.`
           )
         );
         continue;
@@ -434,10 +421,17 @@ async function runOnce(
   const buildResults = await Promise.all(buildPromises);
 
   const evaluators: EvaluatorState = {
-    evaluators: {},
+    evaluators: [],
     reporters: {},
   };
   updateEvaluators(evaluators, buildResults, opts);
+
+  if (opts.list) {
+    for (const evaluator of evaluators.evaluators) {
+      console.log(evaluator.evaluator.evalName);
+    }
+    return true;
+  }
 
   const resultPromises = Object.values(evaluators.evaluators).map(
     async (evaluator) => {
@@ -478,10 +472,8 @@ async function runOnce(
       results: [];
     }
   > = {};
-  for (const [evaluatorName, idx] of Object.keys(evaluators.evaluators).map(
-    (k, i) => [k, i]
-  )) {
-    const evaluator = evaluators.evaluators[evaluatorName];
+  for (let idx = 0; idx < evaluators.evaluators.length; idx++) {
+    const evaluator = evaluators.evaluators[idx];
     const resolvedReporter = resolveReporter(
       evaluator.reporter,
       evaluators.reporters
@@ -513,6 +505,7 @@ async function runOnce(
 interface RunArgs {
   files: string[];
   watch: boolean;
+  list: boolean;
   jsonl: boolean;
   verbose: boolean;
   api_key?: string;
@@ -687,7 +680,7 @@ async function initializeHandles(args: RunArgs, opts: EvaluatorOpts) {
 }
 
 async function run(args: RunArgs) {
-  const evaluatorOpts = {
+  const evaluatorOpts: EvaluatorOpts = {
     verbose: args.verbose,
     apiKey: args.api_key,
     orgName: args.org_name,
@@ -700,7 +693,13 @@ async function run(args: RunArgs) {
       ? new SimpleProgressReporter()
       : new BarProgressReporter(),
     filters: args.filter ? parseFilters(args.filter) : [],
+    list: !!args.list,
   };
+
+  if (args.list && args.watch) {
+    console.error(error("Cannot specify both --list and --watch."));
+    process.exit(1);
+  }
 
   const handles = await initializeHandles(args, evaluatorOpts);
 
@@ -768,6 +767,10 @@ async function main() {
   });
   parser_run.add_argument("--filter", {
     help: "Only run evaluators that match these filters. Each filter is a regular expression (https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp). For example, --filter metadata.priority='^P0$' input.name='foo.*bar' will only run evaluators that have metadata.priority equal to 'P0' and input.name matching the regular expression 'foo.*bar'.",
+    nargs: "*",
+  });
+  parser_run.add_argument("--list", {
+    help: "List, but do not execute, evaluators.",
     nargs: "*",
   });
   parser_run.add_argument("--jsonl", {
