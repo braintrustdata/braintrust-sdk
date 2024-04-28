@@ -116,7 +116,7 @@ export interface Span {
    */
   traced<R>(
     callback: (span: Span) => R,
-    args?: StartSpanArgs & SetCurrentArg
+    args?: StartSpanArgs & SetCurrentArg,
   ): R;
 
   /**
@@ -176,7 +176,7 @@ export class NoopSpan implements Span {
 
   public traced<R>(
     callback: (span: Span) => R,
-    _1?: StartSpanArgs & SetCurrentArg
+    _1?: StartSpanArgs & SetCurrentArg,
   ): R {
     return callback(this);
   }
@@ -245,7 +245,7 @@ class BraintrustState {
       return this.logConn();
     };
     this._globalBgLogger = new BackgroundLogger(
-      new LazyValue(defaultGetLogConn)
+      new LazyValue(defaultGetLogConn),
     );
 
     this.resetLoginInfo();
@@ -327,7 +327,7 @@ async function checkResponse(resp: Response) {
     throw new FailedHTTPResponse(
       resp.status,
       resp.statusText,
-      await resp.text()
+      await resp.text(),
     );
   }
 }
@@ -380,16 +380,16 @@ class HTTPConnection {
   async get(
     path: string,
     params: Record<string, string | undefined> | undefined = undefined,
-    config?: RequestInit
+    config?: RequestInit,
   ) {
     const { headers, ...rest } = config || {};
     const url = new URL(_urljoin(this.base_url, path));
     url.search = new URLSearchParams(
       params
         ? (Object.fromEntries(
-            Object.entries(params).filter(([_, v]) => v !== undefined)
+            Object.entries(params).filter(([_, v]) => v !== undefined),
           ) as Record<string, string>)
-        : {}
+        : {},
     ).toString();
     return await checkResponse(
       // Using toString() here makes it work with isomorphic fetch
@@ -400,14 +400,14 @@ class HTTPConnection {
         },
         keepalive: true,
         ...rest,
-      })
+      }),
     );
   }
 
   async post(
     path: string,
     params?: Record<string, unknown> | string,
-    config?: RequestInit
+    config?: RequestInit,
   ) {
     const { headers, ...rest } = config || {};
     return await checkResponse(
@@ -422,18 +422,18 @@ class HTTPConnection {
           typeof params === "string"
             ? params
             : params
-            ? JSON.stringify(params)
-            : undefined,
+              ? JSON.stringify(params)
+              : undefined,
         keepalive: true,
         ...rest,
-      })
+      }),
     );
   }
 
   async get_json(
     object_type: string,
     args: Record<string, string | undefined> | undefined = undefined,
-    retries: number = 0
+    retries: number = 0,
   ) {
     const tries = retries + 1;
     for (let i = 0; i < tries; i++) {
@@ -445,7 +445,7 @@ class HTTPConnection {
           console.log(
             `Retrying API request ${object_type} ${args} ${(e as any).status} ${
               (e as any).text
-            }`
+            }`,
           );
           continue;
         }
@@ -456,7 +456,7 @@ class HTTPConnection {
 
   async post_json(
     object_type: string,
-    args: Record<string, unknown> | string | undefined = undefined
+    args: Record<string, unknown> | string | undefined = undefined,
   ) {
     const resp = await this.post(`${object_type}`, args, {
       headers: { "Content-Type": "application/json" },
@@ -503,7 +503,7 @@ function logFeedbackImpl(
     tags,
     comment,
     source: inputSource,
-  }: LogFeedbackFullArgs
+  }: LogFeedbackFullArgs,
 ) {
   const source = inputSource ?? "external";
 
@@ -518,7 +518,7 @@ function logFeedbackImpl(
     isEmpty(comment)
   ) {
     throw new Error(
-      "At least one of scores, expected, tags, or comment must be specified"
+      "At least one of scores, expected, tags, or comment must be specified",
     );
   }
 
@@ -531,7 +531,7 @@ function logFeedbackImpl(
 
   let { metadata, ...updateEvent } = validatedEvent;
   updateEvent = Object.fromEntries(
-    Object.entries(updateEvent).filter(([_, v]) => !isEmpty(v))
+    Object.entries(updateEvent).filter(([_, v]) => !isEmpty(v)),
   );
 
   const parentIds = async () =>
@@ -600,7 +600,7 @@ function startSpanParentArgs(args: {
     const parentComponents = SpanComponents.fromStr(args.parent);
     if (args.parentObjectType !== parentComponents.objectType) {
       throw new Error(
-        `Mismatch between expected span parent object type ${args.parentObjectType} and provided type ${parentComponents.objectType}`
+        `Mismatch between expected span parent object type ${args.parentObjectType} and provided type ${parentComponents.objectType}`,
       );
     }
 
@@ -609,7 +609,7 @@ function startSpanParentArgs(args: {
         throw new Error(
           `Mismatch between expected span parent object id ${await args.parentObjectId.get()} and provided id ${
             parentComponents.objectId
-          }`
+          }`,
         );
       }
       return await args.parentObjectId.get();
@@ -645,7 +645,7 @@ export class Logger<IsAsyncFlush extends boolean> {
 
   constructor(
     lazyMetadata: LazyValue<OrgProjectMetadata>,
-    logOptions: LogOptions<IsAsyncFlush> = {}
+    logOptions: LogOptions<IsAsyncFlush> = {},
   ) {
     this.lazyMetadata = lazyMetadata;
     this.logOptions = logOptions;
@@ -691,11 +691,11 @@ export class Logger<IsAsyncFlush extends boolean> {
    */
   public log(
     event: Readonly<StartSpanEventArgs>,
-    options?: { allowConcurrentWithSpans?: boolean }
+    options?: { allowConcurrentWithSpans?: boolean },
   ): PromiseUnless<IsAsyncFlush, string> {
     if (this.calledStartSpan && !options?.allowConcurrentWithSpans) {
       throw new Error(
-        "Cannot run toplevel `log` method while using spans. To log to the span, call `logger.traced` and then log with `span.log`"
+        "Cannot run toplevel `log` method while using spans. To log to the span, call `logger.traced` and then log with `span.log`",
       );
     }
 
@@ -720,7 +720,7 @@ export class Logger<IsAsyncFlush extends boolean> {
    */
   public traced<R>(
     callback: (span: Span) => R,
-    args?: StartSpanArgs & SetCurrentArg
+    args?: StartSpanArgs & SetCurrentArg,
   ): PromiseUnless<IsAsyncFlush, R> {
     const { setCurrent, ...argsRest } = args ?? {};
     const span = this.startSpan(argsRest);
@@ -732,7 +732,7 @@ export class Logger<IsAsyncFlush extends boolean> {
           return callback(span);
         }
       },
-      () => span.end()
+      () => span.end(),
     );
     type Ret = PromiseUnless<IsAsyncFlush, R>;
 
@@ -811,12 +811,12 @@ export class Logger<IsAsyncFlush extends boolean> {
 
 function castLogger<ToB extends boolean, FromB extends boolean>(
   logger: Logger<FromB> | undefined,
-  asyncFlush?: ToB
+  asyncFlush?: ToB,
 ): Logger<ToB> | undefined {
   if (logger === undefined) return undefined;
   if (asyncFlush && !!asyncFlush !== !!logger.asyncFlush) {
     throw new Error(
-      `Asserted asyncFlush setting ${asyncFlush} does not match stored logger's setting ${logger.asyncFlush}`
+      `Asserted asyncFlush setting ${asyncFlush} does not match stored logger's setting ${logger.asyncFlush}`,
     );
   }
   return logger as unknown as Logger<ToB>;
@@ -856,7 +856,7 @@ class BackgroundLogger {
     }
 
     const defaultBatchSizeEnv = Number(
-      iso.getEnv("BRAINTRUST_DEFAULT_BATCH_SIZE")
+      iso.getEnv("BRAINTRUST_DEFAULT_BATCH_SIZE"),
     );
     if (!isNaN(defaultBatchSizeEnv)) {
       this.defaultBatchSize = defaultBatchSizeEnv;
@@ -913,7 +913,7 @@ class BackgroundLogger {
 
     // Construct batches of records to flush in parallel and in sequence.
     const allItemsStr = allItems.map((bucket) =>
-      bucket.map((item) => JSON.stringify(item))
+      bucket.map((item) => JSON.stringify(item)),
     );
     const batchSets = batchItems({
       items: allItemsStr,
@@ -930,7 +930,7 @@ class BackgroundLogger {
           } catch (e) {
             return { type: "error", value: e } as const;
           }
-        })()
+        })(),
       );
       const results = await Promise.all(postPromises);
       const failingResultErrors = results
@@ -939,7 +939,7 @@ class BackgroundLogger {
       if (failingResultErrors.length) {
         throw new AggregateError(
           failingResultErrors,
-          `Encountered the following errors while logging:`
+          `Encountered the following errors while logging:`,
         );
       }
     }
@@ -951,7 +951,7 @@ class BackgroundLogger {
   }
 
   private async unwrapLazyValues(
-    wrappedItems: LazyValue<BackgroundLogEvent>[]
+    wrappedItems: LazyValue<BackgroundLogEvent>[],
   ): Promise<BackgroundLogEvent[][]> {
     for (let i = 0; i < this.numRetries; ++i) {
       try {
@@ -974,7 +974,7 @@ class BackgroundLogger {
       }
     }
     console.warn(
-      `Failed to construct log records to flush after ${this.numRetries} retries. Dropping batch`
+      `Failed to construct log records to flush after ${this.numRetries} retries. Dropping batch`,
     );
     return [];
   }
@@ -992,8 +992,8 @@ class BackgroundLogger {
         try {
           const legacyDataS = constructJsonArray(
             items.map((r: any) =>
-              JSON.stringify(makeLegacyEvent(JSON.parse(r)))
-            )
+              JSON.stringify(makeLegacyEvent(JSON.parse(r))),
+            ),
           );
           await conn.post_json("logs", legacyDataS);
         } catch (e) {
@@ -1030,7 +1030,7 @@ class BackgroundLogger {
     }
 
     console.warn(
-      `log request failed after ${this.numRetries} retries. Dropping batch`
+      `log request failed after ${this.numRetries} retries. Dropping batch`,
     );
     return;
   }
@@ -1110,7 +1110,7 @@ type InitializedExperiment<IsOpen extends boolean | undefined> =
  * @returns The newly created Experiment.
  */
 export function init<IsOpen extends boolean = false>(
-  options: Readonly<FullInitOptions<IsOpen>>
+  options: Readonly<FullInitOptions<IsOpen>>,
 ): InitializedExperiment<IsOpen>;
 
 /**
@@ -1119,7 +1119,7 @@ export function init<IsOpen extends boolean = false>(
  */
 export function init<IsOpen extends boolean = false>(
   project: string,
-  options?: Readonly<InitOptions<IsOpen>>
+  options?: Readonly<InitOptions<IsOpen>>,
 ): InitializedExperiment<IsOpen>;
 
 /**
@@ -1128,7 +1128,7 @@ export function init<IsOpen extends boolean = false>(
  */
 export function init<IsOpen extends boolean = false>(
   projectOrOptions: string | Readonly<FullInitOptions<IsOpen>>,
-  optionalOptions?: Readonly<InitOptions<IsOpen>>
+  optionalOptions?: Readonly<InitOptions<IsOpen>>,
 ): InitializedExperiment<IsOpen> {
   const options = ((): Readonly<FullInitOptions<IsOpen>> => {
     if (typeof projectOrOptions === "string") {
@@ -1136,7 +1136,7 @@ export function init<IsOpen extends boolean = false>(
     } else {
       if (optionalOptions !== undefined) {
         throw new Error(
-          "Cannot specify options struct as both parameters. Must call either init(project, options) or init(options)."
+          "Cannot specify options struct as both parameters. Must call either init(project, options) or init(options).",
         );
       }
       return projectOrOptions;
@@ -1193,7 +1193,7 @@ export function init<IsOpen extends boolean = false>(
           throw new Error(
             `Experiment ${experiment} not found in project ${
               projectId ?? project
-            }.`
+            }.`,
           );
         }
 
@@ -1210,11 +1210,11 @@ export function init<IsOpen extends boolean = false>(
             fullInfo: info,
           },
         };
-      }
+      },
     );
 
     return new ReadonlyExperiment(
-      lazyMetadata
+      lazyMetadata,
     ) as InitializedExperiment<IsOpen>;
   }
 
@@ -1252,7 +1252,7 @@ export function init<IsOpen extends boolean = false>(
         if (gitMetadataSettings) {
           mergedGitMetadataSettings = mergeGitMetadataSettings(
             mergedGitMetadataSettings,
-            gitMetadataSettings
+            gitMetadataSettings,
           );
         }
         return await iso.getRepoInfo(mergedGitMetadataSettings);
@@ -1296,7 +1296,7 @@ export function init<IsOpen extends boolean = false>(
             `${"data" in e && e.data}`.includes("base experiment")
           ) {
             console.warn(
-              `Base experiment ${args["base_experiment"]} not found.`
+              `Base experiment ${args["base_experiment"]} not found.`,
             );
             delete args["base_experiment"];
           } else {
@@ -1317,7 +1317,7 @@ export function init<IsOpen extends boolean = false>(
           fullInfo: response.experiment,
         },
       };
-    }
+    },
   );
 
   const ret = new Experiment(lazyMetadata, dataset);
@@ -1331,7 +1331,7 @@ export function init<IsOpen extends boolean = false>(
  * Alias for init(options).
  */
 export function initExperiment<IsOpen extends boolean = false>(
-  options: Readonly<InitOptions<IsOpen>>
+  options: Readonly<InitOptions<IsOpen>>,
 ): InitializedExperiment<IsOpen>;
 
 /**
@@ -1339,7 +1339,7 @@ export function initExperiment<IsOpen extends boolean = false>(
  */
 export function initExperiment<IsOpen extends boolean = false>(
   project: string,
-  options?: Readonly<InitOptions<IsOpen>>
+  options?: Readonly<InitOptions<IsOpen>>,
 ): InitializedExperiment<IsOpen>;
 
 /**
@@ -1349,7 +1349,7 @@ export function initExperiment<IsOpen extends boolean = false>(
  */
 export function initExperiment<IsOpen extends boolean = false>(
   projectOrOptions: string | Readonly<InitOptions<IsOpen>>,
-  optionalOptions?: Readonly<InitOptions<IsOpen>>
+  optionalOptions?: Readonly<InitOptions<IsOpen>>,
 ): InitializedExperiment<IsOpen> {
   const options = ((): Readonly<FullInitOptions<IsOpen>> => {
     if (typeof projectOrOptions === "string") {
@@ -1357,7 +1357,7 @@ export function initExperiment<IsOpen extends boolean = false>(
     } else {
       if (optionalOptions !== undefined) {
         throw new Error(
-          "Cannot specify options struct as both parameters. Must call either init(project, options) or init(options)."
+          "Cannot specify options struct as both parameters. Must call either init(project, options) or init(options).",
         );
       }
       return projectOrOptions;
@@ -1372,10 +1372,10 @@ export function initExperiment<IsOpen extends boolean = false>(
 export function withExperiment<R>(
   project: string,
   callback: (experiment: Experiment) => R,
-  options: Readonly<InitOptions<false> & SetCurrentArg> = {}
+  options: Readonly<InitOptions<false> & SetCurrentArg> = {},
 ): R {
   console.warn(
-    "withExperiment is deprecated and will be removed in a future version of braintrust. Simply create the experiment with `init`."
+    "withExperiment is deprecated and will be removed in a future version of braintrust. Simply create the experiment with `init`.",
   );
   const experiment = init(project, options);
   return callback(experiment);
@@ -1386,10 +1386,10 @@ export function withExperiment<R>(
  */
 export function withLogger<IsAsyncFlush extends boolean = false, R = void>(
   callback: (logger: Logger<IsAsyncFlush>) => R,
-  options: Readonly<InitLoggerOptions<IsAsyncFlush> & SetCurrentArg> = {}
+  options: Readonly<InitLoggerOptions<IsAsyncFlush> & SetCurrentArg> = {},
 ): R {
   console.warn(
-    "withLogger is deprecated and will be removed in a future version of braintrust. Simply create the logger with `initLogger`."
+    "withLogger is deprecated and will be removed in a future version of braintrust. Simply create the logger with `initLogger`.",
   );
   const logger = initLogger(options);
   return callback(logger);
@@ -1428,9 +1428,9 @@ type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
  * @returns The newly created Dataset.
  */
 export function initDataset<
-  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET,
 >(
-  options: Readonly<FullInitDatasetOptions<IsLegacyDataset>>
+  options: Readonly<FullInitDatasetOptions<IsLegacyDataset>>,
 ): Dataset<IsLegacyDataset>;
 
 /**
@@ -1439,10 +1439,10 @@ export function initDataset<
  * `initDataset(options)` for full details.
  */
 export function initDataset<
-  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET,
 >(
   project: string,
-  options?: Readonly<InitDatasetOptions<IsLegacyDataset>>
+  options?: Readonly<InitDatasetOptions<IsLegacyDataset>>,
 ): Dataset<IsLegacyDataset>;
 
 /**
@@ -1451,10 +1451,10 @@ export function initDataset<
  * options)`.
  */
 export function initDataset<
-  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET,
 >(
   projectOrOptions: string | Readonly<FullInitDatasetOptions<IsLegacyDataset>>,
-  optionalOptions?: Readonly<InitDatasetOptions<IsLegacyDataset>>
+  optionalOptions?: Readonly<InitDatasetOptions<IsLegacyDataset>>,
 ): Dataset<IsLegacyDataset> {
   const options = ((): Readonly<FullInitDatasetOptions<IsLegacyDataset>> => {
     if (typeof projectOrOptions === "string") {
@@ -1462,7 +1462,7 @@ export function initDataset<
     } else {
       if (optionalOptions !== undefined) {
         throw new Error(
-          "Cannot specify options struct as both parameters. Must call either initDataset(project, options) or initDataset(options)."
+          "Cannot specify options struct as both parameters. Must call either initDataset(project, options) or initDataset(options).",
         );
       }
       return projectOrOptions;
@@ -1512,7 +1512,7 @@ export function initDataset<
           fullInfo: response.dataset,
         },
       };
-    }
+    },
   );
 
   return new Dataset(lazyMetadata, version, legacy);
@@ -1523,14 +1523,14 @@ export function initDataset<
  */
 export function withDataset<
   R,
-  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET,
 >(
   project: string,
   callback: (dataset: Dataset<IsLegacyDataset>) => R,
-  options: Readonly<InitDatasetOptions<IsLegacyDataset>> = {}
+  options: Readonly<InitDatasetOptions<IsLegacyDataset>> = {},
 ): R {
   console.warn(
-    "withDataset is deprecated and will be removed in a future version of braintrust. Simply create the dataset with `initDataset`."
+    "withDataset is deprecated and will be removed in a future version of braintrust. Simply create the dataset with `initDataset`.",
   );
   const dataset = initDataset<IsLegacyDataset>(project, options);
   return callback(dataset);
@@ -1566,7 +1566,7 @@ type InitLoggerOptions<IsAsyncFlush> = {
  * @returns The newly created Logger.
  */
 export function initLogger<IsAsyncFlush extends boolean = false>(
-  options: Readonly<InitLoggerOptions<IsAsyncFlush>> = {}
+  options: Readonly<InitLoggerOptions<IsAsyncFlush>> = {},
 ) {
   const {
     projectName,
@@ -1620,7 +1620,7 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
           project: { id: projectId, name: projectName, fullInfo: {} },
         };
       }
-    }
+    },
   );
 
   const ret = new Logger<IsAsyncFlush>(lazyMetadata, {
@@ -1706,13 +1706,13 @@ export async function loadPrompt({
 
   if (!("objects" in response) || response.objects.length === 0) {
     throw new Error(
-      `Prompt ${slug} not found in ${[projectName ?? projectId]}`
+      `Prompt ${slug} not found in ${[projectName ?? projectId]}`,
     );
   } else if (response.objects.length > 1) {
     throw new Error(
       `Multiple prompts found with slug ${slug} in project ${
         projectName ?? projectId
-      }. This should never happen.`
+      }. This should never happen.`,
     );
   }
 
@@ -1738,7 +1738,7 @@ export async function login(
     apiKey?: string;
     orgName?: string;
     forceLogin?: boolean;
-  } = {}
+  } = {},
 ) {
   let { forceLogin = false } = options || {};
 
@@ -1749,11 +1749,11 @@ export async function login(
     function checkUpdatedParam(
       varname: string,
       arg: string | undefined,
-      orig: string | null
+      orig: string | null,
     ) {
       if (!isEmpty(arg) && !isEmpty(orig) && arg !== orig) {
         throw new Error(
-          `Re-logging in with different ${varname} (${arg}) than original (${orig}). To force re-login, pass \`forceLogin: true\``
+          `Re-logging in with different ${varname} (${arg}) than original (${orig}). To force re-login, pass \`forceLogin: true\``,
         );
       }
     }
@@ -1763,7 +1763,7 @@ export async function login(
       options.apiKey
         ? HTTPConnection.sanitize_token(options.apiKey)
         : undefined,
-      _state.loginToken
+      _state.loginToken,
     );
     checkUpdatedParam("orgName", options.orgName, _state.orgName);
     return;
@@ -1795,7 +1795,7 @@ export async function login(
         body: JSON.stringify({
           token: apiKey,
         }),
-      })
+      }),
     );
     const info = await resp.json();
 
@@ -1804,9 +1804,8 @@ export async function login(
     conn = _state.logConn();
     conn.set_token(apiKey);
   } else {
-    // TODO: Implement token based login in the JS client
     throw new Error(
-      "Please specify an api key. Token based login is not yet implemented in the JS client."
+      "Please specify an api key (e.g. by setting BRAINTRUST_API_KEY).",
     );
   }
 
@@ -1834,7 +1833,7 @@ export async function login(
  */
 export function log(event: ExperimentLogFullArgs): string {
   console.warn(
-    "braintrust.log is deprecated and will be removed in a future version of braintrust. Use `experiment.log` instead."
+    "braintrust.log is deprecated and will be removed in a future version of braintrust. Use `experiment.log` instead.",
   );
   const e = currentExperiment();
   if (!e) {
@@ -1855,10 +1854,10 @@ export async function summarize(
   options: {
     readonly summarizeScores?: boolean;
     readonly comparisonExperimentId?: string;
-  } = {}
+  } = {},
 ): Promise<ExperimentSummary> {
   console.warn(
-    "braintrust.summarize is deprecated and will be removed in a future version of braintrust. Use `experiment.summarize` instead."
+    "braintrust.summarize is deprecated and will be removed in a future version of braintrust. Use `experiment.summarize` instead.",
   );
   const e = currentExperiment();
   if (!e) {
@@ -1878,7 +1877,7 @@ export function currentExperiment(): Experiment | undefined {
  * Returns the currently-active logger (set by `braintrust.initLogger`). Returns undefined if no current logger has been set.
  */
 export function currentLogger<IsAsyncFlush extends boolean>(
-  options?: AsyncFlushArg<IsAsyncFlush>
+  options?: AsyncFlushArg<IsAsyncFlush>,
 ): Logger<IsAsyncFlush> | undefined {
   return castLogger(_state.currentLogger, options?.asyncFlush);
 }
@@ -1896,7 +1895,7 @@ export function currentSpan(): Span {
  * Mainly for internal use. Return the parent object for starting a span in a global context.
  */
 export function getSpanParentObject<IsAsyncFlush extends boolean>(
-  options?: AsyncFlushArg<IsAsyncFlush>
+  options?: AsyncFlushArg<IsAsyncFlush>,
 ): Span | Experiment | Logger<IsAsyncFlush> {
   const parentSpan = currentSpan();
   if (!Object.is(parentSpan, NOOP_SPAN)) {
@@ -1925,7 +1924,7 @@ export function getSpanParentObject<IsAsyncFlush extends boolean>(
  */
 export function traced<IsAsyncFlush extends boolean = false, R = void>(
   callback: (span: Span) => R,
-  args?: StartSpanArgs & SetCurrentArg & AsyncFlushArg<IsAsyncFlush>
+  args?: StartSpanArgs & SetCurrentArg & AsyncFlushArg<IsAsyncFlush>,
 ): PromiseUnless<IsAsyncFlush, R> {
   const { span, isLogger } = startSpanAndIsLogger(args);
 
@@ -1937,7 +1936,7 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
         return callback(span);
       }
     },
-    () => span.end()
+    () => span.end(),
   );
   type Ret = PromiseUnless<IsAsyncFlush, R>;
 
@@ -1962,7 +1961,7 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
  * See `traced` for full details.
  */
 export function startSpan<IsAsyncFlush extends boolean = false>(
-  args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush>
+  args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush>,
 ): Span {
   return startSpanAndIsLogger(args).span;
 }
@@ -1975,7 +1974,7 @@ export async function flush(): Promise<void> {
 }
 
 function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
-  args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush>
+  args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush>,
 ): { span: Span; isLogger: boolean } {
   if (args?.parent) {
     const components = SpanComponents.fromStr(args?.parent);
@@ -2029,7 +2028,7 @@ function _check_org_info(org_info: any, org_name: string | undefined) {
     throw new Error(
       `Organization ${org_name} not found. Must be one of ${org_info
         .map((x: any) => x.name)
-        .join(", ")}`
+        .join(", ")}`,
     );
   }
 }
@@ -2052,7 +2051,7 @@ function validateTags(tags: readonly string[]) {
 }
 
 function validateAndSanitizeExperimentLogPartialArgs(
-  event: ExperimentLogPartialArgs
+  event: ExperimentLogPartialArgs,
 ): SanitizedExperimentLogPartialArgs {
   if (event.scores) {
     for (let [name, score] of Object.entries(event.scores)) {
@@ -2100,7 +2099,7 @@ function validateAndSanitizeExperimentLogPartialArgs(
 
   if ("input" in event && event.input && "inputs" in event && event.inputs) {
     throw new Error(
-      "Only one of input or inputs (deprecated) can be specified. Prefer input."
+      "Only one of input or inputs (deprecated) can be specified. Prefer input.",
     );
   }
 
@@ -2121,7 +2120,7 @@ function validateAndSanitizeExperimentLogPartialArgs(
 // handling special fields like 'id').
 function validateAndSanitizeExperimentLogFullArgs(
   event: ExperimentLogFullArgs,
-  hasDataset: boolean
+  hasDataset: boolean,
 ): ExperimentLogFullArgs {
   if (
     ("input" in event &&
@@ -2131,7 +2130,7 @@ function validateAndSanitizeExperimentLogFullArgs(
     (!("input" in event) && !("inputs" in event))
   ) {
     throw new Error(
-      "Exactly one of input or inputs (deprecated) must be specified. Prefer input."
+      "Exactly one of input or inputs (deprecated) must be specified. Prefer input.",
     );
   }
 
@@ -2146,7 +2145,7 @@ function validateAndSanitizeExperimentLogFullArgs(
     throw new Error("datasetRecordId must be specified when using a dataset");
   } else if (!hasDataset && event.datasetRecordId !== undefined) {
     throw new Error(
-      "datasetRecordId cannot be specified when not using a dataset"
+      "datasetRecordId cannot be specified when not using a dataset",
     );
   }
 
@@ -2165,7 +2164,7 @@ class ObjectFetcher<RecordType>
   constructor(
     private objectType: "dataset" | "experiment",
     private pinnedVersion: string | undefined,
-    private mutateRecord?: (r: any) => RecordType
+    private mutateRecord?: (r: any) => RecordType,
   ) {}
 
   public get id(): Promise<string> {
@@ -2195,7 +2194,7 @@ class ObjectFetcher<RecordType>
         {
           version: this.pinnedVersion,
         },
-        { headers: { "Accept-Encoding": "gzip" } }
+        { headers: { "Accept-Encoding": "gzip" } },
       );
       const data = (await resp.json()).events;
       this._fetchedData = this.mutateRecord
@@ -2258,7 +2257,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
 
   constructor(
     lazyMetadata: LazyValue<ProjectExperimentMetadata>,
-    dataset?: AnyDataset
+    dataset?: AnyDataset,
   ) {
     super("experiment", undefined);
     this.lazyMetadata = lazyMetadata;
@@ -2315,11 +2314,11 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
    */
   public log(
     event: Readonly<ExperimentLogFullArgs>,
-    options?: { allowConcurrentWithSpans?: boolean }
+    options?: { allowConcurrentWithSpans?: boolean },
   ): string {
     if (this.calledStartSpan && !options?.allowConcurrentWithSpans) {
       throw new Error(
-        "Cannot run toplevel `log` method while using spans. To log to the span, call `experiment.traced` and then log with `span.log`"
+        "Cannot run toplevel `log` method while using spans. To log to the span, call `experiment.traced` and then log with `span.log`",
       );
     }
 
@@ -2336,7 +2335,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
    */
   public traced<R>(
     callback: (span: Span) => R,
-    args?: StartSpanArgs & SetCurrentArg
+    args?: StartSpanArgs & SetCurrentArg,
   ): R {
     const { setCurrent, ...argsRest } = args ?? {};
     const span = this.startSpan(argsRest);
@@ -2348,7 +2347,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
           return callback(span);
         }
       },
-      () => span.end()
+      () => span.end(),
     );
   }
 
@@ -2413,7 +2412,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     options: {
       readonly summarizeScores?: boolean;
       readonly comparisonExperimentId?: string;
-    } = {}
+    } = {},
   ): Promise<ExperimentSummary> {
     let { summarizeScores = true, comparisonExperimentId = undefined } =
       options || {};
@@ -2421,10 +2420,10 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     await this.flush();
     const state = await this.getState();
     const projectUrl = `${state.appPublicUrl}/app/${encodeURIComponent(
-      state.orgName!
+      state.orgName!,
     )}/p/${encodeURIComponent((await this.project).name)}`;
     const experimentUrl = `${projectUrl}/experiments/${encodeURIComponent(
-      await this.name
+      await this.name,
     )}`;
 
     let scores: Record<string, ScoreSummary> | undefined = undefined;
@@ -2446,7 +2445,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
             experiment_id: await this.id,
             base_experiment_id: comparisonExperimentId,
           },
-          3
+          3,
         );
 
         scores = results["scores"];
@@ -2502,7 +2501,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
    */
   public async close(): Promise<string> {
     console.warn(
-      "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed"
+      "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed",
     );
     return this.id;
   }
@@ -2513,7 +2512,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
  */
 export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
   constructor(
-    private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>
+    private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>,
   ) {
     super("experiment", undefined);
   }
@@ -2594,7 +2593,7 @@ export class SpanImpl implements Span {
       parentObjectId: LazyValue<string>;
       parentSpanIds: ParentSpanIds | undefined;
       defaultRootType?: SpanType;
-    } & Omit<StartSpanArgs, "parent">
+    } & Omit<StartSpanArgs, "parent">,
   ) {
     const spanAttributes = args.spanAttributes ?? {};
     const event = args.event ?? {};
@@ -2614,7 +2613,7 @@ export class SpanImpl implements Span {
         const filename = pathComponents[pathComponents.length - 1];
         return [callerLocation.caller_functionname]
           .concat(
-            filename ? [`${filename}:${callerLocation.caller_lineno}`] : []
+            filename ? [`${filename}:${callerLocation.caller_lineno}`] : [],
           )
           .join(":");
       }
@@ -2708,7 +2707,7 @@ export class SpanImpl implements Span {
 
   public traced<R>(
     callback: (span: Span) => R,
-    args?: StartSpanArgs & SetCurrentArg
+    args?: StartSpanArgs & SetCurrentArg,
   ): R {
     const { setCurrent, ...argsRest } = args ?? {};
     const span = this.startSpan(argsRest);
@@ -2720,7 +2719,7 @@ export class SpanImpl implements Span {
           return callback(span);
         }
       },
-      () => span.end()
+      () => span.end(),
     );
   }
 
@@ -2780,24 +2779,24 @@ export class SpanImpl implements Span {
  * You should not create `Dataset` objects directly. Instead, use the `braintrust.initDataset()` method.
  */
 export class Dataset<
-  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET
+  IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET,
 > extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
   private readonly lazyMetadata: LazyValue<ProjectDatasetMetadata>;
 
   constructor(
     lazyMetadata: LazyValue<ProjectDatasetMetadata>,
     pinnedVersion?: string,
-    legacy?: IsLegacyDataset
+    legacy?: IsLegacyDataset,
   ) {
     const isLegacyDataset = (legacy ??
       DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
     if (isLegacyDataset) {
       console.warn(
-        `Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use \`braintrust.initDataset()\` with \`{ useOutput: false }\`, which will become the default in a future version of Braintrust.`
+        `Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use \`braintrust.initDataset()\` with \`{ useOutput: false }\`, which will become the default in a future version of Braintrust.`,
       );
     }
     super("dataset", pinnedVersion, (r: AnyDatasetRecord) =>
-      ensureDatasetRecord(r, isLegacyDataset)
+      ensureDatasetRecord(r, isLegacyDataset),
     );
     this.lazyMetadata = lazyMetadata;
   }
@@ -2867,7 +2866,7 @@ export class Dataset<
 
     if (expected && output) {
       throw new Error(
-        "Only one of expected or output (deprecated) can be specified. Prefer expected."
+        "Only one of expected or output (deprecated) can be specified. Prefer expected.",
       );
     }
 
@@ -2909,17 +2908,17 @@ export class Dataset<
    * @returns A summary of the dataset.
    */
   public async summarize(
-    options: { readonly summarizeData?: boolean } = {}
+    options: { readonly summarizeData?: boolean } = {},
   ): Promise<DatasetSummary> {
     let { summarizeData = true } = options || {};
 
     await this.flush();
     const state = await this.getState();
     const projectUrl = `${state.appPublicUrl}/app/${encodeURIComponent(
-      state.orgName!
+      state.orgName!,
     )}/p/${encodeURIComponent((await this.project).name)}`;
     const datasetUrl = `${projectUrl}/datasets/${encodeURIComponent(
-      await this.name
+      await this.name,
     )}`;
 
     let dataSummary = undefined;
@@ -2929,7 +2928,7 @@ export class Dataset<
         {
           dataset_id: await this.id,
         },
-        3
+        3,
       );
     }
 
@@ -2954,7 +2953,7 @@ export class Dataset<
    */
   public async close(): Promise<string> {
     console.warn(
-      "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed"
+      "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed",
     );
     return this.id;
   }
@@ -2990,8 +2989,8 @@ export type CompiledPrompt<Flavor extends "chat" | "completion"> =
   } & (Flavor extends "chat"
       ? ChatPrompt
       : Flavor extends "completion"
-      ? CompletionPrompt
-      : {});
+        ? CompletionPrompt
+        : {});
 
 export type DefaultPromptArgs = Partial<
   CompiledPromptParams & AnyModelParam & ChatPrompt & CompletionPrompt
@@ -3001,7 +3000,7 @@ export class Prompt {
   constructor(
     private metadata: PromptRow,
     private defaults: DefaultPromptArgs,
-    private noTrace: boolean
+    private noTrace: boolean,
   ) {}
 
   public get id(): string {
@@ -3043,7 +3042,7 @@ export class Prompt {
     buildArgs: Record<string, unknown>,
     options: {
       flavor?: Flavor;
-    } = {}
+    } = {},
   ): CompiledPrompt<Flavor> {
     return this.runBuild(buildArgs, {
       flavor: options.flavor ?? "chat",
@@ -3054,7 +3053,7 @@ export class Prompt {
     buildArgs: Record<string, unknown>,
     options: {
       flavor: Flavor;
-    }
+    },
   ): CompiledPrompt<Flavor> {
     const { flavor } = options;
 
@@ -3062,8 +3061,8 @@ export class Prompt {
       ...this.defaults,
       ...Object.fromEntries(
         Object.entries(this.options.params || {}).filter(
-          ([k, _v]) => !BRAINTRUST_PARAMS.includes(k)
-        )
+          ([k, _v]) => !BRAINTRUST_PARAMS.includes(k),
+        ),
       ),
       ...(!isEmpty(this.options.model)
         ? {
@@ -3074,7 +3073,7 @@ export class Prompt {
 
     if (!("model" in params) || isEmpty(params.model)) {
       throw new Error(
-        "No model specified. Either specify it in the prompt or as a default"
+        "No model specified. Either specify it in the prompt or as a default",
       );
     }
 
@@ -3102,7 +3101,7 @@ export class Prompt {
     if (flavor === "chat") {
       if (prompt.type !== "chat") {
         throw new Error(
-          "Prompt is a completion prompt. Use buildCompletion() instead"
+          "Prompt is a completion prompt. Use buildCompletion() instead",
         );
       }
 
@@ -3130,7 +3129,7 @@ export class Prompt {
         ...(prompt.tools
           ? {
               tools: toolsSchema.parse(
-                JSON.parse(Mustache.render(prompt.tools, buildArgs))
+                JSON.parse(Mustache.render(prompt.tools, buildArgs)),
               ),
             }
           : undefined),
