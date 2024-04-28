@@ -88,7 +88,7 @@ function evalWithModuleContext<T>(inFile: string, evalFn: () => T): T {
 
 function evaluateBuildResults(
   inFile: string,
-  buildResult: esbuild.BuildResult
+  buildResult: esbuild.BuildResult,
 ): EvaluatorFile | null {
   if (!buildResult.outputFiles) {
     return null;
@@ -106,7 +106,7 @@ function evaluateBuildResults(
     new Function("require", "__filename", "__dirname", moduleText)(
       require,
       __filename,
-      __dirname
+      __dirname,
     );
     return { ...globalThis._evals };
   });
@@ -115,7 +115,7 @@ function evaluateBuildResults(
 async function initLogger(
   projectName: string,
   experimentName?: string,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
 ) {
   const logger = initExperiment(projectName, {
     experiment: experimentName,
@@ -123,14 +123,14 @@ async function initLogger(
   });
   const info = await logger.summarize({ summarizeScores: false });
   console.error(
-    `Experiment ${info.experimentName} is running at ${info.experimentUrl}`
+    `Experiment ${info.experimentName} is running at ${info.experimentUrl}`,
   );
   return logger;
 }
 
 function resolveReporter(
   reporter: string | ReporterDef<any> | undefined,
-  reporters: Record<string, ReporterDef<any>>
+  reporters: Record<string, ReporterDef<any>>,
 ) {
   if (typeof reporter === "string") {
     if (!reporters[reporter]) {
@@ -146,7 +146,7 @@ function resolveReporter(
   } else {
     const reporterNames = Object.keys(reporters).join(", ");
     throw new Error(
-      `Multiple reporters found (${reporterNames}). Please specify a reporter explicitly.`
+      `Multiple reporters found (${reporterNames}). Please specify a reporter explicitly.`,
     );
   }
 }
@@ -162,7 +162,7 @@ type AllReports = Record<
 function addReport(
   evalReports: AllReports,
   reporter: ReporterDef<any>,
-  report: any
+  report: any,
 ) {
   if (!evalReports[reporter.name]) {
     evalReports[reporter.name] = {
@@ -175,7 +175,7 @@ function addReport(
 
 function buildWatchPluginForEvaluator(
   inFile: string,
-  opts: EvaluatorOpts
+  opts: EvaluatorOpts,
 ): esbuild.Plugin {
   const evaluators: EvaluatorState = {
     evaluators: [],
@@ -203,7 +203,7 @@ function buildWatchPluginForEvaluator(
         }
 
         evaluators.evaluators = evaluators.evaluators.filter(
-          (e) => e.sourceFile !== inFile
+          (e) => e.sourceFile !== inFile,
         );
 
         // Update the evaluators and reporters
@@ -215,7 +215,7 @@ function buildWatchPluginForEvaluator(
           });
         }
         for (const [reporterName, reporter] of Object.entries(
-          evalResult.reporters
+          evalResult.reporters,
         )) {
           evaluators.reporters[reporterName] = reporter;
         }
@@ -234,17 +234,17 @@ function buildWatchPluginForEvaluator(
             : await initLogger(
                 evaluator.projectName,
                 evaluator.experimentName,
-                evaluator.metadata
+                evaluator.metadata,
               );
           const evaluatorResult = await runEvaluator(
             logger,
             evaluator,
             opts.progressReporter,
-            opts.filters
+            opts.filters,
           );
           const resolvedReporter = resolveReporter(
             reporter,
-            evaluators.reporters // Let these accumulate across all files.
+            evaluators.reporters, // Let these accumulate across all files.
           );
 
           const report = resolvedReporter.reportEval(
@@ -253,14 +253,14 @@ function buildWatchPluginForEvaluator(
             {
               verbose: opts.verbose,
               jsonl: opts.jsonl,
-            }
+            },
           );
 
           addReport(evalReports, resolvedReporter, report);
         }
 
         for (const [reporterName, { reporter, results }] of Object.entries(
-          evalReports
+          evalReports,
         )) {
           const success = await reporter.reportRun(await Promise.all(results));
           if (!success) {
@@ -278,7 +278,7 @@ async function initFile(
   inFile: string,
   outFile: string,
   opts: EvaluatorOpts,
-  args: RunArgs
+  args: RunArgs,
 ): Promise<FileHandle> {
   const buildOptions = buildOpts(inFile, outFile, opts, args);
   const ctx = await esbuild.context(buildOptions);
@@ -342,7 +342,7 @@ interface EvaluatorOpts {
 function updateEvaluators(
   evaluators: EvaluatorState,
   buildResults: BuildResult[],
-  opts: EvaluatorOpts
+  opts: EvaluatorOpts,
 ) {
   for (const result of buildResults) {
     if (result.type === "failure") {
@@ -353,7 +353,7 @@ function updateEvaluators(
         console.warn(result.error);
       } else {
         console.warn(
-          `Failed to compile ${result.sourceFile}: ${result.error.message}`
+          `Failed to compile ${result.sourceFile}: ${result.error.message}`,
         );
       }
       continue;
@@ -368,7 +368,7 @@ function updateEvaluators(
     }
 
     for (const [reporterName, reporter] of Object.entries(
-      result.evaluator.reporters
+      result.evaluator.reporters,
     )) {
       if (
         evaluators.reporters[reporterName] &&
@@ -376,8 +376,8 @@ function updateEvaluators(
       ) {
         console.warn(
           warning(
-            `Reporter '${reporterName}' already exists. Will skip '${reporterName}' from ${result.sourceFile}.`
-          )
+            `Reporter '${reporterName}' already exists. Will skip '${reporterName}' from ${result.sourceFile}.`,
+          ),
         );
         continue;
       }
@@ -388,7 +388,7 @@ function updateEvaluators(
 
 async function runAndWatch(
   handles: Record<string, FileHandle>,
-  opts: EvaluatorOpts
+  opts: EvaluatorOpts,
 ) {
   const count = Object.keys(handles).length;
   console.error(`Watching ${pluralize("file", count, true)}...`);
@@ -412,10 +412,10 @@ async function runAndWatch(
 
 async function runOnce(
   handles: Record<string, FileHandle>,
-  opts: EvaluatorOpts
+  opts: EvaluatorOpts,
 ) {
   const buildPromises = Object.values(handles).map((handle) =>
-    handle.rebuild()
+    handle.rebuild(),
   );
 
   const buildResults = await Promise.all(buildPromises);
@@ -443,21 +443,21 @@ async function runOnce(
         : await initLogger(
             evaluator.evaluator.projectName,
             evaluator.evaluator.experimentName,
-            evaluator.evaluator.metadata
+            evaluator.evaluator.metadata,
           );
       try {
         return await runEvaluator(
           logger,
           evaluator.evaluator,
           opts.progressReporter,
-          opts.filters
+          opts.filters,
         );
       } finally {
         if (logger) {
           await logger.flush();
         }
       }
-    }
+    },
   );
 
   console.error(`Processing ${resultPromises.length} evaluators...`);
@@ -476,7 +476,7 @@ async function runOnce(
     const evaluator = evaluators.evaluators[idx];
     const resolvedReporter = resolveReporter(
       evaluator.reporter,
-      evaluators.reporters
+      evaluators.reporters,
     );
 
     const report = resolvedReporter.reportEval(
@@ -485,7 +485,7 @@ async function runOnce(
       {
         verbose: opts.verbose,
         jsonl: opts.jsonl,
-      }
+      },
     );
 
     addReport(evalReports, resolvedReporter, report);
@@ -493,7 +493,7 @@ async function runOnce(
 
   let allSuccess = true;
   for (const [reporterName, { reporter, results }] of Object.entries(
-    evalReports
+    evalReports,
   )) {
     const success = await reporter.reportRun(await Promise.all(results));
     allSuccess = allSuccess && success;
@@ -521,7 +521,7 @@ interface RunArgs {
 function checkMatch(
   pathInput: string,
   include_patterns: string[] | null,
-  exclude_patterns: string[] | null
+  exclude_patterns: string[] | null,
 ): boolean {
   const p = path.resolve(pathInput);
   if (include_patterns !== null) {
@@ -570,8 +570,8 @@ async function collectFiles(inputPath: string): Promise<string[]> {
       console.warn(
         warning(
           `Reading ${inputPath} because it was specified directly. Rename it to end in .eval.ts or ` +
-            `.eval.js to include it automatically when you specify a directory.`
-        )
+            `.eval.js to include it automatically when you specify a directory.`,
+        ),
       );
     }
     files.push(inputPath);
@@ -612,7 +612,7 @@ function buildOpts(
   fileName: string,
   outFile: string,
   opts: EvaluatorOpts,
-  args: RunArgs
+  args: RunArgs,
 ): esbuild.BuildOptions {
   const plugins = [markOurPackagesExternalPlugin];
   if (opts.watch) {
@@ -640,8 +640,8 @@ async function initializeHandles(args: RunArgs, opts: EvaluatorOpts) {
     if (newFiles.length == 0) {
       console.warn(
         warning(
-          `Provided path ${inputPath} is not an eval file or a directory containing eval files, skipping...`
-        )
+          `Provided path ${inputPath} is not an eval file or a directory containing eval files, skipping...`,
+        ),
       );
     }
     for (const file of newFiles) {
@@ -651,7 +651,7 @@ async function initializeHandles(args: RunArgs, opts: EvaluatorOpts) {
 
   if (Object.keys(files).length == 0) {
     console.warn(
-      warning("No eval files were found in any of the provided paths.")
+      warning("No eval files were found in any of the provided paths."),
     );
     process.exit(0);
   }
@@ -665,8 +665,8 @@ async function initializeHandles(args: RunArgs, opts: EvaluatorOpts) {
       tmpDir,
       `${path.basename(file, path.extname(file))}-${uuidv4().slice(
         0,
-        8
-      )}.${OUT_EXT}`
+        8,
+      )}.${OUT_EXT}`,
     );
     initPromises.push(initFile(file, outFile, opts, args));
   }
