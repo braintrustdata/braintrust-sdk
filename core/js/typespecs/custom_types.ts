@@ -10,7 +10,7 @@ const modeSchema = z.enum(["default", "stainless"]);
 const mode = modeSchema.parse(
   typeof process === "undefined"
     ? "default"
-    : process?.env?.BRAINTRUST_TYPESPECS_MODE || "default"
+    : process?.env?.BRAINTRUST_TYPESPECS_MODE || "default",
 );
 
 const modeToTypes = {

@@ -71,8 +71,8 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
           ...("tools" in mode && mode.tools
             ? { tools: convertTools(mode.tools) }
             : "tool" in mode && mode.tool
-            ? { tools: convertTools([mode.tool]) }
-            : {}),
+              ? { tools: convertTools([mode.tool]) }
+              : {}),
         },
         output: postProcessOutput(ret.text, ret.toolCalls, ret.finishReason),
         metrics: {
@@ -108,8 +108,8 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
         ...("tools" in mode && mode.tools
           ? { tools: convertTools(mode.tools) }
           : "tool" in mode && mode.tool
-          ? { tools: convertTools([mode.tool]) }
-          : {}),
+            ? { tools: convertTools([mode.tool]) }
+            : {}),
       },
     });
 
@@ -187,7 +187,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
                   Object.keys(toolCalls).length > 0
                     ? Object.values(toolCalls)
                     : undefined,
-                  finishReason!
+                  finishReason!,
                 ),
                 metrics: {
                   time_to_first_token: getCurrentUnixTimestamp() - startTime,
@@ -201,7 +201,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
               end();
               controller.terminate();
             },
-          })
+          }),
         ),
       };
     } finally {
@@ -223,7 +223,7 @@ function convertTools(tools: LanguageModelV1FunctionTool[]): Tools {
 function postProcessOutput(
   text: string | undefined,
   tool_calls: LanguageModelV1FunctionToolCall[] | undefined,
-  finish_reason: LanguageModelV1FinishReason
+  finish_reason: LanguageModelV1FinishReason,
 ) {
   return {
     text,

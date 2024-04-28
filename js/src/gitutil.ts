@@ -45,7 +45,7 @@ async function getBaseBranch(remote: string | undefined = undefined) {
     // and only fall back to the remote origin if required.
     const repoBranches = new Set((await git.branchLocal()).all);
     const matchingBaseBranches = COMMON_BASE_BRANCHES.filter((b) =>
-      repoBranches.has(b)
+      repoBranches.has(b),
     );
     if (matchingBaseBranches.length === 1) {
       branch = matchingBaseBranches[0];
@@ -77,9 +77,8 @@ async function getBaseBranchAncestor(remote: string | undefined = undefined) {
     throw new Error("Not in a git repo");
   }
 
-  const { remote: remoteName, branch: baseBranch } = await getBaseBranch(
-    remote
-  );
+  const { remote: remoteName, branch: baseBranch } =
+    await getBaseBranch(remote);
 
   const isDirty = (await git.diffSummary()).files.length > 0;
   const head = isDirty ? "HEAD" : "HEAD^";
@@ -103,7 +102,7 @@ async function getBaseBranchAncestor(remote: string | undefined = undefined) {
 
 export async function getPastNAncestors(
   n: number = 10,
-  remote: string | undefined = undefined
+  remote: string | undefined = undefined,
 ) {
   const git = await currentRepo();
   if (git === null) {
@@ -116,7 +115,7 @@ export async function getPastNAncestors(
   } catch (e) {
     console.warn(
       "Skipping git metadata. This is likely because the repository has not been published to a remote yet.",
-      `${e}`
+      `${e}`,
     );
   }
   if (!ancestor) {
@@ -182,28 +181,28 @@ async function repoInfo() {
 
   commit = await attempt(async () => await git.revparse(["HEAD"]));
   commit_message = await attempt(async () =>
-    (await git.raw(["log", "-1", "--pretty=%B"])).trim()
+    (await git.raw(["log", "-1", "--pretty=%B"])).trim(),
   );
   commit_time = await attempt(async () =>
-    (await git.raw(["log", "-1", "--pretty=%cI"])).trim()
+    (await git.raw(["log", "-1", "--pretty=%cI"])).trim(),
   );
   author_name = await attempt(async () =>
-    (await git.raw(["log", "-1", "--pretty=%aN"])).trim()
+    (await git.raw(["log", "-1", "--pretty=%aN"])).trim(),
   );
   author_email = await attempt(async () =>
-    (await git.raw(["log", "-1", "--pretty=%aE"])).trim()
+    (await git.raw(["log", "-1", "--pretty=%aE"])).trim(),
   );
   tag = await attempt(async () =>
-    (await git.raw(["describe", "--tags", "--exact-match", "--always"])).trim()
+    (await git.raw(["describe", "--tags", "--exact-match", "--always"])).trim(),
   );
 
   branch = await attempt(async () =>
-    (await git.raw(["rev-parse", "--abbrev-ref", "HEAD"])).trim()
+    (await git.raw(["rev-parse", "--abbrev-ref", "HEAD"])).trim(),
   );
 
   if (dirty) {
     git_diff = await attempt(async () =>
-      truncateToByteLimit(await git.raw(["diff", "HEAD"]))
+      truncateToByteLimit(await git.raw(["diff", "HEAD"])),
     );
   }
 

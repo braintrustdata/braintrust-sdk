@@ -10,7 +10,7 @@ import {
 
 function generateMergedRowKey(
   row: Record<string, unknown>,
-  useParentIdForId?: boolean
+  useParentIdForId?: boolean,
 ) {
   return JSON.stringify(
     [
@@ -21,7 +21,7 @@ function generateMergedRowKey(
       "prompt_session_id",
       "log_id",
       useParentIdForId ?? false ? PARENT_ID_FIELD : "id",
-    ].map((k) => row[k])
+    ].map((k) => row[k]),
   );
 }
 
@@ -30,12 +30,12 @@ export function mergeRowBatch<
     id: string;
     [IS_MERGE_FIELD]?: boolean;
     [PARENT_ID_FIELD]?: string;
-  }
+  },
 >(rows: T[]): T[][] {
   for (const row of rows) {
     if (row.id === undefined) {
       throw new Error(
-        "Logged row is missing an id. This is an internal braintrust error. Please contact us at info@braintrustdata.com for help"
+        "Logged row is missing an id. This is an internal braintrust error. Please contact us at info@braintrustdata.com for help",
       );
     }
   }
@@ -57,11 +57,11 @@ export function mergeRowBatch<
 
   const merged = [...rowGroups.values()];
   const rowToLabel = new Map<string, number>(
-    merged.map((r, i) => [generateMergedRowKey(r), i])
+    merged.map((r, i) => [generateMergedRowKey(r), i]),
   );
 
   const graph: AdjacencyListGraph = new Map(
-    Array.from({ length: merged.length }).map((_, i) => [i, new Set()])
+    Array.from({ length: merged.length }).map((_, i) => [i, new Set()]),
   );
   merged.forEach((r, i) => {
     const parentId = r[PARENT_ID_FIELD];
@@ -82,12 +82,12 @@ export function mergeRowBatch<
         [...vs].map((v) => {
           const ret: [number, number] = [k, v];
           return ret;
-        })
-      )
+        }),
+      ),
     ),
   });
   const buckets = connectedComponents.map((cc) =>
-    topologicalSort(graph, cc /* visitationOrder */)
+    topologicalSort(graph, cc /* visitationOrder */),
   );
   return buckets.map((bucket) => bucket.map((i) => merged[i]));
 }

@@ -26,7 +26,7 @@ class DefaultAsyncLocalStorage<T> implements IsoAsyncLocalStorage<T> {
 
 export interface Common {
   getRepoInfo: (
-    settings?: GitMetadataSettings
+    settings?: GitMetadataSettings,
   ) => Promise<RepoInfo | undefined>;
   getPastNAncestors: () => Promise<string[]>;
   getEnv: (name: string) => string | undefined;
