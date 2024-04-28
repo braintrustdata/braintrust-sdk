@@ -771,7 +771,7 @@ async function main() {
   });
   parser_run.add_argument("--list", {
     help: "List, but do not execute, evaluators.",
-    nargs: "*",
+    action: "store_true",
   });
   parser_run.add_argument("--jsonl", {
     action: "store_true",
