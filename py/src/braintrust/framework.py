@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from enum import Enum
 from multiprocessing import cpu_count
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List, Optional, TypeVar, Union
+from typing import Any, AsyncIterator, Awaitable, Callable, Coroutine, Dict, Iterator, List, Optional, TypeVar, Union
 
 import exceptiongroup
 from braintrust_core.score import Score, Scorer
@@ -644,6 +644,21 @@ def _scorer_name(scorer, scorer_idx):
     return ret
 
 
+def listify_score_values(result, scorer_name):
+    if isinstance(result, Iterable):
+        for s in result:
+            if not isinstance(s, Score):
+                raise ValueError(
+                    f"When returning an array of scores, each score must be a non-empty object. Got: {s}"
+                )
+        result = list(result)
+    elif isinstance(result, Score):
+        result = [result]
+    else:
+        result = [Score(name=scorer_name, score=result)]
+    return result
+
+
 async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int], filters: List[Filter]):
     event_loop = asyncio.get_event_loop()
 
@@ -656,17 +671,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
             scorer_args = kwargs
 
             result = await call_user_fn(event_loop, score, **scorer_args)
-            if isinstance(result, Iterable):
-                for s in result:
-                    if not isinstance(s, Score):
-                        raise ValueError(
-                            f"When returning an array of scores, each score must be a non-empty object. Got: {s}"
-                        )
-                result = list(result)
-            elif isinstance(result, Score):
-                result = [result]
-            else:
-                result = [Score(name=name, score=result)]
+            result = listify_score_values(result, name)
 
             def get_other_fields(s):
                 return {k: v for k, v in s.as_dict().items() if k not in ["metadata", "name"]}
@@ -850,4 +855,34 @@ def build_local_summary(evaluator, results):
     )
 
 
-__all__ = ["Evaluator", "Eval", "Score", "EvalCase", "EvalHooks", "BaseExperiment", "Reporter"]
+def normalize_scorers(scorers: List[Callable]) -> Callable[[Any], Coroutine[Any, Any, List[Any]]]:
+    """
+    A higher order scorer that makes it easier to build other higher order scorers. It takes a list of scorers and
+    returns a single (async) scorer that calls the other scorers and returns a list of Score objects. This way, when
+    you're building a higher order scorer, you don't need to worry about the dependent scorers returning numbers or
+    Nones or Score objects or whatever. Just call the returned scorer, and you'll get back a list of Score objects.
+    """
+    async def NormalizedScorer(args: Any) -> List[Any]:
+        score_lists = await asyncio.gather(
+            *[process_scorer(scorer, args, index) for index, scorer in enumerate(scorers)]
+        )
+        # Flatten the list of lists into a single list
+        scores = [score for sublist in score_lists for score in sublist]
+        return scores
+
+    async def process_scorer(scorer: Callable, args: Any, index: int) -> List[Any]:
+        name = _scorer_name(scorer, index)
+        one_or_more_scores = await maybe_await(scorer, args)
+        score_values = listify_score_values(one_or_more_scores, name)
+        return score_values
+
+    async def maybe_await(f, *args):
+        if asyncio.iscoroutinefunction(f):
+            return await f(*args)
+        else:
+            return f(*args)
+
+    return NormalizedScorer
+
+
+__all__ = ["Evaluator", "Eval", "Score", "EvalCase", "EvalHooks", "BaseExperiment", "Reporter", "normalize_scorers"]

@@ -63,6 +63,7 @@ export {
   Reporter,
   buildLocalSummary,
   reportFailures,
+  normalizeScorers,
 } from "./framework";
 export * from "./wrappers/oai";
 export * from "./wrappers/ai-sdk";
