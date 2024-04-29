@@ -19,7 +19,7 @@ export type GitMetadataSettings = {
 
 export function mergeGitMetadataSettings(
   s1: GitMetadataSettings,
-  s2: GitMetadataSettings
+  s2: GitMetadataSettings,
 ): GitMetadataSettings {
   if (s1.collect === "all") {
     return s2;

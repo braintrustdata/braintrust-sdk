@@ -18,7 +18,7 @@ import { isEmpty } from "./util";
 export type BaseExperiment<
   Input,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType
+  Metadata extends BaseMetadata = DefaultMetadataType,
 > = {
   _type: "BaseExperiment";
   _phantom?: [Input, Expected, Metadata];
@@ -38,11 +38,11 @@ export type BaseExperiment<
 export function BaseExperiment<
   Input = unknown,
   Expected = unknown,
-  Metadata extends BaseMetadata = DefaultMetadataType
+  Metadata extends BaseMetadata = DefaultMetadataType,
 >(
   options: {
     name?: string;
-  } = {}
+  } = {},
 ): BaseExperiment<Input, Expected, Metadata> {
   return { _type: "BaseExperiment", ...options };
 }
@@ -50,7 +50,7 @@ export function BaseExperiment<
 export type EvalData<
   Input,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType
+  Metadata extends BaseMetadata = DefaultMetadataType,
 > =
   | EvalCase<Input, Expected, Metadata>[]
   | (() => EvalCase<Input, Expected, Metadata>[])
@@ -74,7 +74,7 @@ export type EvalScorerArgs<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType
+  Metadata extends BaseMetadata = DefaultMetadataType,
 > = EvalCase<Input, Expected, Metadata> & {
   output: Output;
 };
@@ -85,16 +85,16 @@ export type EvalScorer<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType
+  Metadata extends BaseMetadata = DefaultMetadataType,
 > = (
-  args: EvalScorerArgs<Input, Output, Expected, Metadata>
+  args: EvalScorerArgs<Input, Output, Expected, Metadata>,
 ) => OneOrMoreScores | Promise<OneOrMoreScores>;
 
 export type EvalResult<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType
+  Metadata extends BaseMetadata = DefaultMetadataType,
 > = EvalCase<Input, Expected, Metadata> & {
   output: Output;
   scores: Record<string, number | null>;
@@ -105,7 +105,7 @@ export interface Evaluator<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType
+  Metadata extends BaseMetadata = DefaultMetadataType,
 > {
   /**
    * A function that returns a list of inputs, expected outputs, and metadata.
@@ -154,7 +154,7 @@ export type EvalResultWithSummary<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType
+  Metadata extends BaseMetadata = DefaultMetadataType,
 > = {
   summary: ExperimentSummary;
   results: EvalResult<Input, Output, Expected, Metadata>[];
@@ -176,7 +176,7 @@ export interface ReporterBody<EvalReport> {
   reportEval(
     evaluator: EvaluatorDef<any, any, any, any>,
     result: EvalResultWithSummary<any, any, any, any>,
-    opts: ReporterOpts
+    opts: ReporterOpts,
   ): Promise<EvalReport> | EvalReport;
 
   /**
@@ -205,7 +205,7 @@ export type EvaluatorDef<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType
+  Metadata extends BaseMetadata = DefaultMetadataType,
 > = {
   projectName: string;
   evalName: string;
@@ -223,7 +223,7 @@ export type EvaluatorFile = {
 
 function initExperiment<IsOpen extends boolean = false>(
   projectName: string,
-  options: Readonly<InitOptions<IsOpen>> = {}
+  options: Readonly<InitOptions<IsOpen>> = {},
 ) {
   return _initExperiment(projectName, {
     ...options,
@@ -246,11 +246,11 @@ export async function Eval<
   Output,
   Expected = void,
   Metadata extends BaseMetadata = DefaultMetadataType,
-  EvalReport = boolean
+  EvalReport = boolean,
 >(
   name: string,
   evaluator: Evaluator<Input, Output, Expected, Metadata>,
-  reporter?: ReporterDef<EvalReport> | string
+  reporter?: ReporterDef<EvalReport> | string,
 ): Promise<EvalResultWithSummary<Input, Output, Expected, Metadata>> {
   let evalName = makeEvalName(name, evaluator.experimentName);
   if (_evals.evaluators[evalName]) {
@@ -277,7 +277,7 @@ export async function Eval<
 
   if (typeof reporter === "string") {
     throw new Error(
-      "Must specify a reporter object, not a name. Can only specify reporter names when running 'braintrust eval'"
+      "Must specify a reporter object, not a name. Can only specify reporter names when running 'braintrust eval'",
     );
   }
 
@@ -311,7 +311,7 @@ export async function Eval<
 
 export function Reporter<EvalReport>(
   name: string,
-  reporter: ReporterBody<EvalReport>
+  reporter: ReporterBody<EvalReport>,
 ): ReporterDef<EvalReport> {
   const ret = { name, ...reporter };
   if (_evals.reporters[name]) {
@@ -381,7 +381,7 @@ function evaluateFilter(object: any, filter: Filter) {
 
 function scorerName(
   scorer: EvalScorer<any, any, any, any>,
-  scorer_idx: number
+  scorer_idx: number,
 ) {
   return scorer.name || `scorer_${scorer_idx}`;
 }
@@ -390,7 +390,7 @@ export async function runEvaluator(
   experiment: Experiment | null,
   evaluator: EvaluatorDef<any, any, any, any>,
   progressReporter: ProgressReporter,
-  filters: Filter[]
+  filters: Filter[],
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   if (typeof evaluator.data === "string") {
     throw new Error("Unimplemented: string data paths");
@@ -405,7 +405,7 @@ export async function runEvaluator(
     }
     if (!experiment) {
       throw new Error(
-        "Cannot use BaseExperiment() without connecting to Braintrust (you most likely set --no-send-logs)"
+        "Cannot use BaseExperiment() without connecting to Braintrust (you most likely set --no-send-logs)",
       );
     }
     let name = dataResult.name;
@@ -439,7 +439,7 @@ export async function runEvaluator(
   data = data
     .filter((d) => filters.every((f) => evaluateFilter(d, f)))
     .flatMap((datum) =>
-      [...Array(evaluator.trialCount ?? 1).keys()].map(() => datum)
+      [...Array(evaluator.trialCount ?? 1).keys()].map(() => datum),
     );
 
   progressReporter.start(evaluator.evalName, data.length);
@@ -470,7 +470,7 @@ export async function runEvaluator(
             name: "task",
             spanAttributes: { type: SpanTypeAttribute.TASK },
             event: { input: datum.input },
-          }
+          },
         );
         rootSpan.log({ output, metadata });
 
@@ -496,8 +496,8 @@ export async function runEvaluator(
                       if (!(typeof s === "object" && !isEmpty(s))) {
                         throw new Error(
                           `When returning an array of scores, each score must be a non-empty object. Got: ${JSON.stringify(
-                            s
-                          )}`
+                            s,
+                          )}`,
                         );
                       }
                     }
@@ -506,13 +506,13 @@ export async function runEvaluator(
                   const results = Array.isArray(scoreValue)
                     ? scoreValue
                     : typeof scoreValue === "object" && !isEmpty(scoreValue)
-                    ? [scoreValue]
-                    : [
-                        {
-                          name: scorerNames[score_idx],
-                          score: scoreValue,
-                        },
-                      ];
+                      ? [scoreValue]
+                      : [
+                          {
+                            name: scorerNames[score_idx],
+                            score: scoreValue,
+                          },
+                        ];
 
                   const getOtherFields = (s: Score) => {
                     const { metadata, name, ...rest } = s;
@@ -527,7 +527,7 @@ export async function runEvaluator(
                             mergeDicts(prev, {
                               [s.name]: s.metadata,
                             }),
-                          {}
+                          {},
                         );
 
                   const resultOutput =
@@ -536,12 +536,12 @@ export async function runEvaluator(
                       : results.reduce(
                           (prev, s) =>
                             mergeDicts(prev, { [s.name]: getOtherFields(s) }),
-                          {}
+                          {},
                         );
 
                   const scores = results.reduce(
                     (prev, s) => mergeDicts(prev, { [s.name]: s.score }),
-                    {}
+                    {},
                   );
 
                   span.log({
@@ -557,13 +557,13 @@ export async function runEvaluator(
                     type: SpanTypeAttribute.SCORE,
                   },
                   event: { input: scoringArgs },
-                }
+                },
               );
               return { kind: "score", value: results } as const;
             } catch (e) {
               return { kind: "error", value: e } as const;
             }
-          })
+          }),
         );
         // Resolve each promise on its own so that we can separate the passing
         // from the failing ones.
@@ -592,7 +592,7 @@ export async function runEvaluator(
             failingScorersAndResults.map(({ name, error }) => [
               name,
               error instanceof Error ? error.stack : `${error}`,
-            ])
+            ]),
           );
           metadata["scorer_errors"] = scorerErrors;
           rootSpan.log({ metadata: { scorer_errors: scorerErrors } });
@@ -600,7 +600,7 @@ export async function runEvaluator(
           const errors = failingScorersAndResults.map((item) => item.error);
           throw new AggregateError(
             errors,
-            `Found exceptions for the following scorers: ${names}`
+            `Found exceptions for the following scorers: ${names}`,
           );
         }
       } catch (e) {
@@ -660,7 +660,7 @@ export function logError(e: unknown, verbose: boolean) {
 
 export function buildLocalSummary(
   evaluator: EvaluatorDef<any, any, any, any>,
-  results: EvalResult<any, any, any, any>[]
+  results: EvalResult<any, any, any, any>[],
 ): ExperimentSummary {
   const scoresByName: { [name: string]: { total: number; count: number } } = {};
   for (const result of results) {
@@ -683,7 +683,7 @@ export function buildLocalSummary(
           name,
           score: total / count,
         },
-      ])
+      ]),
     ),
   };
 }
@@ -692,11 +692,11 @@ export function reportFailures<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata
+  Metadata extends BaseMetadata,
 >(
   evaluator: EvaluatorDef<Input, Output, Expected, Metadata>,
   failingResults: EvalResult<Input, Output, Expected, Metadata>[],
-  { verbose, jsonl }: ReporterOpts
+  { verbose, jsonl }: ReporterOpts,
 ) {
   if (failingResults.length > 0) {
     // TODO: We may want to support a non-strict mode (and make this the "strict" behavior), so that
@@ -707,18 +707,20 @@ export function reportFailures<
         `Evaluator ${evaluator.evalName} failed with ${pluralize(
           "error",
           failingResults.length,
-          true
-        )}. This evaluation ("${evaluator.evalName}") will not be fully logged.`
-      )
+          true,
+        )}. This evaluation ("${
+          evaluator.evalName
+        }") will not be fully logged.`,
+      ),
     );
     if (jsonl) {
       console.log(
         JSON.stringify({
           evaluatorName: evaluator.evalName,
           errors: failingResults.map(
-            (r) => `${r.error instanceof Error ? r.error.stack : r.error}`
+            (r) => `${r.error instanceof Error ? r.error.stack : r.error}`,
           ),
-        })
+        }),
       );
     } else {
       for (const result of failingResults) {
@@ -741,11 +743,11 @@ export const defaultReporter: ReporterDef<boolean> = {
   async reportEval(
     evaluator: EvaluatorDef<any, any, any, any>,
     result: EvalResultWithSummary<any, any, any, any>,
-    { verbose, jsonl }: ReporterOpts
+    { verbose, jsonl }: ReporterOpts,
   ) {
     const { results, summary } = result;
     const failingResults = results.filter(
-      (r: { error: unknown }) => r.error !== undefined
+      (r: { error: unknown }) => r.error !== undefined,
     );
 
     if (failingResults.length > 0) {

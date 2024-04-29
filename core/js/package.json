@@ -54,6 +54,7 @@
     "ai"
   ],
   "devDependencies": {
+    "@types/node": "^20.10.5",
     "@types/uuid": "^9.0.7",
     "tsup": "^8.0.1",
     "tsx": "^3.14.0",

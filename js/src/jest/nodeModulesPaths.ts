@@ -19,7 +19,7 @@ type NodeModulesPathsOptions = {
 
 export default function nodeModulesPaths(
   basedir: string,
-  options: NodeModulesPathsOptions
+  options: NodeModulesPathsOptions,
 ): Array<string> {
   const modules =
     options && options.moduleDirectory

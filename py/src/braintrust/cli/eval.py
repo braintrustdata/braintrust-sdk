@@ -72,6 +72,7 @@ class EvaluatorOpts:
     terminate_on_failure: bool
     watch: bool
     filters: List[str]
+    list: bool
     jsonl: bool
 
 
@@ -84,11 +85,11 @@ class LoadedEvaluator:
 
 @dataclass
 class EvaluatorState:
-    evaluators: Dict[str, LoadedEvaluator] = field(default_factory=dict)
+    evaluators: List[LoadedEvaluator] = field(default_factory=list)
     reporters: Dict[str, ReporterDef] = field(default_factory=dict)
 
 
-def update_evaluators(evaluators: EvaluatorState, handles, terminate_on_failure):
+def update_evaluators(eval_state: EvaluatorState, handles, terminate_on_failure):
     for handle in handles:
         try:
             module_evals = handle.rebuild()
@@ -99,31 +100,25 @@ def update_evaluators(evaluators: EvaluatorState, handles, terminate_on_failure)
                 eprint(f"Failed to import {handle.in_file}: {e}")
                 continue
 
-        for eval_name, evaluator in module_evals.evaluators.items():
+        for evaluator in module_evals.evaluators.values():
             if not isinstance(evaluator, EvaluatorInstance):
                 continue
 
-            if eval_name in evaluators.evaluators:
-                _logger.warning(
-                    f"Evaluator {eval_name} already exists (in {evaluators[eval_name].handle.in_file} and {handle.in_file}). Will skip {eval_name} in {handle.in_file}."
-                )
-                continue
-
-            evaluators.evaluators[eval_name] = LoadedEvaluator(
-                handle=handle, evaluator=evaluator.evaluator, reporter=evaluator.reporter
+            eval_state.evaluators.append(
+                LoadedEvaluator(handle=handle, evaluator=evaluator.evaluator, reporter=evaluator.reporter)
             )
 
         for reporter_name, reporter in module_evals.reporters.items():
             if not isinstance(reporter, ReporterDef):
                 continue
 
-            if reporter_name in evaluators.reporters:
+            if reporter_name in eval_state.reporters:
                 _logger.warning(
-                    f"Reporter {reporter_name} already exists (in {evaluators.reporters[reporter_name].module} and {handle.in_file}). Will skip {reporter_name} in {handle.in_file}."
+                    f"Reporter {reporter_name} already exists (in {eval_state.reporters[reporter_name].module} and {handle.in_file}). Will skip {reporter_name} in {handle.in_file}."
                 )
                 continue
 
-            evaluators.reporters[reporter_name] = reporter
+            eval_state.reporters[reporter_name] = reporter
 
 
 async def run_evaluator_task(evaluator, position, opts: EvaluatorOpts):
@@ -171,14 +166,19 @@ async def run_once(handles, evaluator_opts):
     objects = EvaluatorState()
     update_evaluators(objects, handles, terminate_on_failure=evaluator_opts.terminate_on_failure)
 
+    if evaluator_opts.list:
+        for evaluator in objects.evaluators:
+            print(f"{evaluator.evaluator.eval_name}")
+        return True
+
     eval_promises = [
         asyncio.create_task(run_evaluator_task(evaluator.evaluator, idx, evaluator_opts))
-        for idx, evaluator in enumerate(objects.evaluators.values())
+        for idx, evaluator in enumerate(objects.evaluators)
     ]
     eval_results = [await p for p in eval_promises]
 
     eval_reports = {}
-    for evaluator, result in zip(objects.evaluators.values(), eval_results):
+    for evaluator, result in zip(objects.evaluators, eval_results):
         resolved_reporter = resolve_reporter(evaluator.reporter, objects.reporters)
         report = resolved_reporter._call_report_eval(
             evaluator=evaluator.evaluator, result=result, verbose=evaluator_opts.verbose, jsonl=evaluator_opts.jsonl
@@ -256,8 +256,16 @@ def run(args):
         terminate_on_failure=args.terminate_on_failure,
         watch=args.watch,
         filters=parse_filters(args.filter) if args.filter else [],
+        list=args.list,
         jsonl=args.jsonl,
     )
+
+    if args.watch:
+        eprint("Watch mode is not yet implemented")
+        exit(1)
+    if args.watch and args.list:
+        eprint("Cannot specify both --list and --watch")
+        exit(1)
 
     handles = initialize_handles(args.files)
 
@@ -268,12 +276,8 @@ def run(args):
             app_url=args.app_url,
         )
 
-    if args.watch:
-        eprint("Watch mode is not yet implemented")
-        exit(1)
-    else:
-        if not asyncio.run(run_once(handles, evaluator_opts)):
-            sys.exit(1)
+    if not asyncio.run(run_once(handles, evaluator_opts)):
+        sys.exit(1)
 
 
 def build_parser(subparsers, parent_parser):
@@ -305,6 +309,7 @@ def build_parser(subparsers, parent_parser):
         help="Only run evaluators that match these filters. Each filter is a regular expression (https://docs.python.org/3/library/re.html). For example, --filter metadata.priority='^P0$' input.name='foo.*bar' will only run evaluators that have metadata.priority equal to 'P0' and input.name matching the regular expression 'foo.*bar'.",
         nargs="*",
     )
+    parser.add_argument("--list", help="List, but do not execute, evaluators.", action="store_true")
     parser.add_argument(
         "--jsonl",
         help="Format score summaries as jsonl, i.e. one JSON-formatted line per summary.",
