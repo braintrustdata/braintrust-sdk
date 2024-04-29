@@ -147,7 +147,7 @@ interface NonStreamingChatResponse {
 
 function wrapBetaChatCompletion<
   P extends ChatParams,
-  C extends StreamingChatResponse
+  C extends StreamingChatResponse,
 >(completion: (params: P) => C): (params: P) => Promise<any> {
   return (allParams: P & SpanInfo) => {
     const { span_info: _, ...params } = allParams;
@@ -159,8 +159,8 @@ function wrapBetaChatCompletion<
             type: SpanTypeAttribute.LLM,
           },
         },
-        parseChatCompletionParams(allParams)
-      )
+        parseChatCompletionParams(allParams),
+      ),
     );
     const startTime = getCurrentUnixTimestamp();
 
@@ -196,9 +196,9 @@ type StreamingChatResponse = any;
 
 function wrapChatCompletion<
   P extends ChatParams,
-  C extends NonStreamingChatResponse | StreamingChatResponse
+  C extends NonStreamingChatResponse | StreamingChatResponse,
 >(
-  completion: (params: P, options?: unknown) => Promise<C>
+  completion: (params: P, options?: unknown) => Promise<C>,
 ): (params: P, options?: unknown) => Promise<any> {
   return async (allParams: P & SpanInfo, options?: unknown) => {
     const { span_info: _, ...params } = allParams;
@@ -210,8 +210,8 @@ function wrapChatCompletion<
             type: SpanTypeAttribute.LLM,
           },
         },
-        parseChatCompletionParams(allParams)
-      )
+        parseChatCompletionParams(allParams),
+      ),
     );
     const startTime = getCurrentUnixTimestamp();
     if (params.stream) {
@@ -220,7 +220,7 @@ function wrapChatCompletion<
         // that `P extends ChatParams` BUT does not have the property
         // `span_info`.
         params as P,
-        options
+        options,
       )) as StreamingChatResponse;
       const wrapperStream = new WrapperStream(span, startTime, ret.iterator());
       ret.iterator = () => wrapperStream[Symbol.asyncIterator]();
@@ -229,7 +229,7 @@ function wrapChatCompletion<
       try {
         const ret = (await completion(
           params as P,
-          options
+          options,
         )) as NonStreamingChatResponse;
         const { messages, ...rest } = params;
         span.log({
@@ -254,7 +254,7 @@ function wrapChatCompletion<
 }
 
 function parseChatCompletionParams<P extends ChatParams>(
-  allParams: P & SpanInfo
+  allParams: P & SpanInfo,
 ): StartSpanArgs {
   const { span_info, ...params } = allParams;
   const { metadata: spanInfoMetadata, ...spanInfoRest } = span_info ?? {};
@@ -284,9 +284,9 @@ type CreateEmbeddingResponse = {
 
 function wrapEmbeddings<
   P extends EmbeddingCreateParams,
-  C extends CreateEmbeddingResponse
+  C extends CreateEmbeddingResponse,
 >(
-  create: (params: P, options?: unknown) => Promise<C>
+  create: (params: P, options?: unknown) => Promise<C>,
 ): (params: P & SpanInfo, options?: unknown) => Promise<any> {
   return async (allParams: P & SpanInfo, options?: unknown) => {
     const { span_info: _, ...params } = allParams;
@@ -316,14 +316,14 @@ function wrapEmbeddings<
             type: SpanTypeAttribute.LLM,
           },
         },
-        parseEmbeddingParams(allParams)
-      )
+        parseEmbeddingParams(allParams),
+      ),
     );
   };
 }
 
 function parseEmbeddingParams<P extends EmbeddingCreateParams>(
-  allParams: P & SpanInfo
+  allParams: P & SpanInfo,
 ): StartSpanArgs {
   const { span_info, ...params } = allParams;
   const { metadata: spanInfoMetadata, ...spanInfoRest } = span_info ?? {};
@@ -343,7 +343,7 @@ function postprocessStreamingResults(allResults: any[]): [
     message: any;
     logprobs: null;
     finish_reason?: string;
-  }
+  },
 ] {
   let role = undefined;
   let content = undefined;

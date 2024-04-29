@@ -1,7 +1,7 @@
 // Mutably updates `mergeInto` with the contents of `mergeFrom`, merging objects deeply.
 export function mergeDicts(
   mergeInto: Record<string, unknown>,
-  mergeFrom: Record<string, unknown>
+  mergeFrom: Record<string, unknown>,
 ) {
   for (const [k, mergeFromV] of Object.entries(mergeFrom)) {
     const mergeIntoV = mergeInto[k];
@@ -13,7 +13,7 @@ export function mergeDicts(
     ) {
       mergeDicts(
         mergeIntoV as Record<string, unknown>,
-        mergeFromV as Record<string, unknown>
+        mergeFromV as Record<string, unknown>,
       );
     } else {
       mergeInto[k] = mergeFromV;

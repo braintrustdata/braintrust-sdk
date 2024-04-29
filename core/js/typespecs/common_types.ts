@@ -10,7 +10,7 @@ type Literal = z.infer<typeof literalSchema>;
 
 export type Json = Literal | { [key: string]: Json } | Json[];
 export const jsonSchema: z.ZodType<Json> = z.lazy(() =>
-  z.union([literalSchema, z.array(jsonSchema), z.record(jsonSchema)])
+  z.union([literalSchema, z.array(jsonSchema), z.record(jsonSchema)]),
 );
 
 export const datetimeStringSchema = z.string().datetime({ offset: true });

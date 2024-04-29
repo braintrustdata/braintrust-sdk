@@ -12,7 +12,7 @@ import { promptDataSchema } from "./prompt";
 
 function generateBaseTableSchema(
   objectName: string,
-  opts?: { uniqueName?: boolean }
+  opts?: { uniqueName?: boolean },
 ) {
   let nameDescription = `Name of the ${objectName}`;
   if (opts?.uniqueName) {
@@ -25,7 +25,7 @@ function generateBaseTableSchema(
       .string()
       .uuid()
       .describe(
-        `Unique identifier for the project that the ${objectName} belongs under`
+        `Unique identifier for the project that the ${objectName} belongs under`,
       ),
     name: z.string().describe(nameDescription),
     description: z
@@ -38,7 +38,7 @@ function generateBaseTableSchema(
     deleted_at: datetimeStringSchema
       .nullish()
       .describe(
-        `Date of ${objectName} deletion, or null if the ${objectName} is still active`
+        `Date of ${objectName} deletion, or null if the ${objectName} is still active`,
       ),
     user_id: z
       .string()
@@ -119,7 +119,7 @@ export const projectSchema = z
       .string()
       .uuid()
       .describe(
-        "Unique id for the organization that the project belongs under"
+        "Unique id for the organization that the project belongs under",
       ),
     name: projectBaseSchema.shape.name,
     created: projectBaseSchema.shape.created,
@@ -152,7 +152,7 @@ export const promptSchema = z.strictObject({
   _xact_id: z
     .string()
     .describe(
-      `The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the prompt (see the \`version\` parameter)`
+      `The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the prompt (see the \`version\` parameter)`,
     ),
   project_id: promptBaseSchema.shape.project_id,
   log_id: z
@@ -186,7 +186,7 @@ const repoInfoSchema = z
       .boolean()
       .nullish()
       .describe(
-        "Whether or not the repo had uncommitted changes when snapshotted"
+        "Whether or not the repo had uncommitted changes when snapshotted",
       ),
     author_name: z
       .string()
@@ -205,11 +205,11 @@ const repoInfoSchema = z
       .string()
       .nullish()
       .describe(
-        "If the repo was dirty when run, this includes the diff between the current state of the repo and the most recent commit."
+        "If the repo was dirty when run, this includes the diff between the current state of the repo and the most recent commit.",
       ),
   })
   .describe(
-    "Metadata about the state of the repo when the experiment was created"
+    "Metadata about the state of the repo when the experiment was created",
   )
   .openapi("RepoInfo");
 
@@ -233,7 +233,7 @@ export const experimentSchema = z
       .uuid()
       .nullish()
       .describe(
-        "Id of default base experiment to compare against when viewing this experiment"
+        "Id of default base experiment to compare against when viewing this experiment",
       ),
     deleted_at: experimentBaseSchema.shape.deleted_at,
     dataset_id: z
@@ -241,18 +241,18 @@ export const experimentSchema = z
       .uuid()
       .nullish()
       .describe(
-        "Identifier of the linked dataset, or null if the experiment is not linked to a dataset"
+        "Identifier of the linked dataset, or null if the experiment is not linked to a dataset",
       ),
     dataset_version: z
       .string()
       .nullish()
       .describe(
-        "Version number of the linked dataset the experiment was run against. This can be used to reproduce the experiment after the dataset has been modified."
+        "Version number of the linked dataset the experiment was run against. This can be used to reproduce the experiment after the dataset has been modified.",
       ),
     public: z
       .boolean()
       .describe(
-        "Whether or not the experiment is public. Public experiments can be viewed by anybody inside or outside the organization"
+        "Whether or not the experiment is public. Public experiments can be viewed by anybody inside or outside the organization",
       ),
     user_id: experimentBaseSchema.shape.user_id,
     metadata: experimentBaseSchema.shape.metadata,
@@ -275,7 +275,7 @@ export const permissionEnum = z
     [
       "Each permission permits a certain type of operation on an object in the system",
       "Permissions can be assigned to to objects on an individual basis, or grouped into roles",
-    ].join("\n\n")
+    ].join("\n\n"),
   );
 export type Permission = z.infer<typeof permissionEnum>;
 
@@ -292,7 +292,7 @@ export const roleSchema = z
           "Unique id for the organization that the role belongs under",
           "A null org_id indicates a system role, which may be assigned to anybody and inherited by any other role, but cannot be edited.",
           "It is forbidden to change the org after creating a role",
-        ].join("\n\n")
+        ].join("\n\n"),
       ),
     user_id: roleBaseSchema.shape.user_id,
     created: roleBaseSchema.shape.created,
@@ -310,14 +310,14 @@ export const roleSchema = z
         [
           "Ids of the roles this role inherits from",
           "An inheriting role has all the permissions contained in its member roles, as well as all of their inherited permissions",
-        ].join("\n\n")
+        ].join("\n\n"),
       ),
   })
   .describe(
     [
       "A role is a collection of permissions which can be granted as part of an ACL",
       "Roles can consist of individual permissions, as well as a set of roles they inherit from",
-    ].join("\n\n")
+    ].join("\n\n"),
   )
   .openapi("Role");
 export type Role = z.infer<typeof roleSchema>;
@@ -333,7 +333,7 @@ export const groupSchema = z
         [
           "Unique id for the organization that the group belongs under",
           "It is forbidden to change the org after creating a group",
-        ].join("\n\n")
+        ].join("\n\n"),
       ),
     user_id: groupBaseSchema.shape.user_id,
     created: groupBaseSchema.shape.created,
@@ -351,14 +351,14 @@ export const groupSchema = z
         [
           "Ids of the groups this group inherits from",
           "An inheriting group has all the users contained in its member groups, as well as all of their inherited users",
-        ].join("\n\n")
+        ].join("\n\n"),
       ),
   })
   .describe(
     [
       "A group is a collection of users which can be assigned an ACL",
       "Groups can consist of individual users, as well as a set of groups they inherit from",
-    ].join("\n\n")
+    ].join("\n\n"),
   )
   .openapi("Group");
 export type Group = z.infer<typeof groupSchema>;
@@ -390,7 +390,7 @@ export const aclObjectSchema = z.strictObject({
   restrict_object_type: z
     .optional(z.union([aclObjectTypeEnum, z.null()]))
     .describe(
-      "Optionally restricts the permission grant to just the specified object type"
+      "Optionally restricts the permission grant to just the specified object type",
     ),
   _object_org_id: z
     .string()
@@ -435,7 +435,7 @@ export const aclSchema = z
       "An ACL grants a certain permission or role to a certain user or group on an object.",
       "ACLs are inherited across the object hierarchy. So for example, if a user has read permissions on a project, they will also have read permissions on any experiment, dataset, etc. created within that project.",
       "To restrict a grant to a particular sub-object, you may specify `restrict_object_type` in the ACL.",
-    ].join("\n\n")
+    ].join("\n\n"),
   )
   .openapi("Acl");
 export type Acl = z.infer<typeof aclSchema>;
@@ -454,7 +454,7 @@ function generateBaseTableOpSchema(objectName: string) {
       .string()
       .nullish()
       .describe(
-        `For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, you may specify the name of the organization the ${objectName} belongs in.`
+        `For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, you may specify the name of the organization the ${objectName} belongs in.`,
       ),
   });
 }
@@ -468,7 +468,7 @@ export const startingAfterSchema = z
     [
       "Pagination cursor id.",
       "For example, if the final item in the last page you fetched had an id of `foo`, pass `starting_after=foo` to fetch the next page. Note: you may only pass one of `starting_after` and `ending_before`",
-    ].join("\n\n")
+    ].join("\n\n"),
   )
   .openapi("StartingAfter");
 
@@ -479,7 +479,7 @@ export const endingBeforeSchema = z
     [
       "Pagination cursor id.",
       "For example, if the initial item in the last page you fetched had an id of `foo`, pass `ending_before=foo` to fetch the previous page. Note: you may only pass one of `starting_after` and `ending_before`",
-    ].join("\n\n")
+    ].join("\n\n"),
   )
   .openapi("EndingBefore");
 
@@ -489,7 +489,7 @@ export function makeObjectIdsFilterSchema(objectName: string) {
     .string()
     .uuid()
     .describe(
-      `Filter search results to a particular set of ${objectName} IDs. To specify a list of IDs, include the query param multiple times`
+      `Filter search results to a particular set of ${objectName} IDs. To specify a list of IDs, include the query param multiple times`,
     )
     .openapi(`${objectName}IdsFilter`);
 }
@@ -523,7 +523,7 @@ const createExperimentSchema = z
       .boolean()
       .nullish()
       .describe(
-        "Normally, creating an experiment with the same name as an existing experiment will return the existing one un-modified. But if `ensure_new` is true, registration will generate a new experiment with a unique name in case of a conflict."
+        "Normally, creating an experiment with the same name as an existing experiment will return the existing one un-modified. But if `ensure_new` is true, registration will generate a new experiment with a unique name in case of a conflict.",
       ),
   })
   .openapi("CreateExperiment");
@@ -583,7 +583,7 @@ const patchRoleSchema = createRoleSchema
   .merge(
     z.strictObject({
       name: createRoleSchema.shape.name.nullish(),
-    })
+    }),
   )
   .openapi("PatchRole");
 
@@ -603,7 +603,7 @@ const patchGroupSchema = createGroupSchema
   .merge(
     z.strictObject({
       name: createGroupSchema.shape.name.nullish(),
-    })
+    }),
   )
   .openapi("PatchGroup");
 

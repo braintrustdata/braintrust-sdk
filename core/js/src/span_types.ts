@@ -17,4 +17,4 @@ export enum SpanTypeAttribute {
   TOOL = "tool",
 }
 
-export type SpanType = typeof spanTypeAttributeValues[number];
+export type SpanType = (typeof spanTypeAttributeValues)[number];

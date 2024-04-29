@@ -86,11 +86,11 @@ export class SpanComponents {
         this.objectType,
         this.rowIds ? 1 : 0,
         rowIdIsUUID ? 1 : 0,
-      ])
+      ]),
     );
 
     const { bytes: objectIdBytes, isUUID: objectIdIsUUID } = tryMakeUuid(
-      this.objectId
+      this.objectId,
     );
     if (!objectIdIsUUID) {
       throw new Error("object_id component must be a valid UUID");
@@ -99,13 +99,13 @@ export class SpanComponents {
 
     if (this.rowIds) {
       const { bytes: spanIdBytes, isUUID: spanIdIsUUID } = tryMakeUuid(
-        this.rowIds.spanId
+        this.rowIds.spanId,
       );
       if (!spanIdIsUUID) {
         throw new Error("span_id component must be a valid UUID");
       }
       const { bytes: rootSpanIdBytes, isUUID: rootSpanIdIsUUID } = tryMakeUuid(
-        this.rowIds.rootSpanId
+        this.rowIds.rootSpanId,
       );
       if (!rootSpanIdIsUUID) {
         throw new Error("root_span_id component must be a valid UUID");

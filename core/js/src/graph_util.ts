@@ -11,7 +11,7 @@ export type AdjacencyListGraph = Map<number, Set<number>>;
 
 export type FirstVisitF = (
   vertex: number,
-  args?: { parentVertex?: number }
+  args?: { parentVertex?: number },
 ) => void;
 export type LastVisitF = (vertex: number, args?: {}) => void;
 
@@ -42,7 +42,7 @@ export function depthFirstSearch(args: {
   const firstVisitedVertices: Set<number> = new Set();
   const visitationOrder = args.visitationOrder ?? [...graph.keys()];
   const events: EventType[] = visitationOrder
-    .map((vertex) => ({ eventType: "first", vertex, extras: {} } as const))
+    .map((vertex) => ({ eventType: "first", vertex, extras: {} }) as const)
     .reverse();
   while (events.length) {
     const { eventType, vertex, extras } = events.pop()!;
@@ -70,10 +70,10 @@ export function depthFirstSearch(args: {
 }
 
 export function undirectedConnectedComponents(
-  graph: UndirectedGraph
+  graph: UndirectedGraph,
 ): number[][] {
   const directedGraph: AdjacencyListGraph = new Map(
-    [...graph.vertices].map((v) => [v, new Set<number>()])
+    [...graph.vertices].map((v) => [v, new Set<number>()]),
   );
   for (const [i, j] of graph.edges) {
     mapAt(directedGraph, i).add(j);
@@ -100,7 +100,7 @@ export function undirectedConnectedComponents(
 
 export function topologicalSort(
   graph: AdjacencyListGraph,
-  visitationOrder?: number[]
+  visitationOrder?: number[],
 ): number[] {
   const reverseOrdering: number[] = [];
   const lastVisitF: LastVisitF = (vertex) => {
