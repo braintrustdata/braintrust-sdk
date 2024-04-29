@@ -36,7 +36,7 @@ export class BarProgressReporter {
           " {bar} | {evaluator} | {percentage}% | {value}/{total} datapoints",
         autopadding: true,
       },
-      cliProgress.Presets.shades_grey
+      cliProgress.Presets.shades_grey,
     );
   }
 

@@ -15,5 +15,5 @@ export type ScorerArgs<Output, Extra> = {
 } & Extra;
 
 export type Scorer<Output, Extra> = (
-  args: ScorerArgs<Output, Extra>
+  args: ScorerArgs<Output, Extra>,
 ) => Score | Promise<Score>;
