@@ -3162,8 +3162,8 @@ export interface ScoreSummary {
   name: string;
   score: number;
   diff?: number;
-  improvements?: number;
-  regressions?: number;
+  improvements: number;
+  regressions: number;
 }
 
 /**
@@ -3180,8 +3180,8 @@ export interface MetricSummary {
   metric: number;
   unit: string;
   diff?: number;
-  improvements?: number;
-  regressions?: number;
+  improvements: number;
+  regressions: number;
 }
 
 /**

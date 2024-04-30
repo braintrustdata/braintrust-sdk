@@ -2683,12 +2683,12 @@ class ScoreSummary(SerializableDataClass):
     score: float
     """Average score across all examples."""
 
+    improvements: Optional[int]
+    """Number of improvements in the score."""
+    regressions: Optional[int]
+    """Number of regressions in the score."""
     diff: Optional[float] = None
     """Difference in score between the current and reference experiment."""
-    improvements: Optional[int] = None
-    """Number of improvements in the score."""
-    regressions: Optional[int] = None
-    """Number of regressions in the score."""
 
     def __str__(self):
         # format with 2 decimal points and pad so that it's exactly 2 characters then 2 decimals
@@ -2722,16 +2722,19 @@ class MetricSummary(SerializableDataClass):
     """Average metric across all examples."""
     unit: str
     """Unit label for the metric."""
+    improvements: Optional[int]
+    """Number of improvements in the metric."""
+    regressions: Optional[int]
+    """Number of regressions in the metric."""
     diff: Optional[float] = None
     """Difference in metric between the current and reference experiment."""
-    improvements: Optional[int] = None
-    """Number of improvements in the metric."""
-    regressions: Optional[int] = None
-    """Number of regressions in the metric."""
 
     def __str__(self):
         # format with 2 decimal points
         metric = f"{self.metric:.2f}"
+        if self.diff is None:
+            return textwrap.dedent(f"""{metric}{self.unit} {self.name}""")
+
         diff_pct = f"{abs(self.diff) * 100:05.2f}%"
         diff_score = f"+{diff_pct}" if self.diff > 0 else f"-{diff_pct}" if self.diff < 0 else "-"
 
