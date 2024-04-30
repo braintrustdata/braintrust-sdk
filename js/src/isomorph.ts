@@ -34,7 +34,7 @@ export interface Common {
   newAsyncLocalStorage: <T>() => IsoAsyncLocalStorage<T>;
   processOn: (event: string, handler: (code: any) => void) => void;
 
-  // Filesystetm operations.
+  // Filesystem operations.
   pathJoin?: (...args: string[]) => string;
   pathDirname?: (path: string) => string;
   writeFile?: (filename: string, data: string) => Promise<void>;
