@@ -1031,6 +1031,7 @@ class BackgroundLogger {
         !isRetrying &&
         this.failedPublishPayloadsDir &&
         iso.pathJoin &&
+        iso.mkdir &&
         iso.writeFile
       ) {
         const payloadFile = iso.pathJoin(
@@ -1038,6 +1039,7 @@ class BackgroundLogger {
           `payload_${getCurrentUnixTimestamp()}_${uuidv4().slice(0, 8)}.json`,
         );
         try {
+          await iso.mkdir(this.failedPublishPayloadsDir, { recursive: true });
           await iso.writeFile(payloadFile, dataStr);
         } catch (e) {
           console.error(

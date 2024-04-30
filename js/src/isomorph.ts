@@ -37,6 +37,10 @@ export interface Common {
   // Filesystem operations.
   pathJoin?: (...args: string[]) => string;
   pathDirname?: (path: string) => string;
+  mkdir?: (
+    path: string,
+    opts?: { recursive?: boolean },
+  ) => Promise<string | undefined>;
   writeFile?: (filename: string, data: string) => Promise<void>;
 }
 

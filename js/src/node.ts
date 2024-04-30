@@ -18,6 +18,7 @@ export function configureNode() {
   };
   iso.pathJoin = path.join;
   iso.pathDirname = path.dirname;
+  iso.mkdir = fs.mkdir;
   iso.writeFile = fs.writeFile;
 
   _internalSetInitialState();
