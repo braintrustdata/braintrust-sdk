@@ -1,6 +1,4 @@
-import * as path from "path";
-
-import { CallerLocation } from "./isomorph";
+import iso, { CallerLocation } from "./isomorph";
 
 export interface StackTraceEntry {
   functionName: string;
@@ -40,9 +38,9 @@ export function getCallerLocation(): CallerLocation | undefined {
   const entries = getStackTrace();
   for (const frame of entries) {
     if (thisDir === undefined) {
-      thisDir = path.dirname(frame.fileName);
+      thisDir = iso.pathDirname?.(frame.fileName);
     }
-    if (path.dirname(frame.fileName) !== thisDir) {
+    if (iso.pathDirname?.(frame.fileName) !== thisDir) {
       return {
         caller_functionname: frame.functionName,
         caller_filename: frame.fileName,

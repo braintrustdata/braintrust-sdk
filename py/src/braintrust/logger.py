@@ -429,9 +429,9 @@ class _BackgroundLogger:
             self.default_batch_size = 100
 
         try:
-            self.num_retries = int(os.environ["BRAINTRUST_NUM_RETRIES"])
+            self.num_tries = int(os.environ["BRAINTRUST_NUM_RETRIES"]) + 1
         except:
-            self.num_retries = 3
+            self.num_tries = 3
 
         try:
             queue_maxsize = int(os.environ["BRAINTRUST_QUEUE_SIZE"])
@@ -439,6 +439,11 @@ class _BackgroundLogger:
             # Don't limit the queue size if we're in 'sync_flush' mode, because
             # otherwise logging could block indefinitely.
             queue_maxsize = 0 if self.sync_flush else 1000
+
+        try:
+            self.failed_publish_payloads_dir = os.environ["BRAINTRUST_FAILED_PUBLISH_PAYLOADS_DIR"]
+        except:
+            self.failed_publish_payloads_dir = None
 
         self.start_thread_lock = threading.RLock()
         self.thread = threading.Thread(target=self._publisher, daemon=True)
@@ -533,13 +538,13 @@ class _BackgroundLogger:
                     )
 
     def _unwrap_lazy_values(self, wrapped_items):
-        for i in range(self.num_retries):
+        for i in range(self.num_tries):
             try:
                 unwrapped_items = [item.get() for item in wrapped_items]
                 return merge_row_batch(unwrapped_items)
             except Exception as e:
                 errmsg = "Encountered error when constructing records to flush"
-                is_retrying = i + 1 < self.num_retries
+                is_retrying = i + 1 < self.num_tries
                 if is_retrying:
                     errmsg += ". Retrying"
 
@@ -552,7 +557,7 @@ class _BackgroundLogger:
                         time.sleep(0.1)
 
         print(
-            f"Failed to construct log records to flush after {self.num_retries} retries. Dropping batch",
+            f"Failed to construct log records to flush after {self.num_tries} attempts. Dropping batch",
             file=self.outfile,
         )
         return []
@@ -560,7 +565,7 @@ class _BackgroundLogger:
     def _submit_logs_request(self, items):
         conn = self.log_conn.get()
         dataStr = construct_logs3_data(items)
-        for i in range(self.num_retries):
+        for i in range(self.num_tries):
             start_time = time.time()
             resp = conn.post("/logs3", data=dataStr)
             if not resp.ok:
@@ -569,9 +574,20 @@ class _BackgroundLogger:
             if resp.ok:
                 return
 
-            is_retrying = i + 1 < self.num_retries
+            is_retrying = i + 1 < self.num_tries
             retrying_text = "" if is_retrying else " Retrying"
             errmsg = f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataStr)}.{retrying_text}\nError: {resp.status_code}: {resp.text}"
+
+            if not is_retrying and self.failed_publish_payloads_dir:
+                payload_file = os.path.join(
+                    self.failed_publish_payloads_dir, f"payload_{time.time()}_{str(uuid.uuid4())[:8]}.json"
+                )
+                try:
+                    os.makedirs(self.failed_publish_payloads_dir, exist_ok=True)
+                    with open(payload_file, "w") as f:
+                        f.write(dataStr)
+                except Exception as e:
+                    eprint(f"Failed to write failed payload to output file {payload_file}:\n", e)
 
             if not is_retrying and self.sync_flush:
                 raise Exception(errmsg)
@@ -580,7 +596,7 @@ class _BackgroundLogger:
                 if is_retrying:
                     time.sleep(0.1)
 
-        print(f"log request failed after {self.num_retries} retries. Dropping batch", file=self.outfile)
+        print(f"log request failed after {self.num_tries} retries. Dropping batch", file=self.outfile)
 
     # Should only be called by BraintrustState.
     def internal_replace_log_conn(self, log_conn: HTTPConnection):
