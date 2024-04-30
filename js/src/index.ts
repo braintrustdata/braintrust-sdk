@@ -64,6 +64,7 @@ export {
   buildLocalSummary,
   reportFailures,
 } from "./framework";
+export { LazyValue } from "./util";
 export * from "./wrappers/oai";
 export * from "./wrappers/ai-sdk";
 export {

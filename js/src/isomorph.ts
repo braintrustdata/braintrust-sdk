@@ -33,6 +33,11 @@ export interface Common {
   getCallerLocation: () => CallerLocation | undefined;
   newAsyncLocalStorage: <T>() => IsoAsyncLocalStorage<T>;
   processOn: (event: string, handler: (code: any) => void) => void;
+
+  // Filesystetm operations.
+  pathJoin?: (...args: string[]) => string;
+  pathDirname?: (path: string) => string;
+  writeFile?: (filename: string, data: string) => Promise<void>;
 }
 
 const iso: Common = {

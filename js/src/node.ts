@@ -1,4 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import * as path from "node:path";
+import * as fs from "node:fs/promises";
 
 import iso from "./isomorph";
 import { getRepoInfo, getPastNAncestors } from "./gitutil";
@@ -14,6 +16,9 @@ export function configureNode() {
   iso.processOn = (event: string, handler: (code: any) => void) => {
     process.on(event, handler);
   };
+  iso.pathJoin = path.join;
+  iso.pathDirname = path.dirname;
+  iso.writeFile = fs.writeFile;
 
   _internalSetInitialState();
 }

@@ -845,7 +845,8 @@ class BackgroundLogger {
   // 6 MB for the AWS lambda gateway (from our own testing).
   public maxRequestSize: number = 6 * 1024 * 1024;
   public defaultBatchSize: number = 100;
-  public numRetries: number = 3;
+  public numTries: number = 3;
+  public failedPublishPayloadsDir: string | undefined = undefined;
 
   constructor(logConn: LazyValue<HTTPConnection>) {
     this.logConn = logConn;
@@ -867,9 +868,16 @@ class BackgroundLogger {
       this.maxRequestSize = maxRequestSizeEnv;
     }
 
-    const numRetriesEnv = Number(iso.getEnv("BRAINTRUST_NUM_RETRIES"));
-    if (!isNaN(numRetriesEnv)) {
-      this.numRetries = numRetriesEnv;
+    const numTriesEnv = Number(iso.getEnv("BRAINTRUST_NUM_RETRIES"));
+    if (!isNaN(numTriesEnv)) {
+      this.numTries = numTriesEnv + 1;
+    }
+
+    const failedPublishPayloadsDirEnv = iso.getEnv(
+      "BRAINTRUST_FAILED_PUBLISH_PAYLOADS_DIR",
+    );
+    if (failedPublishPayloadsDirEnv) {
+      this.failedPublishPayloadsDir = failedPublishPayloadsDirEnv;
     }
 
     // Note that this will not run for explicit termination events, such as
@@ -953,13 +961,13 @@ class BackgroundLogger {
   private async unwrapLazyValues(
     wrappedItems: LazyValue<BackgroundLogEvent>[],
   ): Promise<BackgroundLogEvent[][]> {
-    for (let i = 0; i < this.numRetries; ++i) {
+    for (let i = 0; i < this.numTries; ++i) {
       try {
         const itemPromises = wrappedItems.map((x) => x.get());
         return mergeRowBatch(await Promise.all(itemPromises));
       } catch (e) {
         let errmsg = "Encountered error when constructing records to flush";
-        const isRetrying = i + 1 < this.numRetries;
+        const isRetrying = i + 1 < this.numTries;
         if (isRetrying) {
           errmsg += ". Retrying";
         }
@@ -974,7 +982,7 @@ class BackgroundLogger {
       }
     }
     console.warn(
-      `Failed to construct log records to flush after ${this.numRetries} retries. Dropping batch`,
+      `Failed to construct log records to flush after ${this.numTries} attempts. Dropping batch`,
     );
     return [];
   }
@@ -982,7 +990,7 @@ class BackgroundLogger {
   private async submitLogsRequest(items: string[]): Promise<void> {
     const conn = await this.logConn.get();
     const dataStr = constructLogs3Data(items);
-    for (let i = 0; i < this.numRetries; i++) {
+    for (let i = 0; i < this.numTries; i++) {
       const startTime = now();
       let error: unknown = undefined;
       try {
@@ -1004,7 +1012,7 @@ class BackgroundLogger {
         return;
       }
 
-      const isRetrying = i + 1 < this.numRetries;
+      const isRetrying = i + 1 < this.numTries;
       const retryingText = isRetrying ? "" : " Retrying";
       const errorText = (() => {
         if (error instanceof FailedHTTPResponse) {
@@ -1019,6 +1027,26 @@ class BackgroundLogger {
         dataStr.length
       }.${retryingText}\nError: ${errorText}`;
 
+      if (
+        !isRetrying &&
+        this.failedPublishPayloadsDir &&
+        iso.pathJoin &&
+        iso.writeFile
+      ) {
+        const payloadFile = iso.pathJoin(
+          this.failedPublishPayloadsDir,
+          `payload_${getCurrentUnixTimestamp()}_${uuidv4().slice(0, 8)}.json`,
+        );
+        try {
+          await iso.writeFile(payloadFile, dataStr);
+        } catch (e) {
+          console.error(
+            `Failed to write failed payload to output file ${payloadFile}:\n`,
+            e,
+          );
+        }
+      }
+
       if (!isRetrying && this.syncFlush) {
         throw new Error(errMsg);
       } else {
@@ -1030,7 +1058,7 @@ class BackgroundLogger {
     }
 
     console.warn(
-      `log request failed after ${this.numRetries} retries. Dropping batch`,
+      `log request failed after ${this.numTries} retries. Dropping batch`,
     );
     return;
   }
