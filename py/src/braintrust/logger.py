@@ -583,7 +583,7 @@ class _BackgroundLogger:
                     self.failed_publish_payloads_dir, f"payload_{time.time()}_{str(uuid.uuid4())[:8]}.json"
                 )
                 try:
-                    os.makedirs(self.failed_publish_payloads_dir)
+                    os.makedirs(self.failed_publish_payloads_dir, exist_ok=True)
                     with open(payload_file, "w") as f:
                         f.write(dataStr)
                 except Exception as e:
