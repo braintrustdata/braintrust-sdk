@@ -2438,19 +2438,17 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
         }
       }
 
-      if (comparisonExperimentId !== undefined) {
-        const results = await state.logConn().get_json(
-          "/experiment-comparison2",
-          {
-            experiment_id: await this.id,
-            base_experiment_id: comparisonExperimentId,
-          },
-          3,
-        );
+      const results = await state.logConn().get_json(
+        "/experiment-comparison2",
+        {
+          experiment_id: await this.id,
+          base_experiment_id: comparisonExperimentId,
+        },
+        3,
+      );
 
-        scores = results["scores"];
-        metrics = results["metrics"];
-      }
+      scores = results["scores"];
+      metrics = results["metrics"];
     }
 
     return {
@@ -3164,8 +3162,8 @@ export interface ScoreSummary {
   name: string;
   score: number;
   diff?: number;
-  improvements?: number;
-  regressions?: number;
+  improvements: number;
+  regressions: number;
 }
 
 /**
@@ -3181,7 +3179,7 @@ export interface MetricSummary {
   name: string;
   metric: number;
   unit: string;
-  diff: number;
+  diff?: number;
   improvements: number;
   regressions: number;
 }

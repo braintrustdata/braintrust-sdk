@@ -837,6 +837,7 @@ const summarizeExperimentResponseSchema = z
               .number()
               .min(-1)
               .max(1)
+              .optional()
               .describe(
                 "Difference in score between the current and comparison experiment",
               ),
@@ -865,6 +866,7 @@ const summarizeExperimentResponseSchema = z
             unit: z.string().describe("Unit label for the metric"),
             diff: z
               .number()
+              .optional()
               .describe(
                 "Difference in metric between the current and comparison experiment",
               ),

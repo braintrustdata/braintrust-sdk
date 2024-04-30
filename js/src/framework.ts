@@ -682,6 +682,8 @@ export function buildLocalSummary(
         {
           name,
           score: total / count,
+          improvements: 0,
+          regressions: 0,
         },
       ]),
     ),

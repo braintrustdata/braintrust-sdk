@@ -833,8 +833,8 @@ def build_local_summary(evaluator, results):
             name=name,
             score=total / count,
             diff=None,
-            improvements=None,
-            regressions=None,
+            improvements=0,
+            regressions=0,
             _longest_score_name=longest_score_name,
         )
         for name, (total, count) in scores_by_name.items()

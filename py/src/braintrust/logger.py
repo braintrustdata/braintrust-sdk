@@ -1833,27 +1833,26 @@ class Experiment(ObjectFetcher):
                     comparison_experiment_id = base_experiment.id
                     comparison_experiment_name = base_experiment.name
 
-            if comparison_experiment_id is not None:
-                summary_items = state.log_conn().get_json(
-                    "experiment-comparison2",
-                    args={
-                        "experiment_id": self.id,
-                        "base_experiment_id": comparison_experiment_id,
-                    },
-                    retries=3,
-                )
-                score_items = summary_items.get("scores", {})
-                metric_items = summary_items.get("metrics", {})
+            summary_items = state.log_conn().get_json(
+                "experiment-comparison2",
+                args={
+                    "experiment_id": self.id,
+                    "base_experiment_id": comparison_experiment_id,
+                },
+                retries=3,
+            )
+            score_items = summary_items.get("scores", {})
+            metric_items = summary_items.get("metrics", {})
 
-                longest_score_name = max(len(k) for k in score_items.keys()) if score_items else 0
-                score_summary = {
-                    k: ScoreSummary(_longest_score_name=longest_score_name, **v) for (k, v) in score_items.items()
-                }
+            longest_score_name = max(len(k) for k in score_items.keys()) if score_items else 0
+            score_summary = {
+                k: ScoreSummary(_longest_score_name=longest_score_name, **v) for (k, v) in score_items.items()
+            }
 
-                longest_metric_name = max(len(k) for k in metric_items.keys()) if metric_items else 0
-                metric_summary = {
-                    k: MetricSummary(_longest_metric_name=longest_metric_name, **v) for (k, v) in metric_items.items()
-                }
+            longest_metric_name = max(len(k) for k in metric_items.keys()) if metric_items else 0
+            metric_summary = {
+                k: MetricSummary(_longest_metric_name=longest_metric_name, **v) for (k, v) in metric_items.items()
+            }
 
         return ExperimentSummary(
             project_name=self.project.name,
@@ -2677,17 +2676,19 @@ class ScoreSummary(SerializableDataClass):
 
     name: str
     """Name of the score."""
+
+    # Used to help with formatting
+    _longest_score_name: int
+
     score: float
     """Average score across all examples."""
-    diff: Optional[float]
-    """Difference in score between the current and reference experiment."""
+
     improvements: Optional[int]
     """Number of improvements in the score."""
     regressions: Optional[int]
     """Number of regressions in the score."""
-
-    # Used to help with formatting
-    _longest_score_name: int
+    diff: Optional[float] = None
+    """Difference in score between the current and reference experiment."""
 
     def __str__(self):
         # format with 2 decimal points and pad so that it's exactly 2 characters then 2 decimals
@@ -2713,23 +2714,27 @@ class MetricSummary(SerializableDataClass):
 
     name: str
     """Name of the metric."""
-    metric: float
-    """Average metric across all examples."""
-    unit: str
-    """Unit label for the metric."""
-    diff: float
-    """Difference in metric between the current and reference experiment."""
-    improvements: int
-    """Number of improvements in the metric."""
-    regressions: int
-    """Number of regressions in the metric."""
 
     # Used to help with formatting
     _longest_metric_name: int
 
+    metric: float
+    """Average metric across all examples."""
+    unit: str
+    """Unit label for the metric."""
+    improvements: Optional[int]
+    """Number of improvements in the metric."""
+    regressions: Optional[int]
+    """Number of regressions in the metric."""
+    diff: Optional[float] = None
+    """Difference in metric between the current and reference experiment."""
+
     def __str__(self):
         # format with 2 decimal points
         metric = f"{self.metric:.2f}"
+        if self.diff is None:
+            return textwrap.dedent(f"""{metric}{self.unit} {self.name}""")
+
         diff_pct = f"{abs(self.diff) * 100:05.2f}%"
         diff_score = f"+{diff_pct}" if self.diff > 0 else f"-{diff_pct}" if self.diff < 0 else "-"
 
