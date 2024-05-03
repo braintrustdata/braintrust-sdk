@@ -87,7 +87,7 @@ const chatCompletionMessageToolCallSchema = z
   })
   .strip();
 
-const chatCompletionAssistantMessageParamSchema = z
+export const chatCompletionAssistantMessageParamSchema = z
   .strictObject({
     role: z.literal("assistant"),
     content: z.string().nullish(),

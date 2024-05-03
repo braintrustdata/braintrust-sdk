@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  chatCompletionAssistantMessageParamSchema,
   chatCompletionContentPartSchema,
   chatCompletionContentPartImageSchema,
   chatCompletionContentPartTextSchema,
@@ -7,6 +8,7 @@ import {
 } from "./openai/messages";
 export { ToolCall } from "./openai/messages";
 export {
+  chatCompletionAssistantMessageParamSchema,
   chatCompletionContentPartImageSchema,
   chatCompletionMessageParamSchema,
 };
@@ -25,6 +27,9 @@ export const messageRoleSchema = z.enum([
 export type MessageRole = z.infer<typeof messageRoleSchema>;
 
 export type Message = z.infer<typeof chatCompletionMessageParamSchema>;
+export type AssistantMessage = z.infer<
+  typeof chatCompletionAssistantMessageParamSchema
+>;
 export type Content = Message["content"];
 export type ContentPartText = z.infer<
   typeof chatCompletionContentPartTextSchema
