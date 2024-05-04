@@ -30,6 +30,9 @@ def main(args):
             lambda_function = [x for x in stack["Outputs"] if x["OutputKey"] == name]
             if len(lambda_function) > 1:
                 raise ValueError(f"Expected 1 APIHandlerName, found {len(lambda_function)} ({lambda_function}))")
+            if len(lambda_function) == 0:
+                _logger.warn(f"Could not find {name}, skipping...")
+                continue
             log_group_names.append(f"/aws/lambda/{lambda_function[0]['OutputValue']}")
     else:
         raise ValueError(f"Unknown service {args.service}")
