@@ -30,3 +30,4 @@ const modeToTypes = {
 } as const;
 
 export const customTypes = modeToTypes[mode];
+export const customTypesMode = mode;
