@@ -28,6 +28,8 @@ PARAMS = {
     "ManagedClickhouse": "managed_clickhouse",
     "ClickhouseInstanceType": "clickhouse_instance_type",
     "PostgresVersion": "postgres_version",
+    "OutboundRateLimitWindowMinutes": "outbound_rate_limit_window_minutes",
+    "OutboundRateLimitMaxRequests": "outbound_rate_limit_max_requests",
 }
 
 REMOVED_PARAMS = ["ThirdAZIndex"]
@@ -184,6 +186,20 @@ def build_parser(subparsers, parents):
     # SecurityGroupId, SubnetIds
     parser.add_argument("--security-group-id", help="The security group ID to use", default=None)
     parser.add_argument("--subnet-ids", help="The subnet IDs to use", default=None)
+
+    # Rate limit configuration.
+    parser.add_argument(
+        "--outbound-rate-limit-window-minutes",
+        help="The time frame in minutes over which rate per-user rate limits are accumulated",
+        default=None,
+        type=int,
+    )
+    parser.add_argument(
+        "--outbound-rate-limit-max-requests",
+        help="The maximum number of requests per user allowed in the time frame specified by OutboundRateLimitMaxRequests. Setting to 0 will disable rate limits",
+        default=None,
+        type=int,
+    )
 
     # Advancd use only
     parser.add_argument(
