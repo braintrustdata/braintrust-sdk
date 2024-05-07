@@ -48,6 +48,9 @@ importers:
       '@braintrust/core':
         specifier: workspace:*
         version: link:../core/js
+      '@next/env':
+        specifier: ^14.2.3
+        version: 14.2.3
       argparse:
         specifier: ^2.0.1
         version: 2.0.1
@@ -557,6 +560,10 @@ packages:
 
   /@kwsites/promise-deferred@1.1.1:
     resolution: {integrity: sha512-GaHYm+c0O9MjZRu0ongGBRbinu8gVAMd2UZjji6jVmqKtZluZnptXGWhz1E8j8D2HJ3f/yMxKAUC0b+57wncIw==}
+    dev: false
+
+  /@next/env@14.2.3:
+    resolution: {integrity: sha512-W7fd7IbkfmeeY2gXrzJYDx8D2lWKbVoTIj1o1ScPHNzvp30s1AuoEFSdr39bC5sjxJaxTtq3OTCZboNp0lNWHA==}
     dev: false
 
   /@nodelib/fs.scandir@2.1.5:

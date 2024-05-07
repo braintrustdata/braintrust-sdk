@@ -37,6 +37,7 @@ import {
 } from "./framework";
 import { configureNode } from "./node";
 import { isEmpty } from "./util";
+import { loadEnvConfig } from "@next/env";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript
@@ -799,6 +800,9 @@ async function main() {
   parser_run.set_defaults({ func: run });
 
   const parsed = parser.parse_args();
+
+  // Load the environment variables from the .env files using the same rules as Next.js
+  console.log(loadEnvConfig(process.cwd(), true));
 
   try {
     await parsed.func(parsed);
