@@ -443,9 +443,9 @@ class HTTPConnection {
       } catch (e) {
         if (i < tries - 1) {
           console.log(
-            `Retrying API request ${object_type} ${args} ${(e as any).status} ${
-              (e as any).text
-            }`,
+            `Retrying API request ${object_type} ${JSON.stringify(args)} ${
+              (e as any).status
+            } ${(e as any).text}`,
           );
           continue;
         }
