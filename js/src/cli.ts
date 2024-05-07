@@ -802,7 +802,7 @@ async function main() {
   const parsed = parser.parse_args();
 
   // Load the environment variables from the .env files using the same rules as Next.js
-  console.log(loadEnvConfig(process.cwd(), true));
+  loadEnvConfig(process.cwd(), true);
 
   try {
     await parsed.func(parsed);
