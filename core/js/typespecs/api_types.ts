@@ -231,6 +231,7 @@ export const fetchLimitSchema = z
   );
 
 const fetchPaginationCursorDescription = [
+  "DEPRECATION NOTICE: The manually-constructed pagination cursor is deprecated in favor of the explicit 'cursor' returned by object fetch requests. Please prefer the 'cursor' argument going forwards.",
   "Together, `max_xact_id` and `max_root_span_id` form a pagination cursor",
   `Since a paginated fetch query returns results in order from latest to earliest, the cursor for the next page can be found as the row with the minimum (earliest) value of the tuple \`(${TRANSACTION_ID_FIELD}, root_span_id)\`. See the documentation of \`limit\` for an overview of paginating fetch queries.`,
 ].join("\n\n");
@@ -242,6 +243,15 @@ export const maxXactIdSchema = z
 export const maxRootSpanIdSchema = z
   .string()
   .describe(fetchPaginationCursorDescription);
+
+export const fetchPaginationCursorSchema = z
+  .string()
+  .describe(
+    [
+      "An opaque string to be used as a cursor for the next page of results, in order from latest to earliest.",
+      "The string can be obtained directly from the `cursor` property of the previous fetch query",
+    ].join("\n\n"),
+  );
 
 export const versionSchema = z
   .string()
@@ -306,6 +316,7 @@ export const fetchFiltersSchema = pathTypeFilterSchema
 export const fetchEventsRequestSchema = z
   .strictObject({
     limit: fetchLimitSchema.nullish(),
+    cursor: fetchPaginationCursorSchema.nullish(),
     max_xact_id: maxXactIdSchema.nullish(),
     max_root_span_id: maxRootSpanIdSchema.nullish(),
     filters: fetchFiltersSchema.nullish(),
@@ -324,6 +335,15 @@ function makeFetchEventsResponseSchema<T extends z.AnyZodObject>(
   return z
     .strictObject({
       events: eventSchema.array().describe("A list of fetched events"),
+      cursor: z
+        .string()
+        .nullish()
+        .describe(
+          [
+            "Pagination cursor",
+            "Pass this string directly as the `cursor` param to your next fetch request to get the next page of results. Not provided if the returned result set is empty.",
+          ].join("\n\n"),
+        ),
     })
     .openapi(`Fetch${eventName}EventsResponse`);
 }
