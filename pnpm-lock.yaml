@@ -48,6 +48,9 @@ importers:
       '@braintrust/core':
         specifier: workspace:*
         version: link:../core/js
+      '@next/env':
+        specifier: ^14.2.3
+        version: 14.2.3
       argparse:
         specifier: ^2.0.1
         version: 2.0.1
@@ -57,6 +60,9 @@ importers:
       cli-progress:
         specifier: ^3.12.0
         version: 3.12.0
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.4.5
       esbuild:
         specifier: ^0.18.20
         version: 0.18.20
@@ -559,6 +565,10 @@ packages:
     resolution: {integrity: sha512-GaHYm+c0O9MjZRu0ongGBRbinu8gVAMd2UZjji6jVmqKtZluZnptXGWhz1E8j8D2HJ3f/yMxKAUC0b+57wncIw==}
     dev: false
 
+  /@next/env@14.2.3:
+    resolution: {integrity: sha512-W7fd7IbkfmeeY2gXrzJYDx8D2lWKbVoTIj1o1ScPHNzvp30s1AuoEFSdr39bC5sjxJaxTtq3OTCZboNp0lNWHA==}
+    dev: false
+
   /@nodelib/fs.scandir@2.1.5:
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
     engines: {node: '>= 8'}
@@ -965,6 +975,11 @@ packages:
     dependencies:
       path-type: 4.0.0
     dev: true
+
+  /dotenv@16.4.5:
+    resolution: {integrity: sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg==}
+    engines: {node: '>=12'}
+    dev: false
 
   /emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
