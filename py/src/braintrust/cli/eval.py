@@ -249,6 +249,11 @@ def run(args):
     if args.num_workers:
         set_thread_pool_max_workers(args.num_workers)
 
+    if args.env_file:
+        from dotenv import load_dotenv
+
+        load_dotenv(args.env_file)
+
     evaluator_opts = EvaluatorOpts(
         verbose=args.verbose,
         no_send_logs=args.no_send_logs,
@@ -329,6 +334,10 @@ def build_parser(subparsers, parent_parser):
         "--terminate-on-failure",
         action="store_true",
         help="If provided, terminates on a failing eval, instead of the default (moving onto the next one).",
+    )
+    parser.add_argument(
+        "--env-file",
+        help="A path to a .env file containing environment variables to load (via dotenv).",
     )
     parser.add_argument(
         "--num-workers",
