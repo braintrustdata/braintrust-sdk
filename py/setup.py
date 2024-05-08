@@ -11,7 +11,15 @@ with open(os.path.join(dir_name, "src", "braintrust", "version.py"), encoding="u
 with open(os.path.join(dir_name, "README.md"), "r", encoding="utf-8") as f:
     long_description = f.read()
 
-install_requires = ["GitPython", "requests", "chevron", "braintrust_core", "tqdm", "exceptiongroup==1.2.0", "dotenv"]
+install_requires = [
+    "GitPython",
+    "requests",
+    "chevron",
+    "braintrust_core",
+    "tqdm",
+    "exceptiongroup==1.2.0",
+    "python-dotenv",
+]
 
 extras_require = {
     "cli": ["boto3", "psycopg2-binary"],
