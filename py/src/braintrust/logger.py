@@ -434,23 +434,36 @@ class _BackgroundLogger:
             self.num_tries = 3
 
         try:
-            queue_maxsize = int(os.environ["BRAINTRUST_QUEUE_SIZE"])
+            self.queue_maxsize = int(os.environ["BRAINTRUST_QUEUE_SIZE"])
         except:
-            # Don't limit the queue size if we're in 'sync_flush' mode, because
-            # otherwise logging could block indefinitely.
-            queue_maxsize = 0 if self.sync_flush else 1000
+            self.queue_maxsize = 1000
+
+        try:
+            self.queue_drop_when_full = bool(int(os.environ["BRAINTRUST_QUEUE_DROP_WHEN_FULL"]))
+        except:
+            self.queue_drop_when_full = False
 
         try:
             self.failed_publish_payloads_dir = os.environ["BRAINTRUST_FAILED_PUBLISH_PAYLOADS_DIR"]
         except:
             self.failed_publish_payloads_dir = None
 
+        try:
+            self.all_publish_payloads_dir = os.environ["BRAINTRUST_ALL_PUBLISH_PAYLOADS_DIR"]
+        except:
+            self.all_publish_payloads_dir = None
+
+        # Don't limit the queue size if we're in 'sync_flush' mode and are not
+        # dropping when full, otherwise logging could block indefinitely.
+        if self.sync_flush and not self.queue_drop_when_full:
+            self.queue_maxsize = 0
+
         self.start_thread_lock = threading.RLock()
         self.thread = threading.Thread(target=self._publisher, daemon=True)
         self.started = False
 
         self.logger = logging.getLogger("braintrust")
-        self.queue = queue.Queue(maxsize=queue_maxsize)
+        self.queue = queue.Queue(maxsize=self.queue_maxsize)
         # Each time we put items in the queue, we increment a semaphore to
         # indicate to any consumer thread that it should attempt a flush.
         self.queue_filled_semaphore = threading.Semaphore(value=0)
@@ -459,13 +472,20 @@ class _BackgroundLogger:
 
     def log(self, *args):
         self._start()
+        did_notify_drop = False
         for event in args:
             try:
                 self.queue.put_nowait(event)
             except queue.Full:
                 # Notify consumers to start draining the queue.
                 self.queue_filled_semaphore.release()
-                self.queue.put(event)
+                if not self.queue_drop_when_full:
+                    self.queue.put(event)
+                elif not did_notify_drop:
+                    _logger.warning(
+                        f"Queue is currently full at size {self.queue_maxsize}. Dropping additional elements"
+                    )
+                    did_notify_drop = True
         self.queue_filled_semaphore.release()
 
     def _start(self):
@@ -565,6 +585,8 @@ class _BackgroundLogger:
     def _submit_logs_request(self, items):
         conn = self.log_conn.get()
         dataStr = construct_logs3_data(items)
+        if self.all_publish_payloads_dir:
+            _BackgroundLogger._write_payload_to_dir(payload_dir=self.all_publish_payloads_dir, payload=dataStr)
         for i in range(self.num_tries):
             start_time = time.time()
             resp = conn.post("/logs3", data=dataStr)
@@ -579,15 +601,7 @@ class _BackgroundLogger:
             errmsg = f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataStr)}.{retrying_text}\nError: {resp.status_code}: {resp.text}"
 
             if not is_retrying and self.failed_publish_payloads_dir:
-                payload_file = os.path.join(
-                    self.failed_publish_payloads_dir, f"payload_{time.time()}_{str(uuid.uuid4())[:8]}.json"
-                )
-                try:
-                    os.makedirs(self.failed_publish_payloads_dir, exist_ok=True)
-                    with open(payload_file, "w") as f:
-                        f.write(dataStr)
-                except Exception as e:
-                    eprint(f"Failed to write failed payload to output file {payload_file}:\n", e)
+                _BackgroundLogger._write_payload_to_dir(payload_dir=self.failed_publish_payloads_dir, payload=dataStr)
 
             if not is_retrying and self.sync_flush:
                 raise Exception(errmsg)
@@ -597,6 +611,16 @@ class _BackgroundLogger:
                     time.sleep(0.1)
 
         print(f"log request failed after {self.num_tries} retries. Dropping batch", file=self.outfile)
+
+    @staticmethod
+    def _write_payload_to_dir(payload_dir, payload):
+        payload_file = os.path.join(payload_dir, f"payload_{time.time()}_{str(uuid.uuid4())[:8]}.json")
+        try:
+            os.makedirs(payload_dir, exist_ok=True)
+            with open(payload_file, "w") as f:
+                f.write(payload)
+        except Exception as e:
+            eprint(f"Failed to write failed payload to output file {payload_file}:\n", e)
 
     # Should only be called by BraintrustState.
     def internal_replace_log_conn(self, log_conn: HTTPConnection):
