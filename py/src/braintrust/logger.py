@@ -649,6 +649,7 @@ class _BackgroundLogger:
                     f"Dropped {self._queue_drop_logging_state['num_dropped']} elements due to full queue",
                     file=self.outfile,
                 )
+                self._queue_drop_logging_state["num_dropped"] = 0
                 self._queue_drop_logging_state["last_logged_timestamp"] = time_now
 
     @staticmethod

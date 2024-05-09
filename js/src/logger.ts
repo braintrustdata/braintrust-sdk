@@ -1115,6 +1115,7 @@ class BackgroundLogger {
       console.warn(
         `Dropped ${this.queueDropLoggingState.numDropped} elements due to full queue`,
       );
+      this.queueDropLoggingState.numDropped = 0;
       this.queueDropLoggingState.lastLoggedTimestamp = timeNow;
     }
   }
