@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import * as esbuild from "esbuild";
+import * as dotenv from "dotenv";
 import fs from "fs";
 import os from "os";
 import path, { dirname } from "path";
@@ -37,6 +38,7 @@ import {
 } from "./framework";
 import { configureNode } from "./node";
 import { isEmpty } from "./util";
+import { loadEnvConfig } from "@next/env";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript
@@ -516,6 +518,7 @@ interface RunArgs {
   no_send_logs: boolean;
   no_progress_bars: boolean;
   terminate_on_failure: boolean;
+  env_file?: string;
 }
 
 function checkMatch(
@@ -680,6 +683,18 @@ async function initializeHandles(args: RunArgs, opts: EvaluatorOpts) {
 }
 
 async function run(args: RunArgs) {
+  // Load the environment variables from the .env files using the same rules as Next.js
+  loadEnvConfig(process.cwd(), true);
+
+  if (args.env_file) {
+    // Load via dotenv library
+    const loaded = dotenv.config({ path: args.env_file });
+    if (loaded.error) {
+      console.error(error(`Error loading ${args.env_file}: ${loaded.error}`));
+      process.exit(1);
+    }
+  }
+
   const evaluatorOpts: EvaluatorOpts = {
     verbose: args.verbose,
     apiKey: args.api_key,
@@ -791,6 +806,9 @@ async function main() {
   parser_run.add_argument("--terminate-on-failure", {
     action: "store_true",
     help: "If provided, terminates on a failing eval, instead of the default (moving onto the next one).",
+  });
+  parser_run.add_argument("--env-file", {
+    help: "A path to a .env file containing environment variables to load (via dotenv).",
   });
   parser_run.add_argument("files", {
     nargs: "*",
