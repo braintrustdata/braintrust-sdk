@@ -444,6 +444,13 @@ class _BackgroundLogger:
             self.queue_drop_when_full = False
 
         try:
+            self.queue_drop_logging_period = float(os.environ["BRAINTRUST_QUEUE_DROP_LOGGING_PERIOD"])
+        except:
+            self.queue_drop_logging_period = 60
+
+        self._queue_drop_logging_state = dict(lock=threading.Lock(), num_dropped=0, last_logged_timestamp=0)
+
+        try:
             self.failed_publish_payloads_dir = os.environ["BRAINTRUST_FAILED_PUBLISH_PAYLOADS_DIR"]
         except:
             self.failed_publish_payloads_dir = None
@@ -472,21 +479,26 @@ class _BackgroundLogger:
 
     def log(self, *args):
         self._start()
-        did_notify_drop = False
+        dropped_items = []
         for event in args:
             try:
                 self.queue.put_nowait(event)
             except queue.Full:
                 # Notify consumers to start draining the queue.
                 self.queue_filled_semaphore.release()
-                if not self.queue_drop_when_full:
+                if self.queue_drop_when_full:
+                    dropped_items.append(event)
+                else:
                     self.queue.put(event)
-                elif not did_notify_drop:
-                    _logger.warning(
-                        f"Queue is currently full at size {self.queue_maxsize}. Dropping additional elements"
-                    )
-                    did_notify_drop = True
         self.queue_filled_semaphore.release()
+
+        if dropped_items:
+            self._register_dropped_item_count(len(dropped_items))
+            if self.all_publish_payloads_dir or self.failed_publish_payloads_dir:
+                try:
+                    HTTP_REQUEST_THREAD_POOL.submit(self._dump_dropped_events, dropped_items)
+                except Exception as e:
+                    traceback.print_exc(file=self.outfile)
 
     def _start(self):
         # Double read to avoid contention in the common case.
@@ -611,6 +623,33 @@ class _BackgroundLogger:
                     time.sleep(0.1)
 
         print(f"log request failed after {self.num_tries} retries. Dropping batch", file=self.outfile)
+
+    def _dump_dropped_events(self, wrapped_items):
+        publish_payloads_dir = [x for x in [self.all_publish_payloads_dir, self.failed_publish_payloads_dir] if x]
+        if not (wrapped_items and publish_payloads_dir):
+            return
+        try:
+            all_items = self._unwrap_lazy_values(wrapped_items)
+            dataStr = construct_logs3_data([bt_dumps(item) for item in all_items])
+            for output_dir in publish_payloads_dir:
+                if not output_dir:
+                    continue
+                _BackgroundLogger._write_payload_to_dir(payload_dir=output_dir, payload=dataStr)
+        except Exception as e:
+            traceback.print_exc(file=self.outfile)
+
+    def _register_dropped_item_count(self, num_items):
+        if num_items <= 0:
+            return
+        with self._queue_drop_logging_state["lock"]:
+            self._queue_drop_logging_state["num_dropped"] += num_items
+            time_now = time.time()
+            if time_now - self._queue_drop_logging_state["last_logged_timestamp"] >= self.queue_drop_logging_period:
+                print(
+                    f"Dropped {self._queue_drop_logging_state['num_dropped']} elements due to full queue",
+                    file=self.outfile,
+                )
+                self._queue_drop_logging_state["last_logged_timestamp"] = time_now
 
     @staticmethod
     def _write_payload_to_dir(payload_dir, payload):

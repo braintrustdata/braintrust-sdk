@@ -847,8 +847,14 @@ class BackgroundLogger {
   public defaultBatchSize: number = 100;
   public numTries: number = 3;
   public queueDropExceedingMaxsize: number | undefined = undefined;
+  public queueDropLoggingPeriod: number = 60;
   public failedPublishPayloadsDir: string | undefined = undefined;
   public allPublishPayloadsDir: string | undefined = undefined;
+
+  private queueDropLoggingState = {
+    numDropped: 0,
+    lastLoggedTimestamp: 0,
+  };
 
   constructor(logConn: LazyValue<HTTPConnection>) {
     this.logConn = logConn;
@@ -880,6 +886,13 @@ class BackgroundLogger {
     );
     if (!isNaN(queueDropExceedingMaxsizeEnv)) {
       this.queueDropExceedingMaxsize = queueDropExceedingMaxsizeEnv;
+    }
+
+    const queueDropLoggingPeriodEnv = Number(
+      iso.getEnv("BRAINTRUST_QUEUE_DROP_LOGGING_PERIOD"),
+    );
+    if (!isNaN(queueDropLoggingPeriodEnv)) {
+      this.queueDropLoggingPeriod = queueDropLoggingPeriodEnv;
     }
 
     const failedPublishPayloadsDirEnv = iso.getEnv(
@@ -916,13 +929,15 @@ class BackgroundLogger {
       return [items.slice(0, numElementsToAdd), items.slice(numElementsToAdd)];
     })();
     this.items.push(...addedItems);
-    if (droppedItems.length) {
-      console.warn(
-        `Queue is currently full at size ${this.queueDropExceedingMaxsize}. Dropping additional elements`,
-      );
-    }
     if (!this.syncFlush) {
       this.triggerActiveFlush();
+    }
+
+    if (droppedItems.length) {
+      this.registerDroppedItemCount(droppedItems.length);
+      if (this.allPublishPayloadsDir || this.failedPublishPayloadsDir) {
+        this.dumpDroppedEvents(droppedItems);
+      }
     }
   }
 
@@ -1085,6 +1100,49 @@ class BackgroundLogger {
       `log request failed after ${this.numTries} retries. Dropping batch`,
     );
     return;
+  }
+
+  private registerDroppedItemCount(numItems: number) {
+    if (numItems <= 0) {
+      return;
+    }
+    this.queueDropLoggingState.numDropped += numItems;
+    const timeNow = getCurrentUnixTimestamp();
+    if (
+      timeNow - this.queueDropLoggingState.lastLoggedTimestamp >
+      this.queueDropLoggingPeriod
+    ) {
+      console.warn(
+        `Dropped ${this.queueDropLoggingState.numDropped} elements due to full queue`,
+      );
+      this.queueDropLoggingState.lastLoggedTimestamp = timeNow;
+    }
+  }
+
+  private async dumpDroppedEvents(
+    wrappedItems: LazyValue<BackgroundLogEvent>[],
+  ) {
+    const publishPayloadsDir = [
+      this.allPublishPayloadsDir,
+      this.failedPublishPayloadsDir,
+    ].reduce((acc, x) => (x ? acc.concat([x]) : acc), new Array<string>());
+    if (!(wrappedItems.length && publishPayloadsDir.length)) {
+      return;
+    }
+    try {
+      const allItems = await this.unwrapLazyValues(wrappedItems);
+      const dataStr = constructLogs3Data(
+        allItems.map((x) => JSON.stringify(x)),
+      );
+      for (const payloadDir of publishPayloadsDir) {
+        await BackgroundLogger.writePayloadToDir({
+          payloadDir,
+          payload: dataStr,
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   private static async writePayloadToDir({
