@@ -1084,6 +1084,7 @@ class BackgroundLogger {
           payloadDir: this.failedPublishPayloadsDir,
           payload: dataStr,
         });
+        this.logFailedPayloadsDir();
       }
 
       if (!isRetrying && this.syncFlush) {
@@ -1115,6 +1116,9 @@ class BackgroundLogger {
       console.warn(
         `Dropped ${this.queueDropLoggingState.numDropped} elements due to full queue`,
       );
+      if (this.failedPublishPayloadsDir) {
+        this.logFailedPayloadsDir();
+      }
       this.queueDropLoggingState.numDropped = 0;
       this.queueDropLoggingState.lastLoggedTimestamp = timeNow;
     }
@@ -1188,6 +1192,10 @@ class BackgroundLogger {
         }
       })();
     }
+  }
+
+  private logFailedPayloadsDir() {
+    console.warn(`Logging failed payloads to ${this.failedPublishPayloadsDir}`);
   }
 
   // Should only be called by BraintrustState.

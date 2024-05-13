@@ -614,6 +614,7 @@ class _BackgroundLogger:
 
             if not is_retrying and self.failed_publish_payloads_dir:
                 _BackgroundLogger._write_payload_to_dir(payload_dir=self.failed_publish_payloads_dir, payload=dataStr)
+                self._log_failed_payloads_dir()
 
             if not is_retrying and self.sync_flush:
                 raise Exception(errmsg)
@@ -649,11 +650,13 @@ class _BackgroundLogger:
                     f"Dropped {self._queue_drop_logging_state['num_dropped']} elements due to full queue",
                     file=self.outfile,
                 )
+                if self.failed_publish_payloads_dir:
+                    self._log_failed_payloads_dir()
                 self._queue_drop_logging_state["num_dropped"] = 0
                 self._queue_drop_logging_state["last_logged_timestamp"] = time_now
 
     @staticmethod
-    def _write_payload_to_dir(payload_dir, payload):
+    def _write_payload_to_dir(payload_dir, payload, debug_logging_adjective=None):
         payload_file = os.path.join(payload_dir, f"payload_{time.time()}_{str(uuid.uuid4())[:8]}.json")
         try:
             os.makedirs(payload_dir, exist_ok=True)
@@ -661,6 +664,9 @@ class _BackgroundLogger:
                 f.write(payload)
         except Exception as e:
             eprint(f"Failed to write failed payload to output file {payload_file}:\n", e)
+
+    def _log_failed_payloads_dir(self):
+        print(f"Logging failed payloads to {self.failed_publish_payloads_dir}", file=self.outfile)
 
     # Should only be called by BraintrustState.
     def internal_replace_log_conn(self, log_conn: HTTPConnection):
