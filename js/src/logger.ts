@@ -846,7 +846,15 @@ class BackgroundLogger {
   public maxRequestSize: number = 6 * 1024 * 1024;
   public defaultBatchSize: number = 100;
   public numTries: number = 3;
+  public queueDropExceedingMaxsize: number | undefined = undefined;
+  public queueDropLoggingPeriod: number = 60;
   public failedPublishPayloadsDir: string | undefined = undefined;
+  public allPublishPayloadsDir: string | undefined = undefined;
+
+  private queueDropLoggingState = {
+    numDropped: 0,
+    lastLoggedTimestamp: 0,
+  };
 
   constructor(logConn: LazyValue<HTTPConnection>) {
     this.logConn = logConn;
@@ -873,11 +881,32 @@ class BackgroundLogger {
       this.numTries = numTriesEnv + 1;
     }
 
+    const queueDropExceedingMaxsizeEnv = Number(
+      iso.getEnv("BRAINTRUST_QUEUE_DROP_EXCEEDING_MAXSIZE"),
+    );
+    if (!isNaN(queueDropExceedingMaxsizeEnv)) {
+      this.queueDropExceedingMaxsize = queueDropExceedingMaxsizeEnv;
+    }
+
+    const queueDropLoggingPeriodEnv = Number(
+      iso.getEnv("BRAINTRUST_QUEUE_DROP_LOGGING_PERIOD"),
+    );
+    if (!isNaN(queueDropLoggingPeriodEnv)) {
+      this.queueDropLoggingPeriod = queueDropLoggingPeriodEnv;
+    }
+
     const failedPublishPayloadsDirEnv = iso.getEnv(
       "BRAINTRUST_FAILED_PUBLISH_PAYLOADS_DIR",
     );
     if (failedPublishPayloadsDirEnv) {
       this.failedPublishPayloadsDir = failedPublishPayloadsDirEnv;
+    }
+
+    const allPublishPayloadsDirEnv = iso.getEnv(
+      "BRAINTRUST_ALL_PUBLISH_PAYLOADS_DIR",
+    );
+    if (allPublishPayloadsDirEnv) {
+      this.allPublishPayloadsDir = allPublishPayloadsDirEnv;
     }
 
     // Note that this will not run for explicit termination events, such as
@@ -889,9 +918,26 @@ class BackgroundLogger {
   }
 
   log(items: LazyValue<BackgroundLogEvent>[]) {
-    this.items.push(...items);
+    const [addedItems, droppedItems] = (() => {
+      if (this.queueDropExceedingMaxsize === undefined) {
+        return [items, []];
+      }
+      const numElementsToAdd = Math.min(
+        Math.max(this.queueDropExceedingMaxsize - this.items.length, 0),
+        items.length,
+      );
+      return [items.slice(0, numElementsToAdd), items.slice(numElementsToAdd)];
+    })();
+    this.items.push(...addedItems);
     if (!this.syncFlush) {
       this.triggerActiveFlush();
+    }
+
+    if (droppedItems.length) {
+      this.registerDroppedItemCount(droppedItems.length);
+      if (this.allPublishPayloadsDir || this.failedPublishPayloadsDir) {
+        this.dumpDroppedEvents(droppedItems);
+      }
     }
   }
 
@@ -990,6 +1036,12 @@ class BackgroundLogger {
   private async submitLogsRequest(items: string[]): Promise<void> {
     const conn = await this.logConn.get();
     const dataStr = constructLogs3Data(items);
+    if (this.allPublishPayloadsDir) {
+      await BackgroundLogger.writePayloadToDir({
+        payloadDir: this.allPublishPayloadsDir,
+        payload: dataStr,
+      });
+    }
     for (let i = 0; i < this.numTries; i++) {
       const startTime = now();
       let error: unknown = undefined;
@@ -1027,26 +1079,12 @@ class BackgroundLogger {
         dataStr.length
       }.${retryingText}\nError: ${errorText}`;
 
-      if (
-        !isRetrying &&
-        this.failedPublishPayloadsDir &&
-        iso.pathJoin &&
-        iso.mkdir &&
-        iso.writeFile
-      ) {
-        const payloadFile = iso.pathJoin(
-          this.failedPublishPayloadsDir,
-          `payload_${getCurrentUnixTimestamp()}_${uuidv4().slice(0, 8)}.json`,
-        );
-        try {
-          await iso.mkdir(this.failedPublishPayloadsDir, { recursive: true });
-          await iso.writeFile(payloadFile, dataStr);
-        } catch (e) {
-          console.error(
-            `Failed to write failed payload to output file ${payloadFile}:\n`,
-            e,
-          );
-        }
+      if (!isRetrying && this.failedPublishPayloadsDir) {
+        await BackgroundLogger.writePayloadToDir({
+          payloadDir: this.failedPublishPayloadsDir,
+          payload: dataStr,
+        });
+        this.logFailedPayloadsDir();
       }
 
       if (!isRetrying && this.syncFlush) {
@@ -1065,6 +1103,81 @@ class BackgroundLogger {
     return;
   }
 
+  private registerDroppedItemCount(numItems: number) {
+    if (numItems <= 0) {
+      return;
+    }
+    this.queueDropLoggingState.numDropped += numItems;
+    const timeNow = getCurrentUnixTimestamp();
+    if (
+      timeNow - this.queueDropLoggingState.lastLoggedTimestamp >
+      this.queueDropLoggingPeriod
+    ) {
+      console.warn(
+        `Dropped ${this.queueDropLoggingState.numDropped} elements due to full queue`,
+      );
+      if (this.failedPublishPayloadsDir) {
+        this.logFailedPayloadsDir();
+      }
+      this.queueDropLoggingState.numDropped = 0;
+      this.queueDropLoggingState.lastLoggedTimestamp = timeNow;
+    }
+  }
+
+  private async dumpDroppedEvents(
+    wrappedItems: LazyValue<BackgroundLogEvent>[],
+  ) {
+    const publishPayloadsDir = [
+      this.allPublishPayloadsDir,
+      this.failedPublishPayloadsDir,
+    ].reduce((acc, x) => (x ? acc.concat([x]) : acc), new Array<string>());
+    if (!(wrappedItems.length && publishPayloadsDir.length)) {
+      return;
+    }
+    try {
+      const allItems = await this.unwrapLazyValues(wrappedItems);
+      const dataStr = constructLogs3Data(
+        allItems.map((x) => JSON.stringify(x)),
+      );
+      for (const payloadDir of publishPayloadsDir) {
+        await BackgroundLogger.writePayloadToDir({
+          payloadDir,
+          payload: dataStr,
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  private static async writePayloadToDir({
+    payloadDir,
+    payload,
+  }: {
+    payloadDir: string;
+    payload: string;
+  }) {
+    if (!(iso.pathJoin && iso.mkdir && iso.writeFile)) {
+      console.warn(
+        "Cannot dump payloads: filesystem-operations not supported on this platform",
+      );
+      return;
+    }
+    const payloadFile = iso.pathJoin(
+      payloadDir,
+      `payload_${getCurrentUnixTimestamp()}_${uuidv4().slice(0, 8)}.json`,
+    );
+    try {
+      await iso.mkdir(payloadDir, { recursive: true });
+      await iso.writeFile(payloadFile, payload);
+    } catch (e) {
+      console.error(
+        `Failed to write failed payload to output file ${payloadFile}:\n`,
+        e,
+      );
+    }
+  }
+
   private triggerActiveFlush() {
     if (this.activeFlushResolved) {
       this.activeFlushResolved = false;
@@ -1079,6 +1192,10 @@ class BackgroundLogger {
         }
       })();
     }
+  }
+
+  private logFailedPayloadsDir() {
+    console.warn(`Logging failed payloads to ${this.failedPublishPayloadsDir}`);
   }
 
   // Should only be called by BraintrustState.
