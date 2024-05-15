@@ -224,9 +224,18 @@ export const fetchLimitSchema = z
   .nonnegative()
   .describe(
     [
-      "limit the number of traces fetched",
+      "Limit the number of traces fetched",
       `Fetch queries may be paginated if the total result size is expected to be large (e.g. project_logs which accumulate over a long time). Note that fetch queries only support pagination in descending time order (from latest to earliest \`${TRANSACTION_ID_FIELD}\`. Furthermore, later pages may return rows which showed up in earlier pages, except with an earlier \`${TRANSACTION_ID_FIELD}\`. This happens because pagination occurs over the whole version history of the event log. You will most likely want to exclude any such duplicate, outdated rows (by \`id\`) from your combined result set.`,
       `The \`limit\` parameter controls the number of full traces to return. So you may end up with more individual rows than the specified limit if you are fetching events containing traces.`,
+    ].join("\n\n"),
+  );
+
+export const fetchDisableLimitSchema = z
+  .boolean()
+  .describe(
+    [
+      "Disable the default limit applied to fetch queries",
+      "By default, fetch queries return a limited number of rows, even if no explicit limit is specified. This helps keep the response size capped. If you would like to fetch the entire object in one query, you may specify `disable_limit` as true, leaving the limit parameter unset.",
     ].join("\n\n"),
   );
 
@@ -316,6 +325,7 @@ export const fetchFiltersSchema = pathTypeFilterSchema
 export const fetchEventsRequestSchema = z
   .strictObject({
     limit: fetchLimitSchema.nullish(),
+    disable_limit: fetchDisableLimitSchema.nullish(),
     cursor: fetchPaginationCursorSchema.nullish(),
     max_xact_id: maxXactIdSchema.nullish(),
     max_root_span_id: maxRootSpanIdSchema.nullish(),
@@ -745,7 +755,7 @@ export const eventObjectSchemas = {
     insertEvent: undefined,
     insertRequest: undefined,
     feedbackItem: feedbackPromptSessionItemSchema,
-    feedbackRequest: feedbackPromptRequestBaseSchema,
+    feedbackRequest: feedbackPromptSessionRequestSchema,
   },
 } as const;
 
