@@ -146,29 +146,36 @@ export const datasetSchema = z
 export type Dataset = z.infer<typeof datasetSchema>;
 
 const promptBaseSchema = generateBaseTableSchema("prompt");
-export const promptSchema = z.strictObject({
-  id: promptBaseSchema.shape.id,
-  // This has to be copy/pasted because zod blows up when there are circular dependencies
-  _xact_id: z
-    .string()
-    .describe(
-      `The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the prompt (see the \`version\` parameter)`,
-    ),
-  project_id: promptBaseSchema.shape.project_id,
-  log_id: z
-    .literal("p")
-    .describe("A literal 'p' which identifies the object as a project prompt"),
-  org_id: organizationSchema.shape.id,
-  name: promptBaseSchema.shape.name,
-  slug: z.string().describe("Unique identifier for the prompt"),
-  description: promptBaseSchema.shape.description,
-  created: promptBaseSchema.shape.created,
-  prompt_data: promptDataSchema
-    .nullish()
-    .describe("The prompt, model, and its parameters"),
-  tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
-  metadata: promptBaseSchema.shape.metadata,
-});
+export const promptSchema = z
+  .strictObject({
+    id: promptBaseSchema.shape.id,
+    // This has to be copy/pasted because zod blows up when there are circular dependencies
+    _xact_id: z
+      .string()
+      .describe(
+        `The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the prompt (see the \`version\` parameter)`,
+      ),
+    project_id: promptBaseSchema.shape.project_id,
+    log_id: z
+      .literal("p")
+      .describe(
+        "A literal 'p' which identifies the object as a project prompt",
+      ),
+    org_id: organizationSchema.shape.id,
+    name: promptBaseSchema.shape.name,
+    slug: z.string().describe("Unique identifier for the prompt"),
+    description: promptBaseSchema.shape.description,
+    created: promptBaseSchema.shape.created,
+    prompt_data: promptDataSchema
+      .nullish()
+      .describe("The prompt, model, and its parameters"),
+    tags: z
+      .array(z.string())
+      .nullish()
+      .describe("A list of tags for the prompt"),
+    metadata: promptBaseSchema.shape.metadata,
+  })
+  .openapi("Prompt");
 export type Prompt = z.infer<typeof promptSchema>;
 
 const repoInfoSchema = z
@@ -380,56 +387,51 @@ export const aclObjectTypeEnum = z
 export type AclObjectType = z.infer<typeof aclObjectTypeEnum>;
 
 const aclBaseSchema = generateBaseTableSchema("acl");
-export const aclObjectSchema = z.strictObject({
-  id: aclBaseSchema.shape.id,
-  object_type: aclObjectTypeEnum,
-  object_id: z
-    .string()
-    .uuid()
-    .describe("The id of the object the ACL applies to"),
-  restrict_object_type: z
-    .optional(z.union([aclObjectTypeEnum, z.null()]))
-    .describe(
-      "Optionally restricts the permission grant to just the specified object type",
-    ),
-  _object_org_id: z
-    .string()
-    .uuid()
-    .describe("The organization the ACL's referred object belongs to"),
-  created: aclBaseSchema.shape.created,
-});
-const aclUserObjectSchema = z.strictObject({
-  user_id: z.string().uuid().describe("Id of the user the ACL applies to"),
-});
-const aclGroupObjectSchema = z.strictObject({
-  group_id: z.string().uuid().describe("Id of the group the ACL applies to"),
-});
-const aclPermissionObjectSchema = z.strictObject({
-  permission: permissionEnum.describe("Permission the ACL grants"),
-});
-const aclRoleObjectSchema = z.strictObject({
-  role_id: z.string().uuid().describe("Id of the role the ACL grants"),
-});
-
 export const aclSchema = z
-  .union([
-    aclObjectSchema
-      .merge(aclUserObjectSchema)
-      .merge(aclPermissionObjectSchema)
-      .openapi("UserPermissionAcl"),
-    aclObjectSchema
-      .merge(aclUserObjectSchema)
-      .merge(aclRoleObjectSchema)
-      .openapi("UserRoleAcl"),
-    aclObjectSchema
-      .merge(aclGroupObjectSchema)
-      .merge(aclPermissionObjectSchema)
-      .openapi("GroupPermissionAcl"),
-    aclObjectSchema
-      .merge(aclGroupObjectSchema)
-      .merge(aclRoleObjectSchema)
-      .openapi("GroupRoleAcl"),
-  ])
+  .strictObject({
+    id: aclBaseSchema.shape.id,
+    object_type: aclObjectTypeEnum,
+    object_id: z
+      .string()
+      .uuid()
+      .describe("The id of the object the ACL applies to"),
+    restrict_object_type: aclObjectTypeEnum
+      .nullish()
+      .describe(
+        "Optionally restricts the permission grant to just the specified object type",
+      ),
+    _object_org_id: z
+      .string()
+      .uuid()
+      .describe("The organization the ACL's referred object belongs to"),
+    created: aclBaseSchema.shape.created,
+    user_id: z
+      .string()
+      .uuid()
+      .nullish()
+      .describe(
+        "Id of the user the ACL applies to. Exactly one of `user_id` and `group_id` will be provided",
+      ),
+    group_id: z
+      .string()
+      .uuid()
+      .nullish()
+      .describe(
+        "Id of the group the ACL applies to. Exactly one of `user_id` and `group_id` will be provided",
+      ),
+    permission: permissionEnum
+      .nullish()
+      .describe(
+        "Permission the ACL grants. Exactly one of `permission` and `role_id` will be provided",
+      ),
+    role_id: z
+      .string()
+      .uuid()
+      .nullish()
+      .describe(
+        "Id of the role the ACL grants. Exactly one of `permission` and `role_id` will be provided",
+      ),
+  })
   .describe(
     [
       "An ACL grants a certain permission or role to a certain user or group on an object.",
@@ -607,30 +609,12 @@ const patchGroupSchema = createGroupSchema
   )
   .openapi("PatchGroup");
 
-const createAclObjectSchema = aclObjectSchema.omit({
-  id: true,
-  created: true,
-  _object_org_id: true,
-});
-const createAclSchema = z
-  .union([
-    createAclObjectSchema
-      .merge(aclUserObjectSchema)
-      .merge(aclPermissionObjectSchema)
-      .openapi("CreateUserPermissionAcl"),
-    createAclObjectSchema
-      .merge(aclUserObjectSchema)
-      .merge(aclRoleObjectSchema)
-      .openapi("CreateUserRoleAcl"),
-    createAclObjectSchema
-      .merge(aclGroupObjectSchema)
-      .merge(aclPermissionObjectSchema)
-      .openapi("CreateGroupPermissionAcl"),
-    createAclObjectSchema
-      .merge(aclGroupObjectSchema)
-      .merge(aclRoleObjectSchema)
-      .openapi("CreateGroupRoleAcl"),
-  ])
+const createAclSchema = aclSchema
+  .omit({
+    id: true,
+    created: true,
+    _object_org_id: true,
+  })
   .openapi("CreateAcl");
 
 // Section: exported schemas, grouped by object type.
