@@ -9,6 +9,8 @@ import {
   InitOptions,
   BaseMetadata,
   DefaultMetadataType,
+  ScoreSummary,
+  MetricSummary,
 } from "./logger";
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
@@ -756,10 +758,180 @@ export const defaultReporter: ReporterDef<boolean> = {
       reportFailures(evaluator, failingResults, { verbose, jsonl });
     }
 
-    console.log(jsonl ? JSON.stringify(summary) : summary);
+    console.log(
+      jsonl ? JSON.stringify(summary) : formatExperimentSummary(summary),
+    );
     return failingResults.length === 0;
   },
   async reportRun(evalReports: boolean[]) {
     return evalReports.every((r) => r);
   },
 };
+
+/*
+@dataclasses.dataclass
+class ScoreSummary(SerializableDataClass):
+    """Summary of a score's performance."""
+
+    name: str
+    """Name of the score."""
+
+    # Used to help with formatting
+    _longest_score_name: int
+
+    score: float
+    """Average score across all examples."""
+
+    improvements: Optional[int]
+    """Number of improvements in the score."""
+    regressions: Optional[int]
+    """Number of regressions in the score."""
+    diff: Optional[float] = None
+    """Difference in score between the current and reference experiment."""
+
+    def __str__(self):
+        # format with 2 decimal points and pad so that it's exactly 2 characters then 2 decimals
+        score_pct = f"{self.score * 100:05.2f}%"
+
+        # pad the name with spaces so that its length is self._longest_score_name + 2
+        score_name = f"'{self.name}'".ljust(self._longest_score_name + 2)
+
+        if self.diff is not None:
+            diff_pct = f"{abs(self.diff) * 100:05.2f}%"
+            diff_score = f"+{diff_pct}" if self.diff > 0 else f"-{diff_pct}" if self.diff < 0 else "-"
+
+            return textwrap.dedent(
+                f"""{score_pct} ({diff_score}) {score_name} score\t({self.improvements} improvements, {self.regressions} regressions)"""
+            )
+        else:
+            return textwrap.dedent(f"""{score_pct} {score_name} score""")
+
+
+@dataclasses.dataclass
+class MetricSummary(SerializableDataClass):
+    """Summary of a metric's performance."""
+
+    name: str
+    """Name of the metric."""
+
+    # Used to help with formatting
+    _longest_metric_name: int
+
+    metric: float
+    """Average metric across all examples."""
+    unit: str
+    """Unit label for the metric."""
+    improvements: Optional[int]
+    """Number of improvements in the metric."""
+    regressions: Optional[int]
+    """Number of regressions in the metric."""
+    diff: Optional[float] = None
+    """Difference in metric between the current and reference experiment."""
+
+    def __str__(self):
+        # format with 2 decimal points
+        metric = f"{self.metric:.2f}"
+        if self.diff is None:
+            return textwrap.dedent(f"""{metric}{self.unit} {self.name}""")
+
+        diff_pct = f"{abs(self.diff) * 100:05.2f}%"
+        diff_score = f"+{diff_pct}" if self.diff > 0 else f"-{diff_pct}" if self.diff < 0 else "-"
+
+        # pad the name with spaces so that its length is self._longest_score_name + 2
+        metric_name = f"'{self.name}'".ljust(self._longest_metric_name + 2)
+
+        return textwrap.dedent(
+            f"""{metric}{self.unit} ({diff_score}) {metric_name}\t({self.improvements} improvements, {self.regressions} regressions)"""
+        )
+
+
+@dataclasses.dataclass
+class ExperimentSummary(SerializableDataClass):
+    """Summary of an experiment's scores and metadata."""
+
+    project_name: str
+    """Name of the project that the experiment belongs to."""
+    experiment_name: str
+    """Name of the experiment."""
+    project_url: Optional[str]
+    """URL to the project's page in the Braintrust app."""
+    experiment_url: Optional[str]
+    """URL to the experiment's page in the Braintrust app."""
+    comparison_experiment_name: Optional[str]
+    """The experiment scores are baselined against."""
+    scores: Dict[str, ScoreSummary]
+    """Summary of the experiment's scores."""
+    metrics: Dict[str, MetricSummary]
+    """Summary of the experiment's metrics."""
+
+    def __str__(self):
+        comparison_line = ""
+        if self.comparison_experiment_name:
+            comparison_line = f"""{self.experiment_name} compared to {self.comparison_experiment_name}:\n"""
+        return (
+            f"""\n=========================SUMMARY=========================\n{comparison_line}"""
+            + "\n".join([str(score) for score in self.scores.values()])
+            + ("\n\n" if self.scores else "")
+            + "\n".join([str(metric) for metric in self.metrics.values()])
+            + ("\n\n" if self.metrics else "")
+            + (
+                textwrap.dedent(
+                    f"""\
+        See results for {self.experiment_name} at {self.experiment_url}"""
+                )
+                if self.experiment_url is not None
+                else ""
+            )
+        )
+*/
+function formatExperimentSummary(summary: ExperimentSummary) {
+  let comparisonLine = "";
+  if (summary.comparisonExperimentName) {
+    comparisonLine = `${summary.experimentName} compared to ${summary.comparisonExperimentName}:\n`;
+  }
+  const longestScoreName = Math.max(
+    ...Object.values(summary.scores).map((score) => score.name.length),
+  );
+  const longestMetricName = Math.max(
+    ...Object.values(summary.metrics ?? {}).map((metric) => metric.name.length),
+  );
+  return (
+    `\n=========================SUMMARY=========================\n${comparisonLine}` +
+    Object.values(summary.scores)
+      .map((score) => formatScoreSummary(score, longestScoreName))
+      .join("\n") +
+    (Object.keys(summary.scores).length ? "\n\n" : "") +
+    Object.values(summary.metrics ?? {})
+      .map((metric) => formatMetricSummary(metric, longestMetricName))
+      .join("\n") +
+    (Object.keys(summary.metrics ?? {}).length ? "\n\n" : "") +
+    (summary.experimentUrl
+      ? `See results for ${summary.experimentName} at ${summary.experimentUrl}`
+      : "")
+  );
+}
+
+function formatScoreSummary(summary: ScoreSummary, longestScoreName: number) {
+  const diffString = isEmpty(summary.diff)
+    ? ""
+    : ` (${summary.diff > 0 ? "+" : ""}${(summary.diff * 100).toFixed(2)}%)`;
+  const scoreName = `'${summary.name}'`.padEnd(longestScoreName + 2);
+  return `${(summary.score * 100).toFixed(
+    2,
+  )}%${diffString} '${scoreName}' score\t(${
+    summary.improvements
+  } improvements, ${summary.regressions} regressions)`;
+}
+
+function formatMetricSummary(
+  summary: MetricSummary,
+  longestMetricName: number,
+) {
+  const diffString = isEmpty(summary.diff)
+    ? ""
+    : ` (${summary.diff > 0 ? "+" : ""}${(summary.diff * 100).toFixed(2)}%)`;
+  const metricName = `'${summary.name}'`.padEnd(longestMetricName + 2);
+  return `${summary.metric.toFixed(2)}${summary.unit} ${metricName}\t(${
+    summary.improvements
+  } improvements, ${summary.regressions} regressions)`;
+}
