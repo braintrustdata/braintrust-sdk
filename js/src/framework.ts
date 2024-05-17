@@ -9,6 +9,8 @@ import {
   InitOptions,
   BaseMetadata,
   DefaultMetadataType,
+  ScoreSummary,
+  MetricSummary,
 } from "./logger";
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
@@ -756,10 +758,66 @@ export const defaultReporter: ReporterDef<boolean> = {
       reportFailures(evaluator, failingResults, { verbose, jsonl });
     }
 
-    console.log(jsonl ? JSON.stringify(summary) : summary);
+    // process.stdout.write will not do intelligent formatting, like cut off long lines
+    process.stdout.write(
+      jsonl ? JSON.stringify(summary) : formatExperimentSummary(summary),
+    );
+    process.stdout.write("\n");
     return failingResults.length === 0;
   },
   async reportRun(evalReports: boolean[]) {
     return evalReports.every((r) => r);
   },
 };
+
+function formatExperimentSummary(summary: ExperimentSummary) {
+  let comparisonLine = "";
+  if (summary.comparisonExperimentName) {
+    comparisonLine = `${summary.experimentName} compared to ${summary.comparisonExperimentName}:\n`;
+  }
+  const longestScoreName = Math.max(
+    ...Object.values(summary.scores).map((score) => score.name.length),
+  );
+  const longestMetricName = Math.max(
+    ...Object.values(summary.metrics ?? {}).map((metric) => metric.name.length),
+  );
+  return (
+    `\n=========================SUMMARY=========================\n${comparisonLine}` +
+    Object.values(summary.scores)
+      .map((score) => formatScoreSummary(score, longestScoreName))
+      .join("\n") +
+    (Object.keys(summary.scores).length ? "\n\n" : "") +
+    Object.values(summary.metrics ?? {})
+      .map((metric) => formatMetricSummary(metric, longestMetricName))
+      .join("\n") +
+    (Object.keys(summary.metrics ?? {}).length ? "\n\n" : "") +
+    (summary.experimentUrl
+      ? `See results for ${summary.experimentName} at ${summary.experimentUrl}`
+      : "")
+  );
+}
+
+function formatScoreSummary(summary: ScoreSummary, longestScoreName: number) {
+  const diffString = isEmpty(summary.diff)
+    ? ""
+    : ` (${summary.diff > 0 ? "+" : ""}${(summary.diff * 100).toFixed(2)}%)`;
+  const scoreName = `'${summary.name}'`.padEnd(longestScoreName + 2);
+  return `${(summary.score * 100).toFixed(
+    2,
+  )}%${diffString} '${scoreName}' score\t(${
+    summary.improvements
+  } improvements, ${summary.regressions} regressions)`;
+}
+
+function formatMetricSummary(
+  summary: MetricSummary,
+  longestMetricName: number,
+) {
+  const diffString = isEmpty(summary.diff)
+    ? ""
+    : ` (${summary.diff > 0 ? "+" : ""}${(summary.diff * 100).toFixed(2)}%)`;
+  const metricName = `'${summary.name}'`.padEnd(longestMetricName + 2);
+  return `${summary.metric.toFixed(2)}${summary.unit} ${metricName}\t(${
+    summary.improvements
+  } improvements, ${summary.regressions} regressions)`;
+}
