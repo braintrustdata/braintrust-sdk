@@ -267,6 +267,27 @@ export const experimentSchema = z
   .openapi("Experiment");
 export type Experiment = z.infer<typeof experimentSchema>;
 
+const promptSessionBaseSchema = generateBaseTableSchema("promptSession", {
+  uniqueName: true,
+});
+export const promptSessionSchema = z
+  .strictObject({
+    id: promptSessionBaseSchema.shape.id,
+    name: promptSessionBaseSchema.shape.name,
+    description: promptSessionBaseSchema.shape.description,
+    created: promptSessionBaseSchema.shape.created,
+    deleted_at: promptSessionBaseSchema.shape.deleted_at,
+    user_id: promptSessionBaseSchema.shape.user_id,
+    project_id: promptSessionBaseSchema.shape.project_id,
+    org_id: organizationSchema.shape.id
+      .nullish()
+      .describe(
+        "This field is deprecated and will be removed in a future revision",
+      ),
+  })
+  .openapi("PromptSession");
+export type PromptSession = z.infer<typeof promptSessionSchema>;
+
 export const permissionEnum = z
   .enum([
     "create",
