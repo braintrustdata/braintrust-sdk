@@ -774,7 +774,7 @@ async function main() {
     help: "The name of a specific organization to connect to. This is useful if you belong to multiple.",
   });
   parser_run.add_argument("--app-url", {
-    help: "Specify a custom braintrust app url. Defaults to https://www.braintrustdata.com. This is only necessary if you are using an experimental version of Braintrust",
+    help: "Specify a custom braintrust app url. Defaults to https://www.braintrust.dev. This is only necessary if you are using an experimental version of Braintrust",
   });
   parser_run.add_argument("--watch", {
     action: "store_true",

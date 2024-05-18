@@ -1,7 +1,7 @@
 # Braintrust SDK
 
-[Braintrust](https://www.braintrustdata.com/) is a platform for evaluating and shipping AI products. To learn more about Braintrust or sign up for free,
-visit our [website](https://www.braintrustdata.com/) or check out the [docs](https://www.braintrustdata.com/docs).
+[Braintrust](https://www.braintrust.dev/) is a platform for evaluating and shipping AI products. To learn more about Braintrust or sign up for free,
+visit our [website](https://www.braintrust.dev/) or check out the [docs](https://www.braintrust.dev/docs).
 
 This repository contains the Python and Javascript SDKs for Braintrust. The SDKs include utilities to:
 
@@ -98,7 +98,7 @@ BRAINTRUST_API_KEY=<YOUR_API_KEY> \
 
 ## Documentation
 
-For more information, check out the [docs](https://www.braintrustdata.com/docs):
+For more information, check out the [docs](https://www.braintrust.dev/docs):
 
-- [Typescript](https://www.braintrustdata.com/docs/libs/nodejs)
-- [Python](https://www.braintrustdata.com/docs/libs/python)
+- [Typescript](https://www.braintrust.dev/docs/libs/nodejs)
+- [Python](https://www.braintrust.dev/docs/libs/python)
