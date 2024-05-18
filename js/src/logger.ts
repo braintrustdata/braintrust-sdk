@@ -1244,7 +1244,7 @@ type InitializedExperiment<IsOpen extends boolean | undefined> =
  * @param options.update If the experiment already exists, continue logging to it. If it does not exist, creates the experiment with the specified arguments.
  * @param options.baseExperiment An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
  * @param options.isPublic An optional parameter to control whether the experiment is publicly visible to anybody with the link or privately visible to only members of the organization. Defaults to private.
- * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
  * @param options.metadata (Optional) A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
@@ -1567,7 +1567,7 @@ type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
  * @param options.project The name of the project to create the dataset in. Must specify at least one of `project` or `projectId`.
  * @param options.dataset The name of the dataset to create. If not specified, a name will be generated automatically.
  * @param options.description An optional description of the dataset.
- * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
  * @param options.projectId The id of the project to create the dataset in. This takes precedence over `project` if specified.
@@ -1704,7 +1704,7 @@ type InitLoggerOptions<IsAsyncFlush> = {
  * @param options.projectName The name of the project to log into. If unspecified, will default to the Global project.
  * @param options.projectId The id of the project to log into. This takes precedence over projectName if specified.
  * @param options.asyncFlush If true, will log asynchronously in the background. Otherwise, will log synchronously. (false by default, to support serverless environments)
- * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -1801,7 +1801,7 @@ interface LoadPromptOptions {
  * @param options.version An optional version of the prompt (to read). If not specified, the latest version will be used.
  * @param options.defaults (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
  * @param options.noTrace If true, do not include logging metadata for this prompt when build() is called.
- * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -1870,10 +1870,10 @@ export async function loadPrompt({
 
 /**
  * Log into Braintrust. This will prompt you for your API token, which you can find at
- * https://www.braintrustdata.com/app/token. This method is called automatically by `init()`.
+ * https://www.braintrust.dev/app/token. This method is called automatically by `init()`.
  *
  * @param options Options for configuring login().
- * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
+ * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -1917,8 +1917,7 @@ export async function login(
   }
 
   const {
-    appUrl = iso.getEnv("BRAINTRUST_APP_URL") ||
-      "https://www.braintrustdata.com",
+    appUrl = iso.getEnv("BRAINTRUST_APP_URL") || "https://www.braintrust.dev",
     apiKey = iso.getEnv("BRAINTRUST_API_KEY"),
     orgName = iso.getEnv("BRAINTRUST_ORG_NAME"),
   } = options || {};

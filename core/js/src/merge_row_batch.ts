@@ -35,7 +35,7 @@ export function mergeRowBatch<
   for (const row of rows) {
     if (row.id === undefined) {
       throw new Error(
-        "Logged row is missing an id. This is an internal braintrust error. Please contact us at info@braintrustdata.com for help",
+        "Logged row is missing an id. This is an internal braintrust error. Please contact us at info@braintrust.dev for help",
       );
     }
   }

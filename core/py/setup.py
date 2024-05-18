@@ -20,11 +20,11 @@ setuptools.setup(
     name="braintrust_core",
     version=version_contents["VERSION"],
     author="Braintrust",
-    author_email="info@braintrustdata.com",
+    author_email="info@braintrust.dev",
     description="Shared core dependencies for Braintrust packages",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://www.braintrustdata.com",
+    url="https://www.braintrust.dev",
     classifiers=[
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",

@@ -136,7 +136,7 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
     span_id: z
       .string()
       .describe(
-        `A unique identifier used to link different ${eventDescription} events together as part of a full trace. See the [tracing guide](https://www.braintrustdata.com/docs/guides/tracing) for full details on tracing`,
+        `A unique identifier used to link different ${eventDescription} events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing`,
       ),
     span_parents: z
       .string()
@@ -495,7 +495,7 @@ const replacementEventSchema = z.strictObject({
     .nullish()
     .describe(
       [
-        "Use the `_parent_id` field to create this row as a subspan of an existing row. It cannot be specified alongside `_is_merge=true`. Tracking hierarchical relationships are important for tracing (see the [guide](https://www.braintrustdata.com/docs/guides/tracing) for full details).",
+        "Use the `_parent_id` field to create this row as a subspan of an existing row. It cannot be specified alongside `_is_merge=true`. Tracking hierarchical relationships are important for tracing (see the [guide](https://www.braintrust.dev/docs/guides/tracing) for full details).",
         'For example, say we have logged a row `{"id": "abc", "input": "foo", "output": "bar", "expected": "boo", "scores": {"correctness": 0.33}}`. We can create a sub-span of the parent row by logging `{"_parent_id": "abc", "id": "llm_call", "input": {"prompt": "What comes after foo?"}, "output": "bar", "metrics": {"tokens": 1}}`. In the webapp, only the root span row `"abc"` will show up in the summary view. You can view the full trace hierarchy (in this case, the `"llm_call"` row) by clicking on the "abc" row.',
       ].join("\n\n"),
     ),

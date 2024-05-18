@@ -67,7 +67,7 @@ def merge_row_batch(rows: List[Dict]) -> List[List[Dict]]:
     for row in rows:
         if row.get("id") is None:
             raise Exception(
-                "Logged row is missing an id. This is an internal braintrust error. Please contact us at info@braintrustdata.com for help"
+                "Logged row is missing an id. This is an internal braintrust error. Please contact us at info@braintrust.dev for help"
             )
 
     row_groups = {}

@@ -43,11 +43,11 @@ setuptools.setup(
     name="braintrust",
     version=version_contents["VERSION"],
     author="Braintrust",
-    author_email="info@braintrustdata.com",
+    author_email="info@braintrust.dev",
     description="SDK for integrating Braintrust",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://www.braintrustdata.com",
+    url="https://www.braintrust.dev",
     # project_urls={
     #    "Bug Tracker": "https://github.com/TODO/issues",
     # },

@@ -42,7 +42,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "homepage": "https://www.braintrustdata.com",
+  "homepage": "https://www.braintrust.dev",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/braintrustdata/braintrust-sdk.git"

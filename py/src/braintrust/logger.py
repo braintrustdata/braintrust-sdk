@@ -747,7 +747,7 @@ def init(
     :param update: If the experiment already exists, continue logging to it. If it does not exist, creates the experiment with the specified arguments.
     :param base_experiment: An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this experiment. Otherwise, it will pick an experiment by finding the closest ancestor on the default (e.g. main) branch.
     :param is_public: An optional parameter to control whether the experiment is publicly visible to anybody with the link or privately visible to only members of the organization. Defaults to private.
-    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
+    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -889,7 +889,7 @@ def init_dataset(
     :param name: The name of the dataset to create. If not specified, a name will be generated automatically.
     :param description: An optional description of the dataset.
     :param version: An optional version of the dataset (to read). If not specified, the latest version will be used.
-    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
+    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -932,7 +932,7 @@ def init_logger(
     :param project: The name of the project to log into. If unspecified, will default to the Global project.
     :param project_id: The id of the project to log into. This takes precedence over project if specified.
     :param async_flush: If true (the default), log events will be batched and sent asynchronously in a background thread. If false, log events will be sent synchronously. Set to false in serverless environments.
-    :param app_url: The URL of the Braintrust API. Defaults to https://www.braintrustdata.com.
+    :param app_url: The URL of the Braintrust API. Defaults to https://www.braintrust.dev.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -996,7 +996,7 @@ def load_prompt(
     :param project_id: The id of the project to load the prompt from. This takes precedence over `project` if specified.
     :param defaults: (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
     :param no_trace: If true, do not include logging metadata for this prompt when build() is called.
-    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
+    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -1040,9 +1040,9 @@ login_lock = threading.RLock()
 def login(app_url=None, api_key=None, org_name=None, force_login=False):
     """
     Log into Braintrust. This will prompt you for your API token, which you can find at
-    https://www.braintrustdata.com/app/token. This method is called automatically by `init()`.
+    https://www.braintrust.dev/app/token. This method is called automatically by `init()`.
 
-    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrustdata.com.
+    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
@@ -1071,7 +1071,7 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
             return
 
         if app_url is None:
-            app_url = os.environ.get("BRAINTRUST_APP_URL", "https://www.braintrustdata.com")
+            app_url = os.environ.get("BRAINTRUST_APP_URL", "https://www.braintrust.dev")
 
         app_public_url = os.environ.get("BRAINTRUST_APP_PUBLIC_URL", app_url)
 

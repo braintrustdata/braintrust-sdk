@@ -302,7 +302,7 @@ def build_parser(subparsers, parent_parser):
     )
     parser.add_argument(
         "--app-url",
-        help="Specify a custom braintrust app url. Defaults to https://www.braintrustdata.com. This is only necessary if you are using an experimental version of Braintrust",
+        help="Specify a custom braintrust app url. Defaults to https://www.braintrust.dev. This is only necessary if you are using an experimental version of Braintrust",
     )
     parser.add_argument(
         "--watch",
