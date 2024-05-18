@@ -566,9 +566,6 @@ async function collectFiles(inputPath: string): Promise<string[]> {
 
   let files: string[] = [];
   if (!pathStat.isDirectory()) {
-    // XXX IMPROVE THIS:
-    // - Allow the file to be included if specified by name
-    // - Print a warning if the file doesn't match
     if (!checkMatch(inputPath, INCLUDE, EXCLUDE)) {
       console.warn(
         warning(
