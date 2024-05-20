@@ -15,12 +15,14 @@ import {
   login,
   init as initExperiment,
   _internalGetGlobalState,
+  Experiment,
 } from "./logger";
 import {
   BarProgressReporter,
   SimpleProgressReporter,
   ProgressReporter,
 } from "./progress";
+import { Readable } from "stream";
 
 // Re-use the module resolution logic from Jest
 import nodeModulesPaths from "./jest/nodeModulesPaths";
@@ -39,6 +41,7 @@ import {
 import { configureNode } from "./node";
 import { isEmpty } from "./util";
 import { loadEnvConfig } from "@next/env";
+import { createGzip } from "zlib";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript
@@ -73,7 +76,9 @@ type BuildResult = BuildSuccess | BuildFailure;
 interface FileHandle {
   inFile: string;
   outFile: string;
+  bundleFile?: string;
   rebuild: () => Promise<BuildResult>;
+  bundle?: () => Promise<esbuild.BuildResult>;
   watch: () => void;
   destroy: () => Promise<void>;
 }
@@ -276,18 +281,26 @@ function buildWatchPluginForEvaluator(
   return plugin;
 }
 
-async function initFile(
-  inFile: string,
-  outFile: string,
-  opts: EvaluatorOpts,
-  args: RunArgs,
-): Promise<FileHandle> {
+async function initFile({
+  inFile,
+  outFile,
+  bundleFile,
+  opts,
+  args,
+}: {
+  inFile: string;
+  outFile: string;
+  bundleFile?: string;
+  opts: EvaluatorOpts;
+  args: RunArgs;
+}): Promise<FileHandle> {
   const buildOptions = buildOpts(inFile, outFile, opts, args);
   const ctx = await esbuild.context(buildOptions);
 
   return {
     inFile,
     outFile,
+    bundleFile,
     rebuild: async () => {
       try {
         const result = await ctx.rebuild();
@@ -307,6 +320,17 @@ async function initFile(
         return { type: "failure", error: e as Error, sourceFile: inFile };
       }
     },
+    bundle: bundleFile
+      ? async () => {
+          const buildOptions: esbuild.BuildOptions = {
+            ...buildOpts(inFile, bundleFile, opts, args),
+            external: [],
+            write: true,
+            plugins: [],
+          };
+          return await esbuild.build(buildOptions);
+        }
+      : undefined,
     watch: () => {
       ctx.watch();
     },
@@ -422,6 +446,13 @@ async function runOnce(
 
   const buildResults = await Promise.all(buildPromises);
 
+  const bundlePromises = Object.fromEntries(
+    Object.entries(handles).map(([inFile, handle]) => [
+      inFile,
+      handle.bundle ? handle.bundle() : Promise.resolve(undefined),
+    ]),
+  );
+
   const evaluators: EvaluatorState = {
     evaluators: [],
     reporters: {},
@@ -435,32 +466,41 @@ async function runOnce(
     return true;
   }
 
-  const resultPromises = Object.values(evaluators.evaluators).map(
-    async (evaluator) => {
-      // TODO: For now, use the eval name as the project. However, we need to evolve
-      // the definition of a project and create a new concept called run, so that we
-      // can name the experiment/evaluation within the run the evaluator's name.
-      const logger = opts.noSendLogs
-        ? null
-        : await initLogger(
-            evaluator.evaluator.projectName,
-            evaluator.evaluator.experimentName,
-            evaluator.evaluator.metadata,
-          );
-      try {
-        return await runEvaluator(
-          logger,
-          evaluator.evaluator,
-          opts.progressReporter,
-          opts.filters,
+  const experimentIdToEvaluator: Record<
+    string,
+    {
+      evaluator: EvaluatorState["evaluators"][number];
+      experiment: Experiment;
+    }
+  > = {};
+  const resultPromises = evaluators.evaluators.map(async (evaluator) => {
+    // TODO: For now, use the eval name as the project. However, we need to evolve
+    // the definition of a project and create a new concept called run, so that we
+    // can name the experiment/evaluation within the run the evaluator's name.
+    const logger = opts.noSendLogs
+      ? null
+      : await initLogger(
+          evaluator.evaluator.projectName,
+          evaluator.evaluator.experimentName,
+          evaluator.evaluator.metadata,
         );
-      } finally {
-        if (logger) {
-          await logger.flush();
-        }
+    try {
+      return await runEvaluator(
+        logger,
+        evaluator.evaluator,
+        opts.progressReporter,
+        opts.filters,
+      );
+    } finally {
+      if (logger) {
+        experimentIdToEvaluator[await logger.id] = {
+          evaluator,
+          experiment: logger,
+        };
+        await logger.flush();
       }
-    },
-  );
+    }
+  });
 
   console.error(`Processing ${resultPromises.length} evaluators...`);
   const allEvalsResults = await Promise.all(resultPromises);
@@ -491,6 +531,88 @@ async function runOnce(
     );
 
     addReport(evalReports, resolvedReporter, report);
+  }
+
+  if (Object.entries(experimentIdToEvaluator).length > 0) {
+    const bundleSpecs: Record<string, Record<string, string>> = {};
+    for (const [experimentId, evaluator] of Object.entries(
+      experimentIdToEvaluator,
+    )) {
+      if (!bundleSpecs[evaluator.evaluator.sourceFile]) {
+        bundleSpecs[evaluator.evaluator.sourceFile] = {};
+      }
+      bundleSpecs[evaluator.evaluator.sourceFile][experimentId] =
+        evaluator.evaluator.evaluator.evalName;
+    }
+
+    console.error(`Processing bundles...`);
+    const uploadPromises = [];
+    const orgId = _internalGetGlobalState().orgId;
+    if (!orgId) {
+      throw new Error("No organization ID found");
+    }
+
+    const loggerConn = _internalGetGlobalState().logConn();
+    let uploaded = 0;
+    for (const [inFile, compileResult] of Object.entries(bundlePromises)) {
+      uploadPromises.push(
+        (async () => {
+          const bundle = await compileResult;
+          if (!bundle || !handles[inFile].bundleFile) {
+            return;
+          }
+          const spec = bundleSpecs[inFile];
+
+          let pathInfo: {
+            url: string;
+          };
+          try {
+            pathInfo = await loggerConn.post_json("register-code", {
+              org_id: orgId,
+              runtime_context: {
+                runtime: "node",
+                version: process.version.slice(1),
+              },
+              experiments: spec,
+            });
+          } catch (e) {
+            console.error(
+              warning(
+                `Failed to register code. You most likely need to update the API: ${e}`,
+              ),
+            );
+            return;
+          }
+
+          // Upload bundleFile to pathInfo.url
+          const bundleFile = path.resolve(handles[inFile].bundleFile);
+          const bundleStream = fs
+            .createReadStream(bundleFile)
+            .pipe(createGzip());
+          const bundleData = await new Promise<Buffer>((resolve, reject) => {
+            const chunks: Buffer[] = [];
+            bundleStream.on("data", (chunk) => {
+              chunks.push(chunk);
+            });
+            bundleStream.on("end", () => {
+              resolve(Buffer.concat(chunks));
+            });
+            bundleStream.on("error", reject);
+          });
+
+          await fetch(pathInfo.url, {
+            method: "PUT",
+            body: bundleData,
+          });
+          uploaded += 1;
+        })(),
+      );
+    }
+
+    await Promise.all(uploadPromises);
+    console.log(
+      `${uploaded} Bundle${uploaded > 1 ? "s" : ""} uploaded successfully.`,
+    );
   }
 
   let allSuccess = true;
@@ -661,14 +783,15 @@ async function initializeHandles(args: RunArgs, opts: EvaluatorOpts) {
 
   const initPromises = [];
   for (const file of Object.keys(files)) {
-    const outFile = path.join(
-      tmpDir,
-      `${path.basename(file, path.extname(file))}-${uuidv4().slice(
-        0,
-        8,
-      )}.${OUT_EXT}`,
+    const baseName = `${path.basename(
+      file,
+      path.extname(file),
+    )}-${uuidv4().slice(0, 8)}`;
+    const outFile = path.join(tmpDir, `${baseName}.${OUT_EXT}`);
+    const bundleFile = path.join(tmpDir, `${baseName}.bundle.js`);
+    initPromises.push(
+      initFile({ inFile: file, outFile, opts, bundleFile, args }),
     );
-    initPromises.push(initFile(file, outFile, opts, args));
   }
 
   const handles: Record<string, FileHandle> = {};
