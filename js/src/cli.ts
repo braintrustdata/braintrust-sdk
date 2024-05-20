@@ -22,7 +22,6 @@ import {
   SimpleProgressReporter,
   ProgressReporter,
 } from "./progress";
-import { Readable } from "stream";
 
 // Re-use the module resolution logic from Jest
 import nodeModulesPaths from "./jest/nodeModulesPaths";
@@ -604,7 +603,7 @@ async function runOnce(
             method: "PUT",
             body: bundleData,
             headers: {
-              "Content-Type": "application/gzip",
+              "Content-Encoding": "gzip",
             },
           });
           uploaded += 1;
