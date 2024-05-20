@@ -603,6 +603,9 @@ async function runOnce(
           await fetch(pathInfo.url, {
             method: "PUT",
             body: bundleData,
+            headers: {
+              "Content-Type": "application/gzip",
+            },
           });
           uploaded += 1;
         })(),
