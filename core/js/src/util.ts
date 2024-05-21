@@ -29,6 +29,13 @@ export function capitalize(s: string, sep?: string) {
     .join(sep || "");
 }
 
+export function snakeToCamelCase(s: string) {
+  return s
+    .split("_")
+    .map((s) => capitalize(s))
+    .join("");
+}
+
 export function constructJsonArray(items: string[]) {
   return `[${items.join(",")}]`;
 }
