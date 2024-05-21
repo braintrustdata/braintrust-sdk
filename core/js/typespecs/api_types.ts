@@ -949,4 +949,6 @@ export const objectTypeSummarizeResponseSchemas = {
   acl: undefined,
   user: undefined,
   prompt_session: undefined,
+  project_score: undefined,
+  project_tag: undefined,
 } as const;
