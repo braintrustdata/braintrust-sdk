@@ -1,4 +1,5 @@
 export * from "./db_fields";
+export * from "./http_headers";
 export * from "./merge_row_batch";
 export * from "./object";
 export * from "./score";

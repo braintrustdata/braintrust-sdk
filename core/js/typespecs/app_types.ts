@@ -391,6 +391,64 @@ export const groupSchema = z
   .openapi("Group");
 export type Group = z.infer<typeof groupSchema>;
 
+export const projectScoreTypeEnum = z
+  .enum(["slider", "categorical"])
+  .describe("The type of the configured score");
+export type ProjectScoreType = z.infer<typeof projectScoreTypeEnum>;
+
+const projectScoreCategory = z
+  .object({
+    name: z.string().describe("Name of the category"),
+    value: z
+      .number()
+      .describe(
+        "Numerical value of the category. Must be between 0 and 1, inclusive",
+      ),
+  })
+  .describe("For categorical-type project scores, defines a single category")
+  .openapi("ProjectScoreCategory");
+export type ProjectScoreCategory = z.infer<typeof projectScoreCategory>;
+
+const projectScoreBaseSchema = generateBaseTableSchema("project score");
+export const projectScoreSchema = z
+  .strictObject({
+    id: projectScoreBaseSchema.shape.id,
+    project_id: projectScoreBaseSchema.shape.project_id,
+    user_id: projectScoreBaseSchema.shape.user_id.unwrap().unwrap(),
+    created: projectScoreBaseSchema.shape.created,
+    name: projectScoreBaseSchema.shape.name,
+    description: projectScoreBaseSchema.shape.description,
+    score_type: projectScoreTypeEnum,
+    categories: projectScoreCategory
+      .array()
+      .nullish()
+      .describe(
+        "For categorical-type project scores, the list of all categories",
+      ),
+  })
+  .describe(
+    "A project score is a user-configured score, which can be manually-labeled through the UI",
+  )
+  .openapi("ProjectScore");
+export type ProjectScore = z.infer<typeof projectScoreSchema>;
+
+const projectTagBaseSchema = generateBaseTableSchema("project tag");
+export const projectTagSchema = z
+  .strictObject({
+    id: projectTagBaseSchema.shape.id,
+    project_id: projectTagBaseSchema.shape.project_id,
+    user_id: projectTagBaseSchema.shape.user_id.unwrap().unwrap(),
+    created: projectTagBaseSchema.shape.created,
+    name: projectTagBaseSchema.shape.name,
+    description: projectTagBaseSchema.shape.description,
+    color: z.string().nullish().describe("Color of the tag for the UI"),
+  })
+  .describe(
+    "A project tag is a user-configured tag for tracking and filtering your experiments, logs, and other data",
+  )
+  .openapi("ProjectTag");
+export type ProjectTag = z.infer<typeof projectTagSchema>;
+
 export const aclObjectTypeEnum = z
   .enum([
     "organization",
@@ -638,6 +696,42 @@ const createAclSchema = aclSchema
   })
   .openapi("CreateAcl");
 
+const createProjectScoreSchema = z
+  .strictObject({
+    project_id: projectScoreSchema.shape.project_id,
+    name: projectScoreSchema.shape.name,
+    description: projectScoreSchema.shape.description,
+    score_type: projectScoreSchema.shape.score_type,
+    categories: projectScoreSchema.shape.categories,
+  })
+  .openapi("CreateProjectScore");
+
+const patchProjectScoreSchema = z
+  .strictObject({
+    name: projectScoreSchema.shape.name.nullish(),
+    description: projectScoreSchema.shape.description,
+    score_type: projectScoreSchema.shape.score_type.nullish(),
+    categories: projectScoreSchema.shape.categories,
+  })
+  .openapi("PatchProjectScore");
+
+const createProjectTagSchema = z
+  .strictObject({
+    project_id: projectTagSchema.shape.project_id,
+    name: projectTagSchema.shape.name,
+    description: projectTagSchema.shape.description,
+    color: projectTagSchema.shape.color,
+  })
+  .openapi("CreateProjectTag");
+
+const patchProjectTagSchema = z
+  .strictObject({
+    name: projectTagSchema.shape.name.nullish(),
+    description: projectTagSchema.shape.description,
+    color: projectTagSchema.shape.color,
+  })
+  .openapi("PatchProjectTag");
+
 // Section: exported schemas, grouped by object type.
 
 export const objectSchemas = {
@@ -685,5 +779,15 @@ export const objectSchemas = {
     create: undefined,
     patch: undefined,
     object: undefined,
+  },
+  project_score: {
+    create: createProjectScoreSchema,
+    patch: patchProjectScoreSchema,
+    object: projectScoreSchema,
+  },
+  project_tag: {
+    create: createProjectTagSchema,
+    patch: patchProjectTagSchema,
+    object: projectTagSchema,
   },
 };
