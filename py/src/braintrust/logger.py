@@ -289,6 +289,17 @@ def set_http_adapter(adapter: HTTPAdapter):
         _state._log_conn._reset()
 
 
+class AugmentedHTTPAdapter(HTTPAdapter):
+    def __init__(self, *args, timeout=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.timeout = timeout
+
+    def send(self, request, **kwargs):
+        if not kwargs.get("timeout"):
+            kwargs["timeout"] = self.timeout
+        return super().send(request, **kwargs)
+
+
 class HTTPConnection:
     def __init__(self, base_url, adapter=None):
         self.base_url = base_url
@@ -324,10 +335,17 @@ class HTTPConnection:
     def _reset(self, **retry_kwargs):
         self.session = requests.Session()
 
+        try:
+            timeout = float(os.environ["BRAINTRUST_HTTP_REQUEST_TIMEOUT"])
+        except:
+            # This is the same default timeout as for Google Chrome's fetch
+            # function.
+            timeout = 300
+
         adapter = self.adapter
         if adapter is None:
             retry = Retry(**retry_kwargs)
-            adapter = HTTPAdapter(max_retries=retry)
+            adapter = AugmentedHTTPAdapter(max_retries=retry, timeout=timeout)
 
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
