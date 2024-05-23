@@ -3,7 +3,7 @@ import textwrap
 
 _module_not_found_error = None
 try:
-    from . import api, logs, redshift
+    from . import api, logs, run_migrations
 except ModuleNotFoundError as e:
     _module_not_found_error = e
 
@@ -34,5 +34,5 @@ def build_parser(subparsers, parent_parser):
     else:
         install_subparsers = install_parser.add_subparsers(dest="install_subcommand", required=True)
 
-        for module in [api, logs, redshift]:
+        for module in [api, logs, run_migrations]:
             module.build_parser(install_subparsers, parents=[parent_parser])
