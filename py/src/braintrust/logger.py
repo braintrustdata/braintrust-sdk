@@ -894,7 +894,7 @@ def init_dataset(
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
     :param project_id: The id of the project to create the dataset in. This takes precedence over `project` if specified.
-    :param use_output: If True (the default), records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This will default to False in a future version of Braintrust.
+    :param use_output: If True, records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This option will be removed in a future version of Braintrust.
     :returns: The dataset object.
     """
 
