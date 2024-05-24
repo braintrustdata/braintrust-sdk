@@ -1,6 +1,6 @@
 from .db_fields import MERGE_PATHS_FIELD
 
-DEFAULT_IS_LEGACY_DATASET = True
+DEFAULT_IS_LEGACY_DATASET = False
 
 
 def ensure_dataset_record(r, legacy: bool):
