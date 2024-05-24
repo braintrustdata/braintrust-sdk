@@ -715,6 +715,9 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                     span.log(input=task_args[0], output=output)
                 root_span.log(output=output, metadata=metadata)
 
+                # metadata may now be changed, due to hooks
+                datum.metadata = metadata
+
                 # First, resolve the scorers if they are classes
                 scorers = [
                     scorer() if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer
