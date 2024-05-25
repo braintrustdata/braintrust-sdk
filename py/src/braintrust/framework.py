@@ -715,9 +715,6 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                     span.log(input=task_args[0], output=output)
                 root_span.log(output=output, metadata=metadata)
 
-                # metadata may now be changed, due to hooks
-                updated_datum = EvalCase.from_dict({**datum.as_dict(), **dict(metadata=metadata)})
-
                 # First, resolve the scorers if they are classes
                 scorers = [
                     scorer() if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer
@@ -725,7 +722,12 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 ]
                 scorer_names = [_scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
                 score_promises = [
-                    asyncio.create_task(await_or_run_scorer(root_span, score, name,**updated_datum.as_dict(), output=output))
+                    asyncio.create_task(
+                        # Propagate updated metadata to the scorer
+                        await_or_run_scorer(
+                            root_span, score, name, **{**datum, "metadata": metadata, "output": output}
+                        )
+                    )
                     for score, name in zip(scorers, scorer_names)
                 ]
                 passing_scorers_and_results = []
@@ -758,10 +760,10 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 exc_info = traceback.format_exc()
 
         return EvalResult(
-            input=updated_datum.input,
-            expected=updated_datum.expected,
+            input=datum.input,
+            expected=datum.expected,
             metadata=metadata,
-            tags=updated_datum.tags,
+            tags=datum.tags,
             output=output,
             scores=scores,
             error=error,
