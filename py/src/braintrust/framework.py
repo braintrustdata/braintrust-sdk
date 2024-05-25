@@ -723,7 +723,6 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 scorer_names = [_scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
                 score_promises = [
                     asyncio.create_task(
-                        # Propagate updated metadata to the scorer
                         await_or_run_scorer(
                             root_span, score, name, **{**datum, "metadata": metadata, "output": output}
                         )
