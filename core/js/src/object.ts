@@ -111,7 +111,7 @@ export type BackgroundLogEvent =
   | LoggingEvent
   | CommentEvent;
 
-export const DEFAULT_IS_LEGACY_DATASET = true;
+export const DEFAULT_IS_LEGACY_DATASET = false;
 
 interface LegacyDatasetRecord {
   id: string;

@@ -14,7 +14,11 @@ import {
   currentSpan,
 } from "./logger";
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
-import { BarProgressReporter, ProgressReporter } from "./progress";
+import {
+  BarProgressReporter,
+  ProgressReporter,
+  SimpleProgressReporter,
+} from "./progress";
 import pluralize from "pluralize";
 import { isEmpty } from "./util";
 
@@ -311,6 +315,7 @@ export async function Eval<
         ...evaluator,
       };
       const ret = await runEvaluator(experiment, evalDef, progressReporter, []);
+      progressReporter.stop();
       resolvedReporter.reportEval(evalDef, ret, {
         verbose: true,
         jsonl: false,
