@@ -310,7 +310,7 @@ function wrapEmbeddings<
   P extends EmbeddingCreateParams,
   C extends CreateEmbeddingResponse,
 >(
-  create: (params: P, options?: unknown) => Promise<C>,
+  create: (params: P, options?: unknown) => APIPromise<C>,
 ): (params: P & SpanInfo, options?: unknown) => Promise<any> {
   return async (allParams: P & SpanInfo, options?: unknown) => {
     const { span_info: _, ...params } = allParams;
@@ -319,7 +319,11 @@ function wrapEmbeddings<
         // We could get rid of this type coercion if we could somehow enforce
         // that `P extends EmbeddingCreateParams` BUT does not have the property
         // `span_info`.
-        const result = await create(params as P, options);
+        const { data: result, response } = await create(
+          params as P,
+          options,
+        ).withResponse();
+        logHeaders(response, span);
         const embedding_length = result.data[0].embedding.length;
         span.log({
           // TODO: Add a flag to control whether to log the full embedding vector,
