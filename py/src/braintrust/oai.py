@@ -132,7 +132,19 @@ class ChatCompletionWrapper:
 
         try:
             start = time.time()
-            raw_response = await self.acreate_fn(*args, **kwargs)
+            create_response = await self.acreate_fn(*args, **kwargs)
+
+            if hasattr(create_response, "parse"):
+                raw_response = create_response.parse()
+                if "x-cached" in create_response.headers:
+                    span.log(
+                        metrics={
+                            "cached": 1 if create_response.headers.get("x-cached").lower() == "true" else 0,
+                        }
+                    )
+            else:
+                raw_response = create_response
+
             if stream:
 
                 async def gen():
