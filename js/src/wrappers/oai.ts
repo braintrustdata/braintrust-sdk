@@ -6,7 +6,7 @@ import {
   startSpan,
   traced,
 } from "../logger";
-import { getCurrentUnixTimestamp } from "../util";
+import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import { mergeDicts } from "@braintrust/core";
 
 interface BetaLike {
@@ -193,12 +193,32 @@ function wrapBetaChatCompletion<
 
 // TODO: Mock this up better
 type StreamingChatResponse = any;
+type EnhancedResponse = {
+  response: Response;
+  data: any;
+};
+
+interface APIPromise<T> extends Promise<T> {
+  withResponse(): Promise<EnhancedResponse>;
+}
+
+function logHeaders(response: Response, span: Span) {
+  const cachedHeader = response.headers.get("x-cached");
+  if (isEmpty(cachedHeader)) {
+    return;
+  }
+  span.log({
+    metrics: {
+      cached: cachedHeader.toLowerCase() === "true" ? 1 : 0,
+    },
+  });
+}
 
 function wrapChatCompletion<
   P extends ChatParams,
   C extends NonStreamingChatResponse | StreamingChatResponse,
 >(
-  completion: (params: P, options?: unknown) => Promise<C>,
+  completion: (params: P, options?: unknown) => APIPromise<C>,
 ): (params: P, options?: unknown) => Promise<any> {
   return async (allParams: P & SpanInfo, options?: unknown) => {
     const { span_info: _, ...params } = allParams;
@@ -215,22 +235,26 @@ function wrapChatCompletion<
     );
     const startTime = getCurrentUnixTimestamp();
     if (params.stream) {
-      const ret = (await completion(
+      const { data: ret, response } = await completion(
         // We could get rid of this type coercion if we could somehow enforce
         // that `P extends ChatParams` BUT does not have the property
         // `span_info`.
         params as P,
         options,
-      )) as StreamingChatResponse;
+      ).withResponse();
+      logHeaders(response, span);
       const wrapperStream = new WrapperStream(span, startTime, ret.iterator());
       ret.iterator = () => wrapperStream[Symbol.asyncIterator]();
       return ret;
     } else {
       try {
-        const ret = (await completion(
-          params as P,
-          options,
-        )) as NonStreamingChatResponse;
+        const { data: ret, response } = await (
+          completion(
+            params as P,
+            options,
+          ) as APIPromise<NonStreamingChatResponse>
+        ).withResponse();
+        logHeaders(response, span);
         const { messages, ...rest } = params;
         span.log({
           input: messages,

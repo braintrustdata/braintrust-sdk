@@ -75,7 +75,6 @@ class ChatCompletionWrapper:
             if hasattr(create_response, "parse"):
                 raw_response = create_response.parse()
                 if "x-cached" in create_response.headers:
-                    print("CACHED?", create_response.headers.get("x-cached"))
                     span.log(
                         metrics={
                             "cached": 1 if create_response.headers.get("x-cached").lower() == "true" else 0,
