@@ -722,7 +722,11 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
                 ]
                 scorer_names = [_scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
                 score_promises = [
-                    asyncio.create_task(await_or_run_scorer(root_span, score, name, **datum.as_dict(), output=output))
+                    asyncio.create_task(
+                        await_or_run_scorer(
+                            root_span, score, name, **{**datum.as_dict(), "metadata": metadata, "output": output}
+                        )
+                    )
                     for score, name in zip(scorers, scorer_names)
                 ]
                 passing_scorers_and_results = []
