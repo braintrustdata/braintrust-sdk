@@ -953,4 +953,5 @@ export const objectTypeSummarizeResponseSchemas = {
   prompt_session: undefined,
   project_score: undefined,
   project_tag: undefined,
+  view: undefined,
 } as const;

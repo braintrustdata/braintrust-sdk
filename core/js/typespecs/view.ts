@@ -1,5 +1,17 @@
 import { z } from "zod";
 
+export const viewTypeEnum = z
+  .enum([
+    "projects",
+    "logs",
+    "experiments",
+    "datasets",
+    "prompts",
+    "prompt_sessions",
+  ])
+  .describe("The type of table that the view applies to");
+export type ViewType = z.infer<typeof viewTypeEnum>;
+
 export const viewDataSearchSchema = z
   .strictObject({
     filter: z.array(z.string()).nullish(),

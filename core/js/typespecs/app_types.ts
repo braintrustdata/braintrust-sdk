@@ -7,7 +7,7 @@ extendZodWithOpenApi(z);
 import { datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
-import { viewDataSchema } from "./view";
+import { viewDataSchema, viewTypeEnum } from "./view";
 
 // Section: App DB table schemas
 
@@ -450,32 +450,19 @@ export const projectTagSchema = z
   .openapi("ProjectTag");
 export type ProjectTag = z.infer<typeof projectTagSchema>;
 
-const viewSpecSchema = z
-  .object({
-    name: z.string().describe("Name of the category"),
-    value: z
-      .number()
-      .describe(
-        "Numerical value of the category. Must be between 0 and 1, inclusive",
-      ),
-  })
-  .describe("For categorical-type project scores, defines a single category")
-  .openapi("ProjectScoreCategory");
-export type ViewSpec = z.infer<typeof viewSpecSchema>;
-
 const viewBaseSchema = generateBaseTableSchema("view");
 export const viewSchema = z
   .strictObject({
     id: viewBaseSchema.shape.id,
     project_id: viewBaseSchema.shape.project_id,
-    org_id: organizationSchema.shape.id,
+    view_type: viewTypeEnum,
     name: viewBaseSchema.shape.name,
     created: viewBaseSchema.shape.created,
     view_data: viewDataSchema.nullish().describe("The view definition"),
     options: z
       .record(customTypes.any)
       .nullish()
-      .describe("Options for the view"),
+      .describe("Options for the view in the app"),
   })
   .openapi("View");
 export type View = z.infer<typeof viewSchema>;
@@ -492,6 +479,7 @@ export const aclObjectTypeEnum = z
     "project_tag",
     "group",
     "role",
+    "view",
   ])
   .describe("The object type that the ACL applies to");
 export type AclObjectType = z.infer<typeof aclObjectTypeEnum>;
@@ -799,6 +787,22 @@ const patchProjectTagSchema = z
     color: projectTagSchema.shape.color,
   })
   .openapi("PatchProjectTag");
+
+const createViewSchema = viewSchema
+  .omit({
+    id: true,
+    org_id: true,
+    created: true,
+  })
+  .openapi("CreateView");
+
+const patchViewSchema = z
+  .strictObject({
+    name: viewSchema.shape.name.nullish(),
+    view_data: viewSchema.shape.view_data.nullish(),
+    options: viewSchema.shape.options.nullish(),
+  })
+  .openapi("PatchView");
 
 // Section: exported schemas, grouped by object type.
 
