@@ -822,9 +822,9 @@ function formatScoreSummary(summary: ScoreSummary, longestScoreName: number) {
   const scoreName = `'${summary.name}'`.padEnd(longestScoreName + 2);
   return `${(summary.score * 100).toFixed(
     2,
-  )}%${diffString} '${scoreName}' score\t(${
-    summary.improvements
-  } improvements, ${summary.regressions} regressions)`;
+  )}%${diffString} ${scoreName} score\t(${summary.improvements} improvements, ${
+    summary.regressions
+  } regressions)`;
 }
 
 function formatMetricSummary(
