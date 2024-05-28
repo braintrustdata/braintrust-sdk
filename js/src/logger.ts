@@ -2237,7 +2237,7 @@ function validateAndSanitizeExperimentLogPartialArgs(
         throw new Error("metric keys must be strings");
       }
 
-      if (typeof value !== "number") {
+      if (value !== undefined && typeof value !== "number") {
         throw new Error("metric values must be numbers");
       }
     }
