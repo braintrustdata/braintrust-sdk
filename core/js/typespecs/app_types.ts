@@ -7,6 +7,7 @@ extendZodWithOpenApi(z);
 import { datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
+import { viewDataSchema } from "./view";
 
 // Section: App DB table schemas
 
@@ -449,6 +450,36 @@ export const projectTagSchema = z
   .openapi("ProjectTag");
 export type ProjectTag = z.infer<typeof projectTagSchema>;
 
+const viewSpecSchema = z
+  .object({
+    name: z.string().describe("Name of the category"),
+    value: z
+      .number()
+      .describe(
+        "Numerical value of the category. Must be between 0 and 1, inclusive",
+      ),
+  })
+  .describe("For categorical-type project scores, defines a single category")
+  .openapi("ProjectScoreCategory");
+export type ViewSpec = z.infer<typeof viewSpecSchema>;
+
+const viewBaseSchema = generateBaseTableSchema("view");
+export const viewSchema = z
+  .strictObject({
+    id: viewBaseSchema.shape.id,
+    project_id: viewBaseSchema.shape.project_id,
+    org_id: organizationSchema.shape.id,
+    name: viewBaseSchema.shape.name,
+    created: viewBaseSchema.shape.created,
+    view_data: viewDataSchema.nullish().describe("The view definition"),
+    options: z
+      .record(customTypes.any)
+      .nullish()
+      .describe("Options for the view"),
+  })
+  .openapi("View");
+export type View = z.infer<typeof viewSchema>;
+
 export const aclObjectTypeEnum = z
   .enum([
     "organization",
@@ -826,5 +857,10 @@ export const objectSchemas = {
     create: createProjectTagSchema,
     patch: patchProjectTagSchema,
     object: projectTagSchema,
+  },
+  view: {
+    create: createViewSchema,
+    patch: patchViewSchema,
+    object: viewSchema,
   },
 };
