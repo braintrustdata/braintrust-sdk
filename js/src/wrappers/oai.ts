@@ -6,8 +6,9 @@ import {
   startSpan,
   traced,
 } from "../logger";
-import { getCurrentUnixTimestamp } from "../util";
+import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import { mergeDicts } from "@braintrust/core";
+import { parse } from "path";
 
 interface BetaLike {
   chat: {
@@ -193,12 +194,39 @@ function wrapBetaChatCompletion<
 
 // TODO: Mock this up better
 type StreamingChatResponse = any;
+type EnhancedResponse = {
+  response: Response;
+  data: any;
+};
+
+interface APIPromise<T> extends Promise<T> {
+  withResponse(): Promise<EnhancedResponse>;
+}
+
+export const X_CACHED_HEADER = "x-cached";
+export function parseCachedHeader(
+  value: string | null | undefined,
+): number | undefined {
+  return isEmpty(value) ? undefined : value.toLowerCase() === "true" ? 1 : 0;
+}
+
+function logHeaders(response: Response, span: Span) {
+  const cachedHeader = response.headers.get(X_CACHED_HEADER);
+  if (isEmpty(cachedHeader)) {
+    return;
+  }
+  span.log({
+    metrics: {
+      cached: parseCachedHeader(cachedHeader),
+    },
+  });
+}
 
 function wrapChatCompletion<
   P extends ChatParams,
   C extends NonStreamingChatResponse | StreamingChatResponse,
 >(
-  completion: (params: P, options?: unknown) => Promise<C>,
+  completion: (params: P, options?: unknown) => APIPromise<C>,
 ): (params: P, options?: unknown) => Promise<any> {
   return async (allParams: P & SpanInfo, options?: unknown) => {
     const { span_info: _, ...params } = allParams;
@@ -215,22 +243,26 @@ function wrapChatCompletion<
     );
     const startTime = getCurrentUnixTimestamp();
     if (params.stream) {
-      const ret = (await completion(
+      const { data: ret, response } = await completion(
         // We could get rid of this type coercion if we could somehow enforce
         // that `P extends ChatParams` BUT does not have the property
         // `span_info`.
         params as P,
         options,
-      )) as StreamingChatResponse;
+      ).withResponse();
+      logHeaders(response, span);
       const wrapperStream = new WrapperStream(span, startTime, ret.iterator());
       ret.iterator = () => wrapperStream[Symbol.asyncIterator]();
       return ret;
     } else {
       try {
-        const ret = (await completion(
-          params as P,
-          options,
-        )) as NonStreamingChatResponse;
+        const { data: ret, response } = await (
+          completion(
+            params as P,
+            options,
+          ) as APIPromise<NonStreamingChatResponse>
+        ).withResponse();
+        logHeaders(response, span);
         const { messages, ...rest } = params;
         span.log({
           input: messages,
@@ -286,7 +318,7 @@ function wrapEmbeddings<
   P extends EmbeddingCreateParams,
   C extends CreateEmbeddingResponse,
 >(
-  create: (params: P, options?: unknown) => Promise<C>,
+  create: (params: P, options?: unknown) => APIPromise<C>,
 ): (params: P & SpanInfo, options?: unknown) => Promise<any> {
   return async (allParams: P & SpanInfo, options?: unknown) => {
     const { span_info: _, ...params } = allParams;
@@ -295,7 +327,11 @@ function wrapEmbeddings<
         // We could get rid of this type coercion if we could somehow enforce
         // that `P extends EmbeddingCreateParams` BUT does not have the property
         // `span_info`.
-        const result = await create(params as P, options);
+        const { data: result, response } = await create(
+          params as P,
+          options,
+        ).withResponse();
+        logHeaders(response, span);
         const embedding_length = result.data[0].embedding.length;
         span.log({
           // TODO: Add a flag to control whether to log the full embedding vector,

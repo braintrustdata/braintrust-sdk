@@ -71,7 +71,17 @@ class ChatCompletionWrapper:
 
         try:
             start = time.time()
-            raw_response = self.create_fn(*args, **kwargs)
+            create_response = self.create_fn(*args, **kwargs)
+            if hasattr(create_response, "parse"):
+                raw_response = create_response.parse()
+                if "x-cached" in create_response.headers:
+                    span.log(
+                        metrics={
+                            "cached": 1 if create_response.headers.get("x-cached").lower() == "true" else 0,
+                        }
+                    )
+            else:
+                raw_response = create_response
             if stream:
 
                 def gen():
@@ -122,7 +132,19 @@ class ChatCompletionWrapper:
 
         try:
             start = time.time()
-            raw_response = await self.acreate_fn(*args, **kwargs)
+            create_response = await self.acreate_fn(*args, **kwargs)
+
+            if hasattr(create_response, "parse"):
+                raw_response = create_response.parse()
+                if "x-cached" in create_response.headers:
+                    span.log(
+                        metrics={
+                            "cached": 1 if create_response.headers.get("x-cached").lower() == "true" else 0,
+                        }
+                    )
+            else:
+                raw_response = create_response
+
             if stream:
 
                 async def gen():
@@ -276,7 +298,7 @@ class CompletionsV1Wrapper(NamedWrapper):
         super().__init__(completions)
 
     def create(self, *args, **kwargs):
-        return ChatCompletionWrapper(self.__completions.create, None).create(*args, **kwargs)
+        return ChatCompletionWrapper(self.__completions.with_raw_response.create, None).create(*args, **kwargs)
 
 
 class EmbeddingV1Wrapper(NamedWrapper):
@@ -285,7 +307,7 @@ class EmbeddingV1Wrapper(NamedWrapper):
         super().__init__(embedding)
 
     def create(self, *args, **kwargs):
-        return EmbeddingWrapper(self.__embedding.create, None).create(*args, **kwargs)
+        return EmbeddingWrapper(self.__embedding.with_raw_response.create, None).create(*args, **kwargs)
 
 
 class AsyncCompletionsV1Wrapper(NamedWrapper):
@@ -294,7 +316,7 @@ class AsyncCompletionsV1Wrapper(NamedWrapper):
         super().__init__(completions)
 
     async def create(self, *args, **kwargs):
-        return await ChatCompletionWrapper(None, self.__completions.create).acreate(*args, **kwargs)
+        return await ChatCompletionWrapper(None, self.__completions.with_raw_response.create).acreate(*args, **kwargs)
 
 
 class AsyncEmbeddingV1Wrapper(NamedWrapper):
@@ -303,7 +325,7 @@ class AsyncEmbeddingV1Wrapper(NamedWrapper):
         super().__init__(embedding)
 
     async def create(self, *args, **kwargs):
-        return await EmbeddingWrapper(None, self.__embedding.create).acreate(*args, **kwargs)
+        return await EmbeddingWrapper(None, self.__embedding.with_raw_response.create).acreate(*args, **kwargs)
 
 
 class ChatV1Wrapper(NamedWrapper):

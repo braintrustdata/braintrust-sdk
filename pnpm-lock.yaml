@@ -43,8 +43,8 @@ importers:
   js:
     dependencies:
       '@ai-sdk/provider':
-        specifier: ^0.0.0
-        version: 0.0.0
+        specifier: ^0.0.6
+        version: 0.0.6
       '@braintrust/core':
         specifier: workspace:*
         version: link:../core/js
@@ -124,8 +124,8 @@ importers:
 
 packages:
 
-  /@ai-sdk/provider@0.0.0:
-    resolution: {integrity: sha512-Gbl9Ei8NPtM85gB/o8cY7s7CLGxK/U6QVheVaI3viFn7o6IpTfy1Ja389e2FXVMNJ4WHK2qYWSp5fAFDuKulTA==}
+  /@ai-sdk/provider@0.0.6:
+    resolution: {integrity: sha512-kiPqIsSnUimckaUn87WepxfjPNdy8SXlPP7P6yWuG3e1NmyFHcyuH6EBBZxXLmu0oZtkb+QEeP3UDWGSc+wwKQ==}
     engines: {node: '>=18'}
     dependencies:
       json-schema: 0.4.0
