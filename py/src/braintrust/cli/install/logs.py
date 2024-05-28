@@ -50,7 +50,9 @@ def main(args):
             if nextToken is not None:
                 kwargs["nextToken"] = nextToken
 
-            stream_resp = logs.describe_log_streams(logGroupName=log_group_name, descending=True, **kwargs)
+            stream_resp = logs.describe_log_streams(
+                logGroupName=log_group_name, descending=True, orderBy="LastEventTime", **kwargs
+            )
 
             first_start_time = min(s["firstEventTimestamp"] for s in stream_resp["logStreams"])
             nextToken = stream_resp.get("nextToken")

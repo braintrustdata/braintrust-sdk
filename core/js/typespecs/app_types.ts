@@ -660,10 +660,31 @@ const createRoleSchema = z
   .openapi("CreateRole");
 
 const patchRoleSchema = createRoleSchema
-  .omit({ name: true, org_name: true })
+  .omit({
+    name: true,
+    org_name: true,
+    member_permissions: true,
+    member_roles: true,
+  })
   .merge(
     z.strictObject({
       name: createRoleSchema.shape.name.nullish(),
+      add_member_permissions: roleSchema.shape.member_permissions
+        .nullish()
+        .describe("A list of permissions to add to the role"),
+      remove_member_permissions: roleSchema.shape.member_permissions
+        .nullish()
+        .describe("A list of permissions to remove from the role"),
+      add_member_roles: roleSchema.shape.member_roles
+        .nullish()
+        .describe(
+          "A list of role IDs to add to the role's inheriting-from set",
+        ),
+      remove_member_roles: roleSchema.shape.member_roles
+        .nullish()
+        .describe(
+          "A list of role IDs to remove from the role's inheriting-from set",
+        ),
     }),
   )
   .openapi("PatchRole");
@@ -680,10 +701,26 @@ const createGroupSchema = z
   .openapi("CreateGroup");
 
 const patchGroupSchema = createGroupSchema
-  .omit({ name: true, org_name: true })
+  .omit({ name: true, org_name: true, member_users: true, member_groups: true })
   .merge(
     z.strictObject({
       name: createGroupSchema.shape.name.nullish(),
+      add_member_users: groupSchema.shape.member_users
+        .nullish()
+        .describe("A list of user IDs to add to the group"),
+      remove_member_users: groupSchema.shape.member_users
+        .nullish()
+        .describe("A list of user IDs to remove from the group"),
+      add_member_groups: groupSchema.shape.member_groups
+        .nullish()
+        .describe(
+          "A list of group IDs to add to the group's inheriting-from set",
+        ),
+      remove_member_groups: groupSchema.shape.member_groups
+        .nullish()
+        .describe(
+          "A list of group IDs to remove from the group's inheriting-from set",
+        ),
     }),
   )
   .openapi("PatchGroup");
