@@ -213,6 +213,9 @@ class EvalResultWithSummary(SerializableDataClass):
     summary: ExperimentSummary
     results: List[EvalResult]
 
+    def _repr_pretty_(self, p, cycle):
+        p.text(f'EvalResultWithSummary(summary="...", results=[...])')
+
 
 EvalReport = TypeVar("EvalReport")
 
