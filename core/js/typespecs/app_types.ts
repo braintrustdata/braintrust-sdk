@@ -461,6 +461,8 @@ export const aclObjectTypeEnum = z
     "project_tag",
     "group",
     "role",
+    "org_member",
+    "project_log",
   ])
   .describe("The object type that the ACL applies to");
 export type AclObjectType = z.infer<typeof aclObjectTypeEnum>;
