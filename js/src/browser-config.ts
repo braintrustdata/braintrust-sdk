@@ -23,6 +23,13 @@ export function configureBrowser() {
     // Ignore
   }
 
+  iso.getEnv = (name: string) => {
+    if (typeof process === "undefined" || typeof process.env === "undefined") {
+      return undefined;
+    }
+    return process.env[name];
+  };
+
   _internalSetInitialState();
   browserConfigured = true;
 }
