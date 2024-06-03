@@ -395,6 +395,7 @@ class HTTPConnection {
       // Using toString() here makes it work with isomorphic fetch
       await fetch(url.toString(), {
         headers: {
+          Accept: "application/json",
           ...this.headers,
           ...headers,
         },
@@ -414,6 +415,7 @@ class HTTPConnection {
       await fetch(_urljoin(this.base_url, path), {
         method: "POST",
         headers: {
+          Accept: "application/json",
           "Content-Type": "application/json",
           ...this.headers,
           ...headers,

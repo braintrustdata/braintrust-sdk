@@ -307,6 +307,25 @@ export const permissionEnum = z
   );
 export type Permission = z.infer<typeof permissionEnum>;
 
+export const aclObjectTypeEnum = z
+  .enum([
+    "organization",
+    "project",
+    "experiment",
+    "dataset",
+    "prompt",
+    "prompt_session",
+    "project_score",
+    "project_tag",
+    "group",
+    "role",
+    "org_member",
+    "project_log",
+    "org_project",
+  ])
+  .describe("The object type that the ACL applies to");
+export type AclObjectType = z.infer<typeof aclObjectTypeEnum>;
+
 const roleBaseSchema = generateBaseTableSchema("role");
 export const roleSchema = z
   .strictObject({
@@ -328,9 +347,16 @@ export const roleSchema = z
     description: roleBaseSchema.shape.description,
     deleted_at: roleBaseSchema.shape.deleted_at,
     member_permissions: z
-      .array(permissionEnum)
+      .array(
+        z.strictObject({
+          permission: permissionEnum,
+          restrict_object_type: aclObjectTypeEnum.nullish(),
+        }),
+      )
       .nullish()
-      .describe("Permissions which belong to this role"),
+      .describe(
+        "(permission, restrict_object_type) tuples which belong to this role",
+      ),
     member_roles: z
       .array(z.string().uuid())
       .nullish()
@@ -449,22 +475,6 @@ export const projectTagSchema = z
   .openapi("ProjectTag");
 export type ProjectTag = z.infer<typeof projectTagSchema>;
 
-export const aclObjectTypeEnum = z
-  .enum([
-    "organization",
-    "project",
-    "experiment",
-    "dataset",
-    "prompt",
-    "prompt_session",
-    "project_score",
-    "project_tag",
-    "group",
-    "role",
-  ])
-  .describe("The object type that the ACL applies to");
-export type AclObjectType = z.infer<typeof aclObjectTypeEnum>;
-
 const aclBaseSchema = generateBaseTableSchema("acl");
 export const aclSchema = z
   .strictObject({
@@ -474,16 +484,6 @@ export const aclSchema = z
       .string()
       .uuid()
       .describe("The id of the object the ACL applies to"),
-    restrict_object_type: aclObjectTypeEnum
-      .nullish()
-      .describe(
-        "Optionally restricts the permission grant to just the specified object type",
-      ),
-    _object_org_id: z
-      .string()
-      .uuid()
-      .describe("The organization the ACL's referred object belongs to"),
-    created: aclBaseSchema.shape.created,
     user_id: z
       .string()
       .uuid()
@@ -503,6 +503,11 @@ export const aclSchema = z
       .describe(
         "Permission the ACL grants. Exactly one of `permission` and `role_id` will be provided",
       ),
+    restrict_object_type: aclObjectTypeEnum
+      .nullish()
+      .describe(
+        "When setting a permission directly, optionally restricts the permission grant to just the specified object type. Cannot be set alongside a `role_id`.",
+      ),
     role_id: z
       .string()
       .uuid()
@@ -510,12 +515,17 @@ export const aclSchema = z
       .describe(
         "Id of the role the ACL grants. Exactly one of `permission` and `role_id` will be provided",
       ),
+    _object_org_id: z
+      .string()
+      .uuid()
+      .describe("The organization the ACL's referred object belongs to"),
+    created: aclBaseSchema.shape.created,
   })
   .describe(
     [
       "An ACL grants a certain permission or role to a certain user or group on an object.",
       "ACLs are inherited across the object hierarchy. So for example, if a user has read permissions on a project, they will also have read permissions on any experiment, dataset, etc. created within that project.",
-      "To restrict a grant to a particular sub-object, you may specify `restrict_object_type` in the ACL.",
+      "To restrict a grant to a particular sub-object, you may specify `restrict_object_type` in the ACL, as part of a direct permission grant or as part of a role.",
     ].join("\n\n"),
   )
   .openapi("Acl");
