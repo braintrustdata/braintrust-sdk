@@ -145,6 +145,24 @@ export const datasetSchema = z
   .openapi("Dataset");
 export type Dataset = z.infer<typeof datasetSchema>;
 
+export const codeBundleSchema = z.strictObject({
+  runtime_context: z.strictObject({
+    runtime: z.enum(["node20"]),
+    // This should be a union, once we support code living in different places
+    // Other options should be:
+    //  - a "handler" function that has some signature [does AWS lambda assume it's always called "handler"?]
+    location: z.strictObject({
+      type: z.literal("eval"),
+      eval_name: z.string(),
+      position: z.union([
+        z.literal("task"),
+        z.strictObject({ score: z.number() }),
+      ]),
+    }),
+  }),
+  path: z.string(),
+});
+
 const promptBaseSchema = generateBaseTableSchema("prompt");
 export const promptSchema = z
   .strictObject({
@@ -169,6 +187,7 @@ export const promptSchema = z
     prompt_data: promptDataSchema
       .nullish()
       .describe("The prompt, model, and its parameters"),
+    code_bundle: codeBundleSchema,
     tags: z
       .array(z.string())
       .nullish()
