@@ -13,11 +13,7 @@ import {
   MetricSummary,
 } from "./logger";
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
-import {
-  BarProgressReporter,
-  ProgressReporter,
-  SimpleProgressReporter,
-} from "./progress";
+import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
 import { isEmpty } from "./util";
 
