@@ -572,7 +572,9 @@ async function runOnce(
                 runtime: "node",
                 version: process.version.slice(1),
               },
-              experiments: spec,
+              // XXX The next step is to upload the spec to the API. We can use the `logs3` endpoint
+              // to write this directly.
+              // experiments: spec,
             });
           } catch (e) {
             console.error(

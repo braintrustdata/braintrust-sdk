@@ -187,7 +187,9 @@ export const promptSchema = z
     prompt_data: promptDataSchema
       .nullish()
       .describe("The prompt, model, and its parameters"),
-    code_bundle: codeBundleSchema,
+    code_bundle: codeBundleSchema
+      .nullish()
+      .describe("The code bundle if this is a code function."),
     tags: z
       .array(z.string())
       .nullish()
