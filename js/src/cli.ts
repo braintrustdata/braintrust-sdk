@@ -577,7 +577,7 @@ async function runOnce(
           } catch (e) {
             console.error(
               warning(
-                `Failed to register code. You most likely need to update the API: ${e}`,
+                `Unable to upload your code. You most likely need to update the API: ${e}`,
               ),
             );
             return;

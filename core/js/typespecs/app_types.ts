@@ -160,7 +160,7 @@ export const codeBundleSchema = z.strictObject({
       ]),
     }),
   }),
-  path: z.string(),
+  bundle_id: z.string(),
 });
 
 const promptBaseSchema = generateBaseTableSchema("prompt");
