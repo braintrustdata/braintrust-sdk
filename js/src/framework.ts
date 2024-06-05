@@ -395,7 +395,7 @@ function evaluateFilter(object: any, filter: Filter) {
   return pattern.test(serializeJSONWithPlainString(key));
 }
 
-function scorerName(
+export function scorerName(
   scorer: EvalScorer<any, any, any, any>,
   scorer_idx: number,
 ) {

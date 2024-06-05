@@ -47,6 +47,8 @@ export interface ParentProjectLogIds {
   log_id: "g";
 }
 
+export const PROMPT_LOG_ID = "p";
+
 export type LogCommentFullArgs = IdField & {
   created: string;
   origin: {

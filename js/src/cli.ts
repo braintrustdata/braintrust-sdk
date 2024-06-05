@@ -72,7 +72,7 @@ interface BuildFailure {
 }
 
 type BuildResult = BuildSuccess | BuildFailure;
-interface FileHandle {
+export interface FileHandle {
   inFile: string;
   outFile: string;
   bundleFile?: string;
@@ -339,7 +339,7 @@ async function initFile({
   };
 }
 
-interface EvaluatorState {
+export interface EvaluatorState {
   evaluators: {
     sourceFile: string;
     evaluator: EvaluatorDef<any, any, any, any>;
@@ -562,8 +562,10 @@ async function runOnce(
           }
           const spec = bundleSpecs[inFile];
 
+          // XXX Zod this
           let pathInfo: {
             url: string;
+            bundleId: string;
           };
           try {
             pathInfo = await loggerConn.post_json("register-code", {
@@ -587,28 +589,34 @@ async function runOnce(
 
           // Upload bundleFile to pathInfo.url
           const bundleFile = path.resolve(handles[inFile].bundleFile);
-          const bundleStream = fs
-            .createReadStream(bundleFile)
-            .pipe(createGzip());
-          const bundleData = await new Promise<Buffer>((resolve, reject) => {
-            const chunks: Buffer[] = [];
-            bundleStream.on("data", (chunk) => {
-              chunks.push(chunk);
+          const uploadPromise = (async () => {
+            const bundleStream = fs
+              .createReadStream(bundleFile)
+              .pipe(createGzip());
+            const bundleData = await new Promise<Buffer>((resolve, reject) => {
+              const chunks: Buffer[] = [];
+              bundleStream.on("data", (chunk) => {
+                chunks.push(chunk);
+              });
+              bundleStream.on("end", () => {
+                resolve(Buffer.concat(chunks));
+              });
+              bundleStream.on("error", reject);
             });
-            bundleStream.on("end", () => {
-              resolve(Buffer.concat(chunks));
-            });
-            bundleStream.on("error", reject);
-          });
 
-          await fetch(pathInfo.url, {
-            method: "PUT",
-            body: bundleData,
-            headers: {
-              "Content-Encoding": "gzip",
-            },
-          });
-          uploaded += 1;
+            await fetch(pathInfo.url, {
+              method: "PUT",
+              body: bundleData,
+              headers: {
+                "Content-Encoding": "gzip",
+              },
+            });
+            uploaded += 1;
+          })();
+
+          // Insert the spec as prompt data
+
+          await Promise.all([uploadPromise]);
         })(),
       );
     }
@@ -891,6 +899,7 @@ async function main() {
     help: "Run evals locally.",
     parents: [parentParser],
   });
+  // XXX add a cli flag to make bundling optional
   parser_run.add_argument("--api-key", {
     help: "Specify a braintrust api key. If the parameter is not specified, the BRAINTRUST_API_KEY environment variable will be used.",
   });
