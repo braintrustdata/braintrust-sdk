@@ -29,7 +29,6 @@ export const viewDataSearchSchema = z
 export const viewDataSchema = z
   .strictObject({
     search: viewDataSearchSchema.nullish(),
-    table: customTypes.any.nullish(),
   })
   .openapi("ViewData");
 
