@@ -9,6 +9,7 @@ import {
   datasetSchema,
   projectSchema,
   promptSchema,
+  functionSchema,
 } from "./app_types";
 import {
   datetimeStringSchema,
@@ -740,6 +741,14 @@ export const eventObjectSchemas = {
     insertRequest: undefined,
     feedbackItem: feedbackPromptItemSchema,
     feedbackRequest: feedbackPromptRequestSchema,
+  },
+  function: {
+    event: functionSchema,
+    fetchResponse: undefined,
+    insertEvent: undefined,
+    insertRequest: undefined,
+    feedbackItem: undefined,
+    feedbackRequest: undefined,
   },
   prompt_session: {
     event: promptSessionEventSchema,

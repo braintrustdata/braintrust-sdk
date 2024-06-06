@@ -204,7 +204,6 @@ export type CodeBundle = z.infer<typeof codeBundleSchema>;
 export const functionDataSchema = z.union([
   z.strictObject({
     type: z.literal("prompt"),
-    data: promptDataSchema,
   }),
   z.strictObject({
     type: z.literal("code"),
@@ -213,7 +212,6 @@ export const functionDataSchema = z.union([
 ]);
 
 export const functionSchema = promptSchemaObject
-  .omit({ prompt_data: true })
   .merge(
     z.strictObject({
       function_data: functionDataSchema,

@@ -6,7 +6,7 @@ import * as esbuild from "esbuild";
 import fs from "fs";
 import path from "path";
 import { createGzip } from "zlib";
-import { LazyValue } from "./util";
+import { isEmpty, LazyValue } from "./util";
 import { FunctionEvent } from "@braintrust/core";
 
 export type EvaluatorMap = Record<
@@ -122,7 +122,11 @@ export async function uploadEvalBundles({
         }
 
         // Upload bundleFile to pathInfo.url
-        const bundleFile = path.resolve(handles[inFile].bundleFile);
+        const bundleFileName = handles[inFile].bundleFile;
+        if (isEmpty(bundleFileName)) {
+          throw new Error("No bundle file found");
+        }
+        const bundleFile = path.resolve(bundleFileName);
         const uploadPromise = (async () => {
           const bundleStream = fs
             .createReadStream(bundleFile)
