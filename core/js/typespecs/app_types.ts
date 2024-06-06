@@ -693,6 +693,17 @@ const createPromptSchema = promptSchema
   })
   .openapi("CreatePrompt");
 
+const createFunctionSchema = functionSchema
+  .omit({
+    id: true,
+    _xact_id: true,
+    org_id: true,
+    log_id: true,
+    created: true,
+    metadata: true,
+  })
+  .openapi("CreateFunction");
+
 const patchPromptSchema = z
   .strictObject({
     name: promptSchema.shape.name.nullish(),
@@ -701,6 +712,16 @@ const patchPromptSchema = z
     tags: promptSchema.shape.tags.nullish(),
   })
   .openapi("PatchPrompt");
+
+const patchFunctionSchema = z
+  .strictObject({
+    name: functionSchema.shape.name.nullish(),
+    description: functionSchema.shape.description.nullish(),
+    prompt_data: functionSchema.shape.prompt_data.nullish(),
+    function_data: functionSchema.shape.function_data.nullish(),
+    tags: functionSchema.shape.tags.nullish(),
+  })
+  .openapi("PatchFunction");
 
 const createRoleBaseSchema = generateBaseTableOpSchema("role");
 const createRoleSchema = z
@@ -845,6 +866,11 @@ export const objectSchemas = {
     create: createPromptSchema,
     patch: patchPromptSchema,
     object: promptSchema,
+  },
+  function: {
+    create: createFunctionSchema,
+    patch: patchFunctionSchema,
+    object: functionSchema,
   },
   role: {
     create: createRoleSchema,
