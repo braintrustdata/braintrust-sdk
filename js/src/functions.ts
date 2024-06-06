@@ -1,4 +1,4 @@
-import { CodeBundle } from "@braintrust/core/typespecs";
+import { CodeBundle, functionDataSchema } from "@braintrust/core/typespecs";
 import { EvaluatorState, FileHandle } from "./cli";
 import { scorerName, warning } from "./framework";
 import { _internalGetGlobalState, Experiment, newId } from "./logger";
@@ -7,7 +7,7 @@ import fs from "fs";
 import path from "path";
 import { createGzip } from "zlib";
 import { isEmpty, LazyValue } from "./util";
-import { FunctionEvent } from "@braintrust/core";
+import { z } from "zod";
 
 export type EvaluatorMap = Record<
   string,
@@ -16,6 +16,14 @@ export type EvaluatorMap = Record<
     experiment: Experiment;
   }
 >;
+
+interface FunctionEvent {
+  project_id: string;
+  slug: string;
+  name: string;
+  description: string;
+  function_data: z.infer<typeof functionDataSchema>;
+}
 
 interface EvalFunction {
   project_id: string;
@@ -158,9 +166,7 @@ export async function uploadEvalBundles({
         )
           .flatMap((specs) => specs)
           .map((spec) => ({
-            id: newId(),
             project_id: spec.project_id,
-            log_id: "p",
             name: spec.name,
             slug: spec.slug,
             description: spec.description,
@@ -174,10 +180,11 @@ export async function uploadEvalBundles({
             },
           }));
 
-        // XXX Manu is there a better way to do this?
-        const logger = _internalGetGlobalState().globalBgLogger();
-        logger.log(functionEntries.map((e) => new LazyValue(async () => e)));
-        const logPromise = logger.flush();
+        const logPromise = _internalGetGlobalState()
+          .logConn()
+          .post_json("insert-functions", {
+            functions: functionEntries,
+          });
 
         await Promise.all([uploadPromise, logPromise]);
       })(),
