@@ -41,6 +41,7 @@ import { configureNode } from "./node";
 import { isEmpty } from "./util";
 import { loadEnvConfig } from "@next/env";
 import { createGzip } from "zlib";
+import { uploadEvalBundles } from "./functions";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript
@@ -544,87 +545,11 @@ async function runOnce(
         evaluator.evaluator.evaluator.evalName;
     }
 
-    console.error(`Processing bundles...`);
-    const uploadPromises = [];
-    const orgId = _internalGetGlobalState().orgId;
-    if (!orgId) {
-      throw new Error("No organization ID found");
-    }
-
-    const loggerConn = _internalGetGlobalState().logConn();
-    let uploaded = 0;
-    for (const [inFile, compileResult] of Object.entries(bundlePromises)) {
-      uploadPromises.push(
-        (async () => {
-          const bundle = await compileResult;
-          if (!bundle || !handles[inFile].bundleFile) {
-            return;
-          }
-          const spec = bundleSpecs[inFile];
-
-          // XXX Zod this
-          let pathInfo: {
-            url: string;
-            bundleId: string;
-          };
-          try {
-            pathInfo = await loggerConn.post_json("register-code", {
-              org_id: orgId,
-              runtime_context: {
-                runtime: "node",
-                version: process.version.slice(1),
-              },
-              // XXX The next step is to upload the spec to the API. We can use the `logs3` endpoint
-              // to write this directly.
-              // experiments: spec,
-            });
-          } catch (e) {
-            console.error(
-              warning(
-                `Unable to upload your code. You most likely need to update the API: ${e}`,
-              ),
-            );
-            return;
-          }
-
-          // Upload bundleFile to pathInfo.url
-          const bundleFile = path.resolve(handles[inFile].bundleFile);
-          const uploadPromise = (async () => {
-            const bundleStream = fs
-              .createReadStream(bundleFile)
-              .pipe(createGzip());
-            const bundleData = await new Promise<Buffer>((resolve, reject) => {
-              const chunks: Buffer[] = [];
-              bundleStream.on("data", (chunk) => {
-                chunks.push(chunk);
-              });
-              bundleStream.on("end", () => {
-                resolve(Buffer.concat(chunks));
-              });
-              bundleStream.on("error", reject);
-            });
-
-            await fetch(pathInfo.url, {
-              method: "PUT",
-              body: bundleData,
-              headers: {
-                "Content-Encoding": "gzip",
-              },
-            });
-            uploaded += 1;
-          })();
-
-          // Insert the spec as prompt data
-
-          await Promise.all([uploadPromise]);
-        })(),
-      );
-    }
-
-    await Promise.all(uploadPromises);
-    console.log(
-      `${uploaded} Bundle${uploaded > 1 ? "s" : ""} uploaded successfully.`,
-    );
+    await uploadEvalBundles({
+      experimentIdToEvaluator,
+      bundlePromises,
+      handles,
+    });
   }
 
   let allSuccess = true;

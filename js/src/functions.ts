@@ -1,13 +1,14 @@
 import { CodeBundle, promptSchema } from "@braintrust/core/typespecs";
 import { EvaluatorState, FileHandle } from "./cli";
 import { scorerName, warning } from "./framework";
-import { _internalGetGlobalState, Experiment } from "./logger";
+import { _internalGetGlobalState, Experiment, newId } from "./logger";
 import * as esbuild from "esbuild";
 import fs from "fs";
 import path from "path";
 import { createGzip } from "zlib";
 import { z } from "zod";
-import { PROMPT_LOG_ID } from "@braintrust/core";
+import { LazyValue } from "./util";
+import { PromptEvent } from "@braintrust/core";
 
 export type EvaluatorMap = Record<
   string,
@@ -24,14 +25,6 @@ interface EvalFunction {
   description: string;
   location: CodeBundle["location"];
 }
-
-const logPromptSchema = promptSchema.omit({
-  id: true,
-  _xact_id: true,
-  org_id: true,
-  metadata: true,
-});
-type LogPrompt = z.infer<typeof logPromptSchema>;
 
 export async function uploadEvalBundles({
   experimentIdToEvaluator,
@@ -157,11 +150,12 @@ export async function uploadEvalBundles({
         })();
 
         // Insert the spec as prompt data
-        const promptEntries: LogPrompt[] = Object.values(bundleSpecs[inFile])
+        const promptEntries: PromptEvent[] = Object.values(bundleSpecs[inFile])
           .flatMap((specs) => specs)
           .map((spec) => ({
+            id: newId(),
             project_id: spec.project_id,
-            log_id: PROMPT_LOG_ID,
+            log_id: "p",
             name: spec.name,
             slug: spec.slug,
             description: spec.description,
@@ -172,7 +166,12 @@ export async function uploadEvalBundles({
             },
           }));
 
-        await Promise.all([uploadPromise]);
+        // XXX Fix this (probably by adding a new log type for prompts)
+        const logger = _internalGetGlobalState().globalBgLogger();
+        logger.log(promptEntries.map((e) => new LazyValue(async () => e)));
+        const logPromise = logger.flush();
+
+        await Promise.all([uploadPromise, logPromise]);
       })(),
     );
   }
