@@ -604,6 +604,8 @@ const {
   }),
 );
 
+// XXX Maybe remove. I can't figure out how to use these
+/*
 const {
   eventSchema: insertFunctionEventSchema,
   requestSchema: insertFunctionEventsRequestSchema,
@@ -620,6 +622,7 @@ const {
     [OBJECT_DELETE_FIELD]: functionEventBaseSchema.shape[OBJECT_DELETE_FIELD],
   }),
 );
+*/
 
 // Section: logging feedback.
 
@@ -779,8 +782,8 @@ export const eventObjectSchemas = {
   function: {
     event: functionSchema,
     fetchResponse: undefined,
-    insertEvent: insertFunctionEventSchema,
-    insertRequest: insertFunctionEventsRequestSchema,
+    insertEvent: undefined,
+    insertRequest: undefined,
     feedbackItem: feedbackFunctionItemSchema,
     feedbackRequest: feedbackFunctionRequestSchema,
   },
