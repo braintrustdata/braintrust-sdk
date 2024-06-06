@@ -153,6 +153,34 @@ export const runtimeContextSchema = z.strictObject({
   version: z.string(),
 });
 
+const promptBaseSchema = generateBaseTableSchema("prompt");
+const promptSchemaObject = z.strictObject({
+  id: promptBaseSchema.shape.id,
+  // This has to be copy/pasted because zod blows up when there are circular dependencies
+  _xact_id: z
+    .string()
+    .describe(
+      `The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the prompt (see the \`version\` parameter)`,
+    ),
+  project_id: promptBaseSchema.shape.project_id,
+  log_id: z
+    .literal("p")
+    .describe("A literal 'p' which identifies the object as a project prompt"),
+  org_id: organizationSchema.shape.id,
+  name: promptBaseSchema.shape.name,
+  slug: z.string().describe("Unique identifier for the prompt"),
+  description: promptBaseSchema.shape.description,
+  created: promptBaseSchema.shape.created,
+  prompt_data: promptDataSchema
+    .nullish()
+    .describe("The prompt, model, and its parameters"),
+  tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
+  metadata: promptBaseSchema.shape.metadata,
+});
+
+export const promptSchema = promptSchemaObject.openapi("Prompt");
+export type Prompt = z.infer<typeof promptSchema>;
+
 export const codeBundleSchema = z.strictObject({
   runtime_context: z.strictObject({
     runtime: z.enum(validRuntimes),
@@ -173,41 +201,28 @@ export const codeBundleSchema = z.strictObject({
 });
 export type CodeBundle = z.infer<typeof codeBundleSchema>;
 
-const promptBaseSchema = generateBaseTableSchema("prompt");
-export const promptSchema = z
-  .strictObject({
-    id: promptBaseSchema.shape.id,
-    // This has to be copy/pasted because zod blows up when there are circular dependencies
-    _xact_id: z
-      .string()
-      .describe(
-        `The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the prompt (see the \`version\` parameter)`,
-      ),
-    project_id: promptBaseSchema.shape.project_id,
-    log_id: z
-      .literal("p")
-      .describe(
-        "A literal 'p' which identifies the object as a project prompt",
-      ),
-    org_id: organizationSchema.shape.id,
-    name: promptBaseSchema.shape.name,
-    slug: z.string().describe("Unique identifier for the prompt"),
-    description: promptBaseSchema.shape.description,
-    created: promptBaseSchema.shape.created,
-    prompt_data: promptDataSchema
-      .nullish()
-      .describe("The prompt, model, and its parameters"),
-    code_bundle: codeBundleSchema
-      .nullish()
-      .describe("The code bundle if this is a code function."),
-    tags: z
-      .array(z.string())
-      .nullish()
-      .describe("A list of tags for the prompt"),
-    metadata: promptBaseSchema.shape.metadata,
-  })
-  .openapi("Prompt");
-export type Prompt = z.infer<typeof promptSchema>;
+export const functionDataSchema = z.union([
+  z.strictObject({
+    type: z.literal("prompt"),
+    data: promptDataSchema,
+  }),
+  z.strictObject({
+    type: z.literal("code"),
+    data: codeBundleSchema,
+  }),
+]);
+
+export const functionSchema = promptSchemaObject
+  .omit({ prompt_data: true })
+  .merge(
+    z.strictObject({
+      function_data: functionDataSchema,
+    }),
+  )
+  .openapi("Function");
+
+// NOTE: suffix "Object" helps avoid a name conflict with the built-in `Function` type
+export type FunctionObject = z.infer<typeof functionSchema>;
 
 const repoInfoSchema = z
   .strictObject({

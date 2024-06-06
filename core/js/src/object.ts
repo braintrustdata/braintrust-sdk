@@ -1,4 +1,4 @@
-import { Prompt } from "typespecs";
+import { FunctionObject, Prompt } from "typespecs";
 import {
   IS_MERGE_FIELD,
   MERGE_PATHS_FIELD,
@@ -94,7 +94,10 @@ export type LoggingEvent = Omit<ExperimentEvent, "experiment_id"> & {
   log_id: "g";
 };
 
-export type PromptEvent = Omit<Prompt, "_xact_id" | "org_id" | "metadata">;
+export type FunctionEvent = Omit<
+  FunctionObject,
+  "_xact_id" | "org_id" | "metadata"
+>;
 
 export type CommentEvent = IdField & {
   created: string;
@@ -113,7 +116,7 @@ export type BackgroundLogEvent =
   | DatasetEvent
   | LoggingEvent
   | CommentEvent
-  | PromptEvent;
+  | FunctionEvent;
 
 export const DEFAULT_IS_LEGACY_DATASET = false;
 

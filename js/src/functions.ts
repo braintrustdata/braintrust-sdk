@@ -1,4 +1,4 @@
-import { CodeBundle, promptSchema } from "@braintrust/core/typespecs";
+import { CodeBundle } from "@braintrust/core/typespecs";
 import { EvaluatorState, FileHandle } from "./cli";
 import { scorerName, warning } from "./framework";
 import { _internalGetGlobalState, Experiment, newId } from "./logger";
@@ -6,9 +6,8 @@ import * as esbuild from "esbuild";
 import fs from "fs";
 import path from "path";
 import { createGzip } from "zlib";
-import { z } from "zod";
 import { LazyValue } from "./util";
-import { PromptEvent } from "@braintrust/core";
+import { FunctionEvent } from "@braintrust/core";
 
 export type EvaluatorMap = Record<
   string,
@@ -150,7 +149,9 @@ export async function uploadEvalBundles({
         })();
 
         // Insert the spec as prompt data
-        const promptEntries: PromptEvent[] = Object.values(bundleSpecs[inFile])
+        const functionEntries: FunctionEvent[] = Object.values(
+          bundleSpecs[inFile],
+        )
           .flatMap((specs) => specs)
           .map((spec) => ({
             id: newId(),
@@ -159,16 +160,19 @@ export async function uploadEvalBundles({
             name: spec.name,
             slug: spec.slug,
             description: spec.description,
-            code_bundle: {
-              runtime_context,
-              location: spec.location,
-              bundle_id: pathInfo.bundleId,
+            function_data: {
+              type: "code",
+              data: {
+                runtime_context,
+                location: spec.location,
+                bundle_id: pathInfo.bundleId,
+              },
             },
           }));
 
-        // XXX Fix this (probably by adding a new log type for prompts)
+        // XXX Manu is there a better way to do this?
         const logger = _internalGetGlobalState().globalBgLogger();
-        logger.log(promptEntries.map((e) => new LazyValue(async () => e)));
+        logger.log(functionEntries.map((e) => new LazyValue(async () => e)));
         const logPromise = logger.flush();
 
         await Promise.all([uploadPromise, logPromise]);
