@@ -152,6 +152,7 @@ export const runtimeContextSchema = z.strictObject({
   runtime: z.enum(validRuntimes),
   version: z.string(),
 });
+export type RuntimeContext = z.infer<typeof runtimeContextSchema>;
 
 const promptBaseSchema = generateBaseTableSchema("prompt");
 const promptSchemaObject = z.strictObject({
