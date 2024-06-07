@@ -71,10 +71,36 @@ export const organizationSchema = z
     id: organizationBaseSchema.shape.id,
     name: organizationBaseSchema.shape.name,
     api_url: z.string().nullish(),
+    proxy_url: z.string().nullish(),
+    realtime_url: z.string().nullish(),
     created: organizationBaseSchema.shape.created,
   })
   .openapi("Organization");
 export type Organization = z.infer<typeof organizationSchema>;
+
+export const maxOverWindowSchema = z
+  .strictObject({
+    window_size_days: z.number().int().positive(),
+    max_value: z.number().nonnegative(),
+  })
+  .openapi("MaxOverWindow");
+
+export type MaxOverWindow = z.infer<typeof maxOverWindowSchema>;
+
+export const resourcesSchema = z
+  .strictObject({
+    org_id: organizationSchema.shape.id,
+    forbid_toggle_experiment_public_to_private: z.boolean().nullish(),
+    num_private_experiment_row_actions: maxOverWindowSchema.nullish(),
+    forbid_insert_datasets: z.boolean().nullish(),
+    forbid_insert_prompt_sessions: z.boolean().nullish(),
+    forbid_access_sql_explorer: z.boolean().nullish(),
+    num_production_log_row_actions: maxOverWindowSchema.nullish(),
+    num_dataset_row_actions: maxOverWindowSchema.nullish(),
+  })
+  .openapi("Resources");
+
+export type Resources = z.infer<typeof resourcesSchema>;
 
 export const memberSchema = z
   .strictObject({
