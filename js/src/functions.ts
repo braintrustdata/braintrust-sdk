@@ -37,12 +37,14 @@ export async function uploadEvalBundles({
   experimentIdToEvaluator,
   bundlePromises,
   handles,
+  verbose,
 }: {
   experimentIdToEvaluator: EvaluatorMap;
   bundlePromises: {
     [k: string]: Promise<esbuild.BuildResult<esbuild.BuildOptions> | undefined>;
   };
   handles: Record<string, FileHandle>;
+  verbose: boolean;
 }) {
   console.error(`Processing bundles...`);
   const uploadPromises = [];
@@ -121,6 +123,9 @@ export async function uploadEvalBundles({
             runtime_context,
           });
         } catch (e) {
+          if (verbose) {
+            console.error(e);
+          }
           console.error(
             warning(
               `Unable to upload your code. You most likely need to update the API: ${e}`,

@@ -40,7 +40,6 @@ import {
 import { configureNode } from "./node";
 import { isEmpty } from "./util";
 import { loadEnvConfig } from "@next/env";
-import { createGzip } from "zlib";
 import { uploadEvalBundles } from "./functions";
 
 // This requires require
@@ -549,6 +548,7 @@ async function runOnce(
       experimentIdToEvaluator,
       bundlePromises,
       handles,
+      verbose: opts.verbose,
     });
   }
 
