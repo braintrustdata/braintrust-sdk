@@ -2202,6 +2202,9 @@ function validateAndSanitizeExperimentLogPartialArgs(
   event: ExperimentLogPartialArgs,
 ): SanitizedExperimentLogPartialArgs {
   if (event.scores) {
+    if (Array.isArray(event.scores)) {
+      throw new Error("scores must be an object, not an array");
+    }
     for (let [name, score] of Object.entries(event.scores)) {
       if (typeof name !== "string") {
         throw new Error("score names must be strings");
