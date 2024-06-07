@@ -110,18 +110,20 @@ export const memberSchema = z
   .openapi("Member");
 export type Member = z.infer<typeof memberSchema>;
 
-export const meSchema = z
+const orgSecretsBaseSchema = generateBaseTableSchema("org secrets");
+export const orgSecretsSchema = z
   .strictObject({
-    id: userSchema.shape.id,
-    organizations: z
-      .strictObject({
-        id: memberSchema.shape.org_id,
-        name: organizationSchema.shape.name,
-      })
-      .array(),
+    id: orgSecretsBaseSchema.shape.id,
+    created: orgSecretsBaseSchema.shape.created,
+    key_id: z.string().uuid(),
+    org_id: organizationSchema.shape.id,
+    name: orgSecretsBaseSchema.shape.name,
+    secret: z.string().nullish(),
+    type: z.string().nullish(),
+    metadata: customTypes.any,
   })
-  .openapi("Me");
-export type Me = z.infer<typeof meSchema>;
+  .openapi("OrgSecrets");
+export type OrgSecrets = z.infer<typeof orgSecretsSchema>;
 
 const apiKeyBaseSchema = generateBaseTableSchema("api key");
 export const apiKeySchema = z
