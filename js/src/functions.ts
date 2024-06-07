@@ -116,7 +116,7 @@ export async function uploadEvalBundles({
           bundleId: string;
         };
         try {
-          pathInfo = await loggerConn.post_json("register-code", {
+          pathInfo = await loggerConn.post_json("function/code", {
             org_id: orgId,
             runtime_context,
           });
@@ -182,7 +182,7 @@ export async function uploadEvalBundles({
 
         const logPromise = _internalGetGlobalState()
           .logConn()
-          .post_json("insert-functions", {
+          .post_json("function/insert", {
             functions: functionEntries,
           });
 
