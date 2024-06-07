@@ -8,7 +8,7 @@ export const viewTypeEnum = z
     "experiments",
     "datasets",
     "prompts",
-    "prompt_sessions",
+    "playgrounds",
   ])
   .describe("The type of table that the view applies to");
 export type ViewType = z.infer<typeof viewTypeEnum>;
@@ -19,10 +19,6 @@ export const viewDataSearchSchema = z
     tag: z.array(customTypes.any).nullish(),
     match: z.array(customTypes.any).nullish(),
     sort: z.array(customTypes.any).nullish(),
-    // filter: z.array(z.string()).nullish(),
-    // tag: z.array(z.string()).nullish(),
-    // match: z.array(z.string()).nullish(),
-    // sort: z.array(z.string()).nullish(),
   })
   .openapi("ViewDataSearch");
 
