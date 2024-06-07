@@ -680,6 +680,7 @@ function buildOpts(
   return {
     entryPoints: [fileName],
     bundle: true,
+    treeShaking: true,
     outfile: outFile,
     platform: "node",
     write: false,
