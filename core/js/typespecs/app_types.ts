@@ -70,7 +70,7 @@ const organizationBaseSchema = generateBaseTableSchema("organization");
 export const organizationSchema = z
   .strictObject({
     id: organizationBaseSchema.shape.id,
-    name: organizationBaseSchema.shape.name.nullish(),
+    name: organizationBaseSchema.shape.name,
     api_url: z.string().nullish(),
     created: organizationBaseSchema.shape.created,
   })
