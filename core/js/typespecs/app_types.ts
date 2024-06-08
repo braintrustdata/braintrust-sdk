@@ -173,11 +173,11 @@ export const datasetSchema = z
   .openapi("Dataset");
 export type Dataset = z.infer<typeof datasetSchema>;
 
-export const validRuntimes = ["node"] as const;
-export type Runtime = (typeof validRuntimes)[number];
+export const validRuntimesEnum = z.enum(["node"]);
+export type Runtime = z.infer<typeof validRuntimesEnum>;
 
 export const runtimeContextSchema = z.strictObject({
-  runtime: z.enum(validRuntimes),
+  runtime: validRuntimesEnum,
   version: z.string(),
 });
 export type RuntimeContext = z.infer<typeof runtimeContextSchema>;
@@ -212,7 +212,7 @@ export type Prompt = z.infer<typeof promptSchema>;
 
 export const codeBundleSchema = z.strictObject({
   runtime_context: z.strictObject({
-    runtime: z.enum(validRuntimes),
+    runtime: validRuntimesEnum,
     version: z.string(),
   }),
   // This should be a union, once we support code living in different places
@@ -233,6 +233,8 @@ export type CodeBundle = z.infer<typeof codeBundleSchema>;
 export const functionDataSchema = z.union([
   z.strictObject({
     type: z.literal("prompt"),
+    // For backwards compatibility reasons, this is hoisted out and stored
+    // in the outer object
   }),
   z.strictObject({
     type: z.literal("code"),
