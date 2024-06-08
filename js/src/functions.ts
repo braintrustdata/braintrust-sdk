@@ -119,7 +119,7 @@ export async function uploadEvalBundles({
         }
         const spec = bundleSpecs[inFile];
 
-        let pathInfo;
+        let pathInfo: z.infer<typeof pathInfoSchema>;
         try {
           pathInfo = pathInfoSchema.parse(
             await loggerConn.post_json("function/code", {
