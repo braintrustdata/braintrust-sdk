@@ -77,7 +77,7 @@ export interface FileHandle {
   outFile: string;
   bundleFile?: string;
   rebuild: () => Promise<BuildResult>;
-  bundle?: () => Promise<esbuild.BuildResult>;
+  bundle: () => Promise<esbuild.BuildResult>;
   watch: () => void;
   destroy: () => Promise<void>;
 }
@@ -289,7 +289,7 @@ async function initFile({
 }: {
   inFile: string;
   outFile: string;
-  bundleFile?: string;
+  bundleFile: string;
   opts: EvaluatorOpts;
   args: RunArgs;
 }): Promise<FileHandle> {
@@ -319,17 +319,16 @@ async function initFile({
         return { type: "failure", error: e as Error, sourceFile: inFile };
       }
     },
-    bundle: bundleFile
-      ? async () => {
-          const buildOptions: esbuild.BuildOptions = {
-            ...buildOpts(inFile, bundleFile, opts, args),
-            external: [],
-            write: true,
-            plugins: [],
-          };
-          return await esbuild.build(buildOptions);
-        }
-      : undefined,
+    bundle: async () => {
+      const buildOptions: esbuild.BuildOptions = {
+        ...buildOpts(inFile, bundleFile, opts, args),
+        external: [],
+        write: true,
+        plugins: [],
+        minify: true,
+      };
+      return await esbuild.build(buildOptions);
+    },
     watch: () => {
       ctx.watch();
     },
@@ -356,6 +355,7 @@ interface EvaluatorOpts {
   orgName?: string;
   appUrl?: string;
   noSendLogs: boolean;
+  bundle: boolean;
   terminateOnFailure: boolean;
   watch: boolean;
   list: boolean;
@@ -445,12 +445,14 @@ async function runOnce(
 
   const buildResults = await Promise.all(buildPromises);
 
-  const bundlePromises = Object.fromEntries(
-    Object.entries(handles).map(([inFile, handle]) => [
-      inFile,
-      handle.bundle ? handle.bundle() : Promise.resolve(undefined),
-    ]),
-  );
+  const bundlePromises = opts.bundle
+    ? Object.fromEntries(
+        Object.entries(handles).map(([inFile, handle]) => [
+          inFile,
+          handle.bundle(),
+        ]),
+      )
+    : null;
 
   const evaluators: EvaluatorState = {
     evaluators: [],
@@ -532,7 +534,10 @@ async function runOnce(
     addReport(evalReports, resolvedReporter, report);
   }
 
-  if (Object.entries(experimentIdToEvaluator).length > 0) {
+  if (
+    bundlePromises !== null &&
+    Object.entries(experimentIdToEvaluator).length > 0
+  ) {
     const bundleSpecs: Record<string, Record<string, string>> = {};
     for (const [experimentId, evaluator] of Object.entries(
       experimentIdToEvaluator,
@@ -577,6 +582,7 @@ interface RunArgs {
   no_send_logs: boolean;
   no_progress_bars: boolean;
   terminate_on_failure: boolean;
+  bundle: boolean;
   env_file?: string;
 }
 
@@ -759,6 +765,7 @@ async function run(args: RunArgs) {
     orgName: args.org_name,
     appUrl: args.app_url,
     noSendLogs: !!args.no_send_logs,
+    bundle: !!args.bundle,
     terminateOnFailure: !!args.terminate_on_failure,
     watch: !!args.watch,
     jsonl: args.jsonl,
@@ -825,7 +832,6 @@ async function main() {
     help: "Run evals locally.",
     parents: [parentParser],
   });
-  // XXX add a cli flag to make bundling optional
   parser_run.add_argument("--api-key", {
     help: "Specify a braintrust api key. If the parameter is not specified, the BRAINTRUST_API_KEY environment variable will be used.",
   });
@@ -865,6 +871,10 @@ async function main() {
   parser_run.add_argument("--terminate-on-failure", {
     action: "store_true",
     help: "If provided, terminates on a failing eval, instead of the default (moving onto the next one).",
+  });
+  parser_run.add_argument("--bundle", {
+    action: "store_true",
+    help: "Experimental (do not use unless you know what you're doing)",
   });
   parser_run.add_argument("--env-file", {
     help: "A path to a .env file containing environment variables to load (via dotenv).",

@@ -33,6 +33,13 @@ interface EvalFunction {
   location: CodeBundle["location"];
 }
 
+const pathInfoSchema = z
+  .strictObject({
+    url: z.string(),
+    bundleId: z.string(),
+  })
+  .strip();
+
 export async function uploadEvalBundles({
   experimentIdToEvaluator,
   bundlePromises,
@@ -41,7 +48,7 @@ export async function uploadEvalBundles({
 }: {
   experimentIdToEvaluator: EvaluatorMap;
   bundlePromises: {
-    [k: string]: Promise<esbuild.BuildResult<esbuild.BuildOptions> | undefined>;
+    [k: string]: Promise<esbuild.BuildResult<esbuild.BuildOptions>>;
   };
   handles: Record<string, FileHandle>;
   verbose: boolean;
@@ -112,16 +119,14 @@ export async function uploadEvalBundles({
         }
         const spec = bundleSpecs[inFile];
 
-        // XXX Zod this
-        let pathInfo: {
-          url: string;
-          bundleId: string;
-        };
+        let pathInfo;
         try {
-          pathInfo = await loggerConn.post_json("function/code", {
-            org_id: orgId,
-            runtime_context,
-          });
+          pathInfo = pathInfoSchema.parse(
+            await loggerConn.post_json("function/code", {
+              org_id: orgId,
+              runtime_context,
+            }),
+          );
         } catch (e) {
           if (verbose) {
             console.error(e);

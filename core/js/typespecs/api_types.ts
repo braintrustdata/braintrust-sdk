@@ -604,26 +604,6 @@ const {
   }),
 );
 
-// XXX Maybe remove. I can't figure out how to use these
-/*
-const {
-  eventSchema: insertFunctionEventSchema,
-  requestSchema: insertFunctionEventsRequestSchema,
-} = makeInsertEventSchemas(
-  "function",
-  z.strictObject({
-    name: functionSchema.shape.name,
-    description: functionSchema.shape.description,
-    prompt_data: functionSchema.shape.prompt_data,
-    function_data: functionSchema.shape.function_data,
-    tags: functionSchema.shape.tags,
-    metadata: functionSchema.shape.metadata,
-    id: functionSchema.shape.id.nullish(),
-    [OBJECT_DELETE_FIELD]: functionEventBaseSchema.shape[OBJECT_DELETE_FIELD],
-  }),
-);
-*/
-
 // Section: logging feedback.
 
 function makeFeedbackRequestSchema<T extends z.AnyZodObject>(
