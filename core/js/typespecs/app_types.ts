@@ -485,6 +485,11 @@ export const projectScoreSchema = z
           .describe(
             "For weighted-type project scores, the weights of each score",
           ),
+        z
+          .array(z.string())
+          .describe(
+            "For minimum-type project scores, the list of included scores",
+          ),
       ])
       .nullish(),
   })
