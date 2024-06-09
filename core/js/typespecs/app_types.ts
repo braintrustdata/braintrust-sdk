@@ -785,7 +785,7 @@ const createProjectScoreSchema = z
     name: projectScoreSchema.shape.name,
     description: projectScoreSchema.shape.description,
     score_type: projectScoreSchema.shape.score_type,
-    config: projectScoreSchema.shape.categories,
+    categories: projectScoreSchema.shape.categories,
   })
   .openapi("CreateProjectScore");
 
