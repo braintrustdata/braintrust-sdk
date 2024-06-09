@@ -446,7 +446,7 @@ export const groupSchema = z
 export type Group = z.infer<typeof groupSchema>;
 
 export const projectScoreTypeEnum = z
-  .enum(["slider", "categorical"])
+  .enum(["slider", "categorical", "weighted", "minimum"])
   .describe("The type of the configured score");
 export type ProjectScoreType = z.infer<typeof projectScoreTypeEnum>;
 
@@ -473,12 +473,20 @@ export const projectScoreSchema = z
     name: projectScoreBaseSchema.shape.name,
     description: projectScoreBaseSchema.shape.description,
     score_type: projectScoreTypeEnum,
-    categories: projectScoreCategory
-      .array()
-      .nullish()
-      .describe(
-        "For categorical-type project scores, the list of all categories",
-      ),
+    config: z
+      .union([
+        projectScoreCategory
+          .array()
+          .describe(
+            "For categorical-type project scores, the list of all categories",
+          ),
+        z
+          .record(z.number())
+          .describe(
+            "For weighted-type project scores, the weights of each score",
+          ),
+      ])
+      .nullish(),
   })
   .describe(
     "A project score is a user-configured score, which can be manually-labeled through the UI",
@@ -777,7 +785,7 @@ const createProjectScoreSchema = z
     name: projectScoreSchema.shape.name,
     description: projectScoreSchema.shape.description,
     score_type: projectScoreSchema.shape.score_type,
-    categories: projectScoreSchema.shape.categories,
+    config: projectScoreSchema.shape.config,
   })
   .openapi("CreateProjectScore");
 
@@ -786,7 +794,7 @@ const patchProjectScoreSchema = z
     name: projectScoreSchema.shape.name.nullish(),
     description: projectScoreSchema.shape.description,
     score_type: projectScoreSchema.shape.score_type.nullish(),
-    categories: projectScoreSchema.shape.categories,
+    config: projectScoreSchema.shape.config,
   })
   .openapi("PatchProjectScore");
 
