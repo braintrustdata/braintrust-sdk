@@ -450,7 +450,7 @@ export const projectScoreTypeEnum = z
   .describe("The type of the configured score");
 export type ProjectScoreType = z.infer<typeof projectScoreTypeEnum>;
 
-const projectScoreCategory = z
+export const projectScoreCategory = z
   .object({
     name: z.string().describe("Name of the category"),
     value: z
@@ -473,7 +473,7 @@ export const projectScoreSchema = z
     name: projectScoreBaseSchema.shape.name,
     description: projectScoreBaseSchema.shape.description,
     score_type: projectScoreTypeEnum,
-    config: z
+    categories: z
       .union([
         projectScoreCategory
           .array()
@@ -785,7 +785,7 @@ const createProjectScoreSchema = z
     name: projectScoreSchema.shape.name,
     description: projectScoreSchema.shape.description,
     score_type: projectScoreSchema.shape.score_type,
-    config: projectScoreSchema.shape.config,
+    config: projectScoreSchema.shape.categories,
   })
   .openapi("CreateProjectScore");
 
@@ -794,7 +794,7 @@ const patchProjectScoreSchema = z
     name: projectScoreSchema.shape.name.nullish(),
     description: projectScoreSchema.shape.description,
     score_type: projectScoreSchema.shape.score_type.nullish(),
-    config: projectScoreSchema.shape.config,
+    config: projectScoreSchema.shape.categories,
   })
   .openapi("PatchProjectScore");
 
