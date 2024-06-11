@@ -4,8 +4,9 @@
 
 import base64
 import dataclasses
+import json
 from enum import Enum, auto
-from typing import Optional
+from typing import Dict, Optional
 from uuid import UUID
 
 
@@ -18,7 +19,9 @@ def _try_make_uuid(s):
         return s.encode("utf-8"), False
 
 
-ENCODING_VERSION_NUMBER = 1
+ENCODING_VERSION_NUMBER = 2
+INTEGER_ENCODING_NUM_BYTES = 4
+INTEGER_ENCODING_BYTEORDER = "big"
 
 INVALID_ENCODING_ERRMSG = "SpanComponents string is not properly encoded. This may be due to a version mismatch between the SDK library used to export the span and the library used to decode it. Please make sure you are using the same SDK version across the board"
 
@@ -49,12 +52,19 @@ class SpanRowIds:
 @dataclasses.dataclass
 class SpanComponents:
     object_type: SpanObjectType
-    object_id: str
+    object_id: Optional[str] = None
+    compute_object_metadata_args: Optional[Dict] = None
     row_ids: Optional[SpanRowIds] = None
 
     def __post_init__(self):
         assert isinstance(self.object_type, SpanObjectType)
-        assert isinstance(self.object_id, str)
+        assert (
+            self.object_id or self.compute_object_metadata_args
+        ), "Must provide either object_id or compute_object_metadata_args"
+        if self.object_id:
+            assert isinstance(self.object_id, str)
+        else:
+            assert isinstance(self.compute_object_metadata_args, dict)
         if self.row_ids is not None:
             assert isinstance(self.row_ids, SpanRowIds)
 
@@ -63,13 +73,19 @@ class SpanComponents:
         #   - Byte 0 encodes the version number of the encoded string. This is
         #   used to check for incompatibilities with previous iterations.
         #   - Byte 1 encodes the SpanObjectType.
-        #   - Byte 2 (0 or 1) describes whether or not the (row_id,
+        #   - Byte 2 (0 or 1) encodes whether or not we have an object_id.
+        #   - Byte 3 (0 or 1) encodes whether or not we have
+        #   compute_object_metadata_args.
+        #   - Byte 4 (0 or 1) describes whether or not the (row_id,
         #   span_id, root_span_id) triple is present.
-        #   - Byte 3 (0 or 1) describes whether or not the row_id component
+        #   - Byte 5 (0 or 1) describes whether or not the row_id component
         #   is a UUID. If not, it is assumed to be a utf-8 encoded string.
-        #   - Bytes 4-19 encode the object_id as a UUID
-        #   - If the row triple is present, bytes 20-51 encode the span_id +
-        #   root_span_id as a UUID.
+        #   - If [byte 2] == 1, the next 16 bytes encode the object_id as a UUID.
+        #   - If [byte 3] == 1, the next [INTEGER_ENCODING_NUM_BYTES] bytes
+        #   encode the length of the serialized compute_object_metadata_args. The next
+        #   [length] bytes contain the serialized compute_object_metadata_args.
+        #   - If [byte 4] == 1, the next 32 bytes encode the span_id +
+        #   root_span_id as UUIDs.
         #   - If the row triple is present, the remaining bytes encode the
         #   row_id either as UUID or as UTF-8.
 
@@ -82,15 +98,26 @@ class SpanComponents:
             [
                 ENCODING_VERSION_NUMBER,
                 self.object_type.value,
+                1 if self.object_id else 0,
+                1 if self.compute_object_metadata_args else 0,
                 1 if self.row_ids else 0,
                 1 if row_id_is_uuid else 0,
             ]
         )
 
-        object_id_bytes, object_id_is_uuid = _try_make_uuid(self.object_id)
-        if not object_id_is_uuid:
-            raise Exception("object_id component must be a valid UUID")
-        raw_bytes += object_id_bytes
+        if self.object_id:
+            object_id_bytes, object_id_is_uuid = _try_make_uuid(self.object_id)
+            if not object_id_is_uuid:
+                raise Exception("object_id component must be a valid UUID")
+            raw_bytes += object_id_bytes
+
+        if self.compute_object_metadata_args:
+            compute_object_metadata_bytes = bytes(json.dumps(self.compute_object_metadata_args).encode())
+            serialized_len_bytes = len(compute_object_metadata_bytes).to_bytes(
+                INTEGER_ENCODING_NUM_BYTES, byteorder=INTEGER_ENCODING_BYTEORDER
+            )
+            raw_bytes += serialized_len_bytes
+            raw_bytes += compute_object_metadata_bytes
 
         if self.row_ids:
             span_id_bytes, span_id_is_uuid = _try_make_uuid(self.row_ids.span_id)
@@ -111,28 +138,62 @@ class SpanComponents:
             raw_bytes = base64.b64decode(s.encode())
             assert raw_bytes[0] == ENCODING_VERSION_NUMBER
             object_type = SpanObjectType(raw_bytes[1])
-            assert raw_bytes[2] in [0, 1]
-            assert raw_bytes[3] in [0, 1]
-            has_row_id = raw_bytes[2] == 1
-            row_id_is_uuid = raw_bytes[3] == 1
+            for i in range(2, 6):
+                assert raw_bytes[i] in [0, 1]
+            has_object_id = raw_bytes[2]
+            has_compute_object_metadata_args = raw_bytes[3]
+            has_row_id = raw_bytes[4] == 1
+            row_id_is_uuid = raw_bytes[5] == 1
 
-            object_id = str(UUID(bytes=raw_bytes[4:20]))
+            byte_cursor = 6
+            if has_object_id:
+                next_byte_cursor = byte_cursor + 16
+                object_id = str(UUID(bytes=raw_bytes[byte_cursor:next_byte_cursor]))
+                byte_cursor = next_byte_cursor
+            else:
+                object_id = None
+
+            if has_compute_object_metadata_args:
+                next_byte_cursor = byte_cursor + INTEGER_ENCODING_NUM_BYTES
+                serialized_len_bytes = int.from_bytes(
+                    raw_bytes[byte_cursor:next_byte_cursor], byteorder=INTEGER_ENCODING_BYTEORDER
+                )
+                byte_cursor = next_byte_cursor
+                next_byte_cursor = byte_cursor + serialized_len_bytes
+                compute_object_metadata_args = json.loads(raw_bytes[byte_cursor:next_byte_cursor].decode())
+                byte_cursor = next_byte_cursor
+            else:
+                compute_object_metadata_args = None
+
             if has_row_id:
-                span_id = str(UUID(bytes=raw_bytes[20:36]))
-                root_span_id = str(UUID(bytes=raw_bytes[36:52]))
+                next_byte_cursor = byte_cursor + 16
+                span_id = str(UUID(bytes=raw_bytes[byte_cursor:next_byte_cursor]))
+                byte_cursor = next_byte_cursor
+                next_byte_cursor = byte_cursor + 16
+                root_span_id = str(UUID(bytes=raw_bytes[byte_cursor:next_byte_cursor]))
+                byte_cursor = next_byte_cursor
                 if row_id_is_uuid:
-                    row_id = str(UUID(bytes=raw_bytes[52:]))
+                    row_id = str(UUID(bytes=raw_bytes[byte_cursor:]))
                 else:
-                    row_id = raw_bytes[52:].decode("utf-8")
+                    row_id = raw_bytes[byte_cursor:].decode("utf-8")
                 row_ids = SpanRowIds(row_id=row_id, span_id=span_id, root_span_id=root_span_id)
             else:
                 row_ids = None
 
-            return SpanComponents(object_type=object_type, object_id=object_id, row_ids=row_ids)
+            return SpanComponents(
+                object_type=object_type,
+                object_id=object_id,
+                compute_object_metadata_args=compute_object_metadata_args,
+                row_ids=row_ids,
+            )
         except Exception:
             raise Exception(INVALID_ENCODING_ERRMSG)
 
     def object_id_fields(self):
+        if not self.object_id:
+            raise Exception(
+                "Impossible: cannot invoke `object_id_fields` unless SpanComponents is initialized with an `object_id`"
+            )
         if self.object_type == SpanObjectType.EXPERIMENT:
             return dict(experiment_id=self.object_id)
         elif self.object_type == SpanObjectType.PROJECT_LOGS:

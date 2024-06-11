@@ -16,10 +16,13 @@ function tryMakeUuid(s: string): { bytes: Buffer; isUUID: boolean } {
   }
 }
 
-const ENCODING_VERSION_NUMBER = 1;
+const ENCODING_VERSION_NUMBER = 2;
 
 const INVALID_ENCODING_ERRMSG =
   "SpanComponents string is not properly encoded. This may be due to a version mismatch between the SDK library used to export the span and the library used to decode it. Please make sure you are using the same SDK version across the board";
+// If you change this, make sure to change the method used to read/write integer
+// bytes to a buffer, from writeInt32BE.
+const INTEGER_ENCODING_NUM_BYTES = 4;
 
 export enum SpanObjectType {
   EXPERIMENT = 0,
@@ -60,17 +63,26 @@ export class SpanRowIds {
 
 export class SpanComponents {
   public objectType: SpanObjectType;
-  public objectId: string;
+  public objectId: string | undefined;
+  public computeObjectMetadataArgs: Record<string, any> | undefined;
   public rowIds: SpanRowIds | undefined;
 
   constructor(args: {
     objectType: SpanObjectType;
-    objectId: string;
+    objectId?: string;
+    computeObjectMetadataArgs?: Record<string, any>;
     rowIds?: SpanRowIds;
   }) {
     this.objectType = args.objectType;
     this.objectId = args.objectId;
+    this.computeObjectMetadataArgs = args.computeObjectMetadataArgs;
     this.rowIds = args.rowIds;
+
+    if (!(this.objectId || this.computeObjectMetadataArgs)) {
+      throw new Error(
+        "Must provide either objectId or computeObjectMetadataArgs",
+      );
+    }
   }
 
   public toStr(): string {
@@ -84,18 +96,32 @@ export class SpanComponents {
       Buffer.from([
         ENCODING_VERSION_NUMBER,
         this.objectType,
+        this.objectId ? 1 : 0,
+        this.computeObjectMetadataArgs ? 1 : 0,
         this.rowIds ? 1 : 0,
         rowIdIsUUID ? 1 : 0,
       ]),
     );
 
-    const { bytes: objectIdBytes, isUUID: objectIdIsUUID } = tryMakeUuid(
-      this.objectId,
-    );
-    if (!objectIdIsUUID) {
-      throw new Error("object_id component must be a valid UUID");
+    if (this.objectId) {
+      const { bytes: objectIdBytes, isUUID: objectIdIsUUID } = tryMakeUuid(
+        this.objectId,
+      );
+      if (!objectIdIsUUID) {
+        throw new Error("object_id component must be a valid UUID");
+      }
+      allBuffers.push(objectIdBytes);
     }
-    allBuffers.push(objectIdBytes);
+
+    if (this.computeObjectMetadataArgs) {
+      const computeObjectMetadataBytes = Buffer.from(
+        JSON.stringify(this.computeObjectMetadataArgs),
+        "utf-8",
+      );
+      const serializedLenBytes = Buffer.alloc(INTEGER_ENCODING_NUM_BYTES);
+      serializedLenBytes.writeInt32BE(computeObjectMetadataBytes.length);
+      allBuffers.push(serializedLenBytes, computeObjectMetadataBytes);
+    }
 
     if (this.rowIds) {
       const { bytes: spanIdBytes, isUUID: spanIdIsUUID } = tryMakeUuid(
@@ -123,35 +149,75 @@ export class SpanComponents {
         throw new Error();
       }
       const objectType = SpanObjectTypeEnumSchema.parse(rawBytes[1]);
-      if (![0, 1].includes(rawBytes[2])) {
-        throw new Error();
+      for (let i = 2; i < 6; ++i) {
+        if (![0, 1].includes(rawBytes[i])) {
+          throw new Error();
+        }
       }
-      if (![0, 1].includes(rawBytes[3])) {
-        throw new Error();
-      }
-      const hasRowId = rawBytes[2] == 1;
-      const rowIdIsUUID = rawBytes[3] == 1;
+      const hasObjectId = rawBytes[2] == 1;
+      const hasComputeObjectMetadataArgs = rawBytes[3] == 1;
+      const hasRowId = rawBytes[4] == 1;
+      const rowIdIsUUID = rawBytes[5] == 1;
 
-      const objectId = uuid.stringify(rawBytes.subarray(4, 20));
+      let byteCursor = 6;
+      let objectId: string | undefined = undefined;
+      if (hasObjectId) {
+        const nextByteCursor = byteCursor + 16;
+        objectId = uuid.stringify(
+          rawBytes.subarray(byteCursor, nextByteCursor),
+        );
+        byteCursor = nextByteCursor;
+      }
+
+      let computeObjectMetadataArgs: Record<string, any> | undefined;
+      if (hasComputeObjectMetadataArgs) {
+        let nextByteCursor = byteCursor + INTEGER_ENCODING_NUM_BYTES;
+        const serializedLenBytes = rawBytes.readInt32BE(byteCursor);
+        byteCursor = nextByteCursor;
+        nextByteCursor = byteCursor + serializedLenBytes;
+        computeObjectMetadataArgs = JSON.parse(
+          rawBytes.subarray(byteCursor, nextByteCursor).toString("utf-8"),
+        );
+        byteCursor = nextByteCursor;
+      }
+
       const rowIds = (() => {
         if (!hasRowId) {
           return undefined;
         }
-        const spanId = uuid.stringify(rawBytes.subarray(20, 36));
-        const rootSpanId = uuid.stringify(rawBytes.subarray(36, 52));
+        let nextByteCursor = byteCursor + 16;
+        const spanId = uuid.stringify(
+          rawBytes.subarray(byteCursor, nextByteCursor),
+        );
+        byteCursor = nextByteCursor;
+        nextByteCursor = byteCursor + 16;
+        const rootSpanId = uuid.stringify(
+          rawBytes.subarray(byteCursor, nextByteCursor),
+        );
+        byteCursor = nextByteCursor;
         const rowId = rowIdIsUUID
-          ? uuid.stringify(rawBytes.subarray(52))
-          : rawBytes.subarray(52).toString("utf-8");
+          ? uuid.stringify(rawBytes.subarray(byteCursor))
+          : rawBytes.subarray(byteCursor).toString("utf-8");
         return new SpanRowIds({ rowId, spanId, rootSpanId });
       })();
 
-      return new SpanComponents({ objectType, objectId, rowIds });
+      return new SpanComponents({
+        objectType,
+        objectId,
+        computeObjectMetadataArgs,
+        rowIds,
+      });
     } catch (e) {
       throw new Error(INVALID_ENCODING_ERRMSG);
     }
   }
 
   public objectIdFields(): ParentExperimentIds | ParentProjectLogIds {
+    if (!this.objectId) {
+      throw new Error(
+        "Impossible: cannot invoke `object_id_fields` unless SpanComponents is initialized with an `object_id`",
+      );
+    }
     switch (this.objectType) {
       case SpanObjectType.EXPERIMENT:
         return { experiment_id: this.objectId };
@@ -166,6 +232,7 @@ export class SpanComponents {
     return {
       objectType: this.objectType,
       objectId: this.objectId,
+      computeObjectMetadataArgs: this.computeObjectMetadataArgs,
       rowIds: this.rowIds?.toObject(),
     };
   }
