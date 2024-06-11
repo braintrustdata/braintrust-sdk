@@ -799,7 +799,7 @@ const patchProjectScoreSchema = z
     name: projectScoreSchema.shape.name.nullish(),
     description: projectScoreSchema.shape.description,
     score_type: projectScoreSchema.shape.score_type.nullish(),
-    config: projectScoreSchema.shape.categories,
+    categories: projectScoreSchema.shape.categories,
   })
   .openapi("PatchProjectScore");
 
