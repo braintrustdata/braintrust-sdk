@@ -130,7 +130,6 @@ export const apiKeySchema = z
   .strictObject({
     id: apiKeyBaseSchema.shape.id,
     created: apiKeyBaseSchema.shape.created,
-    key_hash: z.string(),
     name: apiKeyBaseSchema.shape.name,
     preview_name: z.string(),
     user_id: userSchema.shape.id.nullish(),
