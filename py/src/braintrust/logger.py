@@ -1942,6 +1942,7 @@ class Experiment(ObjectFetcher):
 
         return ExperimentSummary(
             project_name=self.project.name,
+            experiment_id=self.id,
             experiment_name=self.name,
             project_url=project_url,
             experiment_url=experiment_url,
@@ -2838,6 +2839,8 @@ class ExperimentSummary(SerializableDataClass):
 
     project_name: str
     """Name of the project that the experiment belongs to."""
+    experiment_id: Optional[str]
+    """ID of the experiment. May be `None` if the eval was run locally."""
     experiment_name: str
     """Name of the experiment."""
     project_url: Optional[str]
