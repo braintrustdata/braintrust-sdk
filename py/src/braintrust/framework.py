@@ -847,6 +847,7 @@ def build_local_summary(evaluator, results):
         for name, (total, count) in scores_by_name.items()
     }
     return ExperimentSummary(
+        experiment_id=None,
         experiment_name=evaluator.experiment_name,
         project_name=evaluator.project_name,
         project_url=None,
