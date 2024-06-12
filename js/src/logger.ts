@@ -2605,6 +2605,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     return {
       projectName: (await this.project).name,
       experimentName: await this.name,
+      experimentId: await this.id,
       projectUrl: projectUrl,
       experimentUrl: experimentUrl,
       comparisonExperimentName: comparisonExperimentName,
@@ -3339,6 +3340,7 @@ export interface MetricSummary {
  * Summary of an experiment's scores and metadata.
  * @property projectName Name of the project that the experiment belongs to.
  * @property experimentName Name of the experiment.
+ * @property experimentId ID of the experiment. May be `undefined` if the eval was run locally.
  * @property projectUrl URL to the project's page in the Braintrust app.
  * @property experimentUrl URL to the experiment's page in the Braintrust app.
  * @property comparisonExperimentName The experiment scores are baselined against.
@@ -3347,6 +3349,7 @@ export interface MetricSummary {
 export interface ExperimentSummary {
   projectName: string;
   experimentName: string;
+  experimentId?: string;
   projectUrl?: string;
   experimentUrl?: string;
   comparisonExperimentName?: string;
