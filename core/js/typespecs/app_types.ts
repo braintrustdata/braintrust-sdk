@@ -491,6 +491,12 @@ export const projectScoreSchema = z
           ),
       ])
       .nullish(),
+    config: z
+      .strictObject({
+        multi_select: z.boolean().nullish(),
+        destination: z.literal("expected").nullish(),
+      })
+      .nullish(),
   })
   .describe(
     "A project score is a user-configured score, which can be manually-labeled through the UI",
