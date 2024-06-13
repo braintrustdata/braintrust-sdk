@@ -916,6 +916,33 @@ def init_dataset(
     return Dataset(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), version=version, legacy=use_output)
 
 
+def _compute_logger_metadata(project_name: Optional[str] = None, project_id: Optional[str] = None):
+    login()
+    org_id = _state.org_id
+    if project_id is None:
+        response = _state.app_conn().post_json(
+            "api/project/register",
+            {
+                "project_name": project_name or GLOBAL_PROJECT,
+                "org_id": _state.org_id,
+            },
+        )
+        resp_project = response["project"]
+        return OrgProjectMetadata(
+            org_id=org_id,
+            project=ObjectMetadata(id=resp_project["id"], name=resp_project["name"], full_info=resp_project),
+        )
+    elif project_name is None:
+        response = _state.app_conn().get_json("api/project", {"id": project_id})
+        return OrgProjectMetadata(
+            org_id=org_id, project=ObjectMetadata(id=project_id, name=response["name"], full_info=response)
+        )
+    else:
+        return OrgProjectMetadata(
+            org_id=org_id, project=ObjectMetadata(id=project_id, name=project_name, full_info=dict())
+        )
+
+
 def init_logger(
     project: Optional[str] = None,
     project_id: Optional[str] = None,
@@ -941,35 +968,16 @@ def init_logger(
     :returns: The newly created Logger.
     """
 
+    compute_metadata_args = dict(project_name=project, project_id=project_id)
+
     def compute_metadata():
         login(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login)
-        org_id = _state.org_id
-        if project_id is None:
-            response = _state.app_conn().post_json(
-                "api/project/register",
-                {
-                    "project_name": project or GLOBAL_PROJECT,
-                    "org_id": _state.org_id,
-                },
-            )
-            resp_project = response["project"]
-            return OrgProjectMetadata(
-                org_id=org_id,
-                project=ObjectMetadata(id=resp_project["id"], name=resp_project["name"], full_info=resp_project),
-            )
-        elif project is None:
-            response = _state.app_conn().get_json("api/project", {"id": project_id})
-            return OrgProjectMetadata(
-                org_id=org_id, project=ObjectMetadata(id=project_id, name=response["name"], full_info=response)
-            )
-        else:
-            return OrgProjectMetadata(
-                org_id=org_id, project=ObjectMetadata(id=project_id, name=project, full_info=dict())
-            )
+        return _compute_logger_metadata(**compute_metadata_args)
 
     ret = Logger(
         lazy_metadata=LazyValue(compute_metadata, use_mutex=True),
         async_flush=async_flush,
+        compute_metadata_args=compute_metadata_args,
     )
     if set_current:
         _state.current_logger = ret
@@ -1303,7 +1311,8 @@ def start_span(
             parent_span_ids = None
         return SpanImpl(
             parent_object_type=components.object_type,
-            parent_object_id=LazyValue(lambda: components.object_id, use_mutex=False),
+            parent_object_id=LazyValue(_span_components_to_object_id_lambda(components), use_mutex=False),
+            parent_compute_object_metadata_args=components.compute_object_metadata_args,
             parent_span_ids=parent_span_ids,
             name=name,
             type=type,
@@ -1642,10 +1651,23 @@ class ParentSpanIds:
     root_span_id: str
 
 
+def _span_components_to_object_id_lambda(components: SpanComponents):
+    if components.object_id:
+        return lambda: components.object_id
+    assert components.compute_object_metadata_args
+    if components.object_type == SpanObjectType.EXPERIMENT:
+        raise Exception("Impossible: compute_object_metadata_args not supported for experiments")
+    elif components.object_type == SpanObjectType.PROJECT_LOGS:
+        return lambda: _compute_logger_metadata(**components.compute_object_metadata_args).project.id
+    else:
+        raise Exception(f"Unknown object type: {object_type}")
+
+
 def _start_span_parent_args(
     parent: Optional[str],
     parent_object_type: SpanObjectType,
     parent_object_id: LazyValue[str],
+    parent_compute_object_metadata_args: Optional[Dict],
     parent_span_ids: Optional[ParentSpanIds],
 ):
     if parent:
@@ -1655,10 +1677,13 @@ def _start_span_parent_args(
             parent_object_type == parent_components.object_type
         ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
 
+        parent_components_object_id_lambda = _span_components_to_object_id_lambda(parent_components)
+
         def compute_parent_object_id():
+            parent_components_object_id = parent_components_object_id_lambda()
             assert (
-                parent_object_id.get() == parent_components.object_id
-            ), f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components.object_id}"
+                parent_object_id.get() == parent_components_object_id
+            ), f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
             return parent_object_id.get()
 
         arg_parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)
@@ -1675,6 +1700,7 @@ def _start_span_parent_args(
     return dict(
         parent_object_type=parent_object_type,
         parent_object_id=arg_parent_object_id,
+        parent_compute_object_metadata_args=parent_compute_object_metadata_args,
         parent_span_ids=arg_parent_span_ids,
     )
 
@@ -1983,6 +2009,7 @@ class Experiment(ObjectFetcher):
                 parent=parent,
                 parent_object_type=self._parent_object_type(),
                 parent_object_id=self._lazy_id,
+                parent_compute_object_metadata_args=None,
                 parent_span_ids=None,
             ),
             name=name,
@@ -2041,6 +2068,7 @@ class SpanImpl(Span):
         self,
         parent_object_type: SpanObjectType,
         parent_object_id: LazyValue[str],
+        parent_compute_object_metadata_args: Optional[Dict],
         parent_span_ids: Optional[ParentSpanIds],
         name=None,
         type=None,
@@ -2062,6 +2090,7 @@ class SpanImpl(Span):
 
         self.parent_object_type = parent_object_type
         self.parent_object_id = parent_object_id
+        self.parent_compute_object_metadata_args = parent_compute_object_metadata_args
 
         caller_location = get_caller_location()
         if name is None:
@@ -2184,6 +2213,7 @@ class SpanImpl(Span):
                 parent=parent,
                 parent_object_type=self.parent_object_type,
                 parent_object_id=self.parent_object_id,
+                parent_compute_object_metadata_args=self.parent_compute_object_metadata_args,
                 parent_span_ids=parent_span_ids,
             ),
             name=name,
@@ -2204,9 +2234,17 @@ class SpanImpl(Span):
         return end_time
 
     def export(self) -> str:
+        if self.parent_compute_object_metadata_args and not self.parent_object_id.has_computed:
+            object_id = None
+            compute_object_metadata_args = self.parent_compute_object_metadata_args
+        else:
+            object_id = self.parent_object_id.get()
+            compute_object_metadata_args = None
+
         return SpanComponents(
             object_type=self.parent_object_type,
-            object_id=self.parent_object_id.get(),
+            object_id=object_id,
+            compute_object_metadata_args=compute_object_metadata_args,
             row_ids=SpanRowIds(row_id=self.id, span_id=self.span_id, root_span_id=self.root_span_id),
         ).to_str()
 
@@ -2580,9 +2618,15 @@ class Project:
 
 
 class Logger:
-    def __init__(self, lazy_metadata: LazyValue[OrgProjectMetadata], async_flush: bool = True):
+    def __init__(
+        self,
+        lazy_metadata: LazyValue[OrgProjectMetadata],
+        async_flush: bool = True,
+        compute_metadata_args: Optional[Dict] = None,
+    ):
         self._lazy_metadata = lazy_metadata
         self.async_flush = async_flush
+        self._compute_metadata_args = compute_metadata_args
         self.last_start_time = time.time()
         self._lazy_id = LazyValue(lambda: self.id, use_mutex=False)
         self._called_start_span = False
@@ -2729,6 +2773,7 @@ class Logger:
                 parent=parent,
                 parent_object_type=self._parent_object_type(),
                 parent_object_id=self._lazy_id,
+                parent_compute_object_metadata_args=self._compute_metadata_args,
                 parent_span_ids=None,
             ),
             name=name,
@@ -2742,7 +2787,22 @@ class Logger:
 
     def export(self) -> str:
         """Return a serialized representation of the logger that can be used to start subspans in other places. See `Span.start_span` for more details."""
-        return SpanComponents(object_type=self._parent_object_type(), object_id=self.id).to_str()
+        # Note: it is important that the object id we are checking for
+        # `has_computed` is the same as the one we are passing into the span
+        # logging functions. So that if the spans actually do get logged, then
+        # this `_lazy_id` object specifically will also be marked as computed.
+        if self._compute_metadata_args and not self._lazy_id.has_computed:
+            object_id = None
+            compute_object_metadata_args = self._compute_metadata_args
+        else:
+            object_id = self._lazy_id.get()
+            compute_object_metadata_args = None
+
+        return SpanComponents(
+            object_type=self._parent_object_type(),
+            object_id=object_id,
+            compute_object_metadata_args=compute_object_metadata_args,
+        ).to_str()
 
     def __enter__(self):
         return self
