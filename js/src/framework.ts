@@ -150,6 +150,12 @@ export interface Evaluator<
    * Whether to update an existing experiment with `experiment_name` if one exists. Defaults to false.
    */
   update?: boolean;
+
+  /**
+   * The duration, in milliseconds, after which to time out the evaluation.
+   * Defaults to None, in which case there is no timeout.
+   */
+  timeout?: number;
 }
 
 export type EvalResultWithSummary<
@@ -390,6 +396,35 @@ function scorerName(
 }
 
 export async function runEvaluator(
+  experiment: Experiment | null,
+  evaluator: EvaluatorDef<any, any, any, any>,
+  progressReporter: ProgressReporter,
+  filters: Filter[],
+): Promise<EvalResultWithSummary<any, any, any, any>> {
+  let result = runEvaluatorInternal(
+    experiment,
+    evaluator,
+    progressReporter,
+    filters,
+  );
+  let timer = async () => {
+    await new Promise((_, reject) => {
+      if (evaluator.timeout) {
+        setTimeout(() => {
+          reject("evaluator timed out");
+        }, evaluator.timeout);
+      }
+    });
+    return null;
+  };
+  let winner = await Promise.race([result, timer()]);
+  if (!winner) {
+    throw new Error("unreachable");
+  }
+  return winner;
+}
+
+async function runEvaluatorInternal(
   experiment: Experiment | null,
   evaluator: EvaluatorDef<any, any, any, any>,
   progressReporter: ProgressReporter,
