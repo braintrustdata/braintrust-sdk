@@ -131,7 +131,6 @@ export const apiKeySchema = z
   .strictObject({
     id: apiKeyBaseSchema.shape.id,
     created: apiKeyBaseSchema.shape.created,
-    key_hash: z.string(),
     name: apiKeyBaseSchema.shape.name,
     preview_name: z.string(),
     user_id: userSchema.shape.id.nullish(),
@@ -448,11 +447,11 @@ export const groupSchema = z
 export type Group = z.infer<typeof groupSchema>;
 
 export const projectScoreTypeEnum = z
-  .enum(["slider", "categorical"])
+  .enum(["slider", "categorical", "weighted", "minimum"])
   .describe("The type of the configured score");
 export type ProjectScoreType = z.infer<typeof projectScoreTypeEnum>;
 
-const projectScoreCategory = z
+export const projectScoreCategory = z
   .object({
     name: z.string().describe("Name of the category"),
     value: z
@@ -475,12 +474,31 @@ export const projectScoreSchema = z
     name: projectScoreBaseSchema.shape.name,
     description: projectScoreBaseSchema.shape.description,
     score_type: projectScoreTypeEnum,
-    categories: projectScoreCategory
-      .array()
-      .nullish()
-      .describe(
-        "For categorical-type project scores, the list of all categories",
-      ),
+    categories: z
+      .union([
+        projectScoreCategory
+          .array()
+          .describe(
+            "For categorical-type project scores, the list of all categories",
+          ),
+        z
+          .record(z.number())
+          .describe(
+            "For weighted-type project scores, the weights of each score",
+          ),
+        z
+          .array(z.string())
+          .describe(
+            "For minimum-type project scores, the list of included scores",
+          ),
+      ])
+      .nullish(),
+    config: z
+      .strictObject({
+        multi_select: z.boolean().nullish(),
+        destination: z.literal("expected").nullish(),
+      })
+      .nullish(),
   })
   .describe(
     "A project score is a user-configured score, which can be manually-labeled through the UI",

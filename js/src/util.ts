@@ -57,4 +57,8 @@ export class LazyValue<T> {
     this.value = { hasComputed: true, val: this.callable() };
     return this.value.val;
   }
+
+  public get hasComputed(): boolean {
+    return this.value.hasComputed;
+  }
 }

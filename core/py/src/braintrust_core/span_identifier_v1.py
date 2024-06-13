@@ -20,19 +20,19 @@ def _try_make_uuid(s):
 
 ENCODING_VERSION_NUMBER = 1
 
-INVALID_ENCODING_ERRMSG = "SpanComponents string is not properly encoded. This may be due to a version mismatch between the SDK library used to export the span and the library used to decode it. Please make sure you are using the same SDK version across the board"
+INVALID_ENCODING_ERRMSG = "SpanComponentsV1 string is not properly encoded. This may be due to a version mismatch between the SDK library used to export the span and the library used to decode it. Please make sure you are using the same SDK version across the board"
 
 
-class SpanObjectType(Enum):
+class SpanObjectTypeV1(Enum):
     EXPERIMENT = auto()
     PROJECT_LOGS = auto()
 
     def __str__(self):
-        return {SpanObjectType.EXPERIMENT: "experiment", SpanObjectType.PROJECT_LOGS: "project_logs"}[self]
+        return {SpanObjectTypeV1.EXPERIMENT: "experiment", SpanObjectTypeV1.PROJECT_LOGS: "project_logs"}[self]
 
 
 @dataclasses.dataclass
-class SpanRowIds:
+class SpanRowIdsV1:
     row_id: str
     span_id: str
     root_span_id: str
@@ -47,22 +47,22 @@ class SpanRowIds:
 
 
 @dataclasses.dataclass
-class SpanComponents:
-    object_type: SpanObjectType
+class SpanComponentsV1:
+    object_type: SpanObjectTypeV1
     object_id: str
-    row_ids: Optional[SpanRowIds] = None
+    row_ids: Optional[SpanRowIdsV1] = None
 
     def __post_init__(self):
-        assert isinstance(self.object_type, SpanObjectType)
+        assert isinstance(self.object_type, SpanObjectTypeV1)
         assert isinstance(self.object_id, str)
         if self.row_ids is not None:
-            assert isinstance(self.row_ids, SpanRowIds)
+            assert isinstance(self.row_ids, SpanRowIdsV1)
 
     def to_str(self) -> str:
         # Our binary object format is as follows:
         #   - Byte 0 encodes the version number of the encoded string. This is
         #   used to check for incompatibilities with previous iterations.
-        #   - Byte 1 encodes the SpanObjectType.
+        #   - Byte 1 encodes the SpanObjectTypeV1.
         #   - Byte 2 (0 or 1) describes whether or not the (row_id,
         #   span_id, root_span_id) triple is present.
         #   - Byte 3 (0 or 1) describes whether or not the row_id component
@@ -106,11 +106,11 @@ class SpanComponents:
         return base64.b64encode(raw_bytes).decode()
 
     @staticmethod
-    def from_str(s: str) -> "SpanComponents":
+    def from_str(s: str) -> "SpanComponentsV1":
         try:
             raw_bytes = base64.b64decode(s.encode())
             assert raw_bytes[0] == ENCODING_VERSION_NUMBER
-            object_type = SpanObjectType(raw_bytes[1])
+            object_type = SpanObjectTypeV1(raw_bytes[1])
             assert raw_bytes[2] in [0, 1]
             assert raw_bytes[3] in [0, 1]
             has_row_id = raw_bytes[2] == 1
@@ -124,16 +124,16 @@ class SpanComponents:
                     row_id = str(UUID(bytes=raw_bytes[52:]))
                 else:
                     row_id = raw_bytes[52:].decode("utf-8")
-                row_ids = SpanRowIds(row_id=row_id, span_id=span_id, root_span_id=root_span_id)
+                row_ids = SpanRowIdsV1(row_id=row_id, span_id=span_id, root_span_id=root_span_id)
             else:
                 row_ids = None
 
-            return SpanComponents(object_type=object_type, object_id=object_id, row_ids=row_ids)
+            return SpanComponentsV1(object_type=object_type, object_id=object_id, row_ids=row_ids)
         except Exception:
             raise Exception(INVALID_ENCODING_ERRMSG)
 
     def object_id_fields(self):
-        if self.object_type == SpanObjectType.EXPERIMENT:
+        if self.object_type == SpanObjectTypeV1.EXPERIMENT:
             return dict(experiment_id=self.object_id)
-        elif self.object_type == SpanObjectType.PROJECT_LOGS:
+        elif self.object_type == SpanObjectTypeV1.PROJECT_LOGS:
             return dict(project_id=self.object_id, log_id="g")

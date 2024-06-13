@@ -207,6 +207,12 @@ class Evaluator:
     Whether to update an existing experiment with `experiment_name` if one exists. Defaults to false.
     """
 
+    timeout: Optional[float] = None
+    """
+    The duration, in seconds, after which to time out the evaluation.
+    Defaults to None, in which case there is no timeout.
+    """
+
 
 @dataclasses.dataclass
 class EvalResultWithSummary(SerializableDataClass):
@@ -400,6 +406,7 @@ def Eval(
     is_public: bool = False,
     update: bool = False,
     reporter: Optional[Union[ReporterDef, str]] = None,
+    timeout: Optional[float] = None,
 ):
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -436,7 +443,9 @@ def Eval(
     can be any JSON-serializable type, but its keys must be strings.
     :param is_public: (Optional) Whether the experiment should be public. Defaults to false.
     :param reporter: (Optional) A reporter that takes an evaluator and its result and returns a report.
-    :return: An `EvalResult` object, which contains all results and a summary.
+    :param timeout: (Optional) The duration, in seconds, after which to time out the evaluation.
+    Defaults to None, in which case there is no timeout.
+    :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
     eval_name = _make_eval_name(name, experiment_name)
 
@@ -455,6 +464,7 @@ def Eval(
         metadata=metadata,
         is_public=is_public,
         update=update,
+        timeout=timeout,
     )
 
     if _lazy_load:
@@ -648,6 +658,19 @@ def _scorer_name(scorer, scorer_idx):
 
 
 async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int], filters: List[Filter]):
+    """Wrapper on _run_evaluator_internal that times out execution after evaluator.timeout."""
+    async with asyncio.timeout(evaluator.timeout):
+        results = await _run_evaluator_internal(experiment, evaluator, position, filters)
+
+    if experiment:
+        summary = experiment.summarize()
+    else:
+        summary = build_local_summary(evaluator, results)
+
+    return EvalResultWithSummary(results=results, summary=summary)
+
+
+async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Optional[int], filters: List[Filter]):
     event_loop = asyncio.get_event_loop()
 
     async def await_or_run_scorer(root_span, scorer, name, **kwargs):
@@ -817,13 +840,7 @@ async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int
     results = []
     for task in std_tqdm(tasks, desc=f"{evaluator.eval_name} (tasks)", position=position, disable=position is None):
         results.append(await task)
-
-    if experiment:
-        summary = experiment.summarize()
-    else:
-        summary = build_local_summary(evaluator, results)
-
-    return EvalResultWithSummary(results=results, summary=summary)
+    return results
 
 
 def build_local_summary(evaluator, results):
@@ -847,6 +864,7 @@ def build_local_summary(evaluator, results):
         for name, (total, count) in scores_by_name.items()
     }
     return ExperimentSummary(
+        experiment_id=None,
         experiment_name=evaluator.experiment_name,
         project_name=evaluator.project_name,
         project_url=None,

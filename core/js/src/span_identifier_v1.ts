@@ -1,4 +1,4 @@
-// Mirror of core/py/src/braintrust_core/span_parent_identifier.py.
+// Mirror of core/py/src/braintrust_core/span_identifier_v1.py.
 
 import * as uuid from "uuid";
 import { ParentExperimentIds, ParentProjectLogIds } from "./object";
@@ -21,14 +21,14 @@ const ENCODING_VERSION_NUMBER = 1;
 const INVALID_ENCODING_ERRMSG =
   "SpanComponents string is not properly encoded. This may be due to a version mismatch between the SDK library used to export the span and the library used to decode it. Please make sure you are using the same SDK version across the board";
 
-export enum SpanObjectType {
+export enum SpanObjectTypeV1 {
   EXPERIMENT = 0,
   PROJECT_LOGS = 1,
 }
 
-const SpanObjectTypeEnumSchema = z.nativeEnum(SpanObjectType);
+const SpanObjectTypeV1EnumSchema = z.nativeEnum(SpanObjectTypeV1);
 
-export class SpanRowIds {
+export class SpanRowIdsV1 {
   public rowId: string;
   public spanId: string;
   public rootSpanId: string;
@@ -58,15 +58,15 @@ export class SpanRowIds {
   }
 }
 
-export class SpanComponents {
-  public objectType: SpanObjectType;
+export class SpanComponentsV1 {
+  public objectType: SpanObjectTypeV1;
   public objectId: string;
-  public rowIds: SpanRowIds | undefined;
+  public rowIds: SpanRowIdsV1 | undefined;
 
   constructor(args: {
-    objectType: SpanObjectType;
+    objectType: SpanObjectTypeV1;
     objectId: string;
-    rowIds?: SpanRowIds;
+    rowIds?: SpanRowIdsV1;
   }) {
     this.objectType = args.objectType;
     this.objectId = args.objectId;
@@ -116,13 +116,13 @@ export class SpanComponents {
     return Buffer.concat(allBuffers).toString("base64");
   }
 
-  public static fromStr(s: string): SpanComponents {
+  public static fromStr(s: string): SpanComponentsV1 {
     try {
       const rawBytes = Buffer.from(s, "base64");
       if (rawBytes[0] !== ENCODING_VERSION_NUMBER) {
         throw new Error();
       }
-      const objectType = SpanObjectTypeEnumSchema.parse(rawBytes[1]);
+      const objectType = SpanObjectTypeV1EnumSchema.parse(rawBytes[1]);
       if (![0, 1].includes(rawBytes[2])) {
         throw new Error();
       }
@@ -142,10 +142,10 @@ export class SpanComponents {
         const rowId = rowIdIsUUID
           ? uuid.stringify(rawBytes.subarray(52))
           : rawBytes.subarray(52).toString("utf-8");
-        return new SpanRowIds({ rowId, spanId, rootSpanId });
+        return new SpanRowIdsV1({ rowId, spanId, rootSpanId });
       })();
 
-      return new SpanComponents({ objectType, objectId, rowIds });
+      return new SpanComponentsV1({ objectType, objectId, rowIds });
     } catch (e) {
       throw new Error(INVALID_ENCODING_ERRMSG);
     }
@@ -153,9 +153,9 @@ export class SpanComponents {
 
   public objectIdFields(): ParentExperimentIds | ParentProjectLogIds {
     switch (this.objectType) {
-      case SpanObjectType.EXPERIMENT:
+      case SpanObjectTypeV1.EXPERIMENT:
         return { experiment_id: this.objectId };
-      case SpanObjectType.PROJECT_LOGS:
+      case SpanObjectTypeV1.PROJECT_LOGS:
         return { project_id: this.objectId, log_id: "g" };
       default:
         throw new Error("Impossible");
