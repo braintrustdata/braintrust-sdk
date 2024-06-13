@@ -350,7 +350,6 @@ export const aclObjectTypeEnum = z
     "org_member",
     "project_log",
     "org_project",
-    "view",
   ])
   .describe("The object type that the ACL applies to");
 export type AclObjectType = z.infer<typeof aclObjectTypeEnum>;
@@ -527,8 +526,12 @@ const viewBaseSchema = generateBaseTableSchema("view");
 export const viewSchema = z
   .strictObject({
     id: viewBaseSchema.shape.id,
-    project_id: viewBaseSchema.shape.project_id,
-    view_type: viewTypeEnum,
+    object_type: aclObjectTypeEnum,
+    object_id: z
+      .string()
+      .uuid()
+      .describe("The id of the object the view applies to"),
+    view_type: viewTypeEnum.nullish(),
     name: viewBaseSchema.shape.name,
     created: viewBaseSchema.shape.created,
     view_data: viewDataSchema.nullish().describe("The view definition"),
@@ -536,6 +539,8 @@ export const viewSchema = z
       .record(customTypes.any)
       .nullish()
       .describe("Options for the view in the app"),
+    user_id: viewBaseSchema.shape.user_id,
+    deleted_at: roleBaseSchema.shape.deleted_at,
   })
   .openapi("View");
 export type View = z.infer<typeof viewSchema>;
@@ -847,18 +852,31 @@ const patchProjectTagSchema = z
 const createViewSchema = viewSchema
   .omit({
     id: true,
-    org_id: true,
     created: true,
   })
   .openapi("CreateView");
 
-const patchViewSchema = z
-  .strictObject({
-    name: viewSchema.shape.name.nullish(),
-    view_data: viewSchema.shape.view_data.nullish(),
-    options: viewSchema.shape.options.nullish(),
+const patchViewSchema = viewSchema
+  .omit({
+    id: true,
+    view_type: true,
+    created: true,
+    deleted_at: true,
   })
   .openapi("PatchView");
+
+const deleteViewSchema = viewSchema
+  .omit({
+    id: true,
+    view_type: true,
+    name: true,
+    created: true,
+    view_data: true,
+    options: true,
+    user_id: true,
+    deleted_at: true,
+  })
+  .openapi("DeleteView");
 
 // Section: exported schemas, grouped by object type.
 
@@ -867,60 +885,72 @@ export const objectSchemas = {
     create: createExperimentSchema,
     patch: patchExperimentSchema,
     object: experimentSchema,
+    delete: undefined,
   },
   dataset: {
     create: createDatasetSchema,
     patch: patchDatasetSchema,
     object: datasetSchema,
+    delete: undefined,
   },
   project: {
     create: createProjectSchema,
     patch: patchProjectSchema,
     object: projectSchema,
+    delete: undefined,
   },
   prompt: {
     create: createPromptSchema,
     patch: patchPromptSchema,
     object: promptSchema,
+    delete: undefined,
   },
   role: {
     create: createRoleSchema,
     patch: patchRoleSchema,
     object: roleSchema,
+    delete: undefined,
   },
   group: {
     create: createGroupSchema,
     patch: patchGroupSchema,
     object: groupSchema,
+    delete: undefined,
   },
   acl: {
     create: createAclSchema,
     patch: undefined,
     object: aclSchema,
+    delete: undefined,
   },
   user: {
     create: undefined,
     patch: undefined,
     object: userSchema,
+    delete: undefined,
   },
   prompt_session: {
     create: undefined,
     patch: undefined,
     object: undefined,
+    delete: undefined,
   },
   project_score: {
     create: createProjectScoreSchema,
     patch: patchProjectScoreSchema,
     object: projectScoreSchema,
+    delete: undefined,
   },
   project_tag: {
     create: createProjectTagSchema,
     patch: patchProjectTagSchema,
     object: projectTagSchema,
+    delete: undefined,
   },
   view: {
     create: createViewSchema,
     patch: patchViewSchema,
     object: viewSchema,
+    delete: deleteViewSchema,
   },
 };

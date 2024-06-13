@@ -9,8 +9,10 @@ export const viewTypeEnum = z
     "datasets",
     "prompts",
     "playgrounds",
+    "experiment",
+    "dataset",
   ])
-  .describe("The type of table that the view applies to");
+  .describe("Type of table that the view corresponds to.");
 export type ViewType = z.infer<typeof viewTypeEnum>;
 
 export const viewDataSearchSchema = z
