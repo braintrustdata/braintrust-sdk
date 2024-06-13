@@ -36,7 +36,7 @@ from braintrust_core.git_fields import GitMetadataSettings, RepoInfo
 from braintrust_core.merge_row_batch import batch_items, merge_row_batch
 from braintrust_core.object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
 from braintrust_core.prompt import BRAINTRUST_PARAMS, PromptSchema
-from braintrust_core.span_identifier import SpanComponents, SpanObjectType, SpanRowIds
+from braintrust_core.span_identifier_v2 import SpanComponentsV2, SpanObjectTypeV2, SpanRowIdsV2
 from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
     SerializableDataClass,
@@ -1302,7 +1302,7 @@ def start_span(
     """
 
     if parent:
-        components = SpanComponents.from_str(parent)
+        components = SpanComponentsV2.from_str(parent)
         if components.row_ids:
             parent_span_ids = ParentSpanIds(
                 span_id=components.row_ids.span_id, root_span_id=components.row_ids.root_span_id
@@ -1571,7 +1571,7 @@ class ObjectFetcher:
 
 
 def _log_feedback_impl(
-    parent_object_type: SpanObjectType,
+    parent_object_type: SpanObjectTypeV2,
     parent_object_id: LazyValue[str],
     id,
     scores=None,
@@ -1603,7 +1603,7 @@ def _log_feedback_impl(
     metadata = update_event.pop("metadata")
     update_event = {k: v for k, v in update_event.items() if v is not None}
 
-    parent_ids = lambda: SpanComponents(
+    parent_ids = lambda: SpanComponentsV2(
         object_type=parent_object_type,
         object_id=parent_object_id.get(),
     ).object_id_fields()
@@ -1651,13 +1651,13 @@ class ParentSpanIds:
     root_span_id: str
 
 
-def _span_components_to_object_id_lambda(components: SpanComponents):
+def _span_components_to_object_id_lambda(components: SpanComponentsV2):
     if components.object_id:
         return lambda: components.object_id
     assert components.compute_object_metadata_args
-    if components.object_type == SpanObjectType.EXPERIMENT:
+    if components.object_type == SpanObjectTypeV2.EXPERIMENT:
         raise Exception("Impossible: compute_object_metadata_args not supported for experiments")
-    elif components.object_type == SpanObjectType.PROJECT_LOGS:
+    elif components.object_type == SpanObjectTypeV2.PROJECT_LOGS:
         return lambda: _compute_logger_metadata(**components.compute_object_metadata_args).project.id
     else:
         raise Exception(f"Unknown object type: {object_type}")
@@ -1665,14 +1665,14 @@ def _span_components_to_object_id_lambda(components: SpanComponents):
 
 def _start_span_parent_args(
     parent: Optional[str],
-    parent_object_type: SpanObjectType,
+    parent_object_type: SpanObjectTypeV2,
     parent_object_id: LazyValue[str],
     parent_compute_object_metadata_args: Optional[Dict],
     parent_span_ids: Optional[ParentSpanIds],
 ):
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
-        parent_components = SpanComponents.from_str(parent)
+        parent_components = SpanComponentsV2.from_str(parent)
         assert (
             parent_object_type == parent_components.object_type
         ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
@@ -1779,7 +1779,7 @@ class Experiment(ObjectFetcher):
 
     @staticmethod
     def _parent_object_type():
-        return SpanObjectType.EXPERIMENT
+        return SpanObjectTypeV2.EXPERIMENT
 
     # Capture all metadata attributes which aren't covered by existing methods.
     def __getattr__(self, name: str) -> Any:
@@ -1979,7 +1979,7 @@ class Experiment(ObjectFetcher):
 
     def export(self) -> str:
         """Return a serialized representation of the experiment that can be used to start subspans in other places. See `Span.start_span` for more details."""
-        return SpanComponents(object_type=self._parent_object_type(), object_id=self.id).to_str()
+        return SpanComponentsV2(object_type=self._parent_object_type(), object_id=self.id).to_str()
 
     def close(self):
         """This function is deprecated. You can simply remove it from your code."""
@@ -2066,7 +2066,7 @@ class SpanImpl(Span):
 
     def __init__(
         self,
-        parent_object_type: SpanObjectType,
+        parent_object_type: SpanObjectTypeV2,
         parent_object_id: LazyValue[str],
         parent_compute_object_metadata_args: Optional[Dict],
         parent_span_ids: Optional[ParentSpanIds],
@@ -2178,7 +2178,7 @@ class SpanImpl(Span):
         def compute_record():
             return dict(
                 **partial_record,
-                **SpanComponents(
+                **SpanComponentsV2(
                     object_type=self.parent_object_type,
                     object_id=self.parent_object_id.get(),
                 ).object_id_fields(),
@@ -2241,11 +2241,11 @@ class SpanImpl(Span):
             object_id = self.parent_object_id.get()
             compute_object_metadata_args = None
 
-        return SpanComponents(
+        return SpanComponentsV2(
             object_type=self.parent_object_type,
             object_id=object_id,
             compute_object_metadata_args=compute_object_metadata_args,
-            row_ids=SpanRowIds(row_id=self.id, span_id=self.span_id, root_span_id=self.root_span_id),
+            row_ids=SpanRowIdsV2(row_id=self.id, span_id=self.span_id, root_span_id=self.root_span_id),
         ).to_str()
 
     def close(self, end_time=None):
@@ -2645,7 +2645,7 @@ class Logger:
 
     @staticmethod
     def _parent_object_type():
-        return SpanObjectType.PROJECT_LOGS
+        return SpanObjectTypeV2.PROJECT_LOGS
 
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
@@ -2798,7 +2798,7 @@ class Logger:
             object_id = self._lazy_id.get()
             compute_object_metadata_args = None
 
-        return SpanComponents(
+        return SpanComponentsV2(
             object_type=self._parent_object_type(),
             object_id=object_id,
             compute_object_metadata_args=compute_object_metadata_args,

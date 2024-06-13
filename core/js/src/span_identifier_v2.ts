@@ -1,7 +1,8 @@
-// Mirror of core/py/src/braintrust_core/span_parent_identifier.py.
+// Mirror of core/py/src/braintrust_core/span_identifier_v2.py.
 
 import * as uuid from "uuid";
 import { ParentExperimentIds, ParentProjectLogIds } from "./object";
+import { SpanComponentsV1 } from "./span_identifier_v1";
 import { z } from "zod";
 
 function tryMakeUuid(s: string): { bytes: Buffer; isUUID: boolean } {
@@ -18,20 +19,19 @@ function tryMakeUuid(s: string): { bytes: Buffer; isUUID: boolean } {
 
 const ENCODING_VERSION_NUMBER = 2;
 
-const INVALID_ENCODING_ERRMSG =
-  "SpanComponents string is not properly encoded. This may be due to a version mismatch between the SDK library used to export the span and the library used to decode it. Please make sure you are using the same SDK version across the board";
+const INVALID_ENCODING_ERRMSG = `SpanComponents string is not properly encoded. This library only supports encoding versions up to ${ENCODING_VERSION_NUMBER}. Please make sure the SDK library used to decode the SpanComponents is at least as new as any library used to encode it.`;
 // If you change this, make sure to change the method used to read/write integer
 // bytes to a buffer, from writeInt32BE.
 const INTEGER_ENCODING_NUM_BYTES = 4;
 
-export enum SpanObjectType {
+export enum SpanObjectTypeV2 {
   EXPERIMENT = 0,
   PROJECT_LOGS = 1,
 }
 
-const SpanObjectTypeEnumSchema = z.nativeEnum(SpanObjectType);
+const SpanObjectTypeV2EnumSchema = z.nativeEnum(SpanObjectTypeV2);
 
-export class SpanRowIds {
+export class SpanRowIdsV2 {
   public rowId: string;
   public spanId: string;
   public rootSpanId: string;
@@ -61,17 +61,17 @@ export class SpanRowIds {
   }
 }
 
-export class SpanComponents {
-  public objectType: SpanObjectType;
+export class SpanComponentsV2 {
+  public objectType: SpanObjectTypeV2;
   public objectId: string | undefined;
   public computeObjectMetadataArgs: Record<string, any> | undefined;
-  public rowIds: SpanRowIds | undefined;
+  public rowIds: SpanRowIdsV2 | undefined;
 
   constructor(args: {
-    objectType: SpanObjectType;
+    objectType: SpanObjectTypeV2;
     objectId?: string;
     computeObjectMetadataArgs?: Record<string, any>;
-    rowIds?: SpanRowIds;
+    rowIds?: SpanRowIdsV2;
   }) {
     this.objectType = args.objectType;
     this.objectId = args.objectId;
@@ -142,13 +142,31 @@ export class SpanComponents {
     return Buffer.concat(allBuffers).toString("base64");
   }
 
-  public static fromStr(s: string): SpanComponents {
+  public static fromStr(s: string): SpanComponentsV2 {
     try {
       const rawBytes = Buffer.from(s, "base64");
+
+      if (rawBytes[0] < ENCODING_VERSION_NUMBER) {
+        const spanComponentsOld = SpanComponentsV1.fromStr(s);
+        return new SpanComponentsV2({
+          objectType: SpanObjectTypeV2EnumSchema.parse(
+            spanComponentsOld.objectType,
+          ),
+          objectId: spanComponentsOld.objectId,
+          rowIds: spanComponentsOld.rowIds
+            ? new SpanRowIdsV2({
+                rowId: spanComponentsOld.rowIds.rowId,
+                spanId: spanComponentsOld.rowIds.spanId,
+                rootSpanId: spanComponentsOld.rowIds.rootSpanId,
+              })
+            : undefined,
+        });
+      }
+
       if (rawBytes[0] !== ENCODING_VERSION_NUMBER) {
         throw new Error();
       }
-      const objectType = SpanObjectTypeEnumSchema.parse(rawBytes[1]);
+      const objectType = SpanObjectTypeV2EnumSchema.parse(rawBytes[1]);
       for (let i = 2; i < 6; ++i) {
         if (![0, 1].includes(rawBytes[i])) {
           throw new Error();
@@ -198,10 +216,10 @@ export class SpanComponents {
         const rowId = rowIdIsUUID
           ? uuid.stringify(rawBytes.subarray(byteCursor))
           : rawBytes.subarray(byteCursor).toString("utf-8");
-        return new SpanRowIds({ rowId, spanId, rootSpanId });
+        return new SpanRowIdsV2({ rowId, spanId, rootSpanId });
       })();
 
-      return new SpanComponents({
+      return new SpanComponentsV2({
         objectType,
         objectId,
         computeObjectMetadataArgs,
@@ -215,13 +233,13 @@ export class SpanComponents {
   public objectIdFields(): ParentExperimentIds | ParentProjectLogIds {
     if (!this.objectId) {
       throw new Error(
-        "Impossible: cannot invoke `object_id_fields` unless SpanComponents is initialized with an `object_id`",
+        "Impossible: cannot invoke `object_id_fields` unless SpanComponentsV2 is initialized with an `object_id`",
       );
     }
     switch (this.objectType) {
-      case SpanObjectType.EXPERIMENT:
+      case SpanObjectTypeV2.EXPERIMENT:
         return { experiment_id: this.objectId };
-      case SpanObjectType.PROJECT_LOGS:
+      case SpanObjectTypeV2.PROJECT_LOGS:
         return { project_id: this.objectId, log_id: "g" };
       default:
         throw new Error("Impossible");

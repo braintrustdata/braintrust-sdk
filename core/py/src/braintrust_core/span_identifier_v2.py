@@ -9,6 +9,8 @@ from enum import Enum, auto
 from typing import Dict, Optional
 from uuid import UUID
 
+from .span_identifier_v1 import SpanComponentsV1
+
 
 def _try_make_uuid(s):
     try:
@@ -23,19 +25,19 @@ ENCODING_VERSION_NUMBER = 2
 INTEGER_ENCODING_NUM_BYTES = 4
 INTEGER_ENCODING_BYTEORDER = "big"
 
-INVALID_ENCODING_ERRMSG = "SpanComponents string is not properly encoded. This may be due to a version mismatch between the SDK library used to export the span and the library used to decode it. Please make sure you are using the same SDK version across the board"
+INVALID_ENCODING_ERRMSG = f"SpanComponents string is not properly encoded. This library only supports encoding versions up to {ENCODING_VERSION_NUMBER}. Please make sure the SDK library used to decode the SpanComponents is at least as new as any library used to encode it."
 
 
-class SpanObjectType(Enum):
+class SpanObjectTypeV2(Enum):
     EXPERIMENT = auto()
     PROJECT_LOGS = auto()
 
     def __str__(self):
-        return {SpanObjectType.EXPERIMENT: "experiment", SpanObjectType.PROJECT_LOGS: "project_logs"}[self]
+        return {SpanObjectTypeV2.EXPERIMENT: "experiment", SpanObjectTypeV2.PROJECT_LOGS: "project_logs"}[self]
 
 
 @dataclasses.dataclass
-class SpanRowIds:
+class SpanRowIdsV2:
     row_id: str
     span_id: str
     root_span_id: str
@@ -50,14 +52,14 @@ class SpanRowIds:
 
 
 @dataclasses.dataclass
-class SpanComponents:
-    object_type: SpanObjectType
+class SpanComponentsV2:
+    object_type: SpanObjectTypeV2
     object_id: Optional[str] = None
     compute_object_metadata_args: Optional[Dict] = None
-    row_ids: Optional[SpanRowIds] = None
+    row_ids: Optional[SpanRowIdsV2] = None
 
     def __post_init__(self):
-        assert isinstance(self.object_type, SpanObjectType)
+        assert isinstance(self.object_type, SpanObjectTypeV2)
         assert (
             self.object_id or self.compute_object_metadata_args
         ), "Must provide either object_id or compute_object_metadata_args"
@@ -66,13 +68,13 @@ class SpanComponents:
         else:
             assert isinstance(self.compute_object_metadata_args, dict)
         if self.row_ids is not None:
-            assert isinstance(self.row_ids, SpanRowIds)
+            assert isinstance(self.row_ids, SpanRowIdsV2)
 
     def to_str(self) -> str:
         # Our binary object format is as follows:
         #   - Byte 0 encodes the version number of the encoded string. This is
         #   used to check for incompatibilities with previous iterations.
-        #   - Byte 1 encodes the SpanObjectType.
+        #   - Byte 1 encodes the SpanObjectTypeV2.
         #   - Byte 2 (0 or 1) encodes whether or not we have an object_id.
         #   - Byte 3 (0 or 1) encodes whether or not we have
         #   compute_object_metadata_args.
@@ -133,11 +135,27 @@ class SpanComponents:
         return base64.b64encode(raw_bytes).decode()
 
     @staticmethod
-    def from_str(s: str) -> "SpanComponents":
+    def from_str(s: str) -> "SpanComponentsV2":
         try:
             raw_bytes = base64.b64decode(s.encode())
+
+            if raw_bytes[0] < ENCODING_VERSION_NUMBER:
+                span_components_old = SpanComponentsV1.from_str(s)
+                object_type = SpanObjectTypeV2(span_components_old.object_type.value)
+                if span_components_old.row_ids:
+                    row_ids = SpanRowIdsV2(
+                        row_id=span_components_old.row_ids.row_id,
+                        span_id=span_components_old.row_ids.span_id,
+                        root_span_id=span_components_old.row_ids.root_span_id,
+                    )
+                else:
+                    row_ids = None
+                return SpanComponentsV2(
+                    object_type=object_type, object_id=span_components_old.object_id, row_ids=row_ids
+                )
+
             assert raw_bytes[0] == ENCODING_VERSION_NUMBER
-            object_type = SpanObjectType(raw_bytes[1])
+            object_type = SpanObjectTypeV2(raw_bytes[1])
             for i in range(2, 6):
                 assert raw_bytes[i] in [0, 1]
             has_object_id = raw_bytes[2]
@@ -176,11 +194,11 @@ class SpanComponents:
                     row_id = str(UUID(bytes=raw_bytes[byte_cursor:]))
                 else:
                     row_id = raw_bytes[byte_cursor:].decode("utf-8")
-                row_ids = SpanRowIds(row_id=row_id, span_id=span_id, root_span_id=root_span_id)
+                row_ids = SpanRowIdsV2(row_id=row_id, span_id=span_id, root_span_id=root_span_id)
             else:
                 row_ids = None
 
-            return SpanComponents(
+            return SpanComponentsV2(
                 object_type=object_type,
                 object_id=object_id,
                 compute_object_metadata_args=compute_object_metadata_args,
@@ -192,9 +210,9 @@ class SpanComponents:
     def object_id_fields(self):
         if not self.object_id:
             raise Exception(
-                "Impossible: cannot invoke `object_id_fields` unless SpanComponents is initialized with an `object_id`"
+                "Impossible: cannot invoke `object_id_fields` unless SpanComponentsV2 is initialized with an `object_id`"
             )
-        if self.object_type == SpanObjectType.EXPERIMENT:
+        if self.object_type == SpanObjectTypeV2.EXPERIMENT:
             return dict(experiment_id=self.object_id)
-        elif self.object_type == SpanObjectType.PROJECT_LOGS:
+        elif self.object_type == SpanObjectTypeV2.PROJECT_LOGS:
             return dict(project_id=self.object_id, log_id="g")
