@@ -16,6 +16,7 @@ import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
 import { isEmpty } from "./util";
+import { queue } from "async";
 
 export type BaseExperiment<
   Input,
@@ -153,9 +154,15 @@ export interface Evaluator<
 
   /**
    * The duration, in milliseconds, after which to time out the evaluation.
-   * Defaults to None, in which case there is no timeout.
+   * Defaults to undefined, in which case there is no timeout.
    */
   timeout?: number;
+
+  /**
+   * The maximum number of tasks/scorers that will be run concurrently.
+   * Defaults to undefined, in which case there is no max concurrency.
+   */
+  maxConcurrency?: number;
 }
 
 export type EvalResultWithSummary<
@@ -481,8 +488,16 @@ async function runEvaluatorInternal(
     );
 
   progressReporter.start(evaluator.evalName, data.length);
-
-  const evals = data.map(async (datum) => {
+  interface EvalResult {
+    input: any;
+    output: any;
+    tags?: string[];
+    metadata: Record<string, unknown>;
+    scores: Record<string, number | null>;
+    error: unknown;
+  }
+  let results: EvalResult[] = [];
+  let q = queue(async (datum: EvalCase<any, any, any>) => {
     const callback = async (rootSpan: Span) => {
       let metadata: Record<string, unknown> = {
         ...("metadata" in datum ? datum.metadata : {}),
@@ -647,7 +662,7 @@ async function runEvaluatorInternal(
         progressReporter.increment(evaluator.evalName);
       }
 
-      return {
+      results.push({
         input: datum.input,
         ...("expected" in datum ? { expected: datum.expected } : {}),
         output,
@@ -655,7 +670,7 @@ async function runEvaluatorInternal(
         metadata,
         scores,
         error,
-      };
+      });
     };
 
     if (!experiment) {
@@ -673,8 +688,9 @@ async function runEvaluatorInternal(
         },
       });
     }
-  });
-  const results = await Promise.all(evals);
+  }, evaluator.maxConcurrency ?? data.length);
+  q.push(data);
+  await q.drain();
   const summary = experiment
     ? await experiment.summarize()
     : buildLocalSummary(evaluator, results);
