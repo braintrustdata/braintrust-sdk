@@ -30,9 +30,9 @@ import {
   SpanTypeAttribute,
   SpanType,
   batchItems,
-  SpanComponents,
-  SpanObjectType,
-  SpanRowIds,
+  SpanComponentsV2,
+  SpanObjectTypeV2,
+  SpanRowIdsV2,
 } from "@braintrust/core";
 import {
   AnyModelParam,
@@ -496,7 +496,7 @@ export interface LogOptions<IsAsyncFlush> {
 export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
 
 function logFeedbackImpl(
-  parentObjectType: SpanObjectType,
+  parentObjectType: SpanObjectTypeV2,
   parentObjectId: LazyValue<string>,
   {
     id,
@@ -538,7 +538,7 @@ function logFeedbackImpl(
   );
 
   const parentIds = async () =>
-    new SpanComponents({
+    new SpanComponentsV2({
       objectType: parentObjectType,
       objectId: await parentObjectId.get(),
     }).objectIdFields();
@@ -585,7 +585,7 @@ interface ParentSpanIds {
 }
 
 function spanComponentsToObjectIdLambda(
-  components: SpanComponents,
+  components: SpanComponentsV2,
 ): () => Promise<string> {
   if (components.objectId) {
     const ret = components.objectId;
@@ -597,11 +597,11 @@ function spanComponentsToObjectIdLambda(
     );
   }
   switch (components.objectType) {
-    case SpanObjectType.EXPERIMENT:
+    case SpanObjectTypeV2.EXPERIMENT:
       throw new Error(
         "Impossible: computeObjectMetadataArgs not supported for experiments",
       );
-    case SpanObjectType.PROJECT_LOGS:
+    case SpanObjectTypeV2.PROJECT_LOGS:
       const args = components.computeObjectMetadataArgs;
       return async () => (await computeLoggerMetadata(args)).project.id;
     default:
@@ -612,12 +612,12 @@ function spanComponentsToObjectIdLambda(
 
 function startSpanParentArgs(args: {
   parent: string | undefined;
-  parentObjectType: SpanObjectType;
+  parentObjectType: SpanObjectTypeV2;
   parentObjectId: LazyValue<string>;
   parentComputeObjectMetadataArgs: Record<string, any> | undefined;
   parentSpanIds: ParentSpanIds | undefined;
 }): {
-  parentObjectType: SpanObjectType;
+  parentObjectType: SpanObjectTypeV2;
   parentObjectId: LazyValue<string>;
   parentComputeObjectMetadataArgs: Record<string, any> | undefined;
   parentSpanIds: ParentSpanIds | undefined;
@@ -628,7 +628,7 @@ function startSpanParentArgs(args: {
     if (args.parentSpanIds) {
       throw new Error("Cannot specify both parent and parentSpanIds");
     }
-    const parentComponents = SpanComponents.fromStr(args.parent);
+    const parentComponents = SpanComponentsV2.fromStr(args.parent);
     if (args.parentObjectType !== parentComponents.objectType) {
       throw new Error(
         `Mismatch between expected span parent object type ${args.parentObjectType} and provided type ${parentComponents.objectType}`,
@@ -706,7 +706,7 @@ export class Logger<IsAsyncFlush extends boolean> {
   }
 
   private parentObjectType() {
-    return SpanObjectType.PROJECT_LOGS;
+    return SpanObjectTypeV2.PROJECT_LOGS;
   }
 
   /**
@@ -838,7 +838,7 @@ export class Logger<IsAsyncFlush extends boolean> {
     } else {
       objectId = await this.lazyId.get();
     }
-    return new SpanComponents({
+    return new SpanComponentsV2({
       objectType: this.parentObjectType(),
       objectId,
       computeObjectMetadataArgs,
@@ -2188,7 +2188,7 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush>,
 ): { span: Span; isLogger: boolean } {
   if (args?.parent) {
-    const components = SpanComponents.fromStr(args?.parent);
+    const components = SpanComponentsV2.fromStr(args?.parent);
     const parentSpanIds: ParentSpanIds | undefined = components.rowIds
       ? {
           spanId: components.rowIds.spanId,
@@ -2204,7 +2204,7 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
     });
     return {
       span,
-      isLogger: components.objectType === SpanObjectType.PROJECT_LOGS,
+      isLogger: components.objectType === SpanObjectTypeV2.PROJECT_LOGS,
     };
   } else {
     const parentObject = getSpanParentObject<IsAsyncFlush>({
@@ -2501,7 +2501,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
   }
 
   private parentObjectType() {
-    return SpanObjectType.EXPERIMENT;
+    return SpanObjectTypeV2.EXPERIMENT;
   }
 
   protected async getState(): Promise<BraintrustState> {
@@ -2698,7 +2698,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
    * Return a serialized representation of the experiment that can be used to start subspans in other places. See `Span.start_span` for more details.
    */
   public async export(): Promise<string> {
-    return new SpanComponents({
+    return new SpanComponentsV2({
       objectType: this.parentObjectType(),
       objectId: await this.id,
     }).toStr();
@@ -2793,7 +2793,7 @@ export class SpanImpl implements Span {
   private loggedEndTime: number | undefined;
 
   // For internal use only.
-  private parentObjectType: SpanObjectType;
+  private parentObjectType: SpanObjectTypeV2;
   private parentObjectId: LazyValue<string>;
   private parentComputeObjectMetadataArgs: Record<string, any> | undefined;
   private _id: string;
@@ -2805,7 +2805,7 @@ export class SpanImpl implements Span {
 
   constructor(
     args: {
-      parentObjectType: SpanObjectType;
+      parentObjectType: SpanObjectTypeV2;
       parentObjectId: LazyValue<string>;
       parentComputeObjectMetadataArgs: Record<string, any> | undefined;
       parentSpanIds: ParentSpanIds | undefined;
@@ -2908,7 +2908,7 @@ export class SpanImpl implements Span {
 
     const computeRecord = async () => ({
       ...partialRecord,
-      ...new SpanComponents({
+      ...new SpanComponentsV2({
         objectType: this.parentObjectType,
         objectId: await this.parentObjectId.get(),
       }).objectIdFields(),
@@ -2980,11 +2980,11 @@ export class SpanImpl implements Span {
     } else {
       objectId = await this.parentObjectId.get();
     }
-    return new SpanComponents({
+    return new SpanComponentsV2({
       objectType: this.parentObjectType,
       objectId,
       computeObjectMetadataArgs,
-      rowIds: new SpanRowIds({
+      rowIds: new SpanRowIdsV2({
         rowId: this.id,
         spanId: this.spanId,
         rootSpanId: this.rootSpanId,
