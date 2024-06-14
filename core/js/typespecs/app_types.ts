@@ -7,7 +7,7 @@ extendZodWithOpenApi(z);
 import { datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
-import { viewDataSchema, viewTypeEnum } from "./view";
+import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
 
 // Section: App DB table schemas
 
@@ -546,8 +546,7 @@ export const viewSchema = z
     name: viewBaseSchema.shape.name,
     created: viewBaseSchema.shape.created,
     view_data: viewDataSchema.nullish().describe("The view definition"),
-    options: z
-      .record(customTypes.any)
+    options: viewOptionsSchema
       .nullish()
       .describe("Options for the view in the app"),
     user_id: viewBaseSchema.shape.user_id,
