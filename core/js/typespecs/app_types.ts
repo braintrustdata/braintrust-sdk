@@ -653,7 +653,11 @@ const createProjectSchema = z
 const patchProjectSchema = z
   .strictObject({
     name: projectSchema.shape.name.nullish(),
-    settings: projectSchema.shape.settings.nullish(),
+    settings: projectSchema.shape.settings
+      .describe(
+        "Project settings. Patch operations replace all settings, so make sure you include all settings you want to keep.",
+      )
+      .nullish(),
   })
   .openapi("PatchProject");
 
