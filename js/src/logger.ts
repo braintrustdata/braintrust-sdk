@@ -30,9 +30,9 @@ import {
   SpanTypeAttribute,
   SpanType,
   batchItems,
-  SpanComponents,
-  SpanObjectType,
-  SpanRowIds,
+  SpanComponentsV2,
+  SpanObjectTypeV2,
+  SpanRowIdsV2,
 } from "@braintrust/core";
 import {
   AnyModelParam,
@@ -490,12 +490,13 @@ interface OrgProjectMetadata {
 
 export interface LogOptions<IsAsyncFlush> {
   asyncFlush?: IsAsyncFlush;
+  computeMetadataArgs?: Record<string, any>;
 }
 
 export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
 
 function logFeedbackImpl(
-  parentObjectType: SpanObjectType,
+  parentObjectType: SpanObjectTypeV2,
   parentObjectId: LazyValue<string>,
   {
     id,
@@ -537,7 +538,7 @@ function logFeedbackImpl(
   );
 
   const parentIds = async () =>
-    new SpanComponents({
+    new SpanComponentsV2({
       objectType: parentObjectType,
       objectId: await parentObjectId.get(),
     }).objectIdFields();
@@ -583,14 +584,42 @@ interface ParentSpanIds {
   rootSpanId: string;
 }
 
+function spanComponentsToObjectIdLambda(
+  components: SpanComponentsV2,
+): () => Promise<string> {
+  if (components.objectId) {
+    const ret = components.objectId;
+    return async () => ret;
+  }
+  if (!components.computeObjectMetadataArgs) {
+    throw new Error(
+      "Impossible: must provide either objectId or computeObjectMetadataArgs",
+    );
+  }
+  switch (components.objectType) {
+    case SpanObjectTypeV2.EXPERIMENT:
+      throw new Error(
+        "Impossible: computeObjectMetadataArgs not supported for experiments",
+      );
+    case SpanObjectTypeV2.PROJECT_LOGS:
+      const args = components.computeObjectMetadataArgs;
+      return async () => (await computeLoggerMetadata(args)).project.id;
+    default:
+      const x: never = components.objectType;
+      throw new Error(`Unknown object type: ${x}`);
+  }
+}
+
 function startSpanParentArgs(args: {
   parent: string | undefined;
-  parentObjectType: SpanObjectType;
+  parentObjectType: SpanObjectTypeV2;
   parentObjectId: LazyValue<string>;
+  parentComputeObjectMetadataArgs: Record<string, any> | undefined;
   parentSpanIds: ParentSpanIds | undefined;
 }): {
-  parentObjectType: SpanObjectType;
+  parentObjectType: SpanObjectTypeV2;
   parentObjectId: LazyValue<string>;
+  parentComputeObjectMetadataArgs: Record<string, any> | undefined;
   parentSpanIds: ParentSpanIds | undefined;
 } {
   let argParentObjectId: LazyValue<string> | undefined = undefined;
@@ -599,19 +628,20 @@ function startSpanParentArgs(args: {
     if (args.parentSpanIds) {
       throw new Error("Cannot specify both parent and parentSpanIds");
     }
-    const parentComponents = SpanComponents.fromStr(args.parent);
+    const parentComponents = SpanComponentsV2.fromStr(args.parent);
     if (args.parentObjectType !== parentComponents.objectType) {
       throw new Error(
         `Mismatch between expected span parent object type ${args.parentObjectType} and provided type ${parentComponents.objectType}`,
       );
     }
 
+    const parentComponentsObjectIdLambda =
+      spanComponentsToObjectIdLambda(parentComponents);
     const computeParentObjectId = async () => {
-      if ((await args.parentObjectId.get()) !== parentComponents.objectId) {
+      const parentComponentsObjectId = await parentComponentsObjectIdLambda();
+      if ((await args.parentObjectId.get()) !== parentComponentsObjectId) {
         throw new Error(
-          `Mismatch between expected span parent object id ${await args.parentObjectId.get()} and provided id ${
-            parentComponents.objectId
-          }`,
+          `Mismatch between expected span parent object id ${await args.parentObjectId.get()} and provided id ${parentComponentsObjectId}`,
         );
       }
       return await args.parentObjectId.get();
@@ -631,13 +661,15 @@ function startSpanParentArgs(args: {
   return {
     parentObjectType: args.parentObjectType,
     parentObjectId: argParentObjectId,
+    parentComputeObjectMetadataArgs: args.parentComputeObjectMetadataArgs,
     parentSpanIds: argParentSpanIds,
   };
 }
 
 export class Logger<IsAsyncFlush extends boolean> {
   private lazyMetadata: LazyValue<OrgProjectMetadata>;
-  private logOptions: LogOptions<IsAsyncFlush>;
+  private _asyncFlush: IsAsyncFlush | undefined;
+  private computeMetadataArgs: Record<string, any> | undefined;
   private lastStartTime: number;
   private lazyId: LazyValue<string>;
   private calledStartSpan: boolean;
@@ -650,7 +682,8 @@ export class Logger<IsAsyncFlush extends boolean> {
     logOptions: LogOptions<IsAsyncFlush> = {},
   ) {
     this.lazyMetadata = lazyMetadata;
-    this.logOptions = logOptions;
+    this._asyncFlush = logOptions.asyncFlush;
+    this.computeMetadataArgs = logOptions.computeMetadataArgs;
     this.lastStartTime = getCurrentUnixTimestamp();
     this.lazyId = new LazyValue(async () => await this.id);
     this.calledStartSpan = false;
@@ -673,7 +706,7 @@ export class Logger<IsAsyncFlush extends boolean> {
   }
 
   private parentObjectType() {
-    return SpanObjectType.PROJECT_LOGS;
+    return SpanObjectTypeV2.PROJECT_LOGS;
   }
 
   /**
@@ -705,7 +738,7 @@ export class Logger<IsAsyncFlush extends boolean> {
     this.lastStartTime = span.end();
     const ret = span.id;
     type Ret = PromiseUnless<IsAsyncFlush, string>;
-    if (this.logOptions.asyncFlush === true) {
+    if (this.asyncFlush === true) {
       return ret as Ret;
     } else {
       return (async () => {
@@ -738,7 +771,7 @@ export class Logger<IsAsyncFlush extends boolean> {
     );
     type Ret = PromiseUnless<IsAsyncFlush, R>;
 
-    if (this.logOptions.asyncFlush) {
+    if (this.asyncFlush) {
       return ret as Ret;
     } else {
       return (async () => {
@@ -767,6 +800,7 @@ export class Logger<IsAsyncFlush extends boolean> {
         parent: args?.parent,
         parentObjectType: this.parentObjectType(),
         parentObjectId: this.lazyId,
+        parentComputeObjectMetadataArgs: this.computeMetadataArgs,
         parentSpanIds: undefined,
       }),
       ...args,
@@ -793,9 +827,21 @@ export class Logger<IsAsyncFlush extends boolean> {
    * Return a serialized representation of the logger that can be used to start subspans in other places. See `Span.start_span` for more details.
    */
   public async export(): Promise<string> {
-    return new SpanComponents({
+    let objectId: string | undefined = undefined;
+    let computeObjectMetadataArgs: Record<string, any> | undefined = undefined;
+    // Note: it is important that the object id we are checking for
+    // `has_computed` is the same as the one we are passing into the span
+    // logging functions. So that if the spans actually do get logged, then this
+    // `_lazy_id` object specifically will also be marked as computed.
+    if (this.computeMetadataArgs && !this.lazyId.hasComputed) {
+      computeObjectMetadataArgs = this.computeMetadataArgs;
+    } else {
+      objectId = await this.lazyId.get();
+    }
+    return new SpanComponentsV2({
       objectType: this.parentObjectType(),
-      objectId: await this.id,
+      objectId,
+      computeObjectMetadataArgs,
     }).toStr();
   }
 
@@ -807,7 +853,7 @@ export class Logger<IsAsyncFlush extends boolean> {
   }
 
   get asyncFlush(): IsAsyncFlush | undefined {
-    return this.logOptions.asyncFlush;
+    return this._asyncFlush;
   }
 }
 
@@ -1685,6 +1731,51 @@ export function withDataset<
   return callback(dataset);
 }
 
+// Note: the argument names *must* serialize the same way as the argument names
+// for the corresponding python function, because this function may be invoked
+// from arguments serialized elsewhere.
+async function computeLoggerMetadata({
+  project_name,
+  project_id,
+}: {
+  project_name?: string;
+  project_id?: string;
+}) {
+  await login();
+  const org_id = _state.orgId!;
+  if (project_id === undefined) {
+    const response = await _state.apiConn().post_json("api/project/register", {
+      project_name: project_name || GLOBAL_PROJECT,
+      org_id,
+    });
+    return {
+      org_id,
+      project: {
+        id: response.project.id,
+        name: response.project.name,
+        fullInfo: response.project,
+      },
+    };
+  } else if (project_name === undefined) {
+    const response = await _state.apiConn().get_json("api/project", {
+      id: project_id,
+    });
+    return {
+      org_id,
+      project: {
+        id: project_id,
+        name: response.name,
+        fullInfo: response.project,
+      },
+    };
+  } else {
+    return {
+      org_id,
+      project: { id: project_id, name: project_name, fullInfo: {} },
+    };
+  }
+}
+
 type AsyncFlushArg<IsAsyncFlush> = {
   asyncFlush?: IsAsyncFlush;
 };
@@ -1727,6 +1818,10 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
     forceLogin,
   } = options || {};
 
+  const computeMetadataArgs = {
+    project_name: projectName,
+    project_id: projectId,
+  };
   const lazyMetadata: LazyValue<OrgProjectMetadata> = new LazyValue(
     async () => {
       await login({
@@ -1735,45 +1830,13 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
         appUrl,
         forceLogin,
       });
-      const org_id = _state.orgId!;
-      if (projectId === undefined) {
-        const response = await _state
-          .apiConn()
-          .post_json("api/project/register", {
-            project_name: projectName || GLOBAL_PROJECT,
-            org_id,
-          });
-        return {
-          org_id,
-          project: {
-            id: response.project.id,
-            name: response.project.name,
-            fullInfo: response.project,
-          },
-        };
-      } else if (projectName === undefined) {
-        const response = await _state.apiConn().get_json("api/project", {
-          id: projectId,
-        });
-        return {
-          org_id,
-          project: {
-            id: projectId,
-            name: response.name,
-            fullInfo: response.project,
-          },
-        };
-      } else {
-        return {
-          org_id,
-          project: { id: projectId, name: projectName, fullInfo: {} },
-        };
-      }
+      return computeLoggerMetadata(computeMetadataArgs);
     },
   );
 
   const ret = new Logger<IsAsyncFlush>(lazyMetadata, {
     asyncFlush,
+    computeMetadataArgs,
   });
   if (options.setCurrent ?? true) {
     _state.currentLogger = ret as Logger<false>;
@@ -2125,7 +2188,7 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush>,
 ): { span: Span; isLogger: boolean } {
   if (args?.parent) {
-    const components = SpanComponents.fromStr(args?.parent);
+    const components = SpanComponentsV2.fromStr(args?.parent);
     const parentSpanIds: ParentSpanIds | undefined = components.rowIds
       ? {
           spanId: components.rowIds.spanId,
@@ -2135,12 +2198,13 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
     const span = new SpanImpl({
       ...args,
       parentObjectType: components.objectType,
-      parentObjectId: new LazyValue(async () => components.objectId),
+      parentObjectId: new LazyValue(spanComponentsToObjectIdLambda(components)),
+      parentComputeObjectMetadataArgs: components.computeObjectMetadataArgs,
       parentSpanIds,
     });
     return {
       span,
-      isLogger: components.objectType === SpanObjectType.PROJECT_LOGS,
+      isLogger: components.objectType === SpanObjectTypeV2.PROJECT_LOGS,
     };
   } else {
     const parentObject = getSpanParentObject<IsAsyncFlush>({
@@ -2437,7 +2501,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
   }
 
   private parentObjectType() {
-    return SpanObjectType.EXPERIMENT;
+    return SpanObjectTypeV2.EXPERIMENT;
   }
 
   protected async getState(): Promise<BraintrustState> {
@@ -2520,6 +2584,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
         parent: args?.parent,
         parentObjectType: this.parentObjectType(),
         parentObjectId: this.lazyId,
+        parentComputeObjectMetadataArgs: undefined,
         parentSpanIds: undefined,
       }),
       ...args,
@@ -2633,7 +2698,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
    * Return a serialized representation of the experiment that can be used to start subspans in other places. See `Span.start_span` for more details.
    */
   public async export(): Promise<string> {
-    return new SpanComponents({
+    return new SpanComponentsV2({
       objectType: this.parentObjectType(),
       objectId: await this.id,
     }).toStr();
@@ -2732,8 +2797,9 @@ export class SpanImpl implements Span {
   private loggedEndTime: number | undefined;
 
   // For internal use only.
-  private parentObjectType: SpanObjectType;
+  private parentObjectType: SpanObjectTypeV2;
   private parentObjectId: LazyValue<string>;
+  private parentComputeObjectMetadataArgs: Record<string, any> | undefined;
   private _id: string;
   private spanId: string;
   private rootSpanId: string;
@@ -2743,8 +2809,9 @@ export class SpanImpl implements Span {
 
   constructor(
     args: {
-      parentObjectType: SpanObjectType;
+      parentObjectType: SpanObjectTypeV2;
       parentObjectId: LazyValue<string>;
+      parentComputeObjectMetadataArgs: Record<string, any> | undefined;
       parentSpanIds: ParentSpanIds | undefined;
       defaultRootType?: SpanType;
     } & Omit<StartSpanArgs, "parent">,
@@ -2757,6 +2824,7 @@ export class SpanImpl implements Span {
     this.loggedEndTime = undefined;
     this.parentObjectType = args.parentObjectType;
     this.parentObjectId = args.parentObjectId;
+    this.parentComputeObjectMetadataArgs = args.parentComputeObjectMetadataArgs;
 
     const callerLocation = iso.getCallerLocation();
     const name = (() => {
@@ -2844,7 +2912,7 @@ export class SpanImpl implements Span {
 
     const computeRecord = async () => ({
       ...partialRecord,
-      ...new SpanComponents({
+      ...new SpanComponentsV2({
         objectType: this.parentObjectType,
         objectId: await this.parentObjectId.get(),
       }).objectIdFields(),
@@ -2887,6 +2955,7 @@ export class SpanImpl implements Span {
         parent: args?.parent,
         parentObjectType: this.parentObjectType,
         parentObjectId: this.parentObjectId,
+        parentComputeObjectMetadataArgs: this.parentComputeObjectMetadataArgs,
         parentSpanIds,
       }),
     });
@@ -2905,10 +2974,21 @@ export class SpanImpl implements Span {
   }
 
   public async export(): Promise<string> {
-    return new SpanComponents({
+    let objectId: string | undefined = undefined;
+    let computeObjectMetadataArgs: Record<string, any> | undefined = undefined;
+    if (
+      this.parentComputeObjectMetadataArgs &&
+      !this.parentObjectId.hasComputed
+    ) {
+      computeObjectMetadataArgs = this.parentComputeObjectMetadataArgs;
+    } else {
+      objectId = await this.parentObjectId.get();
+    }
+    return new SpanComponentsV2({
       objectType: this.parentObjectType,
-      objectId: await this.parentObjectId.get(),
-      rowIds: new SpanRowIds({
+      objectId,
+      computeObjectMetadataArgs,
+      rowIds: new SpanRowIdsV2({
         rowId: this.id,
         spanId: this.spanId,
         rootSpanId: this.rootSpanId,

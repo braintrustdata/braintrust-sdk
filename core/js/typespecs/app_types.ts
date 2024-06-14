@@ -130,7 +130,6 @@ export const apiKeySchema = z
   .strictObject({
     id: apiKeyBaseSchema.shape.id,
     created: apiKeyBaseSchema.shape.created,
-    key_hash: z.string(),
     name: apiKeyBaseSchema.shape.name,
     preview_name: z.string(),
     user_id: userSchema.shape.id.nullish(),
@@ -138,6 +137,16 @@ export const apiKeySchema = z
   })
   .openapi("ApiKey");
 export type ApiKey = z.infer<typeof apiKeySchema>;
+
+export const projectSettingsSchema = z
+  .strictObject({
+    comparison_key: z
+      .string()
+      .nullish()
+      .describe("The key used to join two experiments (defaults to `input`)."),
+  })
+  .strip();
+export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
 
 const projectBaseSchema = generateBaseTableSchema("project");
 export const projectSchema = z
@@ -153,6 +162,7 @@ export const projectSchema = z
     created: projectBaseSchema.shape.created,
     deleted_at: projectBaseSchema.shape.deleted_at,
     user_id: projectBaseSchema.shape.user_id,
+    settings: projectSettingsSchema.nullish(),
   })
   .openapi("Project");
 export type Project = z.infer<typeof projectSchema>;
@@ -539,6 +549,12 @@ export const projectScoreSchema = z
           ),
       ])
       .nullish(),
+    config: z
+      .strictObject({
+        multi_select: z.boolean().nullish(),
+        destination: z.literal("expected").nullish(),
+      })
+      .nullish(),
   })
   .describe(
     "A project score is a user-configured score, which can be manually-labeled through the UI",
@@ -684,6 +700,11 @@ const createProjectSchema = z
 const patchProjectSchema = z
   .strictObject({
     name: projectSchema.shape.name.nullish(),
+    settings: projectSchema.shape.settings
+      .describe(
+        "Project settings. Patch operations replace all settings, so make sure you include all settings you want to keep.",
+      )
+      .nullish(),
   })
   .openapi("PatchProject");
 
