@@ -856,25 +856,22 @@ const createViewSchema = viewSchema
   })
   .openapi("CreateView");
 
-const patchViewSchema = viewSchema
-  .omit({
-    id: true,
-    view_type: true,
-    created: true,
-    deleted_at: true,
+const patchViewSchema = z
+  .strictObject({
+    object_type: viewSchema.shape.object_type,
+    object_id: viewSchema.shape.object_id,
+    view_type: viewSchema.shape.view_type.nullish(),
+    name: viewSchema.shape.name.nullish(),
+    view_data: viewSchema.shape.view_data,
+    options: viewSchema.shape.options,
+    user_id: viewSchema.shape.user_id,
   })
   .openapi("PatchView");
 
-const deleteViewSchema = viewSchema
-  .omit({
-    id: true,
-    view_type: true,
-    name: true,
-    created: true,
-    view_data: true,
-    options: true,
-    user_id: true,
-    deleted_at: true,
+const deleteViewSchema = z
+  .strictObject({
+    object_type: viewSchema.shape.object_type,
+    object_id: viewSchema.shape.object_id,
   })
   .openapi("DeleteView");
 
