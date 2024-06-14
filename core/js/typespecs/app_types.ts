@@ -138,6 +138,16 @@ export const apiKeySchema = z
   .openapi("ApiKey");
 export type ApiKey = z.infer<typeof apiKeySchema>;
 
+export const projectSettingsSchema = z
+  .strictObject({
+    comparison_key: z
+      .string()
+      .nullish()
+      .describe("The key used to join two experiments (defaults to `input`)."),
+  })
+  .strip();
+export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
+
 const projectBaseSchema = generateBaseTableSchema("project");
 export const projectSchema = z
   .strictObject({
@@ -152,6 +162,7 @@ export const projectSchema = z
     created: projectBaseSchema.shape.created,
     deleted_at: projectBaseSchema.shape.deleted_at,
     user_id: projectBaseSchema.shape.user_id,
+    settings: projectSettingsSchema.nullish(),
   })
   .openapi("Project");
 export type Project = z.infer<typeof projectSchema>;
