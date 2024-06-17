@@ -235,7 +235,7 @@ class BraintrustState {
   private _logConn: HTTPConnection | null = null;
 
   constructor() {
-    this.id = uuidv4(); // This is for debugging
+    this.id = new Date().toLocaleString(); // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
     this.currentExperiment = undefined;
     this.currentLogger = undefined;
     this.currentSpan = iso.newAsyncLocalStorage();
