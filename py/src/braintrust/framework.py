@@ -659,8 +659,9 @@ def _scorer_name(scorer, scorer_idx):
 
 async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int], filters: List[Filter]):
     """Wrapper on _run_evaluator_internal that times out execution after evaluator.timeout."""
-    async with asyncio.timeout(evaluator.timeout):
-        results = await _run_evaluator_internal(experiment, evaluator, position, filters)
+    results = await asyncio.wait_for(
+        _run_evaluator_internal(experiment, evaluator, position, filters), evaluator.timeout
+    )
 
     if experiment:
         summary = experiment.summarize()
