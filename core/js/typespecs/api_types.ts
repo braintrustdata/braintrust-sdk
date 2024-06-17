@@ -9,6 +9,7 @@ import {
   datasetSchema,
   projectSchema,
   promptSchema,
+  functionSchema,
 } from "./app_types";
 import {
   datetimeStringSchema,
@@ -429,6 +430,8 @@ const promptSessionEventSchema = z
   })
   .openapi("PromptSessionEvent");
 
+const functionEventBaseSchema = generateBaseEventOpSchema("function");
+
 const projectLogsEventBaseSchema = generateBaseEventOpSchema("project");
 const projectLogsEventSchema = z
   .strictObject({
@@ -685,6 +688,21 @@ const feedbackPromptRequestSchema = makeFeedbackRequestSchema(
   feedbackPromptItemSchema,
 );
 
+const feedbackFunctionRequestBaseSchema =
+  generateBaseEventFeedbackSchema("function");
+const feedbackFunctionItemSchema = z
+  .strictObject({
+    id: feedbackFunctionRequestBaseSchema.shape.id,
+    comment: feedbackFunctionRequestBaseSchema.shape.comment,
+    metadata: feedbackFunctionRequestBaseSchema.shape.metadata,
+    source: feedbackFunctionRequestBaseSchema.shape.source,
+  })
+  .openapi("FeedbackFunctionItem");
+const feedbackFunctionRequestSchema = makeFeedbackRequestSchema(
+  "function",
+  feedbackFunctionItemSchema,
+);
+
 const feedbackPromptSessionRequestBaseSchema =
   generateBaseEventFeedbackSchema("prompt_session");
 const feedbackPromptSessionItemSchema = z
@@ -740,6 +758,14 @@ export const eventObjectSchemas = {
     insertRequest: undefined,
     feedbackItem: feedbackPromptItemSchema,
     feedbackRequest: feedbackPromptRequestSchema,
+  },
+  function: {
+    event: functionSchema,
+    fetchResponse: undefined,
+    insertEvent: undefined,
+    insertRequest: undefined,
+    feedbackItem: feedbackFunctionItemSchema,
+    feedbackRequest: feedbackFunctionRequestSchema,
   },
   prompt_session: {
     event: promptSessionEventSchema,
@@ -946,6 +972,7 @@ export const objectTypeSummarizeResponseSchemas = {
   dataset: summarizeDatasetResponseSchema,
   project: undefined,
   prompt: undefined,
+  function: undefined,
   role: undefined,
   group: undefined,
   acl: undefined,

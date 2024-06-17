@@ -15,6 +15,7 @@ import {
   login,
   init as initExperiment,
   _internalGetGlobalState,
+  Experiment,
 } from "./logger";
 import {
   BarProgressReporter,
@@ -39,6 +40,7 @@ import {
 import { configureNode } from "./node";
 import { isEmpty } from "./util";
 import { loadEnvConfig } from "@next/env";
+import { uploadEvalBundles } from "./functions";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript
@@ -70,10 +72,12 @@ interface BuildFailure {
 }
 
 type BuildResult = BuildSuccess | BuildFailure;
-interface FileHandle {
+export interface FileHandle {
   inFile: string;
   outFile: string;
+  bundleFile?: string;
   rebuild: () => Promise<BuildResult>;
+  bundle: () => Promise<esbuild.BuildResult>;
   watch: () => void;
   destroy: () => Promise<void>;
 }
@@ -276,18 +280,26 @@ function buildWatchPluginForEvaluator(
   return plugin;
 }
 
-async function initFile(
-  inFile: string,
-  outFile: string,
-  opts: EvaluatorOpts,
-  args: RunArgs,
-): Promise<FileHandle> {
+async function initFile({
+  inFile,
+  outFile,
+  bundleFile,
+  opts,
+  args,
+}: {
+  inFile: string;
+  outFile: string;
+  bundleFile: string;
+  opts: EvaluatorOpts;
+  args: RunArgs;
+}): Promise<FileHandle> {
   const buildOptions = buildOpts(inFile, outFile, opts, args);
   const ctx = await esbuild.context(buildOptions);
 
   return {
     inFile,
     outFile,
+    bundleFile,
     rebuild: async () => {
       try {
         const result = await ctx.rebuild();
@@ -307,6 +319,16 @@ async function initFile(
         return { type: "failure", error: e as Error, sourceFile: inFile };
       }
     },
+    bundle: async () => {
+      const buildOptions: esbuild.BuildOptions = {
+        ...buildOpts(inFile, bundleFile, opts, args),
+        external: [],
+        write: true,
+        plugins: [],
+        minify: true,
+      };
+      return await esbuild.build(buildOptions);
+    },
     watch: () => {
       ctx.watch();
     },
@@ -316,7 +338,7 @@ async function initFile(
   };
 }
 
-interface EvaluatorState {
+export interface EvaluatorState {
   evaluators: {
     sourceFile: string;
     evaluator: EvaluatorDef<any, any, any, any>;
@@ -333,6 +355,7 @@ interface EvaluatorOpts {
   orgName?: string;
   appUrl?: string;
   noSendLogs: boolean;
+  bundle: boolean;
   terminateOnFailure: boolean;
   watch: boolean;
   list: boolean;
@@ -422,6 +445,15 @@ async function runOnce(
 
   const buildResults = await Promise.all(buildPromises);
 
+  const bundlePromises = opts.bundle
+    ? Object.fromEntries(
+        Object.entries(handles).map(([inFile, handle]) => [
+          inFile,
+          handle.bundle(),
+        ]),
+      )
+    : null;
+
   const evaluators: EvaluatorState = {
     evaluators: [],
     reporters: {},
@@ -435,32 +467,41 @@ async function runOnce(
     return true;
   }
 
-  const resultPromises = Object.values(evaluators.evaluators).map(
-    async (evaluator) => {
-      // TODO: For now, use the eval name as the project. However, we need to evolve
-      // the definition of a project and create a new concept called run, so that we
-      // can name the experiment/evaluation within the run the evaluator's name.
-      const logger = opts.noSendLogs
-        ? null
-        : await initLogger(
-            evaluator.evaluator.projectName,
-            evaluator.evaluator.experimentName,
-            evaluator.evaluator.metadata,
-          );
-      try {
-        return await runEvaluator(
-          logger,
-          evaluator.evaluator,
-          opts.progressReporter,
-          opts.filters,
+  const experimentIdToEvaluator: Record<
+    string,
+    {
+      evaluator: EvaluatorState["evaluators"][number];
+      experiment: Experiment;
+    }
+  > = {};
+  const resultPromises = evaluators.evaluators.map(async (evaluator) => {
+    // TODO: For now, use the eval name as the project. However, we need to evolve
+    // the definition of a project and create a new concept called run, so that we
+    // can name the experiment/evaluation within the run the evaluator's name.
+    const logger = opts.noSendLogs
+      ? null
+      : await initLogger(
+          evaluator.evaluator.projectName,
+          evaluator.evaluator.experimentName,
+          evaluator.evaluator.metadata,
         );
-      } finally {
-        if (logger) {
-          await logger.flush();
-        }
+    try {
+      return await runEvaluator(
+        logger,
+        evaluator.evaluator,
+        opts.progressReporter,
+        opts.filters,
+      );
+    } finally {
+      if (logger) {
+        experimentIdToEvaluator[await logger.id] = {
+          evaluator,
+          experiment: logger,
+        };
+        await logger.flush();
       }
-    },
-  );
+    }
+  });
 
   console.error(`Processing ${resultPromises.length} evaluators...`);
   const allEvalsResults = await Promise.all(resultPromises);
@@ -493,6 +534,29 @@ async function runOnce(
     addReport(evalReports, resolvedReporter, report);
   }
 
+  if (
+    bundlePromises !== null &&
+    Object.entries(experimentIdToEvaluator).length > 0
+  ) {
+    const bundleSpecs: Record<string, Record<string, string>> = {};
+    for (const [experimentId, evaluator] of Object.entries(
+      experimentIdToEvaluator,
+    )) {
+      if (!bundleSpecs[evaluator.evaluator.sourceFile]) {
+        bundleSpecs[evaluator.evaluator.sourceFile] = {};
+      }
+      bundleSpecs[evaluator.evaluator.sourceFile][experimentId] =
+        evaluator.evaluator.evaluator.evalName;
+    }
+
+    await uploadEvalBundles({
+      experimentIdToEvaluator,
+      bundlePromises,
+      handles,
+      verbose: opts.verbose,
+    });
+  }
+
   let allSuccess = true;
   for (const [reporterName, { reporter, results }] of Object.entries(
     evalReports,
@@ -518,6 +582,7 @@ interface RunArgs {
   no_send_logs: boolean;
   no_progress_bars: boolean;
   terminate_on_failure: boolean;
+  bundle: boolean;
   env_file?: string;
 }
 
@@ -566,9 +631,6 @@ async function collectFiles(inputPath: string): Promise<string[]> {
 
   let files: string[] = [];
   if (!pathStat.isDirectory()) {
-    // XXX IMPROVE THIS:
-    // - Allow the file to be included if specified by name
-    // - Print a warning if the file doesn't match
     if (!checkMatch(inputPath, INCLUDE, EXCLUDE)) {
       console.warn(
         warning(
@@ -624,6 +686,7 @@ function buildOpts(
   return {
     entryPoints: [fileName],
     bundle: true,
+    treeShaking: true,
     outfile: outFile,
     platform: "node",
     write: false,
@@ -664,14 +727,15 @@ async function initializeHandles(args: RunArgs, opts: EvaluatorOpts) {
 
   const initPromises = [];
   for (const file of Object.keys(files)) {
-    const outFile = path.join(
-      tmpDir,
-      `${path.basename(file, path.extname(file))}-${uuidv4().slice(
-        0,
-        8,
-      )}.${OUT_EXT}`,
+    const baseName = `${path.basename(
+      file,
+      path.extname(file),
+    )}-${uuidv4().slice(0, 8)}`;
+    const outFile = path.join(tmpDir, `${baseName}.${OUT_EXT}`);
+    const bundleFile = path.join(tmpDir, `${baseName}.bundle.js`);
+    initPromises.push(
+      initFile({ inFile: file, outFile, opts, bundleFile, args }),
     );
-    initPromises.push(initFile(file, outFile, opts, args));
   }
 
   const handles: Record<string, FileHandle> = {};
@@ -701,6 +765,7 @@ async function run(args: RunArgs) {
     orgName: args.org_name,
     appUrl: args.app_url,
     noSendLogs: !!args.no_send_logs,
+    bundle: !!args.bundle,
     terminateOnFailure: !!args.terminate_on_failure,
     watch: !!args.watch,
     jsonl: args.jsonl,
@@ -806,6 +871,10 @@ async function main() {
   parser_run.add_argument("--terminate-on-failure", {
     action: "store_true",
     help: "If provided, terminates on a failing eval, instead of the default (moving onto the next one).",
+  });
+  parser_run.add_argument("--bundle", {
+    action: "store_true",
+    help: "Experimental (do not use unless you know what you're doing)",
   });
   parser_run.add_argument("--env-file", {
     help: "A path to a .env file containing environment variables to load (via dotenv).",
