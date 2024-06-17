@@ -183,38 +183,85 @@ export const datasetSchema = z
   .openapi("Dataset");
 export type Dataset = z.infer<typeof datasetSchema>;
 
+export const validRuntimesEnum = z.enum(["node"]);
+export type Runtime = z.infer<typeof validRuntimesEnum>;
+
+export const runtimeContextSchema = z.strictObject({
+  runtime: validRuntimesEnum,
+  version: z.string(),
+});
+export type RuntimeContext = z.infer<typeof runtimeContextSchema>;
+
 const promptBaseSchema = generateBaseTableSchema("prompt");
-export const promptSchema = z
-  .strictObject({
-    id: promptBaseSchema.shape.id,
-    // This has to be copy/pasted because zod blows up when there are circular dependencies
-    _xact_id: z
-      .string()
-      .describe(
-        `The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the prompt (see the \`version\` parameter)`,
-      ),
-    project_id: promptBaseSchema.shape.project_id,
-    log_id: z
-      .literal("p")
-      .describe(
-        "A literal 'p' which identifies the object as a project prompt",
-      ),
-    org_id: organizationSchema.shape.id,
-    name: promptBaseSchema.shape.name,
-    slug: z.string().describe("Unique identifier for the prompt"),
-    description: promptBaseSchema.shape.description,
-    created: promptBaseSchema.shape.created,
-    prompt_data: promptDataSchema
-      .nullish()
-      .describe("The prompt, model, and its parameters"),
-    tags: z
-      .array(z.string())
-      .nullish()
-      .describe("A list of tags for the prompt"),
-    metadata: promptBaseSchema.shape.metadata,
-  })
-  .openapi("Prompt");
+const promptSchemaObject = z.strictObject({
+  id: promptBaseSchema.shape.id,
+  // This has to be copy/pasted because zod blows up when there are circular dependencies
+  _xact_id: z
+    .string()
+    .describe(
+      `The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the prompt (see the \`version\` parameter)`,
+    ),
+  project_id: promptBaseSchema.shape.project_id,
+  log_id: z
+    .literal("p")
+    .describe("A literal 'p' which identifies the object as a project prompt"),
+  org_id: organizationSchema.shape.id,
+  name: promptBaseSchema.shape.name,
+  slug: z.string().describe("Unique identifier for the prompt"),
+  description: promptBaseSchema.shape.description,
+  created: promptBaseSchema.shape.created,
+  prompt_data: promptDataSchema
+    .nullish()
+    .describe("The prompt, model, and its parameters"),
+  tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
+  metadata: promptBaseSchema.shape.metadata,
+});
+
+export const promptSchema = promptSchemaObject.openapi("Prompt");
 export type Prompt = z.infer<typeof promptSchema>;
+
+export const codeBundleSchema = z.strictObject({
+  runtime_context: z.strictObject({
+    runtime: validRuntimesEnum,
+    version: z.string(),
+  }),
+  // This should be a union, once we support code living in different places
+  // Other options should be:
+  //  - a "handler" function that has some signature [does AWS lambda assume it's always called "handler"?]
+  location: z.strictObject({
+    type: z.literal("experiment"),
+    eval_name: z.string(),
+    position: z.union([
+      z.literal("task"),
+      z.strictObject({ score: z.number() }),
+    ]),
+  }),
+  bundle_id: z.string(),
+});
+export type CodeBundle = z.infer<typeof codeBundleSchema>;
+
+export const functionDataSchema = z.union([
+  z.strictObject({
+    type: z.literal("prompt"),
+    // For backwards compatibility reasons, this is hoisted out and stored
+    // in the outer object
+  }),
+  z.strictObject({
+    type: z.literal("code"),
+    data: codeBundleSchema,
+  }),
+]);
+
+export const functionSchema = promptSchemaObject
+  .merge(
+    z.strictObject({
+      function_data: functionDataSchema,
+    }),
+  )
+  .openapi("Function");
+
+// NOTE: suffix "Object" helps avoid a name conflict with the built-in `Function` type
+export type FunctionObject = z.infer<typeof functionSchema>;
 
 const repoInfoSchema = z
   .strictObject({
@@ -711,6 +758,17 @@ const createPromptSchema = promptSchema
   })
   .openapi("CreatePrompt");
 
+const createFunctionSchema = functionSchema
+  .omit({
+    id: true,
+    _xact_id: true,
+    org_id: true,
+    log_id: true,
+    created: true,
+    metadata: true,
+  })
+  .openapi("CreateFunction");
+
 const patchPromptSchema = z
   .strictObject({
     name: promptSchema.shape.name.nullish(),
@@ -719,6 +777,16 @@ const patchPromptSchema = z
     tags: promptSchema.shape.tags.nullish(),
   })
   .openapi("PatchPrompt");
+
+const patchFunctionSchema = z
+  .strictObject({
+    name: functionSchema.shape.name.nullish(),
+    description: functionSchema.shape.description.nullish(),
+    prompt_data: functionSchema.shape.prompt_data.nullish(),
+    function_data: functionSchema.shape.function_data.nullish(),
+    tags: functionSchema.shape.tags.nullish(),
+  })
+  .openapi("PatchFunction");
 
 const createRoleBaseSchema = generateBaseTableOpSchema("role");
 const createRoleSchema = z
@@ -863,6 +931,11 @@ export const objectSchemas = {
     create: createPromptSchema,
     patch: patchPromptSchema,
     object: promptSchema,
+  },
+  function: {
+    create: createFunctionSchema,
+    patch: patchFunctionSchema,
+    object: functionSchema,
   },
   role: {
     create: createRoleSchema,

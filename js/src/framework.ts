@@ -11,6 +11,7 @@ import {
   DefaultMetadataType,
   ScoreSummary,
   MetricSummary,
+  currentSpan,
 } from "./logger";
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
@@ -239,8 +240,14 @@ function initExperiment<IsOpen extends boolean = false>(
   });
 }
 
+export type SpanContext = {
+  currentSpan: typeof currentSpan;
+  NOOP_SPAN: typeof NOOP_SPAN;
+};
+
 declare global {
   var _evals: EvaluatorFile;
+  var _spanContext: SpanContext | undefined;
   var _lazy_load: boolean;
 }
 
@@ -261,14 +268,20 @@ export async function Eval<
   reporter?: ReporterDef<EvalReport> | string,
 ): Promise<EvalResultWithSummary<Input, Output, Expected, Metadata>> {
   let evalName = makeEvalName(name, evaluator.experimentName);
-  if (_evals.evaluators[evalName]) {
+  if (globalThis._evals.evaluators[evalName]) {
     evalName = `${evalName}_${Object.keys(_evals).length}`;
   }
   if (globalThis._lazy_load) {
-    _evals.evaluators[evalName] = {
+    globalThis._evals.evaluators[evalName] = {
       evaluator: { evalName, projectName: name, ...evaluator },
       reporter,
     };
+
+    // This only needs to be set once, but Eval() is the only time
+    // we get to run code while importing a module, so use it to
+    // grab these values.
+    globalThis._spanContext = { currentSpan, NOOP_SPAN };
+
     // Better to return this empty object than have an annoying-to-use signature
     return {
       summary: {
@@ -388,7 +401,7 @@ function evaluateFilter(object: any, filter: Filter) {
   return pattern.test(serializeJSONWithPlainString(key));
 }
 
-function scorerName(
+export function scorerName(
   scorer: EvalScorer<any, any, any, any>,
   scorer_idx: number,
 ) {

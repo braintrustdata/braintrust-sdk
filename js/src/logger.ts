@@ -2780,6 +2780,10 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
 
 let executionCounter = 0;
 
+export function newId() {
+  return uuidv4();
+}
+
 /**
  * Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
  *
