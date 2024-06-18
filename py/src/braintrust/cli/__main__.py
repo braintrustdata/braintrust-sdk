@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 import textwrap
+import traceback
 
 from . import eval, install
 
@@ -49,6 +50,7 @@ def main(args=None):
         else:
             os._exit(0)
     except:
+        traceback.print_exc()
         os._exit(1)
 
 

@@ -333,7 +333,7 @@ def main(args):
             Parameters=[
                 {"ParameterKey": param, "ParameterValue": str(update)}
                 for (param, update) in param_updates.items()
-                if param in known_params and param not in REMOVED_PARAMS and param in new_params
+                if param in new_params and param not in REMOVED_PARAMS and param in new_params
             ]
             + [
                 {"ParameterKey": param["ParameterKey"], "UsePreviousValue": True}
