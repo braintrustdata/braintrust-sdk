@@ -30,9 +30,11 @@ export const viewDataSchema = z
   .openapi("ViewData");
 export type ViewData = z.infer<typeof viewDataSchema>;
 
-export const viewOptionsSchema = z.object({
-  columnVisibility: z.record(z.boolean()).nullish(),
-  columnOrder: z.array(z.string()).nullish(),
-  columnSizing: z.record(z.number()).nullish(),
-});
+export const viewOptionsSchema = z
+  .strictObject({
+    columnVisibility: z.record(z.boolean()).nullish(),
+    columnOrder: z.array(z.string()).nullish(),
+    columnSizing: z.record(z.number()).nullish(),
+  })
+  .openapi("ViewOptions");
 export type ViewOptions = z.infer<typeof viewOptionsSchema>;
