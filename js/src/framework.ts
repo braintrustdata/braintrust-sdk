@@ -157,6 +157,11 @@ export interface Evaluator<
    * Defaults to None, in which case there is no timeout.
    */
   timeout?: number;
+
+  /**
+   * If specified, uses the given project ID instead of the evaluator's name to identify the project.
+   */
+  projectId?: string;
 }
 
 export type EvalResultWithSummary<
