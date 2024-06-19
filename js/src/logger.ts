@@ -54,6 +54,8 @@ import {
   LazyValue,
 } from "./util";
 import Mustache from "mustache";
+import { isObj } from "openai/core";
+import { z } from "zod";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -3275,7 +3277,7 @@ export class Prompt {
    * @param buildArgs Args to forward along to the prompt template.
    */
   public build<Flavor extends "chat" | "completion" = "chat">(
-    buildArgs: Record<string, unknown>,
+    buildArgs: unknown,
     options: {
       flavor?: Flavor;
     } = {},
@@ -3286,7 +3288,7 @@ export class Prompt {
   }
 
   private runBuild<Flavor extends "chat" | "completion">(
-    buildArgs: Record<string, unknown>,
+    buildArgs: unknown,
     options: {
       flavor: Flavor;
     },
@@ -3334,6 +3336,12 @@ export class Prompt {
       throw new Error("Empty prompt");
     }
 
+    const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
+    const variables: Record<string, unknown> = {
+      input: buildArgs,
+      ...(dictArgParsed.success ? dictArgParsed.data : {}),
+    };
+
     if (flavor === "chat") {
       if (prompt.type !== "chat") {
         throw new Error(
@@ -3342,7 +3350,7 @@ export class Prompt {
       }
 
       const render = (template: string) =>
-        Mustache.render(template, buildArgs, undefined, {
+        Mustache.render(template, variables, undefined, {
           escape: (v: any) => (typeof v === "string" ? v : JSON.stringify(v)),
         });
 
@@ -3365,7 +3373,7 @@ export class Prompt {
         ...(prompt.tools
           ? {
               tools: toolsSchema.parse(
-                JSON.parse(Mustache.render(prompt.tools, buildArgs)),
+                JSON.parse(Mustache.render(prompt.tools, variables)),
               ),
             }
           : undefined),
@@ -3378,7 +3386,7 @@ export class Prompt {
       return {
         ...params,
         ...spanInfo,
-        prompt: Mustache.render(prompt.content, buildArgs),
+        prompt: Mustache.render(prompt.content, variables),
       } as CompiledPrompt<Flavor>;
     } else {
       throw new Error("never!");
