@@ -54,7 +54,6 @@ import {
   LazyValue,
 } from "./util";
 import Mustache from "mustache";
-import { isObj } from "openai/core";
 import { z } from "zod";
 
 export type SetCurrentArg = { setCurrent?: boolean };
