@@ -400,8 +400,6 @@ export const aclObjectTypeEnum = z
     "dataset",
     "prompt",
     "prompt_session",
-    "project_score",
-    "project_tag",
     "group",
     "role",
     "org_member",
