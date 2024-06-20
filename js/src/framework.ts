@@ -12,6 +12,8 @@ import {
   MetricSummary,
   currentSpan,
   FullInitOptions,
+  BraintrustState,
+  _internalGetGlobalState,
 } from "./logger";
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
@@ -162,6 +164,12 @@ export interface Evaluator<
    * If specified, uses the given project ID instead of the evaluator's name to identify the project.
    */
   projectId?: string;
+
+  /**
+   * If specified, uses the logger state to initialize Braintrust objects. If unspecified, falls back
+   * to the global state (initialized using your API key).
+   */
+  state?: BraintrustState;
 }
 
 export type EvalResultWithSummary<
@@ -236,9 +244,11 @@ export type EvaluatorFile = {
 };
 
 function initExperiment<IsOpen extends boolean = false>(
+  state: BraintrustState,
   options: Readonly<FullInitOptions<IsOpen>> = {},
 ) {
   return _initExperiment({
+    state,
     ...options,
     setCurrent: false,
   });
@@ -307,8 +317,9 @@ export async function Eval<
   }
 
   const resolvedReporter = reporter || defaultReporter;
+  const state = evaluator.state || _internalGetGlobalState();
   try {
-    const experiment = initExperiment({
+    const experiment = initExperiment(state, {
       ...(evaluator.projectId
         ? { projectId: evaluator.projectId }
         : { project: name }),
@@ -474,7 +485,9 @@ async function runEvaluatorInternal(
       }
       name = baseExperiment.name;
     }
-    dataResult = initExperiment({
+
+    const state = evaluator.state || _internalGetGlobalState();
+    dataResult = initExperiment(state, {
       ...(evaluator.projectId
         ? { projectId: evaluator.projectId }
         : { project: evaluator.projectName }),

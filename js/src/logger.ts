@@ -217,7 +217,7 @@ declare global {
   var __inherited_braintrust_state: BraintrustState;
 }
 
-class BraintrustState {
+export class BraintrustState {
   public id: string;
   public currentExperiment: Experiment | undefined;
   // Note: the value of IsAsyncFlush doesn't really matter here, since we
@@ -249,7 +249,9 @@ class BraintrustState {
     this.currentSpan = iso.newAsyncLocalStorage();
 
     const defaultGetLogConn = async () => {
-      await login();
+      if (this.logUrl === null) {
+        await login();
+      }
       return this.logConn();
     };
     this._globalBgLogger = new BackgroundLogger(
@@ -1391,8 +1393,6 @@ export function init<IsOpen extends boolean = false>(
     state: stateArg,
   } = options;
 
-  const state = stateArg ?? _dangerousGlobalState;
-
   if (open && update) {
     throw new Error("Cannot open and update an experiment at the same time");
   }
@@ -1404,11 +1404,13 @@ export function init<IsOpen extends boolean = false>(
 
     const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(
       async () => {
-        await login({
-          orgName: orgName,
-          apiKey,
-          appUrl,
-        });
+        const state =
+          stateArg ??
+          (await login({
+            orgName: orgName,
+            apiKey,
+            appUrl,
+          }));
         const args: Record<string, unknown> = {
           project_name: project,
           project_id: projectId,
@@ -1445,18 +1447,20 @@ export function init<IsOpen extends boolean = false>(
     );
 
     return new ReadonlyExperiment(
-      state,
+      stateArg ?? _dangerousGlobalState,
       lazyMetadata,
     ) as InitializedExperiment<IsOpen>;
   }
 
   const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(
     async () => {
-      await login({
-        orgName: orgName,
-        apiKey,
-        appUrl,
-      });
+      const state =
+        stateArg ??
+        (await login({
+          orgName: orgName,
+          apiKey,
+          appUrl,
+        }));
       const args: Record<string, unknown> = {
         project_name: project,
         project_id: projectId,
@@ -1552,6 +1556,7 @@ export function init<IsOpen extends boolean = false>(
     },
   );
 
+  const state = stateArg ?? _dangerousGlobalState;
   const ret = new Experiment(state, lazyMetadata, dataset);
   if (options.setCurrent ?? true) {
     state.currentExperiment = ret;
@@ -1717,15 +1722,15 @@ export function initDataset<
     state: stateArg,
   } = options;
 
-  const state = stateArg ?? _internalGetGlobalState();
-
   const lazyMetadata: LazyValue<ProjectDatasetMetadata> = new LazyValue(
     async () => {
-      await login({
-        orgName,
-        apiKey,
-        appUrl,
-      });
+      const state =
+        stateArg ??
+        (await login({
+          orgName,
+          apiKey,
+          appUrl,
+        }));
 
       const args: Record<string, unknown> = {
         org_id: state.orgId,
@@ -1753,7 +1758,12 @@ export function initDataset<
     },
   );
 
-  return new Dataset(state, lazyMetadata, version, legacy);
+  return new Dataset(
+    stateArg ?? _dangerousGlobalState,
+    lazyMetadata,
+    version,
+    legacy,
+  );
 }
 
 /**
@@ -1866,7 +1876,6 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
   } = options || {};
 
   const state = stateArg ?? _internalGetGlobalState();
-
   const computeMetadataArgs = {
     project_name: projectName,
     project_id: projectId,
@@ -1874,12 +1883,14 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
   };
   const lazyMetadata: LazyValue<OrgProjectMetadata> = new LazyValue(
     async () => {
-      await login({
-        orgName: orgName,
-        apiKey,
-        appUrl,
-        forceLogin,
-      });
+      if (!stateArg) {
+        await login({
+          orgName: orgName,
+          apiKey,
+          appUrl,
+          forceLogin,
+        });
+      }
       return computeLoggerMetadata(computeMetadataArgs);
     },
   );
