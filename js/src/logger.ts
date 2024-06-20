@@ -1807,7 +1807,7 @@ async function computeLoggerMetadata({
 }) {
   const state = stateArg ?? (await login());
   const org_id = state.orgId!;
-  if (project_id === undefined) {
+  if (isEmpty(project_id)) {
     const response = await state.apiConn().post_json("api/project/register", {
       project_name: project_name || GLOBAL_PROJECT,
       org_id,
@@ -1820,7 +1820,7 @@ async function computeLoggerMetadata({
         fullInfo: response.project,
       },
     };
-  } else if (project_name === undefined) {
+  } else if (isEmpty(project_name)) {
     const response = await state.apiConn().get_json("api/project", {
       id: project_id,
     });
