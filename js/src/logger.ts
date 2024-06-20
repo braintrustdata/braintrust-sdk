@@ -1738,8 +1738,8 @@ async function computeLoggerMetadata({
   project_name,
   project_id,
 }: {
-  project_name?: string;
-  project_id?: string;
+  project_name?: string | null;
+  project_id?: string | null;
 }) {
   await login();
   const org_id = _state.orgId!;
