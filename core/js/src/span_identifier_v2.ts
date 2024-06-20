@@ -226,6 +226,7 @@ export class SpanComponentsV2 {
         rowIds,
       });
     } catch (e) {
+      console.error(e);
       throw new Error(INVALID_ENCODING_ERRMSG);
     }
   }

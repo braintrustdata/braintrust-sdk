@@ -29,8 +29,8 @@ INVALID_ENCODING_ERRMSG = f"SpanComponents string is not properly encoded. This 
 
 
 class SpanObjectTypeV2(Enum):
-    EXPERIMENT = auto()
-    PROJECT_LOGS = auto()
+    EXPERIMENT = 0
+    PROJECT_LOGS = 1
 
     def __str__(self):
         return {SpanObjectTypeV2.EXPERIMENT: "experiment", SpanObjectTypeV2.PROJECT_LOGS: "project_logs"}[self]

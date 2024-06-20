@@ -215,6 +215,7 @@ export const NOOP_SPAN = new NoopSpan();
 // mechanism to propagate the initial state from some toplevel creator.
 declare global {
   var __inherited_braintrust_state: BraintrustState;
+  var _state: BraintrustState;
 }
 
 class BraintrustState {
@@ -304,17 +305,24 @@ class BraintrustState {
   }
 }
 
-let _state: BraintrustState;
+// let _state: BraintrustState;
 
 // This function should be invoked exactly once after configuring the `iso`
 // object based on the platform. See js/src/node.ts for an example.
 export function _internalSetInitialState() {
-  if (_state) {
-    throw new Error("Cannot set initial state more than once");
-  }
-  _state = globalThis.__inherited_braintrust_state || new BraintrustState();
+  // if (_state) {
+  //   throw new Error("Cannot set initial state more than once");
+  // }
+  globalThis._state =
+    globalThis.__inherited_braintrust_state || new BraintrustState();
 }
-export const _internalGetGlobalState = () => _state;
+export function _hardSetState(state?: BraintrustState) {
+  globalThis._state = state || new BraintrustState();
+}
+export function _makeNewState() {
+  return new BraintrustState();
+}
+export const _internalGetGlobalState = () => globalThis._state;
 
 class FailedHTTPResponse extends Error {
   public status: number;
@@ -562,7 +570,7 @@ function logFeedbackImpl(
         [IS_MERGE_FIELD]: true,
       };
     });
-    _state.globalBgLogger().log([record]);
+    globalThis._state.globalBgLogger().log([record]);
   }
 
   if (!isEmpty(comment)) {
@@ -583,7 +591,7 @@ function logFeedbackImpl(
         [AUDIT_METADATA_FIELD]: metadata,
       };
     });
-    _state.globalBgLogger().log([record]);
+    globalThis._state.globalBgLogger().log([record]);
   }
 }
 
@@ -857,7 +865,7 @@ export class Logger<IsAsyncFlush extends boolean> {
    * Flush any pending logs to the server.
    */
   async flush(): Promise<void> {
-    return await _state.globalBgLogger().flush();
+    return await globalThis._state.globalBgLogger().flush();
   }
 
   get asyncFlush(): IsAsyncFlush | undefined {
@@ -1384,11 +1392,11 @@ export function init<IsOpen extends boolean = false>(
         const args: Record<string, unknown> = {
           project_name: project,
           project_id: projectId,
-          org_name: _state.orgName,
+          org_name: globalThis._state.orgName,
           experiment_name: experiment,
         };
 
-        const response = await _state
+        const response = await globalThis._state
           .apiConn()
           .post_json("api/experiment/get", args);
 
@@ -1431,7 +1439,7 @@ export function init<IsOpen extends boolean = false>(
       const args: Record<string, unknown> = {
         project_name: project,
         project_id: projectId,
-        org_id: _state.orgId,
+        org_id: globalThis._state.orgId,
         update,
       };
 
@@ -1448,7 +1456,7 @@ export function init<IsOpen extends boolean = false>(
           return repoInfo;
         }
         let mergedGitMetadataSettings = {
-          ...(_state.gitMetadataSettings || {
+          ...(globalThis._state.gitMetadataSettings || {
             collect: "all",
           }),
         };
@@ -1489,7 +1497,7 @@ export function init<IsOpen extends boolean = false>(
       let response = null;
       while (true) {
         try {
-          response = await _state
+          response = await globalThis._state
             .apiConn()
             .post_json("api/experiment/register", args);
           break;
@@ -1525,7 +1533,7 @@ export function init<IsOpen extends boolean = false>(
 
   const ret = new Experiment(lazyMetadata, dataset);
   if (options.setCurrent ?? true) {
-    _state.currentExperiment = ret;
+    globalThis._state.currentExperiment = ret;
   }
   return ret as InitializedExperiment<IsOpen>;
 }
@@ -1695,13 +1703,13 @@ export function initDataset<
       });
 
       const args: Record<string, unknown> = {
-        org_id: _state.orgId,
+        org_id: globalThis._state.orgId,
         project_name: project,
         project_id: projectId,
         dataset_name: dataset,
         description,
       };
-      const response = await _state
+      const response = await globalThis._state
         .apiConn()
         .post_json("api/dataset/register", args);
 
@@ -1752,12 +1760,14 @@ async function computeLoggerMetadata({
   project_id?: string;
 }) {
   await login();
-  const org_id = _state.orgId!;
+  const org_id = globalThis._state.orgId!;
   if (project_id === undefined) {
-    const response = await _state.apiConn().post_json("api/project/register", {
-      project_name: project_name || GLOBAL_PROJECT,
-      org_id,
-    });
+    const response = await globalThis._state
+      .apiConn()
+      .post_json("api/project/register", {
+        project_name: project_name || GLOBAL_PROJECT,
+        org_id,
+      });
     return {
       org_id,
       project: {
@@ -1767,7 +1777,7 @@ async function computeLoggerMetadata({
       },
     };
   } else if (project_name === undefined) {
-    const response = await _state.apiConn().get_json("api/project", {
+    const response = await globalThis._state.apiConn().get_json("api/project", {
       id: project_id,
     });
     return {
@@ -1849,7 +1859,7 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
     computeMetadataArgs,
   });
   if (options.setCurrent ?? true) {
-    _state.currentLogger = ret as Logger<false>;
+    globalThis._state.currentLogger = ret as Logger<false>;
   }
   return ret;
 }
@@ -1924,7 +1934,9 @@ export async function loadPrompt({
     version,
   };
 
-  const response = await _state.logConn().get_json("v1/prompt", args);
+  const response = await globalThis._state
+    .logConn()
+    .get_json("v1/prompt", args);
 
   if (!("objects" in response) || response.objects.length === 0) {
     throw new Error(
@@ -1964,7 +1976,7 @@ export async function login(
 ) {
   let { forceLogin = false } = options || {};
 
-  if (_state.loggedIn && !forceLogin) {
+  if (globalThis._state.loggedIn && !forceLogin) {
     // We have already logged in. If any provided login inputs disagree with our
     // existing settings, raise an Exception warning the user to try again with
     // `forceLogin: true`.
@@ -1979,15 +1991,15 @@ export async function login(
         );
       }
     }
-    checkUpdatedParam("appUrl", options.appUrl, _state.appUrl);
+    checkUpdatedParam("appUrl", options.appUrl, globalThis._state.appUrl);
     checkUpdatedParam(
       "apiKey",
       options.apiKey
         ? HTTPConnection.sanitize_token(options.apiKey)
         : undefined,
-      _state.loginToken,
+      globalThis._state.loginToken,
     );
-    checkUpdatedParam("orgName", options.orgName, _state.orgName);
+    checkUpdatedParam("orgName", options.orgName, globalThis._state.orgName);
     return;
   }
 
@@ -1999,16 +2011,16 @@ export async function login(
 
   const appPublicUrl = iso.getEnv("BRAINTRUST_APP_PUBLIC_URL") || appUrl;
 
-  _state.resetLoginInfo();
+  globalThis._state.resetLoginInfo();
 
-  _state.appUrl = appUrl;
-  _state.appPublicUrl = appPublicUrl;
+  globalThis._state.appUrl = appUrl;
+  globalThis._state.appPublicUrl = appPublicUrl;
 
   let conn = null;
 
   if (apiKey !== undefined) {
     const resp = await checkResponse(
-      await fetch(_urljoin(_state.appUrl, `/api/apikey/login`), {
+      await fetch(_urljoin(globalThis._state.appUrl, `/api/apikey/login`), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -2022,7 +2034,7 @@ export async function login(
 
     _check_org_info(info.org_info, orgName);
 
-    conn = _state.logConn();
+    conn = globalThis._state.logConn();
     conn.set_token(apiKey);
   } else {
     throw new Error(
@@ -2037,12 +2049,12 @@ export async function login(
   conn.make_long_lived();
 
   // Set the same token in the API
-  _state.apiConn().set_token(apiKey);
-  _state.loginToken = conn.token;
-  _state.loggedIn = true;
+  globalThis._state.apiConn().set_token(apiKey);
+  globalThis._state.loginToken = conn.token;
+  globalThis._state.loggedIn = true;
 
   // Relpace the global logger's logConn with this one.
-  _state.loginReplaceLogConn(conn);
+  globalThis._state.loginReplaceLogConn(conn);
 }
 
 // XXX We should remove these global functions now
@@ -2091,7 +2103,7 @@ export async function summarize(
  * Returns the currently-active experiment (set by `braintrust.init`). Returns undefined if no current experiment has been set.
  */
 export function currentExperiment(): Experiment | undefined {
-  return _state.currentExperiment;
+  return globalThis._state.currentExperiment;
 }
 
 /**
@@ -2100,7 +2112,7 @@ export function currentExperiment(): Experiment | undefined {
 export function currentLogger<IsAsyncFlush extends boolean>(
   options?: AsyncFlushArg<IsAsyncFlush>,
 ): Logger<IsAsyncFlush> | undefined {
-  return castLogger(_state.currentLogger, options?.asyncFlush);
+  return castLogger(globalThis._state.currentLogger, options?.asyncFlush);
 }
 
 /**
@@ -2109,7 +2121,7 @@ export function currentLogger<IsAsyncFlush extends boolean>(
  * See `Span` for full details.
  */
 export function currentSpan(): Span {
-  return _state.currentSpan.getStore() ?? NOOP_SPAN;
+  return globalThis._state.currentSpan.getStore() ?? NOOP_SPAN;
 }
 
 /**
@@ -2191,7 +2203,7 @@ export function startSpan<IsAsyncFlush extends boolean = false>(
  * Flush any pending rows to the server.
  */
 export async function flush(): Promise<void> {
-  return await _state.globalBgLogger().flush();
+  return await globalThis._state.globalBgLogger().flush();
 }
 
 function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
@@ -2228,7 +2240,7 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
 // Set the given span as current within the given callback and any asynchronous
 // operations created within the callback.
 function withCurrent<R>(span: Span, callback: (span: Span) => R): R {
-  return _state.currentSpan.run(span, () => callback(span));
+  return globalThis._state.currentSpan.run(span, () => callback(span));
 }
 
 function _check_org_info(org_info: any, org_name: string | undefined) {
@@ -2238,15 +2250,16 @@ function _check_org_info(org_info: any, org_name: string | undefined) {
 
   for (const org of org_info) {
     if (org_name === undefined || org.name === org_name) {
-      _state.orgId = org.id;
-      _state.orgName = org.name;
-      _state.logUrl = iso.getEnv("BRAINTRUST_API_URL") ?? org.api_url;
-      _state.gitMetadataSettings = org.git_metadata || undefined;
+      globalThis._state.orgId = org.id;
+      globalThis._state.orgName = org.name;
+      globalThis._state.logUrl =
+        iso.getEnv("BRAINTRUST_API_URL") ?? org.api_url;
+      globalThis._state.gitMetadataSettings = org.git_metadata || undefined;
       break;
     }
   }
 
-  if (_state.orgId === undefined) {
+  if (globalThis._state.orgId === undefined) {
     throw new Error(
       `Organization ${org_name} not found. Must be one of ${org_info
         .map((x: any) => x.name)
@@ -2517,7 +2530,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
   protected async getState(): Promise<BraintrustState> {
     // Ensure the login state is populated by awaiting lazyMetadata.
     await this.lazyMetadata.get();
-    return _state;
+    return globalThis._state;
   }
 
   /**
@@ -2718,7 +2731,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
    * Flush any pending rows to the server.
    */
   async flush(): Promise<void> {
-    return await _state.globalBgLogger().flush();
+    return await globalThis._state.globalBgLogger().flush();
   }
 
   /**
@@ -2757,7 +2770,7 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
   protected async getState(): Promise<BraintrustState> {
     // Ensure the login state is populated by awaiting lazyMetadata.
     await this.lazyMetadata.get();
-    return _state;
+    return globalThis._state;
   }
 
   public async *asDataset<Input, Expected>(): AsyncGenerator<
@@ -2934,7 +2947,7 @@ export class SpanImpl implements Span {
         objectId: await this.parentObjectId.get(),
       }).objectIdFields(),
     });
-    _state.globalBgLogger().log([new LazyValue(computeRecord)]);
+    globalThis._state.globalBgLogger().log([new LazyValue(computeRecord)]);
   }
 
   public logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void {
@@ -3014,7 +3027,7 @@ export class SpanImpl implements Span {
   }
 
   async flush(): Promise<void> {
-    return await _state.globalBgLogger().flush();
+    return await globalThis._state.globalBgLogger().flush();
   }
 
   public close(args?: EndSpanArgs): number {
@@ -3073,7 +3086,7 @@ export class Dataset<
   protected async getState(): Promise<BraintrustState> {
     // Ensure the login state is populated by awaiting lazyMetadata.
     await this.lazyMetadata.get();
-    return _state;
+    return globalThis._state;
   }
 
   /**
@@ -3136,7 +3149,7 @@ export class Dataset<
       metadata,
     }));
 
-    _state.globalBgLogger().log([args]);
+    globalThis._state.globalBgLogger().log([args]);
     return rowId;
   }
 
@@ -3148,7 +3161,7 @@ export class Dataset<
       _object_delete: true,
     }));
 
-    _state.globalBgLogger().log([args]);
+    globalThis._state.globalBgLogger().log([args]);
     return id;
   }
 
@@ -3196,7 +3209,7 @@ export class Dataset<
    * Flush any pending rows to the server.
    */
   async flush(): Promise<void> {
-    return await _state.globalBgLogger().flush();
+    return await globalThis._state.globalBgLogger().flush();
   }
 
   /**
