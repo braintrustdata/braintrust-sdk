@@ -215,7 +215,6 @@ export const NOOP_SPAN = new NoopSpan();
 // mechanism to propagate the initial state from some toplevel creator.
 declare global {
   var __inherited_braintrust_state: BraintrustState;
-  var _state: BraintrustState;
 }
 
 class BraintrustState {
@@ -275,6 +274,19 @@ class BraintrustState {
     this._logConn = null;
   }
 
+  public copyLoginInfo(other: BraintrustState) {
+    this.appUrl = other.appUrl;
+    this.loginToken = other.loginToken;
+    this.orgId = other.orgId;
+    this.orgName = other.orgName;
+    this.logUrl = other.logUrl;
+    this.loggedIn = other.loggedIn;
+    this.gitMetadataSettings = other.gitMetadataSettings;
+
+    this._apiConn = other._apiConn;
+    this._logConn = other._logConn;
+  }
+
   public apiConn(): HTTPConnection {
     if (!this._apiConn) {
       if (!this.appUrl) {
@@ -305,24 +317,18 @@ class BraintrustState {
   }
 }
 
-// let _state: BraintrustState;
+let _dangerousGlobalState: BraintrustState;
 
 // This function should be invoked exactly once after configuring the `iso`
 // object based on the platform. See js/src/node.ts for an example.
 export function _internalSetInitialState() {
-  // if (_state) {
-  //   throw new Error("Cannot set initial state more than once");
-  // }
-  globalThis._state =
+  if (_dangerousGlobalState) {
+    throw new Error("Cannot set initial state more than once");
+  }
+  _dangerousGlobalState =
     globalThis.__inherited_braintrust_state || new BraintrustState();
 }
-export function _hardSetState(state?: BraintrustState) {
-  globalThis._state = state || new BraintrustState();
-}
-export function _makeNewState() {
-  return new BraintrustState();
-}
-export const _internalGetGlobalState = () => globalThis._state;
+export const _internalGetGlobalState = () => _dangerousGlobalState;
 
 class FailedHTTPResponse extends Error {
   public status: number;
@@ -512,6 +518,7 @@ export interface LogOptions<IsAsyncFlush> {
 export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
 
 function logFeedbackImpl(
+  state: BraintrustState,
   parentObjectType: SpanObjectTypeV2,
   parentObjectId: LazyValue<string>,
   {
@@ -570,7 +577,7 @@ function logFeedbackImpl(
         [IS_MERGE_FIELD]: true,
       };
     });
-    globalThis._state.globalBgLogger().log([record]);
+    state.globalBgLogger().log([record]);
   }
 
   if (!isEmpty(comment)) {
@@ -591,7 +598,7 @@ function logFeedbackImpl(
         [AUDIT_METADATA_FIELD]: metadata,
       };
     });
-    globalThis._state.globalBgLogger().log([record]);
+    state.globalBgLogger().log([record]);
   }
 }
 
@@ -683,6 +690,7 @@ function startSpanParentArgs(args: {
 }
 
 export class Logger<IsAsyncFlush extends boolean> {
+  private state: BraintrustState;
   private lazyMetadata: LazyValue<OrgProjectMetadata>;
   private _asyncFlush: IsAsyncFlush | undefined;
   private computeMetadataArgs: Record<string, any> | undefined;
@@ -696,6 +704,7 @@ export class Logger<IsAsyncFlush extends boolean> {
   constructor(
     lazyMetadata: LazyValue<OrgProjectMetadata>,
     logOptions: LogOptions<IsAsyncFlush> = {},
+    state: BraintrustState = _internalGetGlobalState(),
   ) {
     this.lazyMetadata = lazyMetadata;
     this._asyncFlush = logOptions.asyncFlush;
@@ -703,6 +712,7 @@ export class Logger<IsAsyncFlush extends boolean> {
     this.lastStartTime = getCurrentUnixTimestamp();
     this.lazyId = new LazyValue(async () => await this.id);
     this.calledStartSpan = false;
+    this.state = state;
   }
 
   public get org_id(): Promise<string> {
@@ -836,7 +846,7 @@ export class Logger<IsAsyncFlush extends boolean> {
    * @param event.source (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
    */
   public logFeedback(event: LogFeedbackFullArgs): void {
-    logFeedbackImpl(this.parentObjectType(), this.lazyId, event);
+    logFeedbackImpl(this.state, this.parentObjectType(), this.lazyId, event);
   }
 
   /**
@@ -865,7 +875,7 @@ export class Logger<IsAsyncFlush extends boolean> {
    * Flush any pending logs to the server.
    */
   async flush(): Promise<void> {
-    return await globalThis._state.globalBgLogger().flush();
+    return await this.state.globalBgLogger().flush();
   }
 
   get asyncFlush(): IsAsyncFlush | undefined {
@@ -1288,6 +1298,7 @@ export type InitOptions<IsOpen extends boolean> = {
   baseExperimentId?: string;
   repoInfo?: RepoInfo;
   setCurrent?: boolean;
+  state?: BraintrustState;
 } & InitOpenOption<IsOpen>;
 
 export type FullInitOptions<IsOpen extends boolean> = {
@@ -1371,7 +1382,10 @@ export function init<IsOpen extends boolean = false>(
     projectId,
     baseExperimentId,
     repoInfo,
+    state: stateArg,
   } = options;
+
+  const state = stateArg ?? _internalGetGlobalState();
 
   if (open && update) {
     throw new Error("Cannot open and update an experiment at the same time");
@@ -1392,11 +1406,11 @@ export function init<IsOpen extends boolean = false>(
         const args: Record<string, unknown> = {
           project_name: project,
           project_id: projectId,
-          org_name: globalThis._state.orgName,
+          org_name: state.orgName,
           experiment_name: experiment,
         };
 
-        const response = await globalThis._state
+        const response = await state
           .apiConn()
           .post_json("api/experiment/get", args);
 
@@ -1439,7 +1453,7 @@ export function init<IsOpen extends boolean = false>(
       const args: Record<string, unknown> = {
         project_name: project,
         project_id: projectId,
-        org_id: globalThis._state.orgId,
+        org_id: state.orgId,
         update,
       };
 
@@ -1456,7 +1470,7 @@ export function init<IsOpen extends boolean = false>(
           return repoInfo;
         }
         let mergedGitMetadataSettings = {
-          ...(globalThis._state.gitMetadataSettings || {
+          ...(state.gitMetadataSettings || {
             collect: "all",
           }),
         };
@@ -1497,7 +1511,7 @@ export function init<IsOpen extends boolean = false>(
       let response = null;
       while (true) {
         try {
-          response = await globalThis._state
+          response = await state
             .apiConn()
             .post_json("api/experiment/register", args);
           break;
@@ -1533,7 +1547,7 @@ export function init<IsOpen extends boolean = false>(
 
   const ret = new Experiment(lazyMetadata, dataset);
   if (options.setCurrent ?? true) {
-    globalThis._state.currentExperiment = ret;
+    state.currentExperiment = ret;
   }
   return ret as InitializedExperiment<IsOpen>;
 }
@@ -1619,6 +1633,7 @@ type InitDatasetOptions<IsLegacyDataset extends boolean> = {
   orgName?: string;
   projectId?: string;
   datasetId?: string;
+  state?: BraintrustState;
 } & UseOutputOption<IsLegacyDataset>;
 
 type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
@@ -1692,7 +1707,10 @@ export function initDataset<
     projectId,
     useOutput: legacy,
     datasetId,
+    state: stateArg,
   } = options;
+
+  const state = stateArg ?? _internalGetGlobalState();
 
   const lazyMetadata: LazyValue<ProjectDatasetMetadata> = new LazyValue(
     async () => {
@@ -1703,13 +1721,13 @@ export function initDataset<
       });
 
       const args: Record<string, unknown> = {
-        org_id: globalThis._state.orgId,
+        org_id: state.orgId,
         project_name: project,
         project_id: projectId,
         dataset_name: dataset,
         description,
       };
-      const response = await globalThis._state
+      const response = await state
         .apiConn()
         .post_json("api/dataset/register", args);
 
@@ -1755,19 +1773,19 @@ export function withDataset<
 async function computeLoggerMetadata({
   project_name,
   project_id,
+  state: stateArg,
 }: {
   project_name?: string;
   project_id?: string;
+  state?: BraintrustState;
 }) {
-  await login();
-  const org_id = globalThis._state.orgId!;
+  const state = stateArg ?? (await login());
+  const org_id = state.orgId!;
   if (project_id === undefined) {
-    const response = await globalThis._state
-      .apiConn()
-      .post_json("api/project/register", {
-        project_name: project_name || GLOBAL_PROJECT,
-        org_id,
-      });
+    const response = await state.apiConn().post_json("api/project/register", {
+      project_name: project_name || GLOBAL_PROJECT,
+      org_id,
+    });
     return {
       org_id,
       project: {
@@ -1777,7 +1795,7 @@ async function computeLoggerMetadata({
       },
     };
   } else if (project_name === undefined) {
-    const response = await globalThis._state.apiConn().get_json("api/project", {
+    const response = await state.apiConn().get_json("api/project", {
       id: project_id,
     });
     return {
@@ -1808,6 +1826,7 @@ type InitLoggerOptions<IsAsyncFlush> = {
   orgName?: string;
   forceLogin?: boolean;
   setCurrent?: boolean;
+  state?: BraintrustState;
 } & AsyncFlushArg<IsAsyncFlush>;
 
 /**
@@ -1836,7 +1855,10 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
     apiKey,
     orgName,
     forceLogin,
+    state: stateArg,
   } = options || {};
+
+  const state = stateArg ?? _internalGetGlobalState();
 
   const computeMetadataArgs = {
     project_name: projectName,
@@ -1859,7 +1881,7 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
     computeMetadataArgs,
   });
   if (options.setCurrent ?? true) {
-    globalThis._state.currentLogger = ret as Logger<false>;
+    state.currentLogger = ret as Logger<false>;
   }
   return ret;
 }
@@ -1976,7 +1998,7 @@ export async function login(
 ) {
   let { forceLogin = false } = options || {};
 
-  if (globalThis._state.loggedIn && !forceLogin) {
+  if (_dangerousGlobalState.loggedIn && !forceLogin) {
     // We have already logged in. If any provided login inputs disagree with our
     // existing settings, raise an Exception warning the user to try again with
     // `forceLogin: true`.
@@ -1991,18 +2013,35 @@ export async function login(
         );
       }
     }
-    checkUpdatedParam("appUrl", options.appUrl, globalThis._state.appUrl);
+    checkUpdatedParam("appUrl", options.appUrl, _dangerousGlobalState.appUrl);
     checkUpdatedParam(
       "apiKey",
       options.apiKey
         ? HTTPConnection.sanitize_token(options.apiKey)
         : undefined,
-      globalThis._state.loginToken,
+      _dangerousGlobalState.loginToken,
     );
-    checkUpdatedParam("orgName", options.orgName, globalThis._state.orgName);
-    return;
+    checkUpdatedParam(
+      "orgName",
+      options.orgName,
+      _dangerousGlobalState.orgName,
+    );
+    return _dangerousGlobalState;
   }
 
+  const newState = await loginToState(options);
+  _dangerousGlobalState.copyLoginInfo(newState);
+  return _dangerousGlobalState;
+}
+
+export async function loginToState(
+  options: {
+    appUrl?: string;
+    apiKey?: string;
+    orgName?: string;
+    forceLogin?: boolean;
+  } = {},
+) {
   const {
     appUrl = iso.getEnv("BRAINTRUST_APP_URL") || "https://www.braintrust.dev",
     apiKey = iso.getEnv("BRAINTRUST_API_KEY"),
@@ -2011,16 +2050,17 @@ export async function login(
 
   const appPublicUrl = iso.getEnv("BRAINTRUST_APP_PUBLIC_URL") || appUrl;
 
-  globalThis._state.resetLoginInfo();
+  const state = new BraintrustState();
+  state.resetLoginInfo();
 
-  globalThis._state.appUrl = appUrl;
-  globalThis._state.appPublicUrl = appPublicUrl;
+  state.appUrl = appUrl;
+  state.appPublicUrl = appPublicUrl;
 
   let conn = null;
 
   if (apiKey !== undefined) {
     const resp = await checkResponse(
-      await fetch(_urljoin(globalThis._state.appUrl, `/api/apikey/login`), {
+      await fetch(_urljoin(state.appUrl, `/api/apikey/login`), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -2034,7 +2074,7 @@ export async function login(
 
     _check_org_info(info.org_info, orgName);
 
-    conn = globalThis._state.logConn();
+    conn = state.logConn();
     conn.set_token(apiKey);
   } else {
     throw new Error(
@@ -2049,12 +2089,14 @@ export async function login(
   conn.make_long_lived();
 
   // Set the same token in the API
-  globalThis._state.apiConn().set_token(apiKey);
-  globalThis._state.loginToken = conn.token;
-  globalThis._state.loggedIn = true;
+  state.apiConn().set_token(apiKey);
+  state.loginToken = conn.token;
+  state.loggedIn = true;
 
   // Relpace the global logger's logConn with this one.
-  globalThis._state.loginReplaceLogConn(conn);
+  state.loginReplaceLogConn(conn);
+
+  return state;
 }
 
 // XXX We should remove these global functions now
