@@ -2270,7 +2270,7 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
  * See `traced` for full details.
  */
 export function startSpan<IsAsyncFlush extends boolean = false>(
-  args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush>,
+  args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
 ): Span {
   return startSpanAndIsLogger(args).span;
 }
