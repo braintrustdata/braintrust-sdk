@@ -608,6 +608,7 @@ interface ParentSpanIds {
 }
 
 function spanComponentsToObjectIdLambda(
+  state: BraintrustState,
   components: SpanComponentsV2,
 ): () => Promise<string> {
   if (components.objectId) {
@@ -625,7 +626,7 @@ function spanComponentsToObjectIdLambda(
         "Impossible: computeObjectMetadataArgs not supported for experiments",
       );
     case SpanObjectTypeV2.PROJECT_LOGS:
-      const args = components.computeObjectMetadataArgs;
+      const args = { state, ...components.computeObjectMetadataArgs };
       return async () => (await computeLoggerMetadata(args)).project.id;
     default:
       const x: never = components.objectType;
@@ -634,6 +635,7 @@ function spanComponentsToObjectIdLambda(
 }
 
 function startSpanParentArgs(args: {
+  state: BraintrustState;
   parent: string | undefined;
   parentObjectType: SpanObjectTypeV2;
   parentObjectId: LazyValue<string>;
@@ -658,8 +660,10 @@ function startSpanParentArgs(args: {
       );
     }
 
-    const parentComponentsObjectIdLambda =
-      spanComponentsToObjectIdLambda(parentComponents);
+    const parentComponentsObjectIdLambda = spanComponentsToObjectIdLambda(
+      args.state,
+      parentComponents,
+    );
     const computeParentObjectId = async () => {
       const parentComponentsObjectId = await parentComponentsObjectIdLambda();
       if ((await args.parentObjectId.get()) !== parentComponentsObjectId) {
@@ -824,6 +828,7 @@ export class Logger<IsAsyncFlush extends boolean> {
     return new SpanImpl({
       state: this.state,
       ...startSpanParentArgs({
+        state: this.state,
         parent: args?.parent,
         parentObjectType: this.parentObjectType(),
         parentObjectId: this.lazyId,
@@ -1386,7 +1391,7 @@ export function init<IsOpen extends boolean = false>(
     state: stateArg,
   } = options;
 
-  const state = stateArg ?? _internalGetGlobalState();
+  const state = stateArg ?? _dangerousGlobalState;
 
   if (open && update) {
     throw new Error("Cannot open and update an experiment at the same time");
@@ -1779,7 +1784,7 @@ async function computeLoggerMetadata({
 }: {
   project_name?: string;
   project_id?: string;
-  state?: BraintrustState;
+  state: BraintrustState;
 }) {
   const state = stateArg ?? (await login());
   const org_id = state.orgId!;
@@ -1865,6 +1870,7 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
   const computeMetadataArgs = {
     project_name: projectName,
     project_id: projectId,
+    state,
   };
   const lazyMetadata: LazyValue<OrgProjectMetadata> = new LazyValue(
     async () => {
@@ -2279,7 +2285,9 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
       state,
       ...args,
       parentObjectType: components.objectType,
-      parentObjectId: new LazyValue(spanComponentsToObjectIdLambda(components)),
+      parentObjectId: new LazyValue(
+        spanComponentsToObjectIdLambda(state, components),
+      ),
       parentComputeObjectMetadataArgs: components.computeObjectMetadataArgs,
       parentSpanIds,
     });
@@ -2674,6 +2682,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     return new SpanImpl({
       state: this.state,
       ...startSpanParentArgs({
+        state: this.state,
         parent: args?.parent,
         parentObjectType: this.parentObjectType(),
         parentObjectId: this.lazyId,
@@ -3059,6 +3068,7 @@ export class SpanImpl implements Span {
       state: this.state,
       ...args,
       ...startSpanParentArgs({
+        state: this.state,
         parent: args?.parent,
         parentObjectType: this.parentObjectType,
         parentObjectId: this.parentObjectId,
