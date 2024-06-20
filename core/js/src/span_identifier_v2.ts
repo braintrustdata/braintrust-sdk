@@ -25,8 +25,8 @@ const INVALID_ENCODING_ERRMSG = `SpanComponents string is not properly encoded. 
 const INTEGER_ENCODING_NUM_BYTES = 4;
 
 export enum SpanObjectTypeV2 {
-  EXPERIMENT = 0,
-  PROJECT_LOGS = 1,
+  EXPERIMENT = 1,
+  PROJECT_LOGS = 2,
 }
 
 const SpanObjectTypeV2EnumSchema = z.nativeEnum(SpanObjectTypeV2);
