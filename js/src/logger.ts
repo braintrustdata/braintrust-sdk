@@ -242,16 +242,14 @@ export class BraintrustState {
   private _apiConn: HTTPConnection | null = null;
   private _logConn: HTTPConnection | null = null;
 
-  constructor() {
+  constructor(private loginParams: LoginOptions) {
     this.id = new Date().toLocaleString(); // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
     this.currentExperiment = undefined;
     this.currentLogger = undefined;
     this.currentSpan = iso.newAsyncLocalStorage();
 
     const defaultGetLogConn = async () => {
-      if (this.logUrl === null) {
-        await login();
-      }
+      await this.login({ force: false });
       return this.logConn();
     };
     this._globalBgLogger = new BackgroundLogger(
@@ -287,6 +285,14 @@ export class BraintrustState {
 
     this._apiConn = other._apiConn;
     this._logConn = other._logConn;
+  }
+
+  private async login({ force }: { force: boolean }) {
+    if (!force && this.logUrl) {
+      return;
+    }
+    const newState = await loginToState(this.loginParams);
+    this.copyLoginInfo(newState);
   }
 
   public apiConn(): HTTPConnection {
@@ -328,7 +334,10 @@ export function _internalSetInitialState() {
     throw new Error("Cannot set initial state more than once");
   }
   _dangerousGlobalState =
-    globalThis.__inherited_braintrust_state || new BraintrustState();
+    globalThis.__inherited_braintrust_state ||
+    new BraintrustState({
+      /*empty login options*/
+    });
 }
 export const _internalGetGlobalState = () => _dangerousGlobalState;
 
@@ -1998,6 +2007,12 @@ export async function loadPrompt({
   return new Prompt(metadata, defaults || {}, noTrace);
 }
 
+export interface LoginOptions {
+  appUrl?: string;
+  apiKey?: string;
+  orgName?: string;
+}
+
 /**
  * Log into Braintrust. This will prompt you for your API token, which you can find at
  * https://www.braintrust.dev/app/token. This method is called automatically by `init()`.
@@ -2010,12 +2025,7 @@ export async function loadPrompt({
  * @param options.forceLogin Login again, even if you have already logged in (by default, this function will exit quickly if you have already logged in)
  */
 export async function login(
-  options: {
-    appUrl?: string;
-    apiKey?: string;
-    orgName?: string;
-    forceLogin?: boolean;
-  } = {},
+  options: LoginOptions & { forceLogin?: boolean } = {},
 ) {
   let { forceLogin = false } = options || {};
 
@@ -2055,14 +2065,7 @@ export async function login(
   return _dangerousGlobalState;
 }
 
-export async function loginToState(
-  options: {
-    appUrl?: string;
-    apiKey?: string;
-    orgName?: string;
-    forceLogin?: boolean;
-  } = {},
-) {
+export async function loginToState(options: LoginOptions = {}) {
   const {
     appUrl = iso.getEnv("BRAINTRUST_APP_URL") || "https://www.braintrust.dev",
     apiKey = iso.getEnv("BRAINTRUST_API_KEY"),
@@ -2071,7 +2074,7 @@ export async function loginToState(
 
   const appPublicUrl = iso.getEnv("BRAINTRUST_APP_PUBLIC_URL") || appUrl;
 
-  const state = new BraintrustState();
+  const state = new BraintrustState(options);
   state.resetLoginInfo();
 
   state.appUrl = appUrl;
