@@ -1882,26 +1882,25 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
     state: stateArg,
   } = options || {};
 
-  const state = stateArg ?? _internalGetGlobalState();
   const computeMetadataArgs = {
     project_name: projectName,
     project_id: projectId,
-    state,
   };
   const lazyMetadata: LazyValue<OrgProjectMetadata> = new LazyValue(
     async () => {
-      if (!stateArg) {
-        await login({
+      const state =
+        stateArg ??
+        (await login({
           orgName: orgName,
           apiKey,
           appUrl,
           forceLogin,
-        });
-      }
-      return computeLoggerMetadata(computeMetadataArgs);
+        }));
+      return computeLoggerMetadata({ state, ...computeMetadataArgs });
     },
   );
 
+  const state = stateArg ?? _dangerousGlobalState;
   const ret = new Logger<IsAsyncFlush>(state, lazyMetadata, {
     asyncFlush,
     computeMetadataArgs,
