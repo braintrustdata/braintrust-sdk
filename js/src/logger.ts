@@ -157,7 +157,7 @@ export interface Span {
   close(args?: EndSpanArgs): number;
 
   /**
-   * Set the span's name after it's created
+   * Set the span's name, type, or other attributes after it's created.
    */
   setAttributes(args: Omit<StartSpanArgs, "event">): void;
 
@@ -2896,7 +2896,6 @@ export class SpanImpl implements Span {
 
   // `internalData` contains fields that are not part of the "user-sanitized"
   // set of fields which we want to log in just one of the span rows.
-  private internalData: Partial<ExperimentEvent>;
   private isMerge: boolean;
   private loggedEndTime: number | undefined;
 
@@ -2949,7 +2948,7 @@ export class SpanImpl implements Span {
       return "subspan";
     })();
 
-    this.internalData = {
+    const internalData = {
       metrics: {
         start: args.startTime ?? getCurrentUnixTimestamp(),
       },
@@ -2977,7 +2976,7 @@ export class SpanImpl implements Span {
     // object will be merges.
     this.isMerge = false;
     const { id: _id, ...eventRest } = event;
-    this.log(eventRest);
+    this.logInternal({ event: eventRest, internalData });
     this.isMerge = true;
   }
 
@@ -2986,20 +2985,28 @@ export class SpanImpl implements Span {
   }
 
   public setAttributes(args: Omit<StartSpanArgs, "event">): void {
-    this.internalData.span_attributes = {
-      ...this.internalData.span_attributes,
-      ...args,
-    };
+    this.logInternal({ internalData: { span_attributes: args } });
   }
 
   public log(event: ExperimentLogPartialArgs): void {
+    this.logInternal({ event });
+  }
+
+  private logInternal({
+    event,
+    internalData,
+  }: {
+    event?: ExperimentLogPartialArgs;
+    // `internalData` contains fields that are not part of the "user-sanitized"
+    // set of fields which we want to log in just one of the span rows.
+    internalData?: Partial<ExperimentEvent>;
+  }): void {
     // There should be no overlap between the dictionaries being merged,
     // except for `sanitized` and `internalData`, where the former overrides
     // the latter.
-    const sanitized = validateAndSanitizeExperimentLogPartialArgs(event);
-    let sanitizedAndInternalData = { ...this.internalData };
+    const sanitized = validateAndSanitizeExperimentLogPartialArgs(event ?? {});
+    let sanitizedAndInternalData = { ...internalData };
     mergeDicts(sanitizedAndInternalData, sanitized);
-    this.internalData = {};
 
     // We both check for serializability and round-trip `partialRecord` through
     // JSON in order to create a "deep copy". This has the benefit of cutting
@@ -3079,14 +3086,14 @@ export class SpanImpl implements Span {
 
   public end(args?: EndSpanArgs): number {
     let endTime: number;
+    let internalData: Partial<ExperimentEvent> = {};
     if (!this.loggedEndTime) {
       endTime = args?.endTime ?? getCurrentUnixTimestamp();
-      const sanitized = { metrics: { end: endTime } };
-      this.internalData = mergeDicts({ ...this.internalData }, sanitized);
+      internalData = { metrics: { end: endTime } };
     } else {
       endTime = this.loggedEndTime;
     }
-    this.log({});
+    this.logInternal({ internalData });
     return endTime;
   }
 
