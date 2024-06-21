@@ -1746,12 +1746,12 @@ async function computeLoggerMetadata({
   project_name,
   project_id,
 }: {
-  project_name?: string;
-  project_id?: string;
+  project_name?: string | null;
+  project_id?: string | null;
 }) {
   await login();
   const org_id = _state.orgId!;
-  if (project_id === undefined) {
+  if (isEmpty(project_id)) {
     const response = await _state.apiConn().post_json("api/project/register", {
       project_name: project_name || GLOBAL_PROJECT,
       org_id,
@@ -1764,7 +1764,7 @@ async function computeLoggerMetadata({
         fullInfo: response.project,
       },
     };
-  } else if (project_name === undefined) {
+  } else if (isEmpty(project_name)) {
     const response = await _state.apiConn().get_json("api/project", {
       id: project_id,
     });
