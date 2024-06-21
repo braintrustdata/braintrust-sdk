@@ -159,7 +159,7 @@ export interface Span {
   /**
    * Set the span's name after it's created
    */
-  setName(name: string): void;
+  setAttributes(args: Omit<StartSpanArgs, "event">): void;
 
   // For type identification.
   kind: "span";
@@ -205,7 +205,7 @@ export class NoopSpan implements Span {
     return this.end(args);
   }
 
-  public setName(_name: string) {}
+  public setAttributes(_args: Omit<StartSpanArgs, "event">) {}
 }
 
 export const NOOP_SPAN = new NoopSpan();
@@ -2886,11 +2886,11 @@ export class SpanImpl implements Span {
     return this._id;
   }
 
-  public setName(name: string): void {
-    if (!this.internalData.span_attributes) {
-      this.internalData.span_attributes = {};
-    }
-    this.internalData.span_attributes.name = name;
+  public setAttributes(args: Omit<StartSpanArgs, "event">): void {
+    this.internalData.span_attributes = {
+      ...this.internalData.span_attributes,
+      ...args,
+    };
   }
 
   public log(event: ExperimentLogPartialArgs): void {
