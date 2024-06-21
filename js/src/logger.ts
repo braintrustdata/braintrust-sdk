@@ -157,7 +157,7 @@ export interface Span {
   close(args?: EndSpanArgs): number;
 
   /**
-   * Set the span's name after it's created
+   * Set the span's name, type, or other attributes after it's created.
    */
   setAttributes(args: Omit<StartSpanArgs, "event">): void;
 
@@ -2887,18 +2887,25 @@ export class SpanImpl implements Span {
   }
 
   public setAttributes(args: Omit<StartSpanArgs, "event">): void {
-    this.internalData.span_attributes = {
-      ...this.internalData.span_attributes,
-      ...args,
-    };
+    this.logInternal({ internalData: { span_attributes: args } });
   }
 
   public log(event: ExperimentLogPartialArgs): void {
+    this.logInternal({ event });
+  }
+
+  private logInternal({
+    event,
+    internalData,
+  }: {
+    event?: ExperimentLogPartialArgs;
+    internalData?: Partial<ExperimentEvent>;
+  }): void {
     // There should be no overlap between the dictionaries being merged,
     // except for `sanitized` and `internalData`, where the former overrides
     // the latter.
-    const sanitized = validateAndSanitizeExperimentLogPartialArgs(event);
-    let sanitizedAndInternalData = { ...this.internalData };
+    const sanitized = validateAndSanitizeExperimentLogPartialArgs(event ?? {});
+    let sanitizedAndInternalData = { ...this.internalData, ...internalData };
     mergeDicts(sanitizedAndInternalData, sanitized);
     this.internalData = {};
 
