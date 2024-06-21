@@ -136,6 +136,21 @@ class Span(ABC):
         """Alias for `end`."""
 
     @abstractmethod
+    def set_attributes(self, name=None, type=None, span_attributes=None):
+        """Set attributes on the span. These attributes will be attached to all log events within the span.
+        The attributes are equivalent to the arguments to start_span
+
+        :param name: Optional name of the span. If not provided, a name will be inferred from the call stack.
+        :param type: Optional type of the span. Use the `SpanTypeAttribute` enum or just provide a string directly.
+        If not provided, the type will be unset.
+        :param span_attributes: Optional additional attributes to attach to the span, such as a type name.
+        :param start_time: Optional start time of the span, as a timestamp in seconds.
+        :param set_current: If true (the default), the span will be marked as the currently-active span for the duration of the context manager.
+        :param parent: Optional parent info string for the span. The string can be generated from `[Span,Experiment,Logger].export`. If not provided, the current span will be used (depending on context). This is useful for adding spans to an existing trace.
+        """
+        pass
+
+    @abstractmethod
     def __enter__(self):
         pass
 
@@ -183,6 +198,9 @@ class _NoopSpan(Span):
 
     def close(self, end_time=None):
         return self.end(end_time)
+
+    def set_attributes(self, name=None, type=None, span_attributes=None):
+        pass
 
     def __enter__(self):
         return self
@@ -2145,6 +2163,19 @@ class SpanImpl(Span):
     def id(self):
         return self._id
 
+    def set_attributes(self, name=None, type=None, span_attributes=None):
+        self.internal_data["span_attributes"] = {
+            **(self.internal_data.get("span_attributes") or {}),
+            **_strip_nones(
+                dict(
+                    name=name,
+                    type=type,
+                    **(span_attributes or {}),
+                ),
+                deep=False,
+            ),
+        }
+
     def log(self, **event):
         # There should be no overlap between the dictionaries being merged,
         # except for `sanitized` and `internal_data`, where the former overrides
@@ -2227,7 +2258,7 @@ class SpanImpl(Span):
     def end(self, end_time=None):
         if not self._logged_end_time:
             end_time = end_time or time.time()
-            self.internal_data = dict(metrics=dict(end=end_time))
+            self.internal_data = merge_dicts({**self.internal_data}, dict(metrics=dict(end=end_time)))
         else:
             end_time = self._logged_end_time
         self.log()
