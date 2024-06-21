@@ -2128,7 +2128,7 @@ class SpanImpl(Span):
             _EXEC_COUNTER += 1
             exec_counter = _EXEC_COUNTER
 
-        self.internal_data = dict(
+        internal_data = dict(
             metrics=dict(
                 start=start_time or time.time(),
             ),
@@ -2137,7 +2137,7 @@ class SpanImpl(Span):
             created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         )
         if caller_location:
-            self.internal_data["context"] = caller_location
+            internal_data["context"] = caller_location
 
         self._id = event.get("id")
         if self._id is None:
@@ -2153,7 +2153,7 @@ class SpanImpl(Span):
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.
         self._is_merge = False
-        self.log(**{k: v for k, v in event.items() if k != "id"})
+        self.log_internal(event={k: v for k, v in event.items() if k != "id"}, internal_data=internal_data)
         self._is_merge = True
 
     @property
@@ -2161,26 +2161,29 @@ class SpanImpl(Span):
         return self._id
 
     def set_attributes(self, name=None, type=None, span_attributes=None):
-        self.internal_data["span_attributes"] = {
-            **(self.internal_data.get("span_attributes") or {}),
-            **_strip_nones(
-                dict(
-                    name=name,
-                    type=type,
-                    **(span_attributes or {}),
+        self.log_internal(
+            internal_data={
+                "span_attributes": _strip_nones(
+                    dict(
+                        name=name,
+                        type=type,
+                        **(span_attributes or {}),
+                    ),
+                    deep=False,
                 ),
-                deep=False,
-            ),
-        }
+            }
+        )
 
     def log(self, **event):
+        return self.log_internal(event=event, internal_data=None)
+
+    def log_internal(self, event=None, internal_data=None):
         # There should be no overlap between the dictionaries being merged,
         # except for `sanitized` and `internal_data`, where the former overrides
         # the latter.
-        sanitized = _validate_and_sanitize_experiment_log_partial_args(event)
-        sanitized_and_internal_data = _strip_nones(self.internal_data, deep=True)
+        sanitized = _validate_and_sanitize_experiment_log_partial_args(event or {})
+        sanitized_and_internal_data = _strip_nones(internal_data or {}, deep=True)
         merge_dicts(sanitized_and_internal_data, _strip_nones(sanitized, deep=False))
-        self.internal_data = {}
 
         # We both check for serializability and round-trip `partial_record`
         # through JSON in order to create a "deep copy". This has the benefit of
@@ -2253,12 +2256,13 @@ class SpanImpl(Span):
         )
 
     def end(self, end_time=None):
+        internal_data = {}
         if not self._logged_end_time:
             end_time = end_time or time.time()
-            self.internal_data = merge_dicts({**self.internal_data}, dict(metrics=dict(end=end_time)))
+            internal_data = dict(metrics=dict(end=end_time))
         else:
             end_time = self._logged_end_time
-        self.log()
+        self.log_internal(internal_data=internal_data)
         return end_time
 
     def export(self) -> str:
