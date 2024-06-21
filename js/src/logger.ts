@@ -228,7 +228,7 @@ export class BraintrustState {
   // This is preferable to replacing the whole logger, which would create the
   // possibility of multiple loggers floating around, which may not log in a
   // deterministic order.
-  private _globalBgLogger: BackgroundLogger;
+  private _bgLogger: BackgroundLogger;
 
   public appUrl: string | null = null;
   public appPublicUrl: string | null = null;
@@ -249,12 +249,10 @@ export class BraintrustState {
     this.currentSpan = iso.newAsyncLocalStorage();
 
     const defaultGetLogConn = async () => {
-      await this.login({ force: false });
+      await this.login({});
       return this.logConn();
     };
-    this._globalBgLogger = new BackgroundLogger(
-      new LazyValue(defaultGetLogConn),
-    );
+    this._bgLogger = new BackgroundLogger(new LazyValue(defaultGetLogConn));
 
     this.resetLoginInfo();
 
@@ -263,6 +261,7 @@ export class BraintrustState {
 
   public resetLoginInfo() {
     this.appUrl = null;
+    this.appPublicUrl = null;
     this.loginToken = null;
     this.orgId = null;
     this.orgName = null;
@@ -276,6 +275,7 @@ export class BraintrustState {
 
   public copyLoginInfo(other: BraintrustState) {
     this.appUrl = other.appUrl;
+    this.appPublicUrl = other.appPublicUrl;
     this.loginToken = other.loginToken;
     this.orgId = other.orgId;
     this.orgName = other.orgName;
@@ -287,11 +287,14 @@ export class BraintrustState {
     this._logConn = other._logConn;
   }
 
-  private async login({ force }: { force: boolean }) {
-    if (!force && this.logUrl) {
+  public async login(loginParams: LoginOptions) {
+    if (this.logUrl) {
       return;
     }
-    const newState = await loginToState(this.loginParams);
+    const newState = await loginToState({
+      ...this.loginParams,
+      ...loginParams,
+    });
     this.copyLoginInfo(newState);
   }
 
@@ -315,31 +318,31 @@ export class BraintrustState {
     return this._logConn!;
   }
 
-  public globalBgLogger(): BackgroundLogger {
-    return this._globalBgLogger;
+  public bgLogger(): BackgroundLogger {
+    return this._bgLogger;
   }
 
   // Should only be called by the login function.
   public loginReplaceLogConn(logConn: HTTPConnection) {
-    this._globalBgLogger.internalReplaceLogConn(logConn);
+    this._bgLogger.internalReplaceLogConn(logConn);
   }
 }
 
-let _dangerousGlobalState: BraintrustState;
+let _globalState: BraintrustState;
 
 // This function should be invoked exactly once after configuring the `iso`
 // object based on the platform. See js/src/node.ts for an example.
 export function _internalSetInitialState() {
-  if (_dangerousGlobalState) {
+  if (_globalState) {
     throw new Error("Cannot set initial state more than once");
   }
-  _dangerousGlobalState =
+  _globalState =
     globalThis.__inherited_braintrust_state ||
     new BraintrustState({
       /*empty login options*/
     });
 }
-export const _internalGetGlobalState = () => _dangerousGlobalState;
+export const _internalGetGlobalState = () => _globalState;
 
 class FailedHTTPResponse extends Error {
   public status: number;
@@ -588,7 +591,7 @@ function logFeedbackImpl(
         [IS_MERGE_FIELD]: true,
       };
     });
-    state.globalBgLogger().log([record]);
+    state.bgLogger().log([record]);
   }
 
   if (!isEmpty(comment)) {
@@ -609,7 +612,7 @@ function logFeedbackImpl(
         [AUDIT_METADATA_FIELD]: metadata,
       };
     });
-    state.globalBgLogger().log([record]);
+    state.bgLogger().log([record]);
   }
 }
 
@@ -637,8 +640,12 @@ function spanComponentsToObjectIdLambda(
         "Impossible: computeObjectMetadataArgs not supported for experiments",
       );
     case SpanObjectTypeV2.PROJECT_LOGS:
-      const args = { state, ...components.computeObjectMetadataArgs };
-      return async () => (await computeLoggerMetadata(args)).project.id;
+      return async () =>
+        (
+          await computeLoggerMetadata(state, {
+            ...components.computeObjectMetadataArgs,
+          })
+        ).project.id;
     default:
       const x: never = components.objectType;
       throw new Error(`Unknown object type: ${x}`);
@@ -892,7 +899,7 @@ export class Logger<IsAsyncFlush extends boolean> {
    * Flush any pending logs to the server.
    */
   async flush(): Promise<void> {
-    return await this.state.globalBgLogger().flush();
+    return await this.state.bgLogger().flush();
   }
 
   get asyncFlush(): IsAsyncFlush | undefined {
@@ -921,8 +928,8 @@ function now() {
   return new Date().getTime();
 }
 
-// We should only have one instance of this object in
-// 'BraintrustState._globalBgLogger'. Be careful about spawning multiple
+// We should only have one instance of this object per state object in
+// 'BraintrustState._bgLogger'. Be careful about spawning multiple
 // instances of this class, because concurrent BackgroundLoggers will not log to
 // the backend in a deterministic order.
 class BackgroundLogger {
@@ -1406,6 +1413,8 @@ export function init<IsOpen extends boolean = false>(
     throw new Error("Cannot open and update an experiment at the same time");
   }
 
+  const state = stateArg ?? _globalState;
+
   if (open) {
     if (isEmpty(experiment)) {
       throw new Error(`Cannot open an experiment without specifying its name`);
@@ -1413,13 +1422,7 @@ export function init<IsOpen extends boolean = false>(
 
     const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(
       async () => {
-        const state =
-          stateArg ??
-          (await login({
-            orgName: orgName,
-            apiKey,
-            appUrl,
-          }));
+        await state.login({ apiKey, appUrl, orgName });
         const args: Record<string, unknown> = {
           project_name: project,
           project_id: projectId,
@@ -1456,20 +1459,14 @@ export function init<IsOpen extends boolean = false>(
     );
 
     return new ReadonlyExperiment(
-      stateArg ?? _dangerousGlobalState,
+      stateArg ?? _globalState,
       lazyMetadata,
     ) as InitializedExperiment<IsOpen>;
   }
 
   const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(
     async () => {
-      const state =
-        stateArg ??
-        (await login({
-          orgName: orgName,
-          apiKey,
-          appUrl,
-        }));
+      await state.login({ apiKey, appUrl, orgName });
       const args: Record<string, unknown> = {
         project_name: project,
         project_id: projectId,
@@ -1565,7 +1562,6 @@ export function init<IsOpen extends boolean = false>(
     },
   );
 
-  const state = stateArg ?? _dangerousGlobalState;
   const ret = new Experiment(state, lazyMetadata, dataset);
   if (options.setCurrent ?? true) {
     state.currentExperiment = ret;
@@ -1729,15 +1725,15 @@ export function initDataset<
     state: stateArg,
   } = options;
 
+  const state = stateArg ?? _globalState;
+
   const lazyMetadata: LazyValue<ProjectDatasetMetadata> = new LazyValue(
     async () => {
-      const state =
-        stateArg ??
-        (await login({
-          orgName,
-          apiKey,
-          appUrl,
-        }));
+      await state.login({
+        orgName,
+        apiKey,
+        appUrl,
+      });
 
       const args: Record<string, unknown> = {
         org_id: state.orgId,
@@ -1765,12 +1761,7 @@ export function initDataset<
     },
   );
 
-  return new Dataset(
-    stateArg ?? _dangerousGlobalState,
-    lazyMetadata,
-    version,
-    legacy,
-  );
+  return new Dataset(stateArg ?? _globalState, lazyMetadata, version, legacy);
 }
 
 /**
@@ -1794,16 +1785,19 @@ export function withDataset<
 // Note: the argument names *must* serialize the same way as the argument names
 // for the corresponding python function, because this function may be invoked
 // from arguments serialized elsewhere.
-async function computeLoggerMetadata({
-  project_name,
-  project_id,
-  state: stateArg,
-}: {
-  project_name?: string;
-  project_id?: string;
-  state: BraintrustState;
-}) {
-  const state = stateArg ?? (await login());
+async function computeLoggerMetadata(
+  stateArg: BraintrustState | undefined,
+  {
+    project_name,
+    project_id,
+  }: {
+    project_name?: string;
+    project_id?: string;
+  },
+) {
+  const state = stateArg ?? _globalState;
+  await state.login({});
+
   const org_id = state.orgId!;
   if (isEmpty(project_id)) {
     const response = await state.apiConn().post_json("api/project/register", {
@@ -1896,11 +1890,11 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
           appUrl,
           forceLogin,
         }));
-      return computeLoggerMetadata({ state, ...computeMetadataArgs });
+      return computeLoggerMetadata(state, computeMetadataArgs);
     },
   );
 
-  const state = stateArg ?? _dangerousGlobalState;
+  const state = stateArg ?? _globalState;
   const ret = new Logger<IsAsyncFlush>(state, lazyMetadata, {
     asyncFlush,
     computeMetadataArgs,
@@ -1970,13 +1964,13 @@ export async function loadPrompt({
     throw new Error("Must specify slug");
   }
 
-  const state =
-    stateArg ??
-    (await login({
-      orgName,
-      apiKey,
-      appUrl,
-    }));
+  const state = stateArg ?? _globalState;
+
+  state.login({
+    orgName,
+    apiKey,
+    appUrl,
+  });
 
   const args: Record<string, string | undefined> = {
     project_name: projectName,
@@ -2026,7 +2020,7 @@ export async function login(
 ) {
   let { forceLogin = false } = options || {};
 
-  if (_dangerousGlobalState.loggedIn && !forceLogin) {
+  if (_globalState.loggedIn && !forceLogin) {
     // We have already logged in. If any provided login inputs disagree with our
     // existing settings, raise an Exception warning the user to try again with
     // `forceLogin: true`.
@@ -2041,25 +2035,19 @@ export async function login(
         );
       }
     }
-    checkUpdatedParam("appUrl", options.appUrl, _dangerousGlobalState.appUrl);
+    checkUpdatedParam("appUrl", options.appUrl, _globalState.appUrl);
     checkUpdatedParam(
       "apiKey",
       options.apiKey
         ? HTTPConnection.sanitize_token(options.apiKey)
         : undefined,
-      _dangerousGlobalState.loginToken,
+      _globalState.loginToken,
     );
-    checkUpdatedParam(
-      "orgName",
-      options.orgName,
-      _dangerousGlobalState.orgName,
-    );
-    return _dangerousGlobalState;
+    checkUpdatedParam("orgName", options.orgName, _globalState.orgName);
+    return _globalState;
   }
 
-  const newState = await loginToState(options);
-  _dangerousGlobalState.copyLoginInfo(newState);
-  return _dangerousGlobalState;
+  await _globalState.login(options);
 }
 
 export async function loginToState(options: LoginOptions = {}) {
@@ -2172,7 +2160,7 @@ type OptionalStateArg = {
 export function currentExperiment(
   options?: OptionalStateArg,
 ): Experiment | undefined {
-  const state = options?.state ?? _dangerousGlobalState;
+  const state = options?.state ?? _globalState;
   return state.currentExperiment;
 }
 
@@ -2182,7 +2170,7 @@ export function currentExperiment(
 export function currentLogger<IsAsyncFlush extends boolean>(
   options?: AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
 ): Logger<IsAsyncFlush> | undefined {
-  const state = options?.state ?? _dangerousGlobalState;
+  const state = options?.state ?? _globalState;
   return castLogger(state.currentLogger, options?.asyncFlush);
 }
 
@@ -2192,7 +2180,7 @@ export function currentLogger<IsAsyncFlush extends boolean>(
  * See `Span` for full details.
  */
 export function currentSpan(options?: OptionalStateArg): Span {
-  const state = options?.state ?? _dangerousGlobalState;
+  const state = options?.state ?? _globalState;
   return state.currentSpan.getStore() ?? NOOP_SPAN;
 }
 
@@ -2202,7 +2190,7 @@ export function currentSpan(options?: OptionalStateArg): Span {
 export function getSpanParentObject<IsAsyncFlush extends boolean>(
   options?: AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
 ): Span | Experiment | Logger<IsAsyncFlush> {
-  const state = options?.state ?? _dangerousGlobalState;
+  const state = options?.state ?? _globalState;
   const parentSpan = currentSpan({ state });
   if (!Object.is(parentSpan, NOOP_SPAN)) {
     return parentSpan;
@@ -2276,14 +2264,14 @@ export function startSpan<IsAsyncFlush extends boolean = false>(
  * Flush any pending rows to the server.
  */
 export async function flush(options?: OptionalStateArg): Promise<void> {
-  const state = options?.state ?? _dangerousGlobalState;
-  return await state.globalBgLogger().flush();
+  const state = options?.state ?? _globalState;
+  return await state.bgLogger().flush();
 }
 
 function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
 ): { span: Span; isLogger: boolean } {
-  const state = args?.state ?? _dangerousGlobalState;
+  const state = args?.state ?? _globalState;
   if (args?.parent) {
     const components = SpanComponentsV2.fromStr(args?.parent);
     const parentSpanIds: ParentSpanIds | undefined = components.rowIds
@@ -2320,7 +2308,7 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
 function withCurrent<R>(
   span: Span,
   callback: (span: Span) => R,
-  state: BraintrustState = _dangerousGlobalState,
+  state: BraintrustState = _globalState,
 ): R {
   return state.currentSpan.run(span, () => callback(span));
 }
@@ -2821,7 +2809,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
    * Flush any pending rows to the server.
    */
   async flush(): Promise<void> {
-    return await this.state.globalBgLogger().flush();
+    return await this.state.bgLogger().flush();
   }
 
   /**
@@ -3043,7 +3031,7 @@ export class SpanImpl implements Span {
         objectId: await this.parentObjectId.get(),
       }).objectIdFields(),
     });
-    this.state.globalBgLogger().log([new LazyValue(computeRecord)]);
+    this.state.bgLogger().log([new LazyValue(computeRecord)]);
   }
 
   public logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void {
@@ -3126,7 +3114,7 @@ export class SpanImpl implements Span {
   }
 
   async flush(): Promise<void> {
-    return await this.state.globalBgLogger().flush();
+    return await this.state.bgLogger().flush();
   }
 
   public close(args?: EndSpanArgs): number {
@@ -3249,7 +3237,7 @@ export class Dataset<
       metadata,
     }));
 
-    this.state.globalBgLogger().log([args]);
+    this.state.bgLogger().log([args]);
     return rowId;
   }
 
@@ -3261,7 +3249,7 @@ export class Dataset<
       _object_delete: true,
     }));
 
-    this.state.globalBgLogger().log([args]);
+    this.state.bgLogger().log([args]);
     return id;
   }
 
@@ -3309,7 +3297,7 @@ export class Dataset<
    * Flush any pending rows to the server.
    */
   async flush(): Promise<void> {
-    return await this.state.globalBgLogger().flush();
+    return await this.state.bgLogger().flush();
   }
 
   /**
