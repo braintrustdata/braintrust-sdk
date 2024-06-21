@@ -22,8 +22,8 @@ const INVALID_ENCODING_ERRMSG =
   "SpanComponents string is not properly encoded. This may be due to a version mismatch between the SDK library used to export the span and the library used to decode it. Please make sure you are using the same SDK version across the board";
 
 export enum SpanObjectTypeV1 {
-  EXPERIMENT = 0,
-  PROJECT_LOGS = 1,
+  EXPERIMENT = 1,
+  PROJECT_LOGS = 2,
 }
 
 const SpanObjectTypeV1EnumSchema = z.nativeEnum(SpanObjectTypeV1);
