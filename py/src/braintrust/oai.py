@@ -19,8 +19,21 @@ def postprocess_streaming_results(all_results):
     content = None
     tool_calls = None
     finish_reason = None
+    metrics = {}
     for result in all_results:
-        delta = result["choices"][0]["delta"]
+        if "usage" in result and result["usage"] is not None:
+            metrics = {
+                "tokens": result["usage"]["total_tokens"],
+                "prompt_tokens": result["usage"]["prompt_tokens"],
+                "completion_tokens": result["usage"]["completion_tokens"],
+            }
+        choices = result["choices"]
+        if not choices:
+            continue
+        delta = choices[0]["delta"]
+        if not delta:
+            continue
+
         if role is None and delta.get("role") is not None:
             role = delta.get("role")
 
@@ -41,18 +54,21 @@ def postprocess_streaming_results(all_results):
             else:
                 tool_calls[0]["function"]["arguments"] += delta["tool_calls"][0]["function"]["arguments"]
 
-    return [
-        {
-            "index": 0,
-            "message": {
-                "role": role,
-                "content": content,
-                "tool_calls": tool_calls,
-            },
-            "logprobs": None,
-            "finish_reason": finish_reason,
-        }
-    ]
+    return {
+        "metrics": metrics,
+        "output": [
+            {
+                "index": 0,
+                "message": {
+                    "role": role,
+                    "content": content,
+                    "tool_calls": tool_calls,
+                },
+                "logprobs": None,
+                "finish_reason": finish_reason,
+            }
+        ],
+    }
 
 
 class ChatCompletionWrapper:
@@ -99,7 +115,7 @@ class ChatCompletionWrapper:
                             all_results.append(item if isinstance(item, dict) else item.dict())
                             yield item
 
-                        span.log(output=postprocess_streaming_results(all_results))
+                        span.log(**postprocess_streaming_results(all_results))
                     finally:
                         span.end()
 
@@ -162,7 +178,7 @@ class ChatCompletionWrapper:
                             all_results.append(item if isinstance(item, dict) else item.dict())
                             yield item
 
-                        span.log(output=postprocess_streaming_results(all_results))
+                        span.log(**postprocess_streaming_results(all_results))
                     finally:
                         span.end()
 

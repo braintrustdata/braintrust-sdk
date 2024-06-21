@@ -159,7 +159,7 @@ export interface Span {
   /**
    * Set the span's name after it's created
    */
-  setName(name: string): void;
+  setAttributes(args: Omit<StartSpanArgs, "event">): void;
 
   // For type identification.
   kind: "span";
@@ -205,7 +205,7 @@ export class NoopSpan implements Span {
     return this.end(args);
   }
 
-  public setName(_name: string) {}
+  public setAttributes(_args: Omit<StartSpanArgs, "event">) {}
 }
 
 export const NOOP_SPAN = new NoopSpan();
@@ -1653,7 +1653,6 @@ type InitDatasetOptions<IsLegacyDataset extends boolean> = {
   apiKey?: string;
   orgName?: string;
   projectId?: string;
-  datasetId?: string;
   state?: BraintrustState;
 } & UseOutputOption<IsLegacyDataset>;
 
@@ -1727,7 +1726,6 @@ export function initDataset<
     orgName,
     projectId,
     useOutput: legacy,
-    datasetId,
     state: stateArg,
   } = options;
 
@@ -3000,11 +2998,11 @@ export class SpanImpl implements Span {
     return this._id;
   }
 
-  public setName(name: string): void {
-    if (!this.internalData.span_attributes) {
-      this.internalData.span_attributes = {};
-    }
-    this.internalData.span_attributes.name = name;
+  public setAttributes(args: Omit<StartSpanArgs, "event">): void {
+    this.internalData.span_attributes = {
+      ...this.internalData.span_attributes,
+      ...args,
+    };
   }
 
   public log(event: ExperimentLogPartialArgs): void {
@@ -3096,7 +3094,8 @@ export class SpanImpl implements Span {
     let endTime: number;
     if (!this.loggedEndTime) {
       endTime = args?.endTime ?? getCurrentUnixTimestamp();
-      this.internalData = { metrics: { end: endTime } };
+      const sanitized = { metrics: { end: endTime } };
+      this.internalData = mergeDicts({ ...this.internalData }, sanitized);
     } else {
       endTime = this.loggedEndTime;
     }
