@@ -1610,7 +1610,6 @@ type InitDatasetOptions<IsLegacyDataset extends boolean> = {
   apiKey?: string;
   orgName?: string;
   projectId?: string;
-  datasetId?: string;
 } & UseOutputOption<IsLegacyDataset>;
 
 type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
@@ -1683,7 +1682,6 @@ export function initDataset<
     orgName,
     projectId,
     useOutput: legacy,
-    datasetId,
   } = options;
 
   const lazyMetadata: LazyValue<ProjectDatasetMetadata> = new LazyValue(
