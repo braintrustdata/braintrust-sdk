@@ -287,8 +287,8 @@ export class BraintrustState {
     this._logConn = other._logConn;
   }
 
-  public async login(loginParams: LoginOptions) {
-    if (this.logUrl) {
+  public async login(loginParams: LoginOptions & { forceLogin?: boolean }) {
+    if (this.logUrl && !loginParams.forceLogin) {
       return;
     }
     const newState = await loginToState({
@@ -1786,7 +1786,7 @@ export function withDataset<
 // for the corresponding python function, because this function may be invoked
 // from arguments serialized elsewhere.
 async function computeLoggerMetadata(
-  stateArg: BraintrustState | undefined,
+  state: BraintrustState,
   {
     project_name,
     project_id,
@@ -1795,9 +1795,6 @@ async function computeLoggerMetadata(
     project_id?: string;
   },
 ) {
-  const state = stateArg ?? _globalState;
-  await state.login({});
-
   const org_id = state.orgId!;
   if (isEmpty(project_id)) {
     const response = await state.apiConn().post_json("api/project/register", {
@@ -1880,21 +1877,19 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
     project_name: projectName,
     project_id: projectId,
   };
+  const state = stateArg ?? _globalState;
   const lazyMetadata: LazyValue<OrgProjectMetadata> = new LazyValue(
     async () => {
-      const state =
-        stateArg ??
-        (await login({
-          orgName: orgName,
-          apiKey,
-          appUrl,
-          forceLogin,
-        }));
+      await state.login({
+        orgName: orgName,
+        apiKey,
+        appUrl,
+        forceLogin,
+      });
       return computeLoggerMetadata(state, computeMetadataArgs);
     },
   );
 
-  const state = stateArg ?? _globalState;
   const ret = new Logger<IsAsyncFlush>(state, lazyMetadata, {
     asyncFlush,
     computeMetadataArgs,
