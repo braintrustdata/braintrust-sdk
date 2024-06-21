@@ -244,23 +244,39 @@ async def await_or_run(event_loop, f, *args, **kwargs):
                 thread_pool.thread_pool(), run_f, args, kwargs, contextvars.copy_context()
             )
 
+def is_inspectable(obj):
+    """
+    True when obj is inspectable via `inspect`.
+    False when it is, e.g., a native function or builtin.
+    """
+    if obj.__name__ == 'pythonkit_swift_function' or obj.__name__ == "pythonkit_swift_function_with_keywords":
+        return False
+
+    t = type(obj)
+    if t.__module__ == 'builtins' and t.__name__ == 'PyCapsule':
+        return False
+
+    return True
+
 
 async def call_user_fn(event_loop, fn, **kwargs):
-    signature = inspect.signature(fn)
-    accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values())
-
+    accepts_kwargs = True
     positional_args = []
     final_kwargs = {}
 
-    for name, param in signature.parameters.items():
-        if param.kind == inspect.Parameter.VAR_KEYWORD:
-            continue
+    if is_inspectable(fn):
+        signature = inspect.signature(fn)
+        accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values())
 
-        if name in kwargs:
-            final_kwargs[name] = kwargs.pop(name)
-        else:
-            next_arg = list(kwargs.keys())[0]
-            final_kwargs[name] = kwargs.pop(next_arg)
+        for name, param in signature.parameters.items():
+            if param.kind == inspect.Parameter.VAR_KEYWORD:
+                continue
+
+            if name in kwargs:
+                final_kwargs[name] = kwargs.pop(name)
+            else:
+                next_arg = list(kwargs.keys())[0]
+                final_kwargs[name] = kwargs.pop(next_arg)
 
     if accepts_kwargs:
         final_kwargs.update(kwargs)
@@ -733,7 +749,9 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
 
                 # Check if the task takes a hooks argument
                 task_args = [datum.input]
-                if len(inspect.signature(evaluator.task).parameters) == 2:
+                if not is_inspectable(evaluator.task):
+                    task_args.append(hooks)
+                elif len(inspect.signature(evaluator.task).parameters) == 2:
                     task_args.append(hooks)
 
                 with root_span.start_span("task", span_attributes={"type": SpanTypeAttribute.TASK}) as span:
@@ -811,7 +829,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             project=evaluator.project_name, experiment=base_experiment.name, open=True, set_current=False
         ).as_dataset()
 
-    if inspect.isfunction(data_iterator):
+    if inspect.isfunction(data_iterator) or not is_inspectable(data_iterator):
         data_iterator = data_iterator()
 
     if not inspect.isasyncgen(data_iterator):
