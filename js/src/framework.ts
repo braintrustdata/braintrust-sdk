@@ -6,12 +6,12 @@ import {
   Span,
   init as _initExperiment,
   EvalCase,
-  InitOptions,
   BaseMetadata,
   DefaultMetadataType,
   ScoreSummary,
   MetricSummary,
   currentSpan,
+  FullInitOptions,
 } from "./logger";
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
@@ -157,6 +157,11 @@ export interface Evaluator<
    * Defaults to None, in which case there is no timeout.
    */
   timeout?: number;
+
+  /**
+   * If specified, uses the given project ID instead of the evaluator's name to identify the project.
+   */
+  projectId?: string;
 }
 
 export type EvalResultWithSummary<
@@ -231,10 +236,9 @@ export type EvaluatorFile = {
 };
 
 function initExperiment<IsOpen extends boolean = false>(
-  projectName: string,
-  options: Readonly<InitOptions<IsOpen>> = {},
+  options: Readonly<FullInitOptions<IsOpen>> = {},
 ) {
-  return _initExperiment(projectName, {
+  return _initExperiment({
     ...options,
     setCurrent: false,
   });
@@ -304,7 +308,10 @@ export async function Eval<
 
   const resolvedReporter = reporter || defaultReporter;
   try {
-    const experiment = initExperiment(name, {
+    const experiment = initExperiment({
+      ...(evaluator.projectId
+        ? { projectId: evaluator.projectId }
+        : { project: name }),
       experiment: evaluator.experimentName,
       metadata: evaluator.metadata,
       isPublic: evaluator.isPublic,
@@ -467,7 +474,10 @@ async function runEvaluatorInternal(
       }
       name = baseExperiment.name;
     }
-    dataResult = initExperiment(evaluator.projectName, {
+    dataResult = initExperiment({
+      ...(evaluator.projectId
+        ? { projectId: evaluator.projectId }
+        : { project: evaluator.projectName }),
       experiment: name,
       open: true,
     }).asDataset();

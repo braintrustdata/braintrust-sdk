@@ -250,6 +250,10 @@ export const functionDataSchema = z.union([
     type: z.literal("code"),
     data: codeBundleSchema,
   }),
+  z.strictObject({
+    type: z.literal("global"),
+    name: z.string(),
+  }),
 ]);
 
 export const functionSchema = promptSchemaObject

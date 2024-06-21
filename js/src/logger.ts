@@ -54,6 +54,7 @@ import {
   LazyValue,
 } from "./util";
 import Mustache from "mustache";
+import { z } from "zod";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -155,6 +156,11 @@ export interface Span {
    */
   close(args?: EndSpanArgs): number;
 
+  /**
+   * Set the span's name, type, or other attributes after it's created.
+   */
+  setAttributes(args: Omit<StartSpanArgs, "event">): void;
+
   // For type identification.
   kind: "span";
 }
@@ -198,6 +204,8 @@ export class NoopSpan implements Span {
   public close(args?: EndSpanArgs): number {
     return this.end(args);
   }
+
+  public setAttributes(_args: Omit<StartSpanArgs, "event">) {}
 }
 
 export const NOOP_SPAN = new NoopSpan();
@@ -235,7 +243,7 @@ class BraintrustState {
   private _logConn: HTTPConnection | null = null;
 
   constructor() {
-    this.id = uuidv4(); // This is for debugging
+    this.id = new Date().toLocaleString(); // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
     this.currentExperiment = undefined;
     this.currentLogger = undefined;
     this.currentSpan = iso.newAsyncLocalStorage();
@@ -2792,7 +2800,6 @@ export function newId() {
 export class SpanImpl implements Span {
   // `internalData` contains fields that are not part of the "user-sanitized"
   // set of fields which we want to log in just one of the span rows.
-  private internalData: Partial<ExperimentEvent>;
   private isMerge: boolean;
   private loggedEndTime: number | undefined;
 
@@ -2842,7 +2849,7 @@ export class SpanImpl implements Span {
       return "subspan";
     })();
 
-    this.internalData = {
+    const internalData = {
       metrics: {
         start: args.startTime ?? getCurrentUnixTimestamp(),
       },
@@ -2870,7 +2877,7 @@ export class SpanImpl implements Span {
     // object will be merges.
     this.isMerge = false;
     const { id: _id, ...eventRest } = event;
-    this.log(eventRest);
+    this.logInternal({ event: eventRest, internalData });
     this.isMerge = true;
   }
 
@@ -2878,14 +2885,29 @@ export class SpanImpl implements Span {
     return this._id;
   }
 
+  public setAttributes(args: Omit<StartSpanArgs, "event">): void {
+    this.logInternal({ internalData: { span_attributes: args } });
+  }
+
   public log(event: ExperimentLogPartialArgs): void {
+    this.logInternal({ event });
+  }
+
+  private logInternal({
+    event,
+    internalData,
+  }: {
+    event?: ExperimentLogPartialArgs;
+    // `internalData` contains fields that are not part of the "user-sanitized"
+    // set of fields which we want to log in just one of the span rows.
+    internalData?: Partial<ExperimentEvent>;
+  }): void {
     // There should be no overlap between the dictionaries being merged,
     // except for `sanitized` and `internalData`, where the former overrides
     // the latter.
-    const sanitized = validateAndSanitizeExperimentLogPartialArgs(event);
-    let sanitizedAndInternalData = { ...this.internalData };
+    const sanitized = validateAndSanitizeExperimentLogPartialArgs(event ?? {});
+    let sanitizedAndInternalData = { ...internalData };
     mergeDicts(sanitizedAndInternalData, sanitized);
-    this.internalData = {};
 
     // We both check for serializability and round-trip `partialRecord` through
     // JSON in order to create a "deep copy". This has the benefit of cutting
@@ -2963,13 +2985,14 @@ export class SpanImpl implements Span {
 
   public end(args?: EndSpanArgs): number {
     let endTime: number;
+    let internalData: Partial<ExperimentEvent> = {};
     if (!this.loggedEndTime) {
       endTime = args?.endTime ?? getCurrentUnixTimestamp();
-      this.internalData = { metrics: { end: endTime } };
+      internalData = { metrics: { end: endTime } };
     } else {
       endTime = this.loggedEndTime;
     }
-    this.log({});
+    this.logInternal({ internalData });
     return endTime;
   }
 
@@ -3273,7 +3296,7 @@ export class Prompt {
    * @param buildArgs Args to forward along to the prompt template.
    */
   public build<Flavor extends "chat" | "completion" = "chat">(
-    buildArgs: Record<string, unknown>,
+    buildArgs: unknown,
     options: {
       flavor?: Flavor;
     } = {},
@@ -3284,7 +3307,7 @@ export class Prompt {
   }
 
   private runBuild<Flavor extends "chat" | "completion">(
-    buildArgs: Record<string, unknown>,
+    buildArgs: unknown,
     options: {
       flavor: Flavor;
     },
@@ -3332,6 +3355,12 @@ export class Prompt {
       throw new Error("Empty prompt");
     }
 
+    const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
+    const variables: Record<string, unknown> = {
+      input: buildArgs,
+      ...(dictArgParsed.success ? dictArgParsed.data : {}),
+    };
+
     if (flavor === "chat") {
       if (prompt.type !== "chat") {
         throw new Error(
@@ -3340,7 +3369,7 @@ export class Prompt {
       }
 
       const render = (template: string) =>
-        Mustache.render(template, buildArgs, undefined, {
+        Mustache.render(template, variables, undefined, {
           escape: (v: any) => (typeof v === "string" ? v : JSON.stringify(v)),
         });
 
@@ -3363,7 +3392,7 @@ export class Prompt {
         ...(prompt.tools
           ? {
               tools: toolsSchema.parse(
-                JSON.parse(Mustache.render(prompt.tools, buildArgs)),
+                JSON.parse(Mustache.render(prompt.tools, variables)),
               ),
             }
           : undefined),
@@ -3376,7 +3405,7 @@ export class Prompt {
       return {
         ...params,
         ...spanInfo,
-        prompt: Mustache.render(prompt.content, buildArgs),
+        prompt: Mustache.render(prompt.content, variables),
       } as CompiledPrompt<Flavor>;
     } else {
       throw new Error("never!");
