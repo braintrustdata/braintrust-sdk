@@ -248,12 +248,8 @@ export class BraintrustState {
     this.currentLogger = undefined;
     this.currentSpan = iso.newAsyncLocalStorage();
 
-    const defaultGetLogConn = async () => {
-      await this.login({ force: false });
-      return this.logConn();
-    };
     this._globalBgLogger = new BackgroundLogger(
-      new LazyValue(defaultGetLogConn),
+      new LazyValue(this.logConn.bind(this)),
     );
 
     this.resetLoginInfo();
@@ -295,20 +291,26 @@ export class BraintrustState {
     this.copyLoginInfo(newState);
   }
 
-  public apiConn(): HTTPConnection {
+  public async apiConn(): Promise<HTTPConnection> {
     if (!this._apiConn) {
       if (!this.appUrl) {
-        throw new Error("Must initialize appUrl before requesting apiConn");
+        await this.login({ force: false });
+        if (!this.appUrl) {
+          throw new Error("Must initialize appUrl before requesting apiConn");
+        }
       }
       this._apiConn = new HTTPConnection(this.appUrl);
     }
     return this._apiConn!;
   }
 
-  public logConn(): HTTPConnection {
+  public async logConn(): Promise<HTTPConnection> {
     if (!this._logConn) {
       if (!this.logUrl) {
-        throw new Error("Must initialize logUrl before requesting logConn");
+        await this.login({ force: false });
+        if (!this.logUrl) {
+          throw new Error("Must initialize logUrl before requesting logConn");
+        }
       }
       this._logConn = new HTTPConnection(this.logUrl);
     }
@@ -1427,9 +1429,8 @@ export function init<IsOpen extends boolean = false>(
           experiment_name: experiment,
         };
 
-        const response = await state
-          .apiConn()
-          .post_json("api/experiment/get", args);
+        const apiConn = await state.apiConn();
+        const response = await apiConn.post_json("api/experiment/get", args);
 
         if (response.length === 0) {
           throw new Error(
@@ -1531,9 +1532,8 @@ export function init<IsOpen extends boolean = false>(
       let response = null;
       while (true) {
         try {
-          response = await state
-            .apiConn()
-            .post_json("api/experiment/register", args);
+          const apiConn = await state.apiConn();
+          response = await apiConn.post_json("api/experiment/register", args);
           break;
         } catch (e: any) {
           if (
@@ -1746,9 +1746,8 @@ export function initDataset<
         dataset_name: dataset,
         description,
       };
-      const response = await state
-        .apiConn()
-        .post_json("api/dataset/register", args);
+      const apiConn = await state.apiConn();
+      const response = await apiConn.post_json("api/dataset/register", args);
 
       return {
         project: {
@@ -1806,7 +1805,8 @@ async function computeLoggerMetadata({
   const state = stateArg ?? (await login());
   const org_id = state.orgId!;
   if (isEmpty(project_id)) {
-    const response = await state.apiConn().post_json("api/project/register", {
+    const apiConn = await state.apiConn();
+    const response = await apiConn.post_json("api/project/register", {
       project_name: project_name || GLOBAL_PROJECT,
       org_id,
     });
@@ -1819,7 +1819,8 @@ async function computeLoggerMetadata({
       },
     };
   } else if (isEmpty(project_name)) {
-    const response = await state.apiConn().get_json("api/project", {
+    const apiConn = await state.apiConn();
+    const response = await apiConn.get_json("api/project", {
       id: project_id,
     });
     return {
@@ -1986,7 +1987,8 @@ export async function loadPrompt({
     version,
   };
 
-  const response = await state.logConn().get_json("v1/prompt", args);
+  const logConn = await state.logConn();
+  const response = await logConn.get_json("v1/prompt", args);
 
   if (!("objects" in response) || response.objects.length === 0) {
     throw new Error(
@@ -2096,7 +2098,7 @@ export async function loginToState(options: LoginOptions = {}) {
 
     _check_org_info(state, info.org_info, orgName);
 
-    conn = state.logConn();
+    conn = await state.logConn();
     conn.set_token(apiKey);
   } else {
     throw new Error(
@@ -2111,7 +2113,8 @@ export async function loginToState(options: LoginOptions = {}) {
   conn.make_long_lived();
 
   // Set the same token in the API
-  state.apiConn().set_token(apiKey);
+  const apiConn = await state.apiConn();
+  apiConn.set_token(apiKey);
   state.loginToken = conn.token;
   state.loggedIn = true;
 
@@ -2513,7 +2516,8 @@ class ObjectFetcher<RecordType>
   async fetchedData() {
     if (this._fetchedData === undefined) {
       const state = await this.getState();
-      const resp = await state.logConn().get(
+      const logConn = await state.logConn();
+      const resp = await logConn.get(
         `v1/${this.objectType}/${await this.id}/fetch`,
         {
           version: this.pinnedVersion,
@@ -2708,7 +2712,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
 
   public async fetchBaseExperiment() {
     const state = await this.getState();
-    const conn = state.apiConn();
+    const conn = await state.apiConn();
 
     try {
       const resp = await conn.post("/api/base_experiment/get_id", {
@@ -2768,7 +2772,8 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
         }
       }
 
-      const results = await state.logConn().get_json(
+      const logConn = await state.logConn();
+      const results = await logConn.get_json(
         "/experiment-comparison2",
         {
           experiment_id: await this.id,
@@ -3288,7 +3293,8 @@ export class Dataset<
 
     let dataSummary = undefined;
     if (summarizeData) {
-      dataSummary = await state.logConn().get_json(
+      const logConn = await state.logConn();
+      dataSummary = await logConn.get_json(
         "dataset-summary",
         {
           dataset_id: await this.id,
