@@ -2980,7 +2980,8 @@ export class SpanImpl implements Span {
     let endTime: number;
     if (!this.loggedEndTime) {
       endTime = args?.endTime ?? getCurrentUnixTimestamp();
-      this.internalData = { metrics: { end: endTime } };
+      const sanitized = { metrics: { end: endTime } };
+      this.internalData = mergeDicts({ ...this.internalData }, sanitized);
     } else {
       endTime = this.loggedEndTime;
     }
