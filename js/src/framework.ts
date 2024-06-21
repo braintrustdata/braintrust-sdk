@@ -13,7 +13,6 @@ import {
   currentSpan,
   FullInitOptions,
   BraintrustState,
-  _internalGetGlobalState,
 } from "./logger";
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
@@ -244,7 +243,7 @@ export type EvaluatorFile = {
 };
 
 function initExperiment<IsOpen extends boolean = false>(
-  state: BraintrustState,
+  state: BraintrustState | undefined,
   options: Readonly<FullInitOptions<IsOpen>> = {},
 ) {
   return _initExperiment({
@@ -317,9 +316,8 @@ export async function Eval<
   }
 
   const resolvedReporter = reporter || defaultReporter;
-  const state = evaluator.state || _internalGetGlobalState();
   try {
-    const experiment = initExperiment(state, {
+    const experiment = initExperiment(evaluator.state, {
       ...(evaluator.projectId
         ? { projectId: evaluator.projectId }
         : { project: name }),
@@ -486,8 +484,7 @@ async function runEvaluatorInternal(
       name = baseExperiment.name;
     }
 
-    const state = evaluator.state || _internalGetGlobalState();
-    dataResult = initExperiment(state, {
+    dataResult = initExperiment(evaluator.state, {
       ...(evaluator.projectId
         ? { projectId: evaluator.projectId }
         : { project: evaluator.projectName }),
