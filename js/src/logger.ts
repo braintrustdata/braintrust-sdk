@@ -2898,6 +2898,8 @@ export class SpanImpl implements Span {
     internalData,
   }: {
     event?: ExperimentLogPartialArgs;
+    // `internalData` contains fields that are not part of the "user-sanitized"
+    // set of fields which we want to log in just one of the span rows.
     internalData?: Partial<ExperimentEvent>;
   }): void {
     // There should be no overlap between the dictionaries being merged,
