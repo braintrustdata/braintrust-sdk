@@ -749,9 +749,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
 
                 # Check if the task takes a hooks argument
                 task_args = [datum.input]
-                if not is_inspectable(evaluator.task):
-                    task_args.append(hooks)
-                elif len(inspect.signature(evaluator.task).parameters) == 2:
+                if not is_inspectable(evaluator.task) or len(inspect.signature(evaluator.task).parameters) == 2:
                     task_args.append(hooks)
 
                 with root_span.start_span("task", span_attributes={"type": SpanTypeAttribute.TASK}) as span:
@@ -829,7 +827,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             project=evaluator.project_name, experiment=base_experiment.name, open=True, set_current=False
         ).as_dataset()
 
-    if inspect.isfunction(data_iterator) or not is_inspectable(data_iterator):
+    if not is_inspectable(data_iterator) or inspect.isfunction(data_iterator):
         data_iterator = data_iterator()
 
     if not inspect.isasyncgen(data_iterator):
