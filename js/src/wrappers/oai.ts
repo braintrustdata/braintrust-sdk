@@ -203,7 +203,7 @@ interface APIPromise<T> extends Promise<T> {
   withResponse(): Promise<EnhancedResponse>;
 }
 
-export const X_CACHED_HEADER = "x-cached";
+export const X_CACHED_HEADER = "x-bt-cached";
 export function parseCachedHeader(
   value: string | null | undefined,
 ): number | undefined {
