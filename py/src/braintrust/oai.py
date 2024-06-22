@@ -5,6 +5,8 @@ from braintrust_core.util import merge_dicts
 
 from .logger import start_span
 
+X_CACHED_HEADER = "x-bt-cached"
+
 
 class NamedWrapper:
     def __init__(self, wrapped):
@@ -90,10 +92,10 @@ class ChatCompletionWrapper:
             create_response = self.create_fn(*args, **kwargs)
             if hasattr(create_response, "parse"):
                 raw_response = create_response.parse()
-                if "x-cached" in create_response.headers:
+                if X_CACHED_HEADER in create_response.headers:
                     span.log(
                         metrics={
-                            "cached": 1 if create_response.headers.get("x-cached").lower() == "true" else 0,
+                            "cached": 1 if create_response.headers.get(X_CACHED_HEADER).lower() == "true" else 0,
                         }
                     )
             else:
@@ -152,10 +154,10 @@ class ChatCompletionWrapper:
 
             if hasattr(create_response, "parse"):
                 raw_response = create_response.parse()
-                if "x-cached" in create_response.headers:
+                if X_CACHED_HEADER in create_response.headers:
                     span.log(
                         metrics={
-                            "cached": 1 if create_response.headers.get("x-cached").lower() == "true" else 0,
+                            "cached": 1 if create_response.headers.get(X_CACHED_HEADER).lower() == "true" else 0,
                         }
                     )
             else:
@@ -231,10 +233,10 @@ class EmbeddingWrapper:
 
             if hasattr(create_response, "parse"):
                 raw_response = create_response.parse()
-                if "x-cached" in create_response.headers:
+                if X_CACHED_HEADER in create_response.headers:
                     span.log(
                         metrics={
-                            "cached": 1 if create_response.headers.get("x-cached").lower() == "true" else 0,
+                            "cached": 1 if create_response.headers.get(X_CACHED_HEADER).lower() == "true" else 0,
                         }
                     )
             else:
@@ -261,10 +263,10 @@ class EmbeddingWrapper:
             create_response = await self.acreate_fn(*args, **kwargs)
             if hasattr(create_response, "parse"):
                 raw_response = create_response.parse()
-                if "x-cached" in create_response.headers:
+                if X_CACHED_HEADER in create_response.headers:
                     span.log(
                         metrics={
-                            "cached": 1 if create_response.headers.get("x-cached").lower() == "true" else 0,
+                            "cached": 1 if create_response.headers.get(X_CACHED_HEADER).lower() == "true" else 0,
                         }
                     )
             else:
