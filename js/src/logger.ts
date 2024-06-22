@@ -2766,6 +2766,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     return {
       projectName: (await this.project).name,
       experimentName: await this.name,
+      projectId: (await this.project).id,
       experimentId: await this.id,
       projectUrl: projectUrl,
       experimentUrl: experimentUrl,
@@ -3559,6 +3560,7 @@ export interface MetricSummary {
 export interface ExperimentSummary {
   projectName: string;
   experimentName: string;
+  projectId?: string;
   experimentId?: string;
   projectUrl?: string;
   experimentUrl?: string;
