@@ -43,6 +43,7 @@ import {
   promptSchema,
   Prompt as PromptRow,
   toolsSchema,
+  PromptSessionEvent,
 } from "@braintrust/core/typespecs";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -3353,7 +3354,7 @@ export type DefaultPromptArgs = Partial<
 
 export class Prompt {
   constructor(
-    private metadata: PromptRow,
+    private metadata: Omit<PromptRow, "log_id"> | PromptSessionEvent,
     private defaults: DefaultPromptArgs,
     private noTrace: boolean,
   ) {}
@@ -3367,11 +3368,13 @@ export class Prompt {
   }
 
   public get name(): string {
-    return this.metadata.name;
+    return "name" in this.metadata
+      ? this.metadata.name
+      : `Playground function ${this.metadata.id}`;
   }
 
   public get slug(): string {
-    return this.metadata.slug;
+    return "slug" in this.metadata ? this.metadata.slug : this.metadata.id;
   }
 
   public get prompt(): PromptData["prompt"] {
@@ -3442,6 +3445,9 @@ export class Prompt {
                 id: this.id,
                 project_id: this.projectId,
                 version: this.version,
+                ...("prompt_session_id" in this.metadata
+                  ? { prompt_session_id: this.metadata.prompt_session_id }
+                  : {}),
               },
             },
           },
