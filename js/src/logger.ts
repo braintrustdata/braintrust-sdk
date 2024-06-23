@@ -218,6 +218,24 @@ declare global {
   var __inherited_braintrust_state: BraintrustState;
 }
 
+const REQUIRED_LOGIN_ATTRIBUTES = [
+  "appUrl",
+  "appPublicUrl",
+  "orgName",
+  "logUrl",
+] as const;
+const LOGIN_ATTRIBUTES = [
+  ...REQUIRED_LOGIN_ATTRIBUTES,
+  "loginToken",
+  "orgId",
+  "gitMetadataSettings",
+] as const;
+
+export type SerializedBraintrustState = Pick<
+  BraintrustState,
+  NonNullable<(typeof LOGIN_ATTRIBUTES)[number]>
+>;
+
 export class BraintrustState {
   public id: string;
   public currentExperiment: Experiment | undefined;
@@ -286,6 +304,40 @@ export class BraintrustState {
 
     this._apiConn = other._apiConn;
     this._logConn = other._logConn;
+  }
+
+  public serialize(): SerializedBraintrustState {
+    if (!this.loggedIn) {
+      throw new Error(
+        "Cannot serialize BraintrustState without being logged in",
+      );
+    }
+
+    return {
+      appUrl: this.appUrl,
+      appPublicUrl: this.appPublicUrl,
+      loginToken: this.loginToken,
+      orgId: this.orgId,
+      orgName: this.orgName,
+      logUrl: this.logUrl,
+      gitMetadataSettings: this.gitMetadataSettings,
+    };
+  }
+
+  static deserialize(serialized: SerializedBraintrustState): BraintrustState {
+    for (const attr of REQUIRED_LOGIN_ATTRIBUTES) {
+      if (isEmpty(serialized[attr])) {
+        throw new Error(
+          `Cannot deserialize BraintrustState with empty ${attr} attribute`,
+        );
+      }
+    }
+    const state = new BraintrustState({});
+    for (const attr of LOGIN_ATTRIBUTES) {
+      // Typescript does not have a way of making this dependent on the iteration of the loop
+      state[attr] = serialized[attr] as any;
+    }
+    return state;
   }
 
   public async login(loginParams: LoginOptions & { forceLogin?: boolean }) {
