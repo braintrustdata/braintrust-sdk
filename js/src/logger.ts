@@ -337,6 +337,19 @@ export class BraintrustState {
       // Typescript does not have a way of making this dependent on the iteration of the loop
       state[attr] = serialized[attr] as any;
     }
+
+    if (!state.loginToken) {
+      throw new Error(
+        "Cannot deserialize BraintrustState without a login token",
+      );
+    }
+
+    state.logConn().set_token(state.loginToken);
+    state.logConn().make_long_lived();
+    state.apiConn().set_token(state.loginToken);
+    state.loggedIn = true;
+    state.loginReplaceLogConn(state.logConn());
+
     return state;
   }
 
