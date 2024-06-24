@@ -1303,7 +1303,7 @@ def traced(*span_args, **span_kwargs) -> Callable[[F], F]:
     # We determine if the decorator is invoked bare or with arguments by
     # checking if the first positional argument to the decorator is a callable.
     if len(span_args) == 1 and len(span_kwargs) == 0 and callable(span_args[0]):
-        return decorator(span_args[1:], span_kwargs, cast(span_args[0], F))
+        return decorator(span_args[1:], span_kwargs, cast(F, span_args[0]))
     else:
         return cast(Callable[[F], F], partial(decorator, span_args, span_kwargs))
 
