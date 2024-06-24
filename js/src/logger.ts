@@ -33,6 +33,7 @@ import {
   SpanComponentsV2,
   SpanObjectTypeV2,
   SpanRowIdsV2,
+  gitMetadataSettingsSchema,
 } from "@braintrust/core";
 import {
   AnyModelParam,
@@ -44,6 +45,7 @@ import {
   Prompt as PromptRow,
   toolsSchema,
   PromptSessionEvent,
+  repoInfoSchema,
 } from "@braintrust/core/typespecs";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -218,23 +220,17 @@ declare global {
   var __inherited_braintrust_state: BraintrustState;
 }
 
-const REQUIRED_LOGIN_ATTRIBUTES = [
-  "appUrl",
-  "appPublicUrl",
-  "orgName",
-  "logUrl",
-] as const;
-const LOGIN_ATTRIBUTES = [
-  ...REQUIRED_LOGIN_ATTRIBUTES,
-  "loginToken",
-  "orgId",
-  "gitMetadataSettings",
-] as const;
+const loginSchema = z.strictObject({
+  appUrl: z.string(),
+  appPublicUrl: z.string(),
+  orgName: z.string(),
+  logUrl: z.string(),
+  loginToken: z.string(),
+  orgId: z.string().nullish(),
+  gitMetadataSettings: gitMetadataSettingsSchema.nullish(),
+});
 
-export type SerializedBraintrustState = Pick<
-  BraintrustState,
-  NonNullable<(typeof LOGIN_ATTRIBUTES)[number]>
->;
+export type SerializedBraintrustState = z.infer<typeof loginSchema>;
 
 export class BraintrustState {
   public id: string;
@@ -313,6 +309,19 @@ export class BraintrustState {
       );
     }
 
+    if (
+      !this.appUrl ||
+      !this.appPublicUrl ||
+      !this.logUrl ||
+      !this.orgName ||
+      !this.loginToken ||
+      !this.loggedIn
+    ) {
+      throw new Error(
+        "Cannot serialize BraintrustState without all login attributes",
+      );
+    }
+
     return {
       appUrl: this.appUrl,
       appPublicUrl: this.appPublicUrl,
@@ -324,18 +333,16 @@ export class BraintrustState {
     };
   }
 
-  static deserialize(serialized: SerializedBraintrustState): BraintrustState {
-    for (const attr of REQUIRED_LOGIN_ATTRIBUTES) {
-      if (isEmpty(serialized[attr])) {
-        throw new Error(
-          `Cannot deserialize BraintrustState with empty ${attr} attribute`,
-        );
-      }
+  static deserialize(serialized: unknown): BraintrustState {
+    const serializedParsed = loginSchema.safeParse(serialized);
+    if (!serializedParsed.success) {
+      throw new Error(
+        `Cannot deserialize BraintrustState: ${serializedParsed.error.errors}`,
+      );
     }
     const state = new BraintrustState({});
-    for (const attr of LOGIN_ATTRIBUTES) {
-      // Typescript does not have a way of making this dependent on the iteration of the loop
-      state[attr] = serialized[attr] as any;
+    for (const key of Object.keys(loginSchema.shape)) {
+      (state as any)[key] = (serializedParsed.data as any)[key];
     }
 
     if (!state.loginToken) {

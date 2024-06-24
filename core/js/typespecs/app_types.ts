@@ -267,7 +267,7 @@ export const functionSchema = promptSchemaObject
 // NOTE: suffix "Object" helps avoid a name conflict with the built-in `Function` type
 export type FunctionObject = z.infer<typeof functionSchema>;
 
-const repoInfoSchema = z
+export const repoInfoSchema = z
   .strictObject({
     commit: z.string().nullish().describe("SHA of most recent commit"),
     branch: z
