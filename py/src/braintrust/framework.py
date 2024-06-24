@@ -249,11 +249,8 @@ def is_inspectable(obj):
     True when obj is inspectable via `inspect`.
     False when it is, e.g., a native function or builtin.
     """
-    if obj.__name__ == 'pythonkit_swift_function' or obj.__name__ == "pythonkit_swift_function_with_keywords":
-        return False
-
     t = type(obj)
-    if t.__module__ == 'builtins' and t.__name__ == 'PyCapsule':
+    if t.__module__ == 'builtins' and t.__name__ == 'builtin_function_or_method':
         return False
 
     return True
