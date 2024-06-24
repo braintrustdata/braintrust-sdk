@@ -19,7 +19,7 @@ import uuid
 from abc import ABC, abstractmethod
 from functools import partial, wraps
 from multiprocessing import cpu_count
-from typing import Any, Dict, Optional, Union
+from typing import Any, Callable, Dict, Optional, TypeVar, Union, cast, overload
 
 import chevron
 import exceptiongroup
@@ -1238,7 +1238,15 @@ def _try_log_output(span, output):
     span.log(output=output_serializable)
 
 
-def traced(*span_args, **span_kwargs):
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+@overload
+def traced(f: F) -> F:
+    ...
+
+
+def traced(*span_args, **span_kwargs) -> Callable[[F], F]:
     """Decorator to trace the wrapped function. Can either be applied bare (`@traced`) or by providing arguments (`@traced(*span_args, **span_kwargs)`), which will be forwarded to the created span. See `Span.start_span` for full details on the span arguments.
 
     It checks the following (in precedence order):
@@ -1255,7 +1263,7 @@ def traced(*span_args, **span_kwargs):
 
     trace_io = not span_kwargs.pop("notrace_io", False)
 
-    def decorator(span_args, span_kwargs, f):
+    def decorator(span_args, span_kwargs, f: F):
         # We assume 'name' is the first positional argument in `start_span`.
         if len(span_args) == 0 and span_kwargs.get("name") is None:
             span_args += (f.__name__,)
@@ -1288,16 +1296,16 @@ def traced(*span_args, **span_kwargs):
                 return ret
 
         if inspect.iscoroutinefunction(f):
-            return wrapper_async
+            return cast(F, wrapper_async)
         else:
-            return wrapper_sync
+            return cast(F, wrapper_sync)
 
     # We determine if the decorator is invoked bare or with arguments by
     # checking if the first positional argument to the decorator is a callable.
     if len(span_args) == 1 and len(span_kwargs) == 0 and callable(span_args[0]):
-        return decorator(span_args[1:], span_kwargs, span_args[0])
+        return decorator(span_args[1:], span_kwargs, cast(F, span_args[0]))
     else:
-        return partial(decorator, span_args, span_kwargs)
+        return cast(Callable[[F], F], partial(decorator, span_args, span_kwargs))
 
 
 def start_span(
