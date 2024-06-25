@@ -179,6 +179,7 @@ export const datasetSchema = z
     created: datasetBaseSchema.shape.created,
     deleted_at: datasetBaseSchema.shape.deleted_at,
     user_id: datasetBaseSchema.shape.user_id,
+    metadata: datasetBaseSchema.shape.metadata,
   })
   .openapi("Dataset");
 export type Dataset = z.infer<typeof datasetSchema>;
