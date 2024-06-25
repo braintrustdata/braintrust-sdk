@@ -9,7 +9,11 @@ import {
   LanguageModelV1FunctionToolCall,
   LanguageModelV1StreamPart,
 } from "@ai-sdk/provider";
-import { parseCachedHeader, X_CACHED_HEADER } from "./oai";
+import {
+  LEGACY_CACHED_HEADER,
+  parseCachedHeader,
+  X_CACHED_HEADER,
+} from "./oai";
 
 /**
  * Wrap an ai-sdk model (created with `.chat()`, `.completion()`, etc.) to add tracing. If Braintrust is
@@ -84,7 +88,8 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
           prompt_tokens: ret.usage?.promptTokens,
           completion_tokens: ret.usage?.completionTokens,
           cached: parseCachedHeader(
-            ret.rawResponse?.headers?.[X_CACHED_HEADER],
+            ret.rawResponse?.headers?.[X_CACHED_HEADER] ??
+              ret.rawResponse?.headers?.[LEGACY_CACHED_HEADER],
           ),
         },
       });
@@ -201,7 +206,8 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
                   prompt_tokens: usage?.promptTokens,
                   completion_tokens: usage?.completionTokens,
                   cached: parseCachedHeader(
-                    ret.rawResponse?.headers?.[X_CACHED_HEADER],
+                    ret.rawResponse?.headers?.[X_CACHED_HEADER] ??
+                      ret.rawResponse?.headers?.[LEGACY_CACHED_HEADER],
                   ),
                 },
               });

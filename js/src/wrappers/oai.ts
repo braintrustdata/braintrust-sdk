@@ -8,7 +8,6 @@ import {
 } from "../logger";
 import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import { mergeDicts } from "@braintrust/core";
-import { parse } from "path";
 
 interface BetaLike {
   chat: {
@@ -203,23 +202,36 @@ interface APIPromise<T> extends Promise<T> {
   withResponse(): Promise<EnhancedResponse>;
 }
 
-export const X_CACHED_HEADER = "x-cached";
+export const LEGACY_CACHED_HEADER = "x-cached";
+export const X_CACHED_HEADER = "x-bt-cached";
 export function parseCachedHeader(
   value: string | null | undefined,
 ): number | undefined {
-  return isEmpty(value) ? undefined : value.toLowerCase() === "true" ? 1 : 0;
+  return isEmpty(value)
+    ? undefined
+    : ["true", "hit"].includes(value.toLowerCase())
+      ? 1
+      : 0;
 }
 
 function logHeaders(response: Response, span: Span) {
   const cachedHeader = response.headers.get(X_CACHED_HEADER);
   if (isEmpty(cachedHeader)) {
-    return;
+    const legacyCacheHeader = response.headers.get(LEGACY_CACHED_HEADER);
+    if (!isEmpty(legacyCacheHeader)) {
+      span.log({
+        metrics: {
+          cached: parseCachedHeader(legacyCacheHeader),
+        },
+      });
+    }
+  } else {
+    span.log({
+      metrics: {
+        cached: parseCachedHeader(cachedHeader),
+      },
+    });
   }
-  span.log({
-    metrics: {
-      cached: parseCachedHeader(cachedHeader),
-    },
-  });
 }
 
 function wrapChatCompletion<
