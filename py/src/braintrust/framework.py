@@ -250,8 +250,12 @@ async def await_or_run(event_loop, f, *args, **kwargs):
             )
 
 
-async def call_user_fn(event_loop, fn, **kwargs):
-    signature = inspect.signature(fn)
+def _call_user_fn_args(fn, kwargs):
+    try:
+        signature = inspect.signature(fn)
+    except:
+        return [], kwargs
+
     accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values())
 
     positional_args = []
@@ -270,6 +274,11 @@ async def call_user_fn(event_loop, fn, **kwargs):
     if accepts_kwargs:
         final_kwargs.update(kwargs)
 
+    return positional_args, final_kwargs
+
+
+async def call_user_fn(event_loop, fn, **kwargs):
+    positional_args, final_kwargs = _call_user_fn_args(fn, kwargs)
     return await await_or_run(event_loop, fn, *positional_args, **final_kwargs)
 
 
@@ -742,8 +751,11 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
 
                 # Check if the task takes a hooks argument
                 task_args = [datum.input]
-                if len(inspect.signature(evaluator.task).parameters) == 2:
-                    task_args.append(hooks)
+                try:
+                    if len(inspect.signature(evaluator.task).parameters) == 2:
+                        task_args.append(hooks)
+                except:
+                    pass
 
                 with root_span.start_span("task", span_attributes={"type": SpanTypeAttribute.TASK}) as span:
                     hooks.set_span(span)
@@ -824,7 +836,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             set_current=False,
         ).as_dataset()
 
-    if inspect.isfunction(data_iterator):
+    if inspect.isfunction(data_iterator) or inspect.isroutine(data_iterator):
         data_iterator = data_iterator()
 
     if not inspect.isasyncgen(data_iterator):
