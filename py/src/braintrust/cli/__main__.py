@@ -43,16 +43,14 @@ def main(args=None):
     level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(format="%(asctime)s %(levelname)s [%(name)s]: %(message)s", level=level)
 
-    try:
-        ret = args.func(args)
-        if ret:
-            os._exit(1)
-        else:
-            os._exit(0)
-    except:
-        traceback.print_exc()
-        os._exit(1)
+    return args.func(args)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        ret = main()
+        if ret:
+            os._exit(1)
+    except:
+        traceback.print_exc()
+        os._exit(1)
