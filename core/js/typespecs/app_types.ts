@@ -591,7 +591,7 @@ export const viewSchema = z
       .string()
       .uuid()
       .describe("The id of the object the view applies to"),
-    view_type: viewTypeEnum.nullish(),
+    view_type: viewTypeEnum,
     name: viewBaseSchema.shape.name,
     created: viewBaseSchema.shape.created,
     view_data: viewDataSchema.nullish().describe("The view definition"),
