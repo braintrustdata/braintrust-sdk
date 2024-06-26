@@ -28,6 +28,7 @@ export const objectTypes = z.enum([
   "project_score",
   "project_tag",
   "function",
+  "view",
 ]);
 export type ObjectType = z.infer<typeof objectTypes>;
 
