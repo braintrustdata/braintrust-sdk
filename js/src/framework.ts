@@ -269,6 +269,11 @@ globalThis._evals = {
   reporters: {},
 };
 
+export interface EvalOptions<EvalReport> {
+  reporter?: ReporterDef<EvalReport> | string;
+  onStart?: (metadata: Omit<ExperimentSummary, "scores" | "metrics">) => void;
+}
+
 export async function Eval<
   Input,
   Output,
@@ -278,8 +283,16 @@ export async function Eval<
 >(
   name: string,
   evaluator: Evaluator<Input, Output, Expected, Metadata>,
-  reporter?: ReporterDef<EvalReport> | string,
+  reporterOrOpts?: ReporterDef<EvalReport> | string | EvalOptions<EvalReport>,
 ): Promise<EvalResultWithSummary<Input, Output, Expected, Metadata>> {
+  const options: EvalOptions<EvalReport> = isEmpty(reporterOrOpts)
+    ? {}
+    : typeof reporterOrOpts === "string"
+      ? { reporter: reporterOrOpts }
+      : "name" in reporterOrOpts
+        ? { reporter: reporterOrOpts }
+        : reporterOrOpts;
+
   let evalName = makeEvalName(name, evaluator.experimentName);
   if (globalThis._evals.evaluators[evalName]) {
     evalName = `${evalName}_${Object.keys(_evals).length}`;
@@ -287,7 +300,7 @@ export async function Eval<
   if (globalThis._lazy_load) {
     globalThis._evals.evaluators[evalName] = {
       evaluator: { evalName, projectName: name, ...evaluator },
-      reporter,
+      reporter: options.reporter,
     };
 
     // This only needs to be set once, but Eval() is the only time
@@ -309,13 +322,13 @@ export async function Eval<
 
   const progressReporter = new BarProgressReporter();
 
-  if (typeof reporter === "string") {
+  if (typeof options.reporter === "string") {
     throw new Error(
       "Must specify a reporter object, not a name. Can only specify reporter names when running 'braintrust eval'",
     );
   }
 
-  const resolvedReporter = reporter || defaultReporter;
+  const resolvedReporter = options.reporter || defaultReporter;
   try {
     const experiment = initExperiment(evaluator.state, {
       ...(evaluator.projectId
@@ -326,6 +339,11 @@ export async function Eval<
       isPublic: evaluator.isPublic,
       update: evaluator.update,
     });
+
+    if (options.onStart) {
+      experiment.summarize({ summarizeScores: false }).then(options.onStart);
+    }
+
     try {
       const evalDef = {
         evalName,

@@ -429,8 +429,7 @@ const promptSessionEventSchema = z
     tags: promptSessionEventBaseSchema.shape.tags,
   })
   .openapi("PromptSessionEvent");
-
-const functionEventBaseSchema = generateBaseEventOpSchema("function");
+export type PromptSessionEvent = z.infer<typeof promptSessionEventSchema>;
 
 const projectLogsEventBaseSchema = generateBaseEventOpSchema("project");
 const projectLogsEventSchema = z
