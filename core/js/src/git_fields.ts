@@ -1,29 +1,9 @@
 import { repoInfoSchema } from "typespecs";
 import { z } from "zod";
 
-export interface RepoInfo {
-  commit?: string;
-  branch?: string;
-  tag?: string;
-  dirty?: boolean;
-  author_name?: string;
-  author_email?: string;
-  commit_message?: string;
-  commit_time?: string;
-  git_diff?: string;
-}
+export type RepoInfo = z.infer<typeof repoInfoSchema>;
 
-export const gitFieldsSchema = z.enum([
-  "commit",
-  "branch",
-  "tag",
-  "dirty",
-  "author_name",
-  "author_email",
-  "commit_message",
-  "commit_time",
-  "git_diff",
-]);
+export const gitFieldsSchema = repoInfoSchema.keyof();
 export type GitFields = z.infer<typeof gitFieldsSchema>;
 
 const collectMetadataEnum = z.enum(["all", "none", "some"]);
