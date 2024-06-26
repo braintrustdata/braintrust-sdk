@@ -33,6 +33,7 @@ import {
   SpanComponentsV2,
   SpanObjectTypeV2,
   SpanRowIdsV2,
+  gitMetadataSettingsSchema,
 } from "@braintrust/core";
 import {
   AnyModelParam,
@@ -43,6 +44,8 @@ import {
   promptSchema,
   Prompt as PromptRow,
   toolsSchema,
+  PromptSessionEvent,
+  repoInfoSchema,
 } from "@braintrust/core/typespecs";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -217,6 +220,18 @@ declare global {
   var __inherited_braintrust_state: BraintrustState;
 }
 
+const loginSchema = z.strictObject({
+  appUrl: z.string(),
+  appPublicUrl: z.string(),
+  orgName: z.string(),
+  logUrl: z.string(),
+  loginToken: z.string(),
+  orgId: z.string().nullish(),
+  gitMetadataSettings: gitMetadataSettingsSchema.nullish(),
+});
+
+export type SerializedBraintrustState = z.infer<typeof loginSchema>;
+
 export class BraintrustState {
   public id: string;
   public currentExperiment: Experiment | undefined;
@@ -285,6 +300,64 @@ export class BraintrustState {
 
     this._apiConn = other._apiConn;
     this._logConn = other._logConn;
+  }
+
+  public serialize(): SerializedBraintrustState {
+    if (!this.loggedIn) {
+      throw new Error(
+        "Cannot serialize BraintrustState without being logged in",
+      );
+    }
+
+    if (
+      !this.appUrl ||
+      !this.appPublicUrl ||
+      !this.logUrl ||
+      !this.orgName ||
+      !this.loginToken ||
+      !this.loggedIn
+    ) {
+      throw new Error(
+        "Cannot serialize BraintrustState without all login attributes",
+      );
+    }
+
+    return {
+      appUrl: this.appUrl,
+      appPublicUrl: this.appPublicUrl,
+      loginToken: this.loginToken,
+      orgId: this.orgId,
+      orgName: this.orgName,
+      logUrl: this.logUrl,
+      gitMetadataSettings: this.gitMetadataSettings,
+    };
+  }
+
+  static deserialize(serialized: unknown): BraintrustState {
+    const serializedParsed = loginSchema.safeParse(serialized);
+    if (!serializedParsed.success) {
+      throw new Error(
+        `Cannot deserialize BraintrustState: ${serializedParsed.error.errors}`,
+      );
+    }
+    const state = new BraintrustState({});
+    for (const key of Object.keys(loginSchema.shape)) {
+      (state as any)[key] = (serializedParsed.data as any)[key];
+    }
+
+    if (!state.loginToken) {
+      throw new Error(
+        "Cannot deserialize BraintrustState without a login token",
+      );
+    }
+
+    state.logConn().set_token(state.loginToken);
+    state.logConn().make_long_lived();
+    state.apiConn().set_token(state.loginToken);
+    state.loggedIn = true;
+    state.loginReplaceLogConn(state.logConn());
+
+    return state;
   }
 
   public async login(loginParams: LoginOptions & { forceLogin?: boolean }) {
@@ -2766,6 +2839,7 @@ export class Experiment extends ObjectFetcher<ExperimentEvent> {
     return {
       projectName: (await this.project).name,
       experimentName: await this.name,
+      projectId: (await this.project).id,
       experimentId: await this.id,
       projectUrl: projectUrl,
       experimentUrl: experimentUrl,
@@ -3352,7 +3426,7 @@ export type DefaultPromptArgs = Partial<
 
 export class Prompt {
   constructor(
-    private metadata: PromptRow,
+    private metadata: Omit<PromptRow, "log_id"> | PromptSessionEvent,
     private defaults: DefaultPromptArgs,
     private noTrace: boolean,
   ) {}
@@ -3366,11 +3440,13 @@ export class Prompt {
   }
 
   public get name(): string {
-    return this.metadata.name;
+    return "name" in this.metadata
+      ? this.metadata.name
+      : `Playground function ${this.metadata.id}`;
   }
 
   public get slug(): string {
-    return this.metadata.slug;
+    return "slug" in this.metadata ? this.metadata.slug : this.metadata.id;
   }
 
   public get prompt(): PromptData["prompt"] {
@@ -3441,6 +3517,9 @@ export class Prompt {
                 id: this.id,
                 project_id: this.projectId,
                 version: this.version,
+                ...("prompt_session_id" in this.metadata
+                  ? { prompt_session_id: this.metadata.prompt_session_id }
+                  : {}),
               },
             },
           },
@@ -3559,6 +3638,7 @@ export interface MetricSummary {
 export interface ExperimentSummary {
   projectName: string;
   experimentName: string;
+  projectId?: string;
   experimentId?: string;
   projectUrl?: string;
   experimentUrl?: string;
