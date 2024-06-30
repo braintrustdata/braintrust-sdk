@@ -4,24 +4,19 @@ import {
   chatCompletionContentPartImageSchema,
   chatCompletionContentPartTextSchema,
   chatCompletionMessageParamSchema,
+  chatCompletionOpenAIMessageParamSchema,
 } from "./openai/messages";
-export { ToolCall } from "./openai/messages";
+export { ToolCall, messageRoleSchema, MessageRole } from "./openai/messages";
 export { chatCompletionContentPartImageSchema };
 
 export { toolsSchema } from "./openai/tools";
 export type { Tools } from "./openai/tools";
 
-export const messageRoleSchema = z.enum([
-  "system",
-  "user",
-  "assistant",
-  "function",
-  "tool",
-  "model",
-]);
-export type MessageRole = z.infer<typeof messageRoleSchema>;
-
+export type OpenAIMessage = z.infer<
+  typeof chatCompletionOpenAIMessageParamSchema
+>;
 export type Message = z.infer<typeof chatCompletionMessageParamSchema>;
+
 export type Content = Message["content"];
 export type ContentPartText = z.infer<
   typeof chatCompletionContentPartTextSchema
