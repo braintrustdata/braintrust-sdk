@@ -109,7 +109,13 @@ const chatCompletionAssistantMessageParamSchema = z
 
 const chatCompletionFallbackMessageParamSchema = z
   .strictObject({
-    role: messageRoleSchema,
+    role: messageRoleSchema.exclude([
+      "system",
+      "user",
+      "assistant",
+      "tool",
+      "function",
+    ]),
     content: z.string().nullish(),
   })
   .strip();
