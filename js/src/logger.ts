@@ -45,7 +45,7 @@ import {
   Prompt as PromptRow,
   toolsSchema,
   PromptSessionEvent,
-  repoInfoSchema,
+  OpenAIMessage,
 } from "@braintrust/core/typespecs";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -3393,7 +3393,7 @@ export type CompiledPromptParams = Omit<
 > & { model: NonNullable<NonNullable<PromptData["options"]>["model"]> };
 
 export type ChatPrompt = {
-  messages: Message[];
+  messages: OpenAIMessage[];
   tools?: Tools;
 };
 export type CompletionPrompt = {
