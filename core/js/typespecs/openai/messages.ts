@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+export const messageRoleSchema = z.enum([
+  "system",
+  "user",
+  "assistant",
+  "function",
+  "tool",
+  "model",
+]);
+export type MessageRole = z.infer<typeof messageRoleSchema>;
+
 const chatCompletionSystemMessageParamSchema = z
   .strictObject({
     content: z.string().default(""),
@@ -99,7 +109,7 @@ const chatCompletionAssistantMessageParamSchema = z
 
 const chatCompletionFallbackMessageParamSchema = z
   .strictObject({
-    role: z.string(),
+    role: messageRoleSchema,
     content: z.string().nullish(),
   })
   .strip();
