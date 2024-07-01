@@ -2370,6 +2370,16 @@ export async function flush(options?: OptionalStateArg): Promise<void> {
   return await state.bgLogger().flush();
 }
 
+/**
+ * Set the fetch implementation to use for requests. You can specify it here,
+ * or when you call `login`.
+ *
+ * @param fetch The fetch implementation to use.
+ */
+export function setFetch(fetch: typeof globalThis.fetch): void {
+  _globalState.setFetch(fetch);
+}
+
 function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
 ): { span: Span; isLogger: boolean } {
