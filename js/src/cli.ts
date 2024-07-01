@@ -665,7 +665,7 @@ async function collectFiles(inputPath: string): Promise<string[]> {
 let markOurPackagesExternalPlugin = {
   name: "make-all-packages-external",
   setup(build: esbuild.PluginBuild) {
-    const filter = /^(\w)/;
+    const filter = /^(braintrust|autoevals|@braintrust\/)/;
     build.onResolve({ filter }, (args) => ({
       path: args.path,
       external: true,
