@@ -105,19 +105,27 @@ const anthropicModelParamsSchema = z
 
 const googleModelParamsSchema = z
   .strictObject({
-    temperature: z.number(),
+    temperature: z.number().optional(),
     maxOutputTokens: z.number().optional(),
     topP: z.number().optional(),
     topK: z.number().optional(),
   })
   .strip();
 
+const windowAIModelParamsSchema = z
+  .strictObject({
+    temperature: z.number().optional(),
+    topK: z.number().optional(),
+  })
+  .strip();
+
 const jsCompletionParamsSchema = z.strictObject({}).strip();
 export const modelParamsSchema = z.union([
-  braintrustModelParamsSchema.merge(openAIModelParamsSchema),
-  braintrustModelParamsSchema.merge(anthropicModelParamsSchema),
-  braintrustModelParamsSchema.merge(googleModelParamsSchema),
-  braintrustModelParamsSchema.merge(jsCompletionParamsSchema),
+  braintrustModelParamsSchema.merge(openAIModelParamsSchema).passthrough(),
+  braintrustModelParamsSchema.merge(anthropicModelParamsSchema).passthrough(),
+  braintrustModelParamsSchema.merge(googleModelParamsSchema).passthrough(),
+  braintrustModelParamsSchema.merge(windowAIModelParamsSchema).passthrough(),
+  braintrustModelParamsSchema.merge(jsCompletionParamsSchema).passthrough(),
 ]);
 
 export type ModelParams = z.infer<typeof modelParamsSchema>;
