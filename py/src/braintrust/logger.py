@@ -60,8 +60,6 @@ from .util import (
 Metadata = Dict[str, Any]
 DATA_API_VERSION = 2
 
-BRAINTRUST_APP_URL = os.environ.get("BRAINTRUST_APP_URL", "https://www.braintrust.dev")
-
 
 class Span(ABC):
     """
@@ -1096,7 +1094,7 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
             return
 
         if app_url is None:
-            app_url = BRAINTRUST_APP_URL
+            app_url = os.environ.get("BRAINTRUST_APP_URL", "https://www.braintrust.dev")
 
         app_public_url = os.environ.get("BRAINTRUST_APP_PUBLIC_URL", app_url)
 

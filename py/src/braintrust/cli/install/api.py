@@ -6,7 +6,7 @@ import time
 import requests
 from botocore.exceptions import ClientError
 
-from braintrust.logger import BRAINTRUST_APP_URL
+from braintrust.logger import api_conn, login
 
 from ...aws import cloudformation
 
@@ -403,9 +403,12 @@ def main(args):
 
         org_info = []
         if args.api_key:
-            org_info = requests.get(
-                f"{BRAINTRUST_APP_URL}/api/apikey/login", headers={"Authorization": f"Bearer {args.api_key}"}
-            ).json()["org_info"]
+            login(api_key=args.api_key)
+            resp = api_conn().post("api/apikey/login")
+            if resp.ok:
+                org_info = resp.json()["org_info"]
+            else:
+                _logger.error(f"Failed to login with API key: {resp.text}")
 
         if len(org_info) > 0:
             if org_name != "*":
@@ -440,8 +443,7 @@ def main(args):
             if proxy_url and org_info["proxy_url"] != proxy_url:
                 patch_args["proxy_url"] = proxy_url
                 _logger.info(f"  Proxy URL: {proxy_url}")
-            requests.post(
-                f"{BRAINTRUST_APP_URL}/api/organization/patch_id",
-                headers={"Authorization": f"Bearer {args.api_key}"},
+            api_conn().post(
+                "api/organization/patch_id",
                 json=patch_args,
             )
