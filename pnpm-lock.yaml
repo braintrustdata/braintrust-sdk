@@ -97,6 +97,9 @@ importers:
       '@types/argparse':
         specifier: ^2.0.14
         version: 2.0.14
+      '@types/async':
+        specifier: ^3.2.24
+        version: 3.2.24
       '@types/cli-progress':
         specifier: ^3.11.5
         version: 3.11.5
@@ -115,6 +118,9 @@ importers:
       '@types/uuid':
         specifier: ^9.0.7
         version: 9.0.7
+      async:
+        specifier: ^3.2.5
+        version: 3.2.5
       autoevals:
         specifier: ^0.0.69
         version: 0.0.69
@@ -1332,6 +1338,10 @@ packages:
     resolution: {integrity: sha512-jJ6NMs9rXQ0rsqNt3TL4Elcwhd6wygo3lJOVoiHzURD34vsCcAlw443uGu4PXTtEmMF7sYKoadTCLXNmuJuQGw==}
     dev: true
 
+  /@types/async@3.2.24:
+    resolution: {integrity: sha512-8iHVLHsCCOBKjCF2KwFe0p9Z3rfM9mL+sSP8btyR5vTjJRAqpBYD28/ZLgXPf0pjG1VxOvtCV/BgXkQbpSe8Hw==}
+    dev: true
+
   /@types/babel__core@7.20.5:
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
     dependencies:
@@ -1534,6 +1544,10 @@ packages:
       get-intrinsic: 1.2.2
       is-array-buffer: 3.0.2
       is-shared-array-buffer: 1.0.2
+    dev: true
+
+  /async@3.2.5:
+    resolution: {integrity: sha512-baNZyqaaLhyLVKm/DlvdW051MSgO6b8eVfIezl9E5PqWxFgzLm/wQntEW4zOytVburDEr0JlALEpdOFwvErLsg==}
     dev: true
 
   /asynckit@0.4.0:

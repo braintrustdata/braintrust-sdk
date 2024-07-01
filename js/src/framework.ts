@@ -18,6 +18,7 @@ import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
 import { isEmpty } from "./util";
+import { queue } from "async";
 
 export type BaseExperiment<
   Input,
@@ -155,9 +156,15 @@ export interface Evaluator<
 
   /**
    * The duration, in milliseconds, after which to time out the evaluation.
-   * Defaults to None, in which case there is no timeout.
+   * Defaults to undefined, in which case there is no timeout.
    */
   timeout?: number;
+
+  /**
+   * The maximum number of tasks/scorers that will be run concurrently.
+   * Defaults to undefined, in which case there is no max concurrency.
+   */
+  maxConcurrency?: number;
 
   /**
    * If specified, uses the given project ID instead of the evaluator's name to identify the project.
@@ -532,200 +539,213 @@ async function runEvaluatorInternal(
     );
 
   progressReporter.start(evaluator.evalName, data.length);
+  interface EvalResult {
+    input: any;
+    output: any;
+    tags?: string[];
+    metadata: Record<string, unknown>;
+    scores: Record<string, number | null>;
+    error: unknown;
+  }
+  let results: EvalResult[] = [];
+  let q = queue(
+    async (datum: EvalCase<any, any, any>) => {
+      const callback = async (rootSpan: Span) => {
+        let metadata: Record<string, unknown> = {
+          ...("metadata" in datum ? datum.metadata : {}),
+        };
+        let output: any = undefined;
+        let error: unknown | undefined = undefined;
+        let scores: Record<string, number | null> = {};
+        try {
+          const meta = (o: Record<string, unknown>) =>
+            (metadata = { ...metadata, ...o });
 
-  const evals = data.map(async (datum) => {
-    const callback = async (rootSpan: Span) => {
-      let metadata: Record<string, unknown> = {
-        ...("metadata" in datum ? datum.metadata : {}),
-      };
-      let output: any = undefined;
-      let error: unknown | undefined = undefined;
-      let scores: Record<string, number | null> = {};
-      try {
-        const meta = (o: Record<string, unknown>) =>
-          (metadata = { ...metadata, ...o });
+          await rootSpan.traced(
+            async (span: Span) => {
+              const outputResult = evaluator.task(datum.input, { meta, span });
+              if (outputResult instanceof Promise) {
+                output = await outputResult;
+              } else {
+                output = outputResult;
+              }
+              span.log({ output });
+            },
+            {
+              name: "task",
+              spanAttributes: { type: SpanTypeAttribute.TASK },
+              event: { input: datum.input },
+            },
+          );
+          rootSpan.log({ output, metadata });
 
-        await rootSpan.traced(
-          async (span: Span) => {
-            const outputResult = evaluator.task(datum.input, { meta, span });
-            if (outputResult instanceof Promise) {
-              output = await outputResult;
-            } else {
-              output = outputResult;
-            }
-            span.log({ output });
-          },
-          {
-            name: "task",
-            spanAttributes: { type: SpanTypeAttribute.TASK },
-            event: { input: datum.input },
-          },
-        );
-        rootSpan.log({ output, metadata });
+          const scoringArgs = { ...datum, metadata, output };
+          const scorerNames = evaluator.scores.map(scorerName);
+          const scoreResults = await Promise.all(
+            evaluator.scores.map(async (score, score_idx) => {
+              try {
+                const results = await rootSpan.traced(
+                  async (span: Span) => {
+                    const scoreResult = score(scoringArgs);
+                    const scoreValue =
+                      scoreResult instanceof Promise
+                        ? await scoreResult
+                        : scoreResult;
 
-        const scoringArgs = { ...datum, metadata, output };
-        const scorerNames = evaluator.scores.map(scorerName);
-        const scoreResults = await Promise.all(
-          evaluator.scores.map(async (score, score_idx) => {
-            try {
-              const results = await rootSpan.traced(
-                async (span: Span) => {
-                  const scoreResult = score(scoringArgs);
-                  const scoreValue =
-                    scoreResult instanceof Promise
-                      ? await scoreResult
-                      : scoreResult;
+                    if (scoreValue === null) {
+                      return null;
+                    }
 
-                  if (scoreValue === null) {
-                    return null;
-                  }
-
-                  if (Array.isArray(scoreValue)) {
-                    for (const s of scoreValue) {
-                      if (!(typeof s === "object" && !isEmpty(s))) {
-                        throw new Error(
-                          `When returning an array of scores, each score must be a non-empty object. Got: ${JSON.stringify(
-                            s,
-                          )}`,
-                        );
+                    if (Array.isArray(scoreValue)) {
+                      for (const s of scoreValue) {
+                        if (!(typeof s === "object" && !isEmpty(s))) {
+                          throw new Error(
+                            `When returning an array of scores, each score must be a non-empty object. Got: ${JSON.stringify(
+                              s,
+                            )}`,
+                          );
+                        }
                       }
                     }
-                  }
 
-                  const results = Array.isArray(scoreValue)
-                    ? scoreValue
-                    : typeof scoreValue === "object" && !isEmpty(scoreValue)
-                      ? [scoreValue]
-                      : [
-                          {
-                            name: scorerNames[score_idx],
-                            score: scoreValue,
-                          },
-                        ];
+                    const results = Array.isArray(scoreValue)
+                      ? scoreValue
+                      : typeof scoreValue === "object" && !isEmpty(scoreValue)
+                        ? [scoreValue]
+                        : [
+                            {
+                              name: scorerNames[score_idx],
+                              score: scoreValue,
+                            },
+                          ];
 
-                  const getOtherFields = (s: Score) => {
-                    const { metadata, name, ...rest } = s;
-                    return rest;
-                  };
+                    const getOtherFields = (s: Score) => {
+                      const { metadata, name, ...rest } = s;
+                      return rest;
+                    };
 
-                  const resultMetadata =
-                    results.length === 1
-                      ? results[0].metadata
-                      : results.reduce(
-                          (prev, s) =>
-                            mergeDicts(prev, {
-                              [s.name]: s.metadata,
-                            }),
-                          {},
-                        );
+                    const resultMetadata =
+                      results.length === 1
+                        ? results[0].metadata
+                        : results.reduce(
+                            (prev, s) =>
+                              mergeDicts(prev, {
+                                [s.name]: s.metadata,
+                              }),
+                            {},
+                          );
 
-                  const resultOutput =
-                    results.length === 1
-                      ? getOtherFields(results[0])
-                      : results.reduce(
-                          (prev, s) =>
-                            mergeDicts(prev, { [s.name]: getOtherFields(s) }),
-                          {},
-                        );
+                    const resultOutput =
+                      results.length === 1
+                        ? getOtherFields(results[0])
+                        : results.reduce(
+                            (prev, s) =>
+                              mergeDicts(prev, { [s.name]: getOtherFields(s) }),
+                            {},
+                          );
 
-                  const scores = results.reduce(
-                    (prev, s) => mergeDicts(prev, { [s.name]: s.score }),
-                    {},
-                  );
+                    const scores = results.reduce(
+                      (prev, s) => mergeDicts(prev, { [s.name]: s.score }),
+                      {},
+                    );
 
-                  span.log({
-                    output: resultOutput,
-                    metadata: resultMetadata,
-                    scores: scores,
-                  });
-                  return results;
-                },
-                {
-                  name: scorerNames[score_idx],
-                  spanAttributes: {
-                    type: SpanTypeAttribute.SCORE,
+                    span.log({
+                      output: resultOutput,
+                      metadata: resultMetadata,
+                      scores: scores,
+                    });
+                    return results;
                   },
-                  event: { input: scoringArgs },
-                },
-              );
-              return { kind: "score", value: results } as const;
-            } catch (e) {
-              return { kind: "error", value: e } as const;
-            }
-          }),
-        );
-        // Resolve each promise on its own so that we can separate the passing
-        // from the failing ones.
-        const passingScorersAndResults: {
-          name: string;
-          score: Score | null;
-        }[] = [];
-        const failingScorersAndResults: { name: string; error: unknown }[] = [];
-        scoreResults.forEach((results, i) => {
-          const name = scorerNames[i];
-          if (results.kind === "score") {
-            (results.value || []).forEach((result) => {
-              passingScorersAndResults.push({
-                name: result.name,
-                score: result,
+                  {
+                    name: scorerNames[score_idx],
+                    spanAttributes: {
+                      type: SpanTypeAttribute.SCORE,
+                    },
+                    event: { input: scoringArgs },
+                  },
+                );
+                return { kind: "score", value: results } as const;
+              } catch (e) {
+                return { kind: "error", value: e } as const;
+              }
+            }),
+          );
+          // Resolve each promise on its own so that we can separate the passing
+          // from the failing ones.
+          const passingScorersAndResults: {
+            name: string;
+            score: Score | null;
+          }[] = [];
+          const failingScorersAndResults: { name: string; error: unknown }[] =
+            [];
+          scoreResults.forEach((results, i) => {
+            const name = scorerNames[i];
+            if (results.kind === "score") {
+              (results.value || []).forEach((result) => {
+                passingScorersAndResults.push({
+                  name: result.name,
+                  score: result,
+                });
+                scores[result.name] = result.score;
               });
-              scores[result.name] = result.score;
-            });
-          } else {
-            failingScorersAndResults.push({ name, error: results.value });
+            } else {
+              failingScorersAndResults.push({ name, error: results.value });
+            }
+          });
+
+          if (failingScorersAndResults.length) {
+            const scorerErrors = Object.fromEntries(
+              failingScorersAndResults.map(({ name, error }) => [
+                name,
+                error instanceof Error ? error.stack : `${error}`,
+              ]),
+            );
+            metadata["scorer_errors"] = scorerErrors;
+            rootSpan.log({ metadata: { scorer_errors: scorerErrors } });
+            const names = Object.keys(scorerErrors).join(", ");
+            const errors = failingScorersAndResults.map((item) => item.error);
+            throw new AggregateError(
+              errors,
+              `Found exceptions for the following scorers: ${names}`,
+            );
           }
-        });
-
-        if (failingScorersAndResults.length) {
-          const scorerErrors = Object.fromEntries(
-            failingScorersAndResults.map(({ name, error }) => [
-              name,
-              error instanceof Error ? error.stack : `${error}`,
-            ]),
-          );
-          metadata["scorer_errors"] = scorerErrors;
-          rootSpan.log({ metadata: { scorer_errors: scorerErrors } });
-          const names = Object.keys(scorerErrors).join(", ");
-          const errors = failingScorersAndResults.map((item) => item.error);
-          throw new AggregateError(
-            errors,
-            `Found exceptions for the following scorers: ${names}`,
-          );
+        } catch (e) {
+          error = e;
+        } finally {
+          progressReporter.increment(evaluator.evalName);
         }
-      } catch (e) {
-        error = e;
-      } finally {
-        progressReporter.increment(evaluator.evalName);
-      }
 
-      return {
-        input: datum.input,
-        ...("expected" in datum ? { expected: datum.expected } : {}),
-        output,
-        tags: datum.tags,
-        metadata,
-        scores,
-        error,
-      };
-    };
-
-    if (!experiment) {
-      return await callback(NOOP_SPAN);
-    } else {
-      return await experiment.traced(callback, {
-        name: "eval",
-        spanAttributes: {
-          type: SpanTypeAttribute.EVAL,
-        },
-        event: {
+        results.push({
           input: datum.input,
-          expected: "expected" in datum ? datum.expected : undefined,
+          ...("expected" in datum ? { expected: datum.expected } : {}),
+          output,
           tags: datum.tags,
-        },
-      });
-    }
-  });
-  const results = await Promise.all(evals);
+          metadata,
+          scores,
+          error,
+        });
+      };
+
+      if (!experiment) {
+        return await callback(NOOP_SPAN);
+      } else {
+        return await experiment.traced(callback, {
+          name: "eval",
+          spanAttributes: {
+            type: SpanTypeAttribute.EVAL,
+          },
+          event: {
+            input: datum.input,
+            expected: "expected" in datum ? datum.expected : undefined,
+            tags: datum.tags,
+          },
+        });
+      }
+    },
+    Math.max(evaluator.maxConcurrency ?? data.length, 1),
+  );
+  q.push(data);
+  await q.drain();
   const summary = experiment
     ? await experiment.summarize()
     : buildLocalSummary(evaluator, results);
