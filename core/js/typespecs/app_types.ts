@@ -961,8 +961,13 @@ const deleteViewSchema = z
   })
   .openapi("DeleteView");
 
-const patchOrganizationSchema = organizationSchema
-  .omit({ id: true, created: true })
+const patchOrganizationSchema = z
+  .strictObject({
+    name: organizationSchema.shape.name.nullish(),
+    api_url: organizationSchema.shape.api_url.nullish(),
+    proxy_url: organizationSchema.shape.proxy_url.nullish(),
+    realtime_url: organizationSchema.shape.realtime_url.nullish(),
+  })
   .openapi("PatchOrganization");
 
 // Section: exported schemas, grouped by object type.
