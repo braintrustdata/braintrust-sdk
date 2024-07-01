@@ -4,7 +4,7 @@ import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 extendZodWithOpenApi(z);
 
-import { datetimeStringSchema } from "./common_types";
+import { ObjectType, datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
@@ -970,91 +970,79 @@ const patchOrganizationSchema = z
   })
   .openapi("PatchOrganization");
 
-// Section: exported schemas, grouped by object type.
+// Section: exported schemas, grouped by object type. The schemas are used for
+// API spec generation, so their types are not fully-specified. If you wish to
+// use individual schema types, import them directly.
 
-export const objectSchemas = {
+export type ObjectSchemasEntry = {
+  object?: z.ZodTypeAny;
+  create?: z.ZodTypeAny;
+  patch?: z.ZodTypeAny;
+  delete?: z.ZodTypeAny;
+};
+
+export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
   experiment: {
+    object: experimentSchema,
     create: createExperimentSchema,
     patch: patchExperimentSchema,
-    object: experimentSchema,
-    delete: undefined,
   },
   dataset: {
+    object: datasetSchema,
     create: createDatasetSchema,
     patch: patchDatasetSchema,
-    object: datasetSchema,
-    delete: undefined,
   },
   project: {
+    object: projectSchema,
     create: createProjectSchema,
     patch: patchProjectSchema,
-    object: projectSchema,
-    delete: undefined,
   },
   prompt: {
+    object: promptSchema,
     create: createPromptSchema,
     patch: patchPromptSchema,
-    object: promptSchema,
-    delete: undefined,
   },
   function: {
+    object: functionSchema,
     create: createFunctionSchema,
     patch: patchFunctionSchema,
-    object: functionSchema,
-    delete: undefined,
   },
   role: {
+    object: roleSchema,
     create: createRoleSchema,
     patch: patchRoleSchema,
-    object: roleSchema,
-    delete: undefined,
   },
   group: {
+    object: groupSchema,
     create: createGroupSchema,
     patch: patchGroupSchema,
-    object: groupSchema,
-    delete: undefined,
   },
   acl: {
-    create: createAclSchema,
-    patch: undefined,
     object: aclSchema,
-    delete: undefined,
+    create: createAclSchema,
   },
   user: {
-    create: undefined,
-    patch: undefined,
     object: userSchema,
-    delete: undefined,
   },
-  prompt_session: {
-    create: undefined,
-    patch: undefined,
-    object: undefined,
-    delete: undefined,
-  },
+  prompt_session: {},
   project_score: {
+    object: projectScoreSchema,
     create: createProjectScoreSchema,
     patch: patchProjectScoreSchema,
-    object: projectScoreSchema,
-    delete: undefined,
   },
   project_tag: {
+    object: projectTagSchema,
     create: createProjectTagSchema,
     patch: patchProjectTagSchema,
-    object: projectTagSchema,
-    delete: undefined,
   },
   view: {
-    create: createViewSchema,
-    patch: patchViewSchema,
     object: viewSchema,
     delete: deleteViewSchema,
+    create: createViewSchema,
+    patch: patchViewSchema,
   },
   organization: {
-    create: undefined,
-    patch: patchOrganizationSchema,
     object: organizationSchema,
-    delete: undefined,
+    patch: patchOrganizationSchema,
   },
 };

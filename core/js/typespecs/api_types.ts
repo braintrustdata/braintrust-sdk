@@ -12,12 +12,13 @@ import {
   functionSchema,
 } from "./app_types";
 import {
+  EventObjectType,
+  ObjectType,
+  ObjectTypeWithEvent,
   datetimeStringSchema,
   getObjectArticle,
   getEventObjectType,
   getEventObjectDescription,
-  ObjectType,
-  ObjectTypeWithEvent,
 } from "./common_types";
 import { customTypes } from "./custom_types";
 import { capitalize } from "../src/util";
@@ -352,7 +353,7 @@ function makeFetchEventsResponseSchema<T extends z.AnyZodObject>(
 }
 
 const experimentEventBaseSchema = generateBaseEventOpSchema("experiment");
-const experimentEventSchema = z
+export const experimentEventSchema = z
   .strictObject({
     id: experimentEventBaseSchema.shape.id,
     dataset_record_id: z
@@ -388,9 +389,10 @@ const experimentEventSchema = z
     span_attributes: experimentEventBaseSchema.shape.span_attributes,
   })
   .openapi("ExperimentEvent");
+export type ExperimentEvent = z.infer<typeof experimentEventSchema>;
 
 const datasetEventBaseSchema = generateBaseEventOpSchema("dataset");
-const datasetEventSchema = z
+export const datasetEventSchema = z
   .strictObject({
     id: datasetEventBaseSchema.shape.id,
     [TRANSACTION_ID_FIELD]: datasetEventBaseSchema.shape[TRANSACTION_ID_FIELD],
@@ -409,10 +411,11 @@ const datasetEventSchema = z
     root_span_id: datasetEventBaseSchema.shape.root_span_id,
   })
   .openapi("DatasetEvent");
+export type DatasetEvent = z.infer<typeof datasetEventSchema>;
 
 const promptSessionEventBaseSchema =
   generateBaseEventOpSchema("prompt_session");
-const promptSessionEventSchema = z
+export const promptSessionEventSchema = z
   .strictObject({
     id: promptSessionEventBaseSchema.shape.id,
     [TRANSACTION_ID_FIELD]:
@@ -432,7 +435,7 @@ const promptSessionEventSchema = z
 export type PromptSessionEvent = z.infer<typeof promptSessionEventSchema>;
 
 const projectLogsEventBaseSchema = generateBaseEventOpSchema("project");
-const projectLogsEventSchema = z
+export const projectLogsEventSchema = z
   .strictObject({
     id: projectLogsEventBaseSchema.shape.id,
     [TRANSACTION_ID_FIELD]:
@@ -465,6 +468,7 @@ const projectLogsEventSchema = z
     span_attributes: projectLogsEventBaseSchema.shape.span_attributes,
   })
   .openapi("ProjectLogsEvent");
+export type ProjectLogsEvent = z.infer<typeof projectLogsEventSchema>;
 
 // Section: inserting data objects.
 
@@ -702,24 +706,23 @@ const feedbackFunctionRequestSchema = makeFeedbackRequestSchema(
   feedbackFunctionItemSchema,
 );
 
-const feedbackPromptSessionRequestBaseSchema =
-  generateBaseEventFeedbackSchema("prompt_session");
-const feedbackPromptSessionItemSchema = z
-  .strictObject({
-    id: feedbackPromptSessionRequestBaseSchema.shape.id,
-    comment: feedbackPromptSessionRequestBaseSchema.shape.comment,
-    metadata: feedbackPromptSessionRequestBaseSchema.shape.metadata,
-    source: feedbackPromptSessionRequestBaseSchema.shape.source,
-  })
-  .openapi("FeedbackPromptSessionItem");
-const feedbackPromptSessionRequestSchema = makeFeedbackRequestSchema(
-  "prompt_session",
-  feedbackPromptSessionItemSchema,
-);
+// Section: exported schemas, grouped by object type. The schemas are used for
+// API spec generation, so their types are not fully-specified. If you wish to
+// use individual schema types, import them directly.
 
-// Section: exported schemas, grouped by object type.
+export type EventObjectSchemasEntry = {
+  event?: Zod.ZodTypeAny;
+  fetchResponse?: Zod.ZodTypeAny;
+  insertEvent?: Zod.ZodTypeAny;
+  insertRequest?: Zod.ZodTypeAny;
+  feedbackItem?: Zod.ZodTypeAny;
+  feedbackRequest?: Zod.ZodTypeAny;
+};
 
-export const eventObjectSchemas = {
+export const apiSpecEventObjectSchemas: Record<
+  EventObjectType,
+  EventObjectSchemasEntry
+> = {
   experiment: {
     event: experimentEventSchema,
     fetchResponse: makeFetchEventsResponseSchema(
@@ -752,29 +755,16 @@ export const eventObjectSchemas = {
   },
   prompt: {
     event: promptSchema,
-    fetchResponse: undefined,
-    insertEvent: undefined,
-    insertRequest: undefined,
     feedbackItem: feedbackPromptItemSchema,
     feedbackRequest: feedbackPromptRequestSchema,
   },
   function: {
     event: functionSchema,
-    fetchResponse: undefined,
-    insertEvent: undefined,
-    insertRequest: undefined,
     feedbackItem: feedbackFunctionItemSchema,
     feedbackRequest: feedbackFunctionRequestSchema,
   },
-  prompt_session: {
-    event: promptSessionEventSchema,
-    fetchResponse: undefined,
-    insertEvent: undefined,
-    insertRequest: undefined,
-    feedbackItem: feedbackPromptSessionItemSchema,
-    feedbackRequest: feedbackPromptRequestBaseSchema,
-  },
-} as const;
+  prompt_session: {},
+};
 
 // Section: Cross-object operation schemas.
 
@@ -783,7 +773,7 @@ function makeCrossObjectIndividualRequestSchema(
 ) {
   const eventObjectType = getEventObjectType(objectType);
   const eventDescription = getEventObjectDescription(objectType);
-  const eventObjectSchema = eventObjectSchemas[eventObjectType];
+  const eventObjectSchema = apiSpecEventObjectSchemas[eventObjectType];
   const insertObject = z.strictObject({
     ...(eventObjectSchema.insertEvent
       ? {
@@ -793,10 +783,14 @@ function makeCrossObjectIndividualRequestSchema(
             .describe(`A list of ${eventDescription} events to insert`),
         }
       : {}),
-    feedback: eventObjectSchema.feedbackItem
-      .array()
-      .nullish()
-      .describe(`A list of ${eventDescription} feedback items`),
+    ...(eventObjectSchema.feedbackItem
+      ? {
+          feedback: eventObjectSchema.feedbackItem
+            .array()
+            .nullish()
+            .describe(`A list of ${eventDescription} feedback items`),
+        }
+      : {}),
   });
   return z
     .record(z.string().uuid(), insertObject)
@@ -966,19 +960,9 @@ const summarizeDatasetResponseSchema = z
   .describe("Summary of a dataset")
   .openapi("SummarizeDatasetResponse");
 
-export const objectTypeSummarizeResponseSchemas = {
+export const objectTypeSummarizeResponseSchemas: {
+  [K in ObjectType]?: z.ZodTypeAny;
+} = {
   experiment: summarizeExperimentResponseSchema,
   dataset: summarizeDatasetResponseSchema,
-  project: undefined,
-  prompt: undefined,
-  function: undefined,
-  role: undefined,
-  group: undefined,
-  acl: undefined,
-  user: undefined,
-  prompt_session: undefined,
-  project_score: undefined,
-  project_tag: undefined,
-  view: undefined,
-  organization: undefined,
-} as const;
+};
