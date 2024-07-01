@@ -38,7 +38,6 @@ import {
 import {
   AnyModelParam,
   BRAINTRUST_PARAMS,
-  Message,
   PromptData,
   Tools,
   promptSchema,
@@ -254,6 +253,7 @@ export class BraintrustState {
   public loggedIn: boolean = false;
   public gitMetadataSettings?: GitMetadataSettings;
 
+  public fetch: typeof globalThis.fetch = globalThis.fetch;
   private _apiConn: HTTPConnection | null = null;
   private _logConn: HTTPConnection | null = null;
 
@@ -263,6 +263,10 @@ export class BraintrustState {
     this.currentLogger = undefined;
     this.currentSpan = iso.newAsyncLocalStorage();
 
+    if (loginParams.fetch) {
+      this.fetch = loginParams.fetch;
+    }
+
     const defaultGetLogConn = async () => {
       await this.login({});
       return this.logConn();
@@ -270,8 +274,6 @@ export class BraintrustState {
     this._bgLogger = new BackgroundLogger(new LazyValue(defaultGetLogConn));
 
     this.resetLoginInfo();
-
-    globalThis.__inherited_braintrust_state = this;
   }
 
   public resetLoginInfo() {
@@ -360,6 +362,12 @@ export class BraintrustState {
     return state;
   }
 
+  public setFetch(fetch: typeof globalThis.fetch) {
+    this.fetch = fetch;
+    this._logConn?.setFetch(fetch);
+    this._apiConn?.setFetch(fetch);
+  }
+
   public async login(loginParams: LoginOptions & { forceLogin?: boolean }) {
     if (this.logUrl && !loginParams.forceLogin) {
       return;
@@ -376,7 +384,7 @@ export class BraintrustState {
       if (!this.appUrl) {
         throw new Error("Must initialize appUrl before requesting apiConn");
       }
-      this._apiConn = new HTTPConnection(this.appUrl);
+      this._apiConn = new HTTPConnection(this.appUrl, this.fetch);
     }
     return this._apiConn!;
   }
@@ -386,7 +394,7 @@ export class BraintrustState {
       if (!this.logUrl) {
         throw new Error("Must initialize logUrl before requesting logConn");
       }
-      this._logConn = new HTTPConnection(this.logUrl);
+      this._logConn = new HTTPConnection(this.logUrl, this.fetch);
     }
     return this._logConn!;
   }
@@ -445,13 +453,19 @@ class HTTPConnection {
   base_url: string;
   token: string | null;
   headers: Record<string, string>;
+  fetch: typeof globalThis.fetch;
 
-  constructor(base_url: string) {
+  constructor(base_url: string, fetch: typeof globalThis.fetch) {
     this.base_url = base_url;
     this.token = null;
     this.headers = {};
 
     this._reset();
+    this.fetch = fetch;
+  }
+
+  public setFetch(fetch: typeof globalThis.fetch) {
+    this.fetch = fetch;
   }
 
   async ping() {
@@ -502,7 +516,7 @@ class HTTPConnection {
     ).toString();
     return await checkResponse(
       // Using toString() here makes it work with isomorphic fetch
-      await fetch(url.toString(), {
+      await this.fetch(url.toString(), {
         headers: {
           Accept: "application/json",
           ...this.headers,
@@ -521,7 +535,7 @@ class HTTPConnection {
   ) {
     const { headers, ...rest } = config || {};
     return await checkResponse(
-      await fetch(_urljoin(this.base_url, path), {
+      await this.fetch(_urljoin(this.base_url, path), {
         method: "POST",
         headers: {
           Accept: "application/json",
@@ -2070,6 +2084,7 @@ export interface LoginOptions {
   appUrl?: string;
   apiKey?: string;
   orgName?: string;
+  fetch?: typeof globalThis.fetch;
 }
 
 /**
@@ -2116,6 +2131,7 @@ export async function login(
   }
 
   await _globalState.login(options);
+  globalThis.__inherited_braintrust_state = _globalState;
 }
 
 export async function loginToState(options: LoginOptions = {}) {
@@ -2123,6 +2139,7 @@ export async function loginToState(options: LoginOptions = {}) {
     appUrl = iso.getEnv("BRAINTRUST_APP_URL") || "https://www.braintrust.dev",
     apiKey = iso.getEnv("BRAINTRUST_API_KEY"),
     orgName = iso.getEnv("BRAINTRUST_ORG_NAME"),
+    fetch = globalThis.fetch,
   } = options || {};
 
   const appPublicUrl = iso.getEnv("BRAINTRUST_APP_PUBLIC_URL") || appUrl;
