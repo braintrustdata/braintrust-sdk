@@ -961,6 +961,10 @@ const deleteViewSchema = z
   })
   .openapi("DeleteView");
 
+const patchOrganizationSchema = organizationSchema
+  .omit({ id: true, created: true })
+  .openapi("PatchOrganization");
+
 // Section: exported schemas, grouped by object type.
 
 export const objectSchemas = {
@@ -1041,5 +1045,11 @@ export const objectSchemas = {
     patch: patchViewSchema,
     object: viewSchema,
     delete: deleteViewSchema,
+  },
+  organization: {
+    create: undefined,
+    patch: patchOrganizationSchema,
+    object: organizationSchema,
+    delete: undefined,
   },
 };
