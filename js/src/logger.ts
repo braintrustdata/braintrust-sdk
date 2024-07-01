@@ -363,6 +363,7 @@ export class BraintrustState {
   }
 
   public setFetch(fetch: typeof globalThis.fetch) {
+    this.loginParams.fetch = fetch;
     this.fetch = fetch;
     this._logConn?.setFetch(fetch);
     this._apiConn?.setFetch(fetch);
