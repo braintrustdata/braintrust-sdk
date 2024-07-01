@@ -1,8 +1,12 @@
 import logging
+import os
 import textwrap
 import time
 
+import requests
 from botocore.exceptions import ClientError
+
+from braintrust.logger import api_conn, login
 
 from ...aws import cloudformation
 
@@ -213,6 +217,13 @@ def build_parser(subparsers, parents):
         "--clickhouse-catchup-etl-arn", help="[Advanced] The clickhouse catchup ETL ARN to use", default=None
     )
 
+    # To configure your org
+    parser.add_argument(
+        "--api-key",
+        help="The API key to use to configure your org's API URL and Proxy URL",
+        default=os.environ.get("BRAINTRUST_API_KEY", None),
+    )
+
     parser.set_defaults(func=main)
 
 
@@ -328,23 +339,29 @@ def main(args):
         new_params = set(x["ParameterKey"] for x in new_template["Parameters"])
 
         stack = cloudformation.describe_stacks(StackName=args.name)["Stacks"][0]
-        cloudformation.update_stack(
-            StackName=args.name,
-            Parameters=[
-                {"ParameterKey": param, "ParameterValue": str(update)}
-                for (param, update) in param_updates.items()
-                if param in new_params and param not in REMOVED_PARAMS and param in new_params
-            ]
-            + [
-                {"ParameterKey": param["ParameterKey"], "UsePreviousValue": True}
-                for param in stack["Parameters"]
-                if param["ParameterKey"] not in param_updates
-                and param["ParameterKey"] not in REMOVED_PARAMS
-                and param["ParameterKey"] in new_params
-            ],
-            Capabilities=CAPABILITIES,
-            **template_kwargs,
-        )
+        try:
+            cloudformation.update_stack(
+                StackName=args.name,
+                Parameters=[
+                    {"ParameterKey": param, "ParameterValue": str(update)}
+                    for (param, update) in param_updates.items()
+                    if param in new_params and param not in REMOVED_PARAMS and param in new_params
+                ]
+                + [
+                    {"ParameterKey": param["ParameterKey"], "UsePreviousValue": True}
+                    for param in stack["Parameters"]
+                    if param["ParameterKey"] not in param_updates
+                    and param["ParameterKey"] not in REMOVED_PARAMS
+                    and param["ParameterKey"] in new_params
+                ],
+                Capabilities=CAPABILITIES,
+                **template_kwargs,
+            )
+        except ClientError as e:
+            if "No updates are to be performed." in str(e):
+                _logger.warning("No updates are to be performed.")
+            else:
+                raise
 
         for _ in range(120):
             status = cloudformation.describe_stacks(StackName=args.name)["Stacks"][0]
@@ -368,5 +385,65 @@ def main(args):
             function_url = function_url[0]["OutputValue"]
         else:
             function_url = None
+
+        proxy_url = [x for x in status["Outputs"] if x["OutputKey"] == "ProxyURL"]
+        if proxy_url:
+            proxy_url = proxy_url[0]["OutputValue"]
+        else:
+            proxy_url = None
+
+        org_name = [x for x in status["Parameters"] if x["ParameterKey"] == "OrgName"]
+        if org_name:
+            org_name = org_name[0]["ParameterValue"]
+        else:
+            org_name = None
+
         _logger.info(f"Stack with name {args.name} has been updated with status: {status['StackStatus']}")
-        _logger.info(f"Endpoint URL: {function_url}")
+        _logger.info(f"Endpoint URL: {function_url}, Proxy URL: {proxy_url}")
+
+        org_info = []
+        if args.api_key:
+            login(api_key=args.api_key)
+            resp = api_conn().post("api/apikey/login")
+            if resp.ok:
+                org_info = resp.json()["org_info"]
+            else:
+                _logger.error(f"Failed to login with API key: {resp.text}")
+
+        if len(org_info) > 0:
+            if org_name != "*":
+                org_info = [x for x in org_info if x["name"] == org_name]
+            if len(org_info) == 0:
+                _logger.error(f"Org with name {org_name} does not exist")
+                exit(1)
+            elif len(org_info) > 1:
+                names = ", ".join([x["name"] for x in org_info])
+                _logger.error(
+                    f"You belong to multiple orgs: {names}. Please use an API key that's scoped to a single org."
+                )
+                org_info = []
+
+            if len(org_info) == 1:
+                org_info = org_info[0]
+
+        if org_info and (
+            (function_url and org_info["api_url"] != function_url)
+            or (proxy_url and org_info["proxy_url"] != proxy_url)
+        ):
+            _logger.info(f"Will update org {org_info['name']}")
+            _logger.info(f"  They are currently set to:")
+            _logger.info(f"  API URL: {org_info['api_url']}")
+            _logger.info(f"  Proxy URL: {org_info['proxy_url']}")
+            _logger.info(f"And will update them to:")
+
+            patch_args = {"id": org_info["id"]}
+            if function_url and org_info["api_url"] != function_url:
+                patch_args["api_url"] = function_url
+                _logger.info(f"  API URL: {function_url}")
+            if proxy_url and org_info["proxy_url"] != proxy_url:
+                patch_args["proxy_url"] = proxy_url
+                _logger.info(f"  Proxy URL: {proxy_url}")
+            api_conn().post(
+                "api/organization/patch_id",
+                json=patch_args,
+            )
