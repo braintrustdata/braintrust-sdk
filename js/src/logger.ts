@@ -2080,10 +2080,27 @@ export async function loadPrompt({
   return new Prompt(metadata, defaults || {}, noTrace);
 }
 
+/**
+ * Options for logging in to Braintrust.
+ */
 export interface LoginOptions {
+  /**
+   * The URL of the Braintrust App. Defaults to https://www.braintrust.dev. You should not need
+   * to change this unless you are doing the "Full" deployment.
+   */
   appUrl?: string;
+  /**
+   * The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable.
+   */
   apiKey?: string;
+  /**
+   * The name of a specific organization to connect to. Since API keys are scoped to organizations, this parameter is usually
+   * unnecessary unless you are logging in with a JWT.
+   */
   orgName?: string;
+  /**
+   * A custom fetch implementation to use.
+   */
   fetch?: typeof globalThis.fetch;
 }
 
