@@ -8,7 +8,6 @@ import {
 } from "../logger";
 import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import { mergeDicts } from "@braintrust/core";
-import { parse } from "path";
 
 interface BetaLike {
   chat: {
@@ -203,23 +202,36 @@ interface APIPromise<T> extends Promise<T> {
   withResponse(): Promise<EnhancedResponse>;
 }
 
-export const X_CACHED_HEADER = "x-cached";
+export const LEGACY_CACHED_HEADER = "x-cached";
+export const X_CACHED_HEADER = "x-bt-cached";
 export function parseCachedHeader(
   value: string | null | undefined,
 ): number | undefined {
-  return isEmpty(value) ? undefined : value.toLowerCase() === "true" ? 1 : 0;
+  return isEmpty(value)
+    ? undefined
+    : ["true", "hit"].includes(value.toLowerCase())
+      ? 1
+      : 0;
 }
 
 function logHeaders(response: Response, span: Span) {
   const cachedHeader = response.headers.get(X_CACHED_HEADER);
   if (isEmpty(cachedHeader)) {
-    return;
+    const legacyCacheHeader = response.headers.get(LEGACY_CACHED_HEADER);
+    if (!isEmpty(legacyCacheHeader)) {
+      span.log({
+        metrics: {
+          cached: parseCachedHeader(legacyCacheHeader),
+        },
+      });
+    }
+  } else {
+    span.log({
+      metrics: {
+        cached: parseCachedHeader(cachedHeader),
+      },
+    });
   }
-  span.log({
-    metrics: {
-      cached: parseCachedHeader(cachedHeader),
-    },
-  });
 }
 
 function wrapChatCompletion<
@@ -373,19 +385,32 @@ function parseEmbeddingParams<P extends EmbeddingCreateParams>(
   return mergeDicts(ret, { event: { input, metadata: paramsRest } });
 }
 
-function postprocessStreamingResults(allResults: any[]): [
-  {
-    index: number;
-    message: any;
-    logprobs: null;
-    finish_reason?: string;
-  },
-] {
+function postprocessStreamingResults(allResults: any[]): {
+  output: [
+    {
+      index: number;
+      message: any;
+      logprobs: null;
+      finish_reason?: string;
+    },
+  ];
+  metrics: Record<string, number>;
+} {
   let role = undefined;
   let content = undefined;
   let tool_calls = undefined;
   let finish_reason = undefined;
+  let metrics = {};
   for (const result of allResults) {
+    if (result.usage) {
+      metrics = {
+        ...metrics,
+        tokens: result.usage.total_tokens,
+        prompt_tokens: result.usage.prompt_tokens,
+        completion_tokens: result.usage.completion_tokens,
+      };
+    }
+
     const delta = result.choices?.[0]?.delta;
     if (!delta) {
       continue;
@@ -419,18 +444,21 @@ function postprocessStreamingResults(allResults: any[]): [
     }
   }
 
-  return [
-    {
-      index: 0,
-      message: {
-        role,
-        content,
-        tool_calls,
+  return {
+    metrics,
+    output: [
+      {
+        index: 0,
+        message: {
+          role,
+          content,
+          tool_calls,
+        },
+        logprobs: null,
+        finish_reason,
       },
-      logprobs: null,
-      finish_reason,
-    },
-  ];
+    ],
+  };
 }
 
 class WrapperStream<Item> implements AsyncIterable<Item> {
@@ -463,7 +491,7 @@ class WrapperStream<Item> implements AsyncIterable<Item> {
         yield item;
       }
       this.span.log({
-        output: postprocessStreamingResults(allResults),
+        ...postprocessStreamingResults(allResults),
       });
     } finally {
       this.span.end();

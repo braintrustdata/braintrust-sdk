@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+export const messageRoleSchema = z.enum([
+  "system",
+  "user",
+  "assistant",
+  "function",
+  "tool",
+  "model",
+]);
+export type MessageRole = z.infer<typeof messageRoleSchema>;
+
 const chatCompletionSystemMessageParamSchema = z
   .strictObject({
     content: z.string().default(""),
@@ -97,12 +107,30 @@ const chatCompletionAssistantMessageParamSchema = z
   })
   .strip();
 
-export const chatCompletionMessageParamSchema = z.union([
+const chatCompletionFallbackMessageParamSchema = z
+  .strictObject({
+    role: messageRoleSchema.exclude([
+      "system",
+      "user",
+      "assistant",
+      "tool",
+      "function",
+    ]),
+    content: z.string().nullish(),
+  })
+  .strip();
+
+export const chatCompletionOpenAIMessageParamSchema = z.union([
   chatCompletionSystemMessageParamSchema,
   chatCompletionUserMessageParamSchema,
   chatCompletionAssistantMessageParamSchema,
   chatCompletionToolMessageParamSchema,
   chatCompletionFunctionMessageParamSchema,
+]);
+
+export const chatCompletionMessageParamSchema = z.union([
+  chatCompletionOpenAIMessageParamSchema,
+  chatCompletionFallbackMessageParamSchema,
 ]);
 
 export type ToolCall = z.infer<typeof chatCompletionMessageToolCallSchema>;

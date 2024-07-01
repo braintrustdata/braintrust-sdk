@@ -6,11 +6,13 @@ import {
   Span,
   init as _initExperiment,
   EvalCase,
-  InitOptions,
   BaseMetadata,
   DefaultMetadataType,
   ScoreSummary,
   MetricSummary,
+  currentSpan,
+  FullInitOptions,
+  BraintrustState,
 } from "./logger";
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
@@ -163,6 +165,17 @@ export interface Evaluator<
    * Defaults to undefined, in which case there is no max concurrency.
    */
   maxConcurrency?: number;
+
+  /**
+   * If specified, uses the given project ID instead of the evaluator's name to identify the project.
+   */
+  projectId?: string;
+
+  /**
+   * If specified, uses the logger state to initialize Braintrust objects. If unspecified, falls back
+   * to the global state (initialized using your API key).
+   */
+  state?: BraintrustState;
 }
 
 export type EvalResultWithSummary<
@@ -237,17 +250,24 @@ export type EvaluatorFile = {
 };
 
 function initExperiment<IsOpen extends boolean = false>(
-  projectName: string,
-  options: Readonly<InitOptions<IsOpen>> = {},
+  state: BraintrustState | undefined,
+  options: Readonly<FullInitOptions<IsOpen>> = {},
 ) {
-  return _initExperiment(projectName, {
+  return _initExperiment({
+    state,
     ...options,
     setCurrent: false,
   });
 }
 
+export type SpanContext = {
+  currentSpan: typeof currentSpan;
+  NOOP_SPAN: typeof NOOP_SPAN;
+};
+
 declare global {
   var _evals: EvaluatorFile;
+  var _spanContext: SpanContext | undefined;
   var _lazy_load: boolean;
 }
 
@@ -255,6 +275,11 @@ globalThis._evals = {
   evaluators: {},
   reporters: {},
 };
+
+export interface EvalOptions<EvalReport> {
+  reporter?: ReporterDef<EvalReport> | string;
+  onStart?: (metadata: Omit<ExperimentSummary, "scores" | "metrics">) => void;
+}
 
 export async function Eval<
   Input,
@@ -265,17 +290,31 @@ export async function Eval<
 >(
   name: string,
   evaluator: Evaluator<Input, Output, Expected, Metadata>,
-  reporter?: ReporterDef<EvalReport> | string,
+  reporterOrOpts?: ReporterDef<EvalReport> | string | EvalOptions<EvalReport>,
 ): Promise<EvalResultWithSummary<Input, Output, Expected, Metadata>> {
+  const options: EvalOptions<EvalReport> = isEmpty(reporterOrOpts)
+    ? {}
+    : typeof reporterOrOpts === "string"
+      ? { reporter: reporterOrOpts }
+      : "name" in reporterOrOpts
+        ? { reporter: reporterOrOpts }
+        : reporterOrOpts;
+
   let evalName = makeEvalName(name, evaluator.experimentName);
-  if (_evals.evaluators[evalName]) {
+  if (globalThis._evals.evaluators[evalName]) {
     evalName = `${evalName}_${Object.keys(_evals).length}`;
   }
   if (globalThis._lazy_load) {
-    _evals.evaluators[evalName] = {
+    globalThis._evals.evaluators[evalName] = {
       evaluator: { evalName, projectName: name, ...evaluator },
-      reporter,
+      reporter: options.reporter,
     };
+
+    // This only needs to be set once, but Eval() is the only time
+    // we get to run code while importing a module, so use it to
+    // grab these values.
+    globalThis._spanContext = { currentSpan, NOOP_SPAN };
+
     // Better to return this empty object than have an annoying-to-use signature
     return {
       summary: {
@@ -290,20 +329,28 @@ export async function Eval<
 
   const progressReporter = new BarProgressReporter();
 
-  if (typeof reporter === "string") {
+  if (typeof options.reporter === "string") {
     throw new Error(
       "Must specify a reporter object, not a name. Can only specify reporter names when running 'braintrust eval'",
     );
   }
 
-  const resolvedReporter = reporter || defaultReporter;
+  const resolvedReporter = options.reporter || defaultReporter;
   try {
-    const experiment = initExperiment(name, {
+    const experiment = initExperiment(evaluator.state, {
+      ...(evaluator.projectId
+        ? { projectId: evaluator.projectId }
+        : { project: name }),
       experiment: evaluator.experimentName,
       metadata: evaluator.metadata,
       isPublic: evaluator.isPublic,
       update: evaluator.update,
     });
+
+    if (options.onStart) {
+      experiment.summarize({ summarizeScores: false }).then(options.onStart);
+    }
+
     try {
       const evalDef = {
         evalName,
@@ -395,7 +442,7 @@ function evaluateFilter(object: any, filter: Filter) {
   return pattern.test(serializeJSONWithPlainString(key));
 }
 
-function scorerName(
+export function scorerName(
   scorer: EvalScorer<any, any, any, any>,
   scorer_idx: number,
 ) {
@@ -461,7 +508,11 @@ async function runEvaluatorInternal(
       }
       name = baseExperiment.name;
     }
-    dataResult = initExperiment(evaluator.projectName, {
+
+    dataResult = initExperiment(evaluator.state, {
+      ...(evaluator.projectId
+        ? { projectId: evaluator.projectId }
+        : { project: evaluator.projectName }),
       experiment: name,
       open: true,
     }).asDataset();

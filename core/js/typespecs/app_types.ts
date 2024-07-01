@@ -7,6 +7,7 @@ extendZodWithOpenApi(z);
 import { datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
+import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
 
 // Section: App DB table schemas
 
@@ -138,6 +139,16 @@ export const apiKeySchema = z
   .openapi("ApiKey");
 export type ApiKey = z.infer<typeof apiKeySchema>;
 
+export const projectSettingsSchema = z
+  .strictObject({
+    comparison_key: z
+      .string()
+      .nullish()
+      .describe("The key used to join two experiments (defaults to `input`)."),
+  })
+  .strip();
+export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
+
 const projectBaseSchema = generateBaseTableSchema("project");
 export const projectSchema = z
   .strictObject({
@@ -152,6 +163,7 @@ export const projectSchema = z
     created: projectBaseSchema.shape.created,
     deleted_at: projectBaseSchema.shape.deleted_at,
     user_id: projectBaseSchema.shape.user_id,
+    settings: projectSettingsSchema.nullish(),
   })
   .openapi("Project");
 export type Project = z.infer<typeof projectSchema>;
@@ -168,44 +180,96 @@ export const datasetSchema = z
     created: datasetBaseSchema.shape.created,
     deleted_at: datasetBaseSchema.shape.deleted_at,
     user_id: datasetBaseSchema.shape.user_id,
+    metadata: datasetBaseSchema.shape.metadata,
   })
   .openapi("Dataset");
 export type Dataset = z.infer<typeof datasetSchema>;
 
+export const validRuntimesEnum = z.enum(["node"]);
+export type Runtime = z.infer<typeof validRuntimesEnum>;
+
+export const runtimeContextSchema = z.strictObject({
+  runtime: validRuntimesEnum,
+  version: z.string(),
+});
+export type RuntimeContext = z.infer<typeof runtimeContextSchema>;
+
 const promptBaseSchema = generateBaseTableSchema("prompt");
-export const promptSchema = z
-  .strictObject({
-    id: promptBaseSchema.shape.id,
-    // This has to be copy/pasted because zod blows up when there are circular dependencies
-    _xact_id: z
-      .string()
-      .describe(
-        `The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the prompt (see the \`version\` parameter)`,
-      ),
-    project_id: promptBaseSchema.shape.project_id,
-    log_id: z
-      .literal("p")
-      .describe(
-        "A literal 'p' which identifies the object as a project prompt",
-      ),
-    org_id: organizationSchema.shape.id,
-    name: promptBaseSchema.shape.name,
-    slug: z.string().describe("Unique identifier for the prompt"),
-    description: promptBaseSchema.shape.description,
-    created: promptBaseSchema.shape.created,
-    prompt_data: promptDataSchema
-      .nullish()
-      .describe("The prompt, model, and its parameters"),
-    tags: z
-      .array(z.string())
-      .nullish()
-      .describe("A list of tags for the prompt"),
-    metadata: promptBaseSchema.shape.metadata,
-  })
-  .openapi("Prompt");
+const promptSchemaObject = z.strictObject({
+  id: promptBaseSchema.shape.id,
+  // This has to be copy/pasted because zod blows up when there are circular dependencies
+  _xact_id: z
+    .string()
+    .describe(
+      `The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the prompt (see the \`version\` parameter)`,
+    ),
+  project_id: promptBaseSchema.shape.project_id,
+  log_id: z
+    .literal("p")
+    .describe("A literal 'p' which identifies the object as a project prompt"),
+  org_id: organizationSchema.shape.id,
+  name: promptBaseSchema.shape.name,
+  slug: z.string().describe("Unique identifier for the prompt"),
+  description: promptBaseSchema.shape.description,
+  created: promptBaseSchema.shape.created,
+  prompt_data: promptDataSchema
+    .nullish()
+    .describe("The prompt, model, and its parameters"),
+  tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
+  metadata: promptBaseSchema.shape.metadata,
+});
+
+export const promptSchema = promptSchemaObject.openapi("Prompt");
 export type Prompt = z.infer<typeof promptSchema>;
 
-const repoInfoSchema = z
+export const codeBundleSchema = z.strictObject({
+  runtime_context: z.strictObject({
+    runtime: validRuntimesEnum,
+    version: z.string(),
+  }),
+  // This should be a union, once we support code living in different places
+  // Other options should be:
+  //  - a "handler" function that has some signature [does AWS lambda assume it's always called "handler"?]
+  location: z.strictObject({
+    type: z.literal("experiment"),
+    eval_name: z.string(),
+    position: z.union([
+      z.literal("task"),
+      z.strictObject({ score: z.number() }),
+    ]),
+  }),
+  bundle_id: z.string(),
+});
+export type CodeBundle = z.infer<typeof codeBundleSchema>;
+
+export const functionDataSchema = z.union([
+  z.strictObject({
+    type: z.literal("prompt"),
+    // For backwards compatibility reasons, this is hoisted out and stored
+    // in the outer object
+  }),
+  z.strictObject({
+    type: z.literal("code"),
+    data: codeBundleSchema,
+  }),
+  z.strictObject({
+    type: z.literal("global"),
+    name: z.string(),
+  }),
+]);
+
+export const functionSchema = promptSchemaObject
+  .merge(
+    z.strictObject({
+      function_data: functionDataSchema,
+    }),
+  )
+  .openapi("Function");
+
+// NOTE: suffix "Object" helps avoid a name conflict with the built-in `Function` type
+export type FunctionObject = z.infer<typeof functionSchema>;
+
+export const repoInfoSchema = z
   .strictObject({
     commit: z.string().nullish().describe("SHA of most recent commit"),
     branch: z
@@ -342,8 +406,6 @@ export const aclObjectTypeEnum = z
     "dataset",
     "prompt",
     "prompt_session",
-    "project_score",
-    "project_tag",
     "group",
     "role",
     "org_member",
@@ -521,6 +583,28 @@ export const projectTagSchema = z
   .openapi("ProjectTag");
 export type ProjectTag = z.infer<typeof projectTagSchema>;
 
+const viewBaseSchema = generateBaseTableSchema("view");
+export const viewSchema = z
+  .strictObject({
+    id: viewBaseSchema.shape.id,
+    object_type: aclObjectTypeEnum,
+    object_id: z
+      .string()
+      .uuid()
+      .describe("The id of the object the view applies to"),
+    view_type: viewTypeEnum,
+    name: viewBaseSchema.shape.name,
+    created: viewBaseSchema.shape.created,
+    view_data: viewDataSchema.nullish().describe("The view definition"),
+    options: viewOptionsSchema
+      .nullish()
+      .describe("Options for the view in the app"),
+    user_id: viewBaseSchema.shape.user_id,
+    deleted_at: roleBaseSchema.shape.deleted_at,
+  })
+  .openapi("View");
+export type View = z.infer<typeof viewSchema>;
+
 const aclBaseSchema = generateBaseTableSchema("acl");
 export const aclSchema = z
   .strictObject({
@@ -642,6 +726,11 @@ const createProjectSchema = z
 const patchProjectSchema = z
   .strictObject({
     name: projectSchema.shape.name.nullish(),
+    settings: projectSchema.shape.settings
+      .describe(
+        "Project settings. Patch operations replace all settings, so make sure you include all settings you want to keep.",
+      )
+      .nullish(),
   })
   .openapi("PatchProject");
 
@@ -695,6 +784,17 @@ const createPromptSchema = promptSchema
   })
   .openapi("CreatePrompt");
 
+const createFunctionSchema = functionSchema
+  .omit({
+    id: true,
+    _xact_id: true,
+    org_id: true,
+    log_id: true,
+    created: true,
+    metadata: true,
+  })
+  .openapi("CreateFunction");
+
 const patchPromptSchema = z
   .strictObject({
     name: promptSchema.shape.name.nullish(),
@@ -703,6 +803,16 @@ const patchPromptSchema = z
     tags: promptSchema.shape.tags.nullish(),
   })
   .openapi("PatchPrompt");
+
+const patchFunctionSchema = z
+  .strictObject({
+    name: functionSchema.shape.name.nullish(),
+    description: functionSchema.shape.description.nullish(),
+    prompt_data: functionSchema.shape.prompt_data.nullish(),
+    function_data: functionSchema.shape.function_data.nullish(),
+    tags: functionSchema.shape.tags.nullish(),
+  })
+  .openapi("PatchFunction");
 
 const createRoleBaseSchema = generateBaseTableOpSchema("role");
 const createRoleSchema = z
@@ -825,6 +935,32 @@ const patchProjectTagSchema = z
   })
   .openapi("PatchProjectTag");
 
+const createViewSchema = viewSchema
+  .omit({
+    id: true,
+    created: true,
+  })
+  .openapi("CreateView");
+
+const patchViewSchema = z
+  .strictObject({
+    object_type: viewSchema.shape.object_type,
+    object_id: viewSchema.shape.object_id,
+    view_type: viewSchema.shape.view_type.nullish(),
+    name: viewSchema.shape.name.nullish(),
+    view_data: viewSchema.shape.view_data,
+    options: viewSchema.shape.options,
+    user_id: viewSchema.shape.user_id,
+  })
+  .openapi("PatchView");
+
+const deleteViewSchema = z
+  .strictObject({
+    object_type: viewSchema.shape.object_type,
+    object_id: viewSchema.shape.object_id,
+  })
+  .openapi("DeleteView");
+
 // Section: exported schemas, grouped by object type.
 
 export const objectSchemas = {
@@ -832,55 +968,78 @@ export const objectSchemas = {
     create: createExperimentSchema,
     patch: patchExperimentSchema,
     object: experimentSchema,
+    delete: undefined,
   },
   dataset: {
     create: createDatasetSchema,
     patch: patchDatasetSchema,
     object: datasetSchema,
+    delete: undefined,
   },
   project: {
     create: createProjectSchema,
     patch: patchProjectSchema,
     object: projectSchema,
+    delete: undefined,
   },
   prompt: {
     create: createPromptSchema,
     patch: patchPromptSchema,
     object: promptSchema,
+    delete: undefined,
+  },
+  function: {
+    create: createFunctionSchema,
+    patch: patchFunctionSchema,
+    object: functionSchema,
+    delete: undefined,
   },
   role: {
     create: createRoleSchema,
     patch: patchRoleSchema,
     object: roleSchema,
+    delete: undefined,
   },
   group: {
     create: createGroupSchema,
     patch: patchGroupSchema,
     object: groupSchema,
+    delete: undefined,
   },
   acl: {
     create: createAclSchema,
     patch: undefined,
     object: aclSchema,
+    delete: undefined,
   },
   user: {
     create: undefined,
     patch: undefined,
     object: userSchema,
+    delete: undefined,
   },
   prompt_session: {
     create: undefined,
     patch: undefined,
     object: undefined,
+    delete: undefined,
   },
   project_score: {
     create: createProjectScoreSchema,
     patch: patchProjectScoreSchema,
     object: projectScoreSchema,
+    delete: undefined,
   },
   project_tag: {
     create: createProjectTagSchema,
     patch: patchProjectTagSchema,
     object: projectTagSchema,
+    delete: undefined,
+  },
+  view: {
+    create: createViewSchema,
+    patch: patchViewSchema,
+    object: viewSchema,
+    delete: deleteViewSchema,
   },
 };

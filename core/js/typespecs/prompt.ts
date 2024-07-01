@@ -4,24 +4,19 @@ import {
   chatCompletionContentPartImageSchema,
   chatCompletionContentPartTextSchema,
   chatCompletionMessageParamSchema,
+  chatCompletionOpenAIMessageParamSchema,
 } from "./openai/messages";
-export { ToolCall } from "./openai/messages";
+export { ToolCall, messageRoleSchema, MessageRole } from "./openai/messages";
 export { chatCompletionContentPartImageSchema };
 
 export { toolsSchema } from "./openai/tools";
 export type { Tools } from "./openai/tools";
 
-export const messageRoleSchema = z.enum([
-  "system",
-  "user",
-  "assistant",
-  "function",
-  "tool",
-  "model",
-]);
-export type MessageRole = z.infer<typeof messageRoleSchema>;
-
+export type OpenAIMessage = z.infer<
+  typeof chatCompletionOpenAIMessageParamSchema
+>;
 export type Message = z.infer<typeof chatCompletionMessageParamSchema>;
+
 export type Content = Message["content"];
 export type ContentPartText = z.infer<
   typeof chatCompletionContentPartTextSchema
@@ -110,19 +105,27 @@ const anthropicModelParamsSchema = z
 
 const googleModelParamsSchema = z
   .strictObject({
-    temperature: z.number(),
+    temperature: z.number().optional(),
     maxOutputTokens: z.number().optional(),
     topP: z.number().optional(),
     topK: z.number().optional(),
   })
   .strip();
 
+const windowAIModelParamsSchema = z
+  .strictObject({
+    temperature: z.number().optional(),
+    topK: z.number().optional(),
+  })
+  .strip();
+
 const jsCompletionParamsSchema = z.strictObject({}).strip();
 export const modelParamsSchema = z.union([
-  braintrustModelParamsSchema.merge(openAIModelParamsSchema),
-  braintrustModelParamsSchema.merge(anthropicModelParamsSchema),
-  braintrustModelParamsSchema.merge(googleModelParamsSchema),
-  braintrustModelParamsSchema.merge(jsCompletionParamsSchema),
+  braintrustModelParamsSchema.merge(openAIModelParamsSchema).passthrough(),
+  braintrustModelParamsSchema.merge(anthropicModelParamsSchema).passthrough(),
+  braintrustModelParamsSchema.merge(googleModelParamsSchema).passthrough(),
+  braintrustModelParamsSchema.merge(windowAIModelParamsSchema).passthrough(),
+  braintrustModelParamsSchema.merge(jsCompletionParamsSchema).passthrough(),
 ]);
 
 export type ModelParams = z.infer<typeof modelParamsSchema>;

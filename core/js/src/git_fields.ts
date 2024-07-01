@@ -1,21 +1,19 @@
-export interface RepoInfo {
-  commit?: string;
-  branch?: string;
-  tag?: string;
-  dirty?: boolean;
-  author_name?: string;
-  author_email?: string;
-  commit_message?: string;
-  commit_time?: string;
-  git_diff?: string;
-}
+import { repoInfoSchema } from "typespecs";
+import { z } from "zod";
 
-export type GitFields = Array<keyof RepoInfo>;
-export type CollectMetadata = "all" | "none" | "some";
-export type GitMetadataSettings = {
-  collect: CollectMetadata;
-  fields?: GitFields;
-};
+export type RepoInfo = z.infer<typeof repoInfoSchema>;
+
+export const gitFieldsSchema = repoInfoSchema.keyof();
+export type GitFields = z.infer<typeof gitFieldsSchema>;
+
+const collectMetadataEnum = z.enum(["all", "none", "some"]);
+export type CollectMetadata = z.infer<typeof collectMetadataEnum>;
+
+export const gitMetadataSettingsSchema = z.strictObject({
+  collect: collectMetadataEnum,
+  fields: z.array(gitFieldsSchema).optional(),
+});
+export type GitMetadataSettings = z.infer<typeof gitMetadataSettingsSchema>;
 
 export function mergeGitMetadataSettings(
   s1: GitMetadataSettings,

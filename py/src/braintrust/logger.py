@@ -19,7 +19,7 @@ import uuid
 from abc import ABC, abstractmethod
 from functools import partial, wraps
 from multiprocessing import cpu_count
-from typing import Any, Dict, Optional, Union
+from typing import Any, Callable, Dict, Optional, TypeVar, Union, cast, overload
 
 import chevron
 import exceptiongroup
@@ -136,6 +136,18 @@ class Span(ABC):
         """Alias for `end`."""
 
     @abstractmethod
+    def set_attributes(self, name=None, type=None, span_attributes=None):
+        """Set the span's name, type, or other attributes. These attributes will be attached to all log events within the span.
+        The attributes are equivalent to the arguments to start_span.
+
+        :param name: Optional name of the span. If not provided, a name will be inferred from the call stack.
+        :param type: Optional type of the span. Use the `SpanTypeAttribute` enum or just provide a string directly.
+        If not provided, the type will be unset.
+        :param span_attributes: Optional additional attributes to attach to the span, such as a type name.
+        """
+        pass
+
+    @abstractmethod
     def __enter__(self):
         pass
 
@@ -183,6 +195,9 @@ class _NoopSpan(Span):
 
     def close(self, end_time=None):
         return self.end(end_time)
+
+    def set_attributes(self, name=None, type=None, span_attributes=None):
+        pass
 
     def __enter__(self):
         return self
@@ -1223,7 +1238,15 @@ def _try_log_output(span, output):
     span.log(output=output_serializable)
 
 
-def traced(*span_args, **span_kwargs):
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+@overload
+def traced(f: F) -> F:
+    ...
+
+
+def traced(*span_args, **span_kwargs) -> Callable[[F], F]:
     """Decorator to trace the wrapped function. Can either be applied bare (`@traced`) or by providing arguments (`@traced(*span_args, **span_kwargs)`), which will be forwarded to the created span. See `Span.start_span` for full details on the span arguments.
 
     It checks the following (in precedence order):
@@ -1240,7 +1263,7 @@ def traced(*span_args, **span_kwargs):
 
     trace_io = not span_kwargs.pop("notrace_io", False)
 
-    def decorator(span_args, span_kwargs, f):
+    def decorator(span_args, span_kwargs, f: F):
         # We assume 'name' is the first positional argument in `start_span`.
         if len(span_args) == 0 and span_kwargs.get("name") is None:
             span_args += (f.__name__,)
@@ -1273,16 +1296,16 @@ def traced(*span_args, **span_kwargs):
                 return ret
 
         if inspect.iscoroutinefunction(f):
-            return wrapper_async
+            return cast(F, wrapper_async)
         else:
-            return wrapper_sync
+            return cast(F, wrapper_sync)
 
     # We determine if the decorator is invoked bare or with arguments by
     # checking if the first positional argument to the decorator is a callable.
     if len(span_args) == 1 and len(span_kwargs) == 0 and callable(span_args[0]):
-        return decorator(span_args[1:], span_kwargs, span_args[0])
+        return decorator(span_args[1:], span_kwargs, cast(F, span_args[0]))
     else:
-        return partial(decorator, span_args, span_kwargs)
+        return cast(Callable[[F], F], partial(decorator, span_args, span_kwargs))
 
 
 def start_span(
@@ -1968,6 +1991,7 @@ class Experiment(ObjectFetcher):
 
         return ExperimentSummary(
             project_name=self.project.name,
+            project_id=self.project.id,
             experiment_id=self.id,
             experiment_name=self.name,
             project_url=project_url,
@@ -2113,7 +2137,7 @@ class SpanImpl(Span):
             _EXEC_COUNTER += 1
             exec_counter = _EXEC_COUNTER
 
-        self.internal_data = dict(
+        internal_data = dict(
             metrics=dict(
                 start=start_time or time.time(),
             ),
@@ -2122,7 +2146,7 @@ class SpanImpl(Span):
             created=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         )
         if caller_location:
-            self.internal_data["context"] = caller_location
+            internal_data["context"] = caller_location
 
         self._id = event.get("id")
         if self._id is None:
@@ -2138,21 +2162,37 @@ class SpanImpl(Span):
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.
         self._is_merge = False
-        self.log(**{k: v for k, v in event.items() if k != "id"})
+        self.log_internal(event={k: v for k, v in event.items() if k != "id"}, internal_data=internal_data)
         self._is_merge = True
 
     @property
     def id(self):
         return self._id
 
+    def set_attributes(self, name=None, type=None, span_attributes=None):
+        self.log_internal(
+            internal_data={
+                "span_attributes": _strip_nones(
+                    dict(
+                        name=name,
+                        type=type,
+                        **(span_attributes or {}),
+                    ),
+                    deep=False,
+                ),
+            }
+        )
+
     def log(self, **event):
+        return self.log_internal(event=event, internal_data=None)
+
+    def log_internal(self, event=None, internal_data=None):
         # There should be no overlap between the dictionaries being merged,
         # except for `sanitized` and `internal_data`, where the former overrides
         # the latter.
-        sanitized = _validate_and_sanitize_experiment_log_partial_args(event)
-        sanitized_and_internal_data = _strip_nones(self.internal_data, deep=True)
+        sanitized = _validate_and_sanitize_experiment_log_partial_args(event or {})
+        sanitized_and_internal_data = _strip_nones(internal_data or {}, deep=True)
         merge_dicts(sanitized_and_internal_data, _strip_nones(sanitized, deep=False))
-        self.internal_data = {}
 
         # We both check for serializability and round-trip `partial_record`
         # through JSON in order to create a "deep copy". This has the benefit of
@@ -2225,12 +2265,13 @@ class SpanImpl(Span):
         )
 
     def end(self, end_time=None):
+        internal_data = {}
         if not self._logged_end_time:
             end_time = end_time or time.time()
-            self.internal_data = dict(metrics=dict(end=end_time))
+            internal_data = dict(metrics=dict(end=end_time))
         else:
             end_time = self._logged_end_time
-        self.log()
+        self.log_internal(internal_data=internal_data)
         return end_time
 
     def export(self) -> str:
@@ -2899,6 +2940,8 @@ class ExperimentSummary(SerializableDataClass):
 
     project_name: str
     """Name of the project that the experiment belongs to."""
+    project_id: Optional[str]
+    """ID of the project. May be `None` if the eval was run locally."""
     experiment_id: Optional[str]
     """ID of the experiment. May be `None` if the eval was run locally."""
     experiment_name: str

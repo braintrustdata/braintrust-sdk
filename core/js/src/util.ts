@@ -36,6 +36,10 @@ export function snakeToCamelCase(s: string) {
     .join("");
 }
 
+export function snakeToTitleCase(s: string) {
+  return capitalize(s, "_").replace("_", " ");
+}
+
 export function constructJsonArray(items: string[]) {
   return `[${items.join(",")}]`;
 }

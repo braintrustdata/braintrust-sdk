@@ -27,6 +27,8 @@ export const objectTypes = z.enum([
   "user",
   "project_score",
   "project_tag",
+  "function",
+  "view",
 ]);
 export type ObjectType = z.infer<typeof objectTypes>;
 
@@ -35,6 +37,7 @@ export const objectTypesWithEvent = z.enum([
   "experiment",
   "dataset",
   "prompt",
+  "function",
   "prompt_session",
 ]);
 export type ObjectTypeWithEvent = z.infer<typeof objectTypesWithEvent>;

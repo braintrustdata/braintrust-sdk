@@ -213,6 +213,11 @@ class Evaluator:
     Defaults to None, in which case there is no timeout.
     """
 
+    project_id: Optional[str] = None
+    """
+    If specified, uses the given project ID instead of the evaluator's name to identify the project.
+    """
+
 
 @dataclasses.dataclass
 class EvalResultWithSummary(SerializableDataClass):
@@ -245,8 +250,12 @@ async def await_or_run(event_loop, f, *args, **kwargs):
             )
 
 
-async def call_user_fn(event_loop, fn, **kwargs):
-    signature = inspect.signature(fn)
+def _call_user_fn_args(fn, kwargs):
+    try:
+        signature = inspect.signature(fn)
+    except:
+        return [], kwargs
+
     accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values())
 
     positional_args = []
@@ -265,6 +274,11 @@ async def call_user_fn(event_loop, fn, **kwargs):
     if accepts_kwargs:
         final_kwargs.update(kwargs)
 
+    return positional_args, final_kwargs
+
+
+async def call_user_fn(event_loop, fn, **kwargs):
+    positional_args, final_kwargs = _call_user_fn_args(fn, kwargs)
     return await await_or_run(event_loop, fn, *positional_args, **final_kwargs)
 
 
@@ -407,6 +421,7 @@ def Eval(
     update: bool = False,
     reporter: Optional[Union[ReporterDef, str]] = None,
     timeout: Optional[float] = None,
+    project_id: Optional[str] = None,
 ):
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -445,6 +460,7 @@ def Eval(
     :param reporter: (Optional) A reporter that takes an evaluator and its result and returns a report.
     :param timeout: (Optional) The duration, in seconds, after which to time out the evaluation.
     Defaults to None, in which case there is no timeout.
+    :param project_id: (Optional) If specified, uses the given project ID instead of the evaluator's name to identify the project.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
     eval_name = _make_eval_name(name, experiment_name)
@@ -465,6 +481,7 @@ def Eval(
         is_public=is_public,
         update=update,
         timeout=timeout,
+        project_id=project_id,
     )
 
     if _lazy_load:
@@ -485,8 +502,9 @@ def Eval(
 
         async def run_to_completion():
             experiment = init_experiment(
-                evaluator.project_name,
-                evaluator.experiment_name,
+                project_name=evaluator.project_name if evaluator.project_id is None else None,
+                project_id=evaluator.project_id,
+                experiment_name=evaluator.experiment_name,
                 metadata=evaluator.metadata,
                 is_public=evaluator.is_public,
                 update=evaluator.update,
@@ -608,8 +626,8 @@ class DictEvalHooks(EvalHooks):
         self.metadata.update(info)
 
 
-def init_experiment(project_name, experiment_name: Optional[str] = None, set_current=False, **kwargs):
-    ret = _init_experiment(project_name, experiment=experiment_name, set_current=set_current, **kwargs)
+def init_experiment(project_name=None, experiment_name: Optional[str] = None, set_current=False, **kwargs):
+    ret = _init_experiment(project=project_name, experiment=experiment_name, set_current=set_current, **kwargs)
     summary = ret.summarize(summarize_scores=False)
     eprint(f"Experiment {ret.name} is running at {summary.experiment_url}")
     return ret
@@ -659,8 +677,9 @@ def _scorer_name(scorer, scorer_idx):
 
 async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int], filters: List[Filter]):
     """Wrapper on _run_evaluator_internal that times out execution after evaluator.timeout."""
-    async with asyncio.timeout(evaluator.timeout):
-        results = await _run_evaluator_internal(experiment, evaluator, position, filters)
+    results = await asyncio.wait_for(
+        _run_evaluator_internal(experiment, evaluator, position, filters), evaluator.timeout
+    )
 
     if experiment:
         summary = experiment.summarize()
@@ -732,8 +751,11 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
 
                 # Check if the task takes a hooks argument
                 task_args = [datum.input]
-                if len(inspect.signature(evaluator.task).parameters) == 2:
-                    task_args.append(hooks)
+                try:
+                    if len(inspect.signature(evaluator.task).parameters) == 2:
+                        task_args.append(hooks)
+                except:
+                    pass
 
                 with root_span.start_span("task", span_attributes={"type": SpanTypeAttribute.TASK}) as span:
                     hooks.set_span(span)
@@ -807,10 +829,14 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             )
         base_experiment = experiment.fetch_base_experiment()
         data_iterator = _init_experiment(
-            project=evaluator.project_name, experiment=base_experiment.name, open=True, set_current=False
+            project=evaluator.project_name if evaluator.project_id is None else None,
+            project_id=evaluator.project_id,
+            experiment=base_experiment.name,
+            open=True,
+            set_current=False,
         ).as_dataset()
 
-    if inspect.isfunction(data_iterator):
+    if inspect.isfunction(data_iterator) or inspect.isroutine(data_iterator):
         data_iterator = data_iterator()
 
     if not inspect.isasyncgen(data_iterator):

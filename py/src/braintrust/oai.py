@@ -5,6 +5,9 @@ from braintrust_core.util import merge_dicts
 
 from .logger import start_span
 
+X_LEGACY_CACHED_HEADER = "x-cached"
+X_CACHED_HEADER = "x-bt-cached"
+
 
 class NamedWrapper:
     def __init__(self, wrapped):
@@ -14,13 +17,37 @@ class NamedWrapper:
         return getattr(self.__wrapped, name)
 
 
+def log_headers(response, span):
+    cached_value = response.headers.get(X_CACHED_HEADER) or response.headers.get(X_LEGACY_CACHED_HEADER)
+
+    if cached_value:
+        span.log(
+            metrics={
+                "cached": 1 if cached_value.lower() in ["true", "hit"] else 0,
+            }
+        )
+
+
 def postprocess_streaming_results(all_results):
     role = None
     content = None
     tool_calls = None
     finish_reason = None
+    metrics = {}
     for result in all_results:
-        delta = result["choices"][0]["delta"]
+        if "usage" in result and result["usage"] is not None:
+            metrics = {
+                "tokens": result["usage"]["total_tokens"],
+                "prompt_tokens": result["usage"]["prompt_tokens"],
+                "completion_tokens": result["usage"]["completion_tokens"],
+            }
+        choices = result["choices"]
+        if not choices:
+            continue
+        delta = choices[0]["delta"]
+        if not delta:
+            continue
+
         if role is None and delta.get("role") is not None:
             role = delta.get("role")
 
@@ -41,18 +68,21 @@ def postprocess_streaming_results(all_results):
             else:
                 tool_calls[0]["function"]["arguments"] += delta["tool_calls"][0]["function"]["arguments"]
 
-    return [
-        {
-            "index": 0,
-            "message": {
-                "role": role,
-                "content": content,
-                "tool_calls": tool_calls,
-            },
-            "logprobs": None,
-            "finish_reason": finish_reason,
-        }
-    ]
+    return {
+        "metrics": metrics,
+        "output": [
+            {
+                "index": 0,
+                "message": {
+                    "role": role,
+                    "content": content,
+                    "tool_calls": tool_calls,
+                },
+                "logprobs": None,
+                "finish_reason": finish_reason,
+            }
+        ],
+    }
 
 
 class ChatCompletionWrapper:
@@ -74,12 +104,7 @@ class ChatCompletionWrapper:
             create_response = self.create_fn(*args, **kwargs)
             if hasattr(create_response, "parse"):
                 raw_response = create_response.parse()
-                if "x-cached" in create_response.headers:
-                    span.log(
-                        metrics={
-                            "cached": 1 if create_response.headers.get("x-cached").lower() == "true" else 0,
-                        }
-                    )
+                log_headers(create_response, span)
             else:
                 raw_response = create_response
             if stream:
@@ -99,7 +124,7 @@ class ChatCompletionWrapper:
                             all_results.append(item if isinstance(item, dict) else item.dict())
                             yield item
 
-                        span.log(output=postprocess_streaming_results(all_results))
+                        span.log(**postprocess_streaming_results(all_results))
                     finally:
                         span.end()
 
@@ -136,12 +161,7 @@ class ChatCompletionWrapper:
 
             if hasattr(create_response, "parse"):
                 raw_response = create_response.parse()
-                if "x-cached" in create_response.headers:
-                    span.log(
-                        metrics={
-                            "cached": 1 if create_response.headers.get("x-cached").lower() == "true" else 0,
-                        }
-                    )
+                log_headers(create_response, span)
             else:
                 raw_response = create_response
 
@@ -162,7 +182,7 @@ class ChatCompletionWrapper:
                             all_results.append(item if isinstance(item, dict) else item.dict())
                             yield item
 
-                        span.log(output=postprocess_streaming_results(all_results))
+                        span.log(**postprocess_streaming_results(all_results))
                     finally:
                         span.end()
 
@@ -211,7 +231,14 @@ class EmbeddingWrapper:
         with start_span(
             **merge_dicts(dict(name="Embedding", span_attributes={"type": SpanTypeAttribute.LLM}), params)
         ) as span:
-            raw_response = self.create_fn(*args, **kwargs)
+            create_response = self.create_fn(*args, **kwargs)
+
+            if hasattr(create_response, "parse"):
+                raw_response = create_response.parse()
+                log_headers(create_response, span)
+            else:
+                raw_response = create_response
+
             log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
             span.log(
                 metrics={
@@ -230,7 +257,12 @@ class EmbeddingWrapper:
         with start_span(
             **merge_dicts(dict(name="Embedding", span_attributes={"type": SpanTypeAttribute.LLM}), params)
         ) as span:
-            raw_response = await self.acreate_fn(*args, **kwargs)
+            create_response = await self.acreate_fn(*args, **kwargs)
+            if hasattr(create_response, "parse"):
+                raw_response = create_response.parse()
+                log_headers(create_response, span)
+            else:
+                raw_response = create_response
             log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
             span.log(
                 metrics={
