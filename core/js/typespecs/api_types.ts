@@ -12,12 +12,13 @@ import {
   functionSchema,
 } from "./app_types";
 import {
+  EventObjectType,
+  ObjectType,
+  ObjectTypeWithEvent,
   datetimeStringSchema,
   getObjectArticle,
   getEventObjectType,
   getEventObjectDescription,
-  ObjectType,
-  ObjectTypeWithEvent,
 } from "./common_types";
 import { customTypes } from "./custom_types";
 import { capitalize } from "../src/util";
@@ -712,14 +713,22 @@ const feedbackPromptSessionItemSchema = z
     source: feedbackPromptSessionRequestBaseSchema.shape.source,
   })
   .openapi("FeedbackPromptSessionItem");
-const feedbackPromptSessionRequestSchema = makeFeedbackRequestSchema(
-  "prompt_session",
-  feedbackPromptSessionItemSchema,
-);
 
 // Section: exported schemas, grouped by object type.
 
-export const eventObjectSchemas = {
+export type EventObjectSchemasEntry = {
+  event?: Zod.ZodTypeAny;
+  fetchResponse?: Zod.ZodTypeAny;
+  insertEvent?: Zod.ZodTypeAny;
+  insertRequest?: Zod.ZodTypeAny;
+  feedbackItem?: Zod.ZodTypeAny;
+  feedbackRequest?: Zod.ZodTypeAny;
+};
+
+export const eventObjectSchemas: Record<
+  EventObjectType,
+  EventObjectSchemasEntry
+> = {
   experiment: {
     event: experimentEventSchema,
     fetchResponse: makeFetchEventsResponseSchema(
@@ -752,29 +761,20 @@ export const eventObjectSchemas = {
   },
   prompt: {
     event: promptSchema,
-    fetchResponse: undefined,
-    insertEvent: undefined,
-    insertRequest: undefined,
     feedbackItem: feedbackPromptItemSchema,
     feedbackRequest: feedbackPromptRequestSchema,
   },
   function: {
     event: functionSchema,
-    fetchResponse: undefined,
-    insertEvent: undefined,
-    insertRequest: undefined,
     feedbackItem: feedbackFunctionItemSchema,
     feedbackRequest: feedbackFunctionRequestSchema,
   },
   prompt_session: {
     event: promptSessionEventSchema,
-    fetchResponse: undefined,
-    insertEvent: undefined,
-    insertRequest: undefined,
     feedbackItem: feedbackPromptSessionItemSchema,
     feedbackRequest: feedbackPromptRequestBaseSchema,
   },
-} as const;
+};
 
 // Section: Cross-object operation schemas.
 
@@ -793,10 +793,14 @@ function makeCrossObjectIndividualRequestSchema(
             .describe(`A list of ${eventDescription} events to insert`),
         }
       : {}),
-    feedback: eventObjectSchema.feedbackItem
-      .array()
-      .nullish()
-      .describe(`A list of ${eventDescription} feedback items`),
+    ...(eventObjectSchema.feedbackItem
+      ? {
+          feedback: eventObjectSchema.feedbackItem
+            .array()
+            .nullish()
+            .describe(`A list of ${eventDescription} feedback items`),
+        }
+      : {}),
   });
   return z
     .record(z.string().uuid(), insertObject)
@@ -966,19 +970,9 @@ const summarizeDatasetResponseSchema = z
   .describe("Summary of a dataset")
   .openapi("SummarizeDatasetResponse");
 
-export const objectTypeSummarizeResponseSchemas = {
+export const objectTypeSummarizeResponseSchemas: {
+  [K in ObjectType]?: z.ZodTypeAny;
+} = {
   experiment: summarizeExperimentResponseSchema,
   dataset: summarizeDatasetResponseSchema,
-  project: undefined,
-  prompt: undefined,
-  function: undefined,
-  role: undefined,
-  group: undefined,
-  acl: undefined,
-  user: undefined,
-  prompt_session: undefined,
-  project_score: undefined,
-  project_tag: undefined,
-  view: undefined,
-  organization: undefined,
-} as const;
+};

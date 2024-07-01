@@ -4,7 +4,7 @@ import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 extendZodWithOpenApi(z);
 
-import { datetimeStringSchema } from "./common_types";
+import { ObjectType, datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
@@ -972,78 +972,66 @@ const patchOrganizationSchema = z
 
 // Section: exported schemas, grouped by object type.
 
-export const objectSchemas = {
+export type ObjectSchemasEntry = {
+  object?: z.ZodTypeAny;
+  create?: z.ZodTypeAny;
+  patch?: z.ZodTypeAny;
+  delete?: z.ZodTypeAny;
+};
+
+export const objectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
   experiment: {
     create: createExperimentSchema,
     patch: patchExperimentSchema,
     object: experimentSchema,
-    delete: undefined,
   },
   dataset: {
     create: createDatasetSchema,
     patch: patchDatasetSchema,
     object: datasetSchema,
-    delete: undefined,
   },
   project: {
     create: createProjectSchema,
     patch: patchProjectSchema,
     object: projectSchema,
-    delete: undefined,
   },
   prompt: {
     create: createPromptSchema,
     patch: patchPromptSchema,
     object: promptSchema,
-    delete: undefined,
   },
   function: {
     create: createFunctionSchema,
     patch: patchFunctionSchema,
     object: functionSchema,
-    delete: undefined,
   },
   role: {
     create: createRoleSchema,
     patch: patchRoleSchema,
     object: roleSchema,
-    delete: undefined,
   },
   group: {
     create: createGroupSchema,
     patch: patchGroupSchema,
     object: groupSchema,
-    delete: undefined,
   },
   acl: {
     create: createAclSchema,
-    patch: undefined,
     object: aclSchema,
-    delete: undefined,
   },
   user: {
-    create: undefined,
-    patch: undefined,
     object: userSchema,
-    delete: undefined,
   },
-  prompt_session: {
-    create: undefined,
-    patch: undefined,
-    object: undefined,
-    delete: undefined,
-  },
+  prompt_session: {},
   project_score: {
     create: createProjectScoreSchema,
     patch: patchProjectScoreSchema,
     object: projectScoreSchema,
-    delete: undefined,
   },
   project_tag: {
     create: createProjectTagSchema,
     patch: patchProjectTagSchema,
     object: projectTagSchema,
-    delete: undefined,
   },
   view: {
     create: createViewSchema,
