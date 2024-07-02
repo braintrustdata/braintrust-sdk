@@ -891,7 +891,7 @@ const patchGroupSchema = createGroupSchema
   )
   .openapi("PatchGroup");
 
-const createAclSchema = aclSchema
+export const createAclSchema = aclSchema
   .omit({
     id: true,
     created: true,
@@ -935,14 +935,14 @@ const patchProjectTagSchema = z
   })
   .openapi("PatchProjectTag");
 
-const createViewSchema = viewSchema
+export const createViewSchema = viewSchema
   .omit({
     id: true,
     created: true,
   })
   .openapi("CreateView");
 
-const patchViewSchema = z
+export const patchViewSchema = z
   .strictObject({
     object_type: viewSchema.shape.object_type,
     object_id: viewSchema.shape.object_id,
