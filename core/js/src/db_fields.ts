@@ -17,12 +17,3 @@ export const PARENT_ID_FIELD = "_parent_id";
 // prefer to treat them as strings so they uniformly serialize/deserialize as
 // JSON.
 export type TransactionId = string;
-
-export const ALL_ROW_ID_FIELDS = [
-  ID_FIELD,
-  TRANSACTION_ID_FIELD,
-  CREATED_FIELD,
-  IS_MERGE_FIELD,
-  MERGE_PATHS_FIELD,
-  OBJECT_DELETE_FIELD,
-];

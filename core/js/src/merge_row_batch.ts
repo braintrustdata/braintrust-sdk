@@ -28,8 +28,8 @@ function generateMergedRowKey(
 export function mergeRowBatch<
   T extends {
     id: string;
-    [IS_MERGE_FIELD]?: boolean;
-    [PARENT_ID_FIELD]?: string;
+    [IS_MERGE_FIELD]?: boolean | null;
+    [PARENT_ID_FIELD]?: string | null;
   },
 >(rows: T[]): T[][] {
   for (const row of rows) {
