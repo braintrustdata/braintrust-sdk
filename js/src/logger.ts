@@ -62,7 +62,7 @@ import {
   createFinalValuePassThroughStream,
   devNullWritableStream,
 } from "./stream";
-import { waitUntil } from "./wait-until";
+import { waitUntil } from "@vercel/functions";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -881,6 +881,9 @@ export class Logger<IsAsyncFlush extends boolean> {
     const ret = span.id;
     type Ret = PromiseUnless<IsAsyncFlush, string>;
     if (this.asyncFlush === true) {
+      // If we're running in Vercel, waitUntil() will ensure that the logs flush
+      // before the function dies (but perhaps after it returns). This makes it safe
+      // to use `asyncFlush: true` on Vercel.
       waitUntil(this.flush());
       return ret as Ret;
     } else {
@@ -915,6 +918,7 @@ export class Logger<IsAsyncFlush extends boolean> {
     type Ret = PromiseUnless<IsAsyncFlush, R>;
 
     if (this.asyncFlush) {
+      // See comment above explaining waitUntil().
       waitUntil(this.flush());
       return ret as Ret;
     } else {
