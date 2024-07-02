@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
     "declaration": true,
-    "outDir": "./dist",
     "lib": ["es2022"],
     "module": "commonjs",
     "target": "es2022",
@@ -10,6 +9,6 @@
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["src"],
+  "include": ["."],
   "exclude": ["node_modules/**", "**/dist/**"]
 }

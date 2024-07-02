@@ -19,16 +19,10 @@ export default defineConfig([
     outDir: "dist",
     external: ["esbuild"],
   },
-  // {
-  //   entry: ["edge/index.ts"],
-  //   format: ["cjs", "esm"],
-  //   outDir: "edge/dist",
-  //   dts: true,
-  // },
-  // {
-  //   entry: ["schema/index.ts"],
-  //   format: ["cjs", "esm"],
-  //   outDir: "schema/dist",
-  //   dts: true,
-  // },
+  {
+    entry: ["ai-sdk/index.ts"],
+    format: ["cjs", "esm"],
+    outDir: "ai-sdk/dist",
+    dts: true,
+  },
 ]);

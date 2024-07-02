@@ -21,6 +21,12 @@
       "import": "./dist/index.mjs",
       "module": "./dist/index.mjs",
       "require": "./dist/index.js"
+    },
+    "./ai-sdk": {
+      "types": "./ai-sdk/dist/index.d.ts",
+      "import": "./ai-sdk/dist/index.mjs",
+      "module": "./ai-sdk/dist/index.mjs",
+      "require": "./ai-sdk/dist/index.js"
     }
   },
   "scripts": {
@@ -73,6 +79,7 @@
     "pluralize": "^8.0.0",
     "simple-git": "^3.21.0",
     "uuid": "^9.0.1",
+    "web-streams-polyfill": "^4.0.0",
     "zod": "^3.22.4"
   }
 }
