@@ -568,6 +568,7 @@ const {
     id: experimentEventSchema.shape.id.nullish(),
     dataset_record_id: experimentEventSchema.shape.dataset_record_id,
     [OBJECT_DELETE_FIELD]: experimentEventBaseSchema.shape[OBJECT_DELETE_FIELD],
+    created: experimentEventBaseSchema.shape.created.nullish(),
   }),
 );
 
@@ -583,6 +584,7 @@ const {
     tags: datasetEventSchema.shape.tags,
     id: datasetEventSchema.shape.id.nullish(),
     [OBJECT_DELETE_FIELD]: datasetEventBaseSchema.shape[OBJECT_DELETE_FIELD],
+    created: experimentEventBaseSchema.shape.created.nullish(),
   }),
 );
 
@@ -604,6 +606,7 @@ const {
     id: projectLogsEventSchema.shape.id.nullish(),
     [OBJECT_DELETE_FIELD]:
       projectLogsEventBaseSchema.shape[OBJECT_DELETE_FIELD],
+    created: experimentEventBaseSchema.shape.created.nullish(),
   }),
 );
 
