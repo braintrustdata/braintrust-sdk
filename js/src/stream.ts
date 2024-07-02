@@ -34,8 +34,8 @@ export class BraintrustStream {
     // Once a stream is tee'd, it is essentially consumed, so we need to replace our own
     // copy of it.
     const [newStream, copyStream] = this.stream.tee();
-    this.stream = newStream;
-    return new BraintrustStream(copyStream);
+    this.stream = copyStream;
+    return new BraintrustStream(newStream);
   }
 
   public toReadableStream(): ReadableStream<BraintrustStreamChunk> {
@@ -91,34 +91,38 @@ function btStreamParser() {
   });
 }
 
-export function createFinalValuePassThroughStream(
+export function createFinalValuePassThroughStream<
+  T extends BraintrustStreamChunk | string | Uint8Array,
+>(
   onFinal: (result: unknown) => void,
-): TransformStream<BraintrustStreamChunk, BraintrustStreamChunk> {
+): TransformStream<T, BraintrustStreamChunk> {
+  const decoder = new TextDecoder();
   const textChunks: string[] = [];
   const jsonChunks: string[] = [];
 
-  const transformStream = new TransformStream<
-    BraintrustStreamChunk,
-    BraintrustStreamChunk
-  >({
-    async transform(chunk, controller) {
-      const chunkType = chunk.type;
-      console.log("I SEE CHUNK", chunk);
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      switch (chunkType) {
-        case "text_delta":
-          textChunks.push(chunk.data);
-          break;
-        case "json_delta":
-          jsonChunks.push(chunk.data);
-          break;
-        default:
-          const _type: never = chunkType;
-          throw new Error(`Unknown chunk type ${_type}`);
+  const transformStream = new TransformStream<T, BraintrustStreamChunk>({
+    transform(chunk, controller) {
+      if (typeof chunk === "string") {
+        textChunks.push(chunk);
+      } else if (chunk instanceof Uint8Array) {
+        textChunks.push(decoder.decode(chunk));
+      } else {
+        const chunkType = chunk.type;
+        switch (chunkType) {
+          case "text_delta":
+            textChunks.push(chunk.data);
+            break;
+          case "json_delta":
+            jsonChunks.push(chunk.data);
+            break;
+          default:
+            const _type: never = chunkType;
+            throw new Error(`Unknown chunk type ${_type}`);
+        }
+        controller.enqueue(chunk);
       }
-      controller.enqueue(chunk);
     },
-    async flush(controller) {
+    flush(controller) {
       if (jsonChunks.length > 0) {
         // If we received both text and json deltas in the same stream, we
         // only return the json delta
@@ -138,9 +142,9 @@ export function createFinalValuePassThroughStream(
 
 export function devNullWritableStream(): WritableStream {
   return new WritableStream({
-    async write(chunk) {},
-    async close() {},
-    async abort(reason) {},
-    async start() {},
+    write(chunk) {},
+    close() {},
+    abort(reason) {},
+    start(controller) {},
   });
 }

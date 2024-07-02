@@ -62,6 +62,7 @@ import {
   createFinalValuePassThroughStream,
   devNullWritableStream,
 } from "./stream";
+import { waitUntil } from "./wait-until";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -880,6 +881,7 @@ export class Logger<IsAsyncFlush extends boolean> {
     const ret = span.id;
     type Ret = PromiseUnless<IsAsyncFlush, string>;
     if (this.asyncFlush === true) {
+      waitUntil(this.flush());
       return ret as Ret;
     } else {
       return (async () => {
@@ -913,6 +915,7 @@ export class Logger<IsAsyncFlush extends boolean> {
     type Ret = PromiseUnless<IsAsyncFlush, R>;
 
     if (this.asyncFlush) {
+      waitUntil(this.flush());
       return ret as Ret;
     } else {
       return (async () => {
@@ -3135,17 +3138,21 @@ export class SpanImpl implements Span {
       any,
     ][]) {
       if (value instanceof BraintrustStream) {
+        const streamCopy = value.copy();
         lazyInternalData[key] = new LazyValue(async () => {
-          const streamCopy = value.copy();
-          return await new Promise((resolve, reject) => {
-            try {
-              streamCopy
-                .toReadableStream()
-                .pipeThrough(createFinalValuePassThroughStream(resolve))
-                .pipeTo(devNullWritableStream());
-            } catch (e) {
-              reject(e);
-            }
+          return await new Promise((resolve) => {
+            streamCopy
+              .toReadableStream()
+              .pipeThrough(createFinalValuePassThroughStream(resolve))
+              .pipeTo(devNullWritableStream());
+          });
+        });
+      } else if (value instanceof ReadableStream) {
+        lazyInternalData[key] = new LazyValue(async () => {
+          return await new Promise((resolve) => {
+            value
+              .pipeThrough(createFinalValuePassThroughStream(resolve))
+              .pipeTo(devNullWritableStream());
           });
         });
       } else {
