@@ -57,6 +57,12 @@ import {
 } from "./util";
 import Mustache from "mustache";
 import { z } from "zod";
+import {
+  BraintrustStream,
+  createFinalValuePassThroughStream,
+  devNullWritableStream,
+} from "./stream";
+import { waitUntil } from "./wait-until";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -875,6 +881,7 @@ export class Logger<IsAsyncFlush extends boolean> {
     const ret = span.id;
     type Ret = PromiseUnless<IsAsyncFlush, string>;
     if (this.asyncFlush === true) {
+      waitUntil(this.flush());
       return ret as Ret;
     } else {
       return (async () => {
@@ -908,6 +915,7 @@ export class Logger<IsAsyncFlush extends boolean> {
     type Ret = PromiseUnless<IsAsyncFlush, R>;
 
     if (this.asyncFlush) {
+      waitUntil(this.flush());
       return ret as Ret;
     } else {
       return (async () => {
@@ -3122,6 +3130,36 @@ export class SpanImpl implements Span {
     let sanitizedAndInternalData = { ...internalData };
     mergeDicts(sanitizedAndInternalData, sanitized);
 
+    const serializableInternalData: typeof sanitizedAndInternalData = {};
+    const lazyInternalData: Record<string, LazyValue<unknown>> = {};
+
+    for (const [key, value] of Object.entries(sanitizedAndInternalData) as [
+      keyof typeof sanitizedAndInternalData,
+      any,
+    ][]) {
+      if (value instanceof BraintrustStream) {
+        const streamCopy = value.copy();
+        lazyInternalData[key] = new LazyValue(async () => {
+          return await new Promise((resolve) => {
+            streamCopy
+              .toReadableStream()
+              .pipeThrough(createFinalValuePassThroughStream(resolve))
+              .pipeTo(devNullWritableStream());
+          });
+        });
+      } else if (value instanceof ReadableStream) {
+        lazyInternalData[key] = new LazyValue(async () => {
+          return await new Promise((resolve) => {
+            value
+              .pipeThrough(createFinalValuePassThroughStream(resolve))
+              .pipeTo(devNullWritableStream());
+          });
+        });
+      } else {
+        serializableInternalData[key] = value;
+      }
+    }
+
     // We both check for serializability and round-trip `partialRecord` through
     // JSON in order to create a "deep copy". This has the benefit of cutting
     // out any reference to user objects when the object is logged
@@ -3132,7 +3170,7 @@ export class SpanImpl implements Span {
       span_id: this.spanId,
       root_span_id: this.rootSpanId,
       span_parents: this.spanParents,
-      ...sanitizedAndInternalData,
+      ...serializableInternalData,
       [IS_MERGE_FIELD]: this.isMerge,
     };
     const serializedPartialRecord = JSON.stringify(partialRecord);
@@ -3147,6 +3185,14 @@ export class SpanImpl implements Span {
 
     const computeRecord = async () => ({
       ...partialRecord,
+      ...Object.fromEntries(
+        await Promise.all(
+          Object.entries(lazyInternalData).map(async ([key, value]) => [
+            key,
+            await value.get(),
+          ]),
+        ),
+      ),
       ...new SpanComponentsV2({
         objectType: this.parentObjectType,
         objectId: await this.parentObjectId.get(),
