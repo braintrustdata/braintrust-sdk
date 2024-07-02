@@ -2188,10 +2188,8 @@ export async function loginToState(options: LoginOptions = {}) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({
-          token: apiKey,
-        }),
       }),
     );
     const info = await resp.json();
