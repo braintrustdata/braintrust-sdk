@@ -2403,7 +2403,11 @@ export function wrapTraced<
 
         if (!hasExplicitOutput) {
           if (output instanceof Promise) {
-            output.then((result) => span.log({ output: result }));
+            return (async () => {
+              const result = await output;
+              span.log({ output: result });
+              return result;
+            })();
           } else {
             span.log({ output: output });
           }
@@ -2420,8 +2424,7 @@ export function wrapTraced<
 
         const outputResult = fn(...fnArgs);
 
-        const output =
-          outputResult instanceof Promise ? await outputResult : outputResult;
+        const output = await outputResult;
 
         if (!hasExplicitOutput) {
           span.log({ output });
