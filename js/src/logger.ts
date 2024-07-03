@@ -2435,6 +2435,12 @@ export function wrapTraced<
 }
 
 /**
+ * A synonym for `wrapTraced`. If you're porting from systems that use `traceable`, you can use this to
+ * make your codebase more consistent.
+ */
+export const traceable = wrapTraced;
+
+/**
  * Lower-level alternative to `traced`. This allows you to start a span yourself, and can be useful in situations
  * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
  * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
