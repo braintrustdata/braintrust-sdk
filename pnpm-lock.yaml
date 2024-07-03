@@ -49,11 +49,8 @@ importers:
         specifier: ^3.2.16
         version: 3.2.16(react@18.3.1)(svelte@4.2.18)(vue@3.4.31)(zod@3.22.4)
       braintrust:
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../js
-      web-streams-polyfill:
-        specifier: ^4.0.0
-        version: 4.0.0
     devDependencies:
       tsup:
         specifier: ^8.0.1
@@ -115,9 +112,6 @@ importers:
       uuid:
         specifier: ^9.0.1
         version: 9.0.1
-      web-streams-polyfill:
-        specifier: ^4.0.0
-        version: 4.0.0
       zod:
         specifier: ^3.22.4
         version: 3.22.4
@@ -4936,11 +4930,6 @@ packages:
     resolution: {integrity: sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw==}
     engines: {node: '>= 8'}
     dev: true
-
-  /web-streams-polyfill@4.0.0:
-    resolution: {integrity: sha512-0zJXHRAYEjM2tUfZ2DiSOHAa2aw1tisnnhU3ufD57R8iefL+DcdJyRBRyJpG+NUimDgbTI/lH+gAE1PAvV3Cgw==}
-    engines: {node: '>= 8'}
-    dev: false
 
   /web-streams-polyfill@4.0.0-beta.3:
     resolution: {integrity: sha512-QW95TCTaHmsYfHDybGMwO5IJIM93I/6vTRk+daHTWFPhwh+C8Cg7j7XyKrwrj8Ib6vYXe0ocYNrmzY4xAAN6ug==}

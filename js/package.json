@@ -1,6 +1,6 @@
 {
   "name": "braintrust",
-  "version": "0.0.63",
+  "version": "0.0.140",
   "description": "SDK for integrating Braintrust",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -79,7 +79,6 @@
     "pluralize": "^8.0.0",
     "simple-git": "^3.21.0",
     "uuid": "^9.0.1",
-    "web-streams-polyfill": "^4.0.0",
     "zod": "^3.22.4"
   }
 }

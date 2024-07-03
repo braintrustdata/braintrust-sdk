@@ -1,13 +1,8 @@
 import { formatStreamPart } from "ai";
-import type { BraintrustStreamChunk } from "braintrust";
-import { ReadableStream, TransformStream } from "web-streams-polyfill";
-// export { wrapAISDKModel } from "../src/wrappers/ai-sdk";
+import type { BraintrustStreamChunk, BraintrustStream } from "braintrust";
+import { ReadableStream, TransformStream } from "stream/web";
 
-interface BraintrustStream {
-  toReadableStream: () => ReadableStream<BraintrustStreamChunk>;
-}
-
-export function toAISDKStream(
+export function toVercelAISDKStream(
   stream: BraintrustStream,
 ): ReadableStream<Uint8Array> {
   return stream
@@ -15,8 +10,8 @@ export function toAISDKStream(
     .pipeThrough(btStreamToAISDKTransformStream());
 }
 
-export function toAISDKResponse(stream: BraintrustStream): Response {
-  return new Response(toAISDKStream(stream), {
+export function toVercelAISDKResponse(stream: BraintrustStream): Response {
+  return new Response(toVercelAISDKStream(stream), {
     headers: {
       "Content-Type": "application/json",
     },

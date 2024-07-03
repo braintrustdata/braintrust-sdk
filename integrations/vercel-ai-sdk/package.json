@@ -27,8 +27,7 @@
   },
   "dependencies": {
     "@ai-sdk/provider": "^0.0.11",
-    "braintrust": "workspace:*",
     "ai": "^3.2.16",
-    "web-streams-polyfill": "^4.0.0"
+    "braintrust": "workspace:^"
   }
 }
