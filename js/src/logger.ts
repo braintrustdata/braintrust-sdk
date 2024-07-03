@@ -2362,26 +2362,49 @@ export function trace<
     type: "function",
     ...args,
   };
+  const hasExplicitInput =
+    args &&
+    args.event &&
+    "input" in args.event &&
+    args.event.input !== undefined;
+  const hasExplicitOutput =
+    args && args.event && args.event.output !== undefined;
+
   if (args?.asyncFlush) {
     return ((...fnArgs: Parameters<F>) =>
       traced((span) => {
-        span.log({ input: fnArgs });
-        const output = fn(...fnArgs);
-        if (output instanceof Promise) {
-          output.then((result) => span.log({ output: result }));
-        } else {
-          span.log({ output: output });
+        if (!hasExplicitInput) {
+          span.log({ input: fnArgs });
         }
+
+        const output = fn(...fnArgs);
+
+        if (!hasExplicitOutput) {
+          if (output instanceof Promise) {
+            output.then((result) => span.log({ output: result }));
+          } else {
+            span.log({ output: output });
+          }
+        }
+
         return output;
       }, spanArgs)) as IsAsyncFlush extends false ? never : F;
   } else {
     return ((...fnArgs: Parameters<F>) =>
       traced(async (span) => {
-        span.log({ input: fnArgs });
+        if (!hasExplicitInput) {
+          span.log({ input: fnArgs });
+        }
+
         const outputResult = fn(...fnArgs);
+
         const output =
           outputResult instanceof Promise ? await outputResult : outputResult;
-        span.log({ output });
+
+        if (!hasExplicitOutput) {
+          span.log({ output });
+        }
+
         return output;
       }, spanArgs)) as IsAsyncFlush extends false
       ? (...args: Parameters<F>) => Promise<Awaited<ReturnType<F>>>
