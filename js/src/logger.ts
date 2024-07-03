@@ -2348,8 +2348,6 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
   }
 }
 
-type PromiseIfNotPromise<T> = T extends Promise<any> ? T : Promise<T>;
-
 export function trace<
   F extends (...args: any[]) => any,
   IsAsyncFlush extends boolean = false,
@@ -2357,7 +2355,7 @@ export function trace<
   fn: F,
   args?: StartSpanArgs & SetCurrentArg & AsyncFlushArg<IsAsyncFlush>,
 ): IsAsyncFlush extends false
-  ? (...args: Parameters<F>) => PromiseIfNotPromise<ReturnType<F>>
+  ? (...args: Parameters<F>) => Promise<Awaited<ReturnType<F>>>
   : F {
   const spanArgs: typeof args = {
     name: fn.name,
@@ -2386,7 +2384,7 @@ export function trace<
         span.log({ output });
         return output;
       }, spanArgs)) as IsAsyncFlush extends false
-      ? (...args: Parameters<F>) => PromiseIfNotPromise<ReturnType<F>>
+      ? (...args: Parameters<F>) => Promise<Awaited<ReturnType<F>>>
       : never;
   }
 }
