@@ -3227,7 +3227,7 @@ export class SpanImpl implements Span {
     };
     const serializedPartialRecord = JSON.stringify(partialRecord, (k, v) => {
       if (v instanceof SpanImpl) {
-        return `<span id=${v.id}>`;
+        return `<span>`;
       } else if (v instanceof Experiment) {
         return `<experiment>`;
       } else if (v instanceof Dataset) {
