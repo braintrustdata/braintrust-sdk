@@ -2348,6 +2348,49 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
   }
 }
 
+type PromiseIfNotPromise<T> = T extends Promise<any> ? T : Promise<T>;
+
+export function trace<
+  F extends (...args: any[]) => any,
+  IsAsyncFlush extends boolean = false,
+>(
+  fn: F,
+  args?: StartSpanArgs & SetCurrentArg & AsyncFlushArg<IsAsyncFlush>,
+): IsAsyncFlush extends false
+  ? (...args: Parameters<F>) => PromiseIfNotPromise<ReturnType<F>>
+  : F {
+  const spanArgs: typeof args = {
+    name: fn.name,
+    type: "function",
+    ...args,
+  };
+  if (args?.asyncFlush) {
+    return ((...fnArgs: Parameters<F>) =>
+      traced((span) => {
+        span.log({ input: fnArgs });
+        const output = fn(...fnArgs);
+        if (output instanceof Promise) {
+          output.then((result) => span.log({ output: result }));
+        } else {
+          span.log({ output: output });
+        }
+        return output;
+      }, spanArgs)) as IsAsyncFlush extends false ? never : F;
+  } else {
+    return ((...fnArgs: Parameters<F>) =>
+      traced(async (span) => {
+        span.log({ input: fnArgs });
+        const outputResult = fn(...fnArgs);
+        const output =
+          outputResult instanceof Promise ? await outputResult : outputResult;
+        span.log({ output });
+        return output;
+      }, spanArgs)) as IsAsyncFlush extends false
+      ? (...args: Parameters<F>) => PromiseIfNotPromise<ReturnType<F>>
+      : never;
+  }
+}
+
 /**
  * Lower-level alternative to `traced`. This allows you to start a span yourself, and can be useful in situations
  * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
@@ -3133,7 +3176,18 @@ export class SpanImpl implements Span {
       ...sanitizedAndInternalData,
       [IS_MERGE_FIELD]: this.isMerge,
     };
-    const serializedPartialRecord = JSON.stringify(partialRecord);
+    const serializedPartialRecord = JSON.stringify(partialRecord, (k, v) => {
+      if (v instanceof SpanImpl) {
+        return `<span id=${v.id}>`;
+      } else if (v instanceof Experiment) {
+        return `<experiment>`;
+      } else if (v instanceof Dataset) {
+        return `<dataset>`;
+      } else if (v instanceof Logger) {
+        return `<logger>`;
+      }
+      return v;
+    });
     partialRecord = JSON.parse(serializedPartialRecord);
     if (partialRecord.metrics?.end) {
       this.loggedEndTime = partialRecord.metrics?.end as number;
