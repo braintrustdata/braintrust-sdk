@@ -2348,7 +2348,29 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
   }
 }
 
-export function trace<
+/**
+ * Wrap a function with `traced`, using the arguments as `input` and return value as `output`.
+ * Any functions wrapped this way will automatically be traced, similar to the `@traced` decorator
+ * in Python. If you want to correctly propagate the function's name and define it in one go, then
+ * you can do so like this:
+ *
+ * ```ts
+ * const myFunc = wrapTraced(async function myFunc(input) {
+ *  const result = await client.chat.completions.create({
+ *    model: "gpt-3.5-turbo",
+ *    messages: [{ role: "user", content: input }],
+ *  });
+ *  return result.choices[0].message.content ?? "unknown";
+ * });
+ * ```
+ * Now, any calls to `myFunc` will be traced, and the input and output will be logged automatically.
+ * If tracing is inactive, i.e. there is no active logger or experiment, it's just a no-op.
+ *
+ * @param fn The function to wrap.
+ * @param args Span-level arguments (e.g. a custom name or type) to pass to `traced`.
+ * @returns The wrapped function.
+ */
+export function wrapTraced<
   F extends (...args: any[]) => any,
   IsAsyncFlush extends boolean = false,
 >(
