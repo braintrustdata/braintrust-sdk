@@ -1,3 +1,4 @@
+import { callEventSchema } from "@braintrust/core/typespecs";
 import {
   createParser,
   EventSourceParser,
@@ -55,6 +56,10 @@ function btStreamParser() {
         if (event.type === "reconnect-interval") {
           return;
         }
+        const parsed = callEventSchema.safeParse(event);
+        if (!parsed.success) {
+          throw new Error(`Failed to parse event: ${parsed.error}`);
+        }
         switch (event.event) {
           case "text_delta":
             controller.enqueue({
@@ -71,8 +76,6 @@ function btStreamParser() {
           case "done":
             // Do nothing
             break;
-          default:
-            throw new Error(`Unknown event type ${event.event}`);
         }
       });
     },

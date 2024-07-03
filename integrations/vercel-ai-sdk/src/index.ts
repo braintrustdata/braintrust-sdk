@@ -13,7 +13,7 @@ export function toVercelAISDKStream(
 export function toVercelAISDKResponse(stream: BraintrustStream): Response {
   return new Response(toVercelAISDKStream(stream), {
     headers: {
-      "Content-Type": "application/json",
+      "Content-Type": "text/plain; charset=utf-8",
     },
   });
 }

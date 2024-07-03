@@ -81,6 +81,13 @@ export type EndSpanArgs = {
   endTime?: number;
 };
 
+export interface Exportable {
+  /**
+   * Return a serialized representation of the object that can be used to start subspans in other places. See `Span.traced` for more details.
+   */
+  export(): Promise<string>;
+}
+
 /**
  * A Span encapsulates logged data and metrics for a unit of work. This interface is shared by all span implementations.
  *
@@ -88,7 +95,7 @@ export type EndSpanArgs = {
  *
  * See `Span.traced` for full details.
  */
-export interface Span {
+export interface Span extends Exportable {
   /**
    * Row ID of the span.
    */
@@ -148,11 +155,6 @@ export interface Span {
    * @returns The end time logged to the span metrics.
    */
   end(args?: EndSpanArgs): number;
-
-  /**
-   * Return a serialized representation of the span that can be used to start subspans in other places. See `Span.traced` for more details.
-   */
-  export(): Promise<string>;
 
   /**
    * Flush any pending rows to the server.
@@ -230,6 +232,7 @@ const loginSchema = z.strictObject({
   appPublicUrl: z.string(),
   orgName: z.string(),
   logUrl: z.string(),
+  proxyUrl: z.string(),
   loginToken: z.string(),
   orgId: z.string().nullish(),
   gitMetadataSettings: gitMetadataSettingsSchema.nullish(),
@@ -256,12 +259,14 @@ export class BraintrustState {
   public orgId: string | null = null;
   public orgName: string | null = null;
   public logUrl: string | null = null;
+  public proxyUrl: string | null = null;
   public loggedIn: boolean = false;
   public gitMetadataSettings?: GitMetadataSettings;
 
   public fetch: typeof globalThis.fetch = globalThis.fetch;
   private _apiConn: HTTPConnection | null = null;
   private _logConn: HTTPConnection | null = null;
+  private _proxyConn: HTTPConnection | null = null;
 
   constructor(private loginParams: LoginOptions) {
     this.id = new Date().toLocaleString(); // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
@@ -289,11 +294,13 @@ export class BraintrustState {
     this.orgId = null;
     this.orgName = null;
     this.logUrl = null;
+    this.proxyUrl = null;
     this.loggedIn = false;
     this.gitMetadataSettings = undefined;
 
     this._apiConn = null;
     this._logConn = null;
+    this._proxyConn = null;
   }
 
   public copyLoginInfo(other: BraintrustState) {
@@ -303,11 +310,13 @@ export class BraintrustState {
     this.orgId = other.orgId;
     this.orgName = other.orgName;
     this.logUrl = other.logUrl;
+    this.proxyUrl = other.proxyUrl;
     this.loggedIn = other.loggedIn;
     this.gitMetadataSettings = other.gitMetadataSettings;
 
     this._apiConn = other._apiConn;
     this._logConn = other._logConn;
+    this._proxyConn = other._proxyConn;
   }
 
   public serialize(): SerializedBraintrustState {
@@ -321,6 +330,7 @@ export class BraintrustState {
       !this.appUrl ||
       !this.appPublicUrl ||
       !this.logUrl ||
+      !this.proxyUrl ||
       !this.orgName ||
       !this.loginToken ||
       !this.loggedIn
@@ -337,6 +347,7 @@ export class BraintrustState {
       orgId: this.orgId,
       orgName: this.orgName,
       logUrl: this.logUrl,
+      proxyUrl: this.proxyUrl,
       gitMetadataSettings: this.gitMetadataSettings,
     };
   }
@@ -362,6 +373,7 @@ export class BraintrustState {
     state.logConn().set_token(state.loginToken);
     state.logConn().make_long_lived();
     state.apiConn().set_token(state.loginToken);
+    state.proxyConn().set_token(state.loginToken);
     state.loggedIn = true;
     state.loginReplaceLogConn(state.logConn());
 
@@ -404,6 +416,16 @@ export class BraintrustState {
       this._logConn = new HTTPConnection(this.logUrl, this.fetch);
     }
     return this._logConn!;
+  }
+
+  public proxyConn(): HTTPConnection {
+    if (!this._proxyConn) {
+      if (!this.proxyUrl) {
+        throw new Error("Must initialize proxyUrl before requesting proxyConn");
+      }
+      this._proxyConn = new HTTPConnection(this.proxyUrl, this.fetch);
+    }
+    return this._proxyConn!;
   }
 
   public bgLogger(): BackgroundLogger {
@@ -805,7 +827,7 @@ function startSpanParentArgs(args: {
   };
 }
 
-export class Logger<IsAsyncFlush extends boolean> {
+export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   private state: BraintrustState;
   private lazyMetadata: LazyValue<OrgProjectMetadata>;
   private _asyncFlush: IsAsyncFlush | undefined;
@@ -1406,16 +1428,13 @@ type InitOpenOption<IsOpen extends boolean> = {
   open?: IsOpen;
 };
 
-export type InitOptions<IsOpen extends boolean> = {
+export type InitOptions<IsOpen extends boolean> = FullLoginOptions & {
   experiment?: string;
   description?: string;
   dataset?: AnyDataset;
   update?: boolean;
   baseExperiment?: string;
   isPublic?: boolean;
-  appUrl?: string;
-  apiKey?: string;
-  orgName?: string;
   metadata?: Record<string, unknown>;
   gitMetadataSettings?: GitMetadataSettings;
   projectId?: string;
@@ -1501,6 +1520,8 @@ export function init<IsOpen extends boolean = false>(
     appUrl,
     apiKey,
     orgName,
+    forceLogin,
+    fetch,
     metadata,
     gitMetadataSettings,
     projectId,
@@ -1522,7 +1543,7 @@ export function init<IsOpen extends boolean = false>(
 
     const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(
       async () => {
-        await state.login({ apiKey, appUrl, orgName });
+        await state.login({ apiKey, appUrl, orgName, fetch, forceLogin });
         const args: Record<string, unknown> = {
           project_name: project,
           project_id: projectId,
@@ -1741,13 +1762,10 @@ type UseOutputOption<IsLegacyDataset extends boolean> = {
   useOutput?: IsLegacyDataset;
 };
 
-type InitDatasetOptions<IsLegacyDataset extends boolean> = {
+type InitDatasetOptions<IsLegacyDataset extends boolean> = FullLoginOptions & {
   dataset?: string;
   description?: string;
   version?: string;
-  appUrl?: string;
-  apiKey?: string;
-  orgName?: string;
   projectId?: string;
   state?: BraintrustState;
 } & UseOutputOption<IsLegacyDataset>;
@@ -1820,6 +1838,8 @@ export function initDataset<
     appUrl,
     apiKey,
     orgName,
+    fetch,
+    forceLogin,
     projectId,
     useOutput: legacy,
     state: stateArg,
@@ -1833,6 +1853,8 @@ export function initDataset<
         orgName,
         apiKey,
         appUrl,
+        fetch,
+        forceLogin,
       });
 
       const args: Record<string, unknown> = {
@@ -1933,13 +1955,9 @@ type AsyncFlushArg<IsAsyncFlush> = {
   asyncFlush?: IsAsyncFlush;
 };
 
-type InitLoggerOptions<IsAsyncFlush> = {
+type InitLoggerOptions<IsAsyncFlush> = FullLoginOptions & {
   projectName?: string;
   projectId?: string;
-  appUrl?: string;
-  apiKey?: string;
-  orgName?: string;
-  forceLogin?: boolean;
   setCurrent?: boolean;
   state?: BraintrustState;
 } & AsyncFlushArg<IsAsyncFlush>;
@@ -1970,6 +1988,7 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
     apiKey,
     orgName,
     forceLogin,
+    fetch,
     state: stateArg,
   } = options || {};
 
@@ -1981,10 +2000,11 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
   const lazyMetadata: LazyValue<OrgProjectMetadata> = new LazyValue(
     async () => {
       await state.login({
-        orgName: orgName,
+        orgName,
         apiKey,
         appUrl,
         forceLogin,
+        fetch,
       });
       return computeLoggerMetadata(state, computeMetadataArgs);
     },
@@ -2000,18 +2020,15 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
   return ret;
 }
 
-interface LoadPromptOptions {
+type LoadPromptOptions = FullLoginOptions & {
   projectName?: string;
   projectId?: string;
   slug?: string;
   version?: string;
   defaults?: DefaultPromptArgs;
   noTrace?: boolean;
-  appUrl?: string;
-  apiKey?: string;
-  orgName?: string;
   state?: BraintrustState;
-}
+};
 
 /**
  * Load a prompt from the specified project.
@@ -2049,6 +2066,8 @@ export async function loadPrompt({
   appUrl,
   apiKey,
   orgName,
+  fetch,
+  forceLogin,
   state: stateArg,
 }: LoadPromptOptions) {
   if (isEmpty(projectName) && isEmpty(projectId)) {
@@ -2065,6 +2084,8 @@ export async function loadPrompt({
     orgName,
     apiKey,
     appUrl,
+    fetch,
+    forceLogin,
   });
 
   const args: Record<string, string | undefined> = {
@@ -2116,6 +2137,10 @@ export interface LoginOptions {
    */
   fetch?: typeof globalThis.fetch;
 }
+
+export type FullLoginOptions = LoginOptions & {
+  forceLogin?: boolean;
+};
 
 /**
  * Log into Braintrust. This will prompt you for your API token, which you can find at
@@ -2212,6 +2237,7 @@ export async function loginToState(options: LoginOptions = {}) {
 
   // Set the same token in the API
   state.apiConn().set_token(apiKey);
+  state.proxyConn().set_token(apiKey);
   state.loginToken = conn.token;
   state.loggedIn = true;
 
@@ -2450,6 +2476,15 @@ function _check_org_info(
       state.orgId = org.id;
       state.orgName = org.name;
       state.logUrl = iso.getEnv("BRAINTRUST_API_URL") ?? org.api_url;
+      state.proxyUrl = iso.getEnv("BRAINTRUST_PROXY_URL") ?? org.proxy_url;
+
+      // XXX This is a dirty hack fix properly
+      if (state.proxyUrl) {
+        const url = new URL(state.proxyUrl);
+        url.pathname = "";
+        state.proxyUrl = url.toString();
+      }
+
       state.gitMetadataSettings = org.git_metadata || undefined;
       break;
     }
@@ -2465,7 +2500,11 @@ function _check_org_info(
 }
 
 function _urljoin(...parts: string[]): string {
-  return parts.map((x) => x.replace(/^\//, "")).join("/");
+  return parts
+    .map((x, i) =>
+      x.replace(/^\//, "").replace(i < parts.length - 1 ? /\/$/ : "", ""),
+    )
+    .join("/");
 }
 
 function validateTags(tags: readonly string[]) {
@@ -2679,7 +2718,10 @@ export type EvalCase<Input, Expected, Metadata> = {
  *
  * You should not create `Experiment` objects directly. Instead, use the `braintrust.init()` method.
  */
-export class Experiment extends ObjectFetcher<ExperimentEvent> {
+export class Experiment
+  extends ObjectFetcher<ExperimentEvent>
+  implements Exportable
+{
   private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>;
   public readonly dataset?: AnyDataset;
   private lastStartTime: number;
