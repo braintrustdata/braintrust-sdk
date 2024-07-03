@@ -17,7 +17,7 @@ export type CallFunctionArgs<Streaming extends boolean> = FunctionId &
     arg: unknown;
     parent?: Exportable | string;
     state?: BraintrustState;
-    stream: Streaming;
+    stream?: Streaming;
   };
 
 export async function callFunction<Streaming extends boolean>({
