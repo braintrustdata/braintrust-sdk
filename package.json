@@ -11,7 +11,8 @@
     "dev": "turbo run dev",
     "start": "turbo run start",
     "lint": "turbo run lint",
-    "clean": "turbo run clean"
+    "clean": "turbo run clean",
+    "test": "turbo run test"
   },
   "devDependencies": {
     "turbo": "^1.11.2"
