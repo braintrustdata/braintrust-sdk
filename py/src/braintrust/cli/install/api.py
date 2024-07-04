@@ -6,7 +6,7 @@ import time
 import requests
 from botocore.exceptions import ClientError
 
-from braintrust.logger import api_conn, login
+from braintrust.logger import app_conn, login
 
 from ...aws import cloudformation
 
@@ -404,7 +404,7 @@ def main(args):
         org_info = []
         if args.api_key:
             login(api_key=args.api_key)
-            resp = api_conn().post("api/apikey/login")
+            resp = app_conn().post("api/apikey/login")
             if resp.ok:
                 org_info = resp.json()["org_info"]
             else:
@@ -443,7 +443,7 @@ def main(args):
             if proxy_url and org_info["proxy_url"] != proxy_url:
                 patch_args["proxy_url"] = proxy_url
                 _logger.info(f"  Proxy URL: {proxy_url}")
-            api_conn().post(
+            app_conn().post(
                 "api/organization/patch_id",
                 json=patch_args,
             )
