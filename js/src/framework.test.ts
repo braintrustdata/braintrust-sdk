@@ -1,4 +1,4 @@
-import { expect, test } from "@jest/globals";
+import { expect, test } from "vitest";
 import { runEvaluator } from "./framework";
 import { BarProgressReporter } from "./progress";
 import { NumericDiff } from "autoevals";
