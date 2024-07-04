@@ -239,7 +239,7 @@ class BraintrustState:
         self.login_token = None
         self.org_id = None
         self.org_name = None
-        self.app_url = None
+        self.api_url = None
         self.logged_in = False
         self.git_metadata_settings = None
 
@@ -300,7 +300,7 @@ def set_http_adapter(adapter: HTTPAdapter):
         _state._app_conn._set_adapter(adapter=adapter)
         _state._app_conn._reset()
     if _state._api_conn:
-        _state._app_conn._set_adapter(adapter=adapter)
+        _state._api_conn._set_adapter(adapter=adapter)
         _state._api_conn._reset()
 
 
