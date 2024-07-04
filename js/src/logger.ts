@@ -2395,6 +2395,101 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
 }
 
 /**
+ * Wrap a function with `traced`, using the arguments as `input` and return value as `output`.
+ * Any functions wrapped this way will automatically be traced, similar to the `@traced` decorator
+ * in Python. If you want to correctly propagate the function's name and define it in one go, then
+ * you can do so like this:
+ *
+ * ```ts
+ * const myFunc = wrapTraced(async function myFunc(input) {
+ *  const result = await client.chat.completions.create({
+ *    model: "gpt-3.5-turbo",
+ *    messages: [{ role: "user", content: input }],
+ *  });
+ *  return result.choices[0].message.content ?? "unknown";
+ * });
+ * ```
+ * Now, any calls to `myFunc` will be traced, and the input and output will be logged automatically.
+ * If tracing is inactive, i.e. there is no active logger or experiment, it's just a no-op.
+ *
+ * @param fn The function to wrap.
+ * @param args Span-level arguments (e.g. a custom name or type) to pass to `traced`.
+ * @returns The wrapped function.
+ */
+export function wrapTraced<
+  F extends (...args: any[]) => any,
+  IsAsyncFlush extends boolean = false,
+>(
+  fn: F,
+  args?: StartSpanArgs & SetCurrentArg & AsyncFlushArg<IsAsyncFlush>,
+): IsAsyncFlush extends false
+  ? (...args: Parameters<F>) => Promise<Awaited<ReturnType<F>>>
+  : F {
+  const spanArgs: typeof args = {
+    name: fn.name,
+    type: "function",
+    ...args,
+  };
+  const hasExplicitInput =
+    args &&
+    args.event &&
+    "input" in args.event &&
+    args.event.input !== undefined;
+  const hasExplicitOutput =
+    args && args.event && args.event.output !== undefined;
+
+  if (args?.asyncFlush) {
+    return ((...fnArgs: Parameters<F>) =>
+      traced((span) => {
+        if (!hasExplicitInput) {
+          span.log({ input: fnArgs });
+        }
+
+        const output = fn(...fnArgs);
+
+        if (!hasExplicitOutput) {
+          if (output instanceof Promise) {
+            return (async () => {
+              const result = await output;
+              span.log({ output: result });
+              return result;
+            })();
+          } else {
+            span.log({ output: output });
+          }
+        }
+
+        return output;
+      }, spanArgs)) as IsAsyncFlush extends false ? never : F;
+  } else {
+    return ((...fnArgs: Parameters<F>) =>
+      traced(async (span) => {
+        if (!hasExplicitInput) {
+          span.log({ input: fnArgs });
+        }
+
+        const outputResult = fn(...fnArgs);
+
+        const output = await outputResult;
+
+        if (!hasExplicitOutput) {
+          span.log({ output });
+        }
+
+        return output;
+      }, spanArgs)) as IsAsyncFlush extends false
+      ? (...args: Parameters<F>) => Promise<Awaited<ReturnType<F>>>
+      : never;
+  }
+}
+
+/**
+ * A synonym for `wrapTraced`. If you're porting from systems that use `traceable`, you can use this to
+ * make your codebase more consistent.
+ */
+export const traceable = wrapTraced;
+
+/**
  * Lower-level alternative to `traced`. This allows you to start a span yourself, and can be useful in situations
  * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
  * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
@@ -3225,7 +3320,18 @@ export class SpanImpl implements Span {
       ...serializableInternalData,
       [IS_MERGE_FIELD]: this.isMerge,
     };
-    const serializedPartialRecord = JSON.stringify(partialRecord);
+    const serializedPartialRecord = JSON.stringify(partialRecord, (k, v) => {
+      if (v instanceof SpanImpl) {
+        return `<span>`;
+      } else if (v instanceof Experiment) {
+        return `<experiment>`;
+      } else if (v instanceof Dataset) {
+        return `<dataset>`;
+      } else if (v instanceof Logger) {
+        return `<logger>`;
+      }
+      return v;
+    });
     partialRecord = JSON.parse(serializedPartialRecord);
     if (partialRecord.metrics?.end) {
       this.loggedEndTime = partialRecord.metrics?.end as number;

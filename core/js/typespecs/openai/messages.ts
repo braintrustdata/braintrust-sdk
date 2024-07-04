@@ -77,7 +77,7 @@ const chatCompletionToolMessageParamSchema = z
   .strictObject({
     content: z.string().default(""),
     role: z.literal("tool"),
-    tool_call_id: z.string(),
+    tool_call_id: z.string().default(""),
   })
   .strip();
 
@@ -89,7 +89,7 @@ const chatCompletionFunctionMessageParamSchema = z
   })
   .strip();
 
-const chatCompletionMessageToolCallSchema = z
+export const chatCompletionMessageToolCallSchema = z
   .strictObject({
     id: z.string(),
     function: functionSchema,
