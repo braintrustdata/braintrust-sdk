@@ -406,7 +406,7 @@ export class BraintrustState {
 
   // Should only be called by the login function.
   public loginReplaceApiConn(apiConn: HTTPConnection) {
-    this._bgLogger.internalReplaceLogConn(apiConn);
+    this._bgLogger.internalReplaceApiConn(apiConn);
   }
 }
 
