@@ -2163,7 +2163,7 @@ export type FullLoginOptions = LoginOptions & {
  */
 export async function login(
   options: LoginOptions & { forceLogin?: boolean } = {},
-) {
+): Promise<BraintrustState> {
   let { forceLogin = false } = options || {};
 
   if (_globalState.loggedIn && !forceLogin) {
@@ -2195,6 +2195,7 @@ export async function login(
 
   await _globalState.login(options);
   globalThis.__inherited_braintrust_state = _globalState;
+  return _globalState;
 }
 
 export async function loginToState(options: LoginOptions = {}) {
