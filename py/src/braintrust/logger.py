@@ -1372,7 +1372,7 @@ def _check_org_info(org_info, org_name):
         if org_name is None or orgs["name"] == org_name:
             _state.org_id = orgs["id"]
             _state.org_name = orgs["name"]
-            _state.app_url = os.environ.get("BRAINTRUST_API_URL", orgs["api_url"])
+            _state.api_url = os.environ.get("BRAINTRUST_API_URL", orgs["api_url"])
             _state.git_metadata_settings = GitMetadataSettings(**(orgs.get("git_metadata") or {}))
             break
 
