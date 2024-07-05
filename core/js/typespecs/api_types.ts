@@ -37,7 +37,7 @@ export const auditSourcesSchema = z.enum(VALID_SOURCES);
 
 function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
   const eventDescription = getEventObjectDescription(objectType);
-  return z.strictObject({
+  return z.object({
     id: z
       .string()
       .describe(
@@ -63,7 +63,7 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
         "A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings",
       ),
     metrics: z
-      .strictObject({
+      .object({
         start: z
           .number()
           .nullish()
@@ -109,7 +109,7 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
         `Metrics are numerical measurements tracking the execution of the code that produced the ${eventDescription} event. Use "start" and "end" to track the time span over which the ${eventDescription} event was produced`,
       ),
     context: z
-      .strictObject({
+      .object({
         caller_functionname: z
           .string()
           .nullish()
@@ -155,7 +155,7 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
         `The \`span_id\` of the root of the trace this ${eventDescription} event belongs to`,
       ),
     span_attributes: z
-      .strictObject({
+      .object({
         name: z
           .string()
           .nullish()
@@ -182,7 +182,7 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
 function generateBaseEventFeedbackSchema(objectType: ObjectTypeWithEvent) {
   const eventObjectType = getEventObjectType(objectType);
   const eventDescription = getEventObjectDescription(objectType);
-  return z.strictObject({
+  return z.object({
     id: z
       .string()
       .describe(
@@ -267,7 +267,7 @@ export const versionSchema = z
   );
 
 const pathTypeFilterSchema = z
-  .strictObject({
+  .object({
     type: z
       .literal("path_lookup")
       .describe("Denotes the type of filter as a path-lookup filter"),
@@ -287,7 +287,7 @@ const pathTypeFilterSchema = z
   .openapi("PathLookupFilter");
 
 const sqlTypeFilterSchema = z
-  .strictObject({
+  .object({
     type: z
       .literal("sql_filter")
       .describe("Denotes the type of filter as a sql-type filter"),
@@ -318,7 +318,7 @@ export const fetchFiltersSchema = pathTypeFilterSchema
   .openapi("FetchEventsFilters");
 
 export const fetchEventsRequestSchema = z
-  .strictObject({
+  .object({
     limit: fetchLimitSchema.nullish(),
     cursor: fetchPaginationCursorSchema.nullish(),
     max_xact_id: maxXactIdSchema.nullish(),
@@ -337,7 +337,7 @@ function makeFetchEventsResponseSchema<T extends z.AnyZodObject>(
     "",
   );
   return z
-    .strictObject({
+    .object({
       events: eventSchema.array().describe("A list of fetched events"),
       cursor: z
         .string()
@@ -354,7 +354,7 @@ function makeFetchEventsResponseSchema<T extends z.AnyZodObject>(
 
 const experimentEventBaseSchema = generateBaseEventOpSchema("experiment");
 export const experimentEventSchema = z
-  .strictObject({
+  .object({
     id: experimentEventBaseSchema.shape.id,
     dataset_record_id: z
       .string()
@@ -393,7 +393,7 @@ export type ExperimentEvent = z.infer<typeof experimentEventSchema>;
 
 const datasetEventBaseSchema = generateBaseEventOpSchema("dataset");
 export const datasetEventSchema = z
-  .strictObject({
+  .object({
     id: datasetEventBaseSchema.shape.id,
     [TRANSACTION_ID_FIELD]: datasetEventBaseSchema.shape[TRANSACTION_ID_FIELD],
     created: datasetEventBaseSchema.shape.created,
@@ -416,7 +416,7 @@ export type DatasetEvent = z.infer<typeof datasetEventSchema>;
 const promptSessionEventBaseSchema =
   generateBaseEventOpSchema("prompt_session");
 export const promptSessionEventSchema = z
-  .strictObject({
+  .object({
     id: promptSessionEventBaseSchema.shape.id,
     [TRANSACTION_ID_FIELD]:
       promptSessionEventBaseSchema.shape[TRANSACTION_ID_FIELD],
@@ -436,7 +436,7 @@ export type PromptSessionEvent = z.infer<typeof promptSessionEventSchema>;
 
 const projectLogsEventBaseSchema = generateBaseEventOpSchema("project");
 export const projectLogsEventSchema = z
-  .strictObject({
+  .object({
     id: projectLogsEventBaseSchema.shape.id,
     [TRANSACTION_ID_FIELD]:
       projectLogsEventBaseSchema.shape[TRANSACTION_ID_FIELD],
@@ -479,7 +479,7 @@ const isMergeDescription = [
   'For example, say there is an existing row in the DB `{"id": "foo", "input": {"a": 5, "b": 10}}`. If we merge a new row as `{"_is_merge": true, "id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"a": 5, "b": 11, "c": 20}}`. If we replace the new row as `{"id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"b": 11, "c": 20}}`',
 ].join("\n\n");
 
-const mergeEventSchema = z.strictObject({
+const mergeEventSchema = z.object({
   [IS_MERGE_FIELD]: customTypes.literalTrue.describe(isMergeDescription),
   [MERGE_PATHS_FIELD]: z
     .string()
@@ -494,7 +494,7 @@ const mergeEventSchema = z.strictObject({
     ),
 });
 
-const replacementEventSchema = z.strictObject({
+const replacementEventSchema = z.object({
   [IS_MERGE_FIELD]: customTypes.literalFalse
     .nullish()
     .describe(isMergeDescription),
@@ -530,7 +530,7 @@ function makeInsertEventSchemas<T extends z.AnyZodObject>(
     .describe(`${capitalize(article)} ${eventDescription} event`)
     .openapi(`Insert${eventSchemaName}Event`);
   const requestSchema = z
-    .strictObject({
+    .object({
       events: eventSchema
         .array()
         .describe(`A list of ${eventDescription} events to insert`),
@@ -540,7 +540,7 @@ function makeInsertEventSchemas<T extends z.AnyZodObject>(
 }
 
 export const insertEventsResponseSchema = z
-  .strictObject({
+  .object({
     row_ids: z
       .string()
       .array()
@@ -555,7 +555,7 @@ const {
   requestSchema: insertExperimentEventsRequestSchema,
 } = makeInsertEventSchemas(
   "experiment",
-  z.strictObject({
+  z.object({
     input: experimentEventSchema.shape.input,
     output: experimentEventSchema.shape.output,
     expected: experimentEventSchema.shape.expected,
@@ -577,7 +577,7 @@ const {
   requestSchema: insertDatasetEventsRequestSchema,
 } = makeInsertEventSchemas(
   "dataset",
-  z.strictObject({
+  z.object({
     input: datasetEventSchema.shape.input,
     expected: datasetEventSchema.shape.expected,
     metadata: datasetEventSchema.shape.metadata,
@@ -593,7 +593,7 @@ const {
   requestSchema: insertProjectLogsEventsRequestSchema,
 } = makeInsertEventSchemas(
   "project",
-  z.strictObject({
+  z.object({
     input: projectLogsEventSchema.shape.input,
     output: projectLogsEventSchema.shape.output,
     expected: projectLogsEventSchema.shape.expected,
@@ -622,7 +622,7 @@ function makeFeedbackRequestSchema<T extends z.AnyZodObject>(
     "_",
   ).replace("_", "");
   return z
-    .strictObject({
+    .object({
       feedback: feedbackSchema
         .array()
         .describe(`A list of ${eventDescription} feedback items`),
@@ -633,7 +633,7 @@ function makeFeedbackRequestSchema<T extends z.AnyZodObject>(
 const feedbackExperimentRequestBaseSchema =
   generateBaseEventFeedbackSchema("experiment");
 const feedbackExperimentItemSchema = z
-  .strictObject({
+  .object({
     id: feedbackExperimentRequestBaseSchema.shape.id,
     scores: feedbackExperimentRequestBaseSchema.shape.scores,
     expected: feedbackExperimentRequestBaseSchema.shape.expected,
@@ -650,7 +650,7 @@ const feedbackExperimentRequestSchema = makeFeedbackRequestSchema(
 const feedbackDatasetRequestBaseSchema =
   generateBaseEventFeedbackSchema("dataset");
 const feedbackDatasetItemSchema = z
-  .strictObject({
+  .object({
     id: feedbackDatasetRequestBaseSchema.shape.id,
     comment: feedbackDatasetRequestBaseSchema.shape.comment,
     metadata: feedbackDatasetRequestBaseSchema.shape.metadata,
@@ -665,7 +665,7 @@ const feedbackDatasetRequestSchema = makeFeedbackRequestSchema(
 const feedbackProjectLogsRequestBaseSchema =
   generateBaseEventFeedbackSchema("project");
 const feedbackProjectLogsItemSchema = z
-  .strictObject({
+  .object({
     id: feedbackProjectLogsRequestBaseSchema.shape.id,
     scores: feedbackProjectLogsRequestBaseSchema.shape.scores,
     expected: feedbackProjectLogsRequestBaseSchema.shape.expected,
@@ -682,7 +682,7 @@ const feedbackProjectLogsRequestSchema = makeFeedbackRequestSchema(
 const feedbackPromptRequestBaseSchema =
   generateBaseEventFeedbackSchema("prompt");
 const feedbackPromptItemSchema = z
-  .strictObject({
+  .object({
     id: feedbackPromptRequestBaseSchema.shape.id,
     comment: feedbackPromptRequestBaseSchema.shape.comment,
     metadata: feedbackPromptRequestBaseSchema.shape.metadata,
@@ -697,7 +697,7 @@ const feedbackPromptRequestSchema = makeFeedbackRequestSchema(
 const feedbackFunctionRequestBaseSchema =
   generateBaseEventFeedbackSchema("function");
 const feedbackFunctionItemSchema = z
-  .strictObject({
+  .object({
     id: feedbackFunctionRequestBaseSchema.shape.id,
     comment: feedbackFunctionRequestBaseSchema.shape.comment,
     metadata: feedbackFunctionRequestBaseSchema.shape.metadata,
@@ -777,7 +777,7 @@ function makeCrossObjectIndividualRequestSchema(
   const eventObjectType = getEventObjectType(objectType);
   const eventDescription = getEventObjectDescription(objectType);
   const eventObjectSchema = apiSpecEventObjectSchemas[eventObjectType];
-  const insertObject = z.strictObject({
+  const insertObject = z.object({
     ...(eventObjectSchema.insertEvent
       ? {
           events: eventObjectSchema.insertEvent
@@ -813,7 +813,7 @@ function makeCrossObjectIndividualResponseSchema(objectType: ObjectType) {
 }
 
 export const crossObjectInsertRequestSchema = z
-  .strictObject({
+  .object({
     experiment: makeCrossObjectIndividualRequestSchema("experiment"),
     dataset: makeCrossObjectIndividualRequestSchema("dataset"),
     project_logs: makeCrossObjectIndividualRequestSchema("project"),
@@ -821,7 +821,7 @@ export const crossObjectInsertRequestSchema = z
   .openapi("CrossObjectInsertRequest");
 
 export const crossObjectInsertResponseSchema = z
-  .strictObject({
+  .object({
     experiment: makeCrossObjectIndividualResponseSchema("experiment"),
     dataset: makeCrossObjectIndividualResponseSchema("dataset"),
     project_logs: makeCrossObjectIndividualResponseSchema("project"),
@@ -850,7 +850,7 @@ export const summarizeDataParamSchema = z
   );
 
 const summarizeExperimentResponseSchema = z
-  .strictObject({
+  .object({
     project_name: z
       .string()
       .describe("Name of the project that the experiment belongs to"),
@@ -870,7 +870,7 @@ const summarizeExperimentResponseSchema = z
     scores: z
       .record(
         z
-          .strictObject({
+          .object({
             name: z.string().describe("Name of the score"),
             score: z
               .number()
@@ -904,7 +904,7 @@ const summarizeExperimentResponseSchema = z
     metrics: z
       .record(
         z
-          .strictObject({
+          .object({
             name: z.string().describe("Name of the metric"),
             metric: z.number().describe("Average metric across all examples"),
             unit: z.string().describe("Unit label for the metric"),
@@ -935,7 +935,7 @@ const summarizeExperimentResponseSchema = z
   .openapi("SummarizeExperimentResponse");
 
 const summarizeDatasetResponseSchema = z
-  .strictObject({
+  .object({
     project_name: z
       .string()
       .describe("Name of the project that the dataset belongs to"),
@@ -949,7 +949,7 @@ const summarizeDatasetResponseSchema = z
       .url()
       .describe("URL to the dataset's page in the Braintrust app"),
     data_summary: z
-      .strictObject({
+      .object({
         total_records: z
           .number()
           .int()

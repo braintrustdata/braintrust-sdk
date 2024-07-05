@@ -9,3 +9,4 @@ export * from "./span_identifier_v2";
 export * from "./span_types";
 export * from "./git_fields";
 export * from "./xact-ids";
+export * from "./zod_util";
