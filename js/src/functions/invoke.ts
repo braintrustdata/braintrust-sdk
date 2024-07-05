@@ -11,16 +11,22 @@ import {
   FullLoginOptions,
 } from "../logger";
 import { BraintrustStream } from "../stream";
+import { z } from "zod";
 
-export type InvokeFunctionArgs<Streaming extends boolean> = FunctionId &
+export type FunctionReturnType<R, S extends boolean> = S extends true
+  ? BraintrustStream
+  : R;
+
+export type InvokeFunctionArgs<T, R, S extends boolean = false> = FunctionId &
   FullLoginOptions & {
-    arg: unknown;
+    arg: T;
     parent?: Exportable | string;
     state?: BraintrustState;
-    stream?: Streaming;
+    stream?: S;
+    returnSchema?: z.ZodType<R>;
   };
 
-export async function callFunction<Streaming extends boolean>({
+export async function invoke<T, R = unknown, S extends boolean = false>({
   orgName,
   apiKey,
   appUrl,
@@ -30,10 +36,9 @@ export async function callFunction<Streaming extends boolean>({
   parent: parentArg,
   state: stateArg,
   stream,
+  returnSchema,
   ...functionId
-}: InvokeFunctionArgs<Streaming>): Promise<
-  Streaming extends true ? BraintrustStream : unknown
-> {
+}: InvokeFunctionArgs<T, R, S>): Promise<FunctionReturnType<R, S>> {
   const state = stateArg ?? _internalGetGlobalState();
   await state.login({
     orgName: orgName,
@@ -48,7 +53,7 @@ export async function callFunction<Streaming extends boolean>({
       : await parentArg.export()
     : await currentSpan().export();
 
-  const callFunctionRequest: InvokeFunctionRequest = {
+  const request: InvokeFunctionRequest = {
     ...functionId,
     arg,
     parent,
@@ -56,22 +61,22 @@ export async function callFunction<Streaming extends boolean>({
     api_version: INVOKE_API_VERSION,
   };
 
-  const resp = await state
-    .proxyConn()
-    .post(`function/invoke`, callFunctionRequest, {
-      headers: {
-        Accept: stream ? "text/event-stream" : "application/json",
-      },
-    });
+  const resp = await state.proxyConn().post(`function/invoke`, request, {
+    headers: {
+      Accept: stream ? "text/event-stream" : "application/json",
+    },
+  });
 
   if (stream) {
     if (!resp.body) {
       throw new Error("Received empty stream body");
     }
-    return new BraintrustStream(resp.body) as Streaming extends true
-      ? BraintrustStream
-      : never;
+    return new BraintrustStream(resp.body) as FunctionReturnType<R, S>;
   } else {
-    return (await resp.json()) as Streaming extends true ? never : unknown;
+    const data = await resp.json();
+    if (returnSchema) {
+      return returnSchema.parse(data) as FunctionReturnType<R, S>;
+    }
+    return data as FunctionReturnType<R, S>;
   }
 }
