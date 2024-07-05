@@ -22,6 +22,7 @@ export const viewDataSearchSchema = z
     match: z.array(customTypes.any).nullish(),
     sort: z.array(customTypes.any).nullish(),
   })
+  .strip()
   .openapi("ViewDataSearch");
 export const viewDataSchema = z
   .strictObject({
@@ -36,5 +37,6 @@ export const viewOptionsSchema = z
     columnOrder: z.array(z.string()).nullish(),
     columnSizing: z.record(z.number()).nullish(),
   })
+  .strip()
   .openapi("ViewOptions");
 export type ViewOptions = z.infer<typeof viewOptionsSchema>;
