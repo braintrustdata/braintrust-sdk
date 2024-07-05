@@ -13,32 +13,39 @@ import {
 import { BraintrustStream } from "../stream";
 import { z } from "zod";
 
-export type FunctionReturnType<R, S extends boolean> = S extends true
+// Define a type for the return value
+export type InvokeReturn<S extends boolean, R> = S extends true
   ? BraintrustStream
   : R;
 
+// Update the InvokeFunctionArgs type
 export type InvokeFunctionArgs<T, R, S extends boolean = false> = FunctionId &
   FullLoginOptions & {
     arg: T;
     parent?: Exportable | string;
     state?: BraintrustState;
     stream?: S;
-    returnSchema?: z.ZodType<R>;
+    returnSchema?: z.ZodSchema<R, z.ZodTypeDef, any>;
   };
 
-export async function invoke<T, R = unknown, S extends boolean = false>({
-  orgName,
-  apiKey,
-  appUrl,
-  forceLogin,
-  fetch,
-  arg,
-  parent: parentArg,
-  state: stateArg,
-  stream,
-  returnSchema,
-  ...functionId
-}: InvokeFunctionArgs<T, R, S>): Promise<FunctionReturnType<R, S>> {
+// Update the invoke function
+export async function invoke<T, R, S extends boolean = false>(
+  args: InvokeFunctionArgs<T, R, S>,
+): Promise<InvokeReturn<S, R>> {
+  const {
+    orgName,
+    apiKey,
+    appUrl,
+    forceLogin,
+    fetch,
+    arg,
+    parent: parentArg,
+    state: stateArg,
+    stream,
+    returnSchema,
+    ...functionId
+  } = args;
+
   const state = stateArg ?? _internalGetGlobalState();
   await state.login({
     orgName: orgName,
@@ -71,12 +78,13 @@ export async function invoke<T, R = unknown, S extends boolean = false>({
     if (!resp.body) {
       throw new Error("Received empty stream body");
     }
-    return new BraintrustStream(resp.body) as FunctionReturnType<R, S>;
+    return new BraintrustStream(resp.body) as InvokeReturn<S, R>;
   } else {
     const data = await resp.json();
+    // Validate the returned data against the schema if provided
     if (returnSchema) {
-      return returnSchema.parse(data) as FunctionReturnType<R, S>;
+      return returnSchema.parse(data) as InvokeReturn<S, R>;
     }
-    return data as FunctionReturnType<R, S>;
+    return data as InvokeReturn<S, R>;
   }
 }
