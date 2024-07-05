@@ -54,7 +54,7 @@ configureNode();
 
 export * from "./logger";
 export * from "./stream";
-export * from "./functions/call";
+export * from "./functions/invoke";
 export {
   BaseExperiment,
   Evaluator,

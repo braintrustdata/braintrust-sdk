@@ -1,5 +1,5 @@
 import {
-  CallFunctionRequest,
+  InvokeFunctionRequest,
   FunctionId,
   INVOKE_API_VERSION,
 } from "@braintrust/core/typespecs";
@@ -12,7 +12,7 @@ import {
 } from "../logger";
 import { BraintrustStream } from "../stream";
 
-export type CallFunctionArgs<Streaming extends boolean> = FunctionId &
+export type InvokeFunctionArgs<Streaming extends boolean> = FunctionId &
   FullLoginOptions & {
     arg: unknown;
     parent?: Exportable | string;
@@ -31,7 +31,7 @@ export async function callFunction<Streaming extends boolean>({
   state: stateArg,
   stream,
   ...functionId
-}: CallFunctionArgs<Streaming>): Promise<
+}: InvokeFunctionArgs<Streaming>): Promise<
   Streaming extends true ? BraintrustStream : unknown
 > {
   const state = stateArg ?? _internalGetGlobalState();
@@ -48,7 +48,7 @@ export async function callFunction<Streaming extends boolean>({
       : await parentArg.export()
     : await currentSpan().export();
 
-  const callFunctionRequest: CallFunctionRequest = {
+  const callFunctionRequest: InvokeFunctionRequest = {
     ...functionId,
     arg,
     parent,
@@ -58,7 +58,7 @@ export async function callFunction<Streaming extends boolean>({
 
   const resp = await state
     .proxyConn()
-    .post(`function/call`, callFunctionRequest, {
+    .post(`function/invoke`, callFunctionRequest, {
       headers: {
         Accept: stream ? "text/event-stream" : "application/json",
       },
