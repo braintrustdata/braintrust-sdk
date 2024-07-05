@@ -28,6 +28,7 @@ export const viewDataSchema = z
   .strictObject({
     search: viewDataSearchSchema.nullish(),
   })
+  .strip()
   .openapi("ViewData");
 export type ViewData = z.infer<typeof viewDataSchema>;
 
