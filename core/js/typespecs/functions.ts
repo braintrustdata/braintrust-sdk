@@ -32,14 +32,14 @@ export const useFunctionSchema = z
   })
   .and(functionIdSchema);
 
-export const callFunctionSchema = useFunctionSchema.and(
+export const invokeFunctionSchema = useFunctionSchema.and(
   z.object({
     arg: z.any().optional(),
     parent: z.string().optional(),
     stream: z.boolean().optional(),
   }),
 );
-export type CallFunctionRequest = z.infer<typeof callFunctionSchema>;
+export type InvokeFunctionRequest = z.infer<typeof invokeFunctionSchema>;
 
 export const baseSSEEventSchema = z.strictObject({
   id: z.string().optional(),
