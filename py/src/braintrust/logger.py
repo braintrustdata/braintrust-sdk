@@ -216,14 +216,14 @@ class BraintrustState:
         self.current_logger = None
         self.current_span = contextvars.ContextVar("braintrust_current_span", default=NOOP_SPAN)
 
-        def default_get_log_conn():
+        def default_get_api_conn():
             login()
-            return self.log_conn()
+            return self.api_conn()
 
-        # Any time we re-log in, we directly update the log_conn inside the
+        # Any time we re-log in, we directly update the api_conn inside the
         # logger. This is preferable to replacing the whole logger, which would
         # create the possibility of multiple loggers floating around.
-        self._global_bg_logger = _BackgroundLogger(LazyValue(default_get_log_conn, use_mutex=True))
+        self._global_bg_logger = _BackgroundLogger(LazyValue(default_get_api_conn, use_mutex=True))
 
         # For unit-testing, tests may wish to temporarily override the global
         # logger with a custom one. We allow this but keep the override variable
@@ -239,12 +239,12 @@ class BraintrustState:
         self.login_token = None
         self.org_id = None
         self.org_name = None
-        self.log_url = None
+        self.api_url = None
         self.logged_in = False
         self.git_metadata_settings = None
 
         self._app_conn = None
-        self._log_conn = None
+        self._api_conn = None
         self._user_info = None
 
     def app_conn(self):
@@ -254,16 +254,16 @@ class BraintrustState:
             self._app_conn = HTTPConnection(self.app_url, adapter=_http_adapter)
         return self._app_conn
 
-    def log_conn(self):
-        if not self._log_conn:
-            if not self.log_url:
-                raise RuntimeError("Must initialize log_url before requesting log_conn")
-            self._log_conn = HTTPConnection(self.log_url, adapter=_http_adapter)
-        return self._log_conn
+    def api_conn(self):
+        if not self._api_conn:
+            if not self.api_url:
+                raise RuntimeError("Must initialize api_url before requesting api_conn")
+            self._api_conn = HTTPConnection(self.api_url, adapter=_http_adapter)
+        return self._api_conn
 
     def user_info(self):
         if not self._user_info:
-            self._user_info = self.log_conn().get_json("ping")
+            self._user_info = self.api_conn().get_json("ping")
         return self._user_info
 
     def set_user_info_if_null(self, info):
@@ -274,8 +274,8 @@ class BraintrustState:
         return getattr(self._override_bg_logger, "logger", self._global_bg_logger)
 
     # Should only be called by the login function.
-    def login_replace_log_conn(self, log_conn: "HTTPConnection"):
-        self._global_bg_logger.internal_replace_log_conn(log_conn)
+    def login_replace_api_conn(self, api_conn: "HTTPConnection"):
+        self._global_bg_logger.internal_replace_api_conn(api_conn)
 
 
 _state = None
@@ -299,9 +299,9 @@ def set_http_adapter(adapter: HTTPAdapter):
     if _state._app_conn:
         _state._app_conn._set_adapter(adapter=adapter)
         _state._app_conn._reset()
-    if _state._log_conn:
-        _state._app_conn._set_adapter(adapter=adapter)
-        _state._log_conn._reset()
+    if _state._api_conn:
+        _state._api_conn._set_adapter(adapter=adapter)
+        _state._api_conn._reset()
 
 
 class HTTPConnection:
@@ -385,11 +385,11 @@ class HTTPConnection:
 HTTP_REQUEST_THREAD_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=cpu_count())
 
 
-def log_conn():
-    return _state.log_conn()
-
-
 def api_conn():
+    return _state.api_conn()
+
+
+def app_conn():
     return _state.app_conn()
 
 
@@ -422,8 +422,8 @@ def _check_json_serializable(event):
 # instances of this class, because concurrent _BackgroundLoggers will not log to
 # the backend in a deterministic order.
 class _BackgroundLogger:
-    def __init__(self, log_conn: LazyValue[HTTPConnection]):
-        self.log_conn = log_conn
+    def __init__(self, api_conn: LazyValue[HTTPConnection]):
+        self.api_conn = api_conn
         self.outfile = sys.stderr
         self.flush_lock = threading.RLock()
 
@@ -610,7 +610,7 @@ class _BackgroundLogger:
         return []
 
     def _submit_logs_request(self, items):
-        conn = self.log_conn.get()
+        conn = self.api_conn.get()
         dataStr = construct_logs3_data(items)
         if self.all_publish_payloads_dir:
             _BackgroundLogger._write_payload_to_dir(payload_dir=self.all_publish_payloads_dir, payload=dataStr)
@@ -684,8 +684,8 @@ class _BackgroundLogger:
         print(f"Logging failed payloads to {self.failed_publish_payloads_dir}", file=self.outfile)
 
     # Should only be called by BraintrustState.
-    def internal_replace_log_conn(self, log_conn: HTTPConnection):
-        self.log_conn = LazyValue(lambda: log_conn, use_mutex=False)
+    def internal_replace_api_conn(self, api_conn: HTTPConnection):
+        self.api_conn = LazyValue(lambda: api_conn, use_mutex=False)
 
 
 def _internal_reset_global_state():
@@ -699,7 +699,7 @@ _logger = logging.getLogger("braintrust")
 
 @contextlib.contextmanager
 def _internal_with_custom_background_logger():
-    custom_logger = _BackgroundLogger(LazyValue(lambda: _state.log_conn(), use_mutex=True))
+    custom_logger = _BackgroundLogger(LazyValue(lambda: _state.api_conn(), use_mutex=True))
     _state._override_bg_logger.logger = custom_logger
     try:
         yield custom_logger
@@ -1042,7 +1042,7 @@ def load_prompt(
                 "version": version,
             },
         )
-        response = _state.log_conn().get_json("/v1/prompt", args)
+        response = _state.api_conn().get_json("/v1/prompt", args)
         if "objects" not in response or len(response["objects"]) == 0:
             raise ValueError(f"Prompt {slug} not found in project {project or project_id}.")
         elif len(response["objects"]) > 1:
@@ -1123,7 +1123,7 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
 
             _check_org_info(info["org_info"], org_name)
 
-            conn = _state.log_conn()
+            conn = _state.api_conn()
             conn.set_token(api_key)
 
         if not conn:
@@ -1140,8 +1140,8 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
         _state.login_token = conn.token
         _state.logged_in = True
 
-        # Replace the global logger's log_conn with this one.
-        _state.login_replace_log_conn(conn)
+        # Replace the global logger's api_conn with this one.
+        _state.login_replace_api_conn(conn)
 
 
 def log(**event):
@@ -1372,7 +1372,7 @@ def _check_org_info(org_info, org_name):
         if org_name is None or orgs["name"] == org_name:
             _state.org_id = orgs["id"]
             _state.org_name = orgs["name"]
-            _state.log_url = os.environ.get("BRAINTRUST_API_URL", orgs["api_url"])
+            _state.api_url = os.environ.get("BRAINTRUST_API_URL", orgs["api_url"])
             _state.git_metadata_settings = GitMetadataSettings(**(orgs.get("git_metadata") or {}))
             break
 
@@ -1563,7 +1563,7 @@ class ObjectFetcher:
     def _refetch(self):
         state = self._get_state()
         if self._fetched_data is None:
-            resp = state.log_conn().get(
+            resp = state.api_conn().get(
                 f"v1/{self.object_type}/{self.id}/fetch",
                 params={
                     "version": self._pinned_version,
@@ -1968,7 +1968,7 @@ class Experiment(ObjectFetcher):
                     comparison_experiment_id = base_experiment.id
                     comparison_experiment_name = base_experiment.name
 
-            summary_items = state.log_conn().get_json(
+            summary_items = state.api_conn().get_json(
                 "experiment-comparison2",
                 args={
                     "experiment_id": self.id,
@@ -2461,7 +2461,7 @@ class Dataset(ObjectFetcher):
 
         data_summary = None
         if summarize_data:
-            data_summary_d = state.log_conn().get_json(
+            data_summary_d = state.api_conn().get_json(
                 "dataset-summary",
                 args={
                     "dataset_id": self.id,

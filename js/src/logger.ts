@@ -231,7 +231,7 @@ const loginSchema = z.strictObject({
   appUrl: z.string(),
   appPublicUrl: z.string(),
   orgName: z.string(),
-  logUrl: z.string(),
+  apiUrl: z.string(),
   proxyUrl: z.string(),
   loginToken: z.string(),
   orgId: z.string().nullish(),
@@ -247,7 +247,7 @@ export class BraintrustState {
   // (safely) dynamically cast it whenever retrieving the logger.
   public currentLogger: Logger<false> | undefined;
   public currentSpan: IsoAsyncLocalStorage<Span>;
-  // Any time we re-log in, we directly update the logConn inside the logger.
+  // Any time we re-log in, we directly update the apiConn inside the logger.
   // This is preferable to replacing the whole logger, which would create the
   // possibility of multiple loggers floating around, which may not log in a
   // deterministic order.
@@ -258,14 +258,14 @@ export class BraintrustState {
   public loginToken: string | null = null;
   public orgId: string | null = null;
   public orgName: string | null = null;
-  public logUrl: string | null = null;
+  public apiUrl: string | null = null;
   public proxyUrl: string | null = null;
   public loggedIn: boolean = false;
   public gitMetadataSettings?: GitMetadataSettings;
 
   public fetch: typeof globalThis.fetch = globalThis.fetch;
+  private _appConn: HTTPConnection | null = null;
   private _apiConn: HTTPConnection | null = null;
-  private _logConn: HTTPConnection | null = null;
   private _proxyConn: HTTPConnection | null = null;
 
   constructor(private loginParams: LoginOptions) {
@@ -280,7 +280,7 @@ export class BraintrustState {
 
     const defaultGetLogConn = async () => {
       await this.login({});
-      return this.logConn();
+      return this.apiConn();
     };
     this._bgLogger = new BackgroundLogger(new LazyValue(defaultGetLogConn));
 
@@ -293,13 +293,13 @@ export class BraintrustState {
     this.loginToken = null;
     this.orgId = null;
     this.orgName = null;
-    this.logUrl = null;
+    this.apiUrl = null;
     this.proxyUrl = null;
     this.loggedIn = false;
     this.gitMetadataSettings = undefined;
 
+    this._appConn = null;
     this._apiConn = null;
-    this._logConn = null;
     this._proxyConn = null;
   }
 
@@ -309,13 +309,13 @@ export class BraintrustState {
     this.loginToken = other.loginToken;
     this.orgId = other.orgId;
     this.orgName = other.orgName;
-    this.logUrl = other.logUrl;
+    this.apiUrl = other.apiUrl;
     this.proxyUrl = other.proxyUrl;
     this.loggedIn = other.loggedIn;
     this.gitMetadataSettings = other.gitMetadataSettings;
 
+    this._appConn = other._appConn;
     this._apiConn = other._apiConn;
-    this._logConn = other._logConn;
     this._proxyConn = other._proxyConn;
   }
 
@@ -329,7 +329,7 @@ export class BraintrustState {
     if (
       !this.appUrl ||
       !this.appPublicUrl ||
-      !this.logUrl ||
+      !this.apiUrl ||
       !this.proxyUrl ||
       !this.orgName ||
       !this.loginToken ||
@@ -346,7 +346,7 @@ export class BraintrustState {
       loginToken: this.loginToken,
       orgId: this.orgId,
       orgName: this.orgName,
-      logUrl: this.logUrl,
+      apiUrl: this.apiUrl,
       proxyUrl: this.proxyUrl,
       gitMetadataSettings: this.gitMetadataSettings,
     };
@@ -370,12 +370,14 @@ export class BraintrustState {
       );
     }
 
-    state.logConn().set_token(state.loginToken);
-    state.logConn().make_long_lived();
     state.apiConn().set_token(state.loginToken);
+    state.apiConn().make_long_lived();
+    state.appConn().set_token(state.loginToken);
+    state.proxyConn().make_long_lived();
     state.proxyConn().set_token(state.loginToken);
+
     state.loggedIn = true;
-    state.loginReplaceLogConn(state.logConn());
+    state.loginReplaceApiConn(state.apiConn());
 
     return state;
   }
@@ -383,12 +385,12 @@ export class BraintrustState {
   public setFetch(fetch: typeof globalThis.fetch) {
     this.loginParams.fetch = fetch;
     this.fetch = fetch;
-    this._logConn?.setFetch(fetch);
     this._apiConn?.setFetch(fetch);
+    this._appConn?.setFetch(fetch);
   }
 
   public async login(loginParams: LoginOptions & { forceLogin?: boolean }) {
-    if (this.logUrl && !loginParams.forceLogin) {
+    if (this.apiUrl && !loginParams.forceLogin) {
       return;
     }
     const newState = await loginToState({
@@ -398,24 +400,24 @@ export class BraintrustState {
     this.copyLoginInfo(newState);
   }
 
-  public apiConn(): HTTPConnection {
-    if (!this._apiConn) {
+  public appConn(): HTTPConnection {
+    if (!this._appConn) {
       if (!this.appUrl) {
-        throw new Error("Must initialize appUrl before requesting apiConn");
+        throw new Error("Must initialize appUrl before requesting appConn");
       }
-      this._apiConn = new HTTPConnection(this.appUrl, this.fetch);
+      this._appConn = new HTTPConnection(this.appUrl, this.fetch);
     }
-    return this._apiConn!;
+    return this._appConn!;
   }
 
-  public logConn(): HTTPConnection {
-    if (!this._logConn) {
-      if (!this.logUrl) {
-        throw new Error("Must initialize logUrl before requesting logConn");
+  public apiConn(): HTTPConnection {
+    if (!this._apiConn) {
+      if (!this.apiUrl) {
+        throw new Error("Must initialize apiUrl before requesting apiConn");
       }
-      this._logConn = new HTTPConnection(this.logUrl, this.fetch);
+      this._apiConn = new HTTPConnection(this.apiUrl, this.fetch);
     }
-    return this._logConn!;
+    return this._apiConn!;
   }
 
   public proxyConn(): HTTPConnection {
@@ -433,8 +435,8 @@ export class BraintrustState {
   }
 
   // Should only be called by the login function.
-  public loginReplaceLogConn(logConn: HTTPConnection) {
-    this._bgLogger.internalReplaceLogConn(logConn);
+  public loginReplaceApiConn(apiConn: HTTPConnection) {
+    this._bgLogger.internalReplaceApiConn(apiConn);
   }
 }
 
@@ -1063,7 +1065,7 @@ function now() {
 // instances of this class, because concurrent BackgroundLoggers will not log to
 // the backend in a deterministic order.
 class BackgroundLogger {
-  private logConn: LazyValue<HTTPConnection>;
+  private apiConn: LazyValue<HTTPConnection>;
   private items: LazyValue<BackgroundLogEvent>[] = [];
   private activeFlush: Promise<void> = Promise.resolve();
   private activeFlushResolved = true;
@@ -1084,8 +1086,8 @@ class BackgroundLogger {
     lastLoggedTimestamp: 0,
   };
 
-  constructor(logConn: LazyValue<HTTPConnection>) {
-    this.logConn = logConn;
+  constructor(apiConn: LazyValue<HTTPConnection>) {
+    this.apiConn = apiConn;
 
     const syncFlushEnv = Number(iso.getEnv("BRAINTRUST_SYNC_FLUSH"));
     if (!isNaN(syncFlushEnv)) {
@@ -1262,7 +1264,7 @@ class BackgroundLogger {
   }
 
   private async submitLogsRequest(items: string[]): Promise<void> {
-    const conn = await this.logConn.get();
+    const conn = await this.apiConn.get();
     const dataStr = constructLogs3Data(items);
     if (this.allPublishPayloadsDir) {
       await BackgroundLogger.writePayloadToDir({
@@ -1427,8 +1429,8 @@ class BackgroundLogger {
   }
 
   // Should only be called by BraintrustState.
-  public internalReplaceLogConn(logConn: HTTPConnection) {
-    this.logConn = new LazyValue(async () => logConn);
+  public internalReplaceApiConn(apiConn: HTTPConnection) {
+    this.apiConn = new LazyValue(async () => apiConn);
   }
 }
 
@@ -1560,7 +1562,7 @@ export function init<IsOpen extends boolean = false>(
         };
 
         const response = await state
-          .apiConn()
+          .appConn()
           .post_json("api/experiment/get", args);
 
         if (response.length === 0) {
@@ -1658,7 +1660,7 @@ export function init<IsOpen extends boolean = false>(
       while (true) {
         try {
           response = await state
-            .apiConn()
+            .appConn()
             .post_json("api/experiment/register", args);
           break;
         } catch (e: any) {
@@ -1873,7 +1875,7 @@ export function initDataset<
         description,
       };
       const response = await state
-        .apiConn()
+        .appConn()
         .post_json("api/dataset/register", args);
 
       return {
@@ -1927,7 +1929,7 @@ async function computeLoggerMetadata(
 ) {
   const org_id = state.orgId!;
   if (isEmpty(project_id)) {
-    const response = await state.apiConn().post_json("api/project/register", {
+    const response = await state.appConn().post_json("api/project/register", {
       project_name: project_name || GLOBAL_PROJECT,
       org_id,
     });
@@ -1940,7 +1942,7 @@ async function computeLoggerMetadata(
       },
     };
   } else if (isEmpty(project_name)) {
-    const response = await state.apiConn().get_json("api/project", {
+    const response = await state.appConn().get_json("api/project", {
       id: project_id,
     });
     return {
@@ -2103,7 +2105,7 @@ export async function loadPrompt({
     version,
   };
 
-  const response = await state.logConn().get_json("v1/prompt", args);
+  const response = await state.apiConn().get_json("v1/prompt", args);
 
   if (!("objects" in response) || response.objects.length === 0) {
     throw new Error(
@@ -2230,7 +2232,7 @@ export async function loginToState(options: LoginOptions = {}) {
 
     _check_org_info(state, info.org_info, orgName);
 
-    conn = state.logConn();
+    conn = state.apiConn();
     conn.set_token(apiKey);
   } else {
     throw new Error(
@@ -2245,13 +2247,13 @@ export async function loginToState(options: LoginOptions = {}) {
   conn.make_long_lived();
 
   // Set the same token in the API
-  state.apiConn().set_token(apiKey);
+  state.appConn().set_token(apiKey);
   state.proxyConn().set_token(apiKey);
   state.loginToken = conn.token;
   state.loggedIn = true;
 
-  // Relpace the global logger's logConn with this one.
-  state.loginReplaceLogConn(conn);
+  // Relpace the global logger's apiConn with this one.
+  state.loginReplaceApiConn(conn);
 
   return state;
 }
@@ -2579,9 +2581,8 @@ function _check_org_info(
     if (org_name === undefined || org.name === org_name) {
       state.orgId = org.id;
       state.orgName = org.name;
-      state.logUrl = iso.getEnv("BRAINTRUST_API_URL") ?? org.api_url;
+      state.apiUrl = iso.getEnv("BRAINTRUST_API_URL") ?? org.api_url;
       state.proxyUrl = iso.getEnv("BRAINTRUST_PROXY_URL") ?? org.proxy_url;
-
       state.gitMetadataSettings = org.git_metadata || undefined;
       break;
     }
@@ -2759,7 +2760,7 @@ class ObjectFetcher<RecordType>
   async fetchedData() {
     if (this._fetchedData === undefined) {
       const state = await this.getState();
-      const resp = await state.logConn().get(
+      const resp = await state.apiConn().get(
         `v1/${this.objectType}/${await this.id}/fetch`,
         {
           version: this.pinnedVersion,
@@ -2957,7 +2958,7 @@ export class Experiment
 
   public async fetchBaseExperiment() {
     const state = await this.getState();
-    const conn = state.apiConn();
+    const conn = state.appConn();
 
     try {
       const resp = await conn.post("/api/base_experiment/get_id", {
@@ -3017,7 +3018,7 @@ export class Experiment
         }
       }
 
-      const results = await state.logConn().get_json(
+      const results = await state.apiConn().get_json(
         "/experiment-comparison2",
         {
           experiment_id: await this.id,
@@ -3594,7 +3595,7 @@ export class Dataset<
 
     let dataSummary = undefined;
     if (summarizeData) {
-      dataSummary = await state.logConn().get_json(
+      dataSummary = await state.apiConn().get_json(
         "dataset-summary",
         {
           dataset_id: await this.id,

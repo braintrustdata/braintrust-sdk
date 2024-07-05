@@ -104,7 +104,7 @@ export async function uploadEvalBundles({
     ];
   }
 
-  const loggerConn = _internalGetGlobalState().logConn();
+  const loggerConn = _internalGetGlobalState().apiConn();
   let uploaded = 0;
   const runtime_context = {
     runtime: "node",
@@ -191,7 +191,7 @@ export async function uploadEvalBundles({
           }));
 
         const logPromise = _internalGetGlobalState()
-          .logConn()
+          .apiConn()
           .post_json("function/insert", {
             functions: functionEntries,
           });
