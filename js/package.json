@@ -1,6 +1,6 @@
 {
   "name": "braintrust",
-  "version": "0.0.140",
+  "version": "0.0.141",
   "description": "SDK for integrating Braintrust",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
