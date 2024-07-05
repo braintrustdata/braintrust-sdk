@@ -500,6 +500,14 @@ def Eval(
         except RuntimeError:  # 'RuntimeError: There is no current event loop...'
             loop = None
 
+        base_experiment_name = None
+
+        data_iterator = evaluator.data
+        if inspect.isclass(data_iterator):
+            data_iterator = data_iterator()
+        if isinstance(data_iterator, BaseExperiment):
+            base_experiment_name = data_iterator.name
+
         async def run_to_completion():
             experiment = init_experiment(
                 project_name=evaluator.project_name if evaluator.project_id is None else None,
@@ -508,6 +516,7 @@ def Eval(
                 metadata=evaluator.metadata,
                 is_public=evaluator.is_public,
                 update=evaluator.update,
+                base_experiment=base_experiment_name,
             )
             try:
                 ret = await run_evaluator(experiment, evaluator, 0, [])
@@ -827,11 +836,16 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             raise ValueError(
                 "Cannot use BaseExperiment() without connecting to Braintrust (you most likely set --no-send-logs)"
             )
-        base_experiment = experiment.fetch_base_experiment()
+        base_experiment_name = data_iterator.name
+        if base_experiment_name is None:
+            base_experiment = experiment.fetch_base_experiment()
+            if base_experiment is None:
+                raise Exception("BaseExperiment() failed to fetch base experiment")
+            base_experiment_name = base_experiment.name
         data_iterator = _init_experiment(
             project=evaluator.project_name if evaluator.project_id is None else None,
             project_id=evaluator.project_id,
-            experiment=base_experiment.name,
+            experiment=base_experiment_name,
             open=True,
             set_current=False,
         ).as_dataset()

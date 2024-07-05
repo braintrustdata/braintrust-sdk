@@ -337,6 +337,13 @@ export async function Eval<
 
   const resolvedReporter = options.reporter || defaultReporter;
   try {
+    let baseExperiment: string | undefined = undefined;
+    if (
+      "_type" in evaluator.data &&
+      evaluator.data._type === "BaseExperiment"
+    ) {
+      baseExperiment = evaluator.data.name;
+    }
     const experiment = initExperiment(evaluator.state, {
       ...(evaluator.projectId
         ? { projectId: evaluator.projectId }
@@ -345,6 +352,7 @@ export async function Eval<
       metadata: evaluator.metadata,
       isPublic: evaluator.isPublic,
       update: evaluator.update,
+      baseExperiment,
     });
 
     if (options.onStart) {
@@ -487,6 +495,7 @@ async function runEvaluatorInternal(
   if (typeof evaluator.data === "string") {
     throw new Error("Unimplemented: string data paths");
   }
+
   let dataResult =
     typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
 
