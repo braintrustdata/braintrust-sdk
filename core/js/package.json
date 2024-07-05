@@ -10,7 +10,8 @@
     "watch": "tsup --watch",
     "clean": "rm -r dist/*",
     "prepublishOnly": "../../../scripts/node_prepublish_core.py",
-    "postpublish": "../../../scripts/node_postpublish_core.py"
+    "postpublish": "../../../scripts/node_postpublish_core.py",
+    "test": "vitest run"
   },
   "exports": {
     "./package.json": "./package.json",
@@ -58,7 +59,9 @@
     "@types/uuid": "^9.0.7",
     "tsup": "^8.0.1",
     "tsx": "^3.14.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vite-tsconfig-paths": "^4.3.2",
+    "vitest": "^1.6.0"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^6.3.1",
