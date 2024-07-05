@@ -495,7 +495,6 @@ async function runEvaluatorInternal(
   if (typeof evaluator.data === "string") {
     throw new Error("Unimplemented: string data paths");
   }
-
   let dataResult =
     typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
 
