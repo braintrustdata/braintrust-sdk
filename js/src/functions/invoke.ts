@@ -29,7 +29,7 @@ export type InvokeFunctionArgs<
     parent?: Exportable | string;
     state?: BraintrustState;
     stream?: Stream;
-    schema?: z.ZodSchema<Return, z.ZodTypeDef, any>;
+    schema?: z.ZodSchema<Return>;
   };
 
 // Implementation
