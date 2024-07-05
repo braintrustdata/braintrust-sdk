@@ -14,24 +14,28 @@ import { BraintrustStream } from "../stream";
 import { z } from "zod";
 
 // Define a type for the return value
-export type InvokeReturn<S extends boolean, R> = S extends true
+export type InvokeReturn<Stream extends boolean, Return> = Stream extends true
   ? BraintrustStream
-  : R;
+  : Return;
 
 // Update the InvokeFunctionArgs type
-export type InvokeFunctionArgs<T, R, S extends boolean = false> = FunctionId &
+export type InvokeFunctionArgs<
+  Arg,
+  Return,
+  Stream extends boolean = false,
+> = FunctionId &
   FullLoginOptions & {
-    arg: T;
+    arg: Arg;
     parent?: Exportable | string;
     state?: BraintrustState;
-    stream?: S;
-    returnSchema?: z.ZodSchema<R, z.ZodTypeDef, any>;
+    stream?: Stream;
+    schema?: z.ZodSchema<Return>;
   };
 
-// Update the invoke function
-export async function invoke<T, R, S extends boolean = false>(
-  args: InvokeFunctionArgs<T, R, S>,
-): Promise<InvokeReturn<S, R>> {
+// Implementation
+export async function invoke<Arg, Return, Stream extends boolean = false>(
+  args: InvokeFunctionArgs<Arg, Return, Stream>,
+): Promise<InvokeReturn<Stream, Return>> {
   const {
     orgName,
     apiKey,
@@ -42,7 +46,7 @@ export async function invoke<T, R, S extends boolean = false>(
     parent: parentArg,
     state: stateArg,
     stream,
-    returnSchema,
+    schema,
     ...functionId
   } = args;
 
@@ -78,13 +82,9 @@ export async function invoke<T, R, S extends boolean = false>(
     if (!resp.body) {
       throw new Error("Received empty stream body");
     }
-    return new BraintrustStream(resp.body) as InvokeReturn<S, R>;
+    return new BraintrustStream(resp.body) as InvokeReturn<Stream, Return>;
   } else {
     const data = await resp.json();
-    // Validate the returned data against the schema if provided
-    if (returnSchema) {
-      return returnSchema.parse(data) as InvokeReturn<S, R>;
-    }
-    return data as InvokeReturn<S, R>;
+    return (schema ? schema.parse(data) : data) as InvokeReturn<Stream, Return>;
   }
 }
