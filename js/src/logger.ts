@@ -2582,13 +2582,6 @@ function _check_org_info(
       state.logUrl = iso.getEnv("BRAINTRUST_API_URL") ?? org.api_url;
       state.proxyUrl = iso.getEnv("BRAINTRUST_PROXY_URL") ?? org.proxy_url;
 
-      // XXX This is a dirty hack fix properly
-      if (state.proxyUrl) {
-        const url = new URL(state.proxyUrl);
-        url.pathname = "";
-        state.proxyUrl = url.toString();
-      }
-
       state.gitMetadataSettings = org.git_metadata || undefined;
       break;
     }
