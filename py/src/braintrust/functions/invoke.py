@@ -1,5 +1,4 @@
-import dataclasses
-from typing import Any, Generic, Optional, TypeVar, Union
+from typing import Any, Optional, TypeVar, Union
 
 from braintrust_core.functions import INVOKE_API_VERSION
 from sseclient import SSEClient
