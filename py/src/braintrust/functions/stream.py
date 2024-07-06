@@ -1,19 +1,9 @@
 import dataclasses
 import json
 from itertools import tee
-from typing import Any, Callable, Generator, List, Literal, Union
+from typing import Generator, List, Literal, Union
 
 from sseclient import SSEClient
-
-# export type BraintrustStreamChunk =
-#   | {
-#       type: "text_delta";
-#       data: string;
-#     }
-#   | {
-#       type: "json_delta";
-#       data: string;
-#     };
 
 
 @dataclasses.dataclass
