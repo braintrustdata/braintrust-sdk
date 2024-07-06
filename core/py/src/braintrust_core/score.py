@@ -51,8 +51,12 @@ class Scorer(ABC):
         # By default we just run the sync version in a thread
         return self._run_eval_sync(output, expected, **kwargs)
 
+    @classmethod
+    def _cls_name(cls) -> str:
+        return cls.__name__
+
     def _name(self) -> str:
-        return self.__class__.__name__
+        return self._cls_name()
 
     @abstractmethod
     def _run_eval_sync(self, output, expected=None, **kwargs) -> Score:
