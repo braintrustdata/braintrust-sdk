@@ -2370,7 +2370,7 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
   callback: (span: Span) => R,
   args?: StartSpanArgs & SetCurrentArg & AsyncFlushArg<IsAsyncFlush>,
 ): PromiseUnless<IsAsyncFlush, R> {
-  const { span, isLogger } = startSpanAndIsLogger(args);
+  const { span, isLogger, isAsyncFlush } = startSpanAndIsLogger(args);
 
   const ret = runFinally(
     () => {
@@ -2389,7 +2389,7 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
   } else {
     return (async () => {
       const awaitedRet = await ret;
-      if (isLogger) {
+      if (isLogger && !isAsyncFlush) {
         await span.flush();
       }
       return awaitedRet;
@@ -2525,7 +2525,7 @@ export function setFetch(fetch: typeof globalThis.fetch): void {
 
 function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
-): { span: Span; isLogger: boolean } {
+): { span: Span; isLogger: boolean; isAsyncFlush: boolean | undefined } {
   const state = args?.state ?? _globalState;
   if (args?.parent) {
     const components = SpanComponentsV2.fromStr(args?.parent);
@@ -2548,13 +2548,20 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
     return {
       span,
       isLogger: components.objectType === SpanObjectTypeV2.PROJECT_LOGS,
+      // We don't actually know if it's async flush in this case, so just propagate
+      // along whatever we get from the arguments
+      isAsyncFlush: args?.asyncFlush,
     };
   } else {
     const parentObject = getSpanParentObject<IsAsyncFlush>({
       asyncFlush: args?.asyncFlush,
     });
     const span = parentObject.startSpan(args);
-    return { span, isLogger: parentObject.kind === "logger" };
+    return {
+      span,
+      isLogger: parentObject.kind === "logger",
+      isAsyncFlush: parentObject.kind === "logger" && parentObject.asyncFlush,
+    };
   }
 }
 
