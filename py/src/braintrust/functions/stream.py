@@ -37,7 +37,7 @@ class BraintrustStream:
             self.stream = self._parse_sse_stream(base_stream)
         else:
             self.stream = base_stream
-        self.cached_items = []
+        self._memoized_final_value = None
 
     def _parse_sse_stream(self, sse_client: SSEClient) -> Generator[BraintrustStreamChunk, None, None]:
         for event in sse_client.events():
@@ -47,20 +47,16 @@ class BraintrustStream:
                 yield BraintrustJsonChunk(data=event.data)
 
     def copy(self):
-        def tee_generator():
-            for item in self.stream:
-                self.cached_items.append(item)
-                yield item
-
-        self.stream, new_stream = tee(tee_generator())
+        current_stream = self.stream
+        self.stream, new_stream = tee(current_stream)
         return BraintrustStream(new_stream)
 
     def final_value(self):
-        return parse_stream(self)
+        if self._memoized_final_value is None:
+            self._memoized_final_value = parse_stream(self)
+        return self._memoized_final_value
 
     def __iter__(self):
-        if self.cached_items:
-            yield from self.cached_items
         yield from self.stream
 
 

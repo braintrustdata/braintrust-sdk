@@ -6,7 +6,6 @@ import {
 import {
   _internalGetGlobalState,
   BraintrustState,
-  currentSpan,
   Exportable,
   FullLoginOptions,
   getSpanParentObject,

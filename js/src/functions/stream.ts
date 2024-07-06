@@ -18,6 +18,7 @@ export type BraintrustStreamChunk =
 
 export class BraintrustStream {
   private stream: ReadableStream<BraintrustStreamChunk>;
+  private memoizedFinalValue: Promise<unknown> | undefined;
 
   constructor(baseStream: ReadableStream<Uint8Array>);
   constructor(stream: ReadableStream<string>);
@@ -44,11 +45,15 @@ export class BraintrustStream {
   }
 
   public finalValue(): Promise<unknown> {
-    return new Promise((resolve, reject) => {
+    if (this.memoizedFinalValue) {
+      return this.memoizedFinalValue;
+    }
+    this.memoizedFinalValue = new Promise((resolve, reject) => {
       const stream = this.stream
         .pipeThrough(createFinalValuePassThroughStream(resolve))
         .pipeTo(devNullWritableStream());
     });
+    return this.memoizedFinalValue;
   }
 }
 

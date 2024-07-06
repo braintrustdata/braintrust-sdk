@@ -48,6 +48,8 @@ from braintrust_core.util import (
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from braintrust.functions.stream import BraintrustStream
+
 from .gitutil import get_past_n_ancestors, get_repo_info
 from .util import (
     GLOBAL_PROJECT,
@@ -2224,17 +2226,32 @@ class SpanImpl(Span):
             **sanitized_and_internal_data,
             **{IS_MERGE_FIELD: self._is_merge},
         )
-        serialized_partial_record = _check_json_serializable(partial_record)
-        partial_record = json.loads(serialized_partial_record)
-        if "metrics" in partial_record and "end" in partial_record["metrics"]:
-            self._logged_end_time = partial_record["metrics"]["end"]
 
-        if len(partial_record.get("tags", [])) > 0 and self.span_parents:
+        serializable_partial_record = {}
+        lazy_partial_record = {}
+        for k, v in partial_record.items():
+            if isinstance(v, BraintrustStream):
+                # Python has weird semantics with loop variables and lambda functions, so we
+                # capture `v` by plugging it through a closure that itself returns the LazyValue
+                def make_final_value_callback(v):
+                    return LazyValue(lambda: v.copy().final_value(), use_mutex=False)
+
+                lazy_partial_record[k] = make_final_value_callback(v)
+            else:
+                serializable_partial_record[k] = v
+
+        serialized_partial_record = _check_json_serializable(serializable_partial_record)
+        serializable_partial_record = json.loads(serialized_partial_record)
+        if "metrics" in serializable_partial_record and "end" in serializable_partial_record["metrics"]:
+            self._logged_end_time = serializable_partial_record["metrics"]["end"]
+
+        if len(serializable_partial_record.get("tags", [])) > 0 and self.span_parents:
             raise Exception("Tags can only be logged to the root span")
 
         def compute_record():
             return dict(
-                **partial_record,
+                **serializable_partial_record,
+                **{k: v.get() for k, v in lazy_partial_record.items()},
                 **SpanComponentsV2(
                     object_type=self.parent_object_type,
                     object_id=self.parent_object_id.get(),

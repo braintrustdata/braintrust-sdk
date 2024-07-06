@@ -1,10 +1,11 @@
 import dataclasses
-from typing import Any, Dict, Generic, Optional, TypeVar, Union
+from typing import Any, Generic, Optional, TypeVar, Union
 
 from braintrust_core.functions import INVOKE_API_VERSION
 from sseclient import SSEClient
 
-from ..logger import Exportable, current_span, login, proxy_conn
+from ..logger import Exportable, get_span_parent_object, login, proxy_conn
+from ..util import response_raise_for_status
 from .stream import BraintrustStream
 
 T = TypeVar("T")
@@ -54,7 +55,7 @@ def invoke(
         force_login=force_login,
     )
 
-    parent = parent if isinstance(parent, str) else parent.export() if parent else current_span().export()
+    parent = parent if isinstance(parent, str) else parent.export() if parent else get_span_parent_object().export()
 
     function_id_args = {}
     if function_id is not None:
@@ -83,6 +84,7 @@ def invoke(
     headers = {"Accept": "text/event-stream" if stream else "application/json"}
 
     resp = proxy_conn().post("function/invoke", json=request, headers=headers)
+    response_raise_for_status(resp)
 
     if stream:
         if not resp.content:
