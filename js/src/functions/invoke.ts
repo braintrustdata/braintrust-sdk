@@ -9,6 +9,7 @@ import {
   currentSpan,
   Exportable,
   FullLoginOptions,
+  getSpanParentObject,
 } from "../logger";
 import { BraintrustStream } from "./stream";
 import { z } from "zod";
@@ -62,7 +63,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     ? typeof parentArg === "string"
       ? parentArg
       : await parentArg.export()
-    : await currentSpan().export();
+    : await getSpanParentObject().export();
 
   const request: InvokeFunctionRequest = {
     ...functionId,

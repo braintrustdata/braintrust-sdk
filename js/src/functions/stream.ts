@@ -42,6 +42,14 @@ export class BraintrustStream {
   public toReadableStream(): ReadableStream<BraintrustStreamChunk> {
     return this.stream;
   }
+
+  public finalValue(): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      const stream = this.stream
+        .pipeThrough(createFinalValuePassThroughStream(resolve))
+        .pipeTo(devNullWritableStream());
+    });
+  }
 }
 
 function btStreamParser() {
