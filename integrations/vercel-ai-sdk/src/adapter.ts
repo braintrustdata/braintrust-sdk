@@ -72,16 +72,20 @@ function btStreamToAISDKTransformStream(
     },
     async flush(controller) {
       if (jsonChunks.length > 0) {
-        const data = JSON.parse(jsonChunks.join(""));
+        const jsonString = jsonChunks.join("");
+        const data = JSON.parse(jsonString);
         controller.enqueue(encoder.encode(formatStreamPart("data", data)));
-      }
-
-      const textData = textChunks.join("");
-      if (callbacks?.onCompletion) {
-        await callbacks.onCompletion(textData);
-      }
-      if (callbacks?.onFinal) {
-        await callbacks.onFinal(textData);
+        if (callbacks?.onFinal) {
+          await callbacks.onFinal(jsonString);
+        }
+      } else {
+        const textData = textChunks.join("");
+        if (callbacks?.onCompletion) {
+          await callbacks.onCompletion(textData);
+        }
+        if (callbacks?.onFinal) {
+          await callbacks.onFinal(textData);
+        }
       }
 
       controller.terminate();

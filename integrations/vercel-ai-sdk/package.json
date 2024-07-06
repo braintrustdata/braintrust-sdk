@@ -17,18 +17,20 @@
   "scripts": {
     "build": "tsup",
     "watch": "tsup --watch",
-    "clean": "rm -r dist/*"
+    "clean": "rm -r dist/*",
+    "test": "vitest run"
   },
   "author": "Braintrust Data Inc.",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.10.5",
     "tsup": "^8.0.1",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^1.6.0"
   },
   "dependencies": {
     "@ai-sdk/provider": "^0.0.11",
     "ai": "^3.2.16",
-    "braintrust": "workspace:^"
+    "braintrust": "^0.0.141"
   }
 }

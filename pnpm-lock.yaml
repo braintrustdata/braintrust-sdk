@@ -55,7 +55,7 @@ importers:
         specifier: ^3.2.16
         version: 3.2.16(react@18.3.1)(svelte@4.2.18)(vue@3.4.31)(zod@3.22.4)
       braintrust:
-        specifier: workspace:^
+        specifier: ^0.0.141
         version: link:../../js
     devDependencies:
       '@types/node':
@@ -67,6 +67,9 @@ importers:
       typescript:
         specifier: ^5.3.3
         version: 5.3.3
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.0(@types/node@20.10.5)
 
   js:
     dependencies:
