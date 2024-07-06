@@ -53,7 +53,7 @@ import { configureNode } from "./node";
 configureNode();
 
 export * from "./logger";
-export * from "./stream";
+export * from "./functions/stream";
 export * from "./functions/invoke";
 export {
   BaseExperiment,

@@ -61,7 +61,13 @@ Metadata = Dict[str, Any]
 DATA_API_VERSION = 2
 
 
-class Span(ABC):
+class Exportable(ABC):
+    @abstractmethod
+    def export(self) -> str:
+        """Return a serialized representation of the object that can be used to start subspans in other places. See `Span.start_span` for more details."""
+
+
+class Span(Exportable, ABC):
     """
     A Span encapsulates logged data and metrics for a unit of work. This interface is shared by all span implementations.
 
@@ -122,10 +128,6 @@ class Span(ABC):
         :param end_time: Optional end time of the span, as a timestamp in seconds.
         :returns: The end time logged to the span metrics.
         """
-
-    @abstractmethod
-    def export(self) -> str:
-        """Return a serialized representation of the span that can be used to start subspans in other places. See `Span.start_span` for more details."""
 
     @abstractmethod
     def flush(self):
@@ -240,11 +242,13 @@ class BraintrustState:
         self.org_id = None
         self.org_name = None
         self.api_url = None
+        self.proxy_url = None
         self.logged_in = False
         self.git_metadata_settings = None
 
         self._app_conn = None
         self._api_conn = None
+        self._proxy_conn = None
         self._user_info = None
 
     def app_conn(self):
@@ -260,6 +264,13 @@ class BraintrustState:
                 raise RuntimeError("Must initialize api_url before requesting api_conn")
             self._api_conn = HTTPConnection(self.api_url, adapter=_http_adapter)
         return self._api_conn
+
+    def proxy_conn(self):
+        if not self._proxy_conn:
+            if not self.proxy_url:
+                raise RuntimeError("Must initialize proxy_url before requesting proxy_conn")
+            self._proxy_conn = HTTPConnection(self.proxy_url, adapter=_http_adapter)
+        return self._proxy_conn
 
     def user_info(self):
         if not self._user_info:
@@ -391,6 +402,10 @@ def api_conn():
 
 def app_conn():
     return _state.app_conn()
+
+
+def proxy_conn():
+    return _state.proxy_conn()
 
 
 def user_info():
@@ -1137,6 +1152,7 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
 
         # Set the same token in the API
         _state.app_conn().set_token(conn.token)
+        _state.proxy_conn().set_token(conn.token)
         _state.login_token = conn.token
         _state.logged_in = True
 
@@ -1373,6 +1389,7 @@ def _check_org_info(org_info, org_name):
             _state.org_id = orgs["id"]
             _state.org_name = orgs["name"]
             _state.api_url = os.environ.get("BRAINTRUST_API_URL", orgs["api_url"])
+            _state.proxy_url = os.environ.get("BRAINTRUST_PROXY_URL", orgs["proxy_url"])
             _state.git_metadata_settings = GitMetadataSettings(**(orgs.get("git_metadata") or {}))
             break
 
@@ -1757,7 +1774,7 @@ class ExperimentDatasetIterator:
             }
 
 
-class Experiment(ObjectFetcher):
+class Experiment(ObjectFetcher, Exportable):
     """
     An experiment is a collection of logged events, such as model inputs and outputs, which represent
     a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -2658,7 +2675,7 @@ class Project:
         return self._name
 
 
-class Logger:
+class Logger(Exportable):
     def __init__(
         self,
         lazy_metadata: LazyValue[OrgProjectMetadata],

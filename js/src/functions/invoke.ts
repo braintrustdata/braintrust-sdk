@@ -10,39 +10,39 @@ import {
   Exportable,
   FullLoginOptions,
 } from "../logger";
-import { BraintrustStream } from "../stream";
+import { BraintrustStream } from "./stream";
 import { z } from "zod";
 
 // Define a type for the return value
-export type InvokeReturn<Stream extends boolean, Return> = Stream extends true
+export type InvokeReturn<Stream extends boolean, Output> = Stream extends true
   ? BraintrustStream
-  : Return;
+  : Output;
 
 // Update the InvokeFunctionArgs type
 export type InvokeFunctionArgs<
-  Arg,
-  Return,
+  Input,
+  Output,
   Stream extends boolean = false,
 > = FunctionId &
   FullLoginOptions & {
-    arg: Arg;
+    input: Input;
     parent?: Exportable | string;
     state?: BraintrustState;
     stream?: Stream;
-    schema?: z.ZodSchema<Return>;
+    schema?: z.ZodSchema<Output>;
   };
 
 // Implementation
-export async function invoke<Arg, Return, Stream extends boolean = false>(
-  args: InvokeFunctionArgs<Arg, Return, Stream>,
-): Promise<InvokeReturn<Stream, Return>> {
+export async function invoke<Input, Output, Stream extends boolean = false>(
+  args: InvokeFunctionArgs<Input, Output, Stream>,
+): Promise<InvokeReturn<Stream, Output>> {
   const {
     orgName,
     apiKey,
     appUrl,
     forceLogin,
     fetch,
-    arg,
+    input,
     parent: parentArg,
     state: stateArg,
     stream,
@@ -66,7 +66,7 @@ export async function invoke<Arg, Return, Stream extends boolean = false>(
 
   const request: InvokeFunctionRequest = {
     ...functionId,
-    arg,
+    input,
     parent,
     stream,
     api_version: INVOKE_API_VERSION,
@@ -82,9 +82,9 @@ export async function invoke<Arg, Return, Stream extends boolean = false>(
     if (!resp.body) {
       throw new Error("Received empty stream body");
     }
-    return new BraintrustStream(resp.body) as InvokeReturn<Stream, Return>;
+    return new BraintrustStream(resp.body) as InvokeReturn<Stream, Output>;
   } else {
     const data = await resp.json();
-    return (schema ? schema.parse(data) : data) as InvokeReturn<Stream, Return>;
+    return (schema ? schema.parse(data) : data) as InvokeReturn<Stream, Output>;
   }
 }

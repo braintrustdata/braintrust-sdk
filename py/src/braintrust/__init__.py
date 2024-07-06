@@ -46,6 +46,7 @@ BRAINTRUST_API_KEY=<YOUR_BRAINTRUST_API_KEY> braintrust eval eval_hello.py
 """
 
 from .framework import *
+from .functions import *
 from .logger import *
 from .logger import _internal_reset_global_state, _internal_with_custom_background_logger
 from .oai import wrap_openai

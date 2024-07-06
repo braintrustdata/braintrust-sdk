@@ -34,7 +34,7 @@ export const useFunctionSchema = z
 
 export const invokeFunctionSchema = useFunctionSchema.and(
   z.object({
-    arg: z.any().optional(),
+    input: z.any().optional(),
     parent: z.string().optional(),
     stream: z.boolean().optional(),
   }),

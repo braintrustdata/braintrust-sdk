@@ -61,7 +61,7 @@ import {
   BraintrustStream,
   createFinalValuePassThroughStream,
   devNullWritableStream,
-} from "./stream";
+} from "./functions/stream";
 import { waitUntil } from "@vercel/functions";
 
 export type SetCurrentArg = { setCurrent?: boolean };
