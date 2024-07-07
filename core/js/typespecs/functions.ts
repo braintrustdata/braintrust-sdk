@@ -4,21 +4,29 @@ export const INVOKE_API_VERSION = 1;
 
 export const functionIdSchema = z.union([
   z.object({
-    function_id: z.string(),
-    version: z.string().optional(),
+    function_id: z.string().describe("The ID of the function."),
+    version: z.string().optional().describe("The version of the function."),
   }),
   z.object({
-    prompt_session_id: z.string(),
-    prompt_session_function_id: z.string(),
-    version: z.string().optional(),
+    project_name: z
+      .string()
+      .describe("The name of the project containing the function."),
+    slug: z.string().describe("The slug of the function."),
+    version: z.string().optional().describe("The version of the function."),
   }),
   z.object({
-    project_name: z.string(),
-    slug: z.string(),
-    version: z.string().optional(),
+    global_function: z
+      .string()
+      .describe(
+        "The name of the global function. Currently, the global namespace includes the functions in autoevals.",
+      ),
   }),
   z.object({
-    global_function: z.string(),
+    prompt_session_id: z.string().describe("The ID of the prompt session."),
+    prompt_session_function_id: z
+      .string()
+      .describe("The ID of the function in the prompt session."),
+    version: z.string().optional().describe("The version of the function."),
   }),
 ]);
 export type FunctionId = z.infer<typeof functionIdSchema>;

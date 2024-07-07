@@ -6,6 +6,10 @@ import {
   ReconnectInterval,
 } from "eventsource-parser";
 
+/**
+ * A chunk of data from a Braintrust stream. Each chunk type matches
+ * an SSE event type.
+ */
 export type BraintrustStreamChunk =
   | {
       type: "text_delta";
@@ -16,6 +20,10 @@ export type BraintrustStreamChunk =
       data: string;
     };
 
+/**
+ * A Braintrust stream. This is a wrapper around a ReadableStream of `BraintrustStreamChunk`,
+ * with some utility methods to make them easy to log and convert into various formats.
+ */
 export class BraintrustStream {
   private stream: ReadableStream<BraintrustStreamChunk>;
   private memoizedFinalValue: Promise<unknown> | undefined;
@@ -32,6 +40,13 @@ export class BraintrustStream {
     this.stream = baseStream.pipeThrough(btStreamParser());
   }
 
+  /**
+   * Copy the stream. This returns a new stream that shares the same underlying
+   * stream (via `tee`). Since streams are consumed in Javascript, use `copy()` if you
+   * need to use the stream multiple times.
+   *
+   * @returns A new stream that you can independently consume.
+   */
   public copy(): BraintrustStream {
     // Once a stream is tee'd, it is essentially consumed, so we need to replace our own
     // copy of it.
@@ -40,10 +55,26 @@ export class BraintrustStream {
     return new BraintrustStream(newStream);
   }
 
+  /**
+   * Get the underlying ReadableStream.
+   *
+   * @returns The underlying ReadableStream<BraintrustStreamChunk>.
+   */
   public toReadableStream(): ReadableStream<BraintrustStreamChunk> {
     return this.stream;
   }
 
+  /**
+   * Get the final value of the stream. This will return a promise that resolves
+   * when the stream is closed, and contains the final value of the stream. Multiple
+   * calls to `finalValue()` will return the same promise, so it is safe to call
+   * this multiple times.
+   *
+   * This function consumes the stream, so if you need to use the stream multiple
+   * times, you should call `copy()` first.
+   *
+   * @returns A promise that resolves with the final value of the stream.
+   */
   public finalValue(): Promise<unknown> {
     if (this.memoizedFinalValue) {
       return this.memoizedFinalValue;
@@ -107,6 +138,13 @@ function btStreamParser() {
   });
 }
 
+/**
+ * Create a stream that passes through the final value of the stream. This is
+ * used to implement `BraintrustStream.finalValue()`.
+ *
+ * @param onFinal A function to call with the final value of the stream.
+ * @returns A new stream that passes through the final value of the stream.
+ */
 export function createFinalValuePassThroughStream<
   T extends BraintrustStreamChunk | string | Uint8Array,
 >(
