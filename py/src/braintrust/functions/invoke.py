@@ -1,4 +1,4 @@
-from typing import Any, Generic, Literal, Optional, TypeVar, Union, overload
+from typing import Any, Literal, Optional, TypeVar, Union, overload
 
 from braintrust_core.functions import INVOKE_API_VERSION
 from sseclient import SSEClient
@@ -69,6 +69,35 @@ def invoke(
     slug: Optional[str] = None,
     global_function: Optional[str] = None,
 ) -> Union[BraintrustStream, T]:
+    """
+    Invoke a Braintrust function, returning a `BraintrustStream` or the value as a plain
+    Python object.
+
+    Args:
+        input: The input to the function. This will be logged as the `input` field in the span.
+        parent: The parent of the function. This can be an existing span, logger, or experiment, or
+            the output of `.export()` if you are distributed tracing. If unspecified, will use
+            the same semantics as `traced()` to determine the parent and no-op if not in a tracing
+            context.
+        stream: Whether to stream the function's output. If True, the function will return a
+            `BraintrustStream`, otherwise it will return the output of the function as a JSON
+            object.
+        org_name: The name of the Braintrust organization to use.
+        api_key: The API key to use for authentication.
+        app_url: The URL of the Braintrust application.
+        force_login: Whether to force a new login even if already logged in.
+        function_id: The ID of the function to invoke.
+        version: The version of the function to invoke.
+        prompt_session_id: The ID of the prompt session to invoke the function from.
+        prompt_session_function_id: The ID of the function in the prompt session to invoke.
+        project_name: The name of the project containing the function to invoke.
+        slug: The slug of the function to invoke.
+        global_function: The name of the global function to invoke.
+
+    Returns:
+        The output of the function. If `stream` is True, returns a `BraintrustStream`,
+        otherwise returns the output as a Python object.
+    """
     login(
         org_name=org_name,
         api_key=api_key,
