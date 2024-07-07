@@ -15,6 +15,15 @@ export const jsonSchema: z.ZodType<Json> = z.lazy(() =>
   z.union([literalSchema, z.array(jsonSchema), z.record(jsonSchema)]),
 );
 
+// It is often hard for us to control every piece of code that serializes
+// datetimes to strings to ensure they are always strictly ISO8601-compliant.
+// Thus asserting `z.string().datetime()` will not often work. While
+// `z.string().datetime({ offset: true })` could work, it has the downside of
+// not actually sanitizing the string to a consistent format, which is a
+// nice-to-have.
+//
+// Thus we implement this more-lenient parsing and sanitization as a transform
+// and explicitly add the "date-time" format specifier for openAPI.
 export const datetimeStringSchema = z
   .string()
   .transform((x, ctx) => {
