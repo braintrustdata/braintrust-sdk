@@ -31,9 +31,6 @@ export const functionIdSchema = z.union([
 ]);
 export type FunctionId = z.infer<typeof functionIdSchema>;
 
-// NOTE: After a few attempts to make this work with strictObject, I gave up, which means
-// that if the value we're parsing contains extraneous fields, we'll ignore them instead of
-// returning an error.
 export const useFunctionSchema = z
   .object({
     api_version: z.number().optional().default(INVOKE_API_VERSION),
@@ -49,38 +46,31 @@ export const invokeFunctionSchema = useFunctionSchema.and(
 );
 export type InvokeFunctionRequest = z.infer<typeof invokeFunctionSchema>;
 
-export const baseSSEEventSchema = z.strictObject({
+export const baseSSEEventSchema = z.object({
   id: z.string().optional(),
   data: z.string(),
 });
 
 // This should eventually move into the typespecs in @braintrust/core
 //
-export const sseTextEventSchema = baseSSEEventSchema
-  .merge(
-    z.strictObject({
-      event: z.literal("text_delta"),
-    }),
-  )
-  .strip();
+export const sseTextEventSchema = baseSSEEventSchema.merge(
+  z.object({
+    event: z.literal("text_delta"),
+  }),
+);
 
-export const sseDataEventSchema = baseSSEEventSchema
-  .merge(
-    z.strictObject({
-      event: z.literal("json_delta"),
-    }),
-  )
-  .strip();
+export const sseDataEventSchema = baseSSEEventSchema.merge(
+  z.object({
+    event: z.literal("json_delta"),
+  }),
+);
 
-export const sseDoneEventSchema = baseSSEEventSchema
-  .omit({ data: true })
-  .merge(
-    z.strictObject({
-      event: z.literal("done"),
-      data: z.literal(""),
-    }),
-  )
-  .strip();
+export const sseDoneEventSchema = baseSSEEventSchema.omit({ data: true }).merge(
+  z.object({
+    event: z.literal("done"),
+    data: z.literal(""),
+  }),
+);
 
 export const callEventSchema = z.union([
   sseTextEventSchema,

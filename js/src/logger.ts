@@ -3276,7 +3276,9 @@ export class SpanImpl implements Span {
     // except for `sanitized` and `internalData`, where the former overrides
     // the latter.
     const sanitized = validateAndSanitizeExperimentLogPartialArgs(event ?? {});
-    let sanitizedAndInternalData = { ...internalData };
+    const sanitizedAndInternalData: Partial<typeof internalData> &
+      Partial<typeof sanitized> = {};
+    mergeDicts(sanitizedAndInternalData, internalData || {});
     mergeDicts(sanitizedAndInternalData, sanitized);
 
     const serializableInternalData: typeof sanitizedAndInternalData = {};
