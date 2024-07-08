@@ -32,11 +32,11 @@ export type ContentPartImage = z.infer<
 export type ContentPart = z.infer<typeof chatCompletionContentPartSchema>;
 
 export const promptBlockDataSchema = z.union([
-  z.strictObject({
+  z.object({
     type: z.literal("completion"),
     content: z.string(),
   }),
-  z.strictObject({
+  z.object({
     type: z.literal("chat"),
     messages: z.array(chatCompletionMessageParamSchema),
     tools: z.string().optional(),
@@ -48,83 +48,64 @@ export type PromptBlockData = z.infer<typeof promptBlockDataSchema>;
 // Note that for prompt options, we relax the strictness requirement because
 // these params may come from external sources.
 
-const braintrustModelParamsSchema = z
-  .strictObject({
-    use_cache: z.boolean().optional(),
-  })
-  .strip();
-
+const braintrustModelParamsSchema = z.object({
+  use_cache: z.boolean().optional(),
+});
 export const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
-const openAIModelParamsSchema = z
-  .strictObject({
-    temperature: z.number().optional(),
-    top_p: z.number().optional(),
-    max_tokens: z.number().optional(),
-    frequency_penalty: z.number().optional(),
-    presence_penalty: z.number().optional(),
-    response_format: z
-      .strictObject({ type: z.literal("json_object") })
-      .nullish(),
-    tool_choice: z
-      .union([
-        z.literal("auto"),
-        z.literal("none"),
-        z
-          .strictObject({
-            type: z.literal("function"),
-            function: z.strictObject({ name: z.string() }).strip(),
-          })
-          .strip(),
-      ])
-      .optional(),
-    function_call: z
-      .union([
-        z.literal("auto"),
-        z.literal("none"),
-        z.strictObject({
-          name: z.string(),
-        }),
-      ])
-      .optional(),
-    n: z.number().optional(),
-    stop: z.array(z.string()).optional(),
-  })
-  .strip();
-
+const openAIModelParamsSchema = z.object({
+  temperature: z.number().optional(),
+  top_p: z.number().optional(),
+  max_tokens: z.number().optional(),
+  frequency_penalty: z.number().optional(),
+  presence_penalty: z.number().optional(),
+  response_format: z.object({ type: z.literal("json_object") }).nullish(),
+  tool_choice: z
+    .union([
+      z.literal("auto"),
+      z.literal("none"),
+      z.object({
+        type: z.literal("function"),
+        function: z.object({ name: z.string() }),
+      }),
+    ])
+    .optional(),
+  function_call: z
+    .union([
+      z.literal("auto"),
+      z.literal("none"),
+      z.object({
+        name: z.string(),
+      }),
+    ])
+    .optional(),
+  n: z.number().optional(),
+  stop: z.array(z.string()).optional(),
+});
 export type OpenAIModelParams = z.infer<typeof openAIModelParamsSchema>;
 
-const anthropicModelParamsSchema = z
-  .strictObject({
-    max_tokens: z.number(),
-    temperature: z.number(),
-    top_p: z.number().optional(),
-    top_k: z.number().optional(),
-    stop_sequences: z.array(z.string()).optional(),
-    max_tokens_to_sample: z
-      .number()
-      .optional()
-      .describe("This is a legacy parameter that should not be used."),
-  })
-  .strip();
-
-const googleModelParamsSchema = z
-  .strictObject({
-    temperature: z.number().optional(),
-    maxOutputTokens: z.number().optional(),
-    topP: z.number().optional(),
-    topK: z.number().optional(),
-  })
-  .strip();
-
-const windowAIModelParamsSchema = z
-  .strictObject({
-    temperature: z.number().optional(),
-    topK: z.number().optional(),
-  })
-  .strip();
-
-const jsCompletionParamsSchema = z.strictObject({}).strip();
+const anthropicModelParamsSchema = z.object({
+  max_tokens: z.number(),
+  temperature: z.number(),
+  top_p: z.number().optional(),
+  top_k: z.number().optional(),
+  stop_sequences: z.array(z.string()).optional(),
+  max_tokens_to_sample: z
+    .number()
+    .optional()
+    .describe("This is a legacy parameter that should not be used."),
+});
+const googleModelParamsSchema = z.object({
+  temperature: z.number().optional(),
+  maxOutputTokens: z.number().optional(),
+  topP: z.number().optional(),
+  topK: z.number().optional(),
+});
+const windowAIModelParamsSchema = z.object({
+  temperature: z.number().optional(),
+  topK: z.number().optional(),
+});
+const jsCompletionParamsSchema = z.object({});
 export const modelParamsSchema = z.union([
   braintrustModelParamsSchema.merge(openAIModelParamsSchema).passthrough(),
   braintrustModelParamsSchema.merge(anthropicModelParamsSchema).passthrough(),
@@ -142,22 +123,20 @@ const anyModelParamsSchema = openAIModelParamsSchema
 
 export type AnyModelParam = z.infer<typeof anyModelParamsSchema>;
 
-export const promptOptionsSchema = z
-  .strictObject({
-    model: z.string().optional(),
-    params: modelParamsSchema.optional(),
-    position: z.string().optional(),
-  })
-  .strip();
+export const promptOptionsSchema = z.object({
+  model: z.string().optional(),
+  params: modelParamsSchema.optional(),
+  position: z.string().optional(),
+});
 
 export type PromptOptions = z.infer<typeof promptOptionsSchema>;
 
 export const promptDataSchema = z
-  .strictObject({
+  .object({
     prompt: promptBlockDataSchema.nullish(),
     options: promptOptionsSchema.nullish(),
     origin: z
-      .strictObject({
+      .object({
         prompt_id: z.string().optional(),
         project_id: z.string().optional(),
         prompt_version: z.string().optional(),
