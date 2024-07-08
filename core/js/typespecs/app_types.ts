@@ -554,12 +554,6 @@ export const projectScoreSchema = z
         destination: z.literal("expected").nullish(),
       })
       .nullish(),
-    position: z
-      .string()
-      .nullish()
-      .describe(
-        "An optional LexoRank-based string that sets the sort position for the score in the UI",
-      ),
   })
   .describe(
     "A project score is a user-configured score, which can be manually-labeled through the UI",
