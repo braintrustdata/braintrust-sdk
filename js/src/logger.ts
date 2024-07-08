@@ -1000,7 +1000,7 @@ function castLogger<ToB extends boolean, FromB extends boolean>(
   asyncFlush?: ToB,
 ): Logger<ToB> | undefined {
   if (logger === undefined) return undefined;
-  if (asyncFlush && !!asyncFlush !== !!logger.asyncFlush) {
+  if (asyncFlush !== undefined && !!asyncFlush !== !!logger.asyncFlush) {
     throw new Error(
       `Asserted asyncFlush setting ${asyncFlush} does not match stored logger's setting ${logger.asyncFlush}`,
     );
