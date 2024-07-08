@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
+extendZodWithOpenApi(z);
 
 export const literalSchema = z.union([
   z.string(),
@@ -13,7 +15,30 @@ export const jsonSchema: z.ZodType<Json> = z.lazy(() =>
   z.union([literalSchema, z.array(jsonSchema), z.record(jsonSchema)]),
 );
 
-export const datetimeStringSchema = z.string().datetime({ offset: true });
+// It is often hard for us to control every piece of code that serializes
+// datetimes to strings to ensure they are always strictly ISO8601-compliant.
+// Thus asserting `z.string().datetime()` will not often work. While
+// `z.string().datetime({ offset: true })` could work, it has the downside of
+// not actually sanitizing the string to a consistent format, which is a
+// nice-to-have.
+//
+// Thus we implement this more-lenient parsing and sanitization as a transform
+// and explicitly add the "date-time" format specifier for openAPI.
+export const datetimeStringSchema = z
+  .string()
+  .transform((x, ctx) => {
+    const d = new Date(x);
+    if (isNaN(d.getTime())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.invalid_string,
+        validation: "datetime",
+        message: "Invalid datetime",
+      });
+      return z.NEVER;
+    }
+    return d.toISOString();
+  })
+  .openapi({ format: "date-time" });
 
 export const objectTypes = z.enum([
   "project",

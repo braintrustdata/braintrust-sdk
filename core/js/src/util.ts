@@ -22,6 +22,45 @@ export function mergeDicts(
   return mergeInto;
 }
 
+// Recursively walks down `lhs` and `rhs`, invoking `fn` for each key in any
+// `rhs` subobject which is not in the corresponding `lhs` subobject.
+export function forEachMissingKey({
+  lhs,
+  rhs,
+  fn,
+}: {
+  lhs: unknown;
+  rhs: unknown;
+  fn: (args: {
+    lhs: Record<string, unknown>;
+    k: string;
+    v: unknown;
+    path: string[];
+  }) => void;
+}) {
+  function helper(lhs: unknown, rhs: unknown, path: string[]) {
+    if (lhs instanceof Object) {
+      if (!(rhs instanceof Object)) {
+        throw new Error(
+          `Type mismatch between lhs and rhs object at path ${JSON.stringify(
+            path,
+          )}`,
+        );
+      }
+      const lhsRec = lhs as Record<string, unknown>;
+      const rhsRec = rhs as Record<string, unknown>;
+      for (const [k, v] of Object.entries(rhsRec)) {
+        if (!(k in lhsRec)) {
+          fn({ lhs: lhsRec, k, v, path });
+        } else {
+          helper(lhsRec[k], rhsRec[k], [...path, k]);
+        }
+      }
+    }
+  }
+  helper(lhs, rhs, []);
+}
+
 export function capitalize(s: string, sep?: string) {
   const items = sep ? s.split(sep) : [s];
   return items

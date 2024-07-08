@@ -16,25 +16,28 @@ export const viewTypeEnum = z
 export type ViewType = z.infer<typeof viewTypeEnum>;
 
 export const viewDataSearchSchema = z
-  .strictObject({
+  .object({
     filter: z.array(customTypes.any).nullish(),
     tag: z.array(customTypes.any).nullish(),
     match: z.array(customTypes.any).nullish(),
     sort: z.array(customTypes.any).nullish(),
   })
+  .strip()
   .openapi("ViewDataSearch");
 export const viewDataSchema = z
-  .strictObject({
+  .object({
     search: viewDataSearchSchema.nullish(),
   })
+  .strip()
   .openapi("ViewData");
 export type ViewData = z.infer<typeof viewDataSchema>;
 
 export const viewOptionsSchema = z
-  .strictObject({
+  .object({
     columnVisibility: z.record(z.boolean()).nullish(),
     columnOrder: z.array(z.string()).nullish(),
     columnSizing: z.record(z.number()).nullish(),
   })
+  .strip()
   .openapi("ViewOptions");
 export type ViewOptions = z.infer<typeof viewOptionsSchema>;
