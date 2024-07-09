@@ -55,6 +55,7 @@ from .util import (
     GLOBAL_PROJECT,
     AugmentedHTTPError,
     LazyValue,
+    _urljoin,
     get_caller_location,
     response_raise_for_status,
 )
@@ -1399,10 +1400,6 @@ def _check_org_info(org_info, org_name):
         raise ValueError(
             f"Organization {org_name} not found. Must be one of {', '.join([x['name'] for x in org_info])}"
         )
-
-
-def _urljoin(*parts):
-    return "/".join([x.lstrip("/") for x in parts])
 
 
 def _populate_args(d, **kwargs):
