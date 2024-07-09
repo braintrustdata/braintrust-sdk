@@ -765,6 +765,7 @@ export const patchDatasetSchema = z
   .object({
     name: datasetSchema.shape.name.nullish(),
     description: datasetSchema.shape.description,
+    metadata: datasetSchema.shape.metadata,
   })
   .openapi("PatchDataset");
 
