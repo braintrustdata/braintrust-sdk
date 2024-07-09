@@ -876,18 +876,6 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     return SpanObjectTypeV2.PROJECT_LOGS;
   }
 
-  private triggerWaitUntilFlush() {
-    // If we're running in Vercel, waitUntil() will ensure that the logs flush
-    // before the function dies (but perhaps after it returns). This makes it safe
-    // to use `asyncFlush: true` on Vercel.
-    //
-    // If the syncFlush flag is true, however, then the user has asked us _never_ to
-    // flush in the background, so only issue the waitUntil() flush if it's not set.
-    if (!this.state.bgLogger().syncFlush) {
-      return waitUntil(this.state.bgLogger().flush());
-    }
-  }
-
   /**
    * Log a single event. The event will be batched and uploaded behind the scenes if `logOptions.asyncFlush` is true.
    *
@@ -918,7 +906,6 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     const ret = span.id;
     type Ret = PromiseUnless<IsAsyncFlush, string>;
     if (this.asyncFlush === true) {
-      this.triggerWaitUntilFlush();
       return ret as Ret;
     } else {
       return (async () => {
@@ -952,7 +939,6 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     type Ret = PromiseUnless<IsAsyncFlush, R>;
 
     if (this.asyncFlush) {
-      this.triggerWaitUntilFlush();
       return ret as Ret;
     } else {
       return (async () => {
@@ -1422,6 +1408,8 @@ class BackgroundLogger {
           this.activeFlushResolved = true;
         }
       })();
+
+      waitUntil(this.activeFlush);
     }
   }
 

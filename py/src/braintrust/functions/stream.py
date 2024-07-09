@@ -86,9 +86,9 @@ class BraintrustStream:
 
     def final_value(self):
         """
-        Get the final value of the stream. This will return the final value of the stream
-        when it is fully consumed. Multiple calls to `final_value()` will return the same value,
-        so it is safe to call this multiple times.
+        Get the final value of the stream. The final value is the concatenation of all
+        the chunks in the stream, deserialized into a string or object, depending on
+        the value's type.
 
         This function consumes the stream, so if you need to use the stream multiple
         times, you should call `copy()` first.

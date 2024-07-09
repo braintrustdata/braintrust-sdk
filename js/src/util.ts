@@ -68,5 +68,6 @@ export function _urljoin(...parts: string[]): string {
     .map((x, i) =>
       x.replace(/^\//, "").replace(i < parts.length - 1 ? /\/$/ : "", ""),
     )
+    .filter((x) => x.trim() !== "")
     .join("/");
 }

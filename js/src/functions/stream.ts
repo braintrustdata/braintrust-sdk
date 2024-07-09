@@ -5,20 +5,24 @@ import {
   ParsedEvent,
   ReconnectInterval,
 } from "eventsource-parser";
+import { z } from "zod";
+
+export const braintrustStreamChunkSchema = z.union([
+  z.object({
+    type: z.literal("text_delta"),
+    data: z.string(),
+  }),
+  z.object({
+    type: z.literal("json_delta"),
+    data: z.string(),
+  }),
+]);
 
 /**
  * A chunk of data from a Braintrust stream. Each chunk type matches
  * an SSE event type.
  */
-export type BraintrustStreamChunk =
-  | {
-      type: "text_delta";
-      data: string;
-    }
-  | {
-      type: "json_delta";
-      data: string;
-    };
+export type BraintrustStreamChunk = z.infer<typeof braintrustStreamChunkSchema>;
 
 /**
  * A Braintrust stream. This is a wrapper around a ReadableStream of `BraintrustStreamChunk`,
@@ -65,10 +69,13 @@ export class BraintrustStream {
   }
 
   /**
-   * Get the final value of the stream. This will return a promise that resolves
-   * when the stream is closed, and contains the final value of the stream. Multiple
-   * calls to `finalValue()` will return the same promise, so it is safe to call
-   * this multiple times.
+   * Get the final value of the stream. The final value is the concatenation of all
+   * the chunks in the stream, deserialized into a string or JSON object, depending on
+   * the value's type.
+   *
+   * This function returns a promise that resolves when the stream is closed, and
+   * contains the final value. Multiple calls to `finalValue()` will return the same
+   * promise, so it is safe to call this multiple times.
    *
    * This function consumes the stream, so if you need to use the stream multiple
    * times, you should call `copy()` first.
@@ -158,9 +165,17 @@ export function createFinalValuePassThroughStream<
     transform(chunk, controller) {
       if (typeof chunk === "string") {
         textChunks.push(chunk);
+        controller.enqueue({
+          type: "text_delta",
+          data: chunk,
+        });
       } else if (chunk instanceof Uint8Array) {
         textChunks.push(decoder.decode(chunk));
-      } else {
+        controller.enqueue({
+          type: "text_delta",
+          data: decoder.decode(chunk),
+        });
+      } else if (braintrustStreamChunkSchema.safeParse(chunk).success) {
         const chunkType = chunk.type;
         switch (chunkType) {
           case "text_delta":
@@ -174,6 +189,8 @@ export function createFinalValuePassThroughStream<
             throw new Error(`Unknown chunk type ${_type}`);
         }
         controller.enqueue(chunk);
+      } else {
+        throw new Error(`Unknown chunk type ${chunk}`);
       }
     },
     flush(controller) {
