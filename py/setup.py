@@ -19,6 +19,7 @@ install_requires = [
     "tqdm",
     "exceptiongroup==1.2.0",
     "python-dotenv",
+    "sseclient-py",
 ]
 
 extras_require = {

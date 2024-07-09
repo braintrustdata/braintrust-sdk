@@ -1,12 +1,12 @@
 import { CodeBundle, functionDataSchema } from "@braintrust/core/typespecs";
-import { EvaluatorState, FileHandle } from "./cli";
-import { scorerName, warning } from "./framework";
-import { _internalGetGlobalState, Experiment, newId } from "./logger";
+import { EvaluatorState, FileHandle } from "../cli";
+import { scorerName, warning } from "../framework";
+import { _internalGetGlobalState, Experiment, newId } from "../logger";
 import * as esbuild from "esbuild";
 import fs from "fs";
 import path from "path";
 import { createGzip } from "zlib";
-import { isEmpty, LazyValue } from "./util";
+import { isEmpty, LazyValue } from "../util";
 import { z } from "zod";
 
 export type EvaluatorMap = Record<

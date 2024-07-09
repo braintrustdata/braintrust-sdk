@@ -40,7 +40,7 @@ import {
 import { configureNode } from "./node";
 import { isEmpty } from "./util";
 import { loadEnvConfig } from "@next/env";
-import { uploadEvalBundles } from "./functions";
+import { uploadEvalBundles } from "./functions/upload";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript

@@ -1,27 +1,38 @@
 {
   "name": "braintrust",
-  "version": "0.0.63",
+  "version": "0.0.141",
   "description": "SDK for integrating Braintrust",
   "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
   "browser": {
     "./dist/index.js": "./dist/browser.js",
-    "./dist/index.d.ts": "./dist/browser.d.ts"
+    "./dist/index.d.ts": "./dist/browser.d.ts",
+    "./dist/index.mjs": "./dist/browser.mjs",
+    "./dist/index.d.mts": "./dist/browser.d.mts"
   },
   "bin": {
     "braintrust": "./dist/cli.js"
   },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "module": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./ai-sdk": {
+      "types": "./ai-sdk/dist/index.d.ts",
+      "import": "./ai-sdk/dist/index.mjs",
+      "module": "./ai-sdk/dist/index.mjs",
+      "require": "./ai-sdk/dist/index.js"
+    }
+  },
   "scripts": {
-    "build": "run-p build:*",
-    "build:node": "esbuild --platform=node --bundle src/index.ts --outfile=dist/index.js",
-    "build:cli": "esbuild --platform=node --bundle src/cli.ts --outfile=dist/cli.js --external:esbuild",
-    "build:browser": "esbuild --bundle src/browser.ts --outfile=dist/browser.js --format=esm",
-    "build:declarations": "tsc --declaration  --emitDeclarationOnly --outDir dist",
+    "build": "tsup",
+    "watch": "tsup --watch",
     "clean": "rm -r dist/*",
-    "watch": "run-p watch:*",
-    "watch:node": "esbuild --platform=node --bundle src/index.ts --outfile=dist/index.js --watch=forever",
-    "watch:cli": "esbuild --platform=node --bundle src/cli.ts --outfile=dist/cli.js --watch=forever --external:esbuild",
-    "watch:browser": "esbuild --bundle src/browser.ts --outfile=dist/browser.js --watch=forever --format=esm",
-    "watch:declarations": "tsc --declaration  --emitDeclarationOnly --outDir dist --watch",
     "docs": "npx typedoc --options typedoc.json src/index.ts",
     "test": "vitest run",
     "prepublishOnly": "../../scripts/node_prepublish_sdk.py",
@@ -44,6 +55,7 @@
     "autoevals": "^0.0.69",
     "npm-run-all": "^4.1.5",
     "ts-jest": "^29.1.4",
+    "tsup": "^8.0.1",
     "typedoc": "^0.25.4",
     "typedoc-plugin-markdown": "^3.17.1",
     "typescript": "^5.3.3",
@@ -51,14 +63,17 @@
     "vitest": "^1.6.0"
   },
   "dependencies": {
-    "@ai-sdk/provider": "^0.0.6",
+    "@ai-sdk/provider": "^0.0.11",
     "@braintrust/core": "workspace:*",
     "@next/env": "^14.2.3",
+    "@vercel/functions": "^1.0.2",
+    "ai": "^3.2.16",
     "argparse": "^2.0.1",
     "chalk": "^4.1.2",
     "cli-progress": "^3.12.0",
     "dotenv": "^16.4.5",
     "esbuild": "^0.18.20",
+    "eventsource-parser": "^1.1.2",
     "graceful-fs": "^4.2.11",
     "minimatch": "^9.0.3",
     "mustache": "^4.2.0",
@@ -66,5 +81,8 @@
     "simple-git": "^3.21.0",
     "uuid": "^9.0.1",
     "zod": "^3.22.4"
+  },
+  "peerDependencies": {
+    "zod": "^3.0.0"
   }
 }

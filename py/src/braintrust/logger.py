@@ -48,11 +48,14 @@ from braintrust_core.util import (
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from braintrust.functions.stream import BraintrustStream
+
 from .gitutil import get_past_n_ancestors, get_repo_info
 from .util import (
     GLOBAL_PROJECT,
     AugmentedHTTPError,
     LazyValue,
+    _urljoin,
     get_caller_location,
     response_raise_for_status,
 )
@@ -61,7 +64,13 @@ Metadata = Dict[str, Any]
 DATA_API_VERSION = 2
 
 
-class Span(ABC):
+class Exportable(ABC):
+    @abstractmethod
+    def export(self) -> str:
+        """Return a serialized representation of the object that can be used to start subspans in other places. See `Span.start_span` for more details."""
+
+
+class Span(Exportable, ABC):
     """
     A Span encapsulates logged data and metrics for a unit of work. This interface is shared by all span implementations.
 
@@ -122,10 +131,6 @@ class Span(ABC):
         :param end_time: Optional end time of the span, as a timestamp in seconds.
         :returns: The end time logged to the span metrics.
         """
-
-    @abstractmethod
-    def export(self) -> str:
-        """Return a serialized representation of the span that can be used to start subspans in other places. See `Span.start_span` for more details."""
 
     @abstractmethod
     def flush(self):
@@ -240,11 +245,13 @@ class BraintrustState:
         self.org_id = None
         self.org_name = None
         self.api_url = None
+        self.proxy_url = None
         self.logged_in = False
         self.git_metadata_settings = None
 
         self._app_conn = None
         self._api_conn = None
+        self._proxy_conn = None
         self._user_info = None
 
     def app_conn(self):
@@ -260,6 +267,13 @@ class BraintrustState:
                 raise RuntimeError("Must initialize api_url before requesting api_conn")
             self._api_conn = HTTPConnection(self.api_url, adapter=_http_adapter)
         return self._api_conn
+
+    def proxy_conn(self):
+        if not self._proxy_conn:
+            if not self.proxy_url:
+                raise RuntimeError("Must initialize proxy_url before requesting proxy_conn")
+            self._proxy_conn = HTTPConnection(self.proxy_url, adapter=_http_adapter)
+        return self._proxy_conn
 
     def user_info(self):
         if not self._user_info:
@@ -391,6 +405,10 @@ def api_conn():
 
 def app_conn():
     return _state.app_conn()
+
+
+def proxy_conn():
+    return _state.proxy_conn()
 
 
 def user_info():
@@ -1137,6 +1155,7 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
 
         # Set the same token in the API
         _state.app_conn().set_token(conn.token)
+        _state.proxy_conn().set_token(conn.token)
         _state.login_token = conn.token
         _state.logged_in = True
 
@@ -1373,6 +1392,7 @@ def _check_org_info(org_info, org_name):
             _state.org_id = orgs["id"]
             _state.org_name = orgs["name"]
             _state.api_url = os.environ.get("BRAINTRUST_API_URL", orgs["api_url"])
+            _state.proxy_url = os.environ.get("BRAINTRUST_PROXY_URL", orgs["proxy_url"])
             _state.git_metadata_settings = GitMetadataSettings(**(orgs.get("git_metadata") or {}))
             break
 
@@ -1380,10 +1400,6 @@ def _check_org_info(org_info, org_name):
         raise ValueError(
             f"Organization {org_name} not found. Must be one of {', '.join([x['name'] for x in org_info])}"
         )
-
-
-def _urljoin(*parts):
-    return "/".join([x.lstrip("/") for x in parts])
 
 
 def _populate_args(d, **kwargs):
@@ -1757,7 +1773,7 @@ class ExperimentDatasetIterator:
             }
 
 
-class Experiment(ObjectFetcher):
+class Experiment(ObjectFetcher, Exportable):
     """
     An experiment is a collection of logged events, such as model inputs and outputs, which represent
     a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -2187,12 +2203,7 @@ class SpanImpl(Span):
         return self.log_internal(event=event, internal_data=None)
 
     def log_internal(self, event=None, internal_data=None):
-        # There should be no overlap between the dictionaries being merged,
-        # except for `sanitized` and `internal_data`, where the former overrides
-        # the latter.
-        sanitized = _validate_and_sanitize_experiment_log_partial_args(event or {})
-        sanitized_and_internal_data = _strip_nones(internal_data or {}, deep=True)
-        merge_dicts(sanitized_and_internal_data, _strip_nones(sanitized, deep=False))
+        serializable_partial_record, lazy_partial_record = split_logging_data(event, internal_data)
 
         # We both check for serializability and round-trip `partial_record`
         # through JSON in order to create a "deep copy". This has the benefit of
@@ -2204,20 +2215,22 @@ class SpanImpl(Span):
             span_id=self.span_id,
             root_span_id=self.root_span_id,
             span_parents=self.span_parents,
-            **sanitized_and_internal_data,
+            **serializable_partial_record,
             **{IS_MERGE_FIELD: self._is_merge},
         )
-        serialized_partial_record = _check_json_serializable(partial_record)
-        partial_record = json.loads(serialized_partial_record)
-        if "metrics" in partial_record and "end" in partial_record["metrics"]:
-            self._logged_end_time = partial_record["metrics"]["end"]
 
-        if len(partial_record.get("tags", [])) > 0 and self.span_parents:
+        serialized_partial_record = _check_json_serializable(partial_record)
+        serializable_partial_record = json.loads(serialized_partial_record)
+        if "metrics" in serializable_partial_record and "end" in serializable_partial_record["metrics"]:
+            self._logged_end_time = serializable_partial_record["metrics"]["end"]
+
+        if len(serializable_partial_record.get("tags", [])) > 0 and self.span_parents:
             raise Exception("Tags can only be logged to the root span")
 
         def compute_record():
             return dict(
-                **partial_record,
+                **serializable_partial_record,
+                **{k: v.get() for k, v in lazy_partial_record.items()},
                 **SpanComponentsV2(
                     object_type=self.parent_object_type,
                     object_id=self.parent_object_id.get(),
@@ -2315,6 +2328,30 @@ def _strip_nones(d, deep: bool):
     if not isinstance(d, dict):
         return d
     return {k: (_strip_nones(v, deep) if deep else v) for (k, v) in d.items() if v is not None}
+
+
+def split_logging_data(event, internal_data):
+    # There should be no overlap between the dictionaries being merged,
+    # except for `sanitized` and `internal_data`, where the former overrides
+    # the latter.
+    sanitized = _validate_and_sanitize_experiment_log_partial_args(event or {})
+    sanitized_and_internal_data = _strip_nones(internal_data or {}, deep=True)
+    merge_dicts(sanitized_and_internal_data, _strip_nones(sanitized, deep=False))
+
+    serializable_partial_record = {}
+    lazy_partial_record = {}
+    for k, v in sanitized_and_internal_data.items():
+        if isinstance(v, BraintrustStream):
+            # Python has weird semantics with loop variables and lambda functions, so we
+            # capture `v` by plugging it through a closure that itself returns the LazyValue
+            def make_final_value_callback(v):
+                return LazyValue(lambda: v.copy().final_value(), use_mutex=False)
+
+            lazy_partial_record[k] = make_final_value_callback(v)
+        else:
+            serializable_partial_record[k] = v
+
+    return serializable_partial_record, lazy_partial_record
 
 
 class Dataset(ObjectFetcher):
@@ -2658,7 +2695,7 @@ class Project:
         return self._name
 
 
-class Logger:
+class Logger(Exportable):
     def __init__(
         self,
         lazy_metadata: LazyValue[OrgProjectMetadata],

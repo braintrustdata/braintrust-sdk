@@ -53,6 +53,8 @@ import { configureNode } from "./node";
 configureNode();
 
 export * from "./logger";
+export * from "./functions/stream";
+export * from "./functions/invoke";
 export {
   BaseExperiment,
   Evaluator,
@@ -67,7 +69,7 @@ export {
 export { LazyValue } from "./util";
 export * from "./wrappers/oai";
 export * from "./wrappers/ai-sdk";
-export {
+export type {
   ParentExperimentIds,
   ParentProjectLogIds,
   IdField,
