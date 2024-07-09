@@ -54,6 +54,7 @@ import {
   getCurrentUnixTimestamp,
   isEmpty,
   LazyValue,
+  _urljoin,
 } from "./util";
 import Mustache from "mustache";
 import { z } from "zod";
@@ -2370,7 +2371,7 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
   callback: (span: Span) => R,
   args?: StartSpanArgs & SetCurrentArg & AsyncFlushArg<IsAsyncFlush>,
 ): PromiseUnless<IsAsyncFlush, R> {
-  const { span, isLogger, isAsyncFlush } = startSpanAndIsLogger(args);
+  const { span, isSyncFlushLogger } = startSpanAndIsLogger(args);
 
   const ret = runFinally(
     () => {
@@ -2389,7 +2390,7 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
   } else {
     return (async () => {
       const awaitedRet = await ret;
-      if (isLogger && !isAsyncFlush) {
+      if (isSyncFlushLogger) {
         await span.flush();
       }
       return awaitedRet;
@@ -2525,7 +2526,7 @@ export function setFetch(fetch: typeof globalThis.fetch): void {
 
 function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
-): { span: Span; isLogger: boolean; isAsyncFlush: boolean | undefined } {
+): { span: Span; isSyncFlushLogger: boolean } {
   const state = args?.state ?? _globalState;
   if (args?.parent) {
     const components = SpanComponentsV2.fromStr(args?.parent);
@@ -2547,10 +2548,11 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
     });
     return {
       span,
-      isLogger: components.objectType === SpanObjectTypeV2.PROJECT_LOGS,
-      // We don't actually know if it's async flush in this case, so just propagate
-      // along whatever we get from the arguments
-      isAsyncFlush: args?.asyncFlush,
+      isSyncFlushLogger:
+        components.objectType === SpanObjectTypeV2.PROJECT_LOGS &&
+        // Since there's no parent logger here, we're free to choose the async flush
+        // behavior, and therefore propagate along whatever we get from the arguments
+        !args?.asyncFlush,
     };
   } else {
     const parentObject = getSpanParentObject<IsAsyncFlush>({
@@ -2559,8 +2561,8 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
     const span = parentObject.startSpan(args);
     return {
       span,
-      isLogger: parentObject.kind === "logger",
-      isAsyncFlush: parentObject.kind === "logger" && parentObject.asyncFlush,
+      isSyncFlushLogger:
+        parentObject.kind === "logger" && !parentObject.asyncFlush,
     };
   }
 }
@@ -2602,14 +2604,6 @@ function _check_org_info(
         .join(", ")}`,
     );
   }
-}
-
-function _urljoin(...parts: string[]): string {
-  return parts
-    .map((x, i) =>
-      x.replace(/^\//, "").replace(i < parts.length - 1 ? /\/$/ : "", ""),
-    )
-    .join("/");
 }
 
 function validateTags(tags: readonly string[]) {

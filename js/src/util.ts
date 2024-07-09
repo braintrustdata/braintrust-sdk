@@ -62,3 +62,11 @@ export class LazyValue<T> {
     return this.value.hasComputed;
   }
 }
+
+export function _urljoin(...parts: string[]): string {
+  return parts
+    .map((x, i) =>
+      x.replace(/^\//, "").replace(i < parts.length - 1 ? /\/$/ : "", ""),
+    )
+    .join("/");
+}

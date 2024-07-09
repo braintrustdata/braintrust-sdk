@@ -73,7 +73,7 @@ export class BraintrustStream {
    * This function consumes the stream, so if you need to use the stream multiple
    * times, you should call `copy()` first.
    *
-   * @returns A promise that resolves with the final value of the stream.
+   * @returns A promise that resolves with the final value of the stream or `undefined` if the stream is empty.
    */
   public finalValue(): Promise<unknown> {
     if (this.memoizedFinalValue) {
