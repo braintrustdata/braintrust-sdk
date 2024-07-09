@@ -2206,12 +2206,7 @@ class SpanImpl(Span):
         return self.log_internal(event=event, internal_data=None)
 
     def log_internal(self, event=None, internal_data=None):
-        # There should be no overlap between the dictionaries being merged,
-        # except for `sanitized` and `internal_data`, where the former overrides
-        # the latter.
-        sanitized = _validate_and_sanitize_experiment_log_partial_args(event or {})
-        sanitized_and_internal_data = _strip_nones(internal_data or {}, deep=True)
-        merge_dicts(sanitized_and_internal_data, _strip_nones(sanitized, deep=False))
+        serializable_partial_record, lazy_partial_record = split_logging_data(event, internal_data)
 
         # We both check for serializability and round-trip `partial_record`
         # through JSON in order to create a "deep copy". This has the benefit of
@@ -2223,24 +2218,11 @@ class SpanImpl(Span):
             span_id=self.span_id,
             root_span_id=self.root_span_id,
             span_parents=self.span_parents,
-            **sanitized_and_internal_data,
+            **serializable_partial_record,
             **{IS_MERGE_FIELD: self._is_merge},
         )
 
-        serializable_partial_record = {}
-        lazy_partial_record = {}
-        for k, v in partial_record.items():
-            if isinstance(v, BraintrustStream):
-                # Python has weird semantics with loop variables and lambda functions, so we
-                # capture `v` by plugging it through a closure that itself returns the LazyValue
-                def make_final_value_callback(v):
-                    return LazyValue(lambda: v.copy().final_value(), use_mutex=False)
-
-                lazy_partial_record[k] = make_final_value_callback(v)
-            else:
-                serializable_partial_record[k] = v
-
-        serialized_partial_record = _check_json_serializable(serializable_partial_record)
+        serialized_partial_record = _check_json_serializable(partial_record)
         serializable_partial_record = json.loads(serialized_partial_record)
         if "metrics" in serializable_partial_record and "end" in serializable_partial_record["metrics"]:
             self._logged_end_time = serializable_partial_record["metrics"]["end"]
@@ -2349,6 +2331,30 @@ def _strip_nones(d, deep: bool):
     if not isinstance(d, dict):
         return d
     return {k: (_strip_nones(v, deep) if deep else v) for (k, v) in d.items() if v is not None}
+
+
+def split_logging_data(event, internal_data):
+    # There should be no overlap between the dictionaries being merged,
+    # except for `sanitized` and `internal_data`, where the former overrides
+    # the latter.
+    sanitized = _validate_and_sanitize_experiment_log_partial_args(event or {})
+    sanitized_and_internal_data = _strip_nones(internal_data or {}, deep=True)
+    merge_dicts(sanitized_and_internal_data, _strip_nones(sanitized, deep=False))
+
+    serializable_partial_record = {}
+    lazy_partial_record = {}
+    for k, v in sanitized_and_internal_data.items():
+        if isinstance(v, BraintrustStream):
+            # Python has weird semantics with loop variables and lambda functions, so we
+            # capture `v` by plugging it through a closure that itself returns the LazyValue
+            def make_final_value_callback(v):
+                return LazyValue(lambda: v.copy().final_value(), use_mutex=False)
+
+            lazy_partial_record[k] = make_final_value_callback(v)
+        else:
+            serializable_partial_record[k] = v
+
+    return serializable_partial_record, lazy_partial_record
 
 
 class Dataset(ObjectFetcher):

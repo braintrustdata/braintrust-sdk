@@ -3266,44 +3266,10 @@ export class SpanImpl implements Span {
     // set of fields which we want to log in just one of the span rows.
     internalData?: Partial<ExperimentEvent>;
   }): void {
-    // There should be no overlap between the dictionaries being merged,
-    // except for `sanitized` and `internalData`, where the former overrides
-    // the latter.
-    const sanitized = validateAndSanitizeExperimentLogPartialArgs(event ?? {});
-    const sanitizedAndInternalData: Partial<typeof internalData> &
-      Partial<typeof sanitized> = {};
-    mergeDicts(sanitizedAndInternalData, internalData || {});
-    mergeDicts(sanitizedAndInternalData, sanitized);
-
-    const serializableInternalData: typeof sanitizedAndInternalData = {};
-    const lazyInternalData: Record<string, LazyValue<unknown>> = {};
-
-    for (const [key, value] of Object.entries(sanitizedAndInternalData) as [
-      keyof typeof sanitizedAndInternalData,
-      any,
-    ][]) {
-      if (value instanceof BraintrustStream) {
-        const streamCopy = value.copy();
-        lazyInternalData[key] = new LazyValue(async () => {
-          return await new Promise((resolve) => {
-            streamCopy
-              .toReadableStream()
-              .pipeThrough(createFinalValuePassThroughStream(resolve))
-              .pipeTo(devNullWritableStream());
-          });
-        });
-      } else if (value instanceof ReadableStream) {
-        lazyInternalData[key] = new LazyValue(async () => {
-          return await new Promise((resolve) => {
-            value
-              .pipeThrough(createFinalValuePassThroughStream(resolve))
-              .pipeTo(devNullWritableStream());
-          });
-        });
-      } else {
-        serializableInternalData[key] = value;
-      }
-    }
+    const [serializableInternalData, lazyInternalData] = splitLoggingData({
+      event,
+      internalData,
+    });
 
     // We both check for serializability and round-trip `partialRecord` through
     // JSON in order to create a "deep copy". This has the benefit of cutting
@@ -3443,6 +3409,58 @@ export class SpanImpl implements Span {
   public close(args?: EndSpanArgs): number {
     return this.end(args);
   }
+}
+
+function splitLoggingData({
+  event,
+  internalData,
+}: {
+  event?: ExperimentLogPartialArgs;
+  // `internalData` contains fields that are not part of the "user-sanitized"
+  // set of fields which we want to log in just one of the span rows.
+  internalData?: Partial<ExperimentEvent>;
+}): [Partial<typeof internalData>, Record<string, LazyValue<unknown>>] {
+  // There should be no overlap between the dictionaries being merged,
+  // except for `sanitized` and `internalData`, where the former overrides
+  // the latter.
+  const sanitized = validateAndSanitizeExperimentLogPartialArgs(event ?? {});
+
+  const sanitizedAndInternalData: Partial<typeof internalData> &
+    Partial<typeof sanitized> = {};
+  mergeDicts(sanitizedAndInternalData, internalData || {});
+  mergeDicts(sanitizedAndInternalData, sanitized);
+
+  const serializableInternalData: typeof sanitizedAndInternalData = {};
+  const lazyInternalData: Record<string, LazyValue<unknown>> = {};
+
+  for (const [key, value] of Object.entries(sanitizedAndInternalData) as [
+    keyof typeof sanitizedAndInternalData,
+    any,
+  ][]) {
+    if (value instanceof BraintrustStream) {
+      const streamCopy = value.copy();
+      lazyInternalData[key] = new LazyValue(async () => {
+        return await new Promise((resolve) => {
+          streamCopy
+            .toReadableStream()
+            .pipeThrough(createFinalValuePassThroughStream(resolve))
+            .pipeTo(devNullWritableStream());
+        });
+      });
+    } else if (value instanceof ReadableStream) {
+      lazyInternalData[key] = new LazyValue(async () => {
+        return await new Promise((resolve) => {
+          value
+            .pipeThrough(createFinalValuePassThroughStream(resolve))
+            .pipeTo(devNullWritableStream());
+        });
+      });
+    } else {
+      serializableInternalData[key] = value;
+    }
+  }
+
+  return [serializableInternalData, lazyInternalData];
 }
 
 /**
