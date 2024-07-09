@@ -30,9 +30,9 @@ export function parseNoStrip<T extends z.ZodType>(schema: T, input: unknown) {
     rhs: input,
     fn: ({ k, path }) => {
       throw new Error(
-        `Key ${JSON.stringify(k)} at path ${JSON.stringify(
+        `Extraneous key ${JSON.stringify(k)} at path ${JSON.stringify(
           path,
-        )} was stripped from input`,
+        )} in input`,
       );
     },
   });
