@@ -358,14 +358,17 @@ export class BraintrustState {
     };
   }
 
-  static deserialize(serialized: unknown): BraintrustState {
+  static deserialize(
+    serialized: unknown,
+    opts?: BackgroundLoggerOpts,
+  ): BraintrustState {
     const serializedParsed = loginSchema.safeParse(serialized);
     if (!serializedParsed.success) {
       throw new Error(
         `Cannot deserialize BraintrustState: ${serializedParsed.error.errors}`,
       );
     }
-    const state = new BraintrustState({});
+    const state = new BraintrustState({ ...opts });
     for (const key of Object.keys(loginSchema.shape)) {
       (state as any)[key] = (serializedParsed.data as any)[key];
     }
