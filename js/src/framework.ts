@@ -260,6 +260,29 @@ function initExperiment<IsOpen extends boolean = false>(
   });
 }
 
+export async function callEvaluatorData<
+  Input,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+>(
+  data: EvalData<Input, Expected, Metadata>,
+): Promise<{
+  data: EvalData<Input, Expected, Metadata>;
+  baseExperiment: string | undefined;
+}> {
+  let dataResult = typeof data === "function" ? data() : data;
+
+  let baseExperiment: string | undefined = undefined;
+  if ("_type" in dataResult && dataResult._type === "BaseExperiment") {
+    baseExperiment = dataResult.name;
+  }
+
+  return {
+    data: dataResult instanceof Promise ? await dataResult : dataResult,
+    baseExperiment,
+  };
+}
+
 export type SpanContext = {
   currentSpan: typeof currentSpan;
   NOOP_SPAN: typeof NOOP_SPAN;
@@ -337,13 +360,7 @@ export async function Eval<
 
   const resolvedReporter = options.reporter || defaultReporter;
   try {
-    let baseExperiment: string | undefined = undefined;
-    if (
-      "_type" in evaluator.data &&
-      evaluator.data._type === "BaseExperiment"
-    ) {
-      baseExperiment = evaluator.data.name;
-    }
+    const { data, baseExperiment } = await callEvaluatorData(evaluator.data);
     const experiment = initExperiment(evaluator.state, {
       ...(evaluator.projectId
         ? { projectId: evaluator.projectId }
@@ -364,6 +381,7 @@ export async function Eval<
         evalName,
         projectName: name,
         ...evaluator,
+        data,
       };
       const ret = await runEvaluator(experiment, evalDef, progressReporter, []);
       progressReporter.stop();
