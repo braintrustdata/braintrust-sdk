@@ -2357,7 +2357,10 @@ export function getSpanParentObject<IsAsyncFlush extends boolean>(
  */
 export function traced<IsAsyncFlush extends boolean = false, R = void>(
   callback: (span: Span) => R,
-  args?: StartSpanArgs & SetCurrentArg & AsyncFlushArg<IsAsyncFlush>,
+  args?: StartSpanArgs &
+    SetCurrentArg &
+    AsyncFlushArg<IsAsyncFlush> &
+    OptionalStateArg,
 ): PromiseUnless<IsAsyncFlush, R> {
   const { span, isSyncFlushLogger } = startSpanAndIsLogger(args);
 
