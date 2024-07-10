@@ -12,6 +12,7 @@ from braintrust_core.util import eprint
 
 from .. import login
 from ..framework import (
+    BaseExperiment,
     Evaluator,
     EvaluatorInstance,
     ReporterDef,
