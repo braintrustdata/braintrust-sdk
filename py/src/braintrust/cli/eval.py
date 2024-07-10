@@ -124,12 +124,16 @@ def update_evaluators(eval_state: EvaluatorState, handles, terminate_on_failure)
 async def run_evaluator_task(evaluator, position, opts: EvaluatorOpts):
     experiment = None
     if not opts.no_send_logs:
+        base_experiment_name = None
+        if isinstance(evaluator.data, BaseExperiment):
+            base_experiment_name = evaluator.data.name
         experiment = init_experiment(
             evaluator.project_name,
             evaluator.experiment_name,
             metadata=evaluator.metadata,
             is_public=evaluator.is_public,
             update=evaluator.update,
+            base_experiment=base_experiment_name,
         )
 
     try:

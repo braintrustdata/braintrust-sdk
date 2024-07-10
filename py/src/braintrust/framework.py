@@ -501,12 +501,8 @@ def Eval(
             loop = None
 
         base_experiment_name = None
-
-        data_iterator = evaluator.data
-        if inspect.isclass(data_iterator):
-            data_iterator = data_iterator()
-        if isinstance(data_iterator, BaseExperiment):
-            base_experiment_name = data_iterator.name
+        if isinstance(evaluator.data, BaseExperiment):
+            base_experiment_name = evaluator.data.name
 
         async def run_to_completion():
             experiment = init_experiment(
