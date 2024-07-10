@@ -241,6 +241,8 @@ const loginSchema = z.strictObject({
 
 export type SerializedBraintrustState = z.infer<typeof loginSchema>;
 
+let stateNonce = 0;
+
 export class BraintrustState {
   public id: string;
   public currentExperiment: Experiment | undefined;
@@ -270,7 +272,7 @@ export class BraintrustState {
   private _proxyConn: HTTPConnection | null = null;
 
   constructor(private loginParams: LoginOptions) {
-    this.id = new Date().toLocaleString(); // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
+    this.id = `${new Date().toLocaleString()}-${stateNonce++}`; // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
     this.currentExperiment = undefined;
     this.currentLogger = undefined;
     this.currentSpan = iso.newAsyncLocalStorage();
@@ -283,7 +285,10 @@ export class BraintrustState {
       await this.login({});
       return this.apiConn();
     };
-    this._bgLogger = new BackgroundLogger(new LazyValue(defaultGetLogConn));
+    this._bgLogger = new BackgroundLogger(
+      new LazyValue(defaultGetLogConn),
+      loginParams,
+    );
 
     this.resetLoginInfo();
   }
@@ -1047,6 +1052,10 @@ function now() {
   return new Date().getTime();
 }
 
+export interface BackgroundLoggerOpts {
+  noExitFlush?: boolean;
+}
+
 // We should only have one instance of this object per state object in
 // 'BraintrustState._bgLogger'. Be careful about spawning multiple
 // instances of this class, because concurrent BackgroundLoggers will not log to
@@ -1073,7 +1082,8 @@ class BackgroundLogger {
     lastLoggedTimestamp: 0,
   };
 
-  constructor(apiConn: LazyValue<HTTPConnection>) {
+  constructor(apiConn: LazyValue<HTTPConnection>, opts?: BackgroundLoggerOpts) {
+    opts = opts ?? {};
     this.apiConn = apiConn;
 
     const syncFlushEnv = Number(iso.getEnv("BRAINTRUST_SYNC_FLUSH"));
@@ -1129,9 +1139,11 @@ class BackgroundLogger {
     // Note that this will not run for explicit termination events, such as
     // calls to `process.exit()` or uncaught exceptions. Thus it is a
     // "best-effort" flush.
-    iso.processOn("beforeExit", async () => {
-      await this.flush();
-    });
+    if (!opts.noExitFlush) {
+      iso.processOn("beforeExit", async () => {
+        await this.flush();
+      });
+    }
   }
 
   log(items: LazyValue<BackgroundLogEvent>[]) {
@@ -1259,6 +1271,7 @@ class BackgroundLogger {
         payload: dataStr,
       });
     }
+
     for (let i = 0; i < this.numTries; i++) {
       const startTime = now();
       let error: unknown = undefined;
@@ -2135,6 +2148,10 @@ export interface LoginOptions {
    * A custom fetch implementation to use.
    */
   fetch?: typeof globalThis.fetch;
+  /**
+   * If true, will not flush the logger when the process exits.
+   */
+  noExitFlush?: boolean;
 }
 
 export type FullLoginOptions = LoginOptions & {
