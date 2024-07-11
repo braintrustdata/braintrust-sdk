@@ -2152,7 +2152,8 @@ export interface LoginOptions {
    */
   fetch?: typeof globalThis.fetch;
   /**
-   * If true, will not flush the logger when the process exits.
+   * By default, the SDK installs an event handler that flushes pending writes on the `beforeExit` event.
+   * If true, this event handler will _not_ be installed.
    */
   noExitFlush?: boolean;
 }
