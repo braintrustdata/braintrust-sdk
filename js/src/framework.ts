@@ -59,6 +59,7 @@ export type EvalData<
 > =
   | EvalCase<Input, Expected, Metadata>[]
   | (() => EvalCase<Input, Expected, Metadata>[])
+  | Promise<EvalCase<Input, Expected, Metadata>[]>
   | (() => Promise<EvalCase<Input, Expected, Metadata>[]>)
   | AsyncGenerator<EvalCase<Input, Expected, Metadata>>
   | AsyncIterable<EvalCase<Input, Expected, Metadata>>
@@ -278,7 +279,7 @@ export async function callEvaluatorData<
   }
 
   return {
-    data: dataResult instanceof Promise ? await dataResult : dataResult,
+    data: dataResult,
     baseExperiment,
   };
 }
