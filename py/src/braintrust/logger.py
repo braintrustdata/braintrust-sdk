@@ -40,6 +40,7 @@ from braintrust_core.span_identifier_v2 import SpanComponentsV2, SpanObjectTypeV
 from braintrust_core.span_types import SpanTypeAttribute
 from braintrust_core.util import (
     SerializableDataClass,
+    _urljoin,
     coalesce,
     encode_uri_component,
     eprint,
@@ -55,7 +56,6 @@ from .util import (
     GLOBAL_PROJECT,
     AugmentedHTTPError,
     LazyValue,
-    _urljoin,
     get_caller_location,
     response_raise_for_status,
 )
