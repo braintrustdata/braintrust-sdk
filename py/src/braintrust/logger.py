@@ -2636,7 +2636,7 @@ class Prompt:
             ]
             ret["tools"] = (
                 json.loads(chevron.render(self.prompt.tools, data=build_args))
-                if self.prompt.tools is not None
+                if (self.prompt.tools or "").strip()
                 else None
             )
 

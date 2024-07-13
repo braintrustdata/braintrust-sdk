@@ -3842,7 +3842,7 @@ export class Prompt {
         ...params,
         ...spanInfo,
         messages: messages,
-        ...(prompt.tools
+        ...(prompt.tools?.trim()
           ? {
               tools: toolsSchema.parse(
                 JSON.parse(Mustache.render(prompt.tools, variables)),
