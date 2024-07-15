@@ -109,3 +109,9 @@ def encode_uri_component(name):
     should not be used for multiple slash-separated URI components."""
 
     return urllib.parse.quote(name, safe="")
+
+
+def _urljoin(*parts):
+    return "/".join(
+        p for p in [x.strip("/") if i < len(parts) - 1 else x.lstrip("/") for i, x in enumerate(parts)] if p.strip()
+    )
