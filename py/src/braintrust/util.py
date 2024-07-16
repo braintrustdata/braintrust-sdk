@@ -73,9 +73,3 @@ class LazyValue(Generic[T]):
         finally:
             if self.mutex:
                 self.mutex.release()
-
-
-def _urljoin(*parts):
-    return "/".join(
-        p for p in [x.strip("/") if i < len(parts) - 1 else x.lstrip("/") for i, x in enumerate(parts)] if p.strip()
-    )

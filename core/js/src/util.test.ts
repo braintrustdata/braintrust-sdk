@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import * as util from "./util";
+import { _urljoin } from "./util";
 
 test("mapAt basic", () => {
   const m = new Map<number, string>([
@@ -42,4 +43,22 @@ test("forEachMissingKey structural mismatch", () => {
   keysAndFn = makeAccumulateMissingKeysF();
   util.forEachMissingKey({ lhs, rhs, fn: keysAndFn.fn });
   expect(keysAndFn.missingKeys).toEqual({ q: [], dog: ["x"] });
+});
+
+test("_urljoin", () => {
+  expect(_urljoin("/a", "/b", "/c")).toBe("a/b/c");
+  expect(_urljoin("a", "b", "c")).toBe("a/b/c");
+  expect(_urljoin("/a/", "/b/", "/c/")).toBe("a/b/c/");
+  expect(_urljoin("a/", "b/", "c/")).toBe("a/b/c/");
+  expect(_urljoin("", "a", "b", "c")).toBe("a/b/c");
+  expect(_urljoin("a", "", "c")).toBe("a/c");
+  expect(_urljoin("/", "a", "b", "c")).toBe("a/b/c");
+  expect(_urljoin("http://example.com", "api", "v1")).toBe(
+    "http://example.com/api/v1",
+  );
+  expect(_urljoin("http://example.com/", "/api/", "/v1/")).toBe(
+    "http://example.com/api/v1/",
+  );
+  expect(_urljoin()).toBe("");
+  expect(_urljoin("a")).toBe("a");
 });

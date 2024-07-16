@@ -34,6 +34,7 @@ import {
   SpanObjectTypeV2,
   SpanRowIdsV2,
   gitMetadataSettingsSchema,
+  _urljoin,
 } from "@braintrust/core";
 import {
   AnyModelParam,
@@ -54,7 +55,6 @@ import {
   getCurrentUnixTimestamp,
   isEmpty,
   LazyValue,
-  _urljoin,
 } from "./util";
 import Mustache from "mustache";
 import { z } from "zod";
@@ -3842,7 +3842,7 @@ export class Prompt {
         ...params,
         ...spanInfo,
         messages: messages,
-        ...(prompt.tools
+        ...(prompt.tools?.trim()
           ? {
               tools: toolsSchema.parse(
                 JSON.parse(Mustache.render(prompt.tools, variables)),
