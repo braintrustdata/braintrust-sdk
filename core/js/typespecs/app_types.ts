@@ -972,6 +972,22 @@ export const patchOrganizationSchema = z
   })
   .openapi("PatchOrganization");
 
+const createApiKeyBaseSchema = generateBaseTableOpSchema("API key");
+const createApiKeySchema = z.object({
+  name: z.string().describe("Name of the api key. Does not have to be unique"),
+  org_name: createApiKeyBaseSchema.shape.org_name,
+});
+
+export const createApiKeyOutputSchema = apiKeySchema
+  .merge(
+    z.object({
+      key: z
+        .string()
+        .describe("The raw API key. It will only be exposed this one time"),
+    }),
+  )
+  .openapi("CreateApiKeyOutput");
+
 // Section: exported schemas, grouped by object type. The schemas are used for
 // API spec generation, so their types are not fully-specified. If you wish to
 // use individual schema types, import them directly.
@@ -1046,5 +1062,9 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
   organization: {
     object: organizationSchema,
     patch: patchOrganizationSchema,
+  },
+  api_key: {
+    object: apiKeySchema,
+    create: createApiKeySchema,
   },
 };
