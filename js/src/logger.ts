@@ -385,6 +385,15 @@ export class BraintrustState {
     state.proxyConn().make_long_lived();
     state.proxyConn().set_token(state.loginToken);
 
+    console.log("INITIALIZED STATE WITH", {
+      apiUrl: state.apiUrl,
+      appUrl: state.appUrl,
+      proxyUrl: state.proxyUrl,
+      apiConnUrl: state.apiConn().base_url,
+      appConnUrl: state.appConn().base_url,
+      proxyConnUrl: state.proxyConn().base_url,
+    });
+
     state.loggedIn = true;
     state.loginReplaceApiConn(state.apiConn());
 
@@ -547,6 +556,7 @@ class HTTPConnection {
   ) {
     const { headers, ...rest } = config || {};
     const url = new URL(_urljoin(this.base_url, path));
+    console.log("RUNNING GET WITH URL", url.toString());
     url.search = new URLSearchParams(
       params
         ? (Object.fromEntries(
@@ -574,6 +584,7 @@ class HTTPConnection {
     config?: RequestInit,
   ) {
     const { headers, ...rest } = config || {};
+    console.log("RUNNING POST WITH URL", _urljoin(this.base_url, path));
     return await checkResponse(
       await this.fetch(_urljoin(this.base_url, path), {
         method: "POST",
