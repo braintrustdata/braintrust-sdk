@@ -679,36 +679,6 @@ const feedbackProjectLogsRequestSchema = makeFeedbackRequestSchema(
   feedbackProjectLogsItemSchema,
 );
 
-const feedbackPromptRequestBaseSchema =
-  generateBaseEventFeedbackSchema("prompt");
-const feedbackPromptItemSchema = z
-  .object({
-    id: feedbackPromptRequestBaseSchema.shape.id,
-    comment: feedbackPromptRequestBaseSchema.shape.comment,
-    metadata: feedbackPromptRequestBaseSchema.shape.metadata,
-    source: feedbackPromptRequestBaseSchema.shape.source,
-  })
-  .openapi("FeedbackPromptItem");
-const feedbackPromptRequestSchema = makeFeedbackRequestSchema(
-  "prompt",
-  feedbackPromptItemSchema,
-);
-
-const feedbackFunctionRequestBaseSchema =
-  generateBaseEventFeedbackSchema("function");
-const feedbackFunctionItemSchema = z
-  .object({
-    id: feedbackFunctionRequestBaseSchema.shape.id,
-    comment: feedbackFunctionRequestBaseSchema.shape.comment,
-    metadata: feedbackFunctionRequestBaseSchema.shape.metadata,
-    source: feedbackFunctionRequestBaseSchema.shape.source,
-  })
-  .openapi("FeedbackFunctionItem");
-const feedbackFunctionRequestSchema = makeFeedbackRequestSchema(
-  "function",
-  feedbackFunctionItemSchema,
-);
-
 // Section: exported schemas, grouped by object type. The schemas are used for
 // API spec generation, so their types are not fully-specified. If you wish to
 // use individual schema types, import them directly.
@@ -758,13 +728,9 @@ export const apiSpecEventObjectSchemas: Record<
   },
   prompt: {
     event: promptSchema,
-    feedbackItem: feedbackPromptItemSchema,
-    feedbackRequest: feedbackPromptRequestSchema,
   },
   function: {
     event: functionSchema,
-    feedbackItem: feedbackFunctionItemSchema,
-    feedbackRequest: feedbackFunctionRequestSchema,
   },
   prompt_session: {},
 };
