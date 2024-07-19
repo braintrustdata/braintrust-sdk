@@ -1,6 +1,5 @@
 import {
   InvokeFunctionRequest,
-  INVOKE_API_VERSION,
   functionIdSchema,
 } from "@braintrust/core/typespecs";
 import {
@@ -144,7 +143,6 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     input,
     parent,
     stream,
-    api_version: INVOKE_API_VERSION,
   };
 
   const resp = await state.proxyConn().post(`function/invoke`, request, {

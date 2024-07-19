@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-export const INVOKE_API_VERSION = 1;
-
 export const functionIdSchema = z
   .union([
     z.object({
@@ -33,19 +31,27 @@ export const functionIdSchema = z
   .describe("Various options for identifying a function.");
 export type FunctionId = z.infer<typeof functionIdSchema>;
 
-export const useFunctionSchema = z
-  .object({
-    api_version: z.number().optional().default(INVOKE_API_VERSION),
-  })
-  .and(functionIdSchema);
+export const useFunctionSchema = functionIdSchema;
 
-export const invokeFunctionSchema = useFunctionSchema.and(
-  z.object({
-    input: z.any().optional(),
-    parent: z.string().optional(),
-    stream: z.boolean().optional(),
-  }),
-);
+export const invokeFunctionSchema = useFunctionSchema
+  .and(
+    z.object({
+      input: z
+        .any()
+        .optional()
+        .describe(
+          "Braintrust functions take a single argument, which can be any JSON serializable value.",
+        ),
+      parent: z
+        .string()
+        .optional()
+        .describe(
+          "The parent's span identifier, created by calling `.export()` on a span. Enables tracing the function call.",
+        ),
+      stream: z.boolean().optional(),
+    }),
+  )
+  .describe("The request to invoke a function.");
 export type InvokeFunctionRequest = z.infer<typeof invokeFunctionSchema>;
 
 export const baseSSEEventSchema = z.object({
