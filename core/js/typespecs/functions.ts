@@ -52,12 +52,14 @@ export const invokeFunctionSchema = useFunctionSchema
         ),
       parent: z
         .union([
-          z.object({
-            object_type: z.enum(["project_log", "experiment"]),
-            object_id: z
-              .string()
-              .describe("The id of the container object you are logging to"),
-          }),
+          z
+            .object({
+              object_type: z.enum(["project_logs", "experiment"]),
+              object_id: z
+                .string()
+                .describe("The id of the container object you are logging to"),
+            })
+            .describe("Object type and id"),
           z
             .string()
             .optional()
