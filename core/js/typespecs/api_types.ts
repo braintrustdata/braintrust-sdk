@@ -21,8 +21,7 @@ import {
   getEventObjectDescription,
 } from "./common_types";
 import { customTypes } from "./custom_types";
-import { capitalize } from "../src/util";
-
+import { capitalize } from "../src/string_util";
 import {
   TRANSACTION_ID_FIELD,
   OBJECT_DELETE_FIELD,
@@ -32,6 +31,7 @@ import {
   VALID_SOURCES,
 } from "../src/db_fields";
 import { spanTypeAttributeValues } from "../src/span_types";
+import { objectNullish } from "../src/zod_util";
 
 export const auditSourcesSchema = z.enum(VALID_SOURCES);
 
@@ -550,65 +550,131 @@ export const insertEventsResponseSchema = z
   })
   .openapi("InsertEventsResponse");
 
+export const insertExperimentEventBaseSchema = objectNullish(
+  experimentEventSchema
+    .pick({
+      input: true,
+      output: true,
+      expected: true,
+      scores: true,
+      metadata: true,
+      tags: true,
+      metrics: true,
+      context: true,
+      span_attributes: true,
+      id: true,
+      dataset_record_id: true,
+      created: true,
+    })
+    .extend({
+      [OBJECT_DELETE_FIELD]:
+        experimentEventBaseSchema.shape[OBJECT_DELETE_FIELD],
+    }),
+);
 const {
   eventSchema: insertExperimentEventSchema,
   requestSchema: insertExperimentEventsRequestSchema,
-} = makeInsertEventSchemas(
-  "experiment",
-  z.object({
-    input: experimentEventSchema.shape.input,
-    output: experimentEventSchema.shape.output,
-    expected: experimentEventSchema.shape.expected,
-    scores: experimentEventSchema.shape.scores,
-    metadata: experimentEventSchema.shape.metadata,
-    tags: experimentEventSchema.shape.tags,
-    metrics: experimentEventSchema.shape.metrics,
-    context: experimentEventSchema.shape.context,
-    span_attributes: experimentEventSchema.shape.span_attributes,
-    id: experimentEventSchema.shape.id.nullish(),
-    dataset_record_id: experimentEventSchema.shape.dataset_record_id,
-    [OBJECT_DELETE_FIELD]: experimentEventBaseSchema.shape[OBJECT_DELETE_FIELD],
-    created: experimentEventBaseSchema.shape.created.nullish(),
-  }),
-);
+} = makeInsertEventSchemas("experiment", insertExperimentEventBaseSchema);
 
+export const insertDatasetEventBaseSchema = objectNullish(
+  datasetEventSchema
+    .pick({
+      input: true,
+      expected: true,
+      metadata: true,
+      tags: true,
+      id: true,
+      created: true,
+    })
+    .extend({
+      [OBJECT_DELETE_FIELD]: datasetEventBaseSchema.shape[OBJECT_DELETE_FIELD],
+    }),
+);
 const {
   eventSchema: insertDatasetEventSchema,
   requestSchema: insertDatasetEventsRequestSchema,
-} = makeInsertEventSchemas(
-  "dataset",
-  z.object({
-    input: datasetEventSchema.shape.input,
-    expected: datasetEventSchema.shape.expected,
-    metadata: datasetEventSchema.shape.metadata,
-    tags: datasetEventSchema.shape.tags,
-    id: datasetEventSchema.shape.id.nullish(),
-    [OBJECT_DELETE_FIELD]: datasetEventBaseSchema.shape[OBJECT_DELETE_FIELD],
-    created: experimentEventBaseSchema.shape.created.nullish(),
-  }),
-);
+} = makeInsertEventSchemas("dataset", insertDatasetEventBaseSchema);
 
+export const insertProjectLogsEventBaseSchema = objectNullish(
+  projectLogsEventSchema
+    .pick({
+      input: true,
+      output: true,
+      expected: true,
+      scores: true,
+      metadata: true,
+      tags: true,
+      metrics: true,
+      context: true,
+      span_attributes: true,
+      id: true,
+      created: true,
+    })
+    .extend({
+      [OBJECT_DELETE_FIELD]:
+        projectLogsEventBaseSchema.shape[OBJECT_DELETE_FIELD],
+    }),
+);
 const {
   eventSchema: insertProjectLogsEventSchema,
   requestSchema: insertProjectLogsEventsRequestSchema,
-} = makeInsertEventSchemas(
-  "project",
-  z.object({
-    input: projectLogsEventSchema.shape.input,
-    output: projectLogsEventSchema.shape.output,
-    expected: projectLogsEventSchema.shape.expected,
-    scores: projectLogsEventSchema.shape.scores,
-    metadata: projectLogsEventSchema.shape.metadata,
-    tags: projectLogsEventSchema.shape.tags,
-    metrics: projectLogsEventSchema.shape.metrics,
-    context: projectLogsEventSchema.shape.context,
-    span_attributes: projectLogsEventSchema.shape.span_attributes,
-    id: projectLogsEventSchema.shape.id.nullish(),
-    [OBJECT_DELETE_FIELD]:
-      projectLogsEventBaseSchema.shape[OBJECT_DELETE_FIELD],
-    created: experimentEventBaseSchema.shape.created.nullish(),
-  }),
+} = makeInsertEventSchemas("project", insertProjectLogsEventBaseSchema);
+
+export const insertPromptSessionEventBaseSchema = objectNullish(
+  promptSessionEventSchema
+    .pick({
+      prompt_session_data: true,
+      prompt_data: true,
+      object_data: true,
+      completion: true,
+      tags: true,
+      id: true,
+      created: true,
+    })
+    .extend({
+      [OBJECT_DELETE_FIELD]:
+        promptSessionEventBaseSchema.shape[OBJECT_DELETE_FIELD],
+    }),
 );
+
+const promptEventBaseSchema = generateBaseEventOpSchema("prompt");
+export const insertPromptEventBaseSchema = promptSchema
+  .pick({ name: true, slug: true })
+  .merge(
+    objectNullish(
+      promptSchema.pick({
+        description: true,
+        created: true,
+        prompt_data: true,
+        tags: true,
+        metadata: true,
+        id: true,
+      }),
+    ),
+  )
+  .extend({
+    [OBJECT_DELETE_FIELD]: promptEventBaseSchema.shape[OBJECT_DELETE_FIELD],
+  });
+
+const functionEventBaseSchema = generateBaseEventOpSchema("function");
+export const insertFunctionEventBaseSchema = functionSchema
+  .pick({ name: true, slug: true })
+  .merge(
+    objectNullish(
+      functionSchema.pick({
+        description: true,
+        created: true,
+        prompt_data: true,
+        function_data: true,
+        tags: true,
+        metadata: true,
+        id: true,
+      }),
+    ),
+  )
+  .extend({
+    [OBJECT_DELETE_FIELD]: functionEventBaseSchema.shape[OBJECT_DELETE_FIELD],
+  });
 
 // Section: logging feedback.
 
@@ -632,14 +698,14 @@ function makeFeedbackRequestSchema<T extends z.AnyZodObject>(
 
 const feedbackExperimentRequestBaseSchema =
   generateBaseEventFeedbackSchema("experiment");
-const feedbackExperimentItemSchema = z
-  .object({
-    id: feedbackExperimentRequestBaseSchema.shape.id,
-    scores: feedbackExperimentRequestBaseSchema.shape.scores,
-    expected: feedbackExperimentRequestBaseSchema.shape.expected,
-    comment: feedbackExperimentRequestBaseSchema.shape.comment,
-    metadata: feedbackExperimentRequestBaseSchema.shape.metadata,
-    source: feedbackExperimentRequestBaseSchema.shape.source,
+const feedbackExperimentItemSchema = feedbackExperimentRequestBaseSchema
+  .pick({
+    id: true,
+    scores: true,
+    expected: true,
+    comment: true,
+    metadata: true,
+    source: true,
   })
   .openapi("FeedbackExperimentItem");
 const feedbackExperimentRequestSchema = makeFeedbackRequestSchema(
@@ -649,12 +715,12 @@ const feedbackExperimentRequestSchema = makeFeedbackRequestSchema(
 
 const feedbackDatasetRequestBaseSchema =
   generateBaseEventFeedbackSchema("dataset");
-const feedbackDatasetItemSchema = z
-  .object({
-    id: feedbackDatasetRequestBaseSchema.shape.id,
-    comment: feedbackDatasetRequestBaseSchema.shape.comment,
-    metadata: feedbackDatasetRequestBaseSchema.shape.metadata,
-    source: feedbackDatasetRequestBaseSchema.shape.source,
+const feedbackDatasetItemSchema = feedbackDatasetRequestBaseSchema
+  .pick({
+    id: true,
+    comment: true,
+    metadata: true,
+    source: true,
   })
   .openapi("FeedbackDatasetItem");
 const feedbackDatasetRequestSchema = makeFeedbackRequestSchema(
@@ -664,14 +730,14 @@ const feedbackDatasetRequestSchema = makeFeedbackRequestSchema(
 
 const feedbackProjectLogsRequestBaseSchema =
   generateBaseEventFeedbackSchema("project");
-const feedbackProjectLogsItemSchema = z
-  .object({
-    id: feedbackProjectLogsRequestBaseSchema.shape.id,
-    scores: feedbackProjectLogsRequestBaseSchema.shape.scores,
-    expected: feedbackProjectLogsRequestBaseSchema.shape.expected,
-    comment: feedbackProjectLogsRequestBaseSchema.shape.comment,
-    metadata: feedbackProjectLogsRequestBaseSchema.shape.metadata,
-    source: feedbackProjectLogsRequestBaseSchema.shape.source,
+const feedbackProjectLogsItemSchema = feedbackProjectLogsRequestBaseSchema
+  .pick({
+    id: true,
+    scores: true,
+    expected: true,
+    comment: true,
+    metadata: true,
+    source: true,
   })
   .openapi("FeedbackProjectLogsItem");
 const feedbackProjectLogsRequestSchema = makeFeedbackRequestSchema(
@@ -681,12 +747,12 @@ const feedbackProjectLogsRequestSchema = makeFeedbackRequestSchema(
 
 const feedbackPromptRequestBaseSchema =
   generateBaseEventFeedbackSchema("prompt");
-const feedbackPromptItemSchema = z
-  .object({
-    id: feedbackPromptRequestBaseSchema.shape.id,
-    comment: feedbackPromptRequestBaseSchema.shape.comment,
-    metadata: feedbackPromptRequestBaseSchema.shape.metadata,
-    source: feedbackPromptRequestBaseSchema.shape.source,
+const feedbackPromptItemSchema = feedbackPromptRequestBaseSchema
+  .pick({
+    id: true,
+    comment: true,
+    metadata: true,
+    source: true,
   })
   .openapi("FeedbackPromptItem");
 const feedbackPromptRequestSchema = makeFeedbackRequestSchema(
@@ -696,12 +762,12 @@ const feedbackPromptRequestSchema = makeFeedbackRequestSchema(
 
 const feedbackFunctionRequestBaseSchema =
   generateBaseEventFeedbackSchema("function");
-const feedbackFunctionItemSchema = z
-  .object({
-    id: feedbackFunctionRequestBaseSchema.shape.id,
-    comment: feedbackFunctionRequestBaseSchema.shape.comment,
-    metadata: feedbackFunctionRequestBaseSchema.shape.metadata,
-    source: feedbackFunctionRequestBaseSchema.shape.source,
+const feedbackFunctionItemSchema = feedbackFunctionRequestBaseSchema
+  .pick({
+    id: true,
+    comment: true,
+    metadata: true,
+    source: true,
   })
   .openapi("FeedbackFunctionItem");
 const feedbackFunctionRequestSchema = makeFeedbackRequestSchema(

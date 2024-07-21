@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { forEachMissingKey } from "./util";
+import { forEachMissingKey } from "./object_util";
 
 // Parses a zod schema, checking afterwards that no fields were stripped during
 // parsing. There are several reasons we have this function:
@@ -37,4 +37,27 @@ export function parseNoStrip<T extends z.ZodType>(schema: T, input: unknown) {
     },
   });
   return output;
+}
+
+// Given a zod object, marks all fields nullish. This operation is shallow, so
+// it does not affect fields in nested objects.
+//
+// Basically the same as `z.partial()`, except instead of marking fields just
+// optional, it marks them nullish.
+export function objectNullish<
+  T extends z.ZodRawShape,
+  UnknownKeys extends z.UnknownKeysParam,
+  Catchall extends z.ZodTypeAny,
+>(object: z.ZodObject<T, UnknownKeys, Catchall>) {
+  return new z.ZodObject({
+    ...object._def,
+    shape: () =>
+      Object.fromEntries(
+        Object.entries(object.shape).map(([k, v]) => [k, v.nullish()]),
+      ),
+  }) as z.ZodObject<
+    { [k in keyof T]: z.ZodOptional<z.ZodNullable<T[k]>> },
+    UnknownKeys,
+    Catchall
+  >;
 }
