@@ -21,7 +21,7 @@ import {
   getEventObjectDescription,
 } from "./common_types";
 import { customTypes } from "./custom_types";
-import { capitalize } from "../src/util";
+import { capitalize } from "../src/string_util";
 import {
   TRANSACTION_ID_FIELD,
   OBJECT_DELETE_FIELD,
