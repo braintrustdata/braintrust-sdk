@@ -34,6 +34,7 @@ PARAMS = {
     "PostgresVersion": "postgres_version",
     "OutboundRateLimitWindowMinutes": "outbound_rate_limit_window_minutes",
     "OutboundRateLimitMaxRequests": "outbound_rate_limit_max_requests",
+    "UseGlobalProxy": "use_global_proxy",
 }
 
 REMOVED_PARAMS = ["ThirdAZIndex"]
@@ -203,6 +204,14 @@ def build_parser(subparsers, parents):
         help="The maximum number of requests per user allowed in the time frame specified by OutboundRateLimitMaxRequests. Setting to 0 will disable rate limits",
         default=None,
         type=int,
+    )
+
+    # Use the global proxy (https://braintrustproxy.com)
+    parser.add_argument(
+        "--use-global-proxy",
+        help="Use the global proxy (https://braintrustproxy.com)",
+        default=None,
+        choices=[None, "true", "false"],
     )
 
     # Advancd use only
@@ -380,17 +389,11 @@ def main(args):
             )
             exit(1)
 
-        function_url = [x for x in status["Outputs"] if x["OutputKey"] == "EndpointURL"]
-        if function_url:
-            function_url = function_url[0]["OutputValue"]
+        universal_url = [x for x in status["Outputs"] if x["OutputKey"] == "UniversalURL"]
+        if universal_url:
+            universal_url = universal_url[0]["OutputValue"]
         else:
-            function_url = None
-
-        proxy_url = [x for x in status["Outputs"] if x["OutputKey"] == "ProxyURL"]
-        if proxy_url:
-            proxy_url = proxy_url[0]["OutputValue"]
-        else:
-            proxy_url = None
+            universal_url = None
 
         org_name = [x for x in status["Parameters"] if x["ParameterKey"] == "OrgName"]
         if org_name:
@@ -399,7 +402,7 @@ def main(args):
             org_name = None
 
         _logger.info(f"Stack with name {args.name} has been updated with status: {status['StackStatus']}")
-        _logger.info(f"Endpoint URL: {function_url}, Proxy URL: {proxy_url}")
+        _logger.info(f"Universal URL: {universal_url}")
 
         org_info = []
         if args.api_key:
@@ -426,24 +429,24 @@ def main(args):
             if len(org_info) == 1:
                 org_info = org_info[0]
 
-        if org_info and (
-            (function_url and org_info["api_url"] != function_url)
-            or (proxy_url and org_info["proxy_url"] != proxy_url)
-        ):
-            _logger.info(f"Will update org {org_info['name']}")
+        if org_info and (universal_url and org_info["api_url"] != universal_url):
+            _logger.info(f"Will update org {org_info['name']}'s urls.")
             _logger.info(f"  They are currently set to:")
             _logger.info(f"  API URL: {org_info['api_url']}")
             _logger.info(f"  Proxy URL: {org_info['proxy_url']}")
             _logger.info(f"And will update them to:")
 
             patch_args = {"id": org_info["id"]}
-            if function_url and org_info["api_url"] != function_url:
-                patch_args["api_url"] = function_url
-                _logger.info(f"  API URL: {function_url}")
-            if proxy_url and org_info["proxy_url"] != proxy_url:
-                patch_args["proxy_url"] = proxy_url
-                _logger.info(f"  Proxy URL: {proxy_url}")
+            if universal_url and org_info["api_url"] != universal_url:
+                patch_args["api_url"] = universal_url
+                patch_args["is_universal_api"] = True
+                _logger.info(f"  API URL: {universal_url}")
+                _logger.warn(
+                    f"\nNOTE: You can delete the proxy URL from your org settings now. It is no longer needed."
+                )
+
+            # Make the actual request
             app_conn().post(
                 "api/organization/patch_id",
                 json=patch_args,
-            )
+            ).raise_for_status()
