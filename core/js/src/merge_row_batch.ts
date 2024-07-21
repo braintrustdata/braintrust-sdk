@@ -1,7 +1,7 @@
 // Mirror of the functions in core/py/src/braintrust_core/merge_row_batch.py.
 
 import { IS_MERGE_FIELD, PARENT_ID_FIELD } from "./db_fields";
-import { mapAt, mergeDicts } from "./util";
+import { mapAt, mergeDicts } from "./object_util";
 import {
   AdjacencyListGraph,
   undirectedConnectedComponents,

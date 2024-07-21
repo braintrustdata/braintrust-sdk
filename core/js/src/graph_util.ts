@@ -1,6 +1,6 @@
 // Mirror of the functions in core/py/src/braintrust_core/graph_util.py.
 
-import { mapAt } from "./util";
+import { mapAt } from "./object_util";
 
 export interface UndirectedGraph {
   vertices: Set<number>;

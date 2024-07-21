@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { forEachMissingKey } from "./util";
+import { forEachMissingKey } from "./object_util";
 
 // Parses a zod schema, checking afterwards that no fields were stripped during
 // parsing. There are several reasons we have this function:
