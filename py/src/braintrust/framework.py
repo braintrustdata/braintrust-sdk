@@ -213,6 +213,12 @@ class Evaluator:
     Defaults to None, in which case there is no timeout.
     """
 
+    max_concurrency: Optional[int] = None
+    """
+    The maximum number of tasks/scorers that will be run concurrently.
+    Defaults to None, in which case there is no max concurrency.
+    """
+
     project_id: Optional[str] = None
     """
     If specified, uses the given project ID instead of the evaluator's name to identify the project.
@@ -421,6 +427,7 @@ def Eval(
     update: bool = False,
     reporter: Optional[Union[ReporterDef, str]] = None,
     timeout: Optional[float] = None,
+    max_concurrency: Optional[int] = None,
     project_id: Optional[str] = None,
 ):
     """
@@ -481,6 +488,7 @@ def Eval(
         is_public=is_public,
         update=update,
         timeout=timeout,
+        max_concurrency=max_concurrency,
         project_id=project_id,
     )
 
@@ -852,6 +860,17 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             if all(evaluate_filter(datum, f) for f in filters):
                 yield datum
 
+    max_concurrency_semaphore = (
+        asyncio.Semaphore(evaluator.max_concurrency) if evaluator.max_concurrency is not None else None
+    )
+
+    async def with_max_concurrency(coro):
+        if max_concurrency_semaphore:
+            async with max_concurrency_semaphore:
+                return await coro
+        else:
+            return await coro
+
     tasks = []
     with async_tqdm(
         filtered_iterator(data_iterator),
@@ -861,7 +880,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
     ) as pbar:
         async for datum in pbar:
             for _ in range(evaluator.trial_count):
-                tasks.append(asyncio.create_task(run_evaluator_task(datum)))
+                tasks.append(asyncio.create_task(with_max_concurrency(run_evaluator_task(datum))))
 
     results = []
     for task in std_tqdm(tasks, desc=f"{evaluator.eval_name} (tasks)", position=position, disable=position is None):
