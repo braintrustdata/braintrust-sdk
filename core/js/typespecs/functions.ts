@@ -41,43 +41,51 @@ export type FunctionId = z.infer<typeof functionIdSchema>;
 
 export const useFunctionSchema = functionIdSchema;
 
-export const invokeFunctionSchema = useFunctionSchema
-  .and(
-    z.object({
-      input: z
-        .any()
-        .optional()
-        .describe(
-          "Argument to the function, which can be any JSON serializable value",
-        ),
-      parent: z
-        .union([
-          z
-            .object({
-              object_type: z.enum(["project_logs", "experiment"]),
-              object_id: z
-                .string()
-                .describe("The id of the container object you are logging to"),
-            })
-            .describe("Object type and id"),
-          z
+export const invokeFunctionNonIdArgsSchema = z.object({
+  input: z
+    .any()
+    .optional()
+    .describe(
+      "Argument to the function, which can be any JSON serializable value",
+    ),
+  parent: z
+    .union([
+      z
+        .object({
+          object_type: z.enum(["project_logs", "experiment"]),
+          object_id: z
             .string()
-            .optional()
-            .describe(
-              "The parent's span identifier, created by calling `.export()` on a span",
-            ),
-        ])
-        .describe("Options for tracing the function call"),
-      stream: z
-        .boolean()
+            .describe("The id of the container object you are logging to"),
+        })
+        .describe("Object type and id"),
+      z
+        .string()
         .optional()
         .describe(
-          "Whether to stream the response. If true, results will be returned in the Braintrust SSE format.",
+          "The parent's span identifier, created by calling `.export()` on a span",
         ),
+    ])
+    .describe("Options for tracing the function call"),
+  stream: z
+    .boolean()
+    .optional()
+    .describe(
+      "Whether to stream the response. If true, results will be returned in the Braintrust SSE format.",
+    ),
+});
+
+export const invokeFunctionSchema = useFunctionSchema.and(
+  invokeFunctionNonIdArgsSchema,
+);
+export type InvokeFunctionRequest = z.infer<typeof invokeFunctionSchema>;
+
+export const invokeApiSchema = invokeFunctionNonIdArgsSchema
+  .merge(
+    z.object({
+      version: z.string().optional().describe("The version of the function"),
     }),
   )
   .describe("The request to invoke a function");
-export type InvokeFunctionRequest = z.infer<typeof invokeFunctionSchema>;
 
 export const runEvalSchema = z
   .strictObject({
