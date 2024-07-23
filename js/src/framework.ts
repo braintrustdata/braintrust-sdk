@@ -59,6 +59,7 @@ export type EvalData<
 > =
   | EvalCase<Input, Expected, Metadata>[]
   | (() => EvalCase<Input, Expected, Metadata>[])
+  | Promise<EvalCase<Input, Expected, Metadata>[]>
   | (() => Promise<EvalCase<Input, Expected, Metadata>[]>)
   | AsyncGenerator<EvalCase<Input, Expected, Metadata>>
   | AsyncIterable<EvalCase<Input, Expected, Metadata>>
@@ -260,6 +261,29 @@ function initExperiment<IsOpen extends boolean = false>(
   });
 }
 
+export function callEvaluatorData<
+  Input,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+>(
+  data: EvalData<Input, Expected, Metadata>,
+): {
+  data: EvalData<Input, Expected, Metadata>;
+  baseExperiment: string | undefined;
+} {
+  let dataResult = typeof data === "function" ? data() : data;
+
+  let baseExperiment: string | undefined = undefined;
+  if ("_type" in dataResult && dataResult._type === "BaseExperiment") {
+    baseExperiment = dataResult.name;
+  }
+
+  return {
+    data: dataResult,
+    baseExperiment,
+  };
+}
+
 export type SpanContext = {
   currentSpan: typeof currentSpan;
   NOOP_SPAN: typeof NOOP_SPAN;
@@ -337,6 +361,7 @@ export async function Eval<
 
   const resolvedReporter = options.reporter || defaultReporter;
   try {
+    const { data, baseExperiment } = callEvaluatorData(evaluator.data);
     const experiment = initExperiment(evaluator.state, {
       ...(evaluator.projectId
         ? { projectId: evaluator.projectId }
@@ -345,6 +370,7 @@ export async function Eval<
       metadata: evaluator.metadata,
       isPublic: evaluator.isPublic,
       update: evaluator.update,
+      baseExperiment,
     });
 
     if (options.onStart) {
@@ -356,6 +382,7 @@ export async function Eval<
         evalName,
         projectName: name,
         ...evaluator,
+        data,
       };
       const ret = await runEvaluator(experiment, evalDef, progressReporter, []);
       progressReporter.stop();
