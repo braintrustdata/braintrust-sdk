@@ -269,6 +269,9 @@ class BraintrustState:
         return self._api_conn
 
     def proxy_conn(self):
+        if not self.proxy_url:
+            return self.api_conn()
+
         if not self._proxy_conn:
             if not self.proxy_url:
                 raise RuntimeError("Must initialize proxy_url before requesting proxy_conn")
@@ -1155,7 +1158,8 @@ def login(app_url=None, api_key=None, org_name=None, force_login=False):
 
         # Set the same token in the API
         _state.app_conn().set_token(conn.token)
-        _state.proxy_conn().set_token(conn.token)
+        if _state.proxy_url:
+            _state.proxy_conn().set_token(conn.token)
         _state.login_token = conn.token
         _state.logged_in = True
 

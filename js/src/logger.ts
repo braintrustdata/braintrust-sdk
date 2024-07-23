@@ -382,8 +382,10 @@ export class BraintrustState {
     state.apiConn().set_token(state.loginToken);
     state.apiConn().make_long_lived();
     state.appConn().set_token(state.loginToken);
-    state.proxyConn().make_long_lived();
-    state.proxyConn().set_token(state.loginToken);
+    if (state.proxyUrl) {
+      state.proxyConn().make_long_lived();
+      state.proxyConn().set_token(state.loginToken);
+    }
 
     state.loggedIn = true;
     state.loginReplaceApiConn(state.apiConn());
@@ -430,6 +432,9 @@ export class BraintrustState {
   }
 
   public proxyConn(): HTTPConnection {
+    if (!this.proxyUrl) {
+      return this.apiConn();
+    }
     if (!this._proxyConn) {
       if (!this.proxyUrl) {
         throw new Error("Must initialize proxyUrl before requesting proxyConn");
@@ -2258,7 +2263,9 @@ export async function loginToState(options: LoginOptions = {}) {
 
   // Set the same token in the API
   state.appConn().set_token(apiKey);
-  state.proxyConn().set_token(apiKey);
+  if (state.proxyUrl) {
+    state.proxyConn().set_token(apiKey);
+  }
   state.loginToken = conn.token;
   state.loggedIn = true;
 
