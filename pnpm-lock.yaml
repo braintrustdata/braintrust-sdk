@@ -55,8 +55,8 @@ importers:
         specifier: ^3.2.16
         version: 3.2.16(react@18.3.1)(svelte@4.2.18)(vue@3.4.31)(zod@3.22.4)
       braintrust:
-        specifier: ^0.0.141
-        version: link:../../js
+        specifier: '>=0.0.141'
+        version: 0.0.146(react@18.3.1)(svelte@4.2.18)(vue@3.4.31)(zod@3.22.4)
     devDependencies:
       '@types/node':
         specifier: ^20.10.5
@@ -649,6 +649,14 @@ packages:
       uuid: 9.0.1
       zod: 3.22.4
     dev: true
+
+  /@braintrust/core@0.0.47:
+    resolution: {integrity: sha512-HNfMvJmOTVVNkT2YDxdl8pBkp8VCfZUJjCxSOkFTqIyPmzfhJHYbuezWaqP8+Zgso0y8fbh2Qg5xqAQuZnyfFw==}
+    dependencies:
+      '@asteasolutions/zod-to-openapi': 6.3.1(zod@3.22.4)
+      uuid: 9.0.1
+      zod: 3.22.4
+    dev: false
 
   /@esbuild/aix-ppc64@0.19.10:
     resolution: {integrity: sha512-Q+mk96KJ+FZ30h9fsJl+67IjNJm3x2eX+GBWGmocAKgzp27cowCOOqSdscX80s0SpdFXZnIv/+1xD1EctFx96Q==}
@@ -2338,6 +2346,39 @@ packages:
     dependencies:
       fill-range: 7.0.1
     dev: true
+
+  /braintrust@0.0.146(react@18.3.1)(svelte@4.2.18)(vue@3.4.31)(zod@3.22.4):
+    resolution: {integrity: sha512-tRCLp+imhSmFRDZkMkR7aqAwuxvy41o842aT81hGcWErLFdbe2W/zrjpoNbOhjUND7jSwP/sY+4CR8Oewx6JIQ==}
+    hasBin: true
+    peerDependencies:
+      zod: ^3.0.0
+    dependencies:
+      '@ai-sdk/provider': 0.0.11
+      '@braintrust/core': 0.0.47
+      '@next/env': 14.2.3
+      '@vercel/functions': 1.0.2
+      ai: 3.2.16(react@18.3.1)(svelte@4.2.18)(vue@3.4.31)(zod@3.22.4)
+      argparse: 2.0.1
+      chalk: 4.1.2
+      cli-progress: 3.12.0
+      dotenv: 16.4.5
+      esbuild: 0.18.20
+      eventsource-parser: 1.1.2
+      graceful-fs: 4.2.11
+      minimatch: 9.0.3
+      mustache: 4.2.0
+      pluralize: 8.0.0
+      simple-git: 3.21.0
+      uuid: 9.0.1
+      zod: 3.22.4
+    transitivePeerDependencies:
+      - openai
+      - react
+      - solid-js
+      - supports-color
+      - svelte
+      - vue
+    dev: false
 
   /browserslist@4.23.1:
     resolution: {integrity: sha512-TUfofFo/KsK/bWZ9TWQ5O26tsWW4Uhmt8IYklbnUa70udB6P2wA7w7o4PY4muaEPBQaAX+CEnmmIA41NVHtPVw==}
