@@ -3,7 +3,7 @@ from typing import Any, Literal, Optional, TypeVar, Union, overload
 from braintrust_core.functions import INVOKE_API_VERSION
 from sseclient import SSEClient
 
-from ..logger import Exportable, api_conn, get_span_parent_object, login
+from ..logger import Exportable, HTTPConnection, api_conn, get_span_parent_object, login
 from ..util import response_raise_for_status
 from .stream import BraintrustStream
 
@@ -68,6 +68,7 @@ def invoke(
     project_name: Optional[str] = None,
     slug: Optional[str] = None,
     global_function: Optional[str] = None,
+    _custom_connection: Optional[HTTPConnection] = None,
 ) -> Union[BraintrustStream, T]:
     """
     Invoke a Braintrust function, returning a `BraintrustStream` or the value as a plain
@@ -133,7 +134,8 @@ def invoke(
 
     headers = {"Accept": "text/event-stream" if stream else "application/json"}
 
-    resp = api_conn().post("function/invoke", json=request, headers=headers)
+    conn = _custom_connection or api_conn()
+    resp = conn.post("function/invoke", json=request, headers=headers)
     response_raise_for_status(resp)
 
     if stream:
