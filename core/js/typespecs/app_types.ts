@@ -990,6 +990,81 @@ export const createApiKeyOutputSchema = apiKeySchema
   )
   .openapi("CreateApiKeyOutput");
 
+export const organizationMembersSchema = z
+  .object({
+    members: userSchema.pick({ id: true, email: true }).array(),
+  })
+  .openapi("OrganizationMembers");
+
+export const patchOrganizationMembersSchema = z
+  .object({
+    invite_users: z
+      .object({
+        ids: userSchema.shape.id
+          .array()
+          .nullish()
+          .describe("Ids of existing users to invite"),
+        emails: userSchema.shape.email
+          .unwrap()
+          .unwrap()
+          .array()
+          .nullish()
+          .describe("Emails of users to invite"),
+        send_invite_emails: z
+          .boolean()
+          .nullish()
+          .describe(
+            "If true, send invite emails to the users who wore actually added",
+          ),
+      })
+      .and(
+        z.union([
+          z.object({
+            group_id: groupSchema.shape.id
+              .nullish()
+              .describe(
+                "Optional id of a group to add the invited users to within the org. Will not affect users who are already in the organization.",
+              ),
+          }),
+          z.object({
+            group_name: groupSchema.shape.name
+              .nullish()
+              .describe(
+                "Optional name of a group to add the invited users to within the org. Will not affect users who are already in the organization.",
+              ),
+          }),
+        ]),
+      )
+      .nullish()
+      .describe("Users to invite to the organization"),
+    remove_users: z
+      .object({
+        ids: userSchema.shape.id
+          .array()
+          .nullish()
+          .describe("Ids of users to remove"),
+        emails: userSchema.shape.email
+          .unwrap()
+          .unwrap()
+          .array()
+          .nullish()
+          .describe("Emails of users to remove"),
+      })
+      .nullish()
+      .describe("Users to remove from the organization"),
+  })
+  .openapi("PatchOrganizationMembers");
+
+export const patchOrganizationMembersOutputSchema = z.object({
+  status: z.literal("success"),
+  send_email_error: z
+    .string()
+    .nullish()
+    .describe(
+      "If invite emails failed to send for some reason, the patch operation will still complete, but we will return an error message here",
+    ),
+});
+
 // Section: exported schemas, grouped by object type. The schemas are used for
 // API spec generation, so their types are not fully-specified. If you wish to
 // use individual schema types, import them directly.
