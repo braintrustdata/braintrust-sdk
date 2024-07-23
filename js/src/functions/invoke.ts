@@ -145,7 +145,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     stream,
   };
 
-  const resp = await state.proxyConn().post(`function/invoke`, request, {
+  const resp = await state.apiConn().post(`function/invoke`, request, {
     headers: {
       Accept: stream ? "text/event-stream" : "application/json",
     },

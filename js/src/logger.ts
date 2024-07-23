@@ -233,7 +233,6 @@ const loginSchema = z.strictObject({
   appPublicUrl: z.string(),
   orgName: z.string(),
   apiUrl: z.string(),
-  proxyUrl: z.string(),
   loginToken: z.string(),
   orgId: z.string().nullish(),
   gitMetadataSettings: gitMetadataSettingsSchema.nullish(),
@@ -262,14 +261,12 @@ export class BraintrustState {
   public orgId: string | null = null;
   public orgName: string | null = null;
   public apiUrl: string | null = null;
-  public proxyUrl: string | null = null;
   public loggedIn: boolean = false;
   public gitMetadataSettings?: GitMetadataSettings;
 
   public fetch: typeof globalThis.fetch = globalThis.fetch;
   private _appConn: HTTPConnection | null = null;
   private _apiConn: HTTPConnection | null = null;
-  private _proxyConn: HTTPConnection | null = null;
 
   constructor(private loginParams: LoginOptions) {
     this.id = `${new Date().toLocaleString()}-${stateNonce++}`; // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
@@ -300,13 +297,11 @@ export class BraintrustState {
     this.orgId = null;
     this.orgName = null;
     this.apiUrl = null;
-    this.proxyUrl = null;
     this.loggedIn = false;
     this.gitMetadataSettings = undefined;
 
     this._appConn = null;
     this._apiConn = null;
-    this._proxyConn = null;
   }
 
   public copyLoginInfo(other: BraintrustState) {
@@ -316,13 +311,11 @@ export class BraintrustState {
     this.orgId = other.orgId;
     this.orgName = other.orgName;
     this.apiUrl = other.apiUrl;
-    this.proxyUrl = other.proxyUrl;
     this.loggedIn = other.loggedIn;
     this.gitMetadataSettings = other.gitMetadataSettings;
 
     this._appConn = other._appConn;
     this._apiConn = other._apiConn;
-    this._proxyConn = other._proxyConn;
   }
 
   public serialize(): SerializedBraintrustState {
@@ -336,7 +329,6 @@ export class BraintrustState {
       !this.appUrl ||
       !this.appPublicUrl ||
       !this.apiUrl ||
-      !this.proxyUrl ||
       !this.orgName ||
       !this.loginToken ||
       !this.loggedIn
@@ -353,7 +345,6 @@ export class BraintrustState {
       orgId: this.orgId,
       orgName: this.orgName,
       apiUrl: this.apiUrl,
-      proxyUrl: this.proxyUrl,
       gitMetadataSettings: this.gitMetadataSettings,
     };
   }
@@ -382,8 +373,6 @@ export class BraintrustState {
     state.apiConn().set_token(state.loginToken);
     state.apiConn().make_long_lived();
     state.appConn().set_token(state.loginToken);
-    state.proxyConn().make_long_lived();
-    state.proxyConn().set_token(state.loginToken);
 
     state.loggedIn = true;
     state.loginReplaceApiConn(state.apiConn());
@@ -427,16 +416,6 @@ export class BraintrustState {
       this._apiConn = new HTTPConnection(this.apiUrl, this.fetch);
     }
     return this._apiConn!;
-  }
-
-  public proxyConn(): HTTPConnection {
-    if (!this._proxyConn) {
-      if (!this.proxyUrl) {
-        throw new Error("Must initialize proxyUrl before requesting proxyConn");
-      }
-      this._proxyConn = new HTTPConnection(this.proxyUrl, this.fetch);
-    }
-    return this._proxyConn!;
   }
 
   public bgLogger(): BackgroundLogger {
@@ -2258,7 +2237,6 @@ export async function loginToState(options: LoginOptions = {}) {
 
   // Set the same token in the API
   state.appConn().set_token(apiKey);
-  state.proxyConn().set_token(apiKey);
   state.loginToken = conn.token;
   state.loggedIn = true;
 
@@ -2603,7 +2581,6 @@ function _check_org_info(
       state.orgId = org.id;
       state.orgName = org.name;
       state.apiUrl = iso.getEnv("BRAINTRUST_API_URL") ?? org.api_url;
-      state.proxyUrl = iso.getEnv("BRAINTRUST_PROXY_URL") ?? org.proxy_url;
       state.gitMetadataSettings = org.git_metadata || undefined;
       break;
     }

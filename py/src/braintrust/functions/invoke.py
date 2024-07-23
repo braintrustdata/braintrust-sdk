@@ -3,7 +3,7 @@ from typing import Any, Literal, Optional, TypeVar, Union, overload
 from braintrust_core.functions import INVOKE_API_VERSION
 from sseclient import SSEClient
 
-from ..logger import Exportable, get_span_parent_object, login, proxy_conn
+from ..logger import Exportable, api_conn, get_span_parent_object, login
 from ..util import response_raise_for_status
 from .stream import BraintrustStream
 
@@ -133,7 +133,7 @@ def invoke(
 
     headers = {"Accept": "text/event-stream" if stream else "application/json"}
 
-    resp = proxy_conn().post("function/invoke", json=request, headers=headers)
+    resp = api_conn().post("function/invoke", json=request, headers=headers)
     response_raise_for_status(resp)
 
     if stream:
