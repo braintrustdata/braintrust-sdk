@@ -2,6 +2,12 @@
   "name": "braintrust",
   "version": "0.0.141",
   "description": "SDK for integrating Braintrust",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/braintrustdata/braintrust-sdk.git",
+    "directory": "blob/main/js"
+  },
+  "homepage": "https://www.braintrust.dev/docs",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
