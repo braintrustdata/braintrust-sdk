@@ -261,16 +261,16 @@ function initExperiment<IsOpen extends boolean = false>(
   });
 }
 
-export async function callEvaluatorData<
+export function callEvaluatorData<
   Input,
   Expected,
   Metadata extends BaseMetadata = DefaultMetadataType,
 >(
   data: EvalData<Input, Expected, Metadata>,
-): Promise<{
+): {
   data: EvalData<Input, Expected, Metadata>;
   baseExperiment: string | undefined;
-}> {
+} {
   let dataResult = typeof data === "function" ? data() : data;
 
   let baseExperiment: string | undefined = undefined;
@@ -361,7 +361,7 @@ export async function Eval<
 
   const resolvedReporter = options.reporter || defaultReporter;
   try {
-    const { data, baseExperiment } = await callEvaluatorData(evaluator.data);
+    const { data, baseExperiment } = callEvaluatorData(evaluator.data);
     const experiment = initExperiment(evaluator.state, {
       ...(evaluator.projectId
         ? { projectId: evaluator.projectId }

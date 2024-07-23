@@ -478,7 +478,7 @@ async function runOnce(
     }
   > = {};
   const resultPromises = evaluators.evaluators.map(async (evaluator) => {
-    const { data, baseExperiment } = await callEvaluatorData(
+    const { data, baseExperiment } = callEvaluatorData(
       evaluator.evaluator.data,
     );
     // TODO: For now, use the eval name as the project. However, we need to evolve
