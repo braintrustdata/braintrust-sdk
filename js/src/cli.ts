@@ -30,6 +30,7 @@ import {
   EvaluatorFile,
   Filter,
   ReporterDef,
+  callEvaluatorData,
   defaultReporter,
   error,
   logError,
@@ -122,10 +123,12 @@ async function initLogger(
   projectName: string,
   experimentName?: string,
   metadata?: Record<string, unknown>,
+  baseExperiment?: string,
 ) {
   const logger = initExperiment(projectName, {
     experiment: experimentName,
     metadata,
+    baseExperiment,
   });
   const info = await logger.summarize({ summarizeScores: false });
   console.error(
@@ -475,6 +478,9 @@ async function runOnce(
     }
   > = {};
   const resultPromises = evaluators.evaluators.map(async (evaluator) => {
+    const { data, baseExperiment } = callEvaluatorData(
+      evaluator.evaluator.data,
+    );
     // TODO: For now, use the eval name as the project. However, we need to evolve
     // the definition of a project and create a new concept called run, so that we
     // can name the experiment/evaluation within the run the evaluator's name.
@@ -484,11 +490,15 @@ async function runOnce(
           evaluator.evaluator.projectName,
           evaluator.evaluator.experimentName,
           evaluator.evaluator.metadata,
+          baseExperiment,
         );
     try {
       return await runEvaluator(
         logger,
-        evaluator.evaluator,
+        {
+          ...evaluator.evaluator,
+          data,
+        },
         opts.progressReporter,
         opts.filters,
       );
