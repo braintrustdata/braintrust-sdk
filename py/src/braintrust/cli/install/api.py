@@ -3,12 +3,12 @@ import os
 import textwrap
 import time
 
-import requests
 from botocore.exceptions import ClientError
 
 from braintrust.logger import app_conn, login
 
 from ...aws import cloudformation
+from ...util import response_raise_for_status
 
 _logger = logging.getLogger("braintrust.install.api")
 
@@ -446,7 +446,9 @@ def main(args):
                 )
 
             # Make the actual request
-            app_conn().post(
-                "api/organization/patch_id",
-                json=patch_args,
-            ).raise_for_status()
+            response_raise_for_status(
+                app_conn().post(
+                    "api/organization/patch_id",
+                    json=patch_args,
+                )
+            )
