@@ -72,6 +72,7 @@ export const organizationSchema = z
     id: organizationBaseSchema.shape.id,
     name: organizationBaseSchema.shape.name,
     api_url: z.string().nullish(),
+    is_universal_api: z.boolean().nullish(),
     proxy_url: z.string().nullish(),
     realtime_url: z.string().nullish(),
     created: organizationBaseSchema.shape.created,
@@ -967,6 +968,7 @@ export const patchOrganizationSchema = z
   .object({
     name: organizationSchema.shape.name.nullish(),
     api_url: organizationSchema.shape.api_url.nullish(),
+    is_universal_api: organizationSchema.shape.is_universal_api.nullish(),
     proxy_url: organizationSchema.shape.proxy_url.nullish(),
     realtime_url: organizationSchema.shape.realtime_url.nullish(),
   })

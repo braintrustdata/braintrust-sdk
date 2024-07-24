@@ -192,7 +192,7 @@ export async function uploadEvalBundles({
 
         const logPromise = _internalGetGlobalState()
           .apiConn()
-          .post_json("function/insert", {
+          .post_json("insert-functions", {
             functions: functionEntries,
           });
 
