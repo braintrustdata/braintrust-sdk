@@ -360,7 +360,7 @@ export class BraintrustState {
 
   static deserialize(
     serialized: unknown,
-    opts?: BackgroundLoggerOpts,
+    opts?: LoginOptions,
   ): BraintrustState {
     const serializedParsed = loginSchema.safeParse(serialized);
     if (!serializedParsed.success) {
