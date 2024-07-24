@@ -1016,25 +1016,17 @@ export const patchOrganizationMembersSchema = z
           .describe(
             "If true, send invite emails to the users who wore actually added",
           ),
+        group_id: groupSchema.shape.id
+          .nullish()
+          .describe(
+            "Optional id of a group to add newly-invited users to. Cannot specify both a group id and a group name.",
+          ),
+        group_name: groupSchema.shape.name
+          .nullish()
+          .describe(
+            "Optional name of a group to add newly-invited users to. Cannot specify both a group id and a group name.",
+          ),
       })
-      .and(
-        z.union([
-          z.object({
-            group_id: groupSchema.shape.id
-              .nullish()
-              .describe(
-                "Optional id of a group to add the invited users to within the org. Will not affect users who are already in the organization.",
-              ),
-          }),
-          z.object({
-            group_name: groupSchema.shape.name
-              .nullish()
-              .describe(
-                "Optional name of a group to add the invited users to within the org. Will not affect users who are already in the organization.",
-              ),
-          }),
-        ]),
-      )
       .nullish()
       .describe("Users to invite to the organization"),
     remove_users: z
