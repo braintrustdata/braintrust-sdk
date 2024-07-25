@@ -206,10 +206,10 @@ def build_parser(subparsers, parents):
         type=int,
     )
 
-    # Use the global proxy (https://braintrustproxy.com)
+    # Use the global cloudflare proxy (https://braintrustproxy.com)
     parser.add_argument(
         "--use-global-proxy",
-        help="Use the global proxy (https://braintrustproxy.com)",
+        help="Use the global cloudflare proxy (https://braintrustproxy.com)",
         default=None,
         choices=[None, "true", "false"],
     )
