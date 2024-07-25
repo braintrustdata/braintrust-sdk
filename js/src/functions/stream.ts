@@ -69,6 +69,34 @@ export class BraintrustStream {
   }
 
   /**
+   * Returns an async iterator for the BraintrustStream.
+   * This allows for easy consumption of the stream using a for-await...of loop.
+   *
+   * @returns An async iterator that yields BraintrustStreamChunk objects.
+   */
+  [Symbol.asyncIterator](): AsyncIterator<BraintrustStreamChunk> {
+    const reader = this.stream.getReader();
+    return {
+      async next() {
+        const { done, value } = await reader.read();
+        if (done) {
+          reader.releaseLock();
+          return { done: true, value: undefined };
+        }
+        return { done: false, value };
+      },
+      async return() {
+        reader.releaseLock();
+        return { done: true, value: undefined };
+      },
+      async throw(error: any) {
+        reader.releaseLock();
+        throw error;
+      },
+    };
+  }
+
+  /**
    * Get the final value of the stream. The final value is the concatenation of all
    * the chunks in the stream, deserialized into a string or JSON object, depending on
    * the value's type.

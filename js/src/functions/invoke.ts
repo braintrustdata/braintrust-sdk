@@ -30,7 +30,7 @@ export interface InvokeFunctionArgs<
   /**
    * The name of the project containing the function to invoke.
    */
-  project_name?: string;
+  projectName?: string;
   /**
    * The slug of the function to invoke.
    */
@@ -39,15 +39,15 @@ export interface InvokeFunctionArgs<
   /**
    * The name of the global function to invoke.
    */
-  global_function?: string;
+  globalFunction?: string;
   /**
    * The ID of the prompt session to invoke the function from.
    */
-  prompt_session_id?: string;
+  promptSessionId?: string;
   /**
    * The ID of the function in the prompt session to invoke.
    */
-  prompt_session_function_id?: string;
+  promptSessionFunctionId?: string;
 
   /**
    * The version of the function to invoke.
@@ -131,7 +131,14 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
       : await parentArg.export()
     : await getSpanParentObject().export();
 
-  const functionId = functionIdSchema.safeParse(functionIdArgs);
+  const functionId = functionIdSchema.safeParse({
+    project_name: functionIdArgs.projectName,
+    slug: functionIdArgs.slug,
+    global_function: functionIdArgs.globalFunction,
+    prompt_session_id: functionIdArgs.promptSessionId,
+    prompt_session_function_id: functionIdArgs.promptSessionFunctionId,
+    version: functionIdArgs.version,
+  });
   if (!functionId.success) {
     throw new Error(
       `Invalid function ID arguments: ${functionId.error.message}`,
