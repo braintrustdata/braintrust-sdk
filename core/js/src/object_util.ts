@@ -83,11 +83,7 @@ export function forEachMissingKey({
   function helper(lhs: unknown, rhs: unknown, path: string[]) {
     if (lhs instanceof Object) {
       if (!(rhs instanceof Object)) {
-        throw new Error(
-          `Type mismatch between lhs and rhs object at path ${JSON.stringify(
-            path,
-          )}`,
-        );
+        return;
       }
       const lhsRec = lhs as Record<string, unknown>;
       const rhsRec = rhs as Record<string, unknown>;
