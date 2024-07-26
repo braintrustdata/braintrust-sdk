@@ -193,6 +193,10 @@ export const runtimeContextSchema = z.object({
 });
 export type RuntimeContext = z.infer<typeof runtimeContextSchema>;
 
+export const promptLogIdLiteralSchema = z
+  .literal("p")
+  .describe("A literal 'p' which identifies the object as a project prompt");
+
 export const promptBaseSchema = generateBaseTableSchema("prompt");
 const promptSchemaObject = z.object({
   id: promptBaseSchema.shape.id,
@@ -203,9 +207,7 @@ const promptSchemaObject = z.object({
       `The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the prompt (see the \`version\` parameter)`,
     ),
   project_id: promptBaseSchema.shape.project_id,
-  log_id: z
-    .literal("p")
-    .describe("A literal 'p' which identifies the object as a project prompt"),
+  log_id: promptLogIdLiteralSchema,
   org_id: organizationSchema.shape.id,
   name: promptBaseSchema.shape.name,
   slug: z.string().describe("Unique identifier for the prompt"),
@@ -787,7 +789,7 @@ const createPromptSchema = promptSchema
   })
   .openapi("CreatePrompt");
 
-const createFunctionSchema = functionSchema
+export const createFunctionSchema = functionSchema
   .omit({
     id: true,
     _xact_id: true,
