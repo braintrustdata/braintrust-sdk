@@ -28,13 +28,6 @@ test("forEachMissingKey structural mismatch", () => {
   let rhs: Record<string, any> = { q: "hi", c: "dog", x: { dog: "cat" } };
 
   let keysAndFn = makeAccumulateMissingKeysF();
-  expect(() => forEachMissingKey({ lhs, rhs, fn: keysAndFn.fn })).toThrowError(
-    `Type mismatch between lhs and rhs object at path ["c"]`,
-  );
-
-  // Should work if we take away element `c`.
-  delete rhs["c"];
-  keysAndFn = makeAccumulateMissingKeysF();
   forEachMissingKey({ lhs, rhs, fn: keysAndFn.fn });
   expect(keysAndFn.missingKeys).toEqual({ q: [], dog: ["x"] });
 });

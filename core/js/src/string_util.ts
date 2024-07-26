@@ -14,6 +14,13 @@ export function capitalize(s: string, sep?: string) {
     .join(sep || "");
 }
 
+export function lowercase(s: string, sep?: string) {
+  const items = sep ? s.split(sep) : [s];
+  return items
+    .map((s) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : s))
+    .join(sep || "");
+}
+
 export function snakeToCamelCase(s: string) {
   return s
     .split("_")
