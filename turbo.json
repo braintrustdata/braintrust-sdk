@@ -21,6 +21,7 @@
     },
     "clean": {
       "cache": false
-    }
+    },
+    "watch": {}
   }
 }

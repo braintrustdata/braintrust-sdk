@@ -1444,6 +1444,7 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
         "scores",
         "metadata",
         "metrics",
+        "error",
         "dataset_record_id",
         "inputs",
     }
@@ -2325,13 +2326,65 @@ class SpanImpl(Span):
             self._context_token = _state.current_span.set(self)
         return self
 
-    def __exit__(self, type, value, callback):
-        del type, value, callback
+    def __exit__(self, exc_type, exc_value, tb):
+        try:
+            if exc_type is not None:
+                self.log_internal(dict(error=stringify_exception(exc_type, exc_value, tb)))
+        finally:
+            if self.set_current:
+                _state.current_span.reset(self._context_token)
 
-        if self.set_current:
-            _state.current_span.reset(self._context_token)
+            self.end()
 
-        self.end()
+
+# Inverts
+#
+# Traceback (most recent call last):
+#   File "/Users/ankur/projects/braintrust/examples/error-tracing/simple.py", line 16, in <module>
+#     main()
+#   File "/Users/ankur/projects/braintrust/sdk/py/src/braintrust/logger.py", line 1311, in wrapper_sync
+#     ret = f(*f_args, **f_kwargs)
+#           ^^^^^^^^^^^^^^^^^^^^^^
+#   File "/Users/ankur/projects/braintrust/examples/error-tracing/simple.py", line 13, in main
+#     will_fail()
+#   File "/Users/ankur/projects/braintrust/sdk/py/src/braintrust/logger.py", line 1311, in wrapper_sync
+#     ret = f(*f_args, **f_kwargs)
+#           ^^^^^^^^^^^^^^^^^^^^^^
+#   File "/Users/ankur/projects/braintrust/examples/error-tracing/simple.py", line 8, in will_fail
+#     raise Exception("I will \n\nfail")
+# Exception: I will
+#
+# to
+#
+# Exception: I will
+# Traceback (most recent call last):
+#   File "/Users/ankur/projects/braintrust/sdk/py/src/braintrust/logger.py", line 1311, in wrapper_sync
+#     ret = f(*f_args, **f_kwargs)
+#           ^^^^^^^^^^^^^^^^^^^^^^
+#   File "/Users/ankur/projects/braintrust/examples/error-tracing/simple.py", line 13, in main
+#     will_fail()
+#   File "/Users/ankur/projects/braintrust/sdk/py/src/braintrust/logger.py", line 1311, in wrapper_sync
+#     ret = f(*f_args, **f_kwargs)
+#           ^^^^^^^^^^^^^^^^^^^^^^
+#   File "/Users/ankur/projects/braintrust/examples/error-tracing/simple.py", line 8, in will_fail
+#     raise Exception("I will \n\nfail")
+def stringify_exception(exc_type, exc_value, tb):
+    lines = traceback.format_exception(exc_type, exc_value, tb)
+
+    # Find the index where the actual exception message starts. Each exception line
+    # starts with two spaces.
+    exception_start = next(
+        i for i, line in enumerate(lines) if not (line.startswith("  ") or line.startswith("Traceback "))
+    )
+
+    # Join the exception message lines
+    error_message = "".join(lines[exception_start:]).strip()
+
+    # Join the stack trace lines
+    stack_trace = "".join(lines[:exception_start]).strip()
+
+    # Combine error message, newline, and stack trace
+    return f"{error_message}\n\n{stack_trace}"
 
 
 def _strip_nones(d, deep: bool):

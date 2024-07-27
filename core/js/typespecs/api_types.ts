@@ -54,6 +54,7 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
     input: customTypes.any,
     output: customTypes.any,
     expected: customTypes.any,
+    error: customTypes.any.describe("The error that occurred, if any"),
     tags: z.array(z.string()).nullish().describe("A list of tags to log"),
     scores: z.record(z.number().min(0).max(1).nullish()).nullish(),
     metadata: z
@@ -376,6 +377,7 @@ export const experimentEventSchema = z
     expected: experimentEventBaseSchema.shape.expected.describe(
       "The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models",
     ),
+    error: experimentEventBaseSchema.shape.error,
     scores: experimentEventBaseSchema.shape.scores.describe(
       "A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments",
     ),
@@ -455,6 +457,7 @@ export const projectLogsEventSchema = z
     expected: projectLogsEventBaseSchema.shape.expected.describe(
       "The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.",
     ),
+    error: projectLogsEventBaseSchema.shape.error,
     scores: projectLogsEventBaseSchema.shape.scores.describe(
       "A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.",
     ),
@@ -556,6 +559,7 @@ export const insertExperimentEventBaseSchema = objectNullish(
       input: true,
       output: true,
       expected: true,
+      error: true,
       scores: true,
       metadata: true,
       tags: true,
@@ -601,6 +605,7 @@ export const insertProjectLogsEventBaseSchema = objectNullish(
       input: true,
       output: true,
       expected: true,
+      error: true,
       scores: true,
       metadata: true,
       tags: true,
