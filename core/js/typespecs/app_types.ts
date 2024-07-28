@@ -1044,6 +1044,18 @@ export const patchOrganizationMembersSchema = z
       })
       .nullish()
       .describe("Users to remove from the organization"),
+    org_name: z
+      .string()
+      .nullish()
+      .describe(
+        `For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, or in case you want to explicitly assert the organization you are modifying, you may specify the name of the organization.`,
+      ),
+    org_id: z
+      .string()
+      .nullish()
+      .describe(
+        `For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, or in case you want to explicitly assert the organization you are modifying, you may specify the id of the organization.`,
+      ),
   })
   .openapi("PatchOrganizationMembers");
 
