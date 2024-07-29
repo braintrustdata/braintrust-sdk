@@ -179,15 +179,35 @@ export interface Evaluator<
   state?: BraintrustState;
 }
 
-export type EvalResultWithSummary<
+export class EvalResultWithSummary<
   Input,
   Output,
   Expected,
   Metadata extends BaseMetadata = DefaultMetadataType,
-> = {
-  summary: ExperimentSummary;
-  results: EvalResult<Input, Output, Expected, Metadata>[];
-};
+> {
+  constructor(
+    public summary: ExperimentSummary,
+    public results: EvalResult<Input, Output, Expected, Metadata>[],
+  ) {}
+
+  toString(): string {
+    return formatExperimentSummary(this.summary);
+  }
+
+  [Symbol.for("nodejs.util.inspect.custom")](): string {
+    return `EvalResultWithSummary(summary="...", results=[...])`;
+  }
+
+  toJSON(): {
+    summary: ExperimentSummary;
+    results: EvalResult<Input, Output, Expected, Metadata>[];
+  } {
+    return {
+      summary: this.summary,
+      results: this.results,
+    };
+  }
+}
 
 export interface ReporterOpts {
   verbose: boolean;
@@ -340,15 +360,15 @@ export async function Eval<
     globalThis._spanContext = { currentSpan, NOOP_SPAN };
 
     // Better to return this empty object than have an annoying-to-use signature
-    return {
-      summary: {
+    return new EvalResultWithSummary(
+      {
         scores: {},
         metrics: {},
         projectName: "",
         experimentName: "",
       },
-      results: [],
-    };
+      [],
+    );
   }
 
   const progressReporter = new BarProgressReporter();
@@ -777,10 +797,7 @@ async function runEvaluatorInternal(
     ? await experiment.summarize()
     : buildLocalSummary(evaluator, results);
 
-  return {
-    summary,
-    results,
-  };
+  return new EvalResultWithSummary(summary, results);
 }
 
 export const error = chalk.bold.red;
