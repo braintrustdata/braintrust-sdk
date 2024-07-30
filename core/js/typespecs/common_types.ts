@@ -3,16 +3,20 @@ import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 extendZodWithOpenApi(z);
 
 export const literalSchema = z.union([
-  z.string(),
-  z.number(),
-  z.boolean(),
-  z.null(),
+  z.string().openapi({ title: "string" }),
+  z.number().openapi({ title: "number" }),
+  z.boolean().openapi({ title: "boolean" }),
+  z.null().openapi({ title: "null" }),
 ]);
 type Literal = z.infer<typeof literalSchema>;
 
 export type Json = Literal | { [key: string]: Json } | Json[];
 export const jsonSchema: z.ZodType<Json> = z.lazy(() =>
-  z.union([literalSchema, z.array(jsonSchema), z.record(jsonSchema)]),
+  z.union([
+    literalSchema,
+    z.array(jsonSchema).openapi({ title: "array" }),
+    z.record(jsonSchema).openapi({ title: "object" }),
+  ]),
 );
 
 // It is often hard for us to control every piece of code that serializes

@@ -23,7 +23,11 @@ export const chatCompletionContentPartTextSchema = z.object({
 const imageURLSchema = z.object({
   url: z.string(),
   detail: z
-    .union([z.literal("auto"), z.literal("low"), z.literal("high")])
+    .union([
+      z.literal("auto").openapi({ title: "auto" }),
+      z.literal("low").openapi({ title: "low" }),
+      z.literal("high").openapi({ title: "high" }),
+    ])
     .optional(),
 });
 export const chatCompletionContentPartImageSchema = z.object({
@@ -32,13 +36,13 @@ export const chatCompletionContentPartImageSchema = z.object({
 });
 
 export const chatCompletionContentPartSchema = z.union([
-  chatCompletionContentPartTextSchema,
-  chatCompletionContentPartImageSchema,
+  chatCompletionContentPartTextSchema.openapi({ title: "text" }),
+  chatCompletionContentPartImageSchema.openapi({ title: "image_url" }),
 ]);
 
 export const chatCompletionContentSchema = z.union([
-  z.string().default(""),
-  z.array(chatCompletionContentPartSchema),
+  z.string().default("").openapi({ title: "text" }),
+  z.array(chatCompletionContentPartSchema).openapi({ title: "array" }),
 ]);
 
 const chatCompletionUserMessageParamSchema = z.object({
@@ -88,16 +92,16 @@ const chatCompletionFallbackMessageParamSchema = z.object({
   content: z.string().nullish(),
 });
 export const chatCompletionOpenAIMessageParamSchema = z.union([
-  chatCompletionSystemMessageParamSchema,
-  chatCompletionUserMessageParamSchema,
-  chatCompletionAssistantMessageParamSchema,
-  chatCompletionToolMessageParamSchema,
-  chatCompletionFunctionMessageParamSchema,
+  chatCompletionSystemMessageParamSchema.openapi({ title: "system" }),
+  chatCompletionUserMessageParamSchema.openapi({ title: "user" }),
+  chatCompletionAssistantMessageParamSchema.openapi({ title: "assistant" }),
+  chatCompletionToolMessageParamSchema.openapi({ title: "tool" }),
+  chatCompletionFunctionMessageParamSchema.openapi({ title: "function" }),
 ]);
 
 export const chatCompletionMessageParamSchema = z.union([
-  chatCompletionOpenAIMessageParamSchema,
-  chatCompletionFallbackMessageParamSchema,
+  chatCompletionOpenAIMessageParamSchema.openapi({ title: "openai" }),
+  chatCompletionFallbackMessageParamSchema.openapi({ title: "fallback" }),
 ]);
 
 export type ToolCall = z.infer<typeof chatCompletionMessageToolCallSchema>;
