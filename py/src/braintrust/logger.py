@@ -1730,6 +1730,11 @@ def update_span(exported, **event) -> Span:
     :param exported: The output of `span.export()`.
     :param **event: Data to update. See `Experiment.log` for a full list of valid fields.
     """
+    if event.get("id") is not None:
+        raise ValueError(
+            "Cannot specify id when updating a span with `update_span`. Use the output of `span.export()` instead."
+        )
+
     components = SpanComponentsV2.from_str(exported)
     return _update_span_impl(
         parent_object_type=components.object_type,

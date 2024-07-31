@@ -786,12 +786,10 @@ function updateSpanImpl(
  */
 export function updateSpan({
   exported,
-  event,
   state,
-}: {
-  exported: string;
-  event: Partial<ExperimentEvent>;
-} & OptionalStateArg): void {
+  ...event
+}: { exported: string } & Omit<Partial<ExperimentEvent>, "id"> &
+  OptionalStateArg): void {
   const resolvedState = state ?? _globalState;
   const components = SpanComponentsV2.fromStr(exported);
 
@@ -1069,11 +1067,20 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
    * Update a span in the experiment using its id. It is important that you only update a span once the original span has been fully written and flushed,
    * since otherwise updates to the span may conflict with the original span.
    *
-   * @param id: The id of the span to update.
-   * @param event The event data to update the span with. See `Experiment.log` for a full list of valid fields.
+   * @param event The event data to update the span with. Must include `id`. See `Experiment.log` for a full list of valid fields.
    */
-  public updateSpan(id: string, event: Partial<ExperimentEvent>): void {
-    updateSpanImpl(this.state, this.parentObjectType(), this.lazyId, id, event);
+  public updateSpan(event: Partial<ExperimentEvent>): void {
+    const { id, ...eventRest } = event;
+    if (!id) {
+      throw new Error("Span id is required to update a span");
+    }
+    updateSpanImpl(
+      this.state,
+      this.parentObjectType(),
+      this.lazyId,
+      id,
+      eventRest,
+    );
   }
 
   /**
@@ -3154,11 +3161,20 @@ export class Experiment
    * Update a span in the experiment using its id. It is important that you only update a span once the original span has been fully written and flushed,
    * since otherwise updates to the span may conflict with the original span.
    *
-   * @param id: The id of the span to update.
-   * @param event The event data to update the span with. See `Experiment.log` for a full list of valid fields.
+   * @param event The event data to update the span with. Must include `id`. See `Experiment.log` for a full list of valid fields.
    */
-  public updateSpan(id: string, event: Partial<ExperimentEvent>): void {
-    updateSpanImpl(this.state, this.parentObjectType(), this.lazyId, id, event);
+  public updateSpan(event: Partial<ExperimentEvent>): void {
+    const { id, ...eventRest } = event;
+    if (!id) {
+      throw new Error("Span id is required to update a span");
+    }
+    updateSpanImpl(
+      this.state,
+      this.parentObjectType(),
+      this.lazyId,
+      id,
+      eventRest,
+    );
   }
 
   /**
