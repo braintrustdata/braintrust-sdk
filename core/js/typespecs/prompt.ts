@@ -32,15 +32,19 @@ export type ContentPartImage = z.infer<
 export type ContentPart = z.infer<typeof chatCompletionContentPartSchema>;
 
 export const promptBlockDataSchema = z.union([
-  z.object({
-    type: z.literal("completion"),
-    content: z.string(),
-  }),
-  z.object({
-    type: z.literal("chat"),
-    messages: z.array(chatCompletionMessageParamSchema),
-    tools: z.string().optional(),
-  }),
+  z
+    .object({
+      type: z.literal("completion"),
+      content: z.string(),
+    })
+    .openapi({ title: "completion" }),
+  z
+    .object({
+      type: z.literal("chat"),
+      messages: z.array(chatCompletionMessageParamSchema),
+      tools: z.string().optional(),
+    })
+    .openapi({ title: "chat" }),
 ]);
 
 export type PromptBlockData = z.infer<typeof promptBlockDataSchema>;
@@ -62,21 +66,25 @@ const openAIModelParamsSchema = z.object({
   response_format: z.object({ type: z.literal("json_object") }).nullish(),
   tool_choice: z
     .union([
-      z.literal("auto"),
-      z.literal("none"),
-      z.object({
-        type: z.literal("function"),
-        function: z.object({ name: z.string() }),
-      }),
+      z.literal("auto").openapi({ title: "auto" }),
+      z.literal("none").openapi({ title: "none" }),
+      z
+        .object({
+          type: z.literal("function"),
+          function: z.object({ name: z.string() }),
+        })
+        .openapi({ title: "function" }),
     ])
     .optional(),
   function_call: z
     .union([
-      z.literal("auto"),
-      z.literal("none"),
-      z.object({
-        name: z.string(),
-      }),
+      z.literal("auto").openapi({ title: "auto" }),
+      z.literal("none").openapi({ title: "none" }),
+      z
+        .object({
+          name: z.string(),
+        })
+        .openapi({ title: "function" }),
     ])
     .optional(),
   n: z.number().optional(),
@@ -107,11 +115,26 @@ const windowAIModelParamsSchema = z.object({
 });
 const jsCompletionParamsSchema = z.object({});
 export const modelParamsSchema = z.union([
-  braintrustModelParamsSchema.merge(openAIModelParamsSchema).passthrough(),
-  braintrustModelParamsSchema.merge(anthropicModelParamsSchema).passthrough(),
-  braintrustModelParamsSchema.merge(googleModelParamsSchema).passthrough(),
-  braintrustModelParamsSchema.merge(windowAIModelParamsSchema).passthrough(),
-  braintrustModelParamsSchema.merge(jsCompletionParamsSchema).passthrough(),
+  braintrustModelParamsSchema
+    .merge(openAIModelParamsSchema)
+    .passthrough()
+    .openapi({ title: "OpenAIModelParams" }),
+  braintrustModelParamsSchema
+    .merge(anthropicModelParamsSchema)
+    .passthrough()
+    .openapi({ title: "AnthropicModelParams" }),
+  braintrustModelParamsSchema
+    .merge(googleModelParamsSchema)
+    .passthrough()
+    .openapi({ title: "GoogleModelParams" }),
+  braintrustModelParamsSchema
+    .merge(windowAIModelParamsSchema)
+    .passthrough()
+    .openapi({ title: "WindowAIModelParams" }),
+  braintrustModelParamsSchema
+    .merge(jsCompletionParamsSchema)
+    .passthrough()
+    .openapi({ title: "JsCompletionParams" }),
 ]);
 
 export type ModelParams = z.infer<typeof modelParamsSchema>;
