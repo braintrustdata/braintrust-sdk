@@ -2100,7 +2100,7 @@ export async function loadPrompt({
 
   const state = stateArg ?? _globalState;
 
-  state.login({
+  await state.login({
     orgName,
     apiKey,
     appUrl,
