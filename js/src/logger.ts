@@ -748,6 +748,64 @@ function logFeedbackImpl(
   }
 }
 
+function updateSpanImpl(
+  state: BraintrustState,
+  parentObjectType: SpanObjectTypeV2,
+  parentObjectId: LazyValue<string>,
+  id: string,
+  event: Omit<Partial<ExperimentEvent>, "id">,
+): void {
+  const updateEvent = validateAndSanitizeExperimentLogPartialArgs({
+    id,
+    ...event,
+  } as Partial<ExperimentEvent>);
+
+  const parentIds = async () =>
+    new SpanComponentsV2({
+      objectType: parentObjectType,
+      objectId: await parentObjectId.get(),
+    }).objectIdFields();
+
+  const record = new LazyValue(async () => ({
+    id,
+    ...updateEvent,
+    ...(await parentIds()),
+    [IS_MERGE_FIELD]: true,
+  }));
+  state.bgLogger().log([record]);
+}
+
+/**
+ * Update a span using the output of `span.export()`. It is important that you only resume updating
+ * to a span once the original span has been fully written and flushed, since otherwise updates to
+ * the span may conflict with the original span.
+ *
+ * @param exported The output of `span.export()`.
+ * @param event The event data to update the span with. See `Experiment.log` for a full list of valid fields.
+ * @param state (optional) Login state to use. If not provided, the global state will be used.
+ */
+export function updateSpan({
+  exported,
+  state,
+  ...event
+}: { exported: string } & Omit<Partial<ExperimentEvent>, "id"> &
+  OptionalStateArg): void {
+  const resolvedState = state ?? _globalState;
+  const components = SpanComponentsV2.fromStr(exported);
+
+  if (!components.rowIds?.rowId) {
+    throw new Error("Exported span must have a row id");
+  }
+
+  updateSpanImpl(
+    resolvedState,
+    components.objectType,
+    new LazyValue(spanComponentsToObjectIdLambda(resolvedState, components)),
+    components.rowIds?.rowId,
+    event,
+  );
+}
+
 interface ParentSpanIds {
   spanId: string;
   rootSpanId: string;
@@ -1003,6 +1061,29 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
    */
   public logFeedback(event: LogFeedbackFullArgs): void {
     logFeedbackImpl(this.state, this.parentObjectType(), this.lazyId, event);
+  }
+
+  /**
+   * Update a span in the experiment using its id. It is important that you only update a span once the original span has been fully written and flushed,
+   * since otherwise updates to the span may conflict with the original span.
+   *
+   * @param event The event data to update the span with. Must include `id`. See `Experiment.log` for a full list of valid fields.
+   */
+  public updateSpan(
+    event: Omit<Partial<ExperimentEvent>, "id"> &
+      Required<Pick<ExperimentEvent, "id">>,
+  ): void {
+    const { id, ...eventRest } = event;
+    if (!id) {
+      throw new Error("Span id is required to update a span");
+    }
+    updateSpanImpl(
+      this.state,
+      this.parentObjectType(),
+      this.lazyId,
+      id,
+      eventRest,
+    );
   }
 
   /**
@@ -3077,6 +3158,29 @@ export class Experiment
    */
   public logFeedback(event: LogFeedbackFullArgs): void {
     logFeedbackImpl(this.state, this.parentObjectType(), this.lazyId, event);
+  }
+
+  /**
+   * Update a span in the experiment using its id. It is important that you only update a span once the original span has been fully written and flushed,
+   * since otherwise updates to the span may conflict with the original span.
+   *
+   * @param event The event data to update the span with. Must include `id`. See `Experiment.log` for a full list of valid fields.
+   */
+  public updateSpan(
+    event: Omit<Partial<ExperimentEvent>, "id"> &
+      Required<Pick<ExperimentEvent, "id">>,
+  ): void {
+    const { id, ...eventRest } = event;
+    if (!id) {
+      throw new Error("Span id is required to update a span");
+    }
+    updateSpanImpl(
+      this.state,
+      this.parentObjectType(),
+      this.lazyId,
+      id,
+      eventRest,
+    );
   }
 
   /**

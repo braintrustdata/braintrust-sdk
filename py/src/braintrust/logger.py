@@ -1,4 +1,3 @@
-import abc
 import atexit
 import concurrent.futures
 import contextlib
@@ -1694,6 +1693,57 @@ def _log_feedback_impl(
         _state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
 
 
+def _update_span_impl(
+    parent_object_type: SpanObjectTypeV2,
+    parent_object_id: LazyValue[str],
+    id,
+    **event,
+):
+    update_event = _validate_and_sanitize_experiment_log_partial_args(
+        event=event,
+    )
+
+    parent_ids = lambda: SpanComponentsV2(
+        object_type=parent_object_type,
+        object_id=parent_object_id.get(),
+    ).object_id_fields()
+
+    def compute_record():
+        return dict(
+            id=id,
+            **update_event,
+            **parent_ids(),
+            **{
+                IS_MERGE_FIELD: True,
+            },
+        )
+
+    _state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
+
+
+def update_span(exported, **event) -> Span:
+    """
+    Update a span using the output of `span.export()`. It is important that you only resume updating
+    to a span once the original span has been fully written and flushed, since otherwise updates to
+    the span may conflict with the original span.
+
+    :param exported: The output of `span.export()`.
+    :param **event: Data to update. See `Experiment.log` for a full list of valid fields.
+    """
+    if event.get("id") is not None:
+        raise ValueError(
+            "Cannot specify id when updating a span with `update_span`. Use the output of `span.export()` instead."
+        )
+
+    components = SpanComponentsV2.from_str(exported)
+    return _update_span_impl(
+        parent_object_type=components.object_type,
+        parent_object_id=LazyValue(_span_components_to_object_id_lambda(components), use_mutex=False),
+        id=components.row_ids.row_id,
+        **event,
+    )
+
+
 @dataclasses.dataclass
 class ParentSpanIds:
     span_id: str
@@ -1948,6 +1998,25 @@ class Experiment(ObjectFetcher, Exportable):
             start_time=start_time,
             set_current=set_current,
             parent=parent,
+            **event,
+        )
+
+    def update_span(
+        self,
+        id,
+        **event,
+    ):
+        """
+        Update a span in the experiment using its id. It is important that you only update a span once the original span has been fully written and flushed,
+        since otherwise updates to the span may conflict with the original span.
+
+        :param id: The id of the span to update.
+        :param **event: Data to update. See `Experiment.log` for a full list of valid fields.
+        """
+        return _update_span_impl(
+            parent_object_type=self._parent_object_type(),
+            parent_object_id=self._lazy_id,
+            id=id,
             **event,
         )
 
@@ -2843,6 +2912,21 @@ class Logger(Exportable):
             start_time=start_time,
             set_current=set_current,
             parent=parent,
+            **event,
+        )
+
+    def update_span(self, id, **event):
+        """
+        Update a span in the experiment using its id. It is important that you only update a span once the original span
+        has been fully written and flushed, since otherwise updates to the span may conflict with the original span.
+
+        :param id: The id of the span to update.
+        :param **event: Data to update. See `Experiment.log` for a full list of valid fields.
+        """
+        return _update_span_impl(
+            parent_object_type=self._parent_object_type(),
+            parent_object_id=self._lazy_id,
+            id=id,
             **event,
         )
 

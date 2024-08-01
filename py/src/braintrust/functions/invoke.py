@@ -12,34 +12,49 @@ T = TypeVar("T")
 
 @overload
 def invoke(
-    input: Any,
+    # the permutations of arguments for a function id
+    function_id: Optional[str] = None,
+    version: Optional[str] = None,
+    prompt_session_id: Optional[str] = None,
+    prompt_session_function_id: Optional[str] = None,
+    project_name: Optional[str] = None,
+    slug: Optional[str] = None,
+    global_function: Optional[str] = None,
+    # arguments to the function
+    input: Any = None,
     parent: Optional[Union[Exportable, str]] = None,
     stream: Optional[Literal[False]] = None,
     org_name: Optional[str] = None,
     api_key: Optional[str] = None,
     app_url: Optional[str] = None,
     force_login: bool = False,
-    # the permutations of arguments for a function id
-    function_id: Optional[str] = None,
-    version: Optional[str] = None,
-    prompt_session_id: Optional[str] = None,
-    prompt_session_function_id: Optional[str] = None,
-    project_name: Optional[str] = None,
-    slug: Optional[str] = None,
-    global_function: Optional[str] = None,
 ) -> T:
     ...
 
 
 @overload
 def invoke(
-    input: Any,
+    # the permutations of arguments for a function id
+    function_id: Optional[str] = None,
+    version: Optional[str] = None,
+    prompt_session_id: Optional[str] = None,
+    prompt_session_function_id: Optional[str] = None,
+    project_name: Optional[str] = None,
+    slug: Optional[str] = None,
+    global_function: Optional[str] = None,
+    # arguments to the function
+    input: Any = None,
     parent: Optional[Union[Exportable, str]] = None,
     stream: Literal[True] = True,
     org_name: Optional[str] = None,
     api_key: Optional[str] = None,
     app_url: Optional[str] = None,
     force_login: bool = False,
+) -> BraintrustStream:
+    ...
+
+
+def invoke(
     # the permutations of arguments for a function id
     function_id: Optional[str] = None,
     version: Optional[str] = None,
@@ -48,26 +63,14 @@ def invoke(
     project_name: Optional[str] = None,
     slug: Optional[str] = None,
     global_function: Optional[str] = None,
-) -> BraintrustStream:
-    ...
-
-
-def invoke(
-    input: Any,
+    # arguments to the function
+    input: Any = None,
     parent: Optional[Union[Exportable, str]] = None,
     stream: bool = False,
     org_name: Optional[str] = None,
     api_key: Optional[str] = None,
     app_url: Optional[str] = None,
     force_login: bool = False,
-    # the permutations of arguments for a function id
-    function_id: Optional[str] = None,
-    version: Optional[str] = None,
-    prompt_session_id: Optional[str] = None,
-    prompt_session_function_id: Optional[str] = None,
-    project_name: Optional[str] = None,
-    slug: Optional[str] = None,
-    global_function: Optional[str] = None,
 ) -> Union[BraintrustStream, T]:
     """
     Invoke a Braintrust function, returning a `BraintrustStream` or the value as a plain
