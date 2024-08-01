@@ -159,9 +159,9 @@ export const sseDoneEventSchema = baseSSEEventSchema.omit({ data: true }).merge(
 );
 
 export const callEventSchema = z.union([
-  sseTextEventSchema,
-  sseDataEventSchema,
-  sseDoneEventSchema,
+  sseTextEventSchema.openapi({ title: "text_delta" }),
+  sseDataEventSchema.openapi({ title: "json_delta" }),
+  sseDoneEventSchema.openapi({ title: "done" }),
 ]);
 
 export type CallEventSchema = z.infer<typeof callEventSchema>;
