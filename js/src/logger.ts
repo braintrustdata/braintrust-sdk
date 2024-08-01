@@ -753,12 +753,12 @@ function updateSpanImpl(
   parentObjectType: SpanObjectTypeV2,
   parentObjectId: LazyValue<string>,
   id: string,
-  event: Partial<ExperimentEvent>,
+  event: Omit<Partial<ExperimentEvent>, "id">,
 ): void {
   const updateEvent = validateAndSanitizeExperimentLogPartialArgs({
     id,
     ...event,
-  });
+  } as Partial<ExperimentEvent>);
 
   const parentIds = async () =>
     new SpanComponentsV2({
@@ -1069,7 +1069,10 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
    *
    * @param event The event data to update the span with. Must include `id`. See `Experiment.log` for a full list of valid fields.
    */
-  public updateSpan(event: Partial<ExperimentEvent>): void {
+  public updateSpan(
+    event: Omit<Partial<ExperimentEvent>, "id"> &
+      Required<Pick<ExperimentEvent, "id">>,
+  ): void {
     const { id, ...eventRest } = event;
     if (!id) {
       throw new Error("Span id is required to update a span");
@@ -3163,7 +3166,10 @@ export class Experiment
    *
    * @param event The event data to update the span with. Must include `id`. See `Experiment.log` for a full list of valid fields.
    */
-  public updateSpan(event: Partial<ExperimentEvent>): void {
+  public updateSpan(
+    event: Omit<Partial<ExperimentEvent>, "id"> &
+      Required<Pick<ExperimentEvent, "id">>,
+  ): void {
     const { id, ...eventRest } = event;
     if (!id) {
       throw new Error("Span id is required to update a span");
