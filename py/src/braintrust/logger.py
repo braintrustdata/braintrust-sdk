@@ -2406,37 +2406,6 @@ class SpanImpl(Span):
             self.end()
 
 
-# Inverts
-#
-# Traceback (most recent call last):
-#   File "/Users/ankur/projects/braintrust/examples/error-tracing/simple.py", line 16, in <module>
-#     main()
-#   File "/Users/ankur/projects/braintrust/sdk/py/src/braintrust/logger.py", line 1311, in wrapper_sync
-#     ret = f(*f_args, **f_kwargs)
-#           ^^^^^^^^^^^^^^^^^^^^^^
-#   File "/Users/ankur/projects/braintrust/examples/error-tracing/simple.py", line 13, in main
-#     will_fail()
-#   File "/Users/ankur/projects/braintrust/sdk/py/src/braintrust/logger.py", line 1311, in wrapper_sync
-#     ret = f(*f_args, **f_kwargs)
-#           ^^^^^^^^^^^^^^^^^^^^^^
-#   File "/Users/ankur/projects/braintrust/examples/error-tracing/simple.py", line 8, in will_fail
-#     raise Exception("I will \n\nfail")
-# Exception: I will
-#
-# to
-#
-# Exception: I will
-# Traceback (most recent call last):
-#   File "/Users/ankur/projects/braintrust/sdk/py/src/braintrust/logger.py", line 1311, in wrapper_sync
-#     ret = f(*f_args, **f_kwargs)
-#           ^^^^^^^^^^^^^^^^^^^^^^
-#   File "/Users/ankur/projects/braintrust/examples/error-tracing/simple.py", line 13, in main
-#     will_fail()
-#   File "/Users/ankur/projects/braintrust/sdk/py/src/braintrust/logger.py", line 1311, in wrapper_sync
-#     ret = f(*f_args, **f_kwargs)
-#           ^^^^^^^^^^^^^^^^^^^^^^
-#   File "/Users/ankur/projects/braintrust/examples/error-tracing/simple.py", line 8, in will_fail
-#     raise Exception("I will \n\nfail")
 def stringify_exception(exc_type, exc_value, tb):
     lines = traceback.format_exception(exc_type, exc_value, tb)
 
