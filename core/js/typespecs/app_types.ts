@@ -234,26 +234,35 @@ export const codeBundleSchema = z.object({
   location: z.object({
     type: z.literal("experiment"),
     eval_name: z.string(),
-    position: z.union([z.literal("task"), z.object({ score: z.number() })]),
+    position: z.union([
+      z.literal("task").openapi({ title: "task" }),
+      z.object({ score: z.number() }).openapi({ title: "score" }),
+    ]),
   }),
   bundle_id: z.string(),
 });
 export type CodeBundle = z.infer<typeof codeBundleSchema>;
 
 export const functionDataSchema = z.union([
-  z.object({
-    type: z.literal("prompt"),
-    // For backwards compatibility reasons, this is hoisted out and stored
-    // in the outer object
-  }),
-  z.object({
-    type: z.literal("code"),
-    data: codeBundleSchema,
-  }),
-  z.object({
-    type: z.literal("global"),
-    name: z.string(),
-  }),
+  z
+    .object({
+      type: z.literal("prompt"),
+      // For backwards compatibility reasons, this is hoisted out and stored
+      // in the outer object
+    })
+    .openapi({ title: "prompt" }),
+  z
+    .object({
+      type: z.literal("code"),
+      data: codeBundleSchema,
+    })
+    .openapi({ title: "code" }),
+  z
+    .object({
+      type: z.literal("global"),
+      name: z.string(),
+    })
+    .openapi({ title: "global" }),
 ]);
 
 export const functionSchema = promptSchemaObject
@@ -538,17 +547,20 @@ export const projectScoreSchema = z
           .array()
           .describe(
             "For categorical-type project scores, the list of all categories",
-          ),
+          )
+          .openapi({ title: "categorical" }),
         z
           .record(z.number())
           .describe(
             "For weighted-type project scores, the weights of each score",
-          ),
+          )
+          .openapi({ title: "weighted" }),
         z
           .array(z.string())
           .describe(
             "For minimum-type project scores, the list of included scores",
-          ),
+          )
+          .openapi({ title: "minimum" }),
       ])
       .nullish(),
     config: z
