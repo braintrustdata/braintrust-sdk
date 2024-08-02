@@ -13,6 +13,7 @@ export type InputsField = { inputs: unknown };
 export type OtherExperimentLogFields = {
   output: unknown;
   expected: unknown;
+  error: unknown;
   tags: string[];
   scores: Record<string, number | null>;
   metadata: Record<string, unknown>;
