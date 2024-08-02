@@ -54,7 +54,7 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
     input: customTypes.any,
     output: customTypes.any,
     expected: customTypes.any,
-    error: customTypes.any.describe("The error that occurred, if any"),
+    error: customTypes.any.describe("The error that occurred, if any."),
     tags: z.array(z.string()).nullish().describe("A list of tags to log"),
     scores: z.record(z.number().min(0).max(1).nullish()).nullish(),
     metadata: z
