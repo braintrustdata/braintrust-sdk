@@ -33,7 +33,7 @@ import {
 import { spanTypeAttributeValues } from "../src/span_types";
 import { objectNullish } from "../src/zod_util";
 
-export const auditSourcesSchema = z.enum(VALID_SOURCES);
+const auditSourcesSchema = z.enum(VALID_SOURCES);
 
 function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
   const eventDescription = getEventObjectDescription(objectType);
@@ -437,6 +437,9 @@ export const promptSessionEventSchema = z
 export type PromptSessionEvent = z.infer<typeof promptSessionEventSchema>;
 
 const projectLogsEventBaseSchema = generateBaseEventOpSchema("project");
+export const projectLogsLogIdLiteralSchema = z
+  .literal("g")
+  .describe("A literal 'g' which identifies the log as a project log");
 export const projectLogsEventSchema = z
   .object({
     id: projectLogsEventBaseSchema.shape.id,
@@ -445,9 +448,7 @@ export const projectLogsEventSchema = z
     created: projectLogsEventBaseSchema.shape.created,
     org_id: projectSchema.shape.org_id,
     project_id: projectSchema.shape.id,
-    log_id: z
-      .literal("g")
-      .describe("A literal 'g' which identifies the log as a project log"),
+    log_id: projectLogsLogIdLiteralSchema,
     input: projectLogsEventBaseSchema.shape.input.describe(
       "The arguments that uniquely define a user input (an arbitrary, JSON serializable object).",
     ),
@@ -553,7 +554,7 @@ export const insertEventsResponseSchema = z
   })
   .openapi("InsertEventsResponse");
 
-export const insertExperimentEventBaseSchema = objectNullish(
+const insertExperimentEventBaseSchema = objectNullish(
   experimentEventSchema
     .pick({
       input: true,
@@ -580,7 +581,7 @@ const {
   requestSchema: insertExperimentEventsRequestSchema,
 } = makeInsertEventSchemas("experiment", insertExperimentEventBaseSchema);
 
-export const insertDatasetEventBaseSchema = objectNullish(
+const insertDatasetEventBaseSchema = objectNullish(
   datasetEventSchema
     .pick({
       input: true,
@@ -599,7 +600,7 @@ const {
   requestSchema: insertDatasetEventsRequestSchema,
 } = makeInsertEventSchemas("dataset", insertDatasetEventBaseSchema);
 
-export const insertProjectLogsEventBaseSchema = objectNullish(
+const insertProjectLogsEventBaseSchema = objectNullish(
   projectLogsEventSchema
     .pick({
       input: true,
@@ -624,62 +625,6 @@ const {
   eventSchema: insertProjectLogsEventSchema,
   requestSchema: insertProjectLogsEventsRequestSchema,
 } = makeInsertEventSchemas("project", insertProjectLogsEventBaseSchema);
-
-export const insertPromptSessionEventBaseSchema = objectNullish(
-  promptSessionEventSchema
-    .pick({
-      prompt_session_data: true,
-      prompt_data: true,
-      object_data: true,
-      completion: true,
-      tags: true,
-      id: true,
-      created: true,
-    })
-    .extend({
-      [OBJECT_DELETE_FIELD]:
-        promptSessionEventBaseSchema.shape[OBJECT_DELETE_FIELD],
-    }),
-);
-
-const promptEventBaseSchema = generateBaseEventOpSchema("prompt");
-export const insertPromptEventBaseSchema = promptSchema
-  .pick({ name: true, slug: true })
-  .merge(
-    objectNullish(
-      promptSchema.pick({
-        description: true,
-        created: true,
-        prompt_data: true,
-        tags: true,
-        metadata: true,
-        id: true,
-      }),
-    ),
-  )
-  .extend({
-    [OBJECT_DELETE_FIELD]: promptEventBaseSchema.shape[OBJECT_DELETE_FIELD],
-  });
-
-const functionEventBaseSchema = generateBaseEventOpSchema("function");
-export const insertFunctionEventBaseSchema = functionSchema
-  .pick({ name: true, slug: true })
-  .merge(
-    objectNullish(
-      functionSchema.pick({
-        description: true,
-        created: true,
-        prompt_data: true,
-        function_data: true,
-        tags: true,
-        metadata: true,
-        id: true,
-      }),
-    ),
-  )
-  .extend({
-    [OBJECT_DELETE_FIELD]: functionEventBaseSchema.shape[OBJECT_DELETE_FIELD],
-  });
 
 // Section: logging feedback.
 
