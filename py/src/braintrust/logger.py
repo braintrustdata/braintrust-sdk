@@ -2407,22 +2407,11 @@ class SpanImpl(Span):
 
 
 def stringify_exception(exc_type, exc_value, tb):
-    lines = traceback.format_exception(exc_type, exc_value, tb)
-
-    # Find the index where the actual exception message starts. Each exception line
-    # starts with two spaces.
-    exception_start = next(
-        i for i, line in enumerate(lines) if not (line.startswith("  ") or line.startswith("Traceback "))
+    return "".join(
+        traceback.format_exception_only(exc_type, exc_value)
+        + ["\nTraceback (most recent call last):\n"]
+        + traceback.format_tb(tb)
     )
-
-    # Join the exception message lines
-    error_message = "".join(lines[exception_start:]).strip()
-
-    # Join the stack trace lines
-    stack_trace = "".join(lines[:exception_start]).strip()
-
-    # Combine error message, newline, and stack trace
-    return f"{error_message}\n\n{stack_trace}"
 
 
 def _strip_nones(d, deep: bool):

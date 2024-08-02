@@ -998,30 +998,21 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     const { setCurrent, ...argsRest } = args ?? {};
     const span = this.startSpan(argsRest);
 
-    let ret;
-    try {
-      ret = runFinally(
-        () => {
-          if (setCurrent ?? true) {
-            return withCurrent(span, callback);
-          } else {
-            return callback(span);
-          }
-        },
-        () => span.end(),
-      );
-    } catch (e) {
-      logError(span, e);
-      throw e;
-    }
+    const ret = runFinally(
+      () => {
+        if (setCurrent ?? true) {
+          return withCurrent(span, callback);
+        } else {
+          return callback(span);
+        }
+      },
+      (e) => {
+        logError(span, e);
+        throw e;
+      },
+      () => span.end(),
+    );
     type Ret = PromiseUnless<IsAsyncFlush, R>;
-
-    if (ret instanceof Promise) {
-      ret = ret.catch((error) => {
-        logError(span, error);
-        throw error;
-      }) as typeof ret;
-    }
 
     if (this.asyncFlush) {
       return ret as Ret;
@@ -2499,29 +2490,22 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
 ): PromiseUnless<IsAsyncFlush, R> {
   const { span, isSyncFlushLogger } = startSpanAndIsLogger(args);
 
-  let ret;
-  try {
-    ret = runFinally(
-      () => {
-        if (args?.setCurrent ?? true) {
-          return withCurrent(span, callback);
-        } else {
-          return callback(span);
-        }
-      },
-      () => span.end(),
-    );
-  } catch (e) {
-    logError(span, e);
-    throw e;
-  }
-  type Ret = PromiseUnless<IsAsyncFlush, R>;
-  if (ret instanceof Promise) {
-    ret = ret.catch((e) => {
+  const ret = runFinally(
+    () => {
+      if (args?.setCurrent ?? true) {
+        return withCurrent(span, callback);
+      } else {
+        return callback(span);
+      }
+    },
+    (e) => {
       logError(span, e);
       throw e;
-    }) as typeof ret;
-  }
+    },
+    () => span.end(),
+  );
+
+  type Ret = PromiseUnless<IsAsyncFlush, R>;
 
   if (args?.asyncFlush) {
     return ret as Ret;
@@ -3056,25 +3040,20 @@ export class Experiment
     const { setCurrent, ...argsRest } = args ?? {};
     const span = this.startSpan(argsRest);
 
-    let ret;
-    try {
-      ret = runFinally(
-        () => {
-          if (setCurrent ?? true) {
-            return withCurrent(span, callback);
-          } else {
-            return callback(span);
-          }
-        },
-        () => span.end(),
-      );
-    } catch (e) {
-      logError(span, e);
-    }
-
-    if (ret instanceof Promise) {
-      ret = ret.catch((e) => logError(span, e));
-    }
+    const ret = runFinally(
+      () => {
+        if (setCurrent ?? true) {
+          return withCurrent(span, callback);
+        } else {
+          return callback(span);
+        }
+      },
+      (e) => {
+        logError(span, e);
+        throw e;
+      },
+      () => span.end(),
+    );
 
     return ret as R;
   }
@@ -3516,6 +3495,10 @@ export class SpanImpl implements Span {
         } else {
           return callback(span);
         }
+      },
+      (e) => {
+        logError(span, e);
+        throw e;
       },
       () => span.end(),
     );
