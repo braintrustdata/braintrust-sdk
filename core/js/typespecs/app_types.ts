@@ -247,7 +247,7 @@ export const functionDataSchema = z.union([
   z
     .object({
       type: z.literal("prompt"),
-      // For backwards compatibility reasons, this is hoisted out and stored
+      // For backwards compatibility reasons, the prompt definition is hoisted out and stored
       // in the outer object
     })
     .openapi({ title: "prompt" }),
