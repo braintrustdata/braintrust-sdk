@@ -163,7 +163,7 @@ export const promptDataSchema = z
       .object({
         type: z.literal("llm_classifier"),
         use_cot: z.boolean(),
-        choice_scores: z.record(z.number().min(0).max(1)).nullish(),
+        choice_scores: z.record(z.number().min(0).max(1)),
       })
       .nullish(),
     origin: z
