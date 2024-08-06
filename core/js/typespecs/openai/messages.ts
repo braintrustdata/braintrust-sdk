@@ -78,7 +78,7 @@ const chatCompletionAssistantMessageParamSchema = z.object({
   role: z.literal("assistant"),
   content: z.string().nullish(),
   function_call: functionCallSchema.nullish(),
-  name: z.string().optional(),
+  name: z.string().nullish(),
   tool_calls: z.array(chatCompletionMessageToolCallSchema).nullish(),
 });
 const chatCompletionFallbackMessageParamSchema = z.object({
