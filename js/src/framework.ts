@@ -13,6 +13,7 @@ import {
   currentSpan,
   FullInitOptions,
   BraintrustState,
+  logError as logSpanError,
 } from "./logger";
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
@@ -757,6 +758,7 @@ async function runEvaluatorInternal(
             );
           }
         } catch (e) {
+          logSpanError(rootSpan, e);
           error = e;
         } finally {
           progressReporter.increment(evaluator.evalName);
