@@ -138,7 +138,6 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
       ),
     span_id: z
       .string()
-      .uuid()
       .describe(
         `A unique identifier used to link different ${eventDescription} events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing`,
       ),
@@ -151,7 +150,6 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
       ),
     root_span_id: z
       .string()
-      .uuid()
       .describe(
         `The \`span_id\` of the root of the trace this ${eventDescription} event belongs to`,
       ),

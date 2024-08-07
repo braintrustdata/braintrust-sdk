@@ -5,6 +5,7 @@ import dataclasses
 import inspect
 import json
 import re
+import sys
 import traceback
 from collections import defaultdict
 from collections.abc import Iterable
@@ -24,7 +25,7 @@ from braintrust_core.util import (
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 
-from .logger import NOOP_SPAN, ExperimentSummary, Metadata, ScoreSummary, Span
+from .logger import NOOP_SPAN, ExperimentSummary, Metadata, ScoreSummary, Span, stringify_exception
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
 
@@ -814,6 +815,9 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                         f"Found exceptions for the following scorers: {names}", exceptions
                     )
             except Exception as e:
+                exc_type, exc_value, tb = sys.exc_info()
+                root_span.log(error=stringify_exception(exc_type, exc_value, tb))
+
                 error = e
                 # Python3.10 has a different set of arguments to format_exception than earlier versions,
                 # so just capture the stack trace here.

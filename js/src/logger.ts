@@ -2460,7 +2460,7 @@ export function getSpanParentObject<IsAsyncFlush extends boolean>(
   return NOOP_SPAN;
 }
 
-function logError(span: Span, error: unknown) {
+export function logError(span: Span, error: unknown) {
   let errorMessage = "<error>";
   let stackTrace = "";
   if (error instanceof Error) {

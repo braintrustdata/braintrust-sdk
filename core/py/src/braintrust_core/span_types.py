@@ -8,3 +8,7 @@ class SpanTypeAttribute(str, Enum):
     EVAL = "eval"
     TASK = "task"
     TOOL = "tool"
+
+
+class SpanPurpose(str, Enum):
+    SCORER = "scorer"

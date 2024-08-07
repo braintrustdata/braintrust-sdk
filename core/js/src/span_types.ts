@@ -18,3 +18,7 @@ export enum SpanTypeAttribute {
 }
 
 export type SpanType = (typeof spanTypeAttributeValues)[number];
+
+export const spanPurposeAttributeValues = ["scorer"] as const;
+
+export type SpanPurpose = (typeof spanPurposeAttributeValues)[number];
