@@ -225,6 +225,18 @@ class Evaluator:
     If specified, uses the given project ID instead of the evaluator's name to identify the project.
     """
 
+    base_experiment_name: Optional[str] = None
+    """
+    An optional experiment name to use as a base. If specified, the new experiment will be summarized and
+    compared to this experiment.
+    """
+
+    base_experiment_id: Optional[str] = None
+    """
+    An optional experiment id to use as a base. If specified, the new experiment will be summarized and
+    compared to this experiment. This takes precedence over `base_experiment_name` if specified.
+    """
+
 
 @dataclasses.dataclass
 class EvalResultWithSummary(SerializableDataClass):
@@ -430,6 +442,8 @@ def Eval(
     timeout: Optional[float] = None,
     max_concurrency: Optional[int] = None,
     project_id: Optional[str] = None,
+    base_experiment_name: Optional[str] = None,
+    base_experiment_id: Optional[str] = None,
 ):
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -469,6 +483,10 @@ def Eval(
     :param timeout: (Optional) The duration, in seconds, after which to time out the evaluation.
     Defaults to None, in which case there is no timeout.
     :param project_id: (Optional) If specified, uses the given project ID instead of the evaluator's name to identify the project.
+    :param base_experiment_name: An optional experiment name to use as a base. If specified, the new experiment will be
+    summarized and compared to this experiment.
+    :param base_experiment_id: An optional experiment id to use as a base. If specified, the new experiment will be
+    summarized and compared to this experiment. This takes precedence over `base_experiment_name` if specified.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
     eval_name = _make_eval_name(name, experiment_name)
@@ -491,6 +509,8 @@ def Eval(
         timeout=timeout,
         max_concurrency=max_concurrency,
         project_id=project_id,
+        base_experiment_name=base_experiment_name,
+        base_experiment_id=base_experiment_id,
     )
 
     if _lazy_load:
@@ -509,8 +529,7 @@ def Eval(
         except RuntimeError:  # 'RuntimeError: There is no current event loop...'
             loop = None
 
-        base_experiment_name = None
-        if isinstance(evaluator.data, BaseExperiment):
+        if base_experiment_name is None and isinstance(evaluator.data, BaseExperiment):
             base_experiment_name = evaluator.data.name
 
         async def run_to_completion():
@@ -522,6 +541,7 @@ def Eval(
                 is_public=evaluator.is_public,
                 update=evaluator.update,
                 base_experiment=base_experiment_name,
+                base_experiment_id=base_experiment_id,
             )
             try:
                 ret = await run_evaluator(experiment, evaluator, 0, [])

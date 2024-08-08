@@ -178,6 +178,18 @@ export interface Evaluator<
    * to the global state (initialized using your API key).
    */
   state?: BraintrustState;
+
+  /**
+   * An optional experiment name to use as a base. If specified, the new experiment will be summarized
+   * and compared to this experiment.
+   */
+  baseExperimentName?: string;
+
+  /**
+   * An optional experiment id to use as a base. If specified, the new experiment will be summarized
+   * and compared to this experiment. This takes precedence over `baseExperimentName` if specified.
+   */
+  baseExperimentId?: string;
 }
 
 export class EvalResultWithSummary<
@@ -382,7 +394,9 @@ export async function Eval<
 
   const resolvedReporter = options.reporter || defaultReporter;
   try {
-    const { data, baseExperiment } = callEvaluatorData(evaluator.data);
+    const { data, baseExperiment: defaultBaseExperiment } = callEvaluatorData(
+      evaluator.data,
+    );
     const experiment = initExperiment(evaluator.state, {
       ...(evaluator.projectId
         ? { projectId: evaluator.projectId }
@@ -391,7 +405,8 @@ export async function Eval<
       metadata: evaluator.metadata,
       isPublic: evaluator.isPublic,
       update: evaluator.update,
-      baseExperiment,
+      baseExperiment: evaluator.baseExperimentName ?? defaultBaseExperiment,
+      baseExperimentId: evaluator.baseExperimentId,
     });
 
     if (options.onStart) {
