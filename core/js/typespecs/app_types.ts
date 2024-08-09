@@ -247,7 +247,7 @@ export const functionDataSchema = z.union([
   z
     .object({
       type: z.literal("prompt"),
-      // For backwards compatibility reasons, this is hoisted out and stored
+      // For backwards compatibility reasons, the prompt definition is hoisted out and stored
       // in the outer object
     })
     .openapi({ title: "prompt" }),
@@ -269,6 +269,8 @@ export const functionSchema = promptSchemaObject
   .merge(
     z.object({
       function_data: functionDataSchema,
+      // An empty (unspecified) function_type is equivalent to "dynamic".
+      function_type: z.enum(["llm", "scorer"]).nullish(),
     }),
   )
   .openapi("Function");

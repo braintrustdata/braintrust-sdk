@@ -158,6 +158,14 @@ export const promptDataSchema = z
   .object({
     prompt: promptBlockDataSchema.nullish(),
     options: promptOptionsSchema.nullish(),
+    // This should be a union once we support multiple parser types
+    parser: z
+      .object({
+        type: z.literal("llm_classifier"),
+        use_cot: z.boolean(),
+        choice_scores: z.record(z.number().min(0).max(1)),
+      })
+      .nullish(),
     origin: z
       .object({
         prompt_id: z.string().optional(),
