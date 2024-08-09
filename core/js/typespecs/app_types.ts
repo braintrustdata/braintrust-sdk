@@ -269,7 +269,8 @@ export const functionSchema = promptSchemaObject
   .merge(
     z.object({
       function_data: functionDataSchema,
-      function_type: z.enum(["dynamic", "llm", "scorer"]),
+      // An empty (unspecified) function_type is equivalent to "dynamic".
+      function_type: z.enum(["llm", "scorer"]).nullish(),
     }),
   )
   .openapi("Function");
