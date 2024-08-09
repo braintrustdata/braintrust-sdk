@@ -269,6 +269,7 @@ export const functionSchema = promptSchemaObject
   .merge(
     z.object({
       function_data: functionDataSchema,
+      function_type: z.enum(["dynamic", "llm", "scorer"]),
     }),
   )
   .openapi("Function");
