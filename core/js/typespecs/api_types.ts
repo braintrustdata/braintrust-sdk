@@ -285,30 +285,6 @@ const pathTypeFilterSchema = z
   )
   .openapi("PathLookupFilter");
 
-const sqlTypeFilterSchema = z
-  .object({
-    type: z
-      .literal("sql_filter")
-      .describe("Denotes the type of filter as a sql-type filter"),
-    expr: z
-      .string()
-      .describe(
-        `A SQL expression in [duckDB syntax](https://duckdb.org/docs/sql/expressions/overview). For instance, if you wish to fuzzy-match the value of \`c\` in \`{"input": {"a": {"b": {"c": "hello"}}}}\`, pass \`expr="input->'a'->'b'->>'c' LIKE '%el%'"\`.`,
-      ),
-  })
-  .describe(
-    `A sql-type filter describes a general filter over an individual row in [duckDB syntax](https://duckdb.org/docs/sql/expressions/overview). For instance, if you wish to fuzzy-match the value of \`c\` in \`{"input": {"a": {"b": {"c": "hello"}}}}\`, pass \`expr="input->'a'->'b'->>'c' LIKE '%el%'"\`.`,
-  )
-  .openapi("SQLFilter");
-
-export const allFetchFiltersSchema = z
-  .union([pathTypeFilterSchema, sqlTypeFilterSchema])
-  .array()
-  .describe(
-    "A list of filters on the events to fetch. Filters can either be specialized `path=value` expressions or general SQL expressions in [duckDB syntax](https://duckdb.org/docs/sql/expressions/overview). When possible, prefer path-lookup type filters over general SQL-type filters, as they are likely to activate indices in the DB and run faster",
-  )
-  .openapi("AllFetchEventsFilters");
-
 export const fetchFiltersSchema = pathTypeFilterSchema
   .array()
   .describe(
