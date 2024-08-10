@@ -84,8 +84,10 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
     let betaChatCompletionProxy = new Proxy(openai?.beta?.chat.completions, {
       get(target, name, receiver) {
         const baseVal = Reflect.get(target, name, receiver);
-        if (name === "stream") {
-          return wrapBetaChatCompletion(baseVal.bind(target));
+        if (name === "parse") {
+          return wrapBetaChatCompletionParse(baseVal.bind(target));
+        } else if (name === "stream") {
+          return wrapBetaChatCompletionStream(baseVal.bind(target));
         }
         return baseVal;
       },
@@ -145,7 +147,43 @@ interface NonStreamingChatResponse {
     | undefined;
 }
 
-function wrapBetaChatCompletion<
+function wrapBetaChatCompletionParse<
+  P extends ChatParams,
+  C extends Promise<NonStreamingChatResponse>,
+>(completion: (params: P) => C): (params: P) => Promise<any> {
+  return async (allParams: P & SpanInfo) => {
+    const { span_info: _, ...params } = allParams;
+    const span = startSpan(
+      mergeDicts(
+        {
+          name: "Chat Completion",
+          spanAttributes: {
+            type: SpanTypeAttribute.LLM,
+          },
+        },
+        parseChatCompletionParams(allParams),
+      ),
+    );
+    const startTime = getCurrentUnixTimestamp();
+    const ret = await completion(params as P);
+    try {
+      span.log({
+        output: ret.choices,
+        metrics: {
+          time_to_first_token: getCurrentUnixTimestamp() - startTime,
+          tokens: ret.usage?.total_tokens,
+          prompt_tokens: ret.usage?.prompt_tokens,
+          completion_tokens: ret.usage?.completion_tokens,
+        },
+      });
+      return ret;
+    } finally {
+      span.end();
+    }
+  };
+}
+
+function wrapBetaChatCompletionStream<
   P extends ChatParams,
   C extends StreamingChatResponse,
 >(completion: (params: P) => C): (params: P) => Promise<any> {
@@ -254,6 +292,7 @@ function wrapChatCompletion<
       ),
     );
     const startTime = getCurrentUnixTimestamp();
+
     if (params.stream) {
       const { data: ret, response } = await completion(
         // We could get rid of this type coercion if we could somehow enforce
