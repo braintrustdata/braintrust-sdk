@@ -217,9 +217,6 @@ export type Prompt = z.infer<typeof promptSchema>;
 
 export const codeBundleSchema = z.object({
   runtime_context: runtimeContextSchema,
-  // This should be a union, once we support code living in different places
-  // Other options should be:
-  //  - a "handler" function that has some signature [does AWS lambda assume it's always called "handler"?]
   location: z.object({
     type: z.literal("experiment"),
     eval_name: z.string(),
@@ -243,7 +240,18 @@ export const functionDataSchema = z.union([
   z
     .object({
       type: z.literal("code"),
-      data: codeBundleSchema,
+      data: z.union([
+        z
+          .object({
+            type: z.literal("bundle"),
+          })
+          .and(codeBundleSchema),
+        z.object({
+          type: z.literal("inline"),
+          runtime_context: runtimeContextSchema,
+          code: z.string(),
+        }),
+      ]),
     })
     .openapi({ title: "code" }),
   z
