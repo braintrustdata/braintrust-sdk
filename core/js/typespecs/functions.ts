@@ -9,53 +9,67 @@ export const runtimeContextSchema = z.object({
 });
 export type RuntimeContext = z.infer<typeof runtimeContextSchema>;
 
+const functionIdWithoutInlineContextSchema = z.union([
+  z
+    .object({
+      function_id: z.string().describe("The ID of the function"),
+      version: z.string().optional().describe("The version of the function"),
+    })
+    .describe("Function id"),
+  z
+    .object({
+      project_name: z
+        .string()
+        .describe("The name of the project containing the function"),
+      slug: z.string().describe("The slug of the function"),
+      version: z.string().optional().describe("The version of the function"),
+    })
+    .describe("Project name and slug"),
+  z
+    .object({
+      global_function: z
+        .string()
+        .describe(
+          "The name of the global function. Currently, the global namespace includes the functions in autoevals",
+        ),
+    })
+    .describe("Global function name"),
+  z
+    .object({
+      prompt_session_id: z.string().describe("The ID of the prompt session"),
+      prompt_session_function_id: z
+        .string()
+        .describe("The ID of the function in the prompt session"),
+      version: z.string().optional().describe("The version of the function"),
+    })
+    .describe("Prompt session id"),
+]);
+
+const functionIdInlineContextSchema = z
+  .object({
+    inline_context: runtimeContextSchema,
+  })
+  .describe("The runtime to use for inline code");
+
+export const useFunctionSchema = z.union([
+  functionIdWithoutInlineContextSchema,
+  functionIdInlineContextSchema, // For use function, we don't need the code itself.
+]);
+
 export const functionIdSchema = z
   .union([
-    z
-      .object({
-        function_id: z.string().describe("The ID of the function"),
-        version: z.string().optional().describe("The version of the function"),
-      })
-      .describe("Function id"),
-    z
-      .object({
-        project_name: z
-          .string()
-          .describe("The name of the project containing the function"),
-        slug: z.string().describe("The slug of the function"),
-        version: z.string().optional().describe("The version of the function"),
-      })
-      .describe("Project name and slug"),
-    z
-      .object({
-        global_function: z
-          .string()
-          .describe(
-            "The name of the global function. Currently, the global namespace includes the functions in autoevals",
-          ),
-      })
-      .describe("Global function name"),
-    z
-      .object({
-        prompt_session_id: z.string().describe("The ID of the prompt session"),
-        prompt_session_function_id: z
-          .string()
-          .describe("The ID of the function in the prompt session"),
-        version: z.string().optional().describe("The version of the function"),
-      })
-      .describe("Prompt session id"),
-    z
-      .object({
-        inline_context: runtimeContextSchema,
-      })
-      .describe("The runtime to use for inline code"),
+    functionIdWithoutInlineContextSchema,
+    functionIdInlineContextSchema.and(
+      z.object({
+        code: z.string().describe("The inline code to execute"),
+      }),
+    ),
   ])
   .describe("Options for identifying a function");
+
 export type FunctionId = z.infer<typeof functionIdSchema>;
 
-export const useFunctionSchema = functionIdSchema;
-
-export const invokeFunctionNonIdArgsSchema = z.object({
+const invokeFunctionNonIdArgsSchema = z.object({
   input: z
     .any()
     .optional()
@@ -88,7 +102,7 @@ export const invokeFunctionNonIdArgsSchema = z.object({
     ),
 });
 
-export const invokeFunctionSchema = useFunctionSchema.and(
+export const invokeFunctionSchema = functionIdSchema.and(
   invokeFunctionNonIdArgsSchema,
 );
 export type InvokeFunctionRequest = z.infer<typeof invokeFunctionSchema>;

@@ -1,6 +1,6 @@
 import {
-  InvokeFunctionRequest,
   functionIdSchema,
+  InvokeFunctionRequest,
 } from "@braintrust/core/typespecs";
 import {
   _internalGetGlobalState,
