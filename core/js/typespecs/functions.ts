@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+export const validRuntimesEnum = z.enum(["node"]);
+export type Runtime = z.infer<typeof validRuntimesEnum>;
+
+export const runtimeContextSchema = z.object({
+  runtime: validRuntimesEnum,
+  version: z.string(),
+});
+export type RuntimeContext = z.infer<typeof runtimeContextSchema>;
+
 export const functionIdSchema = z
   .union([
     z
@@ -35,6 +44,11 @@ export const functionIdSchema = z
         version: z.string().optional().describe("The version of the function"),
       })
       .describe("Prompt session id"),
+    z
+      .object({
+        inline_context: runtimeContextSchema,
+      })
+      .describe("The runtime to use for inline code"),
   ])
   .describe("Options for identifying a function");
 export type FunctionId = z.infer<typeof functionIdSchema>;
@@ -165,23 +179,3 @@ export const callEventSchema = z.union([
 ]);
 
 export type CallEventSchema = z.infer<typeof callEventSchema>;
-
-export function getFunctionId<T extends FunctionId>(functionId: T): FunctionId {
-  if ("function_id" in functionId) {
-    return { function_id: functionId.function_id, version: functionId.version };
-  } else if ("prompt_session_id" in functionId) {
-    return {
-      prompt_session_id: functionId.prompt_session_id,
-      prompt_session_function_id: functionId.prompt_session_function_id,
-      version: functionId.version,
-    };
-  } else if ("project_name" in functionId) {
-    return {
-      project_name: functionId.project_name,
-      slug: functionId.slug,
-      version: functionId.version,
-    };
-  } else {
-    return { global_function: functionId.global_function };
-  }
-}
