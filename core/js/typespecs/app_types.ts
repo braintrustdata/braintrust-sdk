@@ -210,6 +210,8 @@ const promptSchemaObject = z.object({
     .describe("The prompt, model, and its parameters"),
   tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
   metadata: promptBaseSchema.shape.metadata,
+  // An empty (unspecified) function_type is equivalent to "dynamic".
+  function_type: z.enum(["llm", "scorer"]).nullish(),
 });
 
 export const promptSchema = promptSchemaObject.openapi("Prompt");
@@ -266,8 +268,6 @@ export const functionSchema = promptSchemaObject
   .merge(
     z.object({
       function_data: functionDataSchema,
-      // An empty (unspecified) function_type is equivalent to "dynamic".
-      function_type: z.enum(["llm", "scorer"]).nullish(),
     }),
   )
   .openapi("Function");
