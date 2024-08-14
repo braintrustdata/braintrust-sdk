@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const validRuntimesEnum = z.enum(["node"]);
+export const validRuntimesEnum = z.enum(["node", "python"]);
 export type Runtime = z.infer<typeof validRuntimesEnum>;
 
 export const runtimeContextSchema = z.object({
