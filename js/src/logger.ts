@@ -2024,6 +2024,7 @@ async function computeLoggerMetadata(
     project_id?: string;
   },
 ) {
+  await state.login({});
   const org_id = state.orgId!;
   if (isEmpty(project_id)) {
     const response = await state.appConn().post_json("api/project/register", {

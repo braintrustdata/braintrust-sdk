@@ -288,7 +288,10 @@ const pathTypeFilterSchema = z
 export const fetchFiltersSchema = pathTypeFilterSchema
   .array()
   .describe(
-    "A list of filters on the events to fetch. Currently, only path-lookup type filters are supported, but we may add more in the future",
+    [
+      "NOTE: This parameter is deprecated and will be removed in a future revision. Consider using the `/btql` endpoint (https://www.braintrust.dev/docs/reference/btql) for more advanced filtering.",
+      "A list of filters on the events to fetch. Currently, only path-lookup type filters are supported.",
+    ].join("\n\n"),
   )
   .openapi("FetchEventsFilters");
 
