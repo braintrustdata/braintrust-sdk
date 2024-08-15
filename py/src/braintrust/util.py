@@ -8,6 +8,7 @@ from typing import Any, Callable, Generic, TypeVar
 from requests import HTTPError
 
 GLOBAL_PROJECT = "Global"
+BT_IS_ASYNC_ATTRIBUTE = "_BT_IS_ASYNC"
 
 
 class AugmentedHTTPError(Exception):
@@ -73,3 +74,33 @@ class LazyValue(Generic[T]):
         finally:
             if self.mutex:
                 self.mutex.release()
+
+
+_MARK_ASYNC_WRAPPER_UNDERLYING_CALLABLE_ATTRIBUTE = "_MarkAsyncWrapper_underlying_callable"
+
+# A wrapper class to enable explicitly marking a callable object as async. This
+# can be useful for scenarios where the user wants to provide an awaitable
+# function that is not recognized as async with `inspect.iscoroutinefunction`.
+#
+# Note: Python 3.12 provides a `inspect.markcoroutinefunction` function which
+# serves a similar purpose, but we do this ourselves in case this function is
+# not available.
+class MarkAsyncWrapper:
+    def __init__(self, callable):
+        setattr(self, _MARK_ASYNC_WRAPPER_UNDERLYING_CALLABLE_ATTRIBUTE, callable)
+        setattr(self, BT_IS_ASYNC_ATTRIBUTE, True)
+
+    def __getattribute__(self, name):
+        if name in [_MARK_ASYNC_WRAPPER_UNDERLYING_CALLABLE_ATTRIBUTE, BT_IS_ASYNC_ATTRIBUTE]:
+            return object.__getattribute__(self, name)
+        else:
+            return object.__getattribute__(
+                object.__getattribute__(self, _MARK_ASYNC_WRAPPER_UNDERLYING_CALLABLE_ATTRIBUTE), name
+            )
+
+    def __call__(self, *args, **kwargs):
+        return object.__getattribute__(self, _MARK_ASYNC_WRAPPER_UNDERLYING_CALLABLE_ATTRIBUTE)(*args, **kwargs)
+
+
+def bt_iscoroutinefunction(f):
+    return inspect.iscoroutinefunction(f) or getattr(f, BT_IS_ASYNC_ATTRIBUTE, False)
