@@ -55,6 +55,7 @@ from .util import (
     GLOBAL_PROJECT,
     AugmentedHTTPError,
     LazyValue,
+    bt_iscoroutinefunction,
     get_caller_location,
     response_raise_for_status,
 )
@@ -1323,7 +1324,7 @@ def traced(*span_args, **span_kwargs) -> Callable[[F], F]:
                     _try_log_output(span, ret)
                 return ret
 
-        if inspect.iscoroutinefunction(f):
+        if bt_iscoroutinefunction(f):
             return cast(F, wrapper_async)
         else:
             return cast(F, wrapper_sync)
