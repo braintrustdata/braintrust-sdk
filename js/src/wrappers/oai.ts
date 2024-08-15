@@ -292,7 +292,6 @@ function wrapChatCompletion<
       ),
     );
     const startTime = getCurrentUnixTimestamp();
-
     if (params.stream) {
       const { data: ret, response } = await completion(
         // We could get rid of this type coercion if we could somehow enforce

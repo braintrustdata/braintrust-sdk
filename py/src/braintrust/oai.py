@@ -35,7 +35,6 @@ def postprocess_streaming_results(all_results):
     tool_calls = None
     finish_reason = None
     metrics = {}
-
     for result in all_results:
         if "usage" in result and result["usage"] is not None:
             metrics = {
