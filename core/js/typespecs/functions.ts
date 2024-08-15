@@ -1,3 +1,4 @@
+import { ASYNC_SCORING_TOKEN_FIELD } from "../src/db_fields";
 import { z } from "zod";
 
 export const validRuntimesEnum = z.enum(["node", "python"]);
@@ -72,8 +73,16 @@ const invokeFunctionNonIdArgsSchema = z.object({
           object_id: z
             .string()
             .describe("The id of the container object you are logging to"),
+          row_ids: z
+            .object({
+              id: z.string().describe("The id of the row"),
+              span_id: z.string().describe("The span_id of the row"),
+              root_span_id: z.string().describe("The root_span_id of the row"),
+            })
+            .nullish()
+            .describe("Identifiers for the row to to log a subspan under"),
         })
-        .describe("Object type and id"),
+        .describe("Object type, object id, and optional row IDs"),
       z
         .string()
         .optional()
@@ -87,6 +96,21 @@ const invokeFunctionNonIdArgsSchema = z.object({
     .optional()
     .describe(
       "Whether to stream the response. If true, results will be returned in the Braintrust SSE format.",
+    ),
+  update_score: z
+    .object({
+      object_type: z.enum(["project_logs", "experiment"]),
+      object_id: z
+        .string()
+        .describe("The id of the container object you are logging to"),
+      row_id: z.string().describe("Id of the row to update"),
+      [ASYNC_SCORING_TOKEN_FIELD]: z
+        .string()
+        .describe("Token that launched the update"),
+    })
+    .nullish()
+    .describe(
+      "If specified, log the result of the function invocation as a score to the specified row. In this case, the function output must be a number between 0 and 1, inclusive",
     ),
 });
 

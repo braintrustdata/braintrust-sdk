@@ -3,8 +3,10 @@
 import { v4 as uuidv4 } from "uuid";
 
 import {
-  TRANSACTION_ID_FIELD,
   IS_MERGE_FIELD,
+  ASYNC_SCORING_TOKEN_FIELD,
+  SKIP_ASYNC_SCORING_FIELD,
+  TRANSACTION_ID_FIELD,
   mergeDicts,
   mergeRowBatch,
   VALID_SOURCES,
@@ -748,13 +750,28 @@ function logFeedbackImpl(
   }
 }
 
-function updateSpanImpl(
-  state: BraintrustState,
-  parentObjectType: SpanObjectTypeV2,
-  parentObjectId: LazyValue<string>,
-  id: string,
-  event: Omit<Partial<ExperimentEvent>, "id">,
-): void {
+type UpdateSpanOpts = {
+  // For internal use.
+  asyncScoringToken?: string;
+  // For internal use.
+  skipAsyncScoring?: boolean;
+};
+
+function updateSpanImpl({
+  state,
+  parentObjectType,
+  parentObjectId,
+  id,
+  event,
+  asyncScoringToken,
+  skipAsyncScoring,
+}: {
+  state: BraintrustState;
+  parentObjectType: SpanObjectTypeV2;
+  parentObjectId: LazyValue<string>;
+  id: string;
+  event: Omit<Partial<ExperimentEvent>, "id">;
+} & UpdateSpanOpts): void {
   const updateEvent = validateAndSanitizeExperimentLogPartialArgs({
     id,
     ...event,
@@ -771,6 +788,10 @@ function updateSpanImpl(
     ...updateEvent,
     ...(await parentIds()),
     [IS_MERGE_FIELD]: true,
+    ...(asyncScoringToken
+      ? { [ASYNC_SCORING_TOKEN_FIELD]: asyncScoringToken }
+      : {}),
+    ...(skipAsyncScoring ? { [SKIP_ASYNC_SCORING_FIELD]: true } : {}),
   }));
   state.bgLogger().log([record]);
 }
@@ -787,8 +808,11 @@ function updateSpanImpl(
 export function updateSpan({
   exported,
   state,
+  asyncScoringToken,
+  skipAsyncScoring,
   ...event
-}: { exported: string } & Omit<Partial<ExperimentEvent>, "id"> &
+}: { exported: string } & UpdateSpanOpts &
+  Omit<Partial<ExperimentEvent>, "id"> &
   OptionalStateArg): void {
   const resolvedState = state ?? _globalState;
   const components = SpanComponentsV2.fromStr(exported);
@@ -797,13 +821,17 @@ export function updateSpan({
     throw new Error("Exported span must have a row id");
   }
 
-  updateSpanImpl(
-    resolvedState,
-    components.objectType,
-    new LazyValue(spanComponentsToObjectIdLambda(resolvedState, components)),
-    components.rowIds?.rowId,
+  updateSpanImpl({
+    state: resolvedState,
+    parentObjectType: components.objectType,
+    parentObjectId: new LazyValue(
+      spanComponentsToObjectIdLambda(resolvedState, components),
+    ),
+    id: components.rowIds?.rowId,
     event,
-  );
+    asyncScoringToken,
+    skipAsyncScoring,
+  });
 }
 
 interface ParentSpanIds {
@@ -1083,13 +1111,13 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     if (!id) {
       throw new Error("Span id is required to update a span");
     }
-    updateSpanImpl(
-      this.state,
-      this.parentObjectType(),
-      this.lazyId,
+    updateSpanImpl({
+      state: this.state,
+      parentObjectType: this.parentObjectType(),
+      parentObjectId: this.lazyId,
       id,
-      eventRest,
-    );
+      event: eventRest,
+    });
   }
 
   /**
@@ -3206,13 +3234,13 @@ export class Experiment
     if (!id) {
       throw new Error("Span id is required to update a span");
     }
-    updateSpanImpl(
-      this.state,
-      this.parentObjectType(),
-      this.lazyId,
+    updateSpanImpl({
+      state: this.state,
+      parentObjectType: this.parentObjectType(),
+      parentObjectId: this.lazyId,
       id,
-      eventRest,
-    );
+      event: eventRest,
+    });
   }
 
   /**
