@@ -70,7 +70,7 @@ class Exportable(ABC):
         """Return a serialized representation of the object that can be used to start subspans in other places. See `Span.start_span` for more details."""
 
 
-class Span(Exportable, ABC):
+class Span(Exportable, contextlib.AbstractContextManager, ABC):
     """
     A Span encapsulates logged data and metrics for a unit of work. This interface is shared by all span implementations.
 
@@ -152,14 +152,6 @@ class Span(Exportable, ABC):
         """
         pass
 
-    @abstractmethod
-    def __enter__(self):
-        pass
-
-    @abstractmethod
-    def __exit__(self):
-        pass
-
 
 class _NoopSpan(Span):
     """A fake implementation of the Span API which does nothing. This can be used as the default span."""
@@ -205,10 +197,10 @@ class _NoopSpan(Span):
         pass
 
     def __enter__(self):
-        return self
+        return super().__enter__()
 
-    def __exit__(self, type, value, callback):
-        del type, value, callback
+    def __exit__(self, exc_type, exc_value, traceback):
+        return super().__exit__(exc_type, exc_value, traceback)
 
 
 NOOP_SPAN = _NoopSpan()
@@ -2148,8 +2140,8 @@ class Experiment(ObjectFetcher, Exportable):
     def __enter__(self):
         return self
 
-    def __exit__(self, type, value, callback):
-        del type, value, callback
+    def __exit__(self, exc_type, exc_value, traceback):
+        del exc_type, exc_value, traceback
 
 
 class ReadonlyExperiment(ObjectFetcher):
@@ -2625,8 +2617,8 @@ class Dataset(ObjectFetcher):
     def __enter__(self):
         return self
 
-    def __exit__(self, type, value, callback):
-        del type, value, callback
+    def __exit__(self, exc_type, exc_value, traceback):
+        del exc_type, exc_value, traceback
 
 
 class Prompt:
@@ -2997,8 +2989,8 @@ class Logger(Exportable):
     def __enter__(self):
         return self
 
-    def __exit__(self, type, value, callback):
-        del type, value, callback
+    def __exit__(self, exc_type, exc_value, traceback):
+        del exc_type, exc_value, traceback
 
     def flush(self):
         """
