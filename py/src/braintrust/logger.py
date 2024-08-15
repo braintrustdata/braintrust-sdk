@@ -70,7 +70,7 @@ class Exportable(ABC):
         """Return a serialized representation of the object that can be used to start subspans in other places. See `Span.start_span` for more details."""
 
 
-class Span(Exportable, ABC):
+class Span(Exportable, contextlib.AbstractContextManager, ABC):
     """
     A Span encapsulates logged data and metrics for a unit of work. This interface is shared by all span implementations.
 
@@ -152,14 +152,6 @@ class Span(Exportable, ABC):
         """
         pass
 
-    @abstractmethod
-    def __enter__(self):
-        pass
-
-    @abstractmethod
-    def __exit__(self):
-        pass
-
 
 class _NoopSpan(Span):
     """A fake implementation of the Span API which does nothing. This can be used as the default span."""
@@ -203,12 +195,6 @@ class _NoopSpan(Span):
 
     def set_attributes(self, name=None, type=None, span_attributes=None):
         pass
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, type, value, callback):
-        del type, value, callback
 
 
 NOOP_SPAN = _NoopSpan()
@@ -1835,7 +1821,7 @@ class ExperimentDatasetIterator:
             }
 
 
-class Experiment(ObjectFetcher, Exportable):
+class Experiment(ObjectFetcher, Exportable, contextlib.AbstractContextManager):
     """
     An experiment is a collection of logged events, such as model inputs and outputs, which represent
     a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -2145,12 +2131,6 @@ class Experiment(ObjectFetcher, Exportable):
             event=event,
         )
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, type, value, callback):
-        del type, value, callback
-
 
 class ReadonlyExperiment(ObjectFetcher):
     """
@@ -2448,7 +2428,7 @@ def split_logging_data(event, internal_data):
     return serializable_partial_record, lazy_partial_record
 
 
-class Dataset(ObjectFetcher):
+class Dataset(ObjectFetcher, contextlib.AbstractContextManager):
     """
     A dataset is a collection of records, such as model inputs and outputs, which represent
     data you can use to evaluate and fine-tune models. You can log production data to datasets,
@@ -2622,12 +2602,6 @@ class Dataset(ObjectFetcher):
 
         _state.global_bg_logger().flush()
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, type, value, callback):
-        del type, value, callback
-
 
 class Prompt:
     """
@@ -2789,7 +2763,7 @@ class Project:
         return self._name
 
 
-class Logger(Exportable):
+class Logger(Exportable, contextlib.AbstractContextManager):
     def __init__(
         self,
         lazy_metadata: LazyValue[OrgProjectMetadata],
@@ -2993,12 +2967,6 @@ class Logger(Exportable):
             object_id=object_id,
             compute_object_metadata_args=compute_object_metadata_args,
         ).to_str()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, type, value, callback):
-        del type, value, callback
 
     def flush(self):
         """
