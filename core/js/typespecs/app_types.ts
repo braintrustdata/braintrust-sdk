@@ -8,6 +8,7 @@ import { ObjectType, datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
+import { runtimeContextSchema } from "./functions";
 
 // Section: App DB table schemas
 
@@ -184,15 +185,6 @@ export const datasetSchema = z
   .openapi("Dataset");
 export type Dataset = z.infer<typeof datasetSchema>;
 
-export const validRuntimesEnum = z.enum(["node"]);
-export type Runtime = z.infer<typeof validRuntimesEnum>;
-
-export const runtimeContextSchema = z.object({
-  runtime: validRuntimesEnum,
-  version: z.string(),
-});
-export type RuntimeContext = z.infer<typeof runtimeContextSchema>;
-
 export const promptLogIdLiteralSchema = z
   .literal("p")
   .describe("A literal 'p' which identifies the object as a project prompt");
@@ -218,19 +210,15 @@ const promptSchemaObject = z.object({
     .describe("The prompt, model, and its parameters"),
   tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
   metadata: promptBaseSchema.shape.metadata,
+  // An empty (unspecified) function_type is equivalent to "dynamic".
+  function_type: z.enum(["llm", "scorer"]).nullish(),
 });
 
 export const promptSchema = promptSchemaObject.openapi("Prompt");
 export type Prompt = z.infer<typeof promptSchema>;
 
 export const codeBundleSchema = z.object({
-  runtime_context: z.object({
-    runtime: validRuntimesEnum,
-    version: z.string(),
-  }),
-  // This should be a union, once we support code living in different places
-  // Other options should be:
-  //  - a "handler" function that has some signature [does AWS lambda assume it's always called "handler"?]
+  runtime_context: runtimeContextSchema,
   location: z.object({
     type: z.literal("experiment"),
     eval_name: z.string(),
@@ -254,7 +242,18 @@ export const functionDataSchema = z.union([
   z
     .object({
       type: z.literal("code"),
-      data: codeBundleSchema,
+      data: z.union([
+        z
+          .object({
+            type: z.literal("bundle"),
+          })
+          .and(codeBundleSchema),
+        z.object({
+          type: z.literal("inline"),
+          runtime_context: runtimeContextSchema,
+          code: z.string(),
+        }),
+      ]),
     })
     .openapi({ title: "code" }),
   z
@@ -269,8 +268,6 @@ export const functionSchema = promptSchemaObject
   .merge(
     z.object({
       function_data: functionDataSchema,
-      // An empty (unspecified) function_type is equivalent to "dynamic".
-      function_type: z.enum(["llm", "scorer"]).nullish(),
     }),
   )
   .openapi("Function");
