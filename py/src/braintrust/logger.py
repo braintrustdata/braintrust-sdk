@@ -196,6 +196,12 @@ class _NoopSpan(Span):
     def set_attributes(self, name=None, type=None, span_attributes=None):
         pass
 
+    def __enter__(self):
+        return super().__enter__()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        return super().__exit__(exc_type, exc_value, traceback)
+
 
 NOOP_SPAN = _NoopSpan()
 
@@ -1821,7 +1827,7 @@ class ExperimentDatasetIterator:
             }
 
 
-class Experiment(ObjectFetcher, Exportable, contextlib.AbstractContextManager):
+class Experiment(ObjectFetcher, Exportable):
     """
     An experiment is a collection of logged events, such as model inputs and outputs, which represent
     a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -2131,6 +2137,12 @@ class Experiment(ObjectFetcher, Exportable, contextlib.AbstractContextManager):
             event=event,
         )
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        del exc_type, exc_value, traceback
+
 
 class ReadonlyExperiment(ObjectFetcher):
     """
@@ -2428,7 +2440,7 @@ def split_logging_data(event, internal_data):
     return serializable_partial_record, lazy_partial_record
 
 
-class Dataset(ObjectFetcher, contextlib.AbstractContextManager):
+class Dataset(ObjectFetcher):
     """
     A dataset is a collection of records, such as model inputs and outputs, which represent
     data you can use to evaluate and fine-tune models. You can log production data to datasets,
@@ -2602,6 +2614,12 @@ class Dataset(ObjectFetcher, contextlib.AbstractContextManager):
 
         _state.global_bg_logger().flush()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        del exc_type, exc_value, traceback
+
 
 class Prompt:
     """
@@ -2763,7 +2781,7 @@ class Project:
         return self._name
 
 
-class Logger(Exportable, contextlib.AbstractContextManager):
+class Logger(Exportable):
     def __init__(
         self,
         lazy_metadata: LazyValue[OrgProjectMetadata],
@@ -2967,6 +2985,12 @@ class Logger(Exportable, contextlib.AbstractContextManager):
             object_id=object_id,
             compute_object_metadata_args=compute_object_metadata_args,
         ).to_str()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        del exc_type, exc_value, traceback
 
     def flush(self):
         """
