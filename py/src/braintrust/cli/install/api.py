@@ -207,10 +207,16 @@ def build_parser(subparsers, parents):
         type=int,
     )
 
-    # Use the global cloudflare proxy (https://braintrustproxy.com)
     parser.add_argument(
         "--use-global-proxy",
         help="Use the global cloudflare proxy (https://braintrustproxy.com)",
+        default=None,
+        choices=[None, "true", "false"],
+    )
+
+    parser.add_argument(
+        "--enable-quarantine",
+        help="Enable the quarantine feature (running typescript and python functions)",
         default=None,
         choices=[None, "true", "false"],
     )
