@@ -351,25 +351,28 @@ def main(args):
             f"Updating stack with name {args.name} with params: {param_updates} and template: {template_kwargs}"
         )
 
-        new_template = cloudformation.get_template_summary(TemplateURL=template)
-        new_params = set(x["ParameterKey"] for x in new_template["Parameters"])
+        if args.template:
+            new_template = cloudformation.get_template_summary(TemplateURL=template)
+            new_params = set(x["ParameterKey"] for x in new_template["Parameters"])
+        else:
+            new_params = set(x["ParameterKey"] for x in status["Parameters"])
 
         stack = cloudformation.describe_stacks(StackName=args.name)["Stacks"][0]
         try:
+            final_params = [
+                {"ParameterKey": param, "ParameterValue": str(update)}
+                for (param, update) in param_updates.items()
+                if param in new_params and param not in REMOVED_PARAMS
+            ] + [
+                {"ParameterKey": param["ParameterKey"], "UsePreviousValue": True}
+                for param in stack["Parameters"]
+                if param["ParameterKey"] not in param_updates
+                and param["ParameterKey"] not in REMOVED_PARAMS
+                and param["ParameterKey"] in new_params
+            ]
             cloudformation.update_stack(
                 StackName=args.name,
-                Parameters=[
-                    {"ParameterKey": param, "ParameterValue": str(update)}
-                    for (param, update) in param_updates.items()
-                    if param in new_params and param not in REMOVED_PARAMS and param in new_params
-                ]
-                + [
-                    {"ParameterKey": param["ParameterKey"], "UsePreviousValue": True}
-                    for param in stack["Parameters"]
-                    if param["ParameterKey"] not in param_updates
-                    and param["ParameterKey"] not in REMOVED_PARAMS
-                    and param["ParameterKey"] in new_params
-                ],
+                Parameters=final_params,
                 Capabilities=CAPABILITIES,
                 **template_kwargs,
             )
