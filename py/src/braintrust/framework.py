@@ -28,6 +28,7 @@ from tqdm.auto import tqdm as std_tqdm
 from .logger import NOOP_SPAN, ExperimentSummary, Metadata, ScoreSummary, Span, stringify_exception
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
+from .util import bt_iscoroutinefunction
 
 Input = TypeVar("Input")
 Output = TypeVar("Output")
@@ -251,7 +252,7 @@ EvalReport = TypeVar("EvalReport")
 
 
 async def await_or_run(event_loop, f, *args, **kwargs):
-    if inspect.iscoroutinefunction(f):
+    if bt_iscoroutinefunction(f):
         return await f(*args, **kwargs)
     else:
 
