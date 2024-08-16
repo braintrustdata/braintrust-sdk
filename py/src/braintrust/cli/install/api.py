@@ -35,6 +35,7 @@ PARAMS = {
     "OutboundRateLimitWindowMinutes": "outbound_rate_limit_window_minutes",
     "OutboundRateLimitMaxRequests": "outbound_rate_limit_max_requests",
     "UseGlobalProxy": "use_global_proxy",
+    "EnableQuarantine": "enable_quarantine",
 }
 
 REMOVED_PARAMS = ["ThirdAZIndex"]
