@@ -77,9 +77,15 @@ export const chatCompletionMessageToolCallSchema = z.object({
 const chatCompletionAssistantMessageParamSchema = z.object({
   role: z.literal("assistant"),
   content: z.string().nullish(),
-  function_call: functionCallSchema.nullish(),
-  name: z.string().nullish(),
-  tool_calls: z.array(chatCompletionMessageToolCallSchema).nullish(),
+  function_call: functionCallSchema.nullish().transform((x) => x ?? undefined),
+  name: z
+    .string()
+    .nullish()
+    .transform((x) => x ?? undefined),
+  tool_calls: z
+    .array(chatCompletionMessageToolCallSchema)
+    .nullish()
+    .transform((x) => x ?? undefined),
 });
 const chatCompletionFallbackMessageParamSchema = z.object({
   role: messageRoleSchema.exclude([
