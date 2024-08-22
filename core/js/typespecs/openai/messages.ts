@@ -77,9 +77,17 @@ export const chatCompletionMessageToolCallSchema = z.object({
 const chatCompletionAssistantMessageParamSchema = z.object({
   role: z.literal("assistant"),
   content: z.string().nullish(),
-  function_call: functionCallSchema.nullish(),
-  name: z.string().nullish(),
-  tool_calls: z.array(chatCompletionMessageToolCallSchema).nullish(),
+  // NOTE: It's important to keep these optional, rather than nullish, to stay
+  // inline with the OpenAI SDK's type definition.
+  function_call: functionCallSchema.nullish().transform((x) => x ?? undefined),
+  name: z
+    .string()
+    .nullish()
+    .transform((x) => x ?? undefined),
+  tool_calls: z
+    .array(chatCompletionMessageToolCallSchema)
+    .nullish()
+    .transform((x) => x ?? undefined),
 });
 const chatCompletionFallbackMessageParamSchema = z.object({
   role: messageRoleSchema.exclude([
