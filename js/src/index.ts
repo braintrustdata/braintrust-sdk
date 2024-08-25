@@ -1,5 +1,8 @@
 /**
- * An isomorphic JS library for logging data to Braintrust. `braintrust` is distributed as a [library on NPM](https://www.npmjs.com/package/braintrust).
+ * An isomorphic JS library for working with [Braintrust](https://braintrust.dev/). This library contains functionality
+ * for running evaluations, logging completions, loading and invoking functions, and more.
+ *
+ * `braintrust` is distributed as a [library on NPM](https://www.npmjs.com/package/braintrust).
  * It is also open source and available on [GitHub](https://github.com/braintrustdata/braintrust-sdk/tree/main/js).
  *
  * ### Quickstart
