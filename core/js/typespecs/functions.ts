@@ -1,4 +1,3 @@
-import { ASYNC_SCORING_TOKEN_FIELD } from "../src/db_fields";
 import { z } from "zod";
 
 export const validRuntimesEnum = z.enum(["node", "python"]);
