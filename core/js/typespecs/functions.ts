@@ -97,21 +97,6 @@ const invokeFunctionNonIdArgsSchema = z.object({
     .describe(
       "Whether to stream the response. If true, results will be returned in the Braintrust SSE format.",
     ),
-  update_score: z
-    .object({
-      object_type: z.enum(["project_logs", "experiment"]),
-      object_id: z
-        .string()
-        .describe("The id of the container object you are logging to"),
-      row_id: z.string().describe("Id of the row to update"),
-      [ASYNC_SCORING_TOKEN_FIELD]: z
-        .string()
-        .describe("Token that launched the update"),
-    })
-    .nullish()
-    .describe(
-      "If specified, log the result of the function invocation as a score to the specified row. In this case, the function output must be a number between 0 and 1, inclusive",
-    ),
 });
 
 export const invokeFunctionSchema = functionIdSchema.and(
