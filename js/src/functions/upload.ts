@@ -183,6 +183,7 @@ export async function uploadEvalBundles({
             function_data: {
               type: "code",
               data: {
+                type: "bundle",
                 runtime_context,
                 location: spec.location,
                 bundle_id: pathInfo.bundleId,

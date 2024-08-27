@@ -1,6 +1,9 @@
 """
-A Python library for logging data to Braintrust. `braintrust` is distributed as
-a [library on PyPI](https://pypi.org/project/braintrust/). It is open source and
+A Python library for interacting with [Braintrust](https://braintrust.dev/). This library
+contains functionality for running evaluations, logging completions, loading and invoking
+functions, and more.
+
+`braintrust` is distributed as a [library on PyPI](https://pypi.org/project/braintrust/). It is open source and
 [available on GitHub](https://github.com/braintrustdata/braintrust-sdk/tree/main/py).
 
 ### Quickstart

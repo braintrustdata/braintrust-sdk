@@ -22,15 +22,17 @@ def main(args):
     # Then, publish the API handler lambdas just to bump their environment variable values
     api_handler = [r for r in resources["StackResources"] if r["LogicalResourceId"] == "APIHandler"]
     api_handler_js = [r for r in resources["StackResources"] if r["LogicalResourceId"] == "APIHandlerJS"]
+    proxy_handler = [r for r in resources["StackResources"] if r["LogicalResourceId"] == "AIProxyFn"]
 
-    if not api_handler or not api_handler_js:
-        raise ValueError("No APIHandler or APIHandlerJS found in the stack.")
+    if not api_handler or not api_handler_js or not proxy_handler:
+        raise ValueError("No APIHandler, APIHandlerJS, or AIProxyFn found in the stack.")
 
     api_handler = api_handler[0]
     api_handler_js = api_handler_js[0]
+    proxy_handler = proxy_handler[0]
 
     # Publish a new version of the API handler and re-point the "live2" alias to it
-    for resource, alias in [(api_handler, "live2"), (api_handler_js, "live")]:
+    for resource, alias in [(api_handler, "live2"), (api_handler_js, "live"), (proxy_handler, "live")]:
         new_version = lambda_.publish_version(FunctionName=resource["PhysicalResourceId"])
         lambda_.update_alias(
             FunctionName=resource["PhysicalResourceId"],
