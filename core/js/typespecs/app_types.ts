@@ -907,13 +907,31 @@ export const patchGroupSchema = createGroupSchema
   )
   .openapi("PatchGroup");
 
-export const createAclSchema = aclSchema
+export const aclItemSchema = aclSchema
   .omit({
     id: true,
     created: true,
     _object_org_id: true,
   })
-  .openapi("CreateAcl");
+  .openapi("AclItem");
+
+export type AclItem = z.infer<typeof aclItemSchema>;
+
+export const aclBatchUpdateRequestSchema = z.object({
+  add_acls: aclItemSchema.array().nullish(),
+  remove_acls: aclItemSchema.array().nullish(),
+});
+
+export type AclBatchUpdateRequest = z.infer<typeof aclBatchUpdateRequestSchema>;
+
+export const aclBatchUpdateResponseSchema = z.object({
+  added_acls: aclSchema.array(),
+  removed_acls: aclSchema.array(),
+});
+
+export type AclBatchUpdateResponse = z.infer<
+  typeof aclBatchUpdateResponseSchema
+>;
 
 const createProjectScoreSchema = z
   .object({
@@ -1089,49 +1107,51 @@ export const patchOrganizationMembersOutputSchema = z.object({
 export type ObjectSchemasEntry = {
   object?: z.ZodTypeAny;
   create?: z.ZodTypeAny;
-  patch?: z.ZodTypeAny;
   delete?: z.ZodTypeAny;
+  patch_id?: z.ZodTypeAny;
+  delete_id?: z.ZodTypeAny;
 };
 
 export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
   experiment: {
     object: experimentSchema,
     create: createExperimentSchema,
-    patch: patchExperimentSchema,
+    patch_id: patchExperimentSchema,
   },
   dataset: {
     object: datasetSchema,
     create: createDatasetSchema,
-    patch: patchDatasetSchema,
+    patch_id: patchDatasetSchema,
   },
   project: {
     object: projectSchema,
     create: createProjectSchema,
-    patch: patchProjectSchema,
+    patch_id: patchProjectSchema,
   },
   prompt: {
     object: promptSchema,
     create: createPromptSchema,
-    patch: patchPromptSchema,
+    patch_id: patchPromptSchema,
   },
   function: {
     object: functionSchema,
     create: createFunctionSchema,
-    patch: patchFunctionSchema,
+    patch_id: patchFunctionSchema,
   },
   role: {
     object: roleSchema,
     create: createRoleSchema,
-    patch: patchRoleSchema,
+    patch_id: patchRoleSchema,
   },
   group: {
     object: groupSchema,
     create: createGroupSchema,
-    patch: patchGroupSchema,
+    patch_id: patchGroupSchema,
   },
   acl: {
     object: aclSchema,
-    create: createAclSchema,
+    create: aclItemSchema,
+    delete: aclItemSchema,
   },
   user: {
     object: userSchema,
@@ -1140,22 +1160,22 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
   project_score: {
     object: projectScoreSchema,
     create: createProjectScoreSchema,
-    patch: patchProjectScoreSchema,
+    patch_id: patchProjectScoreSchema,
   },
   project_tag: {
     object: projectTagSchema,
     create: createProjectTagSchema,
-    patch: patchProjectTagSchema,
+    patch_id: patchProjectTagSchema,
   },
   view: {
     object: viewSchema,
-    delete: deleteViewSchema,
+    delete_id: deleteViewSchema,
     create: createViewSchema,
-    patch: patchViewSchema,
+    patch_id: patchViewSchema,
   },
   organization: {
     object: organizationSchema,
-    patch: patchOrganizationSchema,
+    patch_id: patchOrganizationSchema,
   },
   api_key: {
     object: apiKeySchema,
