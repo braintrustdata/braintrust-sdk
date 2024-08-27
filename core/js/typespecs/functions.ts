@@ -57,7 +57,7 @@ export type FunctionId = z.infer<typeof functionIdSchema>;
 
 export const useFunctionSchema = functionIdSchema;
 
-const invokeFunctionNonIdArgsSchema = z.object({
+export const invokeFunctionNonIdArgsSchema = z.object({
   input: z
     .any()
     .optional()
