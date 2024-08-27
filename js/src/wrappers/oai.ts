@@ -147,6 +147,22 @@ interface NonStreamingChatResponse {
     | undefined;
 }
 
+function logCompletionResponse(
+  startTime: number,
+  response: NonStreamingChatResponse | StreamingChatResponse,
+  span: Span,
+) {
+  span.log({
+    output: response.choices,
+    metrics: {
+      time_to_first_token: getCurrentUnixTimestamp() - startTime,
+      tokens: response.usage?.total_tokens,
+      prompt_tokens: response.usage?.prompt_tokens,
+      completion_tokens: response.usage?.completion_tokens,
+    },
+  });
+}
+
 function wrapBetaChatCompletionParse<
   P extends ChatParams,
   C extends Promise<NonStreamingChatResponse>,
@@ -167,15 +183,7 @@ function wrapBetaChatCompletionParse<
     const startTime = getCurrentUnixTimestamp();
     const ret = await completion(params as P);
     try {
-      span.log({
-        output: ret.choices,
-        metrics: {
-          time_to_first_token: getCurrentUnixTimestamp() - startTime,
-          tokens: ret.usage?.total_tokens,
-          prompt_tokens: ret.usage?.prompt_tokens,
-          completion_tokens: ret.usage?.completion_tokens,
-        },
-      });
+      logCompletionResponse(startTime, ret, span);
       return ret;
     } finally {
       span.end();
@@ -319,14 +327,8 @@ function wrapChatCompletion<
           metadata: {
             ...rest,
           },
-          output: ret.choices,
-          metrics: {
-            time_to_first_token: getCurrentUnixTimestamp() - startTime,
-            tokens: ret.usage?.total_tokens,
-            prompt_tokens: ret.usage?.prompt_tokens,
-            completion_tokens: ret.usage?.completion_tokens,
-          },
         });
+        logCompletionResponse(startTime, ret, span);
         return ret;
       } finally {
         span.end();
