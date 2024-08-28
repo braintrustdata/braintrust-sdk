@@ -26,7 +26,7 @@ def main(args):
 
     log_group_names = []
     if args.service == "api":
-        for name in ["APIHandlerName", "APIHandlerJSName"]:
+        for name in ["APIHandlerName", "APIHandlerJSName", "AIProxyFnName"]:
             lambda_function = [x for x in stack["Outputs"] if x["OutputKey"] == name]
             if len(lambda_function) > 1:
                 raise ValueError(f"Expected 1 APIHandlerName, found {len(lambda_function)} ({lambda_function}))")
