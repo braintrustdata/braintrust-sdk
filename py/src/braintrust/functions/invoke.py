@@ -1,10 +1,10 @@
 from typing import Any, Literal, Optional, TypeVar, Union, overload
 
-from braintrust_core.functions import INVOKE_API_VERSION
 from sseclient import SSEClient
 
 from ..logger import Exportable, get_span_parent_object, login, proxy_conn
 from ..util import response_raise_for_status
+from .constants import INVOKE_API_VERSION
 from .stream import BraintrustStream
 
 T = TypeVar("T")
