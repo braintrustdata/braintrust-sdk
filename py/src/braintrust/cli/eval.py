@@ -8,8 +8,6 @@ from dataclasses import dataclass, field
 from threading import Lock
 from typing import Dict, List, Optional, Union
 
-from braintrust_core.util import eprint
-
 from .. import login
 from ..framework import (
     BaseExperiment,
@@ -26,6 +24,7 @@ from ..framework import (
     run_evaluator,
     set_thread_pool_max_workers,
 )
+from ..util import eprint
 
 INCLUDE = [
     "**/eval_*.py",

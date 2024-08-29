@@ -1,10 +1,9 @@
 import time
 from contextlib import contextmanager
 
-from braintrust_core.span_types import SpanTypeAttribute
-from braintrust_core.util import merge_dicts
-
 from .logger import start_span
+from .span_types import SpanTypeAttribute
+from .util import merge_dicts
 
 X_LEGACY_CACHED_HEADER = "x-cached"
 X_CACHED_HEADER = "x-bt-cached"

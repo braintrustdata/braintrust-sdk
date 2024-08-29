@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Dict, List, Literal, Optional, Union
 
-from .util import SerializableDataClass
+from braintrust_core.serializable_data_class import SerializableDataClass
 
 
 @dataclass
