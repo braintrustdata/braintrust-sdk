@@ -1,3 +1,6 @@
+# Note: This library is copied to autoevals/py/autoevals/score.py. Keep them in
+# sync.
+
 import dataclasses
 from abc import ABC, abstractmethod
 from typing import Dict, Optional

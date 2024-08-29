@@ -16,19 +16,19 @@ from multiprocessing import cpu_count
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List, Optional, TypeVar, Union
 
 import exceptiongroup
-from braintrust_core.score import Score, Scorer
-from braintrust_core.span_types import SpanTypeAttribute
-from braintrust_core.util import (
-    SerializableDataClass,
-    eprint,
-)
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 
 from .logger import NOOP_SPAN, ExperimentSummary, Metadata, ScoreSummary, Span, stringify_exception
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
-from .util import bt_iscoroutinefunction
+from .score import Score, Scorer
+from .span_types import SpanTypeAttribute
+from .util import (
+    SerializableDataClass,
+    bt_iscoroutinefunction,
+    eprint,
+)
 
 Input = TypeVar("Input")
 Output = TypeVar("Output")

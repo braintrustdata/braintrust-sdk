@@ -23,40 +23,38 @@ from typing import Any, Callable, Dict, Optional, TypeVar, Union, cast, overload
 import chevron
 import exceptiongroup
 import requests
-from braintrust_core.bt_json import bt_dumps
-from braintrust_core.db_fields import (
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+from braintrust.functions.stream import BraintrustStream
+
+from .bt_json import bt_dumps
+from .db_fields import (
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
-from braintrust_core.git_fields import GitMetadataSettings, RepoInfo
-from braintrust_core.merge_row_batch import batch_items, merge_row_batch
-from braintrust_core.object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
-from braintrust_core.prompt import BRAINTRUST_PARAMS, PromptSchema
-from braintrust_core.span_identifier_v2 import SpanComponentsV2, SpanObjectTypeV2, SpanRowIdsV2
-from braintrust_core.span_types import SpanTypeAttribute
-from braintrust_core.util import (
-    SerializableDataClass,
-    _urljoin,
-    coalesce,
-    encode_uri_component,
-    eprint,
-    merge_dicts,
-)
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-
-from braintrust.functions.stream import BraintrustStream
-
+from .git_fields import GitMetadataSettings, RepoInfo
 from .gitutil import get_past_n_ancestors, get_repo_info
+from .merge_row_batch import batch_items, merge_row_batch
+from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
+from .prompt import BRAINTRUST_PARAMS, PromptSchema
+from .span_identifier_v2 import SpanComponentsV2, SpanObjectTypeV2, SpanRowIdsV2
+from .span_types import SpanTypeAttribute
 from .util import (
     GLOBAL_PROJECT,
     AugmentedHTTPError,
     LazyValue,
+    SerializableDataClass,
+    _urljoin,
     bt_iscoroutinefunction,
+    coalesce,
+    encode_uri_component,
+    eprint,
     get_caller_location,
+    merge_dicts,
     response_raise_for_status,
 )
 
