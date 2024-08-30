@@ -27,6 +27,7 @@ interface FunctionEvent {
 
 interface EvalFunction {
   project_id: string;
+  experiment_id: string;
   name: string;
   slug: string;
   description: string;
@@ -69,6 +70,7 @@ export async function uploadEvalBundles({
     }
     const baseInfo = {
       project_id: (await evaluator.experiment.project).id, // This should resolve instantly
+      experiment_id: experimentId,
     };
     const namePrefix = `${await evaluator.experiment.name}`;
     bundleSpecs[evaluator.evaluator.sourceFile][experimentId] = [
@@ -188,6 +190,10 @@ export async function uploadEvalBundles({
                 location: spec.location,
                 bundle_id: pathInfo.bundleId,
               },
+            },
+            origin: {
+              object_type: "experiment",
+              object_id: spec.experiment_id,
             },
           }));
 

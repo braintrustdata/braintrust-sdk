@@ -54,6 +54,23 @@ function generateBaseTableSchema(
   });
 }
 
+export const aclObjectTypeEnum = z
+  .enum([
+    "organization",
+    "project",
+    "experiment",
+    "dataset",
+    "prompt",
+    "prompt_session",
+    "group",
+    "role",
+    "org_member",
+    "project_log",
+    "org_project",
+  ])
+  .describe("The object type that the ACL applies to");
+export type AclObjectType = z.infer<typeof aclObjectTypeEnum>;
+
 const userBaseSchema = generateBaseTableSchema("user");
 export const userSchema = z
   .object({
@@ -268,6 +285,15 @@ export const functionSchema = promptSchemaObject
   .merge(
     z.object({
       function_data: functionDataSchema,
+      origin: z
+        .object({
+          object_type: aclObjectTypeEnum,
+          object_id: z
+            .string()
+            .uuid()
+            .describe("Id of the object the function is originating from"),
+        })
+        .nullish(),
     }),
   )
   .openapi("Function");
@@ -403,23 +429,6 @@ export const permissionEnum = z
     ].join("\n\n"),
   );
 export type Permission = z.infer<typeof permissionEnum>;
-
-export const aclObjectTypeEnum = z
-  .enum([
-    "organization",
-    "project",
-    "experiment",
-    "dataset",
-    "prompt",
-    "prompt_session",
-    "group",
-    "role",
-    "org_member",
-    "project_log",
-    "org_project",
-  ])
-  .describe("The object type that the ACL applies to");
-export type AclObjectType = z.infer<typeof aclObjectTypeEnum>;
 
 const roleBaseSchema = generateBaseTableSchema("role");
 export const roleSchema = z
