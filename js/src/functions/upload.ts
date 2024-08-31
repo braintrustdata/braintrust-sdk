@@ -86,7 +86,6 @@ export async function uploadEvalBundles({
         : ""
       : `${await evaluator.experiment.name}`;
 
-    console.log("SLUG", `experiment${namePrefix}-task`);
     bundleSpecs[evaluator.evaluator.sourceFile][experimentId] = [
       {
         ...baseInfo,
