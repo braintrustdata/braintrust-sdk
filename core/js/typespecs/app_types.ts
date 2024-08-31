@@ -811,9 +811,10 @@ export const createFunctionSchema = functionSchema
   })
   .openapi("CreateFunction");
 
-const patchPromptSchema = z
+export const patchPromptSchema = z
   .object({
     name: promptSchema.shape.name.nullish(),
+    slug: promptSchema.shape.slug.nullish(),
     description: promptSchema.shape.description.nullish(),
     prompt_data: promptSchema.shape.prompt_data.nullish(),
     tags: promptSchema.shape.tags.nullish(),
