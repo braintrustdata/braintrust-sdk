@@ -240,8 +240,10 @@ export const codeBundleSchema = z.object({
     type: z.literal("experiment"),
     eval_name: z.string(),
     position: z.union([
-      z.literal("task").openapi({ title: "task" }),
-      z.object({ score: z.number() }).openapi({ title: "score" }),
+      z.object({ type: z.literal("task") }),
+      z
+        .object({ type: z.literal("scorer"), index: z.number() })
+        .openapi({ title: "scorer" }),
     ]),
   }),
   bundle_id: z.string(),

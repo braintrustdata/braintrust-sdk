@@ -84,7 +84,7 @@ export async function uploadEvalBundles({
         location: {
           type: "experiment",
           eval_name: evaluator.evaluator.evaluator.evalName,
-          position: "task",
+          position: { type: "task" },
         },
       },
       ...evaluator.evaluator.evaluator.scores.map((score, i): EvalFunction => {
@@ -99,7 +99,7 @@ export async function uploadEvalBundles({
           location: {
             type: "experiment",
             eval_name: evaluator.evaluator.evaluator.evalName,
-            position: { score: i },
+            position: { type: "scorer", index: i },
           },
         };
       }),
@@ -209,7 +209,7 @@ export async function uploadEvalBundles({
   }
 
   await Promise.all(uploadPromises);
-  console.log(
+  console.error(
     `${uploaded} Bundle${uploaded > 1 ? "s" : ""} uploaded successfully.`,
   );
 }
