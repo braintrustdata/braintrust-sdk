@@ -359,6 +359,7 @@ interface EvaluatorOpts {
   appUrl?: string;
   noSendLogs: boolean;
   bundle: boolean;
+  setLatest: boolean;
   terminateOnFailure: boolean;
   watch: boolean;
   list: boolean;
@@ -563,6 +564,7 @@ async function runOnce(
       experimentIdToEvaluator,
       bundlePromises,
       handles,
+      setLatest: opts.setLatest,
       verbose: opts.verbose,
     });
   }
@@ -593,6 +595,7 @@ interface RunArgs {
   no_progress_bars: boolean;
   terminate_on_failure: boolean;
   bundle: boolean;
+  set_latest: boolean;
   env_file?: string;
 }
 
@@ -776,6 +779,7 @@ async function run(args: RunArgs) {
     appUrl: args.app_url,
     noSendLogs: !!args.no_send_logs,
     bundle: !!args.bundle,
+    setLatest: !!args.set_latest,
     terminateOnFailure: !!args.terminate_on_failure,
     watch: !!args.watch,
     jsonl: args.jsonl,
@@ -885,6 +889,10 @@ async function main() {
   parser_run.add_argument("--bundle", {
     action: "store_true",
     help: "Experimental (do not use unless you know what you're doing)",
+  });
+  parser_run.add_argument("--set-latest", {
+    action: "store_true",
+    help: "Mark the current run as the latest for all experiments. This updates the bundled scorers in your project to this run.",
   });
   parser_run.add_argument("--env-file", {
     help: "A path to a .env file containing environment variables to load (via dotenv).",

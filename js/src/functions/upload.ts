@@ -1,4 +1,8 @@
-import { CodeBundle, functionDataSchema } from "@braintrust/core/typespecs";
+import {
+  CodeBundle,
+  functionDataSchema,
+  FunctionObject,
+} from "@braintrust/core/typespecs";
 import { EvaluatorState, FileHandle } from "../cli";
 import { scorerName, warning } from "../framework";
 import { _internalGetGlobalState, Experiment, newId } from "../logger";
@@ -8,6 +12,7 @@ import path from "path";
 import { createGzip } from "zlib";
 import { isEmpty, LazyValue } from "../util";
 import { z } from "zod";
+import { capitalize } from "@braintrust/core";
 
 export type EvaluatorMap = Record<
   string,
@@ -32,6 +37,7 @@ interface EvalFunction {
   slug: string;
   description: string;
   location: CodeBundle["location"];
+  function_type: FunctionObject["function_type"];
 }
 
 const pathInfoSchema = z
@@ -45,6 +51,7 @@ export async function uploadEvalBundles({
   experimentIdToEvaluator,
   bundlePromises,
   handles,
+  setLatest,
   verbose,
 }: {
   experimentIdToEvaluator: EvaluatorMap;
@@ -53,6 +60,7 @@ export async function uploadEvalBundles({
   };
   handles: Record<string, FileHandle>;
   verbose: boolean;
+  setLatest: boolean;
 }) {
   console.error(`Processing bundles...`);
   const uploadPromises = [];
@@ -72,20 +80,26 @@ export async function uploadEvalBundles({
       project_id: (await evaluator.experiment.project).id, // This should resolve instantly
       experiment_id: experimentId,
     };
-    const namePrefix = `${await evaluator.experiment.name}`;
+    const namePrefix = setLatest
+      ? evaluator.evaluator.evaluator.experimentName
+        ? `${evaluator.evaluator.evaluator.experimentName}`
+        : ""
+      : `${await evaluator.experiment.name}`;
+
+    console.log("SLUG", `experiment${namePrefix}-task`);
     bundleSpecs[evaluator.evaluator.sourceFile][experimentId] = [
       {
         ...baseInfo,
         // There is a very small chance that someone names a function with the same convention, but
         // let's assume it's low enough that it doesn't matter.
-        name: `Eval ${namePrefix} task`,
-        slug: `experiment-${namePrefix}-task`,
+        ...formatNameAndSlug(["experiment", namePrefix, "task"]),
         description: `Task for experiment ${namePrefix}`,
         location: {
           type: "experiment",
           eval_name: evaluator.evaluator.evaluator.evalName,
           position: { type: "task" },
         },
+        function_type: "task",
       },
       ...evaluator.evaluator.evaluator.scores.map((score, i): EvalFunction => {
         const name = scorerName(score, i);
@@ -93,14 +107,14 @@ export async function uploadEvalBundles({
           ...baseInfo,
           // There is a very small chance that someone names a function with the same convention, but
           // let's assume it's low enough that it doesn't matter.
-          name: `Eval ${namePrefix} scorer ${name}`,
-          slug: `experiment-${namePrefix}-scorer-${name}`,
+          ...formatNameAndSlug(["experiment", namePrefix, "scorer", name]),
           description: `Score ${name} for experiment ${namePrefix}`,
           location: {
             type: "experiment",
             eval_name: evaluator.evaluator.evaluator.evalName,
             position: { type: "scorer", index: i },
           },
+          function_type: "scorer",
         };
       }),
     ];
@@ -194,7 +208,9 @@ export async function uploadEvalBundles({
             origin: {
               object_type: "experiment",
               object_id: spec.experiment_id,
+              internal: !setLatest,
             },
+            function_type: spec.function_type,
           }));
 
         const logPromise = _internalGetGlobalState()
@@ -212,4 +228,12 @@ export async function uploadEvalBundles({
   console.error(
     `${uploaded} Bundle${uploaded > 1 ? "s" : ""} uploaded successfully.`,
   );
+}
+
+function formatNameAndSlug(pieces: string[]) {
+  const nonEmptyPieces = pieces.filter((piece) => piece.trim() !== "");
+  return {
+    name: capitalize(nonEmptyPieces.join(" ")),
+    slug: nonEmptyPieces.join("-"),
+  };
 }

@@ -228,7 +228,7 @@ const promptSchemaObject = z.object({
   tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
   metadata: promptBaseSchema.shape.metadata,
   // An empty (unspecified) function_type is equivalent to "dynamic".
-  function_type: z.enum(["llm", "scorer"]).nullish(),
+  function_type: z.enum(["task", "llm", "scorer"]).nullish(),
 });
 
 export const promptSchema = promptSchemaObject.openapi("Prompt");
@@ -294,6 +294,12 @@ export const functionSchema = promptSchemaObject
             .string()
             .uuid()
             .describe("Id of the object the function is originating from"),
+          internal: z
+            .boolean()
+            .nullish()
+            .describe(
+              "The function exists for internal purposes and should not be displayed in the list of functions.",
+            ),
         })
         .nullish(),
     }),
