@@ -84,8 +84,10 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
     let betaChatCompletionProxy = new Proxy(openai?.beta?.chat.completions, {
       get(target, name, receiver) {
         const baseVal = Reflect.get(target, name, receiver);
-        if (name === "stream") {
-          return wrapBetaChatCompletion(baseVal.bind(target));
+        if (name === "parse") {
+          return wrapBetaChatCompletionParse(baseVal.bind(target));
+        } else if (name === "stream") {
+          return wrapBetaChatCompletionStream(baseVal.bind(target));
         }
         return baseVal;
       },
@@ -145,7 +147,51 @@ interface NonStreamingChatResponse {
     | undefined;
 }
 
-function wrapBetaChatCompletion<
+function logCompletionResponse(
+  startTime: number,
+  response: NonStreamingChatResponse | StreamingChatResponse,
+  span: Span,
+) {
+  span.log({
+    output: response.choices,
+    metrics: {
+      time_to_first_token: getCurrentUnixTimestamp() - startTime,
+      tokens: response.usage?.total_tokens,
+      prompt_tokens: response.usage?.prompt_tokens,
+      completion_tokens: response.usage?.completion_tokens,
+    },
+  });
+}
+
+function wrapBetaChatCompletionParse<
+  P extends ChatParams,
+  C extends Promise<NonStreamingChatResponse>,
+>(completion: (params: P) => C): (params: P) => Promise<any> {
+  return async (allParams: P & SpanInfo) => {
+    const { span_info: _, ...params } = allParams;
+    const span = startSpan(
+      mergeDicts(
+        {
+          name: "Chat Completion",
+          spanAttributes: {
+            type: SpanTypeAttribute.LLM,
+          },
+        },
+        parseChatCompletionParams(allParams),
+      ),
+    );
+    const startTime = getCurrentUnixTimestamp();
+    const ret = await completion(params as P);
+    try {
+      logCompletionResponse(startTime, ret, span);
+      return ret;
+    } finally {
+      span.end();
+    }
+  };
+}
+
+function wrapBetaChatCompletionStream<
   P extends ChatParams,
   C extends StreamingChatResponse,
 >(completion: (params: P) => C): (params: P) => Promise<any> {
@@ -281,14 +327,8 @@ function wrapChatCompletion<
           metadata: {
             ...rest,
           },
-          output: ret.choices,
-          metrics: {
-            time_to_first_token: getCurrentUnixTimestamp() - startTime,
-            tokens: ret.usage?.total_tokens,
-            prompt_tokens: ret.usage?.prompt_tokens,
-            completion_tokens: ret.usage?.completion_tokens,
-          },
         });
+        logCompletionResponse(startTime, ret, span);
         return ret;
       } finally {
         span.end();

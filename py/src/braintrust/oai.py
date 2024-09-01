@@ -1,9 +1,9 @@
 import time
-
-from braintrust_core.span_types import SpanTypeAttribute
-from braintrust_core.util import merge_dicts
+from contextlib import contextmanager
 
 from .logger import start_span
+from .span_types import SpanTypeAttribute
+from .util import merge_dicts
 
 X_LEGACY_CACHED_HEADER = "x-cached"
 X_CACHED_HEADER = "x-bt-cached"
@@ -372,6 +372,42 @@ class ChatV1Wrapper(NamedWrapper):
             self.completions = CompletionsV1Wrapper(chat.completions)
 
 
+class BetaCompletionsV1Wrapper(NamedWrapper):
+    def __init__(self, completions):
+        self.__completions = completions
+        super().__init__(completions)
+
+    def parse(self, *args, **kwargs):
+        return ChatCompletionWrapper(self.__completions.parse, None).create(*args, **kwargs)
+
+
+class AsyncBetaCompletionsV1Wrapper(NamedWrapper):
+    def __init__(self, completions):
+        self.__completions = completions
+        super().__init__(completions)
+
+    async def parse(self, *args, **kwargs):
+        return await ChatCompletionWrapper(None, self.__completions.parse).acreate(*args, **kwargs)
+
+
+class BetaChatV1Wrapper(NamedWrapper):
+    def __init__(self, chat):
+        super().__init__(chat)
+
+        import openai
+
+        if type(chat.completions) == openai.resources.beta.chat.completions.AsyncCompletions:
+            self.completions = AsyncBetaCompletionsV1Wrapper(chat.completions)
+        else:
+            self.completions = BetaCompletionsV1Wrapper(chat.completions)
+
+
+class BetaV1Wrapper(NamedWrapper):
+    def __init__(self, beta):
+        super().__init__(beta)
+        self.chat = BetaChatV1Wrapper(beta.chat)
+
+
 # This wraps 1.*.* versions of the openai module, eg https://github.com/openai/openai-python/tree/v1.1.0
 class OpenAIV1Wrapper(NamedWrapper):
     def __init__(self, openai):
@@ -379,6 +415,9 @@ class OpenAIV1Wrapper(NamedWrapper):
         import openai as oai
 
         self.chat = ChatV1Wrapper(openai.chat)
+
+        if hasattr(openai, "beta"):
+            self.beta = BetaV1Wrapper(openai.beta)
 
         if type(openai.embeddings) == oai.resources.embeddings.AsyncEmbeddings:
             self.embeddings = AsyncEmbeddingV1Wrapper(openai.embeddings)
