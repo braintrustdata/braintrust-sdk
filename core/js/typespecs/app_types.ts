@@ -247,6 +247,7 @@ export const codeBundleSchema = z.object({
     ]),
   }),
   bundle_id: z.string(),
+  preview: z.string().nullish().describe("A preview of the code"),
 });
 export type CodeBundle = z.infer<typeof codeBundleSchema>;
 

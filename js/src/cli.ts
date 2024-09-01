@@ -328,7 +328,7 @@ async function initFile({
         external: [],
         write: true,
         plugins: [],
-        minify: true,
+        sourcemap: true,
       };
       return await esbuild.build(buildOptions);
     },
@@ -700,6 +700,7 @@ function buildOpts(
     entryPoints: [fileName],
     bundle: true,
     treeShaking: true,
+    minify: true,
     outfile: outFile,
     platform: "node",
     write: false,

@@ -5,14 +5,15 @@ import {
 } from "@braintrust/core/typespecs";
 import { EvaluatorState, FileHandle } from "../cli";
 import { scorerName, warning } from "../framework";
-import { _internalGetGlobalState, Experiment, newId } from "../logger";
+import { _internalGetGlobalState, Experiment } from "../logger";
 import * as esbuild from "esbuild";
 import fs from "fs";
 import path from "path";
 import { createGzip } from "zlib";
-import { isEmpty, LazyValue } from "../util";
+import { isEmpty } from "../util";
 import { z } from "zod";
 import { capitalize } from "@braintrust/core";
+import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
 
 export type EvaluatorMap = Record<
   string,
@@ -38,6 +39,7 @@ interface EvalFunction {
   description: string;
   location: CodeBundle["location"];
   function_type: FunctionObject["function_type"];
+  function: Function;
 }
 
 const pathInfoSchema = z
@@ -99,6 +101,7 @@ export async function uploadEvalBundles({
           position: { type: "task" },
         },
         function_type: "task",
+        function: evaluator.evaluator.evaluator.task,
       },
       ...evaluator.evaluator.evaluator.scores.map((score, i): EvalFunction => {
         const name = scorerName(score, i);
@@ -114,6 +117,7 @@ export async function uploadEvalBundles({
             position: { type: "scorer", index: i },
           },
           function_type: "scorer",
+          function: score,
         };
       }),
     ];
@@ -132,7 +136,12 @@ export async function uploadEvalBundles({
         if (!bundle || !handles[inFile].bundleFile) {
           return;
         }
-        const spec = bundleSpecs[inFile];
+
+        const sourceMapContextPromise = makeSourceMapContext({
+          inFile,
+          outFile: handles[inFile].bundleFile,
+          sourceMapFile: handles[inFile].bundleFile + ".map",
+        });
 
         let pathInfo: z.infer<typeof pathInfoSchema>;
         try {
@@ -185,38 +194,55 @@ export async function uploadEvalBundles({
           uploaded += 1;
         })();
 
-        // Insert the spec as prompt data
-        const functionEntries: FunctionEvent[] = Object.values(
-          bundleSpecs[inFile],
-        )
-          .flatMap((specs) => specs)
-          .map((spec) => ({
-            project_id: spec.project_id,
-            name: spec.name,
-            slug: spec.slug,
-            description: spec.description,
-            function_data: {
-              type: "code",
-              data: {
-                type: "bundle",
-                runtime_context,
-                location: spec.location,
-                bundle_id: pathInfo.bundleId,
-              },
-            },
-            origin: {
-              object_type: "experiment",
-              object_id: spec.experiment_id,
-              internal: !setLatest,
-            },
-            function_type: spec.function_type,
-          }));
+        const sourceMapContext = await sourceMapContextPromise;
 
-        const logPromise = _internalGetGlobalState()
-          .apiConn()
-          .post_json("insert-functions", {
-            functions: functionEntries,
-          });
+        // Insert the spec as prompt data
+        const functionEntries: FunctionEvent[] = await Promise.all(
+          Object.values(bundleSpecs[inFile])
+            .flatMap((specs) => specs)
+            .map(async (spec) => ({
+              project_id: spec.project_id,
+              name: spec.name,
+              slug: spec.slug,
+              description: spec.description,
+              function_data: {
+                type: "code",
+                data: {
+                  type: "bundle",
+                  runtime_context,
+                  location: spec.location,
+                  bundle_id: pathInfo.bundleId,
+                  preview: await findCodeDefinition({
+                    fn: spec.function,
+                    ctx: sourceMapContext,
+                  }),
+                },
+              },
+              origin: {
+                object_type: "experiment",
+                object_id: spec.experiment_id,
+                internal: !setLatest,
+              },
+              function_type: spec.function_type,
+            })),
+        );
+
+        const logPromise = (async () => {
+          try {
+            await _internalGetGlobalState()
+              .apiConn()
+              .post_json("insert-functions", {
+                functions: functionEntries,
+              });
+          } catch (e) {
+            console.warn(
+              warning(
+                `Failed to save function definitions for '${inFile}'. You most likely need to update the API: ${e}`,
+              ),
+            );
+            return;
+          }
+        })();
 
         await Promise.all([uploadPromise, logPromise]);
       })(),
