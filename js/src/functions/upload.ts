@@ -39,7 +39,6 @@ interface EvalFunction {
   description: string;
   location: CodeBundle["location"];
   function_type: FunctionObject["function_type"];
-  function: Function;
 }
 
 const pathInfoSchema = z
@@ -101,7 +100,6 @@ export async function uploadEvalBundles({
           position: { type: "task" },
         },
         function_type: "task",
-        function: evaluator.evaluator.evaluator.task,
       },
       ...evaluator.evaluator.evaluator.scores.map((score, i): EvalFunction => {
         const name = scorerName(score, i);
@@ -117,7 +115,6 @@ export async function uploadEvalBundles({
             position: { type: "scorer", index: i },
           },
           function_type: "scorer",
-          function: score,
         };
       }),
     ];
@@ -213,7 +210,7 @@ export async function uploadEvalBundles({
                   location: spec.location,
                   bundle_id: pathInfo.bundleId,
                   preview: await findCodeDefinition({
-                    fn: spec.function,
+                    location: spec.location,
                     ctx: sourceMapContext,
                   }),
                 },

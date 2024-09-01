@@ -1,9 +1,12 @@
 import { SourceMapConsumer } from "source-map";
 import * as fs from "fs/promises";
-import { scorerName, warning } from "../framework";
+import { EvaluatorFile, scorerName, warning } from "../framework";
+import { loadModule } from "./load-module";
+import { CodeBundle } from "@braintrust/core/typespecs/dist";
 
 interface SourceMapContext {
   inFiles: Record<string, string[]>;
+  outFileModule: EvaluatorFile;
   outFileLines: string[];
   sourceMap: SourceMapConsumer;
 }
@@ -28,6 +31,7 @@ export async function makeSourceMapContext({
   ]);
   return {
     inFiles: { [inFile]: inFileContents.split("\n") },
+    outFileModule: loadModule({ inFile, moduleText: outFileContents }),
     outFileLines: outFileContents.split("\n"),
     sourceMap,
   };
@@ -38,23 +42,47 @@ function isNative(fn: Function): boolean {
 }
 
 export async function findCodeDefinition({
-  fn,
-  ctx: { inFiles, outFileLines, sourceMap },
+  location,
+  ctx: { inFiles, outFileModule, outFileLines, sourceMap },
 }: {
-  fn: Function;
+  location: CodeBundle["location"];
   ctx: SourceMapContext;
 }): Promise<string | undefined> {
+  const evaluator = outFileModule.evaluators[location.eval_name]?.evaluator;
+  if (!evaluator) {
+    console.warn(
+      warning(
+        `Failed to find evaluator for ${location.eval_name}. Will not display preview.`,
+      ),
+    );
+    return undefined;
+  }
+
+  const fn =
+    location.position.type === "task"
+      ? evaluator.task
+      : evaluator.scores[location.position.index];
+
+  if (!fn) {
+    console.warn(
+      warning(
+        `Failed to find ${location.position.type} for ${location.eval_name}. Will not display preview.`,
+      ),
+    );
+    return undefined;
+  }
+
   const sourceCode = fn.toString();
   if (isNative(fn)) {
     return undefined;
   }
   let lineNumber = 0;
   let columnNumber = -1;
-  console.log("Source code:", sourceCode);
+  //   console.log("Source code:", sourceCode);
   for (const line of outFileLines) {
     const sourceDefinition = line.indexOf(sourceCode);
     if (sourceDefinition !== -1) {
-      console.log("FOO BAR BING!!!", lineNumber, sourceDefinition);
+      //   console.log("FOO BAR BING!!!", lineNumber, sourceDefinition);
       columnNumber = sourceDefinition;
       break;
     }

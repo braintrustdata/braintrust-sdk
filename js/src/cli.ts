@@ -24,7 +24,6 @@ import {
 } from "./progress";
 
 // Re-use the module resolution logic from Jest
-import nodeModulesPaths from "./jest/nodeModulesPaths";
 import {
   EvaluatorDef,
   EvaluatorFile,
@@ -42,6 +41,7 @@ import { configureNode } from "./node";
 import { isEmpty } from "./util";
 import { loadEnvConfig } from "@next/env";
 import { uploadEvalBundles } from "./functions/upload";
+import { loadModule } from "./functions/load-module";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript
@@ -83,16 +83,6 @@ export interface FileHandle {
   destroy: () => Promise<void>;
 }
 
-function evalWithModuleContext<T>(inFile: string, evalFn: () => T): T {
-  const modulePaths = [...module.paths];
-  try {
-    module.paths = nodeModulesPaths(path.dirname(inFile), {});
-    return evalFn();
-  } finally {
-    module.paths = modulePaths;
-  }
-}
-
 function evaluateBuildResults(
   inFile: string,
   buildResult: esbuild.BuildResult,
@@ -101,22 +91,7 @@ function evaluateBuildResults(
     return null;
   }
   const moduleText = buildResult.outputFiles[0].text;
-  return evalWithModuleContext(inFile, () => {
-    globalThis._evals = {
-      evaluators: {},
-      reporters: {},
-    };
-    globalThis._lazy_load = true;
-    globalThis.__inherited_braintrust_state = _internalGetGlobalState();
-    const __filename = inFile;
-    const __dirname = dirname(__filename);
-    new Function("require", "__filename", "__dirname", moduleText)(
-      require,
-      __filename,
-      __dirname,
-    );
-    return { ...globalThis._evals };
-  });
+  return loadModule({ inFile, moduleText });
 }
 
 async function initLogger(
@@ -328,6 +303,7 @@ async function initFile({
         external: [],
         write: true,
         plugins: [],
+        minify: true,
         sourcemap: true,
       };
       return await esbuild.build(buildOptions);
@@ -700,7 +676,6 @@ function buildOpts(
     entryPoints: [fileName],
     bundle: true,
     treeShaking: true,
-    minify: true,
     outfile: outFile,
     platform: "node",
     write: false,
