@@ -119,6 +119,11 @@ export interface Span extends Exportable {
   logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void;
 
   /**
+   * Runs the provided callback with the span as the current span.
+   */
+  withCurrent<R>(callback: (span: Span) => R): R;
+
+  /**
    * Create a new span and run the provided callback. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `Span.log` will be merged into one logical row.
    *
    * Spans created within `traced` are ended automatically. By default, the span is marked as current, so they can be accessed using `braintrust.currentSpan`.
@@ -192,6 +197,10 @@ export class NoopSpan implements Span {
   public log(_: ExperimentLogPartialArgs) {}
 
   public logFeedback(_event: Omit<LogFeedbackFullArgs, "id">) {}
+
+  public withCurrent<R>(callback: (span: Span) => R): R {
+    return callback(this);
+  }
 
   public traced<R>(
     callback: (span: Span) => R,
@@ -3511,6 +3520,10 @@ export class SpanImpl implements Span {
       ...event,
       id: this.id,
     });
+  }
+
+  public withCurrent<R>(callback: (span: Span) => R): R {
+    return withCurrent(this, callback);
   }
 
   public traced<R>(
