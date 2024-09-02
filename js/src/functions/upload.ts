@@ -52,7 +52,7 @@ export async function uploadEvalBundles({
   experimentIdToEvaluator,
   bundlePromises,
   handles,
-  setLatest,
+  setCurrent,
   verbose,
 }: {
   experimentIdToEvaluator: EvaluatorMap;
@@ -61,7 +61,7 @@ export async function uploadEvalBundles({
   };
   handles: Record<string, FileHandle>;
   verbose: boolean;
-  setLatest: boolean;
+  setCurrent: boolean;
 }) {
   console.error(`Processing bundles...`);
   const uploadPromises = [];
@@ -81,7 +81,7 @@ export async function uploadEvalBundles({
       project_id: (await evaluator.experiment.project).id, // This should resolve instantly
       experiment_id: experimentId,
     };
-    const namePrefix = setLatest
+    const namePrefix = setCurrent
       ? evaluator.evaluator.evaluator.experimentName
         ? `${evaluator.evaluator.evaluator.experimentName}`
         : ""
@@ -218,7 +218,7 @@ export async function uploadEvalBundles({
               origin: {
                 object_type: "experiment",
                 object_id: spec.experiment_id,
-                internal: !setLatest,
+                internal: !setCurrent,
               },
               function_type: spec.function_type,
             })),
