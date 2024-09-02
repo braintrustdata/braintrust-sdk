@@ -3,11 +3,13 @@ import * as fs from "fs/promises";
 import { EvaluatorFile, scorerName, warning } from "../framework";
 import { loadModule } from "./load-module";
 import { CodeBundle } from "@braintrust/core/typespecs/dist";
+import path from "path";
 
 interface SourceMapContext {
   inFiles: Record<string, string[]>;
   outFileModule: EvaluatorFile;
   outFileLines: string[];
+  sourceMapDir: string;
   sourceMap: SourceMapConsumer;
 }
 
@@ -33,6 +35,7 @@ export async function makeSourceMapContext({
     inFiles: { [inFile]: inFileContents.split("\n") },
     outFileModule: loadModule({ inFile, moduleText: outFileContents }),
     outFileLines: outFileContents.split("\n"),
+    sourceMapDir: path.dirname(sourceMapFile),
     sourceMap,
   };
 }
@@ -43,7 +46,7 @@ function isNative(fn: Function): boolean {
 
 export async function findCodeDefinition({
   location,
-  ctx: { inFiles, outFileModule, outFileLines, sourceMap },
+  ctx: { inFiles, outFileModule, outFileLines, sourceMapDir, sourceMap },
 }: {
   location: CodeBundle["location"];
   ctx: SourceMapContext;
@@ -103,8 +106,9 @@ export async function findCodeDefinition({
   }
 
   if (!inFiles[originalPosition.source]) {
+    const originalFile = path.join(sourceMapDir, originalPosition.source);
     inFiles[originalPosition.source] = (
-      await fs.readFile(originalPosition.source, "utf-8")
+      await fs.readFile(originalFile, "utf-8")
     ).split("\n");
   }
 
