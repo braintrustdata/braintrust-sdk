@@ -24,7 +24,6 @@ import {
 } from "./progress";
 
 // Re-use the module resolution logic from Jest
-import nodeModulesPaths from "./jest/nodeModulesPaths";
 import {
   EvaluatorDef,
   EvaluatorFile,
@@ -42,6 +41,7 @@ import { configureNode } from "./node";
 import { isEmpty } from "./util";
 import { loadEnvConfig } from "@next/env";
 import { uploadEvalBundles } from "./functions/upload";
+import { loadModule } from "./functions/load-module";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript
@@ -83,16 +83,6 @@ export interface FileHandle {
   destroy: () => Promise<void>;
 }
 
-function evalWithModuleContext<T>(inFile: string, evalFn: () => T): T {
-  const modulePaths = [...module.paths];
-  try {
-    module.paths = nodeModulesPaths(path.dirname(inFile), {});
-    return evalFn();
-  } finally {
-    module.paths = modulePaths;
-  }
-}
-
 function evaluateBuildResults(
   inFile: string,
   buildResult: esbuild.BuildResult,
@@ -101,22 +91,7 @@ function evaluateBuildResults(
     return null;
   }
   const moduleText = buildResult.outputFiles[0].text;
-  return evalWithModuleContext(inFile, () => {
-    globalThis._evals = {
-      evaluators: {},
-      reporters: {},
-    };
-    globalThis._lazy_load = true;
-    globalThis.__inherited_braintrust_state = _internalGetGlobalState();
-    const __filename = inFile;
-    const __dirname = dirname(__filename);
-    new Function("require", "__filename", "__dirname", moduleText)(
-      require,
-      __filename,
-      __dirname,
-    );
-    return { ...globalThis._evals };
-  });
+  return loadModule({ inFile, moduleText });
 }
 
 async function initLogger(
@@ -329,6 +304,7 @@ async function initFile({
         write: true,
         plugins: [],
         minify: true,
+        sourcemap: true,
       };
       return await esbuild.build(buildOptions);
     },
@@ -359,6 +335,7 @@ interface EvaluatorOpts {
   appUrl?: string;
   noSendLogs: boolean;
   bundle: boolean;
+  setCurrent: boolean;
   terminateOnFailure: boolean;
   watch: boolean;
   list: boolean;
@@ -563,6 +540,7 @@ async function runOnce(
       experimentIdToEvaluator,
       bundlePromises,
       handles,
+      setCurrent: opts.setCurrent,
       verbose: opts.verbose,
     });
   }
@@ -593,6 +571,7 @@ interface RunArgs {
   no_progress_bars: boolean;
   terminate_on_failure: boolean;
   bundle: boolean;
+  set_current: boolean;
   env_file?: string;
 }
 
@@ -776,6 +755,7 @@ async function run(args: RunArgs) {
     appUrl: args.app_url,
     noSendLogs: !!args.no_send_logs,
     bundle: !!args.bundle,
+    setCurrent: !!args.set_current,
     terminateOnFailure: !!args.terminate_on_failure,
     watch: !!args.watch,
     jsonl: args.jsonl,
@@ -885,6 +865,10 @@ async function main() {
   parser_run.add_argument("--bundle", {
     action: "store_true",
     help: "Experimental (do not use unless you know what you're doing)",
+  });
+  parser_run.add_argument("--set-current", {
+    action: "store_true",
+    help: "Mark the current run as the current for all experiments. This updates the bundled scorers in your project to this run.",
   });
   parser_run.add_argument("--env-file", {
     help: "A path to a .env file containing environment variables to load (via dotenv).",
