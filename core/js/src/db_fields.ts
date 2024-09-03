@@ -15,6 +15,7 @@ export const PARENT_ID_FIELD = "_parent_id";
 
 export const ASYNC_SCORING_TOKEN_FIELD = "_async_scoring_token";
 export const SKIP_ASYNC_SCORING_FIELD = "_skip_async_scoring";
+export const ASYNC_SCORING_TOKEN_DISABLE_VALUE = "_disable_async_scoring_";
 
 // While transaction ids are convertible to 64-bit integers (BigInts in JS), we
 // prefer to treat them as strings so they uniformly serialize/deserialize as
