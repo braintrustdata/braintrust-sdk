@@ -1,6 +1,6 @@
 import { SourceMapConsumer } from "source-map";
 import * as fs from "fs/promises";
-import { EvaluatorFile, scorerName, warning } from "../framework";
+import { EvaluatorFile, warning } from "../framework";
 import { loadModule } from "./load-module";
 import { CodeBundle } from "@braintrust/core/typespecs/dist";
 import path from "path";
@@ -81,11 +81,9 @@ export async function findCodeDefinition({
   }
   let lineNumber = 0;
   let columnNumber = -1;
-  //   console.log("Source code:", sourceCode);
   for (const line of outFileLines) {
     const sourceDefinition = line.indexOf(sourceCode);
     if (sourceDefinition !== -1) {
-      //   console.log("FOO BAR BING!!!", lineNumber, sourceDefinition);
       columnNumber = sourceDefinition;
       break;
     }
