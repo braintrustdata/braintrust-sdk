@@ -126,6 +126,7 @@ export async function uploadEvalBundles({
     runtime: "node",
     version: process.version.slice(1),
   } as const;
+  let failed = false;
   for (const [inFile, compileResult] of Object.entries(bundlePromises)) {
     uploadPromises.push(
       (async () => {
@@ -149,6 +150,7 @@ export async function uploadEvalBundles({
             }),
           );
         } catch (e) {
+          failed = true;
           if (verbose) {
             console.error(e);
           }
@@ -232,12 +234,15 @@ export async function uploadEvalBundles({
                 functions: functionEntries,
               });
           } catch (e) {
+            failed = true;
+            if (verbose) {
+              console.error(e);
+            }
             console.warn(
               warning(
                 `Failed to save function definitions for '${inFile}'. You most likely need to update the API: ${e}`,
               ),
             );
-            return;
           }
         })();
 
@@ -248,7 +253,9 @@ export async function uploadEvalBundles({
 
   await Promise.all(uploadPromises);
   console.error(
-    `${uploaded} Bundle${uploaded > 1 ? "s" : ""} uploaded successfully.`,
+    `${uploaded} Bundle${uploaded > 1 ? "s" : ""} uploaded ${
+      failed ? "with errors" : "successfully"
+    }.`,
   );
 }
 
