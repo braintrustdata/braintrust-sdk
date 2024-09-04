@@ -3,9 +3,8 @@
 import { v4 as uuidv4 } from "uuid";
 
 import {
+  ASYNC_SCORING_CONTROL_FIELD,
   IS_MERGE_FIELD,
-  ASYNC_SCORING_TOKEN_FIELD,
-  SKIP_ASYNC_SCORING_FIELD,
   TRANSACTION_ID_FIELD,
   mergeDicts,
   mergeRowBatch,
@@ -39,6 +38,7 @@ import {
   _urljoin,
 } from "@braintrust/core";
 import {
+  AsyncScoringControl,
   AnyModelParam,
   BRAINTRUST_PARAMS,
   PromptData,
@@ -752,9 +752,7 @@ function logFeedbackImpl(
 
 type UpdateSpanOpts = {
   // For internal use.
-  asyncScoringToken?: string;
-  // For internal use.
-  skipAsyncScoring?: boolean;
+  asyncScoringControl?: AsyncScoringControl;
 };
 
 function updateSpanImpl({
@@ -763,8 +761,7 @@ function updateSpanImpl({
   parentObjectId,
   id,
   event,
-  asyncScoringToken,
-  skipAsyncScoring,
+  asyncScoringControl,
 }: {
   state: BraintrustState;
   parentObjectType: SpanObjectTypeV2;
@@ -788,10 +785,9 @@ function updateSpanImpl({
     ...updateEvent,
     ...(await parentIds()),
     [IS_MERGE_FIELD]: true,
-    ...(asyncScoringToken
-      ? { [ASYNC_SCORING_TOKEN_FIELD]: asyncScoringToken }
+    ...(asyncScoringControl
+      ? { [ASYNC_SCORING_CONTROL_FIELD]: asyncScoringControl }
       : {}),
-    ...(skipAsyncScoring ? { [SKIP_ASYNC_SCORING_FIELD]: true } : {}),
   }));
   state.bgLogger().log([record]);
 }
@@ -808,8 +804,7 @@ function updateSpanImpl({
 export function updateSpan({
   exported,
   state,
-  asyncScoringToken,
-  skipAsyncScoring,
+  asyncScoringControl,
   ...event
 }: { exported: string } & UpdateSpanOpts &
   Omit<Partial<ExperimentEvent>, "id"> &
@@ -829,8 +824,7 @@ export function updateSpan({
     ),
     id: components.rowIds?.rowId,
     event,
-    asyncScoringToken,
-    skipAsyncScoring,
+    asyncScoringControl,
   });
 }
 

@@ -928,3 +928,32 @@ export const objectTypeSummarizeResponseSchemas: {
   experiment: summarizeExperimentResponseSchema,
   dataset: summarizeDatasetResponseSchema,
 };
+
+// Section: async scoring.
+
+export const asyncScoringStateSchema = z.union([
+  z.object({
+    status: z.literal("enabled"),
+    token: z.string(),
+  }),
+  z.object({
+    status: z.literal("disabled"),
+  }),
+  // Default value - means the state is in "auto-determine" mode.
+  z.null(),
+]);
+
+export type AsyncScoringState = z.infer<typeof asyncScoringStateSchema>;
+
+export const asyncScoringControlSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("score_update"),
+    token: z.string(),
+  }),
+  z.object({
+    kind: z.literal("state_override"),
+    state: asyncScoringStateSchema,
+  }),
+]);
+
+export type AsyncScoringControl = z.infer<typeof asyncScoringControlSchema>;
