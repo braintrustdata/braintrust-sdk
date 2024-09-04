@@ -10,7 +10,6 @@
     "watch": "tsup --watch",
     "clean": "rm -r dist/*",
     "prepublishOnly": "../../../scripts/node_prepublish_core.py",
-    "postpublish": "../../../scripts/node_postpublish_core.py",
     "test": "vitest run"
   },
   "exports": {
