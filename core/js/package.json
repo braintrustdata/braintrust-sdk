@@ -1,6 +1,6 @@
 {
   "name": "@braintrust/core",
-  "version": "0.0.52",
+  "version": "0.0.54",
   "description": "Shared core dependencies for Braintrust packages",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -10,7 +10,6 @@
     "watch": "tsup --watch",
     "clean": "rm -r dist/*",
     "prepublishOnly": "../../../scripts/node_prepublish_core.py",
-    "postpublish": "../../../scripts/node_postpublish_core.py",
     "test": "vitest run"
   },
   "exports": {

@@ -54,6 +54,23 @@ function generateBaseTableSchema(
   });
 }
 
+export const aclObjectTypeEnum = z
+  .enum([
+    "organization",
+    "project",
+    "experiment",
+    "dataset",
+    "prompt",
+    "prompt_session",
+    "group",
+    "role",
+    "org_member",
+    "project_log",
+    "org_project",
+  ])
+  .describe("The object type that the ACL applies to");
+export type AclObjectType = z.infer<typeof aclObjectTypeEnum>;
+
 const userBaseSchema = generateBaseTableSchema("user");
 export const userSchema = z
   .object({
@@ -211,7 +228,7 @@ const promptSchemaObject = z.object({
   tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
   metadata: promptBaseSchema.shape.metadata,
   // An empty (unspecified) function_type is equivalent to "dynamic".
-  function_type: z.enum(["llm", "scorer"]).nullish(),
+  function_type: z.enum(["task", "llm", "scorer"]).nullish(),
 });
 
 export const promptSchema = promptSchemaObject.openapi("Prompt");
@@ -223,11 +240,14 @@ export const codeBundleSchema = z.object({
     type: z.literal("experiment"),
     eval_name: z.string(),
     position: z.union([
-      z.literal("task").openapi({ title: "task" }),
-      z.object({ score: z.number() }).openapi({ title: "score" }),
+      z.object({ type: z.literal("task") }),
+      z
+        .object({ type: z.literal("scorer"), index: z.number() })
+        .openapi({ title: "scorer" }),
     ]),
   }),
   bundle_id: z.string(),
+  preview: z.string().nullish().describe("A preview of the code"),
 });
 export type CodeBundle = z.infer<typeof codeBundleSchema>;
 
@@ -268,6 +288,21 @@ export const functionSchema = promptSchemaObject
   .merge(
     z.object({
       function_data: functionDataSchema,
+      origin: z
+        .object({
+          object_type: aclObjectTypeEnum,
+          object_id: z
+            .string()
+            .uuid()
+            .describe("Id of the object the function is originating from"),
+          internal: z
+            .boolean()
+            .nullish()
+            .describe(
+              "The function exists for internal purposes and should not be displayed in the list of functions.",
+            ),
+        })
+        .nullish(),
     }),
   )
   .openapi("Function");
@@ -403,23 +438,6 @@ export const permissionEnum = z
     ].join("\n\n"),
   );
 export type Permission = z.infer<typeof permissionEnum>;
-
-export const aclObjectTypeEnum = z
-  .enum([
-    "organization",
-    "project",
-    "experiment",
-    "dataset",
-    "prompt",
-    "prompt_session",
-    "group",
-    "role",
-    "org_member",
-    "project_log",
-    "org_project",
-  ])
-  .describe("The object type that the ACL applies to");
-export type AclObjectType = z.infer<typeof aclObjectTypeEnum>;
 
 const roleBaseSchema = generateBaseTableSchema("role");
 export const roleSchema = z

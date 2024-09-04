@@ -1,13 +1,19 @@
-import { CodeBundle, functionDataSchema } from "@braintrust/core/typespecs";
+import {
+  CodeBundle,
+  functionDataSchema,
+  FunctionObject,
+} from "@braintrust/core/typespecs";
 import { EvaluatorState, FileHandle } from "../cli";
 import { scorerName, warning } from "../framework";
-import { _internalGetGlobalState, Experiment, newId } from "../logger";
+import { _internalGetGlobalState, Experiment } from "../logger";
 import * as esbuild from "esbuild";
 import fs from "fs";
 import path from "path";
 import { createGzip } from "zlib";
-import { isEmpty, LazyValue } from "../util";
+import { isEmpty } from "../util";
 import { z } from "zod";
+import { capitalize } from "@braintrust/core";
+import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
 
 export type EvaluatorMap = Record<
   string,
@@ -27,10 +33,12 @@ interface FunctionEvent {
 
 interface EvalFunction {
   project_id: string;
+  experiment_id: string;
   name: string;
   slug: string;
   description: string;
   location: CodeBundle["location"];
+  function_type: FunctionObject["function_type"];
 }
 
 const pathInfoSchema = z
@@ -44,6 +52,7 @@ export async function uploadEvalBundles({
   experimentIdToEvaluator,
   bundlePromises,
   handles,
+  setCurrent,
   verbose,
 }: {
   experimentIdToEvaluator: EvaluatorMap;
@@ -52,6 +61,7 @@ export async function uploadEvalBundles({
   };
   handles: Record<string, FileHandle>;
   verbose: boolean;
+  setCurrent: boolean;
 }) {
   console.error(`Processing bundles...`);
   const uploadPromises = [];
@@ -69,21 +79,27 @@ export async function uploadEvalBundles({
     }
     const baseInfo = {
       project_id: (await evaluator.experiment.project).id, // This should resolve instantly
+      experiment_id: experimentId,
     };
-    const namePrefix = `${await evaluator.experiment.name}`;
+    const namePrefix = setCurrent
+      ? evaluator.evaluator.evaluator.experimentName
+        ? `${evaluator.evaluator.evaluator.experimentName}`
+        : ""
+      : `${await evaluator.experiment.name}`;
+
     bundleSpecs[evaluator.evaluator.sourceFile][experimentId] = [
       {
         ...baseInfo,
         // There is a very small chance that someone names a function with the same convention, but
         // let's assume it's low enough that it doesn't matter.
-        name: `Eval ${namePrefix} task`,
-        slug: `experiment-${namePrefix}-task`,
+        ...formatNameAndSlug(["experiment", namePrefix, "task"]),
         description: `Task for experiment ${namePrefix}`,
         location: {
           type: "experiment",
           eval_name: evaluator.evaluator.evaluator.evalName,
-          position: "task",
+          position: { type: "task" },
         },
+        function_type: "task",
       },
       ...evaluator.evaluator.evaluator.scores.map((score, i): EvalFunction => {
         const name = scorerName(score, i);
@@ -91,14 +107,14 @@ export async function uploadEvalBundles({
           ...baseInfo,
           // There is a very small chance that someone names a function with the same convention, but
           // let's assume it's low enough that it doesn't matter.
-          name: `Eval ${namePrefix} scorer ${name}`,
-          slug: `experiment-${namePrefix}-scorer-${name}`,
+          ...formatNameAndSlug(["experiment", namePrefix, "scorer", name]),
           description: `Score ${name} for experiment ${namePrefix}`,
           location: {
             type: "experiment",
             eval_name: evaluator.evaluator.evaluator.evalName,
-            position: { score: i },
+            position: { type: "scorer", index: i },
           },
+          function_type: "scorer",
         };
       }),
     ];
@@ -110,6 +126,7 @@ export async function uploadEvalBundles({
     runtime: "node",
     version: process.version.slice(1),
   } as const;
+  let failed = false;
   for (const [inFile, compileResult] of Object.entries(bundlePromises)) {
     uploadPromises.push(
       (async () => {
@@ -117,7 +134,12 @@ export async function uploadEvalBundles({
         if (!bundle || !handles[inFile].bundleFile) {
           return;
         }
-        const spec = bundleSpecs[inFile];
+
+        const sourceMapContextPromise = makeSourceMapContext({
+          inFile,
+          outFile: handles[inFile].bundleFile,
+          sourceMapFile: handles[inFile].bundleFile + ".map",
+        });
 
         let pathInfo: z.infer<typeof pathInfoSchema>;
         try {
@@ -128,6 +150,7 @@ export async function uploadEvalBundles({
             }),
           );
         } catch (e) {
+          failed = true;
           if (verbose) {
             console.error(e);
           }
@@ -170,32 +193,58 @@ export async function uploadEvalBundles({
           uploaded += 1;
         })();
 
-        // Insert the spec as prompt data
-        const functionEntries: FunctionEvent[] = Object.values(
-          bundleSpecs[inFile],
-        )
-          .flatMap((specs) => specs)
-          .map((spec) => ({
-            project_id: spec.project_id,
-            name: spec.name,
-            slug: spec.slug,
-            description: spec.description,
-            function_data: {
-              type: "code",
-              data: {
-                type: "bundle",
-                runtime_context,
-                location: spec.location,
-                bundle_id: pathInfo.bundleId,
-              },
-            },
-          }));
+        const sourceMapContext = await sourceMapContextPromise;
 
-        const logPromise = _internalGetGlobalState()
-          .apiConn()
-          .post_json("insert-functions", {
-            functions: functionEntries,
-          });
+        // Insert the spec as prompt data
+        const functionEntries: FunctionEvent[] = await Promise.all(
+          Object.values(bundleSpecs[inFile])
+            .flatMap((specs) => specs)
+            .map(async (spec) => ({
+              project_id: spec.project_id,
+              name: spec.name,
+              slug: spec.slug,
+              description: spec.description,
+              function_data: {
+                type: "code",
+                data: {
+                  type: "bundle",
+                  runtime_context,
+                  location: spec.location,
+                  bundle_id: pathInfo.bundleId,
+                  preview: await findCodeDefinition({
+                    location: spec.location,
+                    ctx: sourceMapContext,
+                  }),
+                },
+              },
+              origin: {
+                object_type: "experiment",
+                object_id: spec.experiment_id,
+                internal: !setCurrent,
+              },
+              function_type: spec.function_type,
+            })),
+        );
+
+        const logPromise = (async () => {
+          try {
+            await _internalGetGlobalState()
+              .apiConn()
+              .post_json("insert-functions", {
+                functions: functionEntries,
+              });
+          } catch (e) {
+            failed = true;
+            if (verbose) {
+              console.error(e);
+            }
+            console.warn(
+              warning(
+                `Failed to save function definitions for '${inFile}'. You most likely need to update the API: ${e}`,
+              ),
+            );
+          }
+        })();
 
         await Promise.all([uploadPromise, logPromise]);
       })(),
@@ -203,7 +252,17 @@ export async function uploadEvalBundles({
   }
 
   await Promise.all(uploadPromises);
-  console.log(
-    `${uploaded} Bundle${uploaded > 1 ? "s" : ""} uploaded successfully.`,
+  console.error(
+    `${uploaded} Bundle${uploaded > 1 ? "s" : ""} uploaded ${
+      failed ? "with errors" : "successfully"
+    }.`,
   );
+}
+
+function formatNameAndSlug(pieces: string[]) {
+  const nonEmptyPieces = pieces.filter((piece) => piece.trim() !== "");
+  return {
+    name: capitalize(nonEmptyPieces.join(" ")),
+    slug: nonEmptyPieces.join("-"),
+  };
 }
