@@ -2699,10 +2699,9 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
   }
 }
 
-/**
- * Runs the provided callback with the span as the current span.
- */
-export function withCurrent<R>(
+// Set the given span as current within the given callback and any asynchronous
+// operations created within the callback.
+function withCurrent<R>(
   span: Span,
   callback: (span: Span) => R,
   state: BraintrustState = _globalState,
