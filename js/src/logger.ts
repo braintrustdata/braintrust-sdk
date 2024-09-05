@@ -3,7 +3,6 @@
 import { v4 as uuidv4 } from "uuid";
 
 import {
-  ASYNC_SCORING_CONTROL_FIELD,
   IS_MERGE_FIELD,
   TRANSACTION_ID_FIELD,
   mergeDicts,
@@ -38,7 +37,6 @@ import {
   _urljoin,
 } from "@braintrust/core";
 import {
-  AsyncScoringControl,
   AnyModelParam,
   BRAINTRUST_PARAMS,
   PromptData,
@@ -750,25 +748,19 @@ function logFeedbackImpl(
   }
 }
 
-type UpdateSpanOpts = {
-  // For internal use.
-  asyncScoringControl?: AsyncScoringControl;
-};
-
 function updateSpanImpl({
   state,
   parentObjectType,
   parentObjectId,
   id,
   event,
-  asyncScoringControl,
 }: {
   state: BraintrustState;
   parentObjectType: SpanObjectTypeV2;
   parentObjectId: LazyValue<string>;
   id: string;
   event: Omit<Partial<ExperimentEvent>, "id">;
-} & UpdateSpanOpts): void {
+}): void {
   const updateEvent = validateAndSanitizeExperimentLogPartialArgs({
     id,
     ...event,
@@ -785,9 +777,6 @@ function updateSpanImpl({
     ...updateEvent,
     ...(await parentIds()),
     [IS_MERGE_FIELD]: true,
-    ...(asyncScoringControl
-      ? { [ASYNC_SCORING_CONTROL_FIELD]: asyncScoringControl }
-      : {}),
   }));
   state.bgLogger().log([record]);
 }
@@ -804,10 +793,8 @@ function updateSpanImpl({
 export function updateSpan({
   exported,
   state,
-  asyncScoringControl,
   ...event
-}: { exported: string } & UpdateSpanOpts &
-  Omit<Partial<ExperimentEvent>, "id"> &
+}: { exported: string } & Omit<Partial<ExperimentEvent>, "id"> &
   OptionalStateArg): void {
   const resolvedState = state ?? _globalState;
   const components = SpanComponentsV2.fromStr(exported);
@@ -824,7 +811,6 @@ export function updateSpan({
     ),
     id: components.rowIds?.rowId,
     event,
-    asyncScoringControl,
   });
 }
 
@@ -3462,7 +3448,7 @@ export class SpanImpl implements Span {
       ...serializableInternalData,
       [IS_MERGE_FIELD]: this.isMerge,
     };
-    const serializedPartialRecord = JSON.stringify(partialRecord, (k, v) => {
+    const serializedPartialRecord = JSON.stringify(partialRecord, (_k, v) => {
       if (v instanceof SpanImpl) {
         return `<span>`;
       } else if (v instanceof Experiment) {
