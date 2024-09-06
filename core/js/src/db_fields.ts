@@ -14,6 +14,7 @@ export type Source = (typeof VALID_SOURCES)[number];
 export const PARENT_ID_FIELD = "_parent_id";
 
 export const ASYNC_SCORING_CONTROL_FIELD = "_async_scoring_control";
+export const SKIP_ASYNC_SCORING_FIELD = "_skip_async_scoring";
 
 // While transaction ids are convertible to 64-bit integers (BigInts in JS), we
 // prefer to treat them as strings so they uniformly serialize/deserialize as

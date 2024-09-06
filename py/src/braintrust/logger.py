@@ -36,6 +36,7 @@ from .db_fields import (
     AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
     MERGE_PATHS_FIELD,
+    SKIP_ASYNC_SCORING_FIELD,
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
@@ -1441,6 +1442,7 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
         "inputs",
         ASYNC_SCORING_CONTROL_FIELD,
         MERGE_PATHS_FIELD,
+        SKIP_ASYNC_SCORING_FIELD,
     }
     if forbidden_keys:
         raise ValueError(f"The following keys may are not permitted: {forbidden_keys}")

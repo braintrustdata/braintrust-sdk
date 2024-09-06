@@ -1,12 +1,13 @@
 import { AsyncScoringControl } from "../typespecs/api_types";
 import {
+  Source,
+  ASYNC_SCORING_CONTROL_FIELD,
+  AUDIT_METADATA_FIELD,
+  AUDIT_SOURCE_FIELD,
   IS_MERGE_FIELD,
   MERGE_PATHS_FIELD,
   PARENT_ID_FIELD,
-  Source,
-  ASYNC_SCORING_CONTROL_FIELD,
-  AUDIT_SOURCE_FIELD,
-  AUDIT_METADATA_FIELD,
+  SKIP_ASYNC_SCORING_FIELD,
 } from "./db_fields";
 
 export type IdField = { id: string };
@@ -23,6 +24,7 @@ export type OtherExperimentLogFields = {
   datasetRecordId: string;
   [ASYNC_SCORING_CONTROL_FIELD]: AsyncScoringControl;
   [MERGE_PATHS_FIELD]: string[][];
+  [SKIP_ASYNC_SCORING_FIELD]: boolean;
 };
 
 export type ExperimentLogPartialArgs = Partial<OtherExperimentLogFields> &

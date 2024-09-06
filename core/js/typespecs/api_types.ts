@@ -11,6 +11,7 @@ import {
   promptSchema,
   functionSchema,
 } from "./app_types";
+import { functionIdSchema } from "./functions";
 import {
   EventObjectType,
   ObjectType,
@@ -935,11 +936,8 @@ export const asyncScoringStateSchema = z.union([
   z.object({
     status: z.literal("enabled"),
     token: z.string(),
+    function_ids: z.array(functionIdSchema).nonempty(),
   }),
-  z.object({
-    status: z.literal("disabled"),
-  }),
-  // Default value - means the state is in "auto-determine" mode.
   z.null(),
 ]);
 
@@ -953,6 +951,9 @@ export const asyncScoringControlSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("state_override"),
     state: asyncScoringStateSchema,
+  }),
+  z.object({
+    kind: z.literal("state_force_reselect"),
   }),
 ]);
 

@@ -13,3 +13,4 @@ VALID_SOURCES = ["app", "api", "external"]
 PARENT_ID_FIELD = "_parent_id"
 
 ASYNC_SCORING_CONTROL_FIELD = "_async_scoring_control"
+SKIP_ASYNC_SCORING_FIELD = "_skip_async_scoring"
