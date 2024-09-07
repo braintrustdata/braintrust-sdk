@@ -22,6 +22,7 @@ export function loadModule({
 }): EvaluatorFile {
   return evalWithModuleContext(inFile, () => {
     globalThis._evals = {
+      tasks: {},
       evaluators: {},
       reporters: {},
     };
@@ -29,8 +30,9 @@ export function loadModule({
     globalThis.__inherited_braintrust_state = _internalGetGlobalState();
     const __filename = inFile;
     const __dirname = dirname(__filename);
-    new Function("require", "__filename", "__dirname", moduleText)(
+    new Function("require", "module", "__filename", "__dirname", moduleText)(
       require,
+      module,
       __filename,
       __dirname,
     );

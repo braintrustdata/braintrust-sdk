@@ -4,8 +4,6 @@ export function initProject(name: string) {
   return new ProjectBuilder(name);
 }
 
-type IsPromise<T> = T extends Promise<any> ? true : false;
-
 export interface Task<Input, Output> {
   task: (input: Input) => Output;
   _name: string;

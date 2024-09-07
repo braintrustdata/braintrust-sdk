@@ -4,19 +4,14 @@ import * as esbuild from "esbuild";
 import * as dotenv from "dotenv";
 import fs from "fs";
 import os from "os";
-import path, { dirname } from "path";
+import path from "path";
 import util from "util";
 import * as fsWalk from "@nodelib/fs.walk";
 import { minimatch } from "minimatch";
 import { ArgumentParser } from "argparse";
 import { v4 as uuidv4 } from "uuid";
 import pluralize from "pluralize";
-import {
-  login,
-  init as initExperiment,
-  _internalGetGlobalState,
-  Experiment,
-} from "./logger";
+import { login, init as initExperiment, Experiment } from "./logger";
 import {
   BarProgressReporter,
   SimpleProgressReporter,
@@ -42,18 +37,21 @@ import { isEmpty } from "./util";
 import { loadEnvConfig } from "@next/env";
 import { uploadEvalBundles } from "./functions/upload";
 import { loadModule } from "./functions/load-module";
+import { bundleCommand } from "./cli-util/bundle";
+import { RunArgs } from "./cli-util/types";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript
 const { version } = require("../package.json");
 
 // TODO: This could be loaded from configuration
-const INCLUDE = [
+const INCLUDE_EVAL = [
   "**/*.eval.ts",
   "**/*.eval.tsx",
   "**/*.eval.js",
   "**/*.eval.jsx",
 ];
+const INCLUDE_BUNDLE = ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"];
 const EXCLUDE = ["**/node_modules/**", "**/dist/**", "**/build/**"];
 const OUT_EXT = "js";
 
@@ -262,16 +260,21 @@ async function initFile({
   inFile,
   outFile,
   bundleFile,
-  opts,
-  args,
+  tsconfig,
+  plugins,
 }: {
   inFile: string;
   outFile: string;
   bundleFile: string;
-  opts: EvaluatorOpts;
-  args: RunArgs;
+  tsconfig?: string;
+  plugins?: PluginMaker[];
 }): Promise<FileHandle> {
-  const buildOptions = buildOpts(inFile, outFile, opts, args);
+  const buildOptions = buildOpts({
+    fileName: inFile,
+    outFile,
+    tsconfig,
+    plugins,
+  });
   const ctx = await esbuild.context(buildOptions);
 
   return {
@@ -289,6 +292,7 @@ async function initFile({
           };
         }
         const evaluator = evaluateBuildResults(inFile, result) || {
+          tasks: {},
           evaluators: {},
           reporters: {},
         };
@@ -299,7 +303,12 @@ async function initFile({
     },
     bundle: async () => {
       const buildOptions: esbuild.BuildOptions = {
-        ...buildOpts(inFile, bundleFile, opts, args),
+        ...buildOpts({
+          fileName: inFile,
+          outFile: bundleFile,
+          tsconfig,
+          plugins,
+        }),
         external: [],
         write: true,
         plugins: [],
@@ -556,25 +565,6 @@ async function runOnce(
   return allSuccess;
 }
 
-interface RunArgs {
-  files: string[];
-  watch: boolean;
-  list: boolean;
-  jsonl: boolean;
-  verbose: boolean;
-  api_key?: string;
-  org_name?: string;
-  app_url?: string;
-  filter?: string[];
-  tsconfig?: string;
-  no_send_logs: boolean;
-  no_progress_bars: boolean;
-  terminate_on_failure: boolean;
-  bundle: boolean;
-  set_current: boolean;
-  env_file?: string;
-}
-
 function checkMatch(
   pathInput: string,
   include_patterns: string[] | null,
@@ -609,7 +599,10 @@ function checkMatch(
   return true;
 }
 
-async function collectFiles(inputPath: string): Promise<string[]> {
+async function collectFiles(
+  inputPath: string,
+  mode: "eval" | "bundle",
+): Promise<string[]> {
   let pathStat = null;
   try {
     pathStat = fs.lstatSync(inputPath);
@@ -620,11 +613,18 @@ async function collectFiles(inputPath: string): Promise<string[]> {
 
   let files: string[] = [];
   if (!pathStat.isDirectory()) {
-    if (!checkMatch(inputPath, INCLUDE, EXCLUDE)) {
+    if (
+      !checkMatch(
+        inputPath,
+        mode === "eval" ? INCLUDE_EVAL : INCLUDE_BUNDLE,
+        EXCLUDE,
+      )
+    ) {
+      const prefix = mode === "eval" ? ".eval" : "";
       console.warn(
         warning(
-          `Reading ${inputPath} because it was specified directly. Rename it to end in .eval.ts or ` +
-            `.eval.js to include it automatically when you specify a directory.`,
+          `Reading ${inputPath} because it was specified directly. Rename it to end in ${prefix}.ts or ` +
+            `.${prefix}.js to include it automatically when you specify a directory.`,
         ),
       );
     }
@@ -636,7 +636,7 @@ async function collectFiles(inputPath: string): Promise<string[]> {
       },
       entryFilter: (entry) => {
         return (
-          entry.dirent.isFile() && checkMatch(entry.path, INCLUDE, EXCLUDE)
+          entry.dirent.isFile() && checkMatch(entry.path, INCLUDE_EVAL, EXCLUDE)
         );
       },
     });
@@ -662,16 +662,23 @@ let markOurPackagesExternalPlugin = {
   },
 };
 
-function buildOpts(
-  fileName: string,
-  outFile: string,
-  opts: EvaluatorOpts,
-  args: RunArgs,
-): esbuild.BuildOptions {
-  const plugins = [markOurPackagesExternalPlugin];
-  if (opts.watch) {
-    plugins.push(buildWatchPluginForEvaluator(fileName, opts));
-  }
+export type PluginMaker = (fileName: string) => esbuild.Plugin;
+
+function buildOpts({
+  fileName,
+  outFile,
+  tsconfig,
+  plugins: argPlugins,
+}: {
+  fileName: string;
+  outFile: string;
+  tsconfig?: string;
+  plugins?: PluginMaker[];
+}): esbuild.BuildOptions {
+  const plugins = [
+    markOurPackagesExternalPlugin,
+    ...(argPlugins || []).map((fn) => fn(fileName)),
+  ];
   return {
     entryPoints: [fileName],
     bundle: true,
@@ -681,17 +688,27 @@ function buildOpts(
     write: false,
     // Remove the leading "v" from process.version
     target: `node${process.version.slice(1)}`,
-    tsconfig: args.tsconfig,
+    tsconfig,
     external: ["node_modules/*"],
     plugins: plugins,
   };
 }
 
-async function initializeHandles(args: RunArgs, opts: EvaluatorOpts) {
+export async function initializeHandles({
+  files: inputFiles,
+  mode,
+  plugins,
+  tsconfig,
+}: {
+  files: string[];
+  mode: "eval" | "bundle";
+  plugins?: PluginMaker[];
+  tsconfig?: string;
+}) {
   const files: Record<string, boolean> = {};
-  const inputPaths = args.files.length > 0 ? args.files : ["."];
+  const inputPaths = inputFiles.length > 0 ? inputFiles : ["."];
   for (const inputPath of inputPaths) {
-    const newFiles = await collectFiles(inputPath);
+    const newFiles = await collectFiles(inputPath, mode);
     if (newFiles.length == 0) {
       console.warn(
         warning(
@@ -723,7 +740,13 @@ async function initializeHandles(args: RunArgs, opts: EvaluatorOpts) {
     const outFile = path.join(tmpDir, `${baseName}.${OUT_EXT}`);
     const bundleFile = path.join(tmpDir, `${baseName}.bundle.js`);
     initPromises.push(
-      initFile({ inFile: file, outFile, opts, bundleFile, args }),
+      initFile({
+        inFile: file,
+        outFile,
+        bundleFile,
+        plugins,
+        tsconfig,
+      }),
     );
   }
 
@@ -771,7 +794,15 @@ async function run(args: RunArgs) {
     process.exit(1);
   }
 
-  const handles = await initializeHandles(args, evaluatorOpts);
+  const makeWatchPlugin = (fileName: string) =>
+    buildWatchPluginForEvaluator(fileName, evaluatorOpts);
+
+  const handles = await initializeHandles({
+    files: args.files,
+    mode: "eval",
+    tsconfig: args.tsconfig,
+    plugins: [makeWatchPlugin],
+  });
 
   let success = true;
   try {
@@ -799,6 +830,31 @@ async function run(args: RunArgs) {
   }
 }
 
+function addAuthArgs(parser: ArgumentParser) {
+  parser.add_argument("--api-key", {
+    help: "Specify a braintrust api key. If the parameter is not specified, the BRAINTRUST_API_KEY environment variable will be used.",
+  });
+  parser.add_argument("--org-name", {
+    help: "The name of a specific organization to connect to. This is useful if you belong to multiple.",
+  });
+  parser.add_argument("--app-url", {
+    help: "Specify a custom braintrust app url. Defaults to https://www.braintrust.dev. This is only necessary if you are using an experimental version of Braintrust",
+  });
+  parser.add_argument("--env-file", {
+    help: "A path to a .env file containing environment variables to load (via dotenv).",
+  });
+}
+
+function addCompileArgs(parser: ArgumentParser) {
+  parser.add_argument("--watch", {
+    action: "store_true",
+    help: "Watch files for changes and rerun evals when changes are detected",
+  });
+  parser.add_argument("--tsconfig", {
+    help: "Specify a custom tsconfig.json file to use.",
+  });
+}
+
 async function main() {
   const [, ...args] = process.argv;
 
@@ -822,19 +878,7 @@ async function main() {
     help: "Run evals locally.",
     parents: [parentParser],
   });
-  parser_run.add_argument("--api-key", {
-    help: "Specify a braintrust api key. If the parameter is not specified, the BRAINTRUST_API_KEY environment variable will be used.",
-  });
-  parser_run.add_argument("--org-name", {
-    help: "The name of a specific organization to connect to. This is useful if you belong to multiple.",
-  });
-  parser_run.add_argument("--app-url", {
-    help: "Specify a custom braintrust app url. Defaults to https://www.braintrust.dev. This is only necessary if you are using an experimental version of Braintrust",
-  });
-  parser_run.add_argument("--watch", {
-    action: "store_true",
-    help: "Watch files for changes and rerun evals when changes are detected",
-  });
+  addAuthArgs(parser_run);
   parser_run.add_argument("--filter", {
     help: "Only run evaluators that match these filters. Each filter is a regular expression (https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp). For example, --filter metadata.priority='^P0$' input.name='foo.*bar' will only run evaluators that have metadata.priority equal to 'P0' and input.name matching the regular expression 'foo.*bar'.",
     nargs: "*",
@@ -847,9 +891,7 @@ async function main() {
     action: "store_true",
     help: "Format score summaries as jsonl, i.e. one JSON-formatted line per summary.",
   });
-  parser_run.add_argument("--tsconfig", {
-    help: "Specify a custom tsconfig.json file to use.",
-  });
+  addCompileArgs(parser_run);
   parser_run.add_argument("--no-send-logs", {
     action: "store_true",
     help: "Do not send logs to Braintrust. Useful for testing evaluators without uploading results.",
@@ -870,14 +912,22 @@ async function main() {
     action: "store_true",
     help: "Mark the current run as the current for all experiments. This updates the bundled scorers in your project to this run.",
   });
-  parser_run.add_argument("--env-file", {
-    help: "A path to a .env file containing environment variables to load (via dotenv).",
-  });
   parser_run.add_argument("files", {
     nargs: "*",
     help: "A list of files or directories to run. If no files are specified, the current directory is used.",
   });
   parser_run.set_defaults({ func: run });
+
+  const parser_bundle = subparser.add_parser("bundle", {
+    help: "Bundle functions and load them into Braintrust",
+  });
+  addAuthArgs(parser_bundle);
+  addCompileArgs(parser_bundle);
+  parser_bundle.add_argument("files", {
+    nargs: "*",
+    help: "A list of files or directories containing functions to bundle. If no files are specified, the current directory is used.",
+  });
+  parser_bundle.set_defaults({ func: bundleCommand });
 
   const parsed = parser.parse_args();
 
