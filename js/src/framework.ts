@@ -275,7 +275,7 @@ export type EvaluatorDef<
 } & Evaluator<Input, Output, Expected, Metadata>;
 
 export type EvaluatorFile = {
-  tasks: { [taskName: string]: Task<any> };
+  tasks: { [taskName: string]: Task<any, any> };
   evaluators: {
     [evalName: string]: {
       evaluator: EvaluatorDef<any, any, any, any>;

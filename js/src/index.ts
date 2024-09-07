@@ -70,6 +70,7 @@ export {
   buildLocalSummary,
   reportFailures,
 } from "./framework";
+export { initProject } from "./framework2";
 export { LazyValue } from "./util";
 export * from "./wrappers/oai";
 export * from "./wrappers/ai-sdk";
