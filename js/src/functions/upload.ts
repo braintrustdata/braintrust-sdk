@@ -31,14 +31,14 @@ interface FunctionEvent {
   function_data: z.infer<typeof functionDataSchema>;
 }
 
-interface EvalFunction {
+interface BundledFunctionSpec {
   project_id: string;
-  experiment_id: string;
   name: string;
   slug: string;
   description: string;
   location: CodeBundle["location"];
   function_type: FunctionObject["function_type"];
+  origin?: FunctionObject["origin"];
 }
 
 const pathInfoSchema = z
@@ -48,7 +48,7 @@ const pathInfoSchema = z
   })
   .strip();
 
-export async function uploadEvalBundles({
+export async function uploadHandleBundles({
   experimentIdToEvaluator,
   bundlePromises,
   handles,
@@ -64,22 +64,16 @@ export async function uploadEvalBundles({
   setCurrent: boolean;
 }) {
   console.error(`Processing bundles...`);
-  const uploadPromises = [];
-  const orgId = _internalGetGlobalState().orgId;
-  if (!orgId) {
-    throw new Error("No organization ID found");
-  }
 
-  const bundleSpecs: Record<string, Record<string, EvalFunction[]>> = {};
+  const bundleSpecs: Record<string, BundledFunctionSpec[]> = {};
   for (const [experimentId, evaluator] of Object.entries(
     experimentIdToEvaluator,
   )) {
     if (!bundleSpecs[evaluator.evaluator.sourceFile]) {
-      bundleSpecs[evaluator.evaluator.sourceFile] = {};
+      bundleSpecs[evaluator.evaluator.sourceFile] = [];
     }
     const baseInfo = {
       project_id: (await evaluator.experiment.project).id, // This should resolve instantly
-      experiment_id: experimentId,
     };
     const namePrefix = setCurrent
       ? evaluator.evaluator.evaluator.experimentName
@@ -87,7 +81,7 @@ export async function uploadEvalBundles({
         : ""
       : `${await evaluator.experiment.name}`;
 
-    bundleSpecs[evaluator.evaluator.sourceFile][experimentId] = [
+    const fileSpecs: BundledFunctionSpec[] = [
       {
         ...baseInfo,
         // There is a very small chance that someone names a function with the same convention, but
@@ -101,23 +95,59 @@ export async function uploadEvalBundles({
         },
         function_type: "task",
       },
-      ...evaluator.evaluator.evaluator.scores.map((score, i): EvalFunction => {
-        const name = scorerName(score, i);
-        return {
-          ...baseInfo,
-          // There is a very small chance that someone names a function with the same convention, but
-          // let's assume it's low enough that it doesn't matter.
-          ...formatNameAndSlug(["experiment", namePrefix, "scorer", name]),
-          description: `Score ${name} for experiment ${namePrefix}`,
-          location: {
-            type: "experiment",
-            eval_name: evaluator.evaluator.evaluator.evalName,
-            position: { type: "scorer", index: i },
-          },
-          function_type: "scorer",
-        };
-      }),
+      ...evaluator.evaluator.evaluator.scores.map(
+        (score, i): BundledFunctionSpec => {
+          const name = scorerName(score, i);
+          return {
+            ...baseInfo,
+            // There is a very small chance that someone names a function with the same convention, but
+            // let's assume it's low enough that it doesn't matter.
+            ...formatNameAndSlug(["experiment", namePrefix, "scorer", name]),
+            description: `Score ${name} for experiment ${namePrefix}`,
+            location: {
+              type: "experiment",
+              eval_name: evaluator.evaluator.evaluator.evalName,
+              position: { type: "scorer", index: i },
+            },
+            function_type: "scorer",
+            origin: {
+              object_type: "experiment",
+              object_id: experimentId,
+              internal: !setCurrent,
+            },
+          };
+        },
+      ),
     ];
+
+    bundleSpecs[evaluator.evaluator.sourceFile].push(...fileSpecs);
+  }
+
+  await uploadBundles({
+    bundlePromises,
+    bundleSpecs,
+    handles,
+    verbose,
+  });
+}
+
+export async function uploadBundles({
+  bundlePromises,
+  bundleSpecs,
+  handles,
+  verbose,
+}: {
+  bundlePromises: {
+    [k: string]: Promise<esbuild.BuildResult<esbuild.BuildOptions>>;
+  };
+  bundleSpecs: Record<string, BundledFunctionSpec[]>;
+  handles: Record<string, FileHandle>;
+  verbose: boolean;
+}) {
+  const uploadPromises = [];
+  const orgId = _internalGetGlobalState().orgId;
+  if (!orgId) {
+    throw new Error("No organization ID found");
   }
 
   const loggerConn = _internalGetGlobalState().apiConn();
@@ -197,33 +227,27 @@ export async function uploadEvalBundles({
 
         // Insert the spec as prompt data
         const functionEntries: FunctionEvent[] = await Promise.all(
-          Object.values(bundleSpecs[inFile])
-            .flatMap((specs) => specs)
-            .map(async (spec) => ({
-              project_id: spec.project_id,
-              name: spec.name,
-              slug: spec.slug,
-              description: spec.description,
-              function_data: {
-                type: "code",
-                data: {
-                  type: "bundle",
-                  runtime_context,
+          bundleSpecs[inFile].map(async (spec) => ({
+            project_id: spec.project_id,
+            name: spec.name,
+            slug: spec.slug,
+            description: spec.description,
+            function_data: {
+              type: "code",
+              data: {
+                type: "bundle",
+                runtime_context,
+                location: spec.location,
+                bundle_id: pathInfo.bundleId,
+                preview: await findCodeDefinition({
                   location: spec.location,
-                  bundle_id: pathInfo.bundleId,
-                  preview: await findCodeDefinition({
-                    location: spec.location,
-                    ctx: sourceMapContext,
-                  }),
-                },
+                  ctx: sourceMapContext,
+                }),
               },
-              origin: {
-                object_type: "experiment",
-                object_id: spec.experiment_id,
-                internal: !setCurrent,
-              },
-              function_type: spec.function_type,
-            })),
+            },
+            origin: spec.origin,
+            function_type: spec.function_type,
+          })),
         );
 
         const logPromise = (async () => {

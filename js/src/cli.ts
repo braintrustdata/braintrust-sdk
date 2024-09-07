@@ -35,7 +35,7 @@ import {
 import { configureNode } from "./node";
 import { isEmpty } from "./util";
 import { loadEnvConfig } from "@next/env";
-import { uploadEvalBundles } from "./functions/upload";
+import { uploadHandleBundles } from "./functions/upload";
 import { loadModule } from "./functions/load-module";
 import { bundleCommand } from "./cli-util/bundle";
 import { RunArgs } from "./cli-util/types";
@@ -534,18 +534,7 @@ async function runOnce(
     bundlePromises !== null &&
     Object.entries(experimentIdToEvaluator).length > 0
   ) {
-    const bundleSpecs: Record<string, Record<string, string>> = {};
-    for (const [experimentId, evaluator] of Object.entries(
-      experimentIdToEvaluator,
-    )) {
-      if (!bundleSpecs[evaluator.evaluator.sourceFile]) {
-        bundleSpecs[evaluator.evaluator.sourceFile] = {};
-      }
-      bundleSpecs[evaluator.evaluator.sourceFile][experimentId] =
-        evaluator.evaluator.evaluator.evalName;
-    }
-
-    await uploadEvalBundles({
+    await uploadHandleBundles({
       experimentIdToEvaluator,
       bundlePromises,
       handles,

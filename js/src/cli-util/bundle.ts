@@ -40,17 +40,10 @@ export async function bundleCommand(args: BundleArgs) {
 }
 
 async function bundle({ handles }: { handles: Record<string, FileHandle> }) {
-  const buildPromises = Object.values(handles).map((handle) =>
-    handle.rebuild(),
-  );
-
   const bundlePromises = Object.fromEntries(
     Object.entries(handles).map(([inFile, handle]) => [
       inFile,
       handle.bundle(),
     ]),
   );
-
-  const buildResults = await Promise.all(buildPromises);
-  console.log(buildResults);
 }
