@@ -57,7 +57,7 @@ export type FunctionId = z.infer<typeof functionIdSchema>;
 
 export const useFunctionSchema = functionIdSchema;
 
-const invokeFunctionNonIdArgsSchema = z.object({
+export const invokeFunctionNonIdArgsSchema = z.object({
   input: z
     .any()
     .optional()
@@ -72,8 +72,16 @@ const invokeFunctionNonIdArgsSchema = z.object({
           object_id: z
             .string()
             .describe("The id of the container object you are logging to"),
+          row_ids: z
+            .object({
+              id: z.string().describe("The id of the row"),
+              span_id: z.string().describe("The span_id of the row"),
+              root_span_id: z.string().describe("The root_span_id of the row"),
+            })
+            .nullish()
+            .describe("Identifiers for the row to to log a subspan under"),
         })
-        .describe("Object type and id"),
+        .describe("Object type, object id, and optional row IDs"),
       z
         .string()
         .optional()

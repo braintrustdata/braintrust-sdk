@@ -11,6 +11,7 @@ import {
   promptSchema,
   functionSchema,
 } from "./app_types";
+import { functionIdSchema } from "./functions";
 import {
   EventObjectType,
   ObjectType,
@@ -934,3 +935,32 @@ export const objectTypeSummarizeResponseSchemas: {
   experiment: summarizeExperimentResponseSchema,
   dataset: summarizeDatasetResponseSchema,
 };
+
+// Section: async scoring.
+
+export const asyncScoringStateSchema = z.union([
+  z.object({
+    status: z.literal("enabled"),
+    token: z.string(),
+    function_ids: z.array(functionIdSchema).nonempty(),
+  }),
+  z.null(),
+]);
+
+export type AsyncScoringState = z.infer<typeof asyncScoringStateSchema>;
+
+export const asyncScoringControlSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("score_update"),
+    token: z.string(),
+  }),
+  z.object({
+    kind: z.literal("state_override"),
+    state: asyncScoringStateSchema,
+  }),
+  z.object({
+    kind: z.literal("state_force_reselect"),
+  }),
+]);
+
+export type AsyncScoringControl = z.infer<typeof asyncScoringControlSchema>;

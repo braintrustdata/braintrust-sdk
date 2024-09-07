@@ -12,11 +12,5 @@ VALID_SOURCES = ["app", "api", "external"]
 
 PARENT_ID_FIELD = "_parent_id"
 
-ALL_ROW_ID_FIELDS = [
-    ID_FIELD,
-    TRANSACTION_ID_FIELD,
-    CREATED_FIELD,
-    IS_MERGE_FIELD,
-    MERGE_PATHS_FIELD,
-    OBJECT_DELETE_FIELD,
-]
+ASYNC_SCORING_CONTROL_FIELD = "_async_scoring_control"
+SKIP_ASYNC_SCORING_FIELD = "_skip_async_scoring"

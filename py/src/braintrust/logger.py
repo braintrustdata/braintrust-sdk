@@ -31,9 +31,12 @@ from braintrust.functions.stream import BraintrustStream
 
 from .bt_json import bt_dumps
 from .db_fields import (
+    ASYNC_SCORING_CONTROL_FIELD,
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
+    MERGE_PATHS_FIELD,
+    SKIP_ASYNC_SCORING_FIELD,
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
@@ -1437,6 +1440,9 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
         "error",
         "dataset_record_id",
         "inputs",
+        ASYNC_SCORING_CONTROL_FIELD,
+        MERGE_PATHS_FIELD,
+        SKIP_ASYNC_SCORING_FIELD,
     }
     if forbidden_keys:
         raise ValueError(f"The following keys may are not permitted: {forbidden_keys}")

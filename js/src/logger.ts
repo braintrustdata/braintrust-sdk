@@ -3,8 +3,8 @@
 import { v4 as uuidv4 } from "uuid";
 
 import {
-  TRANSACTION_ID_FIELD,
   IS_MERGE_FIELD,
+  TRANSACTION_ID_FIELD,
   mergeDicts,
   mergeRowBatch,
   VALID_SOURCES,
@@ -748,13 +748,19 @@ function logFeedbackImpl(
   }
 }
 
-function updateSpanImpl(
-  state: BraintrustState,
-  parentObjectType: SpanObjectTypeV2,
-  parentObjectId: LazyValue<string>,
-  id: string,
-  event: Omit<Partial<ExperimentEvent>, "id">,
-): void {
+function updateSpanImpl({
+  state,
+  parentObjectType,
+  parentObjectId,
+  id,
+  event,
+}: {
+  state: BraintrustState;
+  parentObjectType: SpanObjectTypeV2;
+  parentObjectId: LazyValue<string>;
+  id: string;
+  event: Omit<Partial<ExperimentEvent>, "id">;
+}): void {
   const updateEvent = validateAndSanitizeExperimentLogPartialArgs({
     id,
     ...event,
@@ -797,13 +803,15 @@ export function updateSpan({
     throw new Error("Exported span must have a row id");
   }
 
-  updateSpanImpl(
-    resolvedState,
-    components.objectType,
-    new LazyValue(spanComponentsToObjectIdLambda(resolvedState, components)),
-    components.rowIds?.rowId,
+  updateSpanImpl({
+    state: resolvedState,
+    parentObjectType: components.objectType,
+    parentObjectId: new LazyValue(
+      spanComponentsToObjectIdLambda(resolvedState, components),
+    ),
+    id: components.rowIds?.rowId,
     event,
-  );
+  });
 }
 
 interface ParentSpanIds {
@@ -1083,13 +1091,13 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     if (!id) {
       throw new Error("Span id is required to update a span");
     }
-    updateSpanImpl(
-      this.state,
-      this.parentObjectType(),
-      this.lazyId,
+    updateSpanImpl({
+      state: this.state,
+      parentObjectType: this.parentObjectType(),
+      parentObjectId: this.lazyId,
       id,
-      eventRest,
-    );
+      event: eventRest,
+    });
   }
 
   /**
@@ -2691,9 +2699,10 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
   }
 }
 
-// Set the given span as current within the given callback and any asynchronous
-// operations created within the callback.
-function withCurrent<R>(
+/**
+ * Runs the provided callback with the span as the current span.
+ */
+export function withCurrent<R>(
   span: Span,
   callback: (span: Span) => R,
   state: BraintrustState = _globalState,
@@ -3206,13 +3215,13 @@ export class Experiment
     if (!id) {
       throw new Error("Span id is required to update a span");
     }
-    updateSpanImpl(
-      this.state,
-      this.parentObjectType(),
-      this.lazyId,
+    updateSpanImpl({
+      state: this.state,
+      parentObjectType: this.parentObjectType(),
+      parentObjectId: this.lazyId,
       id,
-      eventRest,
-    );
+      event: eventRest,
+    });
   }
 
   /**
@@ -3439,7 +3448,7 @@ export class SpanImpl implements Span {
       ...serializableInternalData,
       [IS_MERGE_FIELD]: this.isMerge,
     };
-    const serializedPartialRecord = JSON.stringify(partialRecord, (k, v) => {
+    const serializedPartialRecord = JSON.stringify(partialRecord, (_k, v) => {
       if (v instanceof SpanImpl) {
         return `<span>`;
       } else if (v instanceof Experiment) {
