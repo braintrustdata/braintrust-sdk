@@ -20,6 +20,7 @@ import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
 import { isEmpty } from "./util";
 import { queue } from "async";
+import { Task } from "./framework2";
 
 export type BaseExperiment<
   Input,
@@ -274,6 +275,7 @@ export type EvaluatorDef<
 } & Evaluator<Input, Output, Expected, Metadata>;
 
 export type EvaluatorFile = {
+  tasks: { [taskName: string]: Task<any> };
   evaluators: {
     [evalName: string]: {
       evaluator: EvaluatorDef<any, any, any, any>;
@@ -329,6 +331,7 @@ declare global {
 }
 
 globalThis._evals = {
+  tasks: {},
   evaluators: {},
   reporters: {},
 };
