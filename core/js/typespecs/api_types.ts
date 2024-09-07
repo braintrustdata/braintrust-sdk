@@ -532,6 +532,12 @@ export const insertEventsResponseSchema = z
   })
   .openapi("InsertEventsResponse");
 
+export const feedbackResponseSchema = z
+  .object({
+    status: z.literal("success"),
+  })
+  .openapi("FeedbackResponseSchema");
+
 const insertExperimentEventBaseSchema = objectNullish(
   experimentEventSchema
     .pick({
