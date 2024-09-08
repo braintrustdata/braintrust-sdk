@@ -57,25 +57,25 @@ const OUT_EXT = "js";
 
 configureNode();
 
-interface BuildSuccess {
+export interface BuildSuccess {
   type: "success";
   result: esbuild.BuildResult;
   evaluator: EvaluatorFile;
   sourceFile: string;
 }
 
-interface BuildFailure {
+export interface BuildFailure {
   type: "failure";
   error: Error;
   sourceFile: string;
 }
 
-type BuildResult = BuildSuccess | BuildFailure;
+export type BtBuildResult = BuildSuccess | BuildFailure;
 export interface FileHandle {
   inFile: string;
   outFile: string;
   bundleFile?: string;
-  rebuild: () => Promise<BuildResult>;
+  rebuild: () => Promise<BtBuildResult>;
   bundle: () => Promise<esbuild.BuildResult>;
   watch: () => void;
   destroy: () => Promise<void>;
@@ -355,7 +355,7 @@ interface EvaluatorOpts {
 
 function updateEvaluators(
   evaluators: EvaluatorState,
-  buildResults: BuildResult[],
+  buildResults: BtBuildResult[],
   opts: EvaluatorOpts,
 ) {
   for (const result of buildResults) {
@@ -456,13 +456,9 @@ async function runOnce(
     return true;
   }
 
-  const experimentIdToEvaluator: Record<
-    string,
-    {
-      evaluator: EvaluatorState["evaluators"][number];
-      experiment: Experiment;
-    }
-  > = {};
+  // map from file name -> eval name -> experiment id
+  const evalToExperimentId: Record<string, Record<string, string>> = {};
+
   const resultPromises = evaluators.evaluators.map(async (evaluator) => {
     const { data, baseExperiment } = callEvaluatorData(
       evaluator.evaluator.data,
@@ -490,10 +486,11 @@ async function runOnce(
       );
     } finally {
       if (logger) {
-        experimentIdToEvaluator[await logger.id] = {
-          evaluator,
-          experiment: logger,
-        };
+        evalToExperimentId[evaluator.sourceFile] =
+          evalToExperimentId[evaluator.sourceFile] || {};
+        evalToExperimentId[evaluator.sourceFile][evaluator.evaluator.evalName] =
+          await logger.id;
+
         await logger.flush();
       }
     }
@@ -532,10 +529,10 @@ async function runOnce(
 
   if (
     bundlePromises !== null &&
-    Object.entries(experimentIdToEvaluator).length > 0
+    Object.entries(evalToExperimentId).length > 0
   ) {
     await uploadHandleBundles({
-      experimentIdToEvaluator,
+      evalToExperimentId,
       bundlePromises,
       handles,
       setCurrent: opts.setCurrent,

@@ -3,7 +3,7 @@ import {
   functionDataSchema,
   FunctionObject,
 } from "@braintrust/core/typespecs";
-import { EvaluatorState, FileHandle } from "../cli";
+import { BuildSuccess, EvaluatorState, FileHandle } from "../cli";
 import { scorerName, warning } from "../framework";
 import { _internalGetGlobalState, Experiment } from "../logger";
 import * as esbuild from "esbuild";
@@ -49,13 +49,15 @@ const pathInfoSchema = z
   .strip();
 
 export async function uploadHandleBundles({
-  experimentIdToEvaluator,
+  buildResults,
+  evalToExperiment,
   bundlePromises,
   handles,
   setCurrent,
   verbose,
 }: {
-  experimentIdToEvaluator: EvaluatorMap;
+  buildResults: BuildSuccess[];
+  evalToExperiment?: Record<string, Record<string, Experiment>>;
   bundlePromises: {
     [k: string]: Promise<esbuild.BuildResult<esbuild.BuildOptions>>;
   };
@@ -66,37 +68,57 @@ export async function uploadHandleBundles({
   console.error(`Processing bundles...`);
 
   const bundleSpecs: Record<string, BundledFunctionSpec[]> = {};
-  for (const [experimentId, evaluator] of Object.entries(
-    experimentIdToEvaluator,
-  )) {
-    if (!bundleSpecs[evaluator.evaluator.sourceFile]) {
-      bundleSpecs[evaluator.evaluator.sourceFile] = [];
-    }
-    const baseInfo = {
-      project_id: (await evaluator.experiment.project).id, // This should resolve instantly
-    };
-    const namePrefix = setCurrent
-      ? evaluator.evaluator.evaluator.experimentName
-        ? `${evaluator.evaluator.evaluator.experimentName}`
-        : ""
-      : `${await evaluator.experiment.name}`;
 
-    const fileSpecs: BundledFunctionSpec[] = [
-      {
-        ...baseInfo,
-        // There is a very small chance that someone names a function with the same convention, but
-        // let's assume it's low enough that it doesn't matter.
-        ...formatNameAndSlug(["experiment", namePrefix, "task"]),
-        description: `Task for experiment ${namePrefix}`,
-        location: {
-          type: "experiment",
-          eval_name: evaluator.evaluator.evaluator.evalName,
-          position: { type: "task" },
+  const uploadPromises = buildResults.map(async (result) => {
+    if (result.type !== "success") {
+      return;
+    }
+    const sourceFile = result.sourceFile;
+
+    if (!bundleSpecs[sourceFile]) {
+      bundleSpecs[sourceFile] = [];
+    }
+
+    for (const evaluator of Object.values(result.evaluator.evaluators)) {
+      const experiment =
+        evalToExperiment?.[sourceFile]?.[evaluator.evaluator.evalName];
+
+      // XXX NEXT STEPS:
+      // - Figure out how to propagate project id in this case
+      // - Try refactoring bundling code in the cli file to call into this
+      const baseInfo = {
+        project_id: experiment
+          ? (await experiment.project).id
+          : (() => {
+              throw new Error("Cannot derive project id without experiment");
+            })(),
+      };
+
+      const namePrefix = setCurrent
+        ? evaluator.evaluator.experimentName
+          ? `${evaluator.evaluator.experimentName}`
+          : ""
+        : experiment
+          ? `${await experiment.name}`
+          : "";
+
+      const experimentId = experiment ? await experiment.id : undefined;
+
+      const fileSpecs: BundledFunctionSpec[] = [
+        {
+          ...baseInfo,
+          // There is a very small chance that someone names a function with the same convention, but
+          // let's assume it's low enough that it doesn't matter.
+          ...formatNameAndSlug(["experiment", namePrefix, "task"]),
+          description: `Task for experiment ${namePrefix}`,
+          location: {
+            type: "experiment",
+            eval_name: evaluator.evaluator.evalName,
+            position: { type: "task" },
+          },
+          function_type: "task",
         },
-        function_type: "task",
-      },
-      ...evaluator.evaluator.evaluator.scores.map(
-        (score, i): BundledFunctionSpec => {
+        ...evaluator.evaluator.scores.map((score, i): BundledFunctionSpec => {
           const name = scorerName(score, i);
           return {
             ...baseInfo,
@@ -106,22 +128,26 @@ export async function uploadHandleBundles({
             description: `Score ${name} for experiment ${namePrefix}`,
             location: {
               type: "experiment",
-              eval_name: evaluator.evaluator.evaluator.evalName,
+              eval_name: evaluator.evaluator.evalName,
               position: { type: "scorer", index: i },
             },
             function_type: "scorer",
-            origin: {
-              object_type: "experiment",
-              object_id: experimentId,
-              internal: !setCurrent,
-            },
+            origin: experimentId
+              ? {
+                  object_type: "experiment",
+                  object_id: experimentId,
+                  internal: !setCurrent,
+                }
+              : undefined,
           };
-        },
-      ),
-    ];
+        }),
+      ];
 
-    bundleSpecs[evaluator.evaluator.sourceFile].push(...fileSpecs);
-  }
+      bundleSpecs[sourceFile].push(...fileSpecs);
+    }
+  });
+
+  await Promise.all(uploadPromises);
 
   await uploadBundles({
     bundlePromises,
