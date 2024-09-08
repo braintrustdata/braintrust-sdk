@@ -456,8 +456,8 @@ async function runOnce(
     return true;
   }
 
-  // map from file name -> eval name -> experiment id
-  const evalToExperimentId: Record<string, Record<string, string>> = {};
+  // map from file name -> eval name -> experiment
+  const evalToExperiment: Record<string, Record<string, Experiment>> = {};
 
   const resultPromises = evaluators.evaluators.map(async (evaluator) => {
     const { data, baseExperiment } = callEvaluatorData(
@@ -486,10 +486,11 @@ async function runOnce(
       );
     } finally {
       if (logger) {
-        evalToExperimentId[evaluator.sourceFile] =
-          evalToExperimentId[evaluator.sourceFile] || {};
-        evalToExperimentId[evaluator.sourceFile][evaluator.evaluator.evalName] =
-          await logger.id;
+        if (!evalToExperiment[evaluator.sourceFile]) {
+          evalToExperiment[evaluator.sourceFile] = {};
+        }
+        evalToExperiment[evaluator.sourceFile][evaluator.evaluator.evalName] =
+          logger;
 
         await logger.flush();
       }
@@ -527,12 +528,13 @@ async function runOnce(
     addReport(evalReports, resolvedReporter, report);
   }
 
-  if (
-    bundlePromises !== null &&
-    Object.entries(evalToExperimentId).length > 0
-  ) {
+  if (bundlePromises !== null && Object.entries(evalToExperiment).length > 0) {
     await uploadHandleBundles({
-      evalToExperimentId,
+      buildResults: buildResults.filter(
+        // We handle errors above, so it's fine to filter down to successes here.
+        (result): result is BuildSuccess => result.type === "success",
+      ),
+      evalToExperiment,
       bundlePromises,
       handles,
       setCurrent: opts.setCurrent,
