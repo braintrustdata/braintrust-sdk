@@ -44,6 +44,14 @@ function isNative(fn: Function): boolean {
   return /\{\s*\[native code\]\s*\}/.test(Function.prototype.toString.call(fn));
 }
 
+function locationToString(location: CodeBundle["location"]): string {
+  if (location.type === "experiment") {
+    return `eval ${location.eval_name} -> ${location.position.type}`;
+  } else {
+    return `task ${location.task_name}`;
+  }
+}
+
 export async function findCodeDefinition({
   location,
   ctx: { inFiles, outFileModule, outFileLines, sourceMapDir, sourceMap },
@@ -51,25 +59,33 @@ export async function findCodeDefinition({
   location: CodeBundle["location"];
   ctx: SourceMapContext;
 }): Promise<string | undefined> {
-  const evaluator = outFileModule.evaluators[location.eval_name]?.evaluator;
-  if (!evaluator) {
-    console.warn(
-      warning(
-        `Failed to find evaluator for ${location.eval_name}. Will not display preview.`,
-      ),
-    );
-    return undefined;
-  }
+  let fn: Function | undefined = undefined;
 
-  const fn =
-    location.position.type === "task"
-      ? evaluator.task
-      : evaluator.scores[location.position.index];
+  if (location.type === "experiment") {
+    const evaluator = outFileModule.evaluators[location.eval_name]?.evaluator;
+    if (!evaluator) {
+      console.warn(
+        warning(
+          `Failed to find evaluator for ${location.eval_name}. Will not display preview.`,
+        ),
+      );
+      return undefined;
+    }
+
+    fn =
+      location.position.type === "task"
+        ? evaluator.task
+        : evaluator.scores[location.position.index];
+  } else {
+    console.log("All tasks", outFileModule.tasks);
+    console.log(location.task_name);
+    fn = outFileModule.tasks[location.task_name].task;
+  }
 
   if (!fn) {
     console.warn(
       warning(
-        `Failed to find ${location.position.type} for ${location.eval_name}. Will not display preview.`,
+        `Failed to find ${locationToString(location)}. Will not display preview.`,
       ),
     );
     return undefined;

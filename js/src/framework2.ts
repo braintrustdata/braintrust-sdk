@@ -32,6 +32,7 @@ export class ProjectBuilder {
   ): ExecutableTask<Input, Output> {
     opts = opts ?? {};
 
+    console.log("opts.name", opts.name, "taskFn.name", taskFn.name);
     const name = opts.name ?? taskFn.name;
     const wrapped = wrapTraced(taskFn, {
       name,
@@ -47,7 +48,7 @@ export class ProjectBuilder {
     });
 
     if (globalThis._lazy_load) {
-      globalThis._evals.tasks[task.name] = task;
+      globalThis._evals.tasks[task.taskName] = task;
     }
 
     return task;
