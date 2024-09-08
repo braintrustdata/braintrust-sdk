@@ -236,16 +236,22 @@ export type Prompt = z.infer<typeof promptSchema>;
 
 export const codeBundleSchema = z.object({
   runtime_context: runtimeContextSchema,
-  location: z.object({
-    type: z.literal("experiment"),
-    eval_name: z.string(),
-    position: z.union([
-      z.object({ type: z.literal("task") }),
-      z
-        .object({ type: z.literal("scorer"), index: z.number() })
-        .openapi({ title: "scorer" }),
-    ]),
-  }),
+  location: z.union([
+    z.object({
+      type: z.literal("experiment"),
+      eval_name: z.string(),
+      position: z.union([
+        z.object({ type: z.literal("task") }),
+        z
+          .object({ type: z.literal("scorer"), index: z.number() })
+          .openapi({ title: "scorer" }),
+      ]),
+    }),
+    z.object({
+      type: z.literal("task"),
+      task_name: z.string(),
+    }),
+  ]),
   bundle_id: z.string(),
   preview: z.string().nullish().describe("A preview of the code"),
 });

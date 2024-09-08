@@ -14,6 +14,7 @@ import { isEmpty } from "../util";
 import { z } from "zod";
 import { capitalize } from "@braintrust/core";
 import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
+import slugifyLib from "slugify";
 
 export type EvaluatorMap = Record<
   string,
@@ -51,6 +52,7 @@ const pathInfoSchema = z
 export async function uploadHandleBundles({
   buildResults,
   evalToExperiment,
+  projectNameToId,
   bundlePromises,
   handles,
   setCurrent,
@@ -58,6 +60,7 @@ export async function uploadHandleBundles({
 }: {
   buildResults: BuildSuccess[];
   evalToExperiment?: Record<string, Record<string, Experiment>>;
+  projectNameToId?: Record<string, Promise<string>>;
   bundlePromises: {
     [k: string]: Promise<esbuild.BuildResult<esbuild.BuildOptions>>;
   };
@@ -66,8 +69,13 @@ export async function uploadHandleBundles({
   setCurrent: boolean;
 }) {
   console.error(`Processing bundles...`);
-
-  const bundleSpecs: Record<string, BundledFunctionSpec[]> = {};
+  projectNameToId = projectNameToId ?? {};
+  const getProjectId = async (projectName: string) => {
+    if (!projectNameToId[projectName]) {
+      projectNameToId[projectName] = loadProjectId(projectName);
+    }
+    return projectNameToId[projectName];
+  };
 
   const uploadPromises = buildResults.map(async (result) => {
     if (result.type !== "success") {
@@ -75,8 +83,26 @@ export async function uploadHandleBundles({
     }
     const sourceFile = result.sourceFile;
 
-    if (!bundleSpecs[sourceFile]) {
-      bundleSpecs[sourceFile] = [];
+    const bundleSpecs: BundledFunctionSpec[] = [];
+
+    if (setCurrent) {
+      for (const task of Object.values(result.evaluator.tasks)) {
+        const baseInfo = {
+          project_id: await getProjectId(task.projectName),
+        };
+
+        bundleSpecs.push({
+          ...baseInfo,
+          name: task.taskName,
+          slug: task.slug,
+          description: task.description ?? "",
+          function_type: "task",
+          location: {
+            type: "task",
+            task_name: task.taskName,
+          },
+        });
+      }
     }
 
     for (const evaluator of Object.values(result.evaluator.evaluators)) {
@@ -84,23 +110,20 @@ export async function uploadHandleBundles({
         evalToExperiment?.[sourceFile]?.[evaluator.evaluator.evalName];
 
       // XXX NEXT STEPS:
-      // - Figure out how to propagate project id in this case
       // - Try refactoring bundling code in the cli file to call into this
       const baseInfo = {
         project_id: experiment
           ? (await experiment.project).id
-          : (() => {
-              throw new Error("Cannot derive project id without experiment");
-            })(),
+          : await getProjectId(evaluator.evaluator.projectName),
       };
 
       const namePrefix = setCurrent
         ? evaluator.evaluator.experimentName
           ? `${evaluator.evaluator.experimentName}`
-          : ""
+          : evaluator.evaluator.evalName
         : experiment
           ? `${await experiment.name}`
-          : "";
+          : evaluator.evaluator.evalName;
 
       const experimentId = experiment ? await experiment.id : undefined;
 
@@ -109,8 +132,8 @@ export async function uploadHandleBundles({
           ...baseInfo,
           // There is a very small chance that someone names a function with the same convention, but
           // let's assume it's low enough that it doesn't matter.
-          ...formatNameAndSlug(["experiment", namePrefix, "task"]),
-          description: `Task for experiment ${namePrefix}`,
+          ...formatNameAndSlug(["eval", namePrefix, "task"]),
+          description: `Task for eval ${namePrefix}`,
           location: {
             type: "experiment",
             eval_name: evaluator.evaluator.evalName,
@@ -124,8 +147,8 @@ export async function uploadHandleBundles({
             ...baseInfo,
             // There is a very small chance that someone names a function with the same convention, but
             // let's assume it's low enough that it doesn't matter.
-            ...formatNameAndSlug(["experiment", namePrefix, "scorer", name]),
-            description: `Score ${name} for experiment ${namePrefix}`,
+            ...formatNameAndSlug(["eval", namePrefix, "scorer", name]),
+            description: `Score ${name} for eval ${namePrefix}`,
             location: {
               type: "experiment",
               eval_name: evaluator.evaluator.evalName,
@@ -143,33 +166,46 @@ export async function uploadHandleBundles({
         }),
       ];
 
-      bundleSpecs[sourceFile].push(...fileSpecs);
+      bundleSpecs.push(...fileSpecs);
     }
+
+    return await uploadBundles({
+      sourceFile,
+      bundleSpecs,
+      bundlePromises,
+      handles,
+      verbose,
+    });
   });
 
-  await Promise.all(uploadPromises);
+  const uploadResults = await Promise.all(uploadPromises);
+  const numUploaded = uploadResults.length;
+  const numFailed = uploadResults.filter((result) => !result).length;
 
-  await uploadBundles({
-    bundlePromises,
-    bundleSpecs,
-    handles,
-    verbose,
-  });
+  console.error(
+    `${numUploaded} Bundle${numUploaded > 1 ? "s" : ""} uploaded ${
+      numFailed > 0
+        ? `with ${numFailed} error${numFailed > 1 ? "s" : ""}`
+        : "successfully"
+    }.`,
+  );
 }
 
-export async function uploadBundles({
-  bundlePromises,
+async function uploadBundles({
+  sourceFile,
   bundleSpecs,
+  bundlePromises,
   handles,
   verbose,
 }: {
+  sourceFile: string;
+  bundleSpecs: BundledFunctionSpec[];
   bundlePromises: {
     [k: string]: Promise<esbuild.BuildResult<esbuild.BuildOptions>>;
   };
-  bundleSpecs: Record<string, BundledFunctionSpec[]>;
   handles: Record<string, FileHandle>;
   verbose: boolean;
-}) {
+}): Promise<boolean> {
   const uploadPromises = [];
   const orgId = _internalGetGlobalState().orgId;
   if (!orgId) {
@@ -177,142 +213,142 @@ export async function uploadBundles({
   }
 
   const loggerConn = _internalGetGlobalState().apiConn();
-  let uploaded = 0;
   const runtime_context = {
     runtime: "node",
     version: process.version.slice(1),
   } as const;
-  let failed = false;
-  for (const [inFile, compileResult] of Object.entries(bundlePromises)) {
-    uploadPromises.push(
-      (async () => {
-        const bundle = await compileResult;
-        if (!bundle || !handles[inFile].bundleFile) {
-          return;
-        }
 
-        const sourceMapContextPromise = makeSourceMapContext({
-          inFile,
-          outFile: handles[inFile].bundleFile,
-          sourceMapFile: handles[inFile].bundleFile + ".map",
-        });
-
-        let pathInfo: z.infer<typeof pathInfoSchema>;
-        try {
-          pathInfo = pathInfoSchema.parse(
-            await loggerConn.post_json("function/code", {
-              org_id: orgId,
-              runtime_context,
-            }),
-          );
-        } catch (e) {
-          failed = true;
-          if (verbose) {
-            console.error(e);
-          }
-          console.error(
-            warning(
-              `Unable to upload your code. You most likely need to update the API: ${e}`,
-            ),
-          );
-          return;
-        }
-
-        // Upload bundleFile to pathInfo.url
-        const bundleFileName = handles[inFile].bundleFile;
-        if (isEmpty(bundleFileName)) {
-          throw new Error("No bundle file found");
-        }
-        const bundleFile = path.resolve(bundleFileName);
-        const uploadPromise = (async () => {
-          const bundleStream = fs
-            .createReadStream(bundleFile)
-            .pipe(createGzip());
-          const bundleData = await new Promise<Buffer>((resolve, reject) => {
-            const chunks: Buffer[] = [];
-            bundleStream.on("data", (chunk) => {
-              chunks.push(chunk);
-            });
-            bundleStream.on("end", () => {
-              resolve(Buffer.concat(chunks));
-            });
-            bundleStream.on("error", reject);
-          });
-
-          await fetch(pathInfo.url, {
-            method: "PUT",
-            body: bundleData,
-            headers: {
-              "Content-Encoding": "gzip",
-            },
-          });
-          uploaded += 1;
-        })();
-
-        const sourceMapContext = await sourceMapContextPromise;
-
-        // Insert the spec as prompt data
-        const functionEntries: FunctionEvent[] = await Promise.all(
-          bundleSpecs[inFile].map(async (spec) => ({
-            project_id: spec.project_id,
-            name: spec.name,
-            slug: spec.slug,
-            description: spec.description,
-            function_data: {
-              type: "code",
-              data: {
-                type: "bundle",
-                runtime_context,
-                location: spec.location,
-                bundle_id: pathInfo.bundleId,
-                preview: await findCodeDefinition({
-                  location: spec.location,
-                  ctx: sourceMapContext,
-                }),
-              },
-            },
-            origin: spec.origin,
-            function_type: spec.function_type,
-          })),
-        );
-
-        const logPromise = (async () => {
-          try {
-            await _internalGetGlobalState()
-              .apiConn()
-              .post_json("insert-functions", {
-                functions: functionEntries,
-              });
-          } catch (e) {
-            failed = true;
-            if (verbose) {
-              console.error(e);
-            }
-            console.warn(
-              warning(
-                `Failed to save function definitions for '${inFile}'. You most likely need to update the API: ${e}`,
-              ),
-            );
-          }
-        })();
-
-        await Promise.all([uploadPromise, logPromise]);
-      })(),
-    );
+  const bundle = await bundlePromises[sourceFile];
+  if (!bundle || !handles[sourceFile].bundleFile) {
+    return false;
   }
 
-  await Promise.all(uploadPromises);
-  console.error(
-    `${uploaded} Bundle${uploaded > 1 ? "s" : ""} uploaded ${
-      failed ? "with errors" : "successfully"
-    }.`,
+  const sourceMapContextPromise = makeSourceMapContext({
+    inFile: sourceFile,
+    outFile: handles[sourceFile].bundleFile,
+    sourceMapFile: handles[sourceFile].bundleFile + ".map",
+  });
+
+  let pathInfo: z.infer<typeof pathInfoSchema>;
+  try {
+    pathInfo = pathInfoSchema.parse(
+      await loggerConn.post_json("function/code", {
+        org_id: orgId,
+        runtime_context,
+      }),
+    );
+  } catch (e) {
+    if (verbose) {
+      console.error(e);
+    }
+    console.error(
+      warning(
+        `Unable to upload your code. You most likely need to update the API: ${e}`,
+      ),
+    );
+    return false;
+  }
+
+  // Upload bundleFile to pathInfo.url
+  const bundleFileName = handles[sourceFile].bundleFile;
+  if (isEmpty(bundleFileName)) {
+    throw new Error("No bundle file found");
+  }
+  const bundleFile = path.resolve(bundleFileName);
+  const uploadPromise = (async (): Promise<boolean> => {
+    const bundleStream = fs.createReadStream(bundleFile).pipe(createGzip());
+    const bundleData = await new Promise<Buffer>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      bundleStream.on("data", (chunk) => {
+        chunks.push(chunk);
+      });
+      bundleStream.on("end", () => {
+        resolve(Buffer.concat(chunks));
+      });
+      bundleStream.on("error", reject);
+    });
+
+    await fetch(pathInfo.url, {
+      method: "PUT",
+      body: bundleData,
+      headers: {
+        "Content-Encoding": "gzip",
+      },
+    });
+    return true;
+  })();
+
+  const sourceMapContext = await sourceMapContextPromise;
+
+  // Insert the spec as prompt data
+  const functionEntries: FunctionEvent[] = await Promise.all(
+    bundleSpecs.map(async (spec) => ({
+      project_id: spec.project_id,
+      name: spec.name,
+      slug: spec.slug,
+      description: spec.description,
+      function_data: {
+        type: "code",
+        data: {
+          type: "bundle",
+          runtime_context,
+          location: spec.location,
+          bundle_id: pathInfo.bundleId,
+          preview: await findCodeDefinition({
+            location: spec.location,
+            ctx: sourceMapContext,
+          }),
+        },
+      },
+      origin: spec.origin,
+      function_type: spec.function_type,
+    })),
   );
+
+  const logPromise = (async (): Promise<boolean> => {
+    try {
+      await _internalGetGlobalState().apiConn().post_json("insert-functions", {
+        functions: functionEntries,
+      });
+    } catch (e) {
+      if (verbose) {
+        console.error(e);
+      }
+      console.warn(
+        warning(
+          `Failed to save function definitions for '${sourceFile}'. You most likely need to update the API: ${e}`,
+        ),
+      );
+      return false;
+    }
+    return true;
+  })();
+
+  const [uploadSuccess, logSuccess] = await Promise.all([
+    uploadPromise,
+    logPromise,
+  ]);
+
+  return uploadSuccess && logSuccess;
 }
 
 function formatNameAndSlug(pieces: string[]) {
   const nonEmptyPieces = pieces.filter((piece) => piece.trim() !== "");
   return {
     name: capitalize(nonEmptyPieces.join(" ")),
-    slug: nonEmptyPieces.join("-"),
+    slug: slugifyLib(nonEmptyPieces.join("-")),
   };
+}
+
+async function loadProjectId(projectName: string): Promise<string> {
+  const response = await _internalGetGlobalState()
+    .appConn()
+    .post_json("api/project/get", {
+      name: projectName,
+    });
+
+  if (response.length === 0) {
+    throw new Error(`Project ${projectName} not found`);
+  }
+  return response[0].id;
 }

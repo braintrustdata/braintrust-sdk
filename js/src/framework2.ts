@@ -1,4 +1,5 @@
 import { wrapTraced } from "./logger";
+import slugifyLib from "slugify";
 
 export function initProject(name: string) {
   return new ProjectBuilder(name);
@@ -6,7 +7,10 @@ export function initProject(name: string) {
 
 export interface Task<Input, Output> {
   task: (input: Input) => Output;
-  _name: string;
+  projectName: string;
+  taskName: string;
+  slug: string;
+  description?: string;
 }
 
 export interface ExecutableTask<Input, Output> extends Task<Input, Output> {
@@ -15,6 +19,8 @@ export interface ExecutableTask<Input, Output> extends Task<Input, Output> {
 
 export interface TaskOpts {
   name?: string;
+  slug?: string;
+  description?: string;
 }
 
 export class ProjectBuilder {
@@ -29,12 +35,15 @@ export class ProjectBuilder {
     const name = opts.name ?? taskFn.name;
     const wrapped = wrapTraced(taskFn, {
       name,
-      asyncFlush: true, // XXX Manu: shouold we make this a flag?
+      asyncFlush: true, // XXX Manu: should we make this a flag?
     });
 
     const task: ExecutableTask<Input, Output> = Object.assign(wrapped, {
       task: taskFn,
-      _name: opts.name ?? taskFn.name,
+      projectName: this.name,
+      taskName: name,
+      description: opts.description,
+      slug: opts.slug ?? slugifyLib(name),
     });
 
     if (globalThis._lazy_load) {
