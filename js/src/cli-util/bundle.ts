@@ -2,8 +2,9 @@ import { loadEnvConfig } from "@next/env";
 import * as dotenv from "dotenv";
 import { BundleArgs } from "./types";
 import { error } from "../framework";
-import { FileHandle, initializeHandles } from "../cli";
+import { BtBuildResult, handleBuildFailure, initializeHandles } from "../cli";
 import { login } from "../logger";
+import { uploadHandleBundles } from "../functions/upload";
 
 export async function bundleCommand(args: BundleArgs) {
   // Load the environment variables from the .env files using the same rules as Next.js
@@ -31,19 +32,41 @@ export async function bundleCommand(args: BundleArgs) {
   });
 
   try {
-    await bundle({ handles });
+    const allBuildResultsP: Promise<BtBuildResult>[] = Object.values(
+      handles,
+    ).map((handle) => handle.rebuild());
+
+    const bundlePromises = Object.fromEntries(
+      Object.entries(handles).map(([inFile, handle]) => [
+        inFile,
+        handle.bundle(),
+      ]),
+    );
+
+    const allBuildResults = await Promise.all(allBuildResultsP);
+    const buildResults = [];
+    for (const buildResult of allBuildResults) {
+      if (buildResult.type === "failure") {
+        handleBuildFailure({
+          result: buildResult,
+          terminateOnFailure: args.terminate_on_failure,
+          verbose: args.verbose,
+        });
+      } else {
+        buildResults.push(buildResult);
+      }
+    }
+
+    await uploadHandleBundles({
+      buildResults,
+      bundlePromises,
+      handles,
+      setCurrent: true,
+      verbose: args.verbose,
+    });
   } finally {
     for (const handle of Object.values(handles)) {
       await handle.destroy();
     }
   }
-}
-
-async function bundle({ handles }: { handles: Record<string, FileHandle> }) {
-  const bundlePromises = Object.fromEntries(
-    Object.entries(handles).map(([inFile, handle]) => [
-      inFile,
-      handle.bundle(),
-    ]),
-  );
 }

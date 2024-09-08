@@ -1,3 +1,7 @@
+export interface CommonArgs {
+  verbose: boolean;
+}
+
 export interface AuthArgs {
   api_key?: string;
   org_name?: string;
@@ -8,21 +12,20 @@ export interface AuthArgs {
 export interface CompileArgs {
   watch: boolean;
   tsconfig?: string;
+  terminate_on_failure: boolean;
 }
 
-export interface RunArgs extends AuthArgs, CompileArgs {
+export interface RunArgs extends CommonArgs, AuthArgs, CompileArgs {
   files: string[];
   list: boolean;
   jsonl: boolean;
-  verbose: boolean;
   filter?: string[];
   no_send_logs: boolean;
   no_progress_bars: boolean;
-  terminate_on_failure: boolean;
   bundle: boolean;
   set_current: boolean;
 }
 
-export interface BundleArgs extends AuthArgs, CompileArgs {
+export interface BundleArgs extends CommonArgs, AuthArgs, CompileArgs {
   files: string[];
 }

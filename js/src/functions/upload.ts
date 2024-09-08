@@ -2,6 +2,7 @@ import {
   CodeBundle,
   functionDataSchema,
   FunctionObject,
+  projectSchema,
 } from "@braintrust/core/typespecs";
 import { BuildSuccess, EvaluatorState, FileHandle } from "../cli";
 import { scorerName, warning } from "../framework";
@@ -52,7 +53,6 @@ const pathInfoSchema = z
 export async function uploadHandleBundles({
   buildResults,
   evalToExperiment,
-  projectNameToId,
   bundlePromises,
   handles,
   setCurrent,
@@ -60,7 +60,6 @@ export async function uploadHandleBundles({
 }: {
   buildResults: BuildSuccess[];
   evalToExperiment?: Record<string, Record<string, Experiment>>;
-  projectNameToId?: Record<string, Promise<string>>;
   bundlePromises: {
     [k: string]: Promise<esbuild.BuildResult<esbuild.BuildOptions>>;
   };
@@ -69,7 +68,8 @@ export async function uploadHandleBundles({
   setCurrent: boolean;
 }) {
   console.error(`Processing bundles...`);
-  projectNameToId = projectNameToId ?? {};
+
+  const projectNameToId: Record<string, Promise<string>> = {};
   const getProjectId = async (projectName: string) => {
     if (!projectNameToId[projectName]) {
       projectNameToId[projectName] = loadProjectId(projectName);
@@ -343,12 +343,15 @@ function formatNameAndSlug(pieces: string[]) {
 async function loadProjectId(projectName: string): Promise<string> {
   const response = await _internalGetGlobalState()
     .appConn()
-    .post_json("api/project/get", {
-      name: projectName,
+    .post_json("api/project/register", {
+      project_name: projectName,
     });
 
-  if (response.length === 0) {
-    throw new Error(`Project ${projectName} not found`);
-  }
-  return response[0].id;
+  const result = z
+    .object({
+      project: projectSchema,
+    })
+    .parse(response);
+
+  return result.project.id;
 }

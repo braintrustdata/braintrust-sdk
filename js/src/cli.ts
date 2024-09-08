@@ -353,6 +353,27 @@ interface EvaluatorOpts {
   progressReporter: ProgressReporter;
 }
 
+export function handleBuildFailure({
+  result,
+  terminateOnFailure,
+  verbose,
+}: {
+  result: BuildFailure;
+  terminateOnFailure: boolean;
+  verbose: boolean;
+}) {
+  if (terminateOnFailure) {
+    throw result.error;
+  } else if (verbose) {
+    console.warn(`Failed to compile ${result.sourceFile}`);
+    console.warn(result.error);
+  } else {
+    console.warn(
+      `Failed to compile ${result.sourceFile}: ${result.error.message}`,
+    );
+  }
+}
+
 function updateEvaluators(
   evaluators: EvaluatorState,
   buildResults: BtBuildResult[],
@@ -360,16 +381,11 @@ function updateEvaluators(
 ) {
   for (const result of buildResults) {
     if (result.type === "failure") {
-      if (opts.terminateOnFailure) {
-        throw result.error;
-      } else if (opts.verbose) {
-        console.warn(`Failed to compile ${result.sourceFile}`);
-        console.warn(result.error);
-      } else {
-        console.warn(
-          `Failed to compile ${result.sourceFile}: ${result.error.message}`,
-        );
-      }
+      handleBuildFailure({
+        result,
+        terminateOnFailure: opts.terminateOnFailure,
+        verbose: opts.verbose,
+      });
       continue;
     }
 
@@ -842,6 +858,10 @@ function addCompileArgs(parser: ArgumentParser) {
     action: "store_true",
     help: "Watch files for changes and rerun evals when changes are detected",
   });
+  parser.add_argument("--terminate-on-failure", {
+    action: "store_true",
+    help: "If provided, terminates on a failing eval, instead of the default (moving onto the next one).",
+  });
   parser.add_argument("--tsconfig", {
     help: "Specify a custom tsconfig.json file to use.",
   });
@@ -891,10 +911,6 @@ async function main() {
   parser_run.add_argument("--no-progress-bars", {
     action: "store_true",
     help: "Do not show progress bars when processing evaluators.",
-  });
-  parser_run.add_argument("--terminate-on-failure", {
-    action: "store_true",
-    help: "If provided, terminates on a failing eval, instead of the default (moving onto the next one).",
   });
   parser_run.add_argument("--bundle", {
     action: "store_true",
