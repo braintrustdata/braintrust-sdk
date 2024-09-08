@@ -10,13 +10,13 @@ export interface AuthArgs {
 }
 
 export interface CompileArgs {
-  watch: boolean;
   tsconfig?: string;
   terminate_on_failure: boolean;
 }
 
 export interface RunArgs extends CommonArgs, AuthArgs, CompileArgs {
   files: string[];
+  watch: boolean;
   list: boolean;
   jsonl: boolean;
   filter?: string[];

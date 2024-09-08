@@ -416,10 +416,13 @@ function updateEvaluators(
   }
 }
 
-async function runAndWatch(
-  handles: Record<string, FileHandle>,
-  opts: EvaluatorOpts,
-) {
+async function runAndWatch({
+  handles,
+  onExit,
+}: {
+  handles: Record<string, FileHandle>;
+  onExit?: () => void;
+}) {
   const count = Object.keys(handles).length;
   console.error(`Watching ${pluralize("file", count, true)}...`);
 
@@ -431,7 +434,7 @@ async function runAndWatch(
       for (const handle of Object.values(handles)) {
         handle.destroy();
       }
-      opts.progressReporter.stop();
+      onExit?.();
       process.exit(0);
     });
   });
@@ -822,7 +825,12 @@ async function run(args: RunArgs) {
       });
     }
     if (args.watch) {
-      await runAndWatch(handles, evaluatorOpts);
+      await runAndWatch({
+        handles,
+        onExit: () => {
+          evaluatorOpts.progressReporter.stop();
+        },
+      });
     } else {
       success = await runOnce(handles, evaluatorOpts);
     }
@@ -854,10 +862,6 @@ function addAuthArgs(parser: ArgumentParser) {
 }
 
 function addCompileArgs(parser: ArgumentParser) {
-  parser.add_argument("--watch", {
-    action: "store_true",
-    help: "Watch files for changes and rerun evals when changes are detected",
-  });
   parser.add_argument("--terminate-on-failure", {
     action: "store_true",
     help: "If provided, terminates on a failing eval, instead of the default (moving onto the next one).",
@@ -904,6 +908,10 @@ async function main() {
     help: "Format score summaries as jsonl, i.e. one JSON-formatted line per summary.",
   });
   addCompileArgs(parser_run);
+  parser_run.add_argument("--watch", {
+    action: "store_true",
+    help: "Watch files for changes and rerun evals when changes are detected",
+  });
   parser_run.add_argument("--no-send-logs", {
     action: "store_true",
     help: "Do not send logs to Braintrust. Useful for testing evaluators without uploading results.",
