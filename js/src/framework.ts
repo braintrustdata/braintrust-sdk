@@ -341,6 +341,13 @@ export interface EvalOptions<EvalReport> {
   onStart?: (metadata: Omit<ExperimentSummary, "scores" | "metrics">) => void;
 }
 
+export function _initializeSpanContext() {
+  // This only needs to be set once, but Eval(), Task(), etc. are the only time
+  // we get to run code while importing a module, so use it to
+  // grab these values.
+  globalThis._spanContext = { currentSpan, NOOP_SPAN };
+}
+
 export async function Eval<
   Input,
   Output,
@@ -370,10 +377,7 @@ export async function Eval<
       reporter: options.reporter,
     };
 
-    // This only needs to be set once, but Eval() is the only time
-    // we get to run code while importing a module, so use it to
-    // grab these values.
-    globalThis._spanContext = { currentSpan, NOOP_SPAN };
+    _initializeSpanContext();
 
     // Better to return this empty object than have an annoying-to-use signature
     return new EvalResultWithSummary(

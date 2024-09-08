@@ -1,6 +1,7 @@
 import path from "path";
 import { wrapTraced } from "./logger";
 import slugifyLib from "slugify";
+import { _initializeSpanContext } from "./framework";
 
 export function initProject(name: string) {
   return new ProjectBuilder(name);
@@ -26,7 +27,9 @@ export interface TaskOpts {
 
 export class ProjectBuilder {
   private taskCounter = 0;
-  constructor(private name: string) {}
+  constructor(private name: string) {
+    _initializeSpanContext();
+  }
 
   public task<Input, Output>(
     taskFn: (input: Input) => Output,
