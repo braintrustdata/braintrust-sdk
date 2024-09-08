@@ -243,13 +243,16 @@ export const codeBundleSchema = z.object({
       position: z.union([
         z.object({ type: z.literal("task") }),
         z
-          .object({ type: z.literal("scorer"), index: z.number() })
+          .object({
+            type: z.literal("scorer"),
+            index: z.number().int().nonnegative(),
+          })
           .openapi({ title: "scorer" }),
       ]),
     }),
     z.object({
       type: z.literal("task"),
-      task_name: z.string(),
+      index: z.number().int().nonnegative(),
     }),
   ]),
   bundle_id: z.string(),

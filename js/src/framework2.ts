@@ -1,3 +1,4 @@
+import path from "path";
 import { wrapTraced } from "./logger";
 import slugifyLib from "slugify";
 
@@ -24,16 +25,22 @@ export interface TaskOpts {
 }
 
 export class ProjectBuilder {
+  private taskCounter = 0;
   constructor(private name: string) {}
 
   public task<Input, Output>(
     taskFn: (input: Input) => Output,
     opts?: TaskOpts,
   ): ExecutableTask<Input, Output> {
+    this.taskCounter++;
     opts = opts ?? {};
 
-    console.log("opts.name", opts.name, "taskFn.name", taskFn.name);
-    const name = opts.name ?? taskFn.name;
+    let name = opts.name ?? taskFn.name;
+
+    if (name.trim().length === 0) {
+      name = `Task ${path.basename(__filename)} ${this.taskCounter}`;
+    }
+
     const wrapped = wrapTraced(taskFn, {
       name,
       asyncFlush: true, // XXX Manu: should we make this a flag?
@@ -44,11 +51,11 @@ export class ProjectBuilder {
       projectName: this.name,
       taskName: name,
       description: opts.description,
-      slug: opts.slug ?? slugifyLib(name),
+      slug: opts.slug ?? slugifyLib(name, { lower: true, strict: true }),
     });
 
     if (globalThis._lazy_load) {
-      globalThis._evals.tasks[task.taskName] = task;
+      globalThis._evals.tasks.push(task);
     }
 
     return task;

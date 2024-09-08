@@ -48,7 +48,7 @@ function locationToString(location: CodeBundle["location"]): string {
   if (location.type === "experiment") {
     return `eval ${location.eval_name} -> ${location.position.type}`;
   } else {
-    return `task ${location.task_name}`;
+    return `task ${location.index}`;
   }
 }
 
@@ -77,9 +77,7 @@ export async function findCodeDefinition({
         ? evaluator.task
         : evaluator.scores[location.position.index];
   } else {
-    console.log("All tasks", outFileModule.tasks);
-    console.log(location.task_name);
-    fn = outFileModule.tasks[location.task_name].task;
+    fn = outFileModule.tasks[location.index].task;
   }
 
   if (!fn) {

@@ -275,7 +275,7 @@ export type EvaluatorDef<
 } & Evaluator<Input, Output, Expected, Metadata>;
 
 export type EvaluatorFile = {
-  tasks: { [taskName: string]: Task<any, any> };
+  tasks: Task<any, any>[];
   evaluators: {
     [evalName: string]: {
       evaluator: EvaluatorDef<any, any, any, any>;
@@ -331,7 +331,7 @@ declare global {
 }
 
 globalThis._evals = {
-  tasks: {},
+  tasks: [],
   evaluators: {},
   reporters: {},
 };

@@ -86,7 +86,8 @@ export async function uploadHandleBundles({
     const bundleSpecs: BundledFunctionSpec[] = [];
 
     if (setCurrent) {
-      for (const task of Object.values(result.evaluator.tasks)) {
+      for (let i = 0; i < result.evaluator.tasks.length; i++) {
+        const task = result.evaluator.tasks[i];
         const baseInfo = {
           project_id: await getProjectId(task.projectName),
         };
@@ -99,7 +100,7 @@ export async function uploadHandleBundles({
           function_type: "task",
           location: {
             type: "task",
-            task_name: task.taskName,
+            index: i,
           },
         });
       }
@@ -109,8 +110,6 @@ export async function uploadHandleBundles({
       const experiment =
         evalToExperiment?.[sourceFile]?.[evaluator.evaluator.evalName];
 
-      // XXX NEXT STEPS:
-      // - Try refactoring bundling code in the cli file to call into this
       const baseInfo = {
         project_id: experiment
           ? (await experiment.project).id
