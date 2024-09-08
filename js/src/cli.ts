@@ -782,14 +782,18 @@ async function run(args: RunArgs) {
     process.exit(1);
   }
 
-  const makeWatchPlugin = (fileName: string) =>
-    buildWatchPluginForEvaluator(fileName, evaluatorOpts);
+  const plugins = evaluatorOpts.watch
+    ? [
+        (fileName: string) =>
+          buildWatchPluginForEvaluator(fileName, evaluatorOpts),
+      ]
+    : [];
 
   const handles = await initializeHandles({
     files: args.files,
     mode: "eval",
     tsconfig: args.tsconfig,
-    plugins: [makeWatchPlugin],
+    plugins,
   });
 
   let success = true;
