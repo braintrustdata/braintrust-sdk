@@ -125,6 +125,13 @@ export async function uploadHandleBundles({
           : evaluator.evaluator.evalName;
 
       const experimentId = experiment ? await experiment.id : undefined;
+      const origin: FunctionObject["origin"] = experimentId
+        ? {
+            object_type: "experiment",
+            object_id: experimentId,
+            internal: !setCurrent,
+          }
+        : undefined;
 
       const fileSpecs: BundledFunctionSpec[] = [
         {
@@ -139,6 +146,7 @@ export async function uploadHandleBundles({
             position: { type: "task" },
           },
           function_type: "task",
+          origin,
         },
         ...evaluator.evaluator.scores.map((score, i): BundledFunctionSpec => {
           const name = scorerName(score, i);
@@ -154,13 +162,7 @@ export async function uploadHandleBundles({
               position: { type: "scorer", index: i },
             },
             function_type: "scorer",
-            origin: experimentId
-              ? {
-                  object_type: "experiment",
-                  object_id: experimentId,
-                  internal: !setCurrent,
-                }
-              : undefined,
+            origin,
           };
         }),
       ];
