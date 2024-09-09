@@ -1066,15 +1066,17 @@ export const patchOrganizationMembersSchema = z
           .describe(
             "If true, send invite emails to the users who wore actually added",
           ),
-        group_id: groupSchema.shape.id
+        group_ids: groupSchema.shape.id
+          .array()
           .nullish()
           .describe(
-            "Optional id of a group to add newly-invited users to. Cannot specify both a group id and a group name.",
+            "Optional list of group ids to add newly-invited users to.",
           ),
-        group_name: groupSchema.shape.name
+        group_names: groupSchema.shape.name
+          .array()
           .nullish()
           .describe(
-            "Optional name of a group to add newly-invited users to. Cannot specify both a group id and a group name.",
+            "Optional list of group names to add newly-invited users to.",
           ),
       })
       .nullish()
