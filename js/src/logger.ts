@@ -3386,7 +3386,7 @@ export class SpanImpl implements Span {
     };
 
     this._id = event.id ?? uuidv4();
-    this.spanId = this._id;
+    this.spanId = uuidv4();
     if (args.parentSpanIds) {
       this.rootSpanId = args.parentSpanIds.rootSpanId;
       const parentSpanId = args.parentSpanIds.spanId;
