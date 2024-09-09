@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { promptDataSchema } from "./prompt";
 
 export const validRuntimesEnum = z.enum(["node", "python"]);
 export type Runtime = z.infer<typeof validRuntimesEnum>;
@@ -50,12 +51,20 @@ export const functionIdSchema = z
         code: z.string().describe("The inline code to execute"),
       })
       .describe("Inline code function"),
+    z
+      .object({
+        inline_prompt: promptDataSchema,
+      })
+      .describe("Inline prompt definition"),
   ])
   .describe("Options for identifying a function");
 
 export type FunctionId = z.infer<typeof functionIdSchema>;
 
 export const useFunctionSchema = functionIdSchema;
+
+export const streamingModeEnum = z.enum(["auto", "parallel"]);
+export type StreamingMode = z.infer<typeof streamingModeEnum>;
 
 export const invokeFunctionNonIdArgsSchema = z.object({
   input: z
@@ -96,6 +105,9 @@ export const invokeFunctionNonIdArgsSchema = z.object({
     .describe(
       "Whether to stream the response. If true, results will be returned in the Braintrust SSE format.",
     ),
+  mode: streamingModeEnum
+    .optional()
+    .describe("The mode format of the returned value (defaults to 'auto')"),
 });
 
 export const invokeFunctionSchema = functionIdSchema.and(
