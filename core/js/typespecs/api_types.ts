@@ -944,6 +944,11 @@ export const asyncScoringStateSchema = z.union([
     token: z.string(),
     function_ids: z.array(functionIdSchema).nonempty(),
   }),
+  // Explicitly disabled.
+  z.object({
+    status: z.literal("disabled"),
+  }),
+  // Inactive but may be selected later.
   z.null(),
 ]);
 

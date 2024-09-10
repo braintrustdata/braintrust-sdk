@@ -9,7 +9,7 @@ import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
 import { functionIdSchema, runtimeContextSchema } from "./functions";
-import { savedFunctionIdSchema } from "./function-id";
+import { savedFunctionIdSchema } from "./function_id";
 
 // Section: App DB table schemas
 

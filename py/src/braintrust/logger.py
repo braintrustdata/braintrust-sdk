@@ -45,7 +45,7 @@ from .gitutil import get_past_n_ancestors, get_repo_info
 from .merge_row_batch import batch_items, merge_row_batch
 from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
 from .prompt import BRAINTRUST_PARAMS, PromptSchema
-from .span_identifier_v2 import SpanComponentsV2, SpanObjectTypeV2, SpanRowIdsV2
+from .span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from .span_types import SpanTypeAttribute
 from .util import (
     GLOBAL_PROJECT,
@@ -1347,11 +1347,9 @@ def start_span(
     """
 
     if parent:
-        components = SpanComponentsV2.from_str(parent)
-        if components.row_ids:
-            parent_span_ids = ParentSpanIds(
-                span_id=components.row_ids.span_id, root_span_id=components.row_ids.root_span_id
-            )
+        components = SpanComponentsV3.from_str(parent)
+        if components.row_id:
+            parent_span_ids = ParentSpanIds(span_id=components.span_id, root_span_id=components.root_span_id)
         else:
             parent_span_ids = None
         return SpanImpl(
@@ -1617,7 +1615,7 @@ class ObjectFetcher:
 
 
 def _log_feedback_impl(
-    parent_object_type: SpanObjectTypeV2,
+    parent_object_type: SpanObjectTypeV3,
     parent_object_id: LazyValue[str],
     id,
     scores=None,
@@ -1649,7 +1647,7 @@ def _log_feedback_impl(
     metadata = update_event.pop("metadata")
     update_event = {k: v for k, v in update_event.items() if v is not None}
 
-    parent_ids = lambda: SpanComponentsV2(
+    parent_ids = lambda: SpanComponentsV3(
         object_type=parent_object_type,
         object_id=parent_object_id.get(),
     ).object_id_fields()
@@ -1692,7 +1690,7 @@ def _log_feedback_impl(
 
 
 def _update_span_impl(
-    parent_object_type: SpanObjectTypeV2,
+    parent_object_type: SpanObjectTypeV3,
     parent_object_id: LazyValue[str],
     id,
     **event,
@@ -1701,7 +1699,7 @@ def _update_span_impl(
         event=event,
     )
 
-    parent_ids = lambda: SpanComponentsV2(
+    parent_ids = lambda: SpanComponentsV3(
         object_type=parent_object_type,
         object_id=parent_object_id.get(),
     ).object_id_fields()
@@ -1733,11 +1731,13 @@ def update_span(exported, **event) -> Span:
             "Cannot specify id when updating a span with `update_span`. Use the output of `span.export()` instead."
         )
 
-    components = SpanComponentsV2.from_str(exported)
+    components = SpanComponentsV3.from_str(exported)
+    if not components.row_id:
+        raise ValueError("Exported span must have a row_id")
     return _update_span_impl(
         parent_object_type=components.object_type,
         parent_object_id=LazyValue(_span_components_to_object_id_lambda(components), use_mutex=False),
-        id=components.row_ids.row_id,
+        id=components.row_id,
         **event,
     )
 
@@ -1748,13 +1748,13 @@ class ParentSpanIds:
     root_span_id: str
 
 
-def _span_components_to_object_id_lambda(components: SpanComponentsV2):
+def _span_components_to_object_id_lambda(components: SpanComponentsV3):
     if components.object_id:
         return lambda: components.object_id
     assert components.compute_object_metadata_args
-    if components.object_type == SpanObjectTypeV2.EXPERIMENT:
+    if components.object_type == SpanObjectTypeV3.EXPERIMENT:
         raise Exception("Impossible: compute_object_metadata_args not supported for experiments")
-    elif components.object_type == SpanObjectTypeV2.PROJECT_LOGS:
+    elif components.object_type == SpanObjectTypeV3.PROJECT_LOGS:
         return lambda: _compute_logger_metadata(**components.compute_object_metadata_args).project.id
     else:
         raise Exception(f"Unknown object type: {object_type}")
@@ -1762,14 +1762,14 @@ def _span_components_to_object_id_lambda(components: SpanComponentsV2):
 
 def _start_span_parent_args(
     parent: Optional[str],
-    parent_object_type: SpanObjectTypeV2,
+    parent_object_type: SpanObjectTypeV3,
     parent_object_id: LazyValue[str],
     parent_compute_object_metadata_args: Optional[Dict],
     parent_span_ids: Optional[ParentSpanIds],
 ):
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
-        parent_components = SpanComponentsV2.from_str(parent)
+        parent_components = SpanComponentsV3.from_str(parent)
         assert (
             parent_object_type == parent_components.object_type
         ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
@@ -1784,9 +1784,9 @@ def _start_span_parent_args(
             return parent_object_id.get()
 
         arg_parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)
-        if parent_components.row_ids:
+        if parent_components.row_id:
             arg_parent_span_ids = ParentSpanIds(
-                span_id=parent_components.row_ids.span_id, root_span_id=parent_components.row_ids.root_span_id
+                span_id=parent_components.span_id, root_span_id=parent_components.root_span_id
             )
         else:
             arg_parent_span_ids = None
@@ -1876,7 +1876,7 @@ class Experiment(ObjectFetcher, Exportable):
 
     @staticmethod
     def _parent_object_type():
-        return SpanObjectTypeV2.EXPERIMENT
+        return SpanObjectTypeV3.EXPERIMENT
 
     # Capture all metadata attributes which aren't covered by existing methods.
     def __getattr__(self, name: str) -> Any:
@@ -2099,7 +2099,7 @@ class Experiment(ObjectFetcher, Exportable):
 
     def export(self) -> str:
         """Return a serialized representation of the experiment that can be used to start subspans in other places. See `Span.start_span` for more details."""
-        return SpanComponentsV2(object_type=self._parent_object_type(), object_id=self.id).to_str()
+        return SpanComponentsV3(object_type=self._parent_object_type(), object_id=self.id).to_str()
 
     def close(self):
         """This function is deprecated. You can simply remove it from your code."""
@@ -2186,7 +2186,7 @@ class SpanImpl(Span):
 
     def __init__(
         self,
-        parent_object_type: SpanObjectTypeV2,
+        parent_object_type: SpanObjectTypeV3,
         parent_object_id: LazyValue[str],
         parent_compute_object_metadata_args: Optional[Dict],
         parent_span_ids: Optional[ParentSpanIds],
@@ -2311,7 +2311,7 @@ class SpanImpl(Span):
             return dict(
                 **serializable_partial_record,
                 **{k: v.get() for k, v in lazy_partial_record.items()},
-                **SpanComponentsV2(
+                **SpanComponentsV3(
                     object_type=self.parent_object_type,
                     object_id=self.parent_object_id.get(),
                 ).object_id_fields(),
@@ -2375,11 +2375,13 @@ class SpanImpl(Span):
             object_id = self.parent_object_id.get()
             compute_object_metadata_args = None
 
-        return SpanComponentsV2(
+        return SpanComponentsV3(
             object_type=self.parent_object_type,
             object_id=object_id,
             compute_object_metadata_args=compute_object_metadata_args,
-            row_ids=SpanRowIdsV2(row_id=self.id, span_id=self.span_id, root_span_id=self.root_span_id),
+            row_id=self.id,
+            span_id=self.span_id,
+            root_span_id=self.root_span_id,
         ).to_str()
 
     def close(self, end_time=None):
@@ -2813,7 +2815,7 @@ class Logger(Exportable):
 
     @staticmethod
     def _parent_object_type():
-        return SpanObjectTypeV2.PROJECT_LOGS
+        return SpanObjectTypeV3.PROJECT_LOGS
 
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
@@ -2984,7 +2986,7 @@ class Logger(Exportable):
             object_id = self._lazy_id.get()
             compute_object_metadata_args = None
 
-        return SpanComponentsV2(
+        return SpanComponentsV3(
             object_type=self._parent_object_type(),
             object_id=object_id,
             compute_object_metadata_args=compute_object_metadata_args,
