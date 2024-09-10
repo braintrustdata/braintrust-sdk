@@ -6,6 +6,7 @@ import {
   chatCompletionMessageParamSchema,
   chatCompletionOpenAIMessageParamSchema,
 } from "./openai/messages";
+import { permanentFunctionId } from "./function-id";
 export {
   ToolCall,
   messageRoleSchema,
@@ -166,6 +167,7 @@ export const promptDataSchema = z
         choice_scores: z.record(z.number().min(0).max(1)),
       })
       .nullish(),
+    structured_tools: z.array(permanentFunctionId).nullish(),
     origin: z
       .object({
         prompt_id: z.string().optional(),

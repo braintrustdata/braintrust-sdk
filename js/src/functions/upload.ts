@@ -317,6 +317,7 @@ async function uploadBundles({
       },
       origin: spec.origin,
       function_type: spec.function_type,
+      function_schema: spec.function_schema,
     })),
   );
 
