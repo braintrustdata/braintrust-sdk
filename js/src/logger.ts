@@ -3986,8 +3986,9 @@ export class Prompt {
         ...m,
         ...("content" in m
           ? {
-              content:
-                typeof m.content === "string"
+              content: isEmpty(m.content)
+                ? m.content
+                : typeof m.content === "string"
                   ? render(m.content)
                   : JSON.parse(render(JSON.stringify(m.content))),
             }
