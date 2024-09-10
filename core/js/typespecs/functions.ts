@@ -201,3 +201,17 @@ export const callEventSchema = z.union([
 ]);
 
 export type CallEventSchema = z.infer<typeof callEventSchema>;
+
+export const scoreSchema = z.union([
+  z.object({
+    name: z.string(),
+    score: z.number().min(0).max(1).nullable().default(null), // Sometimes we get an empty value over the wire
+    metadata: z
+      .record(z.unknown())
+      .optional()
+      .transform((data) => data ?? undefined),
+  }),
+  z.number().min(0).max(1),
+  z.boolean().transform((b) => (b ? 1 : 0)),
+  z.null(),
+]);

@@ -3,6 +3,7 @@ import {
   functionDataSchema,
   FunctionObject,
   projectSchema,
+  scoreSchema,
 } from "@braintrust/core/typespecs";
 import { BuildSuccess, EvaluatorState, FileHandle } from "../cli";
 import { scorerName, warning } from "../framework";
@@ -16,6 +17,7 @@ import { z } from "zod";
 import { capitalize } from "@braintrust/core";
 import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
 import slugifyLib from "slugify";
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 export type EvaluatorMap = Record<
   string,
@@ -41,6 +43,7 @@ interface BundledFunctionSpec {
   location: CodeBundle["location"];
   function_type: FunctionObject["function_type"];
   origin?: FunctionObject["origin"];
+  function_schema?: FunctionObject["function_schema"];
 }
 
 const pathInfoSchema = z
@@ -102,6 +105,17 @@ export async function uploadHandleBundles({
             type: "task",
             index: i,
           },
+          function_schema:
+            task.parameters || task.returns
+              ? {
+                  parameters: task.parameters
+                    ? zodToJsonSchema(task.parameters)
+                    : undefined,
+                  returns: task.returns
+                    ? zodToJsonSchema(task.returns)
+                    : undefined,
+                }
+              : undefined,
         });
       }
     }

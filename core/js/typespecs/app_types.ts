@@ -312,6 +312,13 @@ export const functionSchema = promptSchemaObject
             ),
         })
         .nullish(),
+      function_schema: z
+        .object({
+          parameters: z.unknown(),
+          returns: z.unknown(),
+        })
+        .nullish()
+        .describe("JSON schema for the function's parameters and return type"),
     }),
   )
   .openapi("Function");

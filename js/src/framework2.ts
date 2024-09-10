@@ -2,28 +2,41 @@ import path from "path";
 import { wrapTraced } from "./logger";
 import slugifyLib from "slugify";
 import { _initializeSpanContext } from "./framework";
+import { z } from "zod";
 
 export function initProject(name: string) {
   return new ProjectBuilder(name);
 }
 
-export interface Task<Input, Output> {
-  task: (input: Input) => Output;
+type TaskFn<Input, Output> =
+  | ((input: Input) => Output)
+  | ((input: Input) => Promise<Output>);
+
+type Schema<Input, Output> = Partial<{
+  parameters: z.ZodSchema<Input>;
+  returns: z.ZodSchema<Output>;
+}>;
+
+export interface Task<Input, Output, Fn extends TaskFn<Input, Output>>
+  extends Schema<Input, Output> {
+  task: Fn;
   projectName: string;
   taskName: string;
   slug: string;
   description?: string;
 }
 
-export interface ExecutableTask<Input, Output> extends Task<Input, Output> {
-  (input: Input): Output;
-}
+export type ExecutableTask<
+  Input,
+  Output,
+  Fn extends TaskFn<Input, Output>,
+> = Fn & Task<Input, Output, Fn>;
 
-export interface TaskOpts {
+export type TaskOpts<Params, Returns> = {
   name?: string;
   slug?: string;
   description?: string;
-}
+} & Schema<Params, Returns>;
 
 export class ProjectBuilder {
   private taskCounter = 0;
@@ -31,10 +44,10 @@ export class ProjectBuilder {
     _initializeSpanContext();
   }
 
-  public task<Input, Output>(
-    taskFn: (input: Input) => Output,
-    opts?: TaskOpts,
-  ): ExecutableTask<Input, Output> {
+  public task<Input, Output, Fn extends TaskFn<Input, Output>>(
+    taskFn: Fn,
+    opts?: TaskOpts<Input, Output>,
+  ): ExecutableTask<Input, Output, Fn> {
     this.taskCounter++;
     opts = opts ?? {};
 
@@ -47,14 +60,16 @@ export class ProjectBuilder {
     const wrapped = wrapTraced(taskFn, {
       name,
       asyncFlush: true, // XXX Manu: should we make this a flag?
-    });
+    }) as Fn;
 
-    const task: ExecutableTask<Input, Output> = Object.assign(wrapped, {
+    const task: ExecutableTask<Input, Output, Fn> = Object.assign(wrapped, {
       task: taskFn,
       projectName: this.name,
       taskName: name,
       description: opts.description,
       slug: opts.slug ?? slugifyLib(name, { lower: true, strict: true }),
+      parameters: opts.parameters,
+      returns: opts.returns,
     });
 
     if (globalThis._lazy_load) {
