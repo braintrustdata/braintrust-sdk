@@ -1078,6 +1078,12 @@ export const patchOrganizationMembersSchema = z
           .describe(
             "Optional list of group names to add newly-invited users to.",
           ),
+        group_id: groupSchema.shape.id
+          .nullish()
+          .describe("Singular form of group_ids"),
+        group_name: groupSchema.shape.name
+          .nullish()
+          .describe("Singular form of group_names"),
       })
       .nullish()
       .describe("Users to invite to the organization"),
