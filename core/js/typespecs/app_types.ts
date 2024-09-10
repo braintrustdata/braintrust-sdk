@@ -1066,16 +1066,24 @@ export const patchOrganizationMembersSchema = z
           .describe(
             "If true, send invite emails to the users who wore actually added",
           ),
+        group_ids: groupSchema.shape.id
+          .array()
+          .nullish()
+          .describe(
+            "Optional list of group ids to add newly-invited users to.",
+          ),
+        group_names: groupSchema.shape.name
+          .array()
+          .nullish()
+          .describe(
+            "Optional list of group names to add newly-invited users to.",
+          ),
         group_id: groupSchema.shape.id
           .nullish()
-          .describe(
-            "Optional id of a group to add newly-invited users to. Cannot specify both a group id and a group name.",
-          ),
+          .describe("Singular form of group_ids"),
         group_name: groupSchema.shape.name
           .nullish()
-          .describe(
-            "Optional name of a group to add newly-invited users to. Cannot specify both a group id and a group name.",
-          ),
+          .describe("Singular form of group_names"),
       })
       .nullish()
       .describe("Users to invite to the organization"),
