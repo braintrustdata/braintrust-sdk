@@ -552,7 +552,7 @@ export const onlineScoreConfigSchema = z.object({
   samplingRate: z
     .number()
     .min(0)
-    .max(100)
+    .max(1)
     .describe("The sampling rate for online scoring"),
   scorers: z
     .array(functionIdSchema)
