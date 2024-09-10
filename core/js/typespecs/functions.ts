@@ -80,8 +80,14 @@ export const invokeFunctionNonIdArgsSchema = z.object({
             })
             .nullish()
             .describe("Identifiers for the row to to log a subspan under"),
+          propagated_event: z
+            .record(z.unknown())
+            .nullish()
+            .describe(
+              "Include these properties in every span created under this parent",
+            ),
         })
-        .describe("Object type, object id, and optional row IDs"),
+        .describe("Span parent properties"),
       z
         .string()
         .optional()
