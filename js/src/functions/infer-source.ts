@@ -1,4 +1,4 @@
-import { SourceMapConsumer } from "source-map";
+import { MappingItem, SourceMapConsumer } from "source-map";
 import * as fs from "fs/promises";
 import { EvaluatorFile, warning } from "../framework";
 import { loadModule } from "./load-module";
@@ -126,19 +126,70 @@ export async function findCodeDefinition({
 
   const originalLines = inFiles[originalPosition.source];
 
+  const ret = extractFunctionDefinition({
+    start: {
+      line: originalPosition.line,
+      column: originalPosition.column,
+    },
+    end: findNextMapping(
+      sourceMap,
+      originalPosition.line,
+      originalPosition.column,
+    ),
+    lines: originalLines,
+  });
+  return ret.length === 0 ? undefined : ret.slice(0, 10240);
+}
+
+export function extractFunctionDefinition({
+  start,
+  end,
+  lines,
+}: {
+  start: { line: number; column: number | null };
+  end: { line: number; column: number | null } | null;
+  lines: string[];
+}) {
   // Extract the function definition
   let functionDefinition = "";
-  let bracketCount = 0;
-  for (let i = originalPosition.line - 1; i < originalLines.length; i++) {
-    const line = originalLines[i];
-    functionDefinition += line + "\n";
-    bracketCount += (line.match(/{/g) || []).length;
-    bracketCount -= (line.match(/}/g) || []).length;
-    if (bracketCount === 0 && functionDefinition.trim().length > 0) {
+  for (let i = start.line - 1; i < lines.length; i++) {
+    let line = lines[i];
+    if (end && end.column !== null && i === end.line - 1) {
+      line = line.slice(0, end.column);
+    } else if (start.column !== null && i === start.line - 1) {
+      line = line.slice(start.column - 1);
+    } else if (end !== null && i >= end.line) {
       break;
     }
+
+    functionDefinition += line + "\n";
   }
 
-  const ret = functionDefinition.trim();
-  return ret.length === 0 ? undefined : ret.slice(0, 10240);
+  return functionDefinition.trim();
+}
+
+// Add this new function to find the next mapping
+function findNextMapping(
+  sourceMap: SourceMapConsumer,
+  line: number,
+  column: number | null,
+) {
+  let nextMapping: MappingItem | null = null;
+  sourceMap.eachMapping((mapping) => {
+    if (
+      mapping.generatedLine > line ||
+      (mapping.generatedLine === line &&
+        mapping.generatedColumn > (column ?? 0))
+    ) {
+      if (
+        !nextMapping ||
+        mapping.generatedLine < nextMapping.generatedLine ||
+        (mapping.generatedLine === nextMapping.generatedLine &&
+          mapping.generatedColumn < nextMapping.generatedColumn)
+      ) {
+        nextMapping = mapping;
+      }
+    }
+  });
+  return nextMapping;
 }
