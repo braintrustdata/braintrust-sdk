@@ -8,7 +8,7 @@ import { ObjectType, datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
-import { runtimeContextSchema } from "./functions";
+import { functionIdSchema, runtimeContextSchema } from "./functions";
 
 // Section: App DB table schemas
 
@@ -531,7 +531,7 @@ export const groupSchema = z
 export type Group = z.infer<typeof groupSchema>;
 
 export const projectScoreTypeEnum = z
-  .enum(["slider", "categorical", "weighted", "minimum"])
+  .enum(["slider", "categorical", "weighted", "minimum", "online"])
   .describe("The type of the configured score");
 export type ProjectScoreType = z.infer<typeof projectScoreTypeEnum>;
 
@@ -547,6 +547,18 @@ export const projectScoreCategory = z
   .describe("For categorical-type project scores, defines a single category")
   .openapi("ProjectScoreCategory");
 export type ProjectScoreCategory = z.infer<typeof projectScoreCategory>;
+
+export const onlineScoreConfigSchema = z.object({
+  samplingRate: z
+    .number()
+    .min(0)
+    .max(100)
+    .describe("The sampling rate for online scoring"),
+  scorers: z
+    .array(functionIdSchema)
+    .describe("The list of scorers to use for online scoring"),
+});
+export type OnlineScoreConfig = z.infer<typeof onlineScoreConfigSchema>;
 
 const projectScoreBaseSchema = generateBaseTableSchema("project score");
 export const projectScoreSchema = z
@@ -584,6 +596,7 @@ export const projectScoreSchema = z
       .object({
         multi_select: z.boolean().nullish(),
         destination: z.literal("expected").nullish(),
+        online: onlineScoreConfigSchema.nullish(),
       })
       .nullish(),
     position: z
