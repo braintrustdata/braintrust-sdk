@@ -9,6 +9,7 @@ import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
 import { functionIdSchema, runtimeContextSchema } from "./functions";
+import { savedFunctionIdSchema } from "./function-id";
 
 // Section: App DB table schemas
 
@@ -555,7 +556,7 @@ export const onlineScoreConfigSchema = z.object({
     .max(1)
     .describe("The sampling rate for online scoring"),
   scorers: z
-    .array(functionIdSchema)
+    .array(savedFunctionIdSchema)
     .describe("The list of scorers to use for online scoring"),
 });
 export type OnlineScoreConfig = z.infer<typeof onlineScoreConfigSchema>;
