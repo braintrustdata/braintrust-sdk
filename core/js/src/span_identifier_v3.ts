@@ -148,7 +148,6 @@ export class SpanComponentsV3 {
       const jsonObj: Record<string, unknown> = {};
       if (rawBytes[0] < ENCODING_VERSION_NUMBER) {
         const spanComponentsOld = SpanComponentsV2.fromStr(s);
-        const jsonObj: Record<string, unknown> = {};
         jsonObj["object_type"] = spanComponentsOld.objectType;
         jsonObj["object_id"] = spanComponentsOld.objectId;
         jsonObj["compute_object_metadata_args"] =
