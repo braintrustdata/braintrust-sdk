@@ -75,6 +75,7 @@ export type StartSpanArgs = {
   startTime?: number;
   parent?: string;
   event?: StartSpanEventArgs;
+  propagatedEvent?: StartSpanEventArgs;
 };
 
 export type EndSpanArgs = {
@@ -849,6 +850,10 @@ function spanComponentsToObjectIdLambda(
   }
 }
 
+// IMPORTANT NOTE: This function may pass arguments which override those in the
+// main argument set, so if using this in a spread, like `SpanImpl({ ...args,
+// ...startSpanParentArgs(...)})`, make sure to put startSpanParentArgs after
+// the original argument set.
 function startSpanParentArgs(args: {
   state: BraintrustState;
   parent: string | undefined;
@@ -856,14 +861,17 @@ function startSpanParentArgs(args: {
   parentObjectId: LazyValue<string>;
   parentComputeObjectMetadataArgs: Record<string, any> | undefined;
   parentSpanIds: ParentSpanIds | undefined;
+  propagatedEvent: StartSpanEventArgs | undefined;
 }): {
   parentObjectType: SpanObjectTypeV3;
   parentObjectId: LazyValue<string>;
   parentComputeObjectMetadataArgs: Record<string, any> | undefined;
   parentSpanIds: ParentSpanIds | undefined;
+  propagatedEvent: StartSpanEventArgs | undefined;
 } {
   let argParentObjectId: LazyValue<string> | undefined = undefined;
   let argParentSpanIds: ParentSpanIds | undefined = undefined;
+  let argPropagatedEvent: StartSpanEventArgs | undefined = undefined;
   if (args.parent) {
     if (args.parentSpanIds) {
       throw new Error("Cannot specify both parent and parentSpanIds");
@@ -895,9 +903,15 @@ function startSpanParentArgs(args: {
         rootSpanId: parentComponents.data.root_span_id,
       };
     }
+    argPropagatedEvent =
+      args.propagatedEvent ??
+      ((parentComponents.data.propagated_event ?? undefined) as
+        | StartSpanEventArgs
+        | undefined);
   } else {
     argParentObjectId = args.parentObjectId;
     argParentSpanIds = args.parentSpanIds;
+    argPropagatedEvent = args.propagatedEvent;
   }
 
   return {
@@ -905,6 +919,7 @@ function startSpanParentArgs(args: {
     parentObjectId: argParentObjectId,
     parentComputeObjectMetadataArgs: args.parentComputeObjectMetadataArgs,
     parentSpanIds: argParentSpanIds,
+    propagatedEvent: argPropagatedEvent,
   };
 }
 
@@ -1048,6 +1063,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   private startSpanImpl(args?: StartSpanArgs): Span {
     return new SpanImpl({
       state: this.state,
+      ...args,
       ...startSpanParentArgs({
         state: this.state,
         parent: args?.parent,
@@ -1055,8 +1071,8 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
         parentObjectId: this.lazyId,
         parentComputeObjectMetadataArgs: this.computeMetadataArgs,
         parentSpanIds: undefined,
+        propagatedEvent: args?.propagatedEvent,
       }),
-      ...args,
       defaultRootType: SpanTypeAttribute.TASK,
     });
   }
@@ -2671,6 +2687,11 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
       parentComputeObjectMetadataArgs:
         components.data.compute_object_metadata_args ?? undefined,
       parentSpanIds,
+      propagatedEvent:
+        args?.propagatedEvent ??
+        ((components.data.propagated_event ?? undefined) as
+          | StartSpanEventArgs
+          | undefined),
     });
     return {
       span,
@@ -3079,6 +3100,7 @@ export class Experiment
   private startSpanImpl(args?: StartSpanArgs): Span {
     return new SpanImpl({
       state: this.state,
+      ...args,
       ...startSpanParentArgs({
         state: this.state,
         parent: args?.parent,
@@ -3086,8 +3108,8 @@ export class Experiment
         parentObjectId: this.lazyId,
         parentComputeObjectMetadataArgs: undefined,
         parentSpanIds: undefined,
+        propagatedEvent: args?.propagatedEvent,
       }),
-      ...args,
       defaultRootType: SpanTypeAttribute.EVAL,
     });
   }
@@ -3317,10 +3339,9 @@ export function newId() {
 export class SpanImpl implements Span {
   private state: BraintrustState;
 
-  // `internalData` contains fields that are not part of the "user-sanitized"
-  // set of fields which we want to log in just one of the span rows.
   private isMerge: boolean;
   private loggedEndTime: number | undefined;
+  private propagatedEvent: StartSpanEventArgs | undefined;
 
   // For internal use only.
   private parentObjectType: SpanObjectTypeV3;
@@ -3346,7 +3367,7 @@ export class SpanImpl implements Span {
     this.state = args.state;
 
     const spanAttributes = args.spanAttributes ?? {};
-    const event = args.event ?? {};
+    const rawEvent = args.event ?? {};
     const type =
       args.type ?? (args.parentSpanIds ? undefined : args.defaultRootType);
 
@@ -3354,6 +3375,14 @@ export class SpanImpl implements Span {
     this.parentObjectType = args.parentObjectType;
     this.parentObjectId = args.parentObjectId;
     this.parentComputeObjectMetadataArgs = args.parentComputeObjectMetadataArgs;
+
+    // Merge propagatedEvent into event. The propagatedEvent data will get
+    // propagated-and-merged into every subspan.
+    this.propagatedEvent = args.propagatedEvent;
+    if (this.propagatedEvent) {
+      mergeDicts(rawEvent, this.propagatedEvent);
+    }
+    const { id: eventId, ...event } = rawEvent;
 
     const callerLocation = iso.getCallerLocation();
     const name = (() => {
@@ -3385,7 +3414,7 @@ export class SpanImpl implements Span {
       created: new Date().toISOString(),
     };
 
-    this._id = event.id ?? uuidv4();
+    this._id = eventId ?? uuidv4();
     this.spanId = uuidv4();
     if (args.parentSpanIds) {
       this.rootSpanId = args.parentSpanIds.rootSpanId;
@@ -3401,8 +3430,7 @@ export class SpanImpl implements Span {
     // The first log is a replacement, but subsequent logs to the same span
     // object will be merges.
     this.isMerge = false;
-    const { id: _id, ...eventRest } = event;
-    this.logInternal({ event: eventRest, internalData });
+    this.logInternal({ event, internalData });
     this.isMerge = true;
   }
 
@@ -3527,6 +3555,7 @@ export class SpanImpl implements Span {
         parentObjectId: this.parentObjectId,
         parentComputeObjectMetadataArgs: this.parentComputeObjectMetadataArgs,
         parentSpanIds,
+        propagatedEvent: args?.propagatedEvent ?? this.propagatedEvent,
       }),
     });
   }
@@ -3554,6 +3583,7 @@ export class SpanImpl implements Span {
       row_id: this.id,
       span_id: this.spanId,
       root_span_id: this.rootSpanId,
+      propagated_event: this.propagatedEvent,
     }).toStr();
   }
 

@@ -63,6 +63,9 @@ class SpanComponentsV3:
     span_id: Optional[str] = None
     root_span_id: Optional[str] = None
 
+    # Additional span properties.
+    propagated_event: Optional[Dict] = None
+
     def __post_init__(self):
         assert isinstance(self.object_type, SpanObjectTypeV3)
 
@@ -96,7 +99,8 @@ class SpanComponentsV3:
         #   - The remaining bytes encode the remaining object properties in JSON
         #   format, or nothing if the JSON object is empty.
         json_obj = dict(
-            compute_object_metadata_args=self.compute_object_metadata_args,
+            compute_object_metadata_args=self.compute_object_metadata_args or None,
+            propagated_event=self.propagated_event or None,
         )
         json_obj = {k: v for k, v in json_obj.items() if v is not None}
         raw_bytes = bytes(
@@ -177,11 +181,8 @@ class SpanComponentsV3:
 
     @staticmethod
     def _from_json_obj(json_obj: Dict) -> "SpanComponentsV3":
-        return SpanComponentsV3(
-            object_type=SpanObjectTypeV3(json_obj["object_type"]),
-            object_id=json_obj.get("object_id"),
-            compute_object_metadata_args=json_obj.get("compute_object_metadata_args"),
-            row_id=json_obj.get("row_id"),
-            span_id=json_obj.get("span_id"),
-            root_span_id=json_obj.get("root_span_id"),
-        )
+        kwargs = {
+            **json_obj,
+            "object_type": SpanObjectTypeV3(json_obj["object_type"]),
+        }
+        return SpanComponentsV3(**kwargs)

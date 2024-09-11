@@ -54,6 +54,10 @@ const _INTERNAL_SPAN_COMPONENT_UUID_FIELDS_ID_TO_NAME: Record<
 export const spanComponentsV3Schema = z
   .object({
     object_type: spanObjectTypeV3EnumSchema,
+    // TODO(manu): We should have a more elaborate zod schema for
+    // `propagated_event`. This will required zod-ifying the contents of
+    // sdk/core/js/src/object.ts.
+    propagated_event: z.record(z.unknown()).nullish(),
   })
   .and(
     z.union([
@@ -93,6 +97,7 @@ export class SpanComponentsV3 {
     const jsonObj: Record<string, unknown> = {
       compute_object_metadata_args:
         this.data.compute_object_metadata_args || undefined,
+      propagated_event: this.data.propagated_event || undefined,
     };
     const allBuffers: Array<Buffer> = [];
     allBuffers.push(
