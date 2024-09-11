@@ -558,6 +558,17 @@ export const onlineScoreConfigSchema = z.object({
   scorers: z
     .array(savedFunctionIdSchema)
     .describe("The list of scorers to use for online scoring"),
+  apply_to_root_span: z
+    .boolean()
+    .nullish()
+    .describe(
+      "Whether to trigger online scoring on the root span of each trace",
+    ),
+  apply_to_span_names: z
+    .string()
+    .array()
+    .nullish()
+    .describe("Trigger online scoring on any spans with a name in this list"),
 });
 export type OnlineScoreConfig = z.infer<typeof onlineScoreConfigSchema>;
 
