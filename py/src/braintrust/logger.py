@@ -281,7 +281,7 @@ class BraintrustState:
             self._user_info = info
 
     def global_bg_logger(self):
-        return getattr(self._override_bg_logger, "logger", self._global_bg_logger)
+        return getattr(self._override_bg_logger, "logger", None) or self._global_bg_logger
 
     # Should only be called by the login function.
     def login_replace_api_conn(self, api_conn: "HTTPConnection"):
@@ -1337,6 +1337,7 @@ def start_span(
     start_time=None,
     set_current=None,
     parent=None,
+    propagated_event=None,
     **event,
 ) -> Span:
     """Lower-level alternative to `@traced` for starting a span at the toplevel. It creates a span under the first active object (using the same precedence order as `@traced`), or if `parent` is specified, under the specified parent row, or returns a no-op span object.
@@ -1362,6 +1363,7 @@ def start_span(
             span_attributes=span_attributes,
             start_time=start_time,
             set_current=set_current,
+            propagated_event=coalesce(propagated_event, components.propagated_event),
             event=event,
         )
     else:
@@ -1372,6 +1374,7 @@ def start_span(
             start_time=start_time,
             set_current=set_current,
             parent=parent,
+            propagated_event=propagated_event,
             **event,
         )
 
@@ -1766,6 +1769,7 @@ def _start_span_parent_args(
     parent_object_id: LazyValue[str],
     parent_compute_object_metadata_args: Optional[Dict],
     parent_span_ids: Optional[ParentSpanIds],
+    propagated_event: Optional[Dict],
 ):
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
@@ -1790,15 +1794,18 @@ def _start_span_parent_args(
             )
         else:
             arg_parent_span_ids = None
+        arg_propagated_event = coalesce(propagated_event, parent_components.propagated_event)
     else:
         arg_parent_object_id = parent_object_id
         arg_parent_span_ids = parent_span_ids
+        arg_propagated_event = propagated_event
 
     return dict(
         parent_object_type=parent_object_type,
         parent_object_id=arg_parent_object_id,
         parent_compute_object_metadata_args=parent_compute_object_metadata_args,
         parent_span_ids=arg_parent_span_ids,
+        propagated_event=arg_propagated_event,
     )
 
 
@@ -1985,6 +1992,7 @@ class Experiment(ObjectFetcher, Exportable):
         start_time=None,
         set_current=None,
         parent=None,
+        propagated_event=None,
         **event,
     ):
         """Create a new toplevel span underneath the experiment. The name defaults to "root" and the span type to "eval".
@@ -1999,6 +2007,7 @@ class Experiment(ObjectFetcher, Exportable):
             start_time=start_time,
             set_current=set_current,
             parent=parent,
+            propagated_event=propagated_event,
             **event,
         )
 
@@ -2122,6 +2131,7 @@ class Experiment(ObjectFetcher, Exportable):
         start_time=None,
         set_current=None,
         parent=None,
+        propagated_event=None,
         **event,
     ):
         return SpanImpl(
@@ -2131,6 +2141,7 @@ class Experiment(ObjectFetcher, Exportable):
                 parent_object_id=self._lazy_id,
                 parent_compute_object_metadata_args=None,
                 parent_span_ids=None,
+                propagated_event=propagated_event,
             ),
             name=name,
             type=type,
@@ -2197,6 +2208,7 @@ class SpanImpl(Span):
         start_time=None,
         set_current=None,
         event=None,
+        propagated_event=None,
     ):
         if span_attributes is None:
             span_attributes = {}
@@ -2211,6 +2223,12 @@ class SpanImpl(Span):
         self.parent_object_type = parent_object_type
         self.parent_object_id = parent_object_id
         self.parent_compute_object_metadata_args = parent_compute_object_metadata_args
+
+        # Merge propagated_event into event. The propagated_event data will get
+        # propagated-and-merged into every subspan.
+        self.propagated_event = propagated_event
+        if self.propagated_event:
+            merge_dicts(event, self.propagated_event)
 
         caller_location = get_caller_location()
         if name is None:
@@ -2244,7 +2262,7 @@ class SpanImpl(Span):
         if caller_location:
             internal_data["context"] = caller_location
 
-        self._id = event.get("id")
+        self._id = event.pop("id", None)
         if self._id is None:
             self._id = str(uuid.uuid4())
         self.span_id = str(uuid.uuid4())
@@ -2258,7 +2276,7 @@ class SpanImpl(Span):
         # The first log is a replacement, but subsequent logs to the same span
         # object will be merges.
         self._is_merge = False
-        self.log_internal(event={k: v for k, v in event.items() if k != "id"}, internal_data=internal_data)
+        self.log_internal(event=event, internal_data=internal_data)
         self._is_merge = True
 
     @property
@@ -2335,6 +2353,7 @@ class SpanImpl(Span):
         start_time=None,
         set_current=None,
         parent=None,
+        propagated_event=None,
         **event,
     ):
         if parent:
@@ -2348,6 +2367,7 @@ class SpanImpl(Span):
                 parent_object_id=self.parent_object_id,
                 parent_compute_object_metadata_args=self.parent_compute_object_metadata_args,
                 parent_span_ids=parent_span_ids,
+                propagated_event=coalesce(propagated_event, self.propagated_event),
             ),
             name=name,
             type=type,
@@ -2382,6 +2402,7 @@ class SpanImpl(Span):
             row_id=self.id,
             span_id=self.span_id,
             root_span_id=self.root_span_id,
+            propagated_event=self.propagated_event,
         ).to_str()
 
     def close(self, end_time=None):
@@ -2914,6 +2935,7 @@ class Logger(Exportable):
         start_time=None,
         set_current=None,
         parent=None,
+        propagated_event=None,
         **event,
     ):
         """Create a new toplevel span underneath the logger. The name defaults to "root" and the span type to "task".
@@ -2928,6 +2950,7 @@ class Logger(Exportable):
             start_time=start_time,
             set_current=set_current,
             parent=parent,
+            propagated_event=propagated_event,
             **event,
         )
 
@@ -2954,6 +2977,7 @@ class Logger(Exportable):
         start_time=None,
         set_current=None,
         parent=None,
+        propagated_event=None,
         **event,
     ):
         return SpanImpl(
@@ -2963,6 +2987,7 @@ class Logger(Exportable):
                 parent_object_id=self._lazy_id,
                 parent_compute_object_metadata_args=self._compute_metadata_args,
                 parent_span_ids=None,
+                propagated_event=propagated_event,
             ),
             name=name,
             type=type,
