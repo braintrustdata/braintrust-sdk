@@ -281,7 +281,7 @@ class BraintrustState:
             self._user_info = info
 
     def global_bg_logger(self):
-        return getattr(self._override_bg_logger, "logger", self._global_bg_logger)
+        return getattr(self._override_bg_logger, "logger", None) or self._global_bg_logger
 
     # Should only be called by the login function.
     def login_replace_api_conn(self, api_conn: "HTTPConnection"):
