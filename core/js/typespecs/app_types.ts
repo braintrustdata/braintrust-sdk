@@ -551,7 +551,7 @@ export type ProjectScoreCategory = z.infer<typeof projectScoreCategory>;
 
 export const onlineScoreConfigSchema = z
   .object({
-    samplingRate: z
+    sampling_rate: z
       .number()
       .min(0)
       .max(1)
