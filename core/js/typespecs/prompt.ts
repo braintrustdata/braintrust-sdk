@@ -6,7 +6,7 @@ import {
   chatCompletionMessageParamSchema,
   chatCompletionOpenAIMessageParamSchema,
 } from "./openai/messages";
-import { savedFunctionIdSchema } from "./function-id";
+import { savedFunctionIdSchema } from "./function_id";
 export {
   ToolCall,
   messageRoleSchema,
