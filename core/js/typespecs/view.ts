@@ -17,10 +17,10 @@ export type ViewType = z.infer<typeof viewTypeEnum>;
 
 export const viewDataSearchSchema = z
   .object({
-    filter: z.array(customTypes.any).nullish(),
-    tag: z.array(customTypes.any).nullish(),
-    match: z.array(customTypes.any).nullish(),
-    sort: z.array(customTypes.any).nullish(),
+    filter: z.array(customTypes.unknown).nullish(),
+    tag: z.array(customTypes.unknown).nullish(),
+    match: z.array(customTypes.unknown).nullish(),
+    sort: z.array(customTypes.unknown).nullish(),
   })
   .strip()
   .openapi("ViewDataSearch");

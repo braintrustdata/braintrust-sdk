@@ -15,14 +15,14 @@ const mode = modeSchema.parse(
 
 const modeToTypes = {
   default: {
-    any: z.any(),
+    unknown: z.unknown(),
     literalTrue: z.literal(true),
     literalFalse: z.literal(false),
   },
   stainless: {
     // Stainless requires schemas which are completely permissive to be
     // tagged.
-    any: z.any().openapi({ ["x-stainless-any"]: true }),
+    unknown: z.unknown().openapi({ ["x-stainless-any"]: true }),
     // Stainless does not support boolean literals in all SDKs.
     literalTrue: z.boolean(),
     literalFalse: z.boolean(),

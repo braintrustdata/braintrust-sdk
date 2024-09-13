@@ -52,14 +52,14 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
     created: datetimeStringSchema.describe(
       `The timestamp the ${eventDescription} event was created`,
     ),
-    input: customTypes.any,
-    output: customTypes.any,
-    expected: customTypes.any,
-    error: customTypes.any.describe("The error that occurred, if any."),
+    input: customTypes.unknown,
+    output: customTypes.unknown,
+    expected: customTypes.unknown,
+    error: customTypes.unknown.describe("The error that occurred, if any."),
     tags: z.array(z.string()).nullish().describe("A list of tags to log"),
     scores: z.record(z.number().min(0).max(1).nullish()).nullish(),
     metadata: z
-      .record(customTypes.any)
+      .record(customTypes.unknown)
       .nullish()
       .describe(
         "A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings",
@@ -105,7 +105,7 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
       // There are also old logged metrics which contain the `caller_*`
       // information. We could potentially stricten this by adding some
       // backfills to the chalice backend.
-      .catchall(customTypes.any)
+      .catchall(customTypes.unknown)
       .nullish()
       .describe(
         `Metrics are numerical measurements tracking the execution of the code that produced the ${eventDescription} event. Use "start" and "end" to track the time span over which the ${eventDescription} event was produced`,
@@ -132,7 +132,7 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
             `Line of code where the ${eventDescription} event was created`,
           ),
       })
-      .catchall(customTypes.any)
+      .catchall(customTypes.unknown)
       .nullish()
       .describe(
         `Context is additional information about the code that produced the ${eventDescription} event. It is essentially the textual counterpart to \`metrics\`. Use the \`caller_*\` attributes to track the location in code which produced the ${eventDescription} event`,
@@ -165,7 +165,7 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
           .nullish()
           .describe("Type of the span, for display purposes only"),
       })
-      .catchall(customTypes.any)
+      .catchall(customTypes.unknown)
       .nullish()
       .describe(
         "Human-identifying attributes of the span, such as name, type, etc.",
@@ -194,7 +194,7 @@ function generateBaseEventFeedbackSchema(objectType: ObjectTypeWithEvent) {
       .describe(
         `A dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the ${eventDescription} event`,
       ),
-    expected: customTypes.any.describe(
+    expected: customTypes.unknown.describe(
       "The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not",
     ),
     tags: z.array(z.string()).nullish().describe("A list of tags to log"),
@@ -205,7 +205,7 @@ function generateBaseEventFeedbackSchema(objectType: ObjectTypeWithEvent) {
         `An optional comment string to log about the ${eventDescription} event`,
       ),
     metadata: z
-      .record(customTypes.any)
+      .record(customTypes.unknown)
       .nullish()
       .describe(
         "A dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.",
@@ -277,7 +277,7 @@ const pathTypeFilterSchema = z
       .describe(
         'List of fields describing the path to the value to be checked against. For instance, if you wish to filter on the value of `c` in `{"input": {"a": {"b": {"c": "hello"}}}}`, pass `path=["input", "a", "b", "c"]`',
       ),
-    value: customTypes.any.describe(
+    value: customTypes.unknown.describe(
       'The value to compare equality-wise against the event value at the specified `path`. The value must be a "primitive", that is, any JSON-serializable object except for objects and arrays. For instance, if you wish to filter on the value of "input.a.b.c" in the object `{"input": {"a": {"b": {"c": "hello"}}}}`, pass `value="hello"`',
     ),
   })
@@ -403,12 +403,12 @@ export const promptSessionEventSchema = z
     created: promptSessionEventBaseSchema.shape.created,
     project_id: promptSchema.shape.project_id,
     prompt_session_id: promptSchema.shape.id,
-    prompt_session_data: customTypes.any.describe(
+    prompt_session_data: customTypes.unknown.describe(
       "Data about the prompt session",
     ),
-    prompt_data: customTypes.any.describe("Data about the prompt"),
-    object_data: customTypes.any.describe("Data about the mapped data"),
-    completion: customTypes.any.describe("Data about the completion"),
+    prompt_data: customTypes.unknown.describe("Data about the prompt"),
+    object_data: customTypes.unknown.describe("Data about the mapped data"),
+    completion: customTypes.unknown.describe("Data about the completion"),
     tags: promptSessionEventBaseSchema.shape.tags,
   })
   .openapi("PromptSessionEvent");
