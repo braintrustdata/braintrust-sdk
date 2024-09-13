@@ -316,7 +316,7 @@ export const functionSchema = promptSchemaObject
       function_schema: z
         .object({
           parameters: z.unknown(),
-          returns: z.unknown(),
+          returns: z.unknown().optional(),
         })
         .nullish()
         .describe("JSON schema for the function's parameters and return type"),
