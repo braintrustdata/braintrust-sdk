@@ -8,7 +8,7 @@ import { ObjectType, datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
-import { functionIdSchema, runtimeContextSchema } from "./functions";
+import { runtimeContextSchema } from "./functions";
 import { savedFunctionIdSchema } from "./function_id";
 
 // Section: App DB table schemas

@@ -8,6 +8,7 @@ from .constants import INVOKE_API_VERSION
 from .stream import BraintrustStream
 
 T = TypeVar("T")
+ModeType = Literal["auto", "parallel"]
 
 
 @overload
@@ -24,6 +25,7 @@ def invoke(
     input: Any = None,
     parent: Optional[Union[Exportable, str]] = None,
     stream: Optional[Literal[False]] = None,
+    mode: Optional[ModeType] = None,
     org_name: Optional[str] = None,
     api_key: Optional[str] = None,
     app_url: Optional[str] = None,
@@ -46,6 +48,7 @@ def invoke(
     input: Any = None,
     parent: Optional[Union[Exportable, str]] = None,
     stream: Literal[True] = True,
+    mode: Optional[ModeType] = None,
     org_name: Optional[str] = None,
     api_key: Optional[str] = None,
     app_url: Optional[str] = None,
@@ -67,6 +70,7 @@ def invoke(
     input: Any = None,
     parent: Optional[Union[Exportable, str]] = None,
     stream: bool = False,
+    mode: Optional[ModeType] = None,
     org_name: Optional[str] = None,
     api_key: Optional[str] = None,
     app_url: Optional[str] = None,
@@ -85,6 +89,9 @@ def invoke(
         stream: Whether to stream the function's output. If True, the function will return a
             `BraintrustStream`, otherwise it will return the output of the function as a JSON
             object.
+        mode: The response shape of the function if returning tool calls. If "auto", will return
+            a string if the function returns a string, and a JSON object otherwise. If "parallel",
+            will return an array of JSON objects with one object per tool call.
         org_name: The name of the Braintrust organization to use.
         api_key: The API key to use for authentication.
         app_url: The URL of the Braintrust application.
@@ -133,6 +140,8 @@ def invoke(
         api_version=INVOKE_API_VERSION,
         **function_id_args,
     )
+    if mode is not None:
+        request["mode"] = mode
 
     headers = {"Accept": "text/event-stream" if stream else "application/json"}
 

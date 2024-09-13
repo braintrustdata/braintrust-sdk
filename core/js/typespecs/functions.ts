@@ -107,12 +107,12 @@ export const invokeFunctionNonIdArgsSchema = z.object({
     .describe("Options for tracing the function call"),
   stream: z
     .boolean()
-    .optional()
+    .nullish()
     .describe(
       "Whether to stream the response. If true, results will be returned in the Braintrust SSE format.",
     ),
   mode: streamingModeEnum
-    .optional()
+    .nullish()
     .describe("The mode format of the returned value (defaults to 'auto')"),
 });
 

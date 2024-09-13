@@ -1,6 +1,7 @@
 import {
   functionIdSchema,
   InvokeFunctionRequest,
+  StreamingMode,
 } from "@braintrust/core/typespecs";
 import {
   _internalGetGlobalState,
@@ -72,6 +73,12 @@ export interface InvokeFunctionArgs<
    */
   stream?: Stream;
   /**
+   * The mode of the function. If "auto", will return a string if the function returns a string,
+   * and a JSON object otherwise. If "parallel", will return an array of JSON objects with one
+   * object per tool call.
+   */
+  mode?: StreamingMode;
+  /**
    * A Zod schema to validate the output of the function and return a typed value. This
    * is only used if `stream` is false.
    */
@@ -113,6 +120,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     parent: parentArg,
     state: stateArg,
     stream,
+    mode,
     schema,
     ...functionIdArgs
   } = args;
@@ -150,6 +158,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     input,
     parent,
     stream,
+    mode,
   };
 
   const resp = await state.proxyConn().post(`function/invoke`, request, {
