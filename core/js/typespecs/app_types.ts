@@ -141,7 +141,7 @@ export const orgSecretsSchema = z
     name: orgSecretsBaseSchema.shape.name,
     secret: z.string().nullish(),
     type: z.string().nullish(),
-    metadata: customTypes.unknown,
+    metadata: z.record(z.unknown()).nullish(),
   })
   .openapi("OrgSecrets");
 export type OrgSecrets = z.infer<typeof orgSecretsSchema>;
