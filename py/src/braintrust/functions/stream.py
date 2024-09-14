@@ -43,6 +43,22 @@ class BraintrustErrorChunk:
     type: Literal["error"] = "error"
 
 
+@dataclasses.dataclass
+class BraintrustProgressChunk:
+    """
+    A progress chunk from a Braintrust stream.
+    """
+
+    data: str
+    id: str
+    object_type: str
+    format: str
+    output_type: str
+    name: str
+    event: Literal["json_delta", "text_delta"]
+    type: Literal["progress"] = "progress"
+
+
 class BraintrustInvokeError(ValueError):
     """
     An error that occurs during a Braintrust stream.
@@ -90,6 +106,17 @@ class BraintrustStream:
                 yield BraintrustJsonChunk(data=event.data)
             elif event.event == "error":
                 yield BraintrustErrorChunk(data=event.data)
+            elif event.event == "progress":
+                event_data = json.loads(event.data)
+                yield BraintrustProgressChunk(
+                    data=event_data["data"],
+                    id=event_data["id"],
+                    object_type=event_data["object_type"],
+                    format=event_data["format"],
+                    output_type=event_data["output_type"],
+                    name=event_data["name"],
+                    event=event_data["event"],
+                )
 
     def copy(self):
         """
@@ -150,6 +177,8 @@ def parse_stream(stream: BraintrustStream):
             json_chunks.append(chunk.data)
         elif isinstance(chunk, BraintrustErrorChunk):
             raise BraintrustInvokeError(chunk.data)
+        elif isinstance(chunk, BraintrustProgressChunk):
+            pass
 
     if json_chunks:
         return json.loads("".join(json_chunks))

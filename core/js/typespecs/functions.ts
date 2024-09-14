@@ -4,6 +4,9 @@ import { promptDataSchema } from "./prompt";
 export const validRuntimesEnum = z.enum(["node", "python"]);
 export type Runtime = z.infer<typeof validRuntimesEnum>;
 
+export const functionTypeEnum = z.enum(["task", "llm", "scorer"]);
+export type FunctionType = z.infer<typeof functionTypeEnum>;
+
 export const runtimeContextSchema = z.object({
   runtime: validRuntimesEnum,
   version: z.string(),
@@ -197,6 +200,22 @@ export const sseErrorEventSchema = baseSSEEventSchema.merge(
   }),
 );
 
+export const sseProgressEventSchema = baseSSEEventSchema.merge(
+  z.object({
+    event: z.literal("progress"),
+  }),
+);
+
+// Both start and end are no-op events that just help display progress
+export const sseStartEventSchema = baseSSEEventSchema
+  .omit({ data: true })
+  .merge(
+    z.object({
+      event: z.literal("start"),
+      data: z.literal(""),
+    }),
+  );
+
 export const sseDoneEventSchema = baseSSEEventSchema.omit({ data: true }).merge(
   z.object({
     event: z.literal("done"),
@@ -204,10 +223,30 @@ export const sseDoneEventSchema = baseSSEEventSchema.omit({ data: true }).merge(
   }),
 );
 
+export const functionObjectTypeEnum = z.enum(["prompt", "tool", "scorer"]);
+export type FunctionObjectType = z.infer<typeof functionObjectTypeEnum>;
+export const functionFormatEnum = z.enum(["llm", "code", "global"]);
+export type FunctionFormat = z.infer<typeof functionFormatEnum>;
+export const functionOutputTypeEnum = z.enum(["completion", "score", "any"]);
+export type FunctionOutputType = z.infer<typeof functionOutputTypeEnum>;
+
+export const sseProgressEventDataSchema = z.object({
+  id: z.string().describe("The id of the span this event is for"),
+  object_type: functionObjectTypeEnum,
+  format: functionFormatEnum,
+  output_type: functionOutputTypeEnum,
+  name: z.string(),
+  event: z.enum(["text_delta", "json_delta", "error", "start", "done"]),
+  data: z.string(), // This is the text_delta or json_delta
+});
+export type SSEProgressEventData = z.infer<typeof sseProgressEventDataSchema>;
+
 export const callEventSchema = z.union([
   sseTextEventSchema.openapi({ title: "text_delta" }),
   sseDataEventSchema.openapi({ title: "json_delta" }),
+  sseProgressEventSchema.openapi({ title: "progress" }),
   sseErrorEventSchema.openapi({ title: "error" }),
+  sseStartEventSchema.openapi({ title: "start" }),
   sseDoneEventSchema.openapi({ title: "done" }),
 ]);
 

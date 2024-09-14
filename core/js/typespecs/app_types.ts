@@ -8,7 +8,11 @@ import { ObjectType, datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
-import { runtimeContextSchema } from "./functions";
+import {
+  FunctionObjectType,
+  functionTypeEnum,
+  runtimeContextSchema,
+} from "./functions";
 import { savedFunctionIdSchema } from "./function_id";
 
 // Section: App DB table schemas
@@ -228,8 +232,8 @@ const promptSchemaObject = z.object({
     .describe("The prompt, model, and its parameters"),
   tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
   metadata: promptBaseSchema.shape.metadata,
-  // An empty (unspecified) function_type is equivalent to "dynamic".
-  function_type: z.enum(["task", "llm", "scorer"]).nullish(),
+  // An empty (unspecified) function_type is equivalent to "task".
+  function_type: functionTypeEnum.nullish(),
 });
 
 export const promptSchema = promptSchemaObject.openapi("Prompt");

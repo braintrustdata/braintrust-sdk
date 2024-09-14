@@ -1,4 +1,7 @@
-import { callEventSchema } from "@braintrust/core/typespecs";
+import {
+  callEventSchema,
+  sseProgressEventDataSchema,
+} from "@braintrust/core/typespecs";
 import {
   createParser,
   EventSourceParser,
@@ -18,6 +21,18 @@ export const braintrustStreamChunkSchema = z.union([
   }),
   z.object({
     type: z.literal("error"),
+    data: z.string(),
+  }),
+  z.object({
+    type: z.literal("progress"),
+    data: sseProgressEventDataSchema,
+  }),
+  z.object({
+    type: z.literal("start"),
+    data: z.string(),
+  }),
+  z.object({
+    type: z.literal("done"),
     data: z.string(),
   }),
 ]);
@@ -162,12 +177,27 @@ function btStreamParser() {
               data: event.data,
             });
             break;
+          case "progress":
+            controller.enqueue({
+              type: "progress",
+              data: sseProgressEventDataSchema.parse(JSON.parse(event.data)),
+            });
+            break;
+          case "start":
+            controller.enqueue({
+              type: "start",
+              data: "",
+            });
+            break;
           case "done":
-            // Do nothing
+            controller.enqueue({
+              type: "done",
+              data: "",
+            });
             break;
           default: {
             const _event: never = parsed.data;
-            throw new Error(`Unknown event type ${_event}`);
+            throw new Error(`Unknown event type ${JSON.stringify(_event)}`);
           }
         }
       });
@@ -229,6 +259,10 @@ export function createFinalValuePassThroughStream<
             break;
           case "error":
             onError(chunk.data);
+            break;
+          case "progress":
+          case "start":
+          case "done":
             break;
           default:
             const _type: never = chunkType;
