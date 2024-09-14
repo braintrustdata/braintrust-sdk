@@ -3622,18 +3622,18 @@ function splitLoggingData({
     if (value instanceof BraintrustStream) {
       const streamCopy = value.copy();
       lazyInternalData[key] = new LazyValue(async () => {
-        return await new Promise((resolve) => {
+        return await new Promise((resolve, reject) => {
           streamCopy
             .toReadableStream()
-            .pipeThrough(createFinalValuePassThroughStream(resolve))
+            .pipeThrough(createFinalValuePassThroughStream(resolve, reject))
             .pipeTo(devNullWritableStream());
         });
       });
     } else if (value instanceof ReadableStream) {
       lazyInternalData[key] = new LazyValue(async () => {
-        return await new Promise((resolve) => {
+        return await new Promise((resolve, reject) => {
           value
-            .pipeThrough(createFinalValuePassThroughStream(resolve))
+            .pipeThrough(createFinalValuePassThroughStream(resolve, reject))
             .pipeTo(devNullWritableStream());
         });
       });
