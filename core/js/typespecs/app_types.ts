@@ -49,7 +49,7 @@ function generateBaseTableSchema(
       .nullish()
       .describe(`Identifies the user who created the ${objectName}`),
     metadata: z
-      .record(customTypes.any)
+      .record(customTypes.unknown)
       .nullish()
       .describe(`User-controlled metadata about the ${objectName}`),
   });
@@ -141,7 +141,7 @@ export const orgSecretsSchema = z
     name: orgSecretsBaseSchema.shape.name,
     secret: z.string().nullish(),
     type: z.string().nullish(),
-    metadata: customTypes.any,
+    metadata: z.record(z.unknown()).nullish(),
   })
   .openapi("OrgSecrets");
 export type OrgSecrets = z.infer<typeof orgSecretsSchema>;
