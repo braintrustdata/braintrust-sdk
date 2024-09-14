@@ -16,6 +16,10 @@ export const braintrustStreamChunkSchema = z.union([
     type: z.literal("json_delta"),
     data: z.string(),
   }),
+  z.object({
+    type: z.literal("error"),
+    data: z.string(),
+  }),
 ]);
 
 /**
@@ -116,7 +120,7 @@ export class BraintrustStream {
     }
     this.memoizedFinalValue = new Promise((resolve, reject) => {
       const stream = this.stream
-        .pipeThrough(createFinalValuePassThroughStream(resolve))
+        .pipeThrough(createFinalValuePassThroughStream(resolve, reject))
         .pipeTo(devNullWritableStream());
     });
     return this.memoizedFinalValue;
@@ -139,7 +143,7 @@ function btStreamParser() {
         if (!parsed.success) {
           throw new Error(`Failed to parse event: ${parsed.error}`);
         }
-        switch (event.event) {
+        switch (parsed.data.event) {
           case "text_delta":
             controller.enqueue({
               type: "text_delta",
@@ -152,9 +156,19 @@ function btStreamParser() {
               data: event.data,
             });
             break;
+          case "error":
+            controller.enqueue({
+              type: "error",
+              data: event.data,
+            });
+            break;
           case "done":
             // Do nothing
             break;
+          default: {
+            const _event: never = parsed.data;
+            throw new Error(`Unknown event type ${_event}`);
+          }
         }
       });
     },
@@ -184,6 +198,7 @@ export function createFinalValuePassThroughStream<
   T extends BraintrustStreamChunk | string | Uint8Array,
 >(
   onFinal: (result: unknown) => void,
+  onError: (error: unknown) => void,
 ): TransformStream<T, BraintrustStreamChunk> {
   const decoder = new TextDecoder();
   const textChunks: string[] = [];
@@ -211,6 +226,9 @@ export function createFinalValuePassThroughStream<
             break;
           case "json_delta":
             jsonChunks.push(chunk.data);
+            break;
+          case "error":
+            onError(chunk.data);
             break;
           default:
             const _type: never = chunkType;

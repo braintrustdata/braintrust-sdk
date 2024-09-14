@@ -179,8 +179,6 @@ export const baseSSEEventSchema = z.object({
   data: z.string(),
 });
 
-// This should eventually move into the typespecs in @braintrust/core
-//
 export const sseTextEventSchema = baseSSEEventSchema.merge(
   z.object({
     event: z.literal("text_delta"),
@@ -190,6 +188,12 @@ export const sseTextEventSchema = baseSSEEventSchema.merge(
 export const sseDataEventSchema = baseSSEEventSchema.merge(
   z.object({
     event: z.literal("json_delta"),
+  }),
+);
+
+export const sseErrorEventSchema = baseSSEEventSchema.merge(
+  z.object({
+    event: z.literal("error"),
   }),
 );
 
@@ -203,6 +207,7 @@ export const sseDoneEventSchema = baseSSEEventSchema.omit({ data: true }).merge(
 export const callEventSchema = z.union([
   sseTextEventSchema.openapi({ title: "text_delta" }),
   sseDataEventSchema.openapi({ title: "json_delta" }),
+  sseErrorEventSchema.openapi({ title: "error" }),
   sseDoneEventSchema.openapi({ title: "done" }),
 ]);
 

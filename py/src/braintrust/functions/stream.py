@@ -33,7 +33,25 @@ class BraintrustJsonChunk:
     type: Literal["json_delta"] = "json_delta"
 
 
-BraintrustStreamChunk = Union[BraintrustTextChunk, BraintrustJsonChunk]
+@dataclasses.dataclass
+class BraintrustErrorChunk:
+    """
+    An error chunk from a Braintrust stream.
+    """
+
+    data: str
+    type: Literal["error"] = "error"
+
+
+class BraintrustInvokeError(ValueError):
+    """
+    An error that occurs during a Braintrust stream.
+    """
+
+    pass
+
+
+BraintrustStreamChunk = Union[BraintrustTextChunk, BraintrustJsonChunk, BraintrustErrorChunk]
 
 
 class BraintrustStream:
@@ -70,6 +88,8 @@ class BraintrustStream:
                 yield BraintrustTextChunk(data=json.loads(event.data))
             elif event.event == "json_delta":
                 yield BraintrustJsonChunk(data=event.data)
+            elif event.event == "error":
+                yield BraintrustErrorChunk(data=event.data)
 
     def copy(self):
         """
@@ -128,6 +148,8 @@ def parse_stream(stream: BraintrustStream):
             text_chunks.append(chunk.data)
         elif isinstance(chunk, BraintrustJsonChunk):
             json_chunks.append(chunk.data)
+        elif isinstance(chunk, BraintrustErrorChunk):
+            raise BraintrustInvokeError(chunk.data)
 
     if json_chunks:
         return json.loads("".join(json_chunks))
