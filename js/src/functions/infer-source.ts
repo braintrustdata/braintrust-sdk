@@ -157,14 +157,12 @@ export function extractFunctionDefinition({
   end: { line: number; column: number | null } | null;
   lines: string[];
 }) {
-  console.log("start", start);
-  console.log("end", end);
   // Extract the function definition
   let functionDefinition = "";
   for (let i = start.line - 1; i < lines.length; i++) {
     let line = lines[i];
     if (end && end.column !== null && i === end.line - 1) {
-      line = line.slice(0, end.column);
+      line = line.slice(0, end.column + 1);
     } else if (
       start.column !== null &&
       start.column > 0 &&
@@ -194,12 +192,9 @@ function findNextMapping(
       if (mapping.source !== source || nextMapping !== null) {
         return;
       }
-      console.log("mapping", mapping);
       if (
-        mapping.originalLine > line ||
-        (false &&
-          mapping.originalLine === line &&
-          mapping.originalColumn > (column ?? 0))
+        mapping.originalLine > line &&
+        mapping.originalColumn <= (column ?? 0)
       ) {
         nextMapping = mapping;
       }
