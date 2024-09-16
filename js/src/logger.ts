@@ -3787,17 +3787,13 @@ export class Dataset<
     id,
     output,
   }: {
+    readonly id: string;
     readonly input?: unknown;
     readonly expected?: unknown;
     readonly tags?: string[];
     readonly metadata?: Record<string, unknown>;
-    readonly id?: string;
     readonly output?: unknown;
   }): string {
-    if (!id) {
-      throw new Error("id is required for update");
-    }
-
     if (metadata !== undefined) {
       for (const key of Object.keys(metadata)) {
         if (typeof key !== "string") {
@@ -3816,7 +3812,7 @@ export class Dataset<
       validateTags(tags);
     }
 
-    const rowId = id || uuidv4();
+    const rowId = id;
     const args = new LazyValue(async () => ({
       id: rowId,
       input,

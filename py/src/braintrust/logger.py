@@ -2569,7 +2569,7 @@ class Dataset(ObjectFetcher):
         _state.global_bg_logger().log(LazyValue(compute_args, use_mutex=False))
         return row_id
 
-    def update(self, input=None, expected=None, tags=None, metadata=None, id=None, output=None):
+    def update(self, id, input=None, expected=None, tags=None, metadata=None, output=None):
         """
         Update fields of a single record in the dataset. The updated fields will be batched and uploaded behind the scenes.
         You must pass in an `id` of the record to update. Only the fields provided will be updated; other fields will remain unchanged.
@@ -2583,9 +2583,6 @@ class Dataset(ObjectFetcher):
         :param output: (Deprecated) The new expected output value for the record. Use `expected` instead.
         :returns: The `id` of the updated record.
         """
-        if not id:
-            raise ValueError("id is required for update")
-
         if metadata:
             if not isinstance(metadata, dict):
                 raise ValueError("metadata must be a dictionary")
