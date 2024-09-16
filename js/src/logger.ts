@@ -40,6 +40,7 @@ import {
   BRAINTRUST_PARAMS,
   PromptData,
   Tools,
+  promptDataSchema,
   promptSchema,
   Prompt as PromptRow,
   toolsSchema,
@@ -3875,6 +3876,9 @@ export type DefaultPromptArgs = Partial<
 >;
 
 export class Prompt {
+  private parsedPromptData: PromptData | undefined;
+  private hasParsedPromptData = false;
+
   constructor(
     private metadata: Omit<PromptRow, "log_id"> | PromptSessionEvent,
     private defaults: DefaultPromptArgs,
@@ -3900,7 +3904,7 @@ export class Prompt {
   }
 
   public get prompt(): PromptData["prompt"] {
-    return this.metadata.prompt_data?.prompt;
+    return this.getParsedPromptData()?.prompt;
   }
 
   public get version(): TransactionId {
@@ -3908,7 +3912,7 @@ export class Prompt {
   }
 
   public get options(): NonNullable<PromptData["options"]> {
-    return this.metadata.prompt_data?.options || {};
+    return this.getParsedPromptData()?.options || {};
   }
 
   /**
@@ -4036,6 +4040,14 @@ export class Prompt {
     } else {
       throw new Error("never!");
     }
+  }
+
+  private getParsedPromptData(): PromptData | undefined {
+    if (!this.hasParsedPromptData) {
+      this.parsedPromptData = promptDataSchema.parse(this.metadata.prompt_data);
+      this.hasParsedPromptData = true;
+    }
+    return this.parsedPromptData!;
   }
 }
 
