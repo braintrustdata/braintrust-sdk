@@ -2602,7 +2602,6 @@ class Dataset(ObjectFetcher):
                 "inputs": input,
                 "expected": expected if expected is not None else output,
                 "tags": tags,
-                "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 IS_MERGE_FIELD: True,
             },
             metadata=metadata,

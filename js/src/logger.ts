@@ -3819,7 +3819,6 @@ export class Dataset<
       expected: expected === undefined ? output : expected,
       tags,
       dataset_id: await this.id,
-      created: new Date().toISOString(),
       metadata,
       [IS_MERGE_FIELD]: true,
     }));
