@@ -3765,6 +3765,73 @@ export class Dataset<
     return rowId;
   }
 
+  /**
+   * Update fields of a single record in the dataset. The updated fields will be batched and uploaded behind the scenes.
+   * You must pass in an `id` of the record to update. Only the fields provided will be updated; other fields will remain unchanged.
+   *
+   * @param event The fields to update in the record.
+   * @param event.input (Optional) The new input value for the record (an arbitrary, JSON serializable object).
+   * @param event.expected (Optional) The new expected output value for the record (an arbitrary, JSON serializable object).
+   * @param event.tags (Optional) A list of strings to update the tags of the record.
+   * @param event.metadata (Optional) A dictionary to update the metadata of the record. The values in `metadata` can be any
+   * JSON-serializable type, but its keys must be strings.
+   * @param event.id The unique identifier of the record to update.
+   * @param event.output (Deprecated) The new expected output value for the record. Use `expected` instead.
+   * @returns The `id` of the updated record.
+   */
+  public update({
+    input,
+    expected,
+    metadata,
+    tags,
+    id,
+    output,
+  }: {
+    readonly input?: unknown;
+    readonly expected?: unknown;
+    readonly tags?: string[];
+    readonly metadata?: Record<string, unknown>;
+    readonly id?: string;
+    readonly output?: unknown;
+  }): string {
+    if (!id) {
+      throw new Error("id is required for update");
+    }
+
+    if (metadata !== undefined) {
+      for (const key of Object.keys(metadata)) {
+        if (typeof key !== "string") {
+          throw new Error("metadata keys must be strings");
+        }
+      }
+    }
+
+    if (expected && output) {
+      throw new Error(
+        "Only one of expected or output (deprecated) can be specified. Prefer expected.",
+      );
+    }
+
+    if (tags) {
+      validateTags(tags);
+    }
+
+    const rowId = id || uuidv4();
+    const args = new LazyValue(async () => ({
+      id: rowId,
+      input,
+      expected: expected === undefined ? output : expected,
+      tags,
+      dataset_id: await this.id,
+      created: new Date().toISOString(),
+      metadata,
+      [IS_MERGE_FIELD]: true,
+    }));
+
+    this.state.bgLogger().log([args]);
+    return rowId;
+  }
+
   public delete(id: string): string {
     const args = new LazyValue(async () => ({
       id,
