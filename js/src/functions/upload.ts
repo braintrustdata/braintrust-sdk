@@ -3,7 +3,6 @@ import {
   functionDataSchema,
   FunctionObject,
   projectSchema,
-  scoreSchema,
 } from "@braintrust/core/typespecs";
 import { BuildSuccess, EvaluatorState, FileHandle } from "../cli";
 import { scorerName, warning } from "../framework";
@@ -89,30 +88,37 @@ export async function uploadHandleBundles({
     const bundleSpecs: BundledFunctionSpec[] = [];
 
     if (setCurrent) {
-      for (let i = 0; i < result.evaluator.tasks.length; i++) {
-        const task = result.evaluator.tasks[i];
+      for (let i = 0; i < result.evaluator.tools.length; i++) {
+        const tool = result.evaluator.tools[i];
+        let project_id = tool.project.id;
+        if (!project_id) {
+          if (!tool.project.name) {
+            throw new Error("Tool project not found");
+          }
+          project_id = await getProjectId(tool.project.name);
+        }
         const baseInfo = {
-          project_id: await getProjectId(task.projectName),
+          project_id: project_id,
         };
 
         bundleSpecs.push({
           ...baseInfo,
-          name: task.taskName,
-          slug: task.slug,
-          description: task.description ?? "",
+          name: tool.name,
+          slug: tool.slug,
+          description: tool.description ?? "",
           function_type: "task",
           location: {
             type: "task",
             index: i,
           },
           function_schema:
-            task.parameters || task.returns
+            tool.parameters || tool.returns
               ? {
-                  parameters: task.parameters
-                    ? zodToJsonSchema(task.parameters)
+                  parameters: tool.parameters
+                    ? zodToJsonSchema(tool.parameters)
                     : undefined,
-                  returns: task.returns
-                    ? zodToJsonSchema(task.returns)
+                  returns: tool.returns
+                    ? zodToJsonSchema(tool.returns)
                     : undefined,
                 }
               : undefined,
@@ -221,7 +227,6 @@ async function uploadBundles({
   handles: Record<string, FileHandle>;
   verbose: boolean;
 }): Promise<boolean> {
-  const uploadPromises = [];
   const orgId = _internalGetGlobalState().orgId;
   if (!orgId) {
     throw new Error("No organization ID found");

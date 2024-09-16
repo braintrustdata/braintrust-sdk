@@ -4,11 +4,66 @@ import slugifyLib from "slugify";
 import { _initializeSpanContext } from "./framework";
 import { z } from "zod";
 
-export function initProject(name: string) {
-  return new ProjectBuilder(name);
+type NameOrId = { name: string } | { id: string };
+type IfExists = "error" | "ignore" | "replace";
+const DEFAULT_IF_EXISTS: IfExists = "error";
+
+export type CreateProjectOpts = NameOrId & { ifExists?: IfExists };
+class ProjectBuilder {
+  create(opts: CreateProjectOpts) {
+    return new Project(opts);
+  }
+}
+export const project = new ProjectBuilder();
+
+export class Project {
+  public readonly name?: string;
+  public readonly id?: string;
+  private ifExists?: IfExists;
+  public tool: ToolBuilder;
+
+  constructor(args: CreateProjectOpts) {
+    _initializeSpanContext();
+    this.name = "name" in args ? args.name : undefined;
+    this.id = "id" in args ? args.id : undefined;
+    this.ifExists = args.ifExists ?? DEFAULT_IF_EXISTS;
+    this.tool = new ToolBuilder(this);
+  }
 }
 
-type TaskFn<Input, Output> =
+export class ToolBuilder {
+  private taskCounter = 0;
+  constructor(private readonly project: Project) {}
+
+  public create<Input, Output, Fn extends ToolFn<Input, Output>>(
+    opts: ToolOpts<Input, Output, Fn>,
+  ): Tool<Input, Output, Fn> {
+    this.taskCounter++;
+    opts = opts ?? {};
+
+    const { handler, name, slug, ...rest } = opts;
+    let resolvedName = name ?? handler.name;
+
+    if (resolvedName.trim().length === 0) {
+      resolvedName = `Tool ${path.basename(__filename)} ${this.taskCounter}`;
+    }
+
+    const tool: Tool<Input, Output, Fn> = new Tool(this.project, {
+      handler,
+      name: resolvedName,
+      slug: slug ?? slugifyLib(resolvedName, { lower: true, strict: true }),
+      ...rest,
+    });
+
+    if (globalThis._lazy_load) {
+      globalThis._evals.tools.push(tool);
+    }
+
+    return tool;
+  }
+}
+
+type ToolFn<Input, Output> =
   | ((input: Input) => Output)
   | ((input: Input) => Promise<Output>);
 
@@ -17,65 +72,50 @@ type Schema<Input, Output> = Partial<{
   returns: z.ZodSchema<Output>;
 }>;
 
-export interface Task<Input, Output, Fn extends TaskFn<Input, Output>>
-  extends Schema<Input, Output> {
-  task: Fn;
-  projectName: string;
-  taskName: string;
-  slug: string;
-  description?: string;
-}
-
-export type ExecutableTask<
-  Input,
-  Output,
-  Fn extends TaskFn<Input, Output>,
-> = Fn & Task<Input, Output, Fn>;
-
-export type TaskOpts<Params, Returns> = {
+export type ToolOpts<Params, Returns, Fn extends ToolFn<Params, Returns>> = {
   name?: string;
   slug?: string;
   description?: string;
+  handler: Fn;
+  ifExists?: IfExists;
 } & Schema<Params, Returns>;
 
-export class ProjectBuilder {
-  private taskCounter = 0;
-  constructor(private name: string) {
-    _initializeSpanContext();
-  }
+export class Tool<Input, Output, Fn extends ToolFn<Input, Output>> {
+  public readonly handler: Fn;
+  public readonly name: string;
+  public readonly slug: string;
+  public readonly description?: string;
+  public readonly parameters?: z.ZodSchema<Input>;
+  public readonly returns?: z.ZodSchema<Output>;
 
-  public task<Input, Output, Fn extends TaskFn<Input, Output>>(
-    taskFn: Fn,
-    opts?: TaskOpts<Input, Output>,
-  ): ExecutableTask<Input, Output, Fn> {
-    this.taskCounter++;
-    opts = opts ?? {};
+  private ifExists: IfExists;
+  private wrappedHandler: Fn;
 
-    let name = opts.name ?? taskFn.name;
+  constructor(
+    public readonly project: Project,
+    opts: Omit<ToolOpts<Input, Output, Fn>, "name" | "slug"> & {
+      name: string;
+      slug: string;
+    },
+  ) {
+    this.handler = opts.handler;
 
-    if (name.trim().length === 0) {
-      name = `Task ${path.basename(__filename)} ${this.taskCounter}`;
+    this.name = opts.name;
+    this.slug = opts.slug;
+    this.description = opts.description;
+
+    this.ifExists = opts.ifExists ?? DEFAULT_IF_EXISTS;
+
+    this.parameters = opts.parameters;
+    this.returns = opts.returns;
+
+    if (this.returns && !this.parameters) {
+      throw new Error("parameters are required if return type is defined");
     }
 
-    const wrapped = wrapTraced(taskFn, {
-      name,
+    this.wrappedHandler = wrapTraced(this.handler, {
+      name: this.name,
       asyncFlush: true, // XXX Manu: should we make this a flag?
     }) as Fn;
-
-    const task: ExecutableTask<Input, Output, Fn> = Object.assign(wrapped, {
-      task: taskFn,
-      projectName: this.name,
-      taskName: name,
-      description: opts.description,
-      slug: opts.slug ?? slugifyLib(name, { lower: true, strict: true }),
-      parameters: opts.parameters,
-      returns: opts.returns,
-    });
-
-    if (globalThis._lazy_load) {
-      globalThis._evals.tasks.push(task);
-    }
-
-    return task;
   }
 }

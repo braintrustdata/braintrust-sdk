@@ -77,7 +77,7 @@ export async function findCodeDefinition({
         ? evaluator.task
         : evaluator.scores[location.position.index];
   } else {
-    fn = outFileModule.tasks[location.index].task;
+    fn = outFileModule.tools[location.index].handler;
   }
 
   if (!fn) {
@@ -110,7 +110,7 @@ export async function findCodeDefinition({
   }
   const originalPosition = sourceMap.originalPositionFor({
     line: lineNumber + 1,
-    column: columnNumber,
+    column: columnNumber + 1,
   });
 
   if (originalPosition.source === null || originalPosition.line === null) {
@@ -125,17 +125,24 @@ export async function findCodeDefinition({
   }
 
   const originalLines = inFiles[originalPosition.source];
+  const endMapping = findNextMapping(
+    sourceMap,
+    originalPosition.source,
+    originalPosition.line,
+    originalPosition.column,
+  );
 
   const ret = extractFunctionDefinition({
     start: {
       line: originalPosition.line,
       column: originalPosition.column,
     },
-    end: findNextMapping(
-      sourceMap,
-      originalPosition.line,
-      originalPosition.column,
-    ),
+    end: endMapping
+      ? {
+          line: endMapping.originalLine,
+          column: endMapping.originalColumn,
+        }
+      : null,
     lines: originalLines,
   });
   return ret.length === 0 ? undefined : ret.slice(0, 10240);
@@ -150,13 +157,19 @@ export function extractFunctionDefinition({
   end: { line: number; column: number | null } | null;
   lines: string[];
 }) {
+  console.log("start", start);
+  console.log("end", end);
   // Extract the function definition
   let functionDefinition = "";
   for (let i = start.line - 1; i < lines.length; i++) {
     let line = lines[i];
     if (end && end.column !== null && i === end.line - 1) {
       line = line.slice(0, end.column);
-    } else if (start.column !== null && i === start.line - 1) {
+    } else if (
+      start.column !== null &&
+      start.column > 0 &&
+      i === start.line - 1
+    ) {
       line = line.slice(start.column - 1);
     } else if (end !== null && i >= end.line) {
       break;
@@ -171,25 +184,28 @@ export function extractFunctionDefinition({
 // Add this new function to find the next mapping
 function findNextMapping(
   sourceMap: SourceMapConsumer,
+  source: string,
   line: number,
   column: number | null,
-) {
+): MappingItem | null {
   let nextMapping: MappingItem | null = null;
-  sourceMap.eachMapping((mapping) => {
-    if (
-      mapping.generatedLine > line ||
-      (mapping.generatedLine === line &&
-        mapping.generatedColumn > (column ?? 0))
-    ) {
+  sourceMap.eachMapping(
+    (mapping: MappingItem) => {
+      if (mapping.source !== source || nextMapping !== null) {
+        return;
+      }
+      console.log("mapping", mapping);
       if (
-        !nextMapping ||
-        mapping.generatedLine < nextMapping.generatedLine ||
-        (mapping.generatedLine === nextMapping.generatedLine &&
-          mapping.generatedColumn < nextMapping.generatedColumn)
+        mapping.originalLine > line ||
+        (false &&
+          mapping.originalLine === line &&
+          mapping.originalColumn > (column ?? 0))
       ) {
         nextMapping = mapping;
       }
-    }
-  });
+    },
+    undefined,
+    SourceMapConsumer.ORIGINAL_ORDER,
+  );
   return nextMapping;
 }

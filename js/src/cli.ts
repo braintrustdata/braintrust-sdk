@@ -292,7 +292,7 @@ async function initFile({
           };
         }
         const evaluator = evaluateBuildResults(inFile, result) || {
-          tasks: [],
+          tools: [],
           evaluators: {},
           reporters: {},
         };
