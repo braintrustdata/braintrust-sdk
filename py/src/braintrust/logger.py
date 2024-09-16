@@ -2569,6 +2569,60 @@ class Dataset(ObjectFetcher):
         _state.global_bg_logger().log(LazyValue(compute_args, use_mutex=False))
         return row_id
 
+    def update(self, input=None, expected=None, tags=None, metadata=None, id=None, output=None):
+        """
+        Update fields of a single record in the dataset. The updated fields will be batched and uploaded behind the scenes.
+        You must pass in an `id` of the record to update. Only the fields provided will be updated; other fields will remain unchanged.
+
+        :param id: The unique identifier of the record to update.
+        :param input: (Optional) The new input value for the record (an arbitrary, JSON serializable object).
+        :param expected: (Optional) The new expected output value for the record (an arbitrary, JSON serializable object).
+        :param tags: (Optional) A list of strings to update the tags of the record.
+        :param metadata: (Optional) A dictionary to update the metadata of the record. The values in `metadata` can be any
+            JSON-serializable type, but its keys must be strings.
+        :param output: (Deprecated) The new expected output value for the record. Use `expected` instead.
+        :returns: The `id` of the updated record.
+        """
+        if not id:
+            raise ValueError("id is required for update")
+
+        if metadata:
+            if not isinstance(metadata, dict):
+                raise ValueError("metadata must be a dictionary")
+            for key in metadata.keys():
+                if not isinstance(key, str):
+                    raise ValueError("metadata keys must be strings")
+
+        if expected is not None and output is not None:
+            raise ValueError("Only one of expected or output (deprecated) can be specified. Prefer expected.")
+
+        if tags:
+            validate_tags(tags)
+
+        partial_args = _populate_args(
+            {
+                "id": id,
+                "inputs": input,
+                "expected": expected if expected is not None else output,
+                "tags": tags,
+                "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                IS_MERGE_FIELD: True,
+            },
+            metadata=metadata,
+        )
+
+        _check_json_serializable(partial_args)
+
+        def compute_args():
+            return dict(
+                **partial_args,
+                dataset_id=self.id,
+            )
+
+        _state.global_bg_logger().log(LazyValue(compute_args, use_mutex=False))
+
+        return id
+
     def delete(self, id):
         """
         Delete a record from the dataset.
