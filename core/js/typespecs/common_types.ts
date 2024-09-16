@@ -60,6 +60,7 @@ export const objectTypes = z.enum([
   "view",
   "organization",
   "api_key",
+  "org_secret",
 ]);
 export type ObjectType = z.infer<typeof objectTypes>;
 
@@ -83,5 +84,13 @@ export function getEventObjectDescription(objectType: ObjectTypeWithEvent) {
 }
 
 export function getObjectArticle(objectType: ObjectType) {
-  return ["acl", "api_key", "experiment"].includes(objectType) ? "an" : "a";
+  return [
+    "acl",
+    "api_key",
+    "experiment",
+    "organization",
+    "org_secret",
+  ].includes(objectType)
+    ? "an"
+    : "a";
 }
