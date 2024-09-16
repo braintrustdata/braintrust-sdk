@@ -326,6 +326,7 @@ async function uploadBundles({
     })),
   );
 
+  // XXX Next step: propagate ifNotExists flag
   const logPromise = (async (): Promise<boolean> => {
     try {
       await _internalGetGlobalState().apiConn().post_json("insert-functions", {

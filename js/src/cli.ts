@@ -562,7 +562,7 @@ async function runOnce(
   }
 
   let allSuccess = true;
-  for (const [reporterName, { reporter, results }] of Object.entries(
+  for (const [_reporterName, { reporter, results }] of Object.entries(
     evalReports,
   )) {
     const success = await reporter.reportRun(await Promise.all(results));
@@ -658,7 +658,7 @@ async function collectFiles(
 // In addition to marking node_modules external, explicitly mark
 // our packages (braintrust and autoevals) external, in case they're
 // installed in a relative path.
-let markOurPackagesExternalPlugin = {
+const markOurPackagesExternalPlugin = {
   name: "make-all-packages-external",
   setup(build: esbuild.PluginBuild) {
     const filter = /^(braintrust|autoevals|@braintrust\/)/;
@@ -735,7 +735,7 @@ export async function initializeHandles({
     process.exit(0);
   }
 
-  let tmpDir = path.join(os.tmpdir(), `btevals-${uuidv4().slice(0, 8)}`);
+  const tmpDir = path.join(os.tmpdir(), `btevals-${uuidv4().slice(0, 8)}`);
   // fs.mkdirSync(tmpDir, { recursive: true });
 
   const initPromises = [];
@@ -872,8 +872,6 @@ function addCompileArgs(parser: ArgumentParser) {
 }
 
 async function main() {
-  const [, ...args] = process.argv;
-
   const parser = new ArgumentParser({
     description: "Braintrust CLI",
   });
@@ -934,16 +932,16 @@ async function main() {
   });
   parser_run.set_defaults({ func: run });
 
-  const parser_bundle = subparser.add_parser("bundle", {
-    help: "Bundle functions and load them into Braintrust",
+  const parser_push = subparser.add_parser("push", {
+    help: "Bundle prompts, tools, scorers, and other resources into Braintrust",
   });
-  addAuthArgs(parser_bundle);
-  addCompileArgs(parser_bundle);
-  parser_bundle.add_argument("files", {
+  addAuthArgs(parser_push);
+  addCompileArgs(parser_push);
+  parser_push.add_argument("files", {
     nargs: "*",
     help: "A list of files or directories containing functions to bundle. If no files are specified, the current directory is used.",
   });
-  parser_bundle.set_defaults({ func: bundleCommand });
+  parser_push.set_defaults({ func: bundleCommand });
 
   const parsed = parser.parse_args();
 
