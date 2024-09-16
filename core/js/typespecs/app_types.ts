@@ -256,7 +256,7 @@ export const codeBundleSchema = z.object({
       ]),
     }),
     z.object({
-      type: z.literal("task"),
+      type: z.literal("function"),
       index: z.number().int().nonnegative(),
     }),
   ]),

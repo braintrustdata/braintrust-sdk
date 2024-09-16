@@ -35,9 +35,9 @@ export class ToolBuilder {
   private taskCounter = 0;
   constructor(private readonly project: Project) {}
 
-  public create<Input, Output, Fn extends ToolFn<Input, Output>>(
+  public create<Input, Output, Fn extends GenericFunction<Input, Output>>(
     opts: ToolOpts<Input, Output, Fn>,
-  ): Tool<Input, Output, Fn> {
+  ): CodeFunction<Input, Output, Fn> {
     this.taskCounter++;
     opts = opts ?? {};
 
@@ -48,22 +48,25 @@ export class ToolBuilder {
       resolvedName = `Tool ${path.basename(__filename)} ${this.taskCounter}`;
     }
 
-    const tool: Tool<Input, Output, Fn> = new Tool(this.project, {
-      handler,
-      name: resolvedName,
-      slug: slug ?? slugifyLib(resolvedName, { lower: true, strict: true }),
-      ...rest,
-    });
+    const tool: CodeFunction<Input, Output, Fn> = new CodeFunction(
+      this.project,
+      {
+        handler,
+        name: resolvedName,
+        slug: slug ?? slugifyLib(resolvedName, { lower: true, strict: true }),
+        ...rest,
+      },
+    );
 
     if (globalThis._lazy_load) {
-      globalThis._evals.tools.push(tool);
+      globalThis._evals.functions.push(tool);
     }
 
     return tool;
   }
 }
 
-type ToolFn<Input, Output> =
+type GenericFunction<Input, Output> =
   | ((input: Input) => Output)
   | ((input: Input) => Promise<Output>);
 
@@ -72,7 +75,11 @@ type Schema<Input, Output> = Partial<{
   returns: z.ZodSchema<Output>;
 }>;
 
-export type ToolOpts<Params, Returns, Fn extends ToolFn<Params, Returns>> = {
+export type ToolOpts<
+  Params,
+  Returns,
+  Fn extends GenericFunction<Params, Returns>,
+> = {
   name?: string;
   slug?: string;
   description?: string;
@@ -80,7 +87,11 @@ export type ToolOpts<Params, Returns, Fn extends ToolFn<Params, Returns>> = {
   ifExists?: IfExists;
 } & Schema<Params, Returns>;
 
-export class Tool<Input, Output, Fn extends ToolFn<Input, Output>> {
+export class CodeFunction<
+  Input,
+  Output,
+  Fn extends GenericFunction<Input, Output>,
+> {
   public readonly handler: Fn;
   public readonly name: string;
   public readonly slug: string;
@@ -115,7 +126,7 @@ export class Tool<Input, Output, Fn extends ToolFn<Input, Output>> {
 
     this.wrappedHandler = wrapTraced(this.handler, {
       name: this.name,
-      asyncFlush: true, // XXX Manu: should we make this a flag?
+      asyncFlush: true,
     }) as Fn;
   }
 }

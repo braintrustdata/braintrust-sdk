@@ -88,8 +88,8 @@ export async function uploadHandleBundles({
     const bundleSpecs: BundledFunctionSpec[] = [];
 
     if (setCurrent) {
-      for (let i = 0; i < result.evaluator.tools.length; i++) {
-        const tool = result.evaluator.tools[i];
+      for (let i = 0; i < result.evaluator.functions.length; i++) {
+        const tool = result.evaluator.functions[i];
         let project_id = tool.project.id;
         if (!project_id) {
           if (!tool.project.name) {

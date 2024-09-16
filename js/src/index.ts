@@ -65,6 +65,7 @@ export {
   Eval,
   EvalScorerArgs,
   EvalScorer,
+  EvaluatorFile,
   ReporterBody,
   Reporter,
   buildLocalSummary,

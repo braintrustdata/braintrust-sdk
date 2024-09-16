@@ -20,7 +20,7 @@ import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
 import { isEmpty } from "./util";
 import { queue } from "async";
-import { Tool } from "./framework2";
+import { CodeFunction } from "./framework2";
 
 export type BaseExperiment<
   Input,
@@ -275,7 +275,7 @@ export type EvaluatorDef<
 } & Evaluator<Input, Output, Expected, Metadata>;
 
 export type EvaluatorFile = {
-  tools: Tool<any, any, any>[];
+  functions: CodeFunction<any, any, any>[];
   evaluators: {
     [evalName: string]: {
       evaluator: EvaluatorDef<any, any, any, any>;
@@ -334,7 +334,7 @@ declare global {
 }
 
 globalThis._evals = {
-  tools: [],
+  functions: [],
   evaluators: {},
   reporters: {},
 };

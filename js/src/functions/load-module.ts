@@ -22,7 +22,7 @@ export function loadModule({
 }): EvaluatorFile {
   return evalWithModuleContext(inFile, () => {
     globalThis._evals = {
-      tools: {},
+      functions: {},
       evaluators: {},
       reporters: {},
     };

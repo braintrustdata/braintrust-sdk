@@ -77,7 +77,7 @@ export async function findCodeDefinition({
         ? evaluator.task
         : evaluator.scores[location.position.index];
   } else {
-    fn = outFileModule.tools[location.index].handler;
+    fn = outFileModule.functions[location.index].handler;
   }
 
   if (!fn) {
