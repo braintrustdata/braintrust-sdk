@@ -68,6 +68,7 @@ export {
   EvaluatorFile,
   ReporterBody,
   Reporter,
+  SpanContext,
   buildLocalSummary,
   reportFailures,
 } from "./framework";

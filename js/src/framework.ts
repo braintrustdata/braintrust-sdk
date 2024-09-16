@@ -14,6 +14,8 @@ import {
   FullInitOptions,
   BraintrustState,
   logError as logSpanError,
+  withCurrent,
+  startSpan,
 } from "./logger";
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
@@ -321,6 +323,8 @@ export function callEvaluatorData<
 
 export type SpanContext = {
   currentSpan: typeof currentSpan;
+  startSpan: typeof startSpan;
+  withCurrent: typeof withCurrent;
   NOOP_SPAN: typeof NOOP_SPAN;
 };
 
@@ -348,7 +352,7 @@ export function _initializeSpanContext() {
   // This only needs to be set once, but Eval(), Task(), etc. are the only time
   // we get to run code while importing a module, so use it to
   // grab these values.
-  globalThis._spanContext = { currentSpan, NOOP_SPAN };
+  globalThis._spanContext = { currentSpan, withCurrent, startSpan, NOOP_SPAN };
 }
 
 export async function Eval<
