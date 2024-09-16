@@ -3820,6 +3820,7 @@ export class Dataset<
       tags,
       dataset_id: await this.id,
       metadata,
+      created: new Date().toISOString(),
       [IS_MERGE_FIELD]: true,
     }));
 
