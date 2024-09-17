@@ -2518,7 +2518,48 @@ class Dataset(ObjectFetcher):
         self._lazy_metadata.get()
         return _state
 
-    def insert(self, input, expected=None, tags=None, metadata=None, id=None, output=None):
+    def _validate_event(self, metadata=None, expected=None, output=None, tags=None):
+        if metadata is not None:
+            if not isinstance(metadata, dict):
+                raise ValueError("metadata must be a dictionary")
+            for key in metadata.keys():
+                if not isinstance(key, str):
+                    raise ValueError("metadata keys must be strings")
+
+        if expected is not None and output is not None:
+            raise ValueError("Only one of expected or output (deprecated) can be specified. Prefer expected.")
+
+        if tags:
+            validate_tags(tags)
+
+    def _create_args(self, id, input=None, expected=None, metadata=None, tags=None, output=None, is_merge=False):
+        expected_value = expected if expected is not None else output
+
+        args = _populate_args(
+            {
+                "id": id,
+                "inputs": input,
+                "expected": expected_value,
+                "tags": tags,
+                "created": None if is_merge else datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            },
+            metadata=metadata,
+        )
+
+        if is_merge:
+            args[IS_MERGE_FIELD] = True
+
+        _check_json_serializable(args)
+
+        def compute_args():
+            return dict(
+                **args,
+                dataset_id=self.id,
+            )
+
+        return LazyValue(compute_args, use_mutex=False)
+
+    def insert(self, input=None, expected=None, tags=None, metadata=None, id=None, output=None):
         """
         Insert a single record to the dataset. The record will be batched and uploaded behind the scenes. If you pass in an `id`,
         and a record with that `id` already exists, it will be overwritten (upsert).
@@ -2534,39 +2575,23 @@ class Dataset(ObjectFetcher):
         :param output: (Deprecated) The output of your application. Use `expected` instead.
         :returns: The `id` of the logged record.
         """
-        if metadata:
-            if not isinstance(metadata, dict):
-                raise ValueError("metadata must be a dictionary")
-            for key in metadata.keys():
-                if not isinstance(key, str):
-                    raise ValueError("metadata keys must be strings")
-
-        if expected is not None and output is not None:
-            raise ValueError("Only one of expected or output (deprecated) can be specified. Prefer expected.")
+        self._validate_event(metadata=metadata, expected=expected, output=output, tags=tags)
 
         row_id = id or str(uuid.uuid4())
-        # Validate the non-lazily-computed part of the record-to-log.
-        partial_args = _populate_args(
-            {
-                "id": row_id,
-                "inputs": input,
-                "expected": expected if expected is not None else output,
-                "tags": tags,
-                "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            },
-            metadata=metadata,
-        )
-        _check_json_serializable(partial_args)
 
-        def compute_args():
-            return dict(
-                **partial_args,
-                dataset_id=self.id,
-            )
+        args = self._create_args(
+            id=row_id,
+            input=input,
+            expected=expected,
+            metadata=metadata,
+            tags=tags,
+            output=output,
+            is_merge=False,
+        )
 
         self._clear_cache()  # We may be able to optimize this
         self.new_records += 1
-        _state.global_bg_logger().log(LazyValue(compute_args, use_mutex=False))
+        _state.global_bg_logger().log(args)
         return row_id
 
     def update(self, id, input=None, expected=None, tags=None, metadata=None, output=None):
@@ -2583,41 +2608,19 @@ class Dataset(ObjectFetcher):
         :param output: (Deprecated) The new expected output value for the record. Use `expected` instead.
         :returns: The `id` of the updated record.
         """
-        if metadata:
-            if not isinstance(metadata, dict):
-                raise ValueError("metadata must be a dictionary")
-            for key in metadata.keys():
-                if not isinstance(key, str):
-                    raise ValueError("metadata keys must be strings")
+        self._validate_event(metadata=metadata, expected=expected, output=output, tags=tags)
 
-        if expected is not None and output is not None:
-            raise ValueError("Only one of expected or output (deprecated) can be specified. Prefer expected.")
-
-        if tags:
-            validate_tags(tags)
-
-        partial_args = _populate_args(
-            {
-                "id": id,
-                "inputs": input,
-                "expected": expected if expected is not None else output,
-                "tags": tags,
-                "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                IS_MERGE_FIELD: True,
-            },
+        args = self._create_args(
+            id=id,
+            input=input,
+            expected=expected,
             metadata=metadata,
+            tags=tags,
+            output=output,
+            is_merge=True,
         )
 
-        _check_json_serializable(partial_args)
-
-        def compute_args():
-            return dict(
-                **partial_args,
-                dataset_id=self.id,
-            )
-
-        _state.global_bg_logger().log(LazyValue(compute_args, use_mutex=False))
-
+        _state.global_bg_logger().log(args)
         return id
 
     def delete(self, id):
