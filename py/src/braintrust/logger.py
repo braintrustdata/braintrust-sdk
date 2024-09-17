@@ -2711,6 +2711,22 @@ class Dataset(ObjectFetcher):
         del exc_type, exc_value, traceback
 
 
+def render_message(render, message):
+    return {
+        **{k: v for (k, v) in message.as_dict().items() if v is not None},
+        "content": render(message.content)
+        if isinstance(message.content, str)
+        else [
+            {**c.as_dict(), "text": render(c.text)}
+            if c.type == "text"
+            else {**c.as_dict(), "image_url": {**c.image_url, "url": render(c.image_url.url)}}
+            if c.type == "image_url"
+            else c
+            for c in message.content
+        ],
+    }
+
+
 class Prompt:
     """
     A prompt object consists of prompt text, a model, and model parameters (such as temperature), which
@@ -2798,8 +2814,8 @@ class Prompt:
             ret["messages"] = [
                 {
                     **{k: v for (k, v) in m.as_dict().items() if v is not None},
-                    "content": chevron.render(m.content, data=build_args)
-                    if isinstance(m.content, str)
+                    "content": chevron.render(m.content, data=build_args) if isinstance(m.content, str)
+                    # XXX Fix
                     else json.loads(chevron.render(json.dumps(m.content), data=build_args)),
                 }
                 for m in self.prompt.messages
