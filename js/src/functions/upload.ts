@@ -108,7 +108,7 @@ export async function uploadHandleBundles({
           description: tool.description ?? "",
           function_type: "task",
           location: {
-            type: "task",
+            type: "function",
             index: i,
           },
           function_schema:
