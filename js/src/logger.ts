@@ -46,6 +46,7 @@ import {
   toolsSchema,
   PromptSessionEvent,
   OpenAIMessage,
+  Message,
 } from "@braintrust/core/typespecs";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -2287,7 +2288,7 @@ export type FullLoginOptions = LoginOptions & {
 export async function login(
   options: LoginOptions & { forceLogin?: boolean } = {},
 ): Promise<BraintrustState> {
-  let { forceLogin = false } = options || {};
+  const { forceLogin = false } = options || {};
 
   if (_globalState.loggedIn && !forceLogin) {
     // We have already logged in. If any provided login inputs disagree with our
@@ -3786,7 +3787,7 @@ export class Dataset<
   public async summarize(
     options: { readonly summarizeData?: boolean } = {},
   ): Promise<DatasetSummary> {
-    let { summarizeData = true } = options || {};
+    const { summarizeData = true } = options || {};
 
     await this.flush();
     const state = await this.getState();
@@ -3871,6 +3872,40 @@ export type CompiledPrompt<Flavor extends "chat" | "completion"> =
 export type DefaultPromptArgs = Partial<
   CompiledPromptParams & AnyModelParam & ChatPrompt & CompletionPrompt
 >;
+
+export function renderMessage<T extends Message>(
+  render: (template: string) => string,
+  message: T,
+): T {
+  return {
+    ...message,
+    ...("content" in message
+      ? {
+          content: isEmpty(message.content)
+            ? undefined
+            : typeof message.content === "string"
+              ? render(message.content)
+              : message.content.map((c) => {
+                  switch (c.type) {
+                    case "text":
+                      return { ...c, text: render(c.text) };
+                    case "image_url":
+                      return {
+                        ...c,
+                        image_url: {
+                          ...c.image_url,
+                          url: render(c.image_url.url),
+                        },
+                      };
+                    default:
+                      const _exhaustiveCheck: never = c;
+                      return _exhaustiveCheck;
+                  }
+                }),
+        }
+      : {}),
+  };
+}
 
 export class Prompt {
   private parsedPromptData: PromptData | undefined;
@@ -4000,17 +4035,9 @@ export class Prompt {
           escape: (v: any) => (typeof v === "string" ? v : JSON.stringify(v)),
         });
 
-      const messages = (prompt.messages || []).map((m) => ({
-        ...m,
-        ...("content" in m
-          ? {
-              content:
-                typeof m.content === "string"
-                  ? render(m.content)
-                  : JSON.parse(render(JSON.stringify(m.content))),
-            }
-          : {}),
-      }));
+      const messages = (prompt.messages || []).map((m) =>
+        renderMessage(render, m),
+      );
 
       return {
         ...params,
