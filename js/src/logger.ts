@@ -3753,7 +3753,7 @@ export class Dataset<
       const dataset_id = await this.id;
       const expectedValue = expected === undefined ? output : expected;
 
-      let args: BackgroundLogEvent = {
+      const args: BackgroundLogEvent = {
         id,
         input,
         expected: expectedValue,
@@ -3761,14 +3761,12 @@ export class Dataset<
         dataset_id,
         created: !isMerge ? new Date().toISOString() : undefined, //if we're merging/updating an event we will not add this ts
         metadata,
+        ...(!!isMerge
+          ? {
+              [IS_MERGE_FIELD]: true,
+            }
+          : {}),
       };
-
-      if (!!isMerge) {
-        args = {
-          ...args,
-          [IS_MERGE_FIELD]: true,
-        };
-      }
 
       return args;
     });
