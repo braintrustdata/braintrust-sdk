@@ -1414,6 +1414,14 @@ def _populate_args(d, **kwargs):
     return d
 
 
+def _filter_none_args(args):
+    new_args = {}
+    for k, v in args.items():
+        if v is not None:
+            new_args[k] = v
+    return new_args
+
+
 def validate_tags(tags):
     # Tag should be a list, set, or tuple, not a dict or string
     if not isinstance(tags, (list, set, tuple)):
@@ -2548,6 +2556,7 @@ class Dataset(ObjectFetcher):
 
         if is_merge:
             args[IS_MERGE_FIELD] = True
+            args = _filter_none_args(args)  # If merging, then remove None values to prevent null value writes
 
         _check_json_serializable(args)
 
@@ -2618,6 +2627,8 @@ class Dataset(ObjectFetcher):
             is_merge=True,
         )
 
+        self._clear_cache()  # We may be able to optimize this
+        self.new_records += 1
         _state.global_bg_logger().log(args)
         return id
 
