@@ -167,7 +167,7 @@ export const promptDataSchema = z
         choice_scores: z.record(z.number().min(0).max(1)),
       })
       .nullish(),
-    structured_tools: z.array(savedFunctionIdSchema).nullish(),
+    tool_functions: z.array(savedFunctionIdSchema).nullish(),
     origin: z
       .object({
         prompt_id: z.string().optional(),
