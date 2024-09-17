@@ -11,7 +11,12 @@ import { minimatch } from "minimatch";
 import { ArgumentParser } from "argparse";
 import { v4 as uuidv4 } from "uuid";
 import pluralize from "pluralize";
-import { login, init as initExperiment, Experiment } from "./logger";
+import {
+  login,
+  init as initExperiment,
+  Experiment,
+  BaseMetadata,
+} from "./logger";
 import {
   BarProgressReporter,
   SimpleProgressReporter,
@@ -111,8 +116,8 @@ async function initLogger(
 }
 
 function resolveReporter(
-  reporter: string | ReporterDef<any> | undefined,
-  reporters: Record<string, ReporterDef<any>>,
+  reporter: string | ReporterDef<unknown> | undefined,
+  reporters: Record<string, ReporterDef<unknown>>,
 ) {
   if (typeof reporter === "string") {
     if (!reporters[reporter]) {
@@ -136,15 +141,15 @@ function resolveReporter(
 type AllReports = Record<
   string,
   {
-    reporter: ReporterDef<any>;
-    results: (any | Promise<any>)[];
+    reporter: ReporterDef<unknown>;
+    results: (unknown | Promise<unknown>)[];
   }
 >;
 
 function addReport(
   evalReports: AllReports,
-  reporter: ReporterDef<any>,
-  report: any,
+  reporter: ReporterDef<unknown>,
+  report: unknown,
 ) {
   if (!evalReports[reporter.name]) {
     evalReports[reporter.name] = {
@@ -192,7 +197,12 @@ function buildWatchPluginForEvaluator(
         for (const evaluator of Object.values(evalResult.evaluators)) {
           evaluators.evaluators.push({
             sourceFile: inFile,
-            evaluator: evaluator.evaluator,
+            evaluator: evaluator.evaluator as EvaluatorDef<
+              unknown,
+              unknown,
+              unknown,
+              BaseMetadata
+            >,
             reporter: evaluator.reporter,
           });
         }
@@ -205,8 +215,8 @@ function buildWatchPluginForEvaluator(
         const evalReports: Record<
           string,
           {
-            reporter: ReporterDef<any>;
-            results: any[];
+            reporter: ReporterDef<unknown>;
+            results: unknown[];
           }
         > = {};
         for (const evaluatorDef of Object.values(evalResult.evaluators)) {
@@ -329,11 +339,11 @@ async function initFile({
 export interface EvaluatorState {
   evaluators: {
     sourceFile: string;
-    evaluator: EvaluatorDef<any, any, any, any>;
-    reporter: string | ReporterDef<any> | undefined;
+    evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>;
+    reporter: string | ReporterDef<unknown> | undefined;
   }[];
   reporters: {
-    [reporter: string]: ReporterDef<any>;
+    [reporter: string]: ReporterDef<unknown>;
   };
 }
 
@@ -392,7 +402,12 @@ function updateEvaluators(
     for (const evaluator of Object.values(result.evaluator.evaluators)) {
       evaluators.evaluators.push({
         sourceFile: result.sourceFile,
-        evaluator: evaluator.evaluator,
+        evaluator: evaluator.evaluator as EvaluatorDef<
+          unknown,
+          unknown,
+          unknown,
+          BaseMetadata
+        >,
         reporter: evaluator.reporter,
       });
     }
@@ -524,8 +539,8 @@ async function runOnce(
   const evalReports: Record<
     string,
     {
-      reporter: ReporterDef<any>;
-      results: [];
+      reporter: ReporterDef<unknown>;
+      results: unknown[];
     }
   > = {};
   for (let idx = 0; idx < evaluators.evaluators.length; idx++) {
@@ -784,8 +799,8 @@ async function run(args: RunArgs) {
     orgName: args.org_name,
     appUrl: args.app_url,
     noSendLogs: !!args.no_send_logs,
-    bundle: !!args.bundle,
-    setCurrent: !!args.set_current,
+    bundle: !!args.bundle || !!args.push,
+    setCurrent: !!args.push,
     terminateOnFailure: !!args.terminate_on_failure,
     watch: !!args.watch,
     jsonl: args.jsonl,
@@ -922,9 +937,9 @@ async function main() {
     action: "store_true",
     help: "Experimental (do not use unless you know what you're doing)",
   });
-  parser_run.add_argument("--set-current", {
+  parser_run.add_argument("--push", {
     action: "store_true",
-    help: "Mark the current run as the current for all experiments. This updates the bundled scorers in your project to this run.",
+    help: "Push the scorers from the current run to Braintrust. This will mark the current run's scorers as the latest version in the project.",
   });
   parser_run.add_argument("files", {
     nargs: "*",

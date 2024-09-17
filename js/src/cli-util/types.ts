@@ -23,7 +23,7 @@ export interface RunArgs extends CommonArgs, AuthArgs, CompileArgs {
   no_send_logs: boolean;
   no_progress_bars: boolean;
   bundle: boolean;
-  set_current: boolean;
+  push: boolean;
 }
 
 export interface BundleArgs extends CommonArgs, AuthArgs, CompileArgs {
