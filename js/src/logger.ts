@@ -3832,7 +3832,6 @@ export class Dataset<
    * @param event.tags (Optional) A list of strings to update the tags of the record.
    * @param event.metadata (Optional) A dictionary to update the metadata of the record. The values in `metadata` can be any
    * JSON-serializable type, but its keys must be strings.
-   * @param event.output (Deprecated) The new expected output value for the record. Use `expected` instead.
    * @returns The `id` of the updated record.
    */
   public update({
