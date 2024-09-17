@@ -3701,6 +3701,78 @@ export class Dataset<
     return this.state;
   }
 
+  private validateEvent({
+    metadata,
+    expected,
+    output,
+    tags,
+  }: {
+    metadata?: Record<string, unknown>;
+    expected?: unknown;
+    output?: unknown;
+    tags?: string[];
+  }) {
+    if (metadata !== undefined) {
+      for (const key of Object.keys(metadata)) {
+        if (typeof key !== "string") {
+          throw new Error("metadata keys must be strings");
+        }
+      }
+    }
+
+    if (expected !== undefined && output !== undefined) {
+      throw new Error(
+        "Only one of expected or output (deprecated) can be specified. Prefer expected.",
+      );
+    }
+
+    if (tags) {
+      validateTags(tags);
+    }
+  }
+
+  private createArgs({
+    id,
+    input,
+    expected,
+    metadata,
+    tags,
+    output,
+    isMerge,
+  }: {
+    id: string;
+    input?: unknown;
+    expected?: unknown;
+    metadata?: Record<string, unknown>;
+    tags?: string[];
+    output?: unknown;
+    isMerge?: boolean;
+  }): LazyValue<BackgroundLogEvent> {
+    return new LazyValue(async () => {
+      const dataset_id = await this.id;
+      const expectedValue = expected === undefined ? output : expected;
+
+      let args: BackgroundLogEvent = {
+        id,
+        input,
+        expected: expectedValue,
+        tags,
+        dataset_id,
+        created: !isMerge ? new Date().toISOString() : undefined, //if we're merging/updating an event we will not add this ts
+        metadata,
+      };
+
+      if (!!isMerge) {
+        args = {
+          ...args,
+          [IS_MERGE_FIELD]: true,
+        };
+      }
+
+      return args;
+    });
+  }
+
   /**
    * Insert a single record to the dataset. The record will be batched and uploaded behind the scenes. If you pass in an `id`,
    * and a record with that `id` already exists, it will be overwritten (upsert).
@@ -3732,34 +3804,18 @@ export class Dataset<
     readonly id?: string;
     readonly output?: unknown;
   }): string {
-    if (metadata !== undefined) {
-      for (const key of Object.keys(metadata)) {
-        if (typeof key !== "string") {
-          throw new Error("metadata keys must be strings");
-        }
-      }
-    }
-
-    if (expected && output) {
-      throw new Error(
-        "Only one of expected or output (deprecated) can be specified. Prefer expected.",
-      );
-    }
-
-    if (tags) {
-      validateTags(tags);
-    }
+    this.validateEvent({ metadata, expected, output, tags });
 
     const rowId = id || uuidv4();
-    const args = new LazyValue(async () => ({
+    const args = this.createArgs({
       id: rowId,
       input,
-      expected: expected === undefined ? output : expected,
-      tags,
-      dataset_id: await this.id,
-      created: new Date().toISOString(),
+      expected,
       metadata,
-    }));
+      tags,
+      output,
+      isMerge: false,
+    });
 
     this.state.bgLogger().log([args]);
     return rowId;
@@ -3770,12 +3826,12 @@ export class Dataset<
    * You must pass in an `id` of the record to update. Only the fields provided will be updated; other fields will remain unchanged.
    *
    * @param event The fields to update in the record.
+   * @param event.id The unique identifier of the record to update.
    * @param event.input (Optional) The new input value for the record (an arbitrary, JSON serializable object).
    * @param event.expected (Optional) The new expected output value for the record (an arbitrary, JSON serializable object).
    * @param event.tags (Optional) A list of strings to update the tags of the record.
    * @param event.metadata (Optional) A dictionary to update the metadata of the record. The values in `metadata` can be any
    * JSON-serializable type, but its keys must be strings.
-   * @param event.id The unique identifier of the record to update.
    * @param event.output (Deprecated) The new expected output value for the record. Use `expected` instead.
    * @returns The `id` of the updated record.
    */
@@ -3785,47 +3841,26 @@ export class Dataset<
     metadata,
     tags,
     id,
-    output,
   }: {
     readonly id: string;
     readonly input?: unknown;
     readonly expected?: unknown;
     readonly tags?: string[];
     readonly metadata?: Record<string, unknown>;
-    readonly output?: unknown;
   }): string {
-    if (metadata !== undefined) {
-      for (const key of Object.keys(metadata)) {
-        if (typeof key !== "string") {
-          throw new Error("metadata keys must be strings");
-        }
-      }
-    }
+    this.validateEvent({ metadata, expected, tags });
 
-    if (expected && output) {
-      throw new Error(
-        "Only one of expected or output (deprecated) can be specified. Prefer expected.",
-      );
-    }
-
-    if (tags) {
-      validateTags(tags);
-    }
-
-    const rowId = id;
-    const args = new LazyValue(async () => ({
-      id: rowId,
+    const args = this.createArgs({
+      id,
       input,
-      expected: expected === undefined ? output : expected,
-      tags,
-      dataset_id: await this.id,
+      expected,
       metadata,
-      created: new Date().toISOString(),
-      [IS_MERGE_FIELD]: true,
-    }));
+      tags,
+      isMerge: true,
+    });
 
     this.state.bgLogger().log([args]);
-    return rowId;
+    return id;
   }
 
   public delete(id: string): string {
