@@ -2594,7 +2594,7 @@ class Dataset(ObjectFetcher):
         _state.global_bg_logger().log(args)
         return row_id
 
-    def update(self, id, input=None, expected=None, tags=None, metadata=None, output=None):
+    def update(self, id, input=None, expected=None, tags=None, metadata=None):
         """
         Update fields of a single record in the dataset. The updated fields will be batched and uploaded behind the scenes.
         You must pass in an `id` of the record to update. Only the fields provided will be updated; other fields will remain unchanged.
@@ -2605,10 +2605,9 @@ class Dataset(ObjectFetcher):
         :param tags: (Optional) A list of strings to update the tags of the record.
         :param metadata: (Optional) A dictionary to update the metadata of the record. The values in `metadata` can be any
             JSON-serializable type, but its keys must be strings.
-        :param output: (Deprecated) The new expected output value for the record. Use `expected` instead.
         :returns: The `id` of the updated record.
         """
-        self._validate_event(metadata=metadata, expected=expected, output=output, tags=tags)
+        self._validate_event(metadata=metadata, expected=expected, tags=tags)
 
         args = self._create_args(
             id=id,
@@ -2616,7 +2615,6 @@ class Dataset(ObjectFetcher):
             expected=expected,
             metadata=metadata,
             tags=tags,
-            output=output,
             is_merge=True,
         )
 
