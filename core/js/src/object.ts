@@ -90,9 +90,9 @@ export type DatasetEvent = {
   input?: unknown;
   tags?: string[];
   metadata?: unknown;
+  created?: string;
   id: string;
   dataset_id: string;
-  created: string;
 } & ({ expected?: unknown } | { output?: unknown });
 
 export type LoggingEvent = Omit<ExperimentEvent, "experiment_id"> & {
