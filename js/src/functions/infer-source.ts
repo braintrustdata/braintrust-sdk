@@ -130,6 +130,7 @@ export async function findCodeDefinition({
     originalPosition.source,
     originalPosition.line,
     originalPosition.column,
+    originalLines,
   );
 
   const ret = extractFunctionDefinition({
@@ -185,18 +186,31 @@ function findNextMapping(
   source: string,
   line: number,
   column: number | null,
+  lines: string[],
 ): MappingItem | null {
   let nextMapping: MappingItem | null = null;
+  let finished = false;
   sourceMap.eachMapping(
     (mapping: MappingItem) => {
-      if (mapping.source !== source || nextMapping !== null) {
+      if (mapping.source !== source || finished) {
         return;
       }
       if (
         mapping.originalLine > line &&
         mapping.originalColumn <= (column ?? 0)
       ) {
-        nextMapping = mapping;
+        if (
+          nextMapping &&
+          lines[mapping.originalLine - 1][mapping.originalColumn] !== "}"
+        ) {
+          // If we've already collected a }, and we encounter a non-}, then we've found
+          // the end of the function definition.
+          finished = true;
+        } else if (
+          lines[mapping.originalLine - 1][mapping.originalColumn] === "}"
+        ) {
+          nextMapping = mapping;
+        }
       }
     },
     undefined,
