@@ -145,7 +145,7 @@ def repo_info():
         branch = None
         git_diff = None
 
-        dirty = repo.is_dirty()
+        dirty = attempt(lambda: repo.is_dirty())
 
         commit = attempt(lambda: repo.head.commit.hexsha.strip())
         commit_message = attempt(lambda: repo.head.commit.message.strip())
