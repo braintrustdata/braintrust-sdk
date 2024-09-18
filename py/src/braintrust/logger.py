@@ -3154,7 +3154,7 @@ class MetricSummary(SerializableDataClass):
     # Used to help with formatting
     _longest_metric_name: int
 
-    metric: float
+    metric: float | int
     """Average metric across all examples."""
     unit: str
     """Unit label for the metric."""
@@ -3166,7 +3166,7 @@ class MetricSummary(SerializableDataClass):
     """Difference in metric between the current and reference experiment."""
 
     def __str__(self):
-        number_fmt = "{:.0f}" if self.unit == "tok" else "{:.2f}"
+        number_fmt = "{:d}" if isinstance(self.metric, int) else "{:.2f}"
         metric = number_fmt.format(self.metric)
         if self.diff is None:
             return textwrap.dedent(f"""{metric}{self.unit} {self.name}""")

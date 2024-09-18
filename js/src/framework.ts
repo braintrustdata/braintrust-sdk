@@ -981,7 +981,7 @@ function formatMetricSummary(
   summary: MetricSummary,
   longestMetricName: number,
 ) {
-  const fractionDigits = summary.unit == "tok" ? 0 : 2;
+  const fractionDigits = Number.isInteger(summary.metric) ? 0 : 2;
   const metricName = `'${summary.name}'`.padEnd(longestMetricName + 2);
   return `${summary.metric.toFixed(fractionDigits)}${summary.unit} ${metricName}\t(${
     summary.improvements
