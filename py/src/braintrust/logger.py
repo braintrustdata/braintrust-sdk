@@ -3166,8 +3166,8 @@ class MetricSummary(SerializableDataClass):
     """Difference in metric between the current and reference experiment."""
 
     def __str__(self):
-        # format with 2 decimal points
-        metric = f"{self.metric:.2f}"
+        number_fmt = "{:.0f}" if self.unit == "tok" else "{:.2f}"
+        metric = number_fmt.format(self.metric)
         if self.diff is None:
             return textwrap.dedent(f"""{metric}{self.unit} {self.name}""")
 
