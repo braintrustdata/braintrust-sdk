@@ -89,13 +89,13 @@ export async function uploadHandleBundles({
 
     if (setCurrent) {
       for (let i = 0; i < result.evaluator.functions.length; i++) {
-        const tool = result.evaluator.functions[i];
-        let project_id = tool.project.id;
+        const fn = result.evaluator.functions[i];
+        let project_id = fn.project.id;
         if (!project_id) {
-          if (!tool.project.name) {
+          if (!fn.project.name) {
             throw new Error("Tool project not found");
           }
-          project_id = await getProjectId(tool.project.name);
+          project_id = await getProjectId(fn.project.name);
         }
         const baseInfo = {
           project_id: project_id,
@@ -103,23 +103,21 @@ export async function uploadHandleBundles({
 
         bundleSpecs.push({
           ...baseInfo,
-          name: tool.name,
-          slug: tool.slug,
-          description: tool.description ?? "",
-          function_type: "task",
+          name: fn.name,
+          slug: fn.slug,
+          description: fn.description ?? "",
+          function_type: fn.type,
           location: {
             type: "function",
             index: i,
           },
           function_schema:
-            tool.parameters || tool.returns
+            fn.parameters || fn.returns
               ? {
-                  parameters: tool.parameters
-                    ? zodToJsonSchema(tool.parameters)
+                  parameters: fn.parameters
+                    ? zodToJsonSchema(fn.parameters)
                     : undefined,
-                  returns: tool.returns
-                    ? zodToJsonSchema(tool.returns)
-                    : undefined,
+                  returns: fn.returns ? zodToJsonSchema(fn.returns) : undefined,
                 }
               : undefined,
         });

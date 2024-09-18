@@ -1,8 +1,9 @@
 import path from "path";
 import { wrapTraced } from "./logger";
 import slugifyLib from "slugify";
-import { _initializeSpanContext } from "./framework";
+import { _initializeSpanContext, GenericFunction } from "./framework";
 import { z } from "zod";
+import { FunctionType } from "@braintrust/core/typespecs";
 
 type NameOrId = { name: string } | { id: string };
 type IfExists = "error" | "ignore" | "replace";
@@ -54,21 +55,24 @@ export class ToolBuilder {
         handler,
         name: resolvedName,
         slug: slug ?? slugifyLib(resolvedName, { lower: true, strict: true }),
+        type: "tool",
         ...rest,
       },
     );
 
     if (globalThis._lazy_load) {
-      globalThis._evals.functions.push(tool);
+      globalThis._evals.functions.push(
+        tool as CodeFunction<
+          unknown,
+          unknown,
+          GenericFunction<unknown, unknown>
+        >,
+      );
     }
 
     return tool;
   }
 }
-
-type GenericFunction<Input, Output> =
-  | ((input: Input) => Output)
-  | ((input: Input) => Promise<Output>);
 
 type Schema<Input, Output> = Partial<{
   parameters: z.ZodSchema<Input>;
@@ -95,6 +99,7 @@ export class CodeFunction<
   public readonly handler: Fn;
   public readonly name: string;
   public readonly slug: string;
+  public readonly type: FunctionType;
   public readonly description?: string;
   public readonly parameters?: z.ZodSchema<Input>;
   public readonly returns?: z.ZodSchema<Output>;
@@ -107,6 +112,7 @@ export class CodeFunction<
     opts: Omit<ToolOpts<Input, Output, Fn>, "name" | "slug"> & {
       name: string;
       slug: string;
+      type: FunctionType;
     },
   ) {
     this.handler = opts.handler;
@@ -114,6 +120,7 @@ export class CodeFunction<
     this.name = opts.name;
     this.slug = opts.slug;
     this.description = opts.description;
+    this.type = opts.type;
 
     this.ifExists = opts.ifExists ?? DEFAULT_IF_EXISTS;
 

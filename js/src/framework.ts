@@ -276,11 +276,19 @@ export type EvaluatorDef<
   evalName: string;
 } & Evaluator<Input, Output, Expected, Metadata>;
 
+export type GenericFunction<Input, Output> =
+  | ((input: Input) => Output)
+  | ((input: Input) => Promise<Output>);
+
 export type EvaluatorFile = {
-  functions: CodeFunction<any, any, any>[];
+  functions: CodeFunction<
+    unknown,
+    unknown,
+    GenericFunction<unknown, unknown>
+  >[];
   evaluators: {
     [evalName: string]: {
-      evaluator: EvaluatorDef<any, any, any, any>;
+      evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>;
       reporter?: ReporterDef<unknown> | string;
     };
   };
@@ -380,7 +388,11 @@ export async function Eval<
   }
   if (globalThis._lazy_load) {
     globalThis._evals.evaluators[evalName] = {
-      evaluator: { evalName, projectName: name, ...evaluator },
+      evaluator: {
+        evalName,
+        projectName: name,
+        ...evaluator,
+      } as EvaluatorDef<unknown, unknown, unknown, BaseMetadata>,
       reporter: options.reporter,
     };
 
@@ -474,7 +486,7 @@ export interface Filter {
   pattern: RegExp;
 }
 
-export function serializeJSONWithPlainString(v: any) {
+export function serializeJSONWithPlainString(v: unknown) {
   if (typeof v === "string") {
     return v;
   } else {
