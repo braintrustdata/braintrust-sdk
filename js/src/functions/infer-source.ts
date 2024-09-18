@@ -204,7 +204,8 @@ function findNextMapping(
           lines[mapping.originalLine - 1][mapping.originalColumn] !== "}"
         ) {
           // If we've already collected a }, and we encounter a non-}, then we've found
-          // the end of the function definition.
+          // the end of the function definition. In the worst case, this will result in
+          // two functions.
           finished = true;
         } else if (
           lines[mapping.originalLine - 1][mapping.originalColumn] === "}"
