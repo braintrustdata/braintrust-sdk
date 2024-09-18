@@ -1007,11 +1007,9 @@ function formatMetricSummary(
   summary: MetricSummary,
   longestMetricName: number,
 ) {
-  const diffString = isEmpty(summary.diff)
-    ? ""
-    : ` (${summary.diff > 0 ? "+" : ""}${(summary.diff * 100).toFixed(2)}%)`;
+  const fractionDigits = Number.isInteger(summary.metric) ? 0 : 2;
   const metricName = `'${summary.name}'`.padEnd(longestMetricName + 2);
-  return `${summary.metric.toFixed(2)}${summary.unit}${diffString} ${metricName}\t(${
+  return `${summary.metric.toFixed(fractionDigits)}${summary.unit} ${metricName}\t(${
     summary.improvements
   } improvements, ${summary.regressions} regressions)`;
 }
