@@ -2820,11 +2820,8 @@ class Prompt:
                 }
                 for m in self.prompt.messages
             ]
-            ret["tools"] = (
-                json.loads(chevron.render(self.prompt.tools, data=build_args))
-                if (self.prompt.tools or "").strip()
-                else None
-            )
+            if self.prompt.tools and self.prompt.tools.strip():
+                ret["tools"] = json.loads(chevron.render(self.prompt.tools, data=build_args))
 
         return ret
 
