@@ -472,7 +472,7 @@ export function _internalSetInitialState() {
 }
 export const _internalGetGlobalState = () => _globalState;
 
-class FailedHTTPResponse extends Error {
+export class FailedHTTPResponse extends Error {
   public status: number;
   public text: string;
   public data: any;

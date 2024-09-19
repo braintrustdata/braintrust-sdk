@@ -275,3 +275,7 @@ export const scoreSchema = z.union([
   z.boolean().transform((b) => (b ? 1 : 0)),
   z.null(),
 ]);
+
+export const ifExistsEnum = z.enum(["error", "ignore", "replace"]);
+export type IfExists = z.infer<typeof ifExistsEnum>;
+export const DEFAULT_IF_EXISTS: IfExists = "error";

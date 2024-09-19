@@ -2,11 +2,16 @@ import {
   CodeBundle,
   functionDataSchema,
   FunctionObject,
+  IfExists,
   projectSchema,
 } from "@braintrust/core/typespecs";
 import { BuildSuccess, EvaluatorState, FileHandle } from "../cli";
 import { scorerName, warning } from "../framework";
-import { _internalGetGlobalState, Experiment } from "../logger";
+import {
+  _internalGetGlobalState,
+  Experiment,
+  FailedHTTPResponse,
+} from "../logger";
 import * as esbuild from "esbuild";
 import fs from "fs";
 import path from "path";
@@ -32,6 +37,7 @@ interface FunctionEvent {
   name: string;
   description: string;
   function_data: z.infer<typeof functionDataSchema>;
+  if_exists?: IfExists;
 }
 
 interface BundledFunctionSpec {
@@ -43,6 +49,7 @@ interface BundledFunctionSpec {
   function_type: FunctionObject["function_type"];
   origin?: FunctionObject["origin"];
   function_schema?: FunctionObject["function_schema"];
+  if_exists?: IfExists;
 }
 
 const pathInfoSchema = z
@@ -120,6 +127,7 @@ export async function uploadHandleBundles({
                   returns: fn.returns ? zodToJsonSchema(fn.returns) : undefined,
                 }
               : undefined,
+          if_exists: fn.ifExists,
         });
       }
     }
@@ -259,11 +267,11 @@ async function uploadBundles({
     if (verbose) {
       console.error(e);
     }
-    console.error(
-      warning(
-        `Unable to upload your code. You most likely need to update the API: ${e}`,
-      ),
-    );
+    const msg =
+      e instanceof FailedHTTPResponse
+        ? `Unable to upload your code. ${e.status} (${e.text}): ${e.data}`
+        : `Unable to upload your code. You most likely need to update the API: ${e}`;
+    console.error(warning(msg));
     return false;
   }
 
@@ -321,6 +329,7 @@ async function uploadBundles({
       origin: spec.origin,
       function_type: spec.function_type,
       function_schema: spec.function_schema,
+      if_exists: spec.if_exists,
     })),
   );
 
@@ -334,11 +343,11 @@ async function uploadBundles({
       if (verbose) {
         console.error(e);
       }
-      console.warn(
-        warning(
-          `Failed to save function definitions for '${sourceFile}'. You most likely need to update the API: ${e}`,
-        ),
-      );
+      const msg =
+        e instanceof FailedHTTPResponse
+          ? `Failed to save function definitions for '${sourceFile}'. ${e.status} (${e.text}): ${e.data}`
+          : `Failed to save function definitions for '${sourceFile}'. You most likely need to update the API: ${e}`;
+      console.warn(warning(msg));
       return false;
     }
     return true;
