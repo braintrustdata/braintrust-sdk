@@ -52,11 +52,16 @@ export const functionIdSchema = z
       .object({
         inline_context: runtimeContextSchema,
         code: z.string().describe("The inline code to execute"),
+        name: z
+          .string()
+          .optional()
+          .describe("The name of the inline code function"),
       })
       .describe("Inline code function"),
     z
       .object({
         inline_prompt: promptDataSchema,
+        name: z.string().optional().describe("The name of the inline prompt"),
       })
       .describe("Inline prompt definition"),
   ])
