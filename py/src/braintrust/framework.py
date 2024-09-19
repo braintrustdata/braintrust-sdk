@@ -379,7 +379,7 @@ def pluralize(n, singular, plural):
         return plural
 
 
-def report_failures(evaluator, failing_results, verbose, jsonl):
+def report_failures(evaluator: Evaluator, failing_results: Iterable[EvalResult], verbose: bool, jsonl: bool) -> None:
     eprint(
         f"{bcolors.FAIL}Evaluator {evaluator.eval_name} failed with {len(failing_results)} {pluralize(len(failing_results), 'error', 'errors')}{bcolors.ENDC}"
     )
@@ -402,7 +402,7 @@ def report_failures(evaluator, failing_results, verbose, jsonl):
         eprint(f"{bcolors.FAIL}Add --verbose to see full stack traces.{bcolors.ENDC}")
 
 
-def report_evaluator_result(evaluator: Evaluator, result, verbose, jsonl):
+def report_evaluator_result(evaluator: Evaluator, result: EvalResultWithSummary, verbose: bool, jsonl: bool) -> bool:
     results = result.results
     summary = result.summary
 
@@ -517,7 +517,7 @@ def Eval(
     if _lazy_load:
         _evals.evaluators[eval_name] = EvaluatorInstance(evaluator=evaluator, reporter=reporter)
     else:
-        if reporter is not None and isinstance(reporter, str):
+        if isinstance(reporter, str):
             raise ValueError(
                 "Must specify a reporter object, not a name. Can only specify reporter names when running 'braintrust eval'"
             )
