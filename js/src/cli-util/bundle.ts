@@ -57,13 +57,17 @@ export async function bundleCommand(args: BundleArgs) {
       }
     }
 
-    await uploadHandleBundles({
+    const { numFailed } = await uploadHandleBundles({
       buildResults,
       bundlePromises,
       handles,
       setCurrent: true,
       verbose: args.verbose,
     });
+
+    if (numFailed > 0) {
+      process.exit(1);
+    }
   } finally {
     for (const handle of Object.values(handles)) {
       await handle.destroy();

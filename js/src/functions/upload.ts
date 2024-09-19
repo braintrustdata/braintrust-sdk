@@ -216,6 +216,12 @@ export async function uploadHandleBundles({
         : "successfully"
     }.`,
   );
+
+  return {
+    numTotal: buildResults.length,
+    numUploaded,
+    numFailed,
+  };
 }
 
 async function uploadBundles({
@@ -333,7 +339,6 @@ async function uploadBundles({
     })),
   );
 
-  // XXX Next step: propagate ifNotExists flag
   const logPromise = (async (): Promise<boolean> => {
     try {
       await _internalGetGlobalState().apiConn().post_json("insert-functions", {
