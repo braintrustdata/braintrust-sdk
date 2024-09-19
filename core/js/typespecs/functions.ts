@@ -223,7 +223,12 @@ export const sseDoneEventSchema = baseSSEEventSchema.omit({ data: true }).merge(
   }),
 );
 
-export const functionObjectTypeEnum = z.enum(["prompt", "tool", "scorer"]);
+export const functionObjectTypeEnum = z.enum([
+  "prompt",
+  "tool",
+  "scorer",
+  "task",
+]);
 export type FunctionObjectType = z.infer<typeof functionObjectTypeEnum>;
 export const functionFormatEnum = z.enum(["llm", "code", "global"]);
 export type FunctionFormat = z.infer<typeof functionFormatEnum>;
