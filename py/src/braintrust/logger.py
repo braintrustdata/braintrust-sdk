@@ -2820,11 +2820,8 @@ class Prompt:
                 }
                 for m in self.prompt.messages
             ]
-            ret["tools"] = (
-                json.loads(chevron.render(self.prompt.tools, data=build_args))
-                if (self.prompt.tools or "").strip()
-                else None
-            )
+            if self.prompt.tools and self.prompt.tools.strip():
+                ret["tools"] = json.loads(chevron.render(self.prompt.tools, data=build_args))
 
         return ret
 
@@ -3157,7 +3154,7 @@ class MetricSummary(SerializableDataClass):
     # Used to help with formatting
     _longest_metric_name: int
 
-    metric: float
+    metric: float | int
     """Average metric across all examples."""
     unit: str
     """Unit label for the metric."""
@@ -3169,8 +3166,8 @@ class MetricSummary(SerializableDataClass):
     """Difference in metric between the current and reference experiment."""
 
     def __str__(self):
-        # format with 2 decimal points
-        metric = f"{self.metric:.2f}"
+        number_fmt = "{:d}" if isinstance(self.metric, int) else "{:.2f}"
+        metric = number_fmt.format(self.metric)
         if self.diff is None:
             return textwrap.dedent(f"""{metric}{self.unit} {self.name}""")
 
