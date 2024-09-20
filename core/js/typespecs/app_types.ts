@@ -8,7 +8,7 @@ import { ObjectType, datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
-import { functionIdSchema, runtimeContextSchema } from "./functions";
+import { runtimeContextSchema } from "./functions";
 import { savedFunctionIdSchema } from "./function_id";
 
 // Section: App DB table schemas
@@ -131,20 +131,19 @@ export const memberSchema = z
   .openapi("Member");
 export type Member = z.infer<typeof memberSchema>;
 
-const orgSecretsBaseSchema = generateBaseTableSchema("org secrets");
-export const orgSecretsSchema = z
+const orgSecretBaseSchema = generateBaseTableSchema("org secret");
+export const orgSecretSchema = z
   .object({
-    id: orgSecretsBaseSchema.shape.id,
-    created: orgSecretsBaseSchema.shape.created,
-    key_id: z.string().uuid(),
+    id: orgSecretBaseSchema.shape.id,
+    created: orgSecretBaseSchema.shape.created,
     org_id: organizationSchema.shape.id,
-    name: orgSecretsBaseSchema.shape.name,
-    secret: z.string().nullish(),
+    name: orgSecretBaseSchema.shape.name,
     type: z.string().nullish(),
     metadata: z.record(z.unknown()).nullish(),
+    preview_secret: z.string().nullish(),
   })
-  .openapi("OrgSecrets");
-export type OrgSecrets = z.infer<typeof orgSecretsSchema>;
+  .openapi("OrgSecret");
+export type OrgSecret = z.infer<typeof orgSecretSchema>;
 
 const apiKeyBaseSchema = generateBaseTableSchema("api key");
 export const apiKeySchema = z
@@ -1156,6 +1155,32 @@ export const patchOrganizationMembersOutputSchema = z.object({
     ),
 });
 
+const createOrgSecretBaseSchema = generateBaseTableOpSchema("Org Secret");
+export const createOrgSecretSchema = z.object({
+  name: orgSecretSchema.shape.name,
+  type: orgSecretSchema.shape.type,
+  metadata: orgSecretSchema.shape.metadata,
+  secret: z
+    .string()
+    .nullish()
+    .describe(
+      "Secret value. If omitted in a PUT request, the existing secret value will be left intact, not replaced with null.",
+    ),
+  org_name: createOrgSecretBaseSchema.shape.org_name,
+});
+
+export const deleteOrgSecretSchema = z.object({
+  name: orgSecretSchema.shape.name,
+  org_name: createOrgSecretBaseSchema.shape.org_name,
+});
+
+export const patchOrgSecretSchema = z.object({
+  name: orgSecretSchema.shape.name.nullish(),
+  type: orgSecretSchema.shape.type,
+  metadata: orgSecretSchema.shape.metadata,
+  secret: z.string().nullish(),
+});
+
 // Section: exported schemas, grouped by object type. The schemas are used for
 // API spec generation, so their types are not fully-specified. If you wish to
 // use individual schema types, import them directly.
@@ -1236,5 +1261,11 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
   api_key: {
     object: apiKeySchema,
     create: createApiKeySchema,
+  },
+  org_secret: {
+    object: orgSecretSchema,
+    create: createOrgSecretSchema,
+    delete: deleteOrgSecretSchema,
+    patch_id: patchOrgSecretSchema,
   },
 };
