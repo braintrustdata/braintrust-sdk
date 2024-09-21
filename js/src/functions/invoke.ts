@@ -1,6 +1,7 @@
 import {
   functionIdSchema,
   InvokeFunctionRequest,
+  Message,
   StreamingMode,
 } from "@braintrust/core/typespecs";
 import {
@@ -59,6 +60,12 @@ export interface InvokeFunctionArgs<
    * The input to the function. This will be logged as the `input` field in the span.
    */
   input: Input;
+
+  /**
+   * Additional OpenAI-style messages to add to the prompt (only works for llm functions).
+   */
+  messages?: Message[];
+
   /**
    * The parent of the function. This can be an existing span, logger, or experiment, or
    * the output of `.export()` if you are distributed tracing. If unspecified, will use
@@ -117,6 +124,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     forceLogin,
     fetch,
     input,
+    messages,
     parent: parentArg,
     state: stateArg,
     stream,
@@ -131,6 +139,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     apiKey,
     appUrl,
     forceLogin,
+    fetch,
   });
 
   const parent = parentArg
@@ -156,6 +165,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
   const request: InvokeFunctionRequest = {
     ...functionId.data,
     input,
+    messages,
     parent,
     stream,
     mode,

@@ -1,4 +1,4 @@
-from typing import Any, Literal, Optional, TypeVar, Union, overload
+from typing import Any, List, Literal, Optional, TypeVar, Union, overload
 
 from sseclient import SSEClient
 
@@ -23,6 +23,7 @@ def invoke(
     global_function: Optional[str] = None,
     # arguments to the function
     input: Any = None,
+    messages: Optional[List[Any]] = None,
     parent: Optional[Union[Exportable, str]] = None,
     stream: Optional[Literal[False]] = None,
     mode: Optional[ModeType] = None,
@@ -46,6 +47,7 @@ def invoke(
     global_function: Optional[str] = None,
     # arguments to the function
     input: Any = None,
+    messages: Optional[List[Any]] = None,
     parent: Optional[Union[Exportable, str]] = None,
     stream: Literal[True] = True,
     mode: Optional[ModeType] = None,
@@ -68,6 +70,7 @@ def invoke(
     global_function: Optional[str] = None,
     # arguments to the function
     input: Any = None,
+    messages: Optional[List[Any]] = None,
     parent: Optional[Union[Exportable, str]] = None,
     stream: bool = False,
     mode: Optional[ModeType] = None,
@@ -82,6 +85,7 @@ def invoke(
 
     Args:
         input: The input to the function. This will be logged as the `input` field in the span.
+        messages: Additional OpenAI-style messages to add to the prompt (only works for llm functions).
         parent: The parent of the function. This can be an existing span, logger, or experiment, or
             the output of `.export()` if you are distributed tracing. If unspecified, will use
             the same semantics as `traced()` to determine the parent and no-op if not in a tracing
@@ -140,6 +144,8 @@ def invoke(
         api_version=INVOKE_API_VERSION,
         **function_id_args,
     )
+    if messages is not None:
+        request["messages"] = messages
     if mode is not None:
         request["mode"] = mode
 
