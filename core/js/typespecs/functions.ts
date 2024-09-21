@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { promptDataSchema } from "./prompt";
+import { chatCompletionMessageParamSchema } from "./openai/messages";
 
 export const validRuntimesEnum = z.enum(["node", "python"]);
 export type Runtime = z.infer<typeof validRuntimesEnum>;
@@ -80,6 +81,12 @@ export const invokeFunctionNonIdArgsSchema = z.object({
     .optional()
     .describe(
       "Argument to the function, which can be any JSON serializable value",
+    ),
+  messages: z
+    .array(chatCompletionMessageParamSchema)
+    .optional()
+    .describe(
+      "If the function is an LLM, additional messages to pass along to it",
     ),
   parent: z
     .union([
