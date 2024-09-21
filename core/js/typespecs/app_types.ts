@@ -139,7 +139,7 @@ export const orgSecretSchema = z
     org_id: organizationSchema.shape.id,
     name: orgSecretBaseSchema.shape.name,
     type: z.string().nullish(),
-    metadata: z.record(z.unknown()).nullish(),
+    metadata: z.record(customTypes.unknown).nullish(),
     preview_secret: z.string().nullish(),
   })
   .openapi("OrgSecret");
@@ -267,12 +267,15 @@ export const functionDataSchema = z.union([
           .object({
             type: z.literal("bundle"),
           })
-          .and(codeBundleSchema),
-        z.object({
-          type: z.literal("inline"),
-          runtime_context: runtimeContextSchema,
-          code: z.string(),
-        }),
+          .and(codeBundleSchema)
+          .openapi({ title: "bundle" }),
+        z
+          .object({
+            type: z.literal("inline"),
+            runtime_context: runtimeContextSchema,
+            code: z.string(),
+          })
+          .openapi({ title: "inline" }),
       ]),
     })
     .openapi({ title: "code" }),
