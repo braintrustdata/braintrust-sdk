@@ -23,6 +23,7 @@ import pluralize from "pluralize";
 import { isEmpty } from "./util";
 import { queue } from "async";
 import { CodeFunction } from "./framework2";
+import { GenericFunction } from "./framework-types";
 
 export type BaseExperiment<
   Input,
@@ -275,10 +276,6 @@ export type EvaluatorDef<
   projectName: string;
   evalName: string;
 } & Evaluator<Input, Output, Expected, Metadata>;
-
-export type GenericFunction<Input, Output> =
-  | ((input: Input) => Output)
-  | ((input: Input) => Promise<Output>);
 
 export type EvaluatorFile = {
   functions: CodeFunction<

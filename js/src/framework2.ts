@@ -1,12 +1,19 @@
 import path from "path";
 import slugifyLib from "slugify";
-import { _initializeSpanContext, GenericFunction } from "./framework";
+import { _initializeSpanContext } from "./framework";
 import { z } from "zod";
 import {
   FunctionType,
   IfExists,
   DEFAULT_IF_EXISTS,
+  Message,
+  ModelParams,
+  SavedFunctionId,
+  PromptBlockData,
 } from "@braintrust/core/typespecs";
+import { TransactionId } from "@braintrust/core";
+import { Prompt, PromptRowWithId } from ".";
+import { GenericFunction } from "./framework-types";
 
 type NameOrId = { name: string } | { id: string };
 
@@ -22,12 +29,14 @@ export class Project {
   public readonly name?: string;
   public readonly id?: string;
   public tool: ToolBuilder;
+  public prompt: PromptBuilder;
 
   constructor(args: CreateProjectOpts) {
     _initializeSpanContext();
     this.name = "name" in args ? args.name : undefined;
     this.id = "id" in args ? args.id : undefined;
     this.tool = new ToolBuilder(this);
+    this.prompt = new PromptBuilder(this);
   }
 }
 
@@ -78,16 +87,19 @@ type Schema<Input, Output> = Partial<{
   returns: z.ZodSchema<Output>;
 }>;
 
+interface BaseFnOpts {
+  name: string;
+  slug: string;
+  description: string;
+  ifExists: IfExists;
+}
+
 export type ToolOpts<
   Params,
   Returns,
   Fn extends GenericFunction<Params, Returns>,
-> = {
-  name?: string;
-  slug?: string;
-  description?: string;
+> = Partial<BaseFnOpts> & {
   handler: Fn;
-  ifExists?: IfExists;
 } & Schema<Params, Returns>;
 
 export class CodeFunction<
@@ -127,5 +139,86 @@ export class CodeFunction<
     if (this.returns && !this.parameters) {
       throw new Error("parameters are required if return type is defined");
     }
+  }
+}
+
+export interface ToolFunctionDefinition {
+  name: string;
+  description?: string;
+  parameters?: Record<string, unknown> | z.ZodSchema<Record<string, unknown>>;
+  strict?: boolean | null;
+}
+
+interface PromptId {
+  id: string;
+  projectId: string;
+}
+
+interface PromptVersion {
+  version: TransactionId;
+}
+
+// This roughly maps to promptBlockDataSchema, but is more ergonomic for the user.
+type PromptContents =
+  | {
+      prompt: string;
+    }
+  | {
+      messages: Message[];
+    };
+
+export type PromptOpts<
+  HasId extends boolean,
+  HasVersion extends boolean,
+> = (Partial<Omit<BaseFnOpts, "name">> & { name: string }) &
+  (HasId extends true ? PromptId : Partial<PromptId>) &
+  (HasVersion extends true ? PromptVersion : Partial<PromptVersion>) &
+  PromptContents & {
+    model: string;
+    params?: ModelParams;
+    tools?: (SavedFunctionId | ToolFunctionDefinition)[];
+    noTrace?: boolean;
+  };
+
+export class PromptBuilder {
+  constructor(private readonly project: Project) {}
+
+  public create<
+    HasId extends boolean = false,
+    HasVersion extends boolean = false,
+  >(opts: PromptOpts<HasId, HasVersion>): Prompt<HasId, HasVersion> {
+    // Create a "Prompt" object that can be built, and install the opts into the set of things
+    // that can be lazily loaded.
+
+    const promptBlock: PromptBlockData =
+      "messages" in opts
+        ? {
+            type: "chat",
+            messages: opts.messages,
+          }
+        : {
+            type: "completion",
+            content: opts.prompt,
+          };
+
+    const prompt = new Prompt<HasId, HasVersion>(
+      {
+        id: opts.id,
+        project_id: opts.projectId,
+        _xact_id: opts.version,
+        name: opts.name,
+        slug: opts.slug,
+        prompt_data: {
+          prompt: promptBlock,
+          model: opts.model,
+          params: opts.params,
+          tools: opts.tools,
+        },
+      } as PromptRowWithId<HasId, HasVersion>,
+      {}, // It doesn't make sense to specify defaults here.
+      opts.noTrace ?? false,
+    );
+
+    return prompt;
   }
 }

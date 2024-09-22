@@ -4002,22 +4002,38 @@ export function renderMessage<T extends Message>(
   };
 }
 
-export class Prompt {
+export type PromptRowWithId<
+  HasId extends boolean,
+  HasVersion extends boolean,
+> = Omit<PromptRow, "log_id" | "org_id" | "id" | "project_id" | "_xact_id"> &
+  (HasId extends true
+    ? Pick<PromptRow, "id" | "project_id">
+    : Partial<Pick<PromptRow, "id" | "project_id">>) &
+  (HasVersion extends true
+    ? Pick<PromptRow, "_xact_id">
+    : Partial<Pick<PromptRow, "_xact_id">>);
+
+export class Prompt<
+  HasId extends boolean = true,
+  HasVersion extends boolean = true,
+> {
   private parsedPromptData: PromptData | undefined;
   private hasParsedPromptData = false;
 
   constructor(
-    private metadata: Omit<PromptRow, "log_id"> | PromptSessionEvent,
+    private metadata: PromptRowWithId<HasId, HasVersion> | PromptSessionEvent,
     private defaults: DefaultPromptArgs,
     private noTrace: boolean,
   ) {}
 
-  public get id(): string {
-    return this.metadata.id;
+  public get id(): HasId extends true ? string : string | undefined {
+    return this.metadata.id as HasId extends true ? string : string | undefined;
   }
 
-  public get projectId(): string {
-    return this.metadata.project_id;
+  public get projectId(): HasId extends true ? string : string | undefined {
+    return this.metadata.project_id as HasId extends true
+      ? string
+      : string | undefined;
   }
 
   public get name(): string {
@@ -4034,8 +4050,12 @@ export class Prompt {
     return this.getParsedPromptData()?.prompt;
   }
 
-  public get version(): TransactionId {
-    return this.metadata[TRANSACTION_ID_FIELD];
+  public get version(): HasId extends true
+    ? TransactionId
+    : TransactionId | undefined {
+    return this.metadata[TRANSACTION_ID_FIELD] as HasId extends true
+      ? TransactionId
+      : TransactionId | undefined;
   }
 
   public get options(): NonNullable<PromptData["options"]> {
@@ -4096,15 +4116,17 @@ export class Prompt {
       : {
           span_info: {
             metadata: {
-              prompt: {
-                variables: buildArgs,
-                id: this.id,
-                project_id: this.projectId,
-                version: this.version,
-                ...("prompt_session_id" in this.metadata
-                  ? { prompt_session_id: this.metadata.prompt_session_id }
-                  : {}),
-              },
+              prompt: this.id
+                ? {
+                    variables: buildArgs,
+                    id: this.id,
+                    project_id: this.projectId,
+                    version: this.version,
+                    ...("prompt_session_id" in this.metadata
+                      ? { prompt_session_id: this.metadata.prompt_session_id }
+                      : {}),
+                  }
+                : undefined,
             },
           },
         };
