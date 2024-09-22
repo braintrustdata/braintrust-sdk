@@ -16,3 +16,15 @@ export const savedFunctionIdSchema = z.union([
 ]);
 
 export type SavedFunctionId = z.infer<typeof savedFunctionIdSchema>;
+
+export const extendedSavedFunctionIdSchema = savedFunctionIdSchema.or(
+  z.object({
+    type: z.literal("slug"),
+    project_id: z.string(),
+    slug: z.string(),
+  }),
+);
+
+export type ExtendedSavedFunctionId = z.infer<
+  typeof extendedSavedFunctionIdSchema
+>;

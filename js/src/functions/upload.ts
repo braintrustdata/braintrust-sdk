@@ -5,6 +5,8 @@ import {
   IfExists,
   projectSchema,
   PromptData,
+  ExtendedSavedFunctionId,
+  SavedFunctionId,
 } from "@braintrust/core/typespecs";
 import { BuildSuccess, EvaluatorState, FileHandle } from "../cli";
 import { scorerName, warning } from "../framework";
@@ -24,6 +26,7 @@ import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
 import slugifyLib from "slugify";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import pluralize from "pluralize";
+import { Project } from "../framework2";
 
 export type EvaluatorMap = Record<
   string,
@@ -90,6 +93,12 @@ export async function uploadHandleBundles({
     }
     return projectNameToId[projectName];
   };
+  const resolveProjectId = async (project: Project): Promise<string> => {
+    if (project.id) {
+      return project.id;
+    }
+    return getProjectId(project.name!);
+  };
 
   const uploadPromises = buildResults.map(async (result) => {
     if (result.type !== "success") {
@@ -103,13 +112,7 @@ export async function uploadHandleBundles({
     if (setCurrent) {
       for (let i = 0; i < result.evaluator.functions.length; i++) {
         const fn = result.evaluator.functions[i];
-        let project_id = fn.project.id;
-        if (!project_id) {
-          if (!fn.project.name) {
-            throw new Error("Tool project not found");
-          }
-          project_id = await getProjectId(fn.project.name);
-        }
+        const project_id = await resolveProjectId(fn.project);
 
         bundleSpecs.push({
           project_id: project_id,
@@ -135,23 +138,40 @@ export async function uploadHandleBundles({
       }
 
       for (const prompt of result.evaluator.prompts) {
-        let project_id = prompt.project.id;
-        if (!project_id) {
-          if (!prompt.project.name) {
-            throw new Error("Prompt project not found");
-          }
-          project_id = await getProjectId(prompt.project.name);
+        const prompt_data = {
+          ...prompt.prompt,
+        };
+        if (prompt.toolFunctions.length > 0) {
+          const resolvableToolFunctions: ExtendedSavedFunctionId[] =
+            await Promise.all(
+              prompt.toolFunctions.map(async (fn) => {
+                if ("slug" in fn) {
+                  return {
+                    type: "slug",
+                    project_id: await resolveProjectId(fn.project),
+                    slug: fn.slug,
+                  };
+                } else {
+                  return fn;
+                }
+              }),
+            );
+
+          // This is a hack because these will be resolved on the server side.
+          prompt_data.tool_functions =
+            resolvableToolFunctions as SavedFunctionId[];
         }
+        console.log(prompt_data.tool_functions);
 
         prompts.push({
-          project_id,
+          project_id: await resolveProjectId(prompt.project),
           name: prompt.name,
           slug: prompt.slug,
           description: prompt.description ?? "",
           function_data: {
             type: "prompt",
           },
-          prompt_data: prompt.prompt,
+          prompt_data,
           if_exists: prompt.ifExists,
         });
       }

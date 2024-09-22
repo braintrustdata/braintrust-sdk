@@ -141,7 +141,21 @@ export class CodeFunction<
       throw new Error("parameters are required if return type is defined");
     }
   }
+
+  public key(): string {
+    return JSON.stringify([
+      this.project.id ?? "",
+      this.project.name ?? "",
+      this.slug,
+    ]);
+  }
 }
+
+type GenericCodeFunction = CodeFunction<
+  unknown,
+  unknown,
+  GenericFunction<unknown, unknown>
+>;
 
 export class CodePrompt {
   public readonly project: Project;
@@ -152,9 +166,12 @@ export class CodePrompt {
   public readonly description?: string;
   public readonly id?: string;
 
+  public readonly toolFunctions: (SavedFunctionId | GenericCodeFunction)[];
+
   constructor(
     project: Project,
     prompt: PromptData,
+    toolFunctions: (SavedFunctionId | GenericCodeFunction)[],
     opts: Omit<PromptOpts<false, false>, "name" | "slug"> & {
       name: string;
       slug: string;
@@ -164,6 +181,7 @@ export class CodePrompt {
     this.name = opts.name;
     this.slug = opts.slug;
     this.prompt = prompt;
+    this.toolFunctions = toolFunctions;
     this.ifExists = opts.ifExists ?? DEFAULT_IF_EXISTS;
     this.description = opts.description;
     this.id = opts.id;
@@ -218,19 +236,14 @@ export class PromptBuilder {
     HasId extends boolean = false,
     HasVersion extends boolean = false,
   >(opts: PromptOpts<HasId, HasVersion>): Prompt<HasId, HasVersion> {
-    const codeTools: CodeFunction<
-      unknown,
-      unknown,
-      GenericFunction<unknown, unknown>
-    >[] = [];
-    const toolFunctionIds: SavedFunctionId[] = [];
+    const toolFunctions: (SavedFunctionId | GenericCodeFunction)[] = [];
     const rawTools: ToolFunctionDefinition[] = [];
 
     for (const tool of opts.tools ?? []) {
       if (tool instanceof CodeFunction) {
-        codeTools.push(tool);
+        toolFunctions.push(tool);
       } else if ("type" in tool) {
-        toolFunctionIds.push(tool);
+        toolFunctions.push(tool);
       } else {
         rawTools.push(tool);
       }
@@ -260,7 +273,6 @@ export class PromptBuilder {
         model: opts.model,
         params: opts.params,
       },
-      tool_functions: toolFunctionIds,
     };
 
     const promptRow: PromptRowWithId<HasId, HasVersion> = {
@@ -277,7 +289,7 @@ export class PromptBuilder {
       opts.noTrace ?? false,
     );
 
-    const codePrompt = new CodePrompt(this.project, promptData, {
+    const codePrompt = new CodePrompt(this.project, promptData, toolFunctions, {
       ...opts,
       slug,
     });
