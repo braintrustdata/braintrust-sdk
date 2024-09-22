@@ -23,6 +23,7 @@ export function loadModule({
   return evalWithModuleContext(inFile, () => {
     globalThis._evals = {
       functions: [],
+      prompts: [],
       evaluators: {},
       reporters: {},
     };

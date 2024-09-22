@@ -303,6 +303,7 @@ async function initFile({
         }
         const evaluator = evaluateBuildResults(inFile, result) || {
           functions: [],
+          prompts: [],
           evaluators: {},
           reporters: {},
         };

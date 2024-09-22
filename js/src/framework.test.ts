@@ -1,7 +1,6 @@
 import { expect, test } from "vitest";
 import { runEvaluator } from "./framework";
 import { BarProgressReporter } from "./progress";
-import { NumericDiff } from "autoevals";
 
 test("runEvaluator rejects on timeout", async () => {
   await expect(
@@ -13,9 +12,9 @@ test("runEvaluator rejects on timeout", async () => {
         data: [{ input: 1, expected: 2 }],
         task: async (input) => {
           await new Promise((r) => setTimeout(r, 100000));
-          return input * 2;
+          return (input as number) * 2;
         },
-        scores: [NumericDiff],
+        scores: [],
         timeout: 1000,
       },
       new BarProgressReporter(),
@@ -33,9 +32,9 @@ test("runEvaluator works with no timeout", async () => {
       data: [{ input: 1, expected: 2 }],
       task: async (input) => {
         await new Promise((r) => setTimeout(r, 100));
-        return input * 2;
+        return (input as number) * 2;
       },
-      scores: [NumericDiff],
+      scores: [],
     },
     new BarProgressReporter(),
     [],

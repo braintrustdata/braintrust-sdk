@@ -12,7 +12,7 @@ import {
   PromptBlockData,
 } from "@braintrust/core/typespecs";
 import { TransactionId } from "@braintrust/core";
-import { Prompt, PromptRowWithId } from ".";
+import { Prompt, PromptRowWithId } from "./logger";
 import { GenericFunction } from "./framework-types";
 
 type NameOrId = { name: string } | { id: string };
@@ -187,9 +187,6 @@ export class PromptBuilder {
     HasId extends boolean = false,
     HasVersion extends boolean = false,
   >(opts: PromptOpts<HasId, HasVersion>): Prompt<HasId, HasVersion> {
-    // Create a "Prompt" object that can be built, and install the opts into the set of things
-    // that can be lazily loaded.
-
     const promptBlock: PromptBlockData =
       "messages" in opts
         ? {
@@ -201,13 +198,16 @@ export class PromptBuilder {
             content: opts.prompt,
           };
 
+    const slug =
+      opts.slug ?? slugifyLib(opts.name, { lower: true, strict: true });
+
     const prompt = new Prompt<HasId, HasVersion>(
       {
         id: opts.id,
         project_id: opts.projectId,
         _xact_id: opts.version,
         name: opts.name,
-        slug: opts.slug,
+        slug: slug,
         prompt_data: {
           prompt: promptBlock,
           model: opts.model,
@@ -218,6 +218,12 @@ export class PromptBuilder {
       {}, // It doesn't make sense to specify defaults here.
       opts.noTrace ?? false,
     );
+
+    if (globalThis._lazy_load) {
+      globalThis._evals.prompts.push(
+        prompt as Prompt /* this is needed because of HasId, HasVersion*/,
+      );
+    }
 
     return prompt;
   }

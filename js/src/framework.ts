@@ -16,6 +16,7 @@ import {
   logError as logSpanError,
   withCurrent,
   startSpan,
+  Prompt,
 } from "./logger";
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
@@ -240,8 +241,8 @@ export interface ReporterBody<EvalReport> {
    * @param opts
    */
   reportEval(
-    evaluator: EvaluatorDef<any, any, any, any>,
-    result: EvalResultWithSummary<any, any, any, any>,
+    evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>,
+    result: EvalResultWithSummary<unknown, unknown, unknown, BaseMetadata>,
     opts: ReporterOpts,
   ): Promise<EvalReport> | EvalReport;
 
@@ -283,6 +284,7 @@ export type EvaluatorFile = {
     unknown,
     GenericFunction<unknown, unknown>
   >[];
+  prompts: Prompt[];
   evaluators: {
     [evalName: string]: {
       evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>;
@@ -344,6 +346,7 @@ declare global {
 
 globalThis._evals = {
   functions: [],
+  prompts: [],
   evaluators: {},
   reporters: {},
 };
@@ -443,13 +446,22 @@ export async function Eval<
         ...evaluator,
         data,
       };
-      const ret = await runEvaluator(experiment, evalDef, progressReporter, []);
+      const ret = await runEvaluator(
+        experiment,
+        evalDef as EvaluatorDef<unknown, unknown, unknown, BaseMetadata>,
+        progressReporter,
+        [],
+      );
       progressReporter.stop();
-      resolvedReporter.reportEval(evalDef, ret, {
-        verbose: true,
-        jsonl: false,
-      });
-      return ret;
+      resolvedReporter.reportEval(
+        evalDef as EvaluatorDef<unknown, unknown, unknown, BaseMetadata>,
+        ret,
+        {
+          verbose: true,
+          jsonl: false,
+        },
+      );
+      return ret as EvalResultWithSummary<Input, Output, Expected, Metadata>;
     } finally {
       experiment.flush();
     }
@@ -519,9 +531,15 @@ export function parseFilters(filters: string[]): Filter[] {
   return result;
 }
 
-function evaluateFilter(object: any, filter: Filter) {
+function evaluateFilter(object: unknown, filter: Filter) {
   const { path, pattern } = filter;
-  const key = path.reduce((acc, p) => acc?.[p], object);
+  const key = path.reduce(
+    (acc, p) =>
+      typeof acc === "object" && acc !== null
+        ? (acc as Record<string, unknown>)[p]
+        : undefined,
+    object,
+  );
   if (key === undefined) {
     return false;
   }
@@ -529,7 +547,7 @@ function evaluateFilter(object: any, filter: Filter) {
 }
 
 export function scorerName(
-  scorer: EvalScorer<any, any, any, any>,
+  scorer: EvalScorer<unknown, unknown, unknown, BaseMetadata>,
   scorer_idx: number,
 ) {
   return scorer.name || `scorer_${scorer_idx}`;
@@ -537,10 +555,10 @@ export function scorerName(
 
 export async function runEvaluator(
   experiment: Experiment | null,
-  evaluator: EvaluatorDef<any, any, any, any>,
+  evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>,
   progressReporter: ProgressReporter,
   filters: Filter[],
-): Promise<EvalResultWithSummary<any, any, any, any>> {
+): Promise<EvalResultWithSummary<unknown, unknown, unknown, BaseMetadata>> {
   const result = runEvaluatorInternal(
     experiment,
     evaluator,
@@ -566,10 +584,10 @@ export async function runEvaluator(
 
 async function runEvaluatorInternal(
   experiment: Experiment | null,
-  evaluator: EvaluatorDef<any, any, any, any>,
+  evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>,
   progressReporter: ProgressReporter,
   filters: Filter[],
-): Promise<EvalResultWithSummary<any, any, any, any>> {
+): Promise<EvalResultWithSummary<unknown, unknown, unknown, BaseMetadata>> {
   if (typeof evaluator.data === "string") {
     throw new Error("Unimplemented: string data paths");
   }
@@ -604,18 +622,18 @@ async function runEvaluatorInternal(
     }).asDataset();
   }
 
-  let data: EvalCase<any, any, any>[] = [];
+  let data: EvalCase<unknown, unknown, unknown>[] = [];
   if (dataResult instanceof Promise) {
-    data = await dataResult;
+    data = (await dataResult) as EvalCase<unknown, unknown, unknown>[];
   } else if (Symbol.asyncIterator in dataResult) {
     // TODO: Eventually, we may want to support pushing the async generator logic
     // down into the evaluator, so we can avoid materializing large datasets
     data = [];
     for await (const d of dataResult) {
-      data.push(d);
+      data.push(d as EvalCase<unknown, unknown, unknown>);
     }
   } else {
-    data = dataResult;
+    data = dataResult as EvalCase<unknown, unknown, unknown>[];
   }
 
   data = data
@@ -625,22 +643,24 @@ async function runEvaluatorInternal(
     );
 
   progressReporter.start(evaluator.evalName, data.length);
-  interface EvalResult {
-    input: any;
-    output: any;
+  interface InlineEvalResult {
+    input: unknown;
+    output: unknown;
     tags?: string[];
     metadata: Record<string, unknown>;
     scores: Record<string, number | null>;
     error: unknown;
   }
-  const results: EvalResult[] = [];
+  const results: InlineEvalResult[] = [];
   const q = queue(
-    async (datum: EvalCase<any, any, any>) => {
+    async (datum: EvalCase<unknown, unknown, unknown>) => {
       const callback = async (rootSpan: Span) => {
         let metadata: Record<string, unknown> = {
-          ...("metadata" in datum ? datum.metadata : {}),
+          ...("metadata" in datum
+            ? (datum.metadata as Record<string, unknown>)
+            : {}),
         };
-        let output: any = undefined;
+        let output: unknown = undefined;
         let error: unknown | undefined = undefined;
         const scores: Record<string, number | null> = {};
         try {
@@ -835,9 +855,15 @@ async function runEvaluatorInternal(
   await q.drain();
   const summary = experiment
     ? await experiment.summarize()
-    : buildLocalSummary(evaluator, results);
+    : buildLocalSummary(
+        evaluator,
+        results as EvalResult<unknown, unknown, unknown, BaseMetadata>[],
+      );
 
-  return new EvalResultWithSummary(summary, results);
+  return new EvalResultWithSummary(
+    summary,
+    results as EvalResult<unknown, unknown, unknown, BaseMetadata>[],
+  );
 }
 
 export const error = chalk.bold.red;
@@ -852,8 +878,8 @@ export function logError(e: unknown, verbose: boolean) {
 }
 
 export function buildLocalSummary(
-  evaluator: EvaluatorDef<any, any, any, any>,
-  results: EvalResult<any, any, any, any>[],
+  evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>,
+  results: EvalResult<unknown, unknown, unknown, BaseMetadata>[],
 ): ExperimentSummary {
   const scoresByName: { [name: string]: { total: number; count: number } } = {};
   for (const result of results) {
@@ -936,8 +962,8 @@ export function reportFailures<
 export const defaultReporter: ReporterDef<boolean> = {
   name: "Braintrust default reporter",
   async reportEval(
-    evaluator: EvaluatorDef<any, any, any, any>,
-    result: EvalResultWithSummary<any, any, any, any>,
+    evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>,
+    result: EvalResultWithSummary<unknown, unknown, unknown, BaseMetadata>,
     { verbose, jsonl }: ReporterOpts,
   ) {
     const { results, summary } = result;
