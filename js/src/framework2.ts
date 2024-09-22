@@ -203,7 +203,11 @@ export type PromptOpts<
   PromptContents & {
     model: string;
     params?: ModelParams;
-    tools?: (SavedFunctionId | ToolFunctionDefinition)[];
+    tools?: (
+      | CodeFunction<unknown, unknown, GenericFunction<unknown, unknown>>
+      | SavedFunctionId
+      | ToolFunctionDefinition
+    )[];
     noTrace?: boolean;
   };
 
@@ -214,19 +218,33 @@ export class PromptBuilder {
     HasId extends boolean = false,
     HasVersion extends boolean = false,
   >(opts: PromptOpts<HasId, HasVersion>): Prompt<HasId, HasVersion> {
-    const tool_functions = opts.tools?.filter((tool) => "type" in tool) as
-      | SavedFunctionId[]
-      | undefined;
-    const raw_tools = opts.tools?.filter((tool) => !("type" in tool)) as
-      | ToolFunctionDefinition[]
-      | undefined;
+    const codeTools: CodeFunction<
+      unknown,
+      unknown,
+      GenericFunction<unknown, unknown>
+    >[] = [];
+    const toolFunctionIds: SavedFunctionId[] = [];
+    const rawTools: ToolFunctionDefinition[] = [];
+
+    for (const tool of opts.tools ?? []) {
+      if (tool instanceof CodeFunction) {
+        codeTools.push(tool);
+      } else if ("type" in tool) {
+        toolFunctionIds.push(tool);
+      } else {
+        rawTools.push(tool);
+      }
+    }
 
     const promptBlock: PromptBlockData =
       "messages" in opts
         ? {
             type: "chat",
             messages: opts.messages,
-            tools: raw_tools ? JSON.stringify(raw_tools) : undefined,
+            tools:
+              rawTools && rawTools.length > 0
+                ? JSON.stringify(rawTools)
+                : undefined,
           }
         : {
             type: "completion",
@@ -242,7 +260,7 @@ export class PromptBuilder {
         model: opts.model,
         params: opts.params,
       },
-      tool_functions,
+      tool_functions: toolFunctionIds,
     };
 
     const promptRow: PromptRowWithId<HasId, HasVersion> = {

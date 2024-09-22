@@ -221,6 +221,20 @@ export async function uploadHandleBundles({
       bundleSpecs.push(...fileSpecs);
     }
 
+    const slugs: Set<string> = new Set();
+    for (const spec of bundleSpecs) {
+      if (slugs.has(spec.slug)) {
+        throw new Error(`Duplicate slug: ${spec.slug}`);
+      }
+      slugs.add(spec.slug);
+    }
+    for (const prompt of prompts) {
+      if (slugs.has(prompt.slug)) {
+        throw new Error(`Duplicate slug: ${prompt.slug}`);
+      }
+      slugs.add(prompt.slug);
+    }
+
     return await uploadBundles({
       sourceFile,
       prompts,
