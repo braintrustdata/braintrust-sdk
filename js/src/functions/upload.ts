@@ -4,6 +4,7 @@ import {
   FunctionObject,
   IfExists,
   projectSchema,
+  PromptData,
 } from "@braintrust/core/typespecs";
 import { BuildSuccess, EvaluatorState, FileHandle } from "../cli";
 import { scorerName, warning } from "../framework";
@@ -22,6 +23,7 @@ import { capitalize } from "@braintrust/core";
 import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
 import slugifyLib from "slugify";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import pluralize from "pluralize";
 
 export type EvaluatorMap = Record<
   string,
@@ -36,6 +38,7 @@ interface FunctionEvent {
   slug: string;
   name: string;
   description: string;
+  prompt_data?: PromptData;
   function_data: z.infer<typeof functionDataSchema>;
   if_exists?: IfExists;
 }
@@ -76,7 +79,9 @@ export async function uploadHandleBundles({
   verbose: boolean;
   setCurrent: boolean;
 }) {
-  console.error(`Processing bundles...`);
+  console.error(
+    `Processing ${buildResults.length} ${pluralize("file", buildResults.length)}...`,
+  );
 
   const projectNameToId: Record<string, Promise<string>> = {};
   const getProjectId = async (projectName: string) => {
@@ -93,6 +98,7 @@ export async function uploadHandleBundles({
     const sourceFile = result.sourceFile;
 
     const bundleSpecs: BundledFunctionSpec[] = [];
+    const prompts: FunctionEvent[] = [];
 
     if (setCurrent) {
       for (let i = 0; i < result.evaluator.functions.length; i++) {
@@ -104,12 +110,9 @@ export async function uploadHandleBundles({
           }
           project_id = await getProjectId(fn.project.name);
         }
-        const baseInfo = {
-          project_id: project_id,
-        };
 
         bundleSpecs.push({
-          ...baseInfo,
+          project_id: project_id,
           name: fn.name,
           slug: fn.slug,
           description: fn.description ?? "",
@@ -128,6 +131,28 @@ export async function uploadHandleBundles({
                 }
               : undefined,
           if_exists: fn.ifExists,
+        });
+      }
+
+      for (const prompt of result.evaluator.prompts) {
+        let project_id = prompt.project.id;
+        if (!project_id) {
+          if (!prompt.project.name) {
+            throw new Error("Prompt project not found");
+          }
+          project_id = await getProjectId(prompt.project.name);
+        }
+
+        prompts.push({
+          project_id,
+          name: prompt.name,
+          slug: prompt.slug,
+          description: prompt.description ?? "",
+          function_data: {
+            type: "prompt",
+          },
+          prompt_data: prompt.prompt,
+          if_exists: prompt.ifExists,
         });
       }
     }
@@ -198,6 +223,7 @@ export async function uploadHandleBundles({
 
     return await uploadBundles({
       sourceFile,
+      prompts,
       bundleSpecs,
       bundlePromises,
       handles,
@@ -210,7 +236,7 @@ export async function uploadHandleBundles({
   const numFailed = uploadResults.filter((result) => !result).length;
 
   console.error(
-    `${numUploaded} Bundle${numUploaded > 1 ? "s" : ""} uploaded ${
+    `${numUploaded} ${pluralize("file", numUploaded)} uploaded ${
       numFailed > 0
         ? `with ${numFailed} error${numFailed > 1 ? "s" : ""}`
         : "successfully"
@@ -226,12 +252,14 @@ export async function uploadHandleBundles({
 
 async function uploadBundles({
   sourceFile,
+  prompts,
   bundleSpecs,
   bundlePromises,
   handles,
   verbose,
 }: {
   sourceFile: string;
+  prompts: FunctionEvent[];
   bundleSpecs: BundledFunctionSpec[];
   bundlePromises: {
     [k: string]: Promise<esbuild.BuildResult<esbuild.BuildOptions>>;
@@ -261,24 +289,26 @@ async function uploadBundles({
     sourceMapFile: handles[sourceFile].bundleFile + ".map",
   });
 
-  let pathInfo: z.infer<typeof pathInfoSchema>;
-  try {
-    pathInfo = pathInfoSchema.parse(
-      await loggerConn.post_json("function/code", {
-        org_id: orgId,
-        runtime_context,
-      }),
-    );
-  } catch (e) {
-    if (verbose) {
-      console.error(e);
+  let pathInfo: z.infer<typeof pathInfoSchema> | undefined = undefined;
+  if (bundleSpecs.length > 0) {
+    try {
+      pathInfo = pathInfoSchema.parse(
+        await loggerConn.post_json("function/code", {
+          org_id: orgId,
+          runtime_context,
+        }),
+      );
+    } catch (e) {
+      if (verbose) {
+        console.error(e);
+      }
+      const msg =
+        e instanceof FailedHTTPResponse
+          ? `Unable to upload your code. ${e.status} (${e.text}): ${e.data}`
+          : `Unable to upload your code. You most likely need to update the API: ${e}`;
+      console.error(warning(msg));
+      return false;
     }
-    const msg =
-      e instanceof FailedHTTPResponse
-        ? `Unable to upload your code. ${e.status} (${e.text}): ${e.data}`
-        : `Unable to upload your code. You most likely need to update the API: ${e}`;
-    console.error(warning(msg));
-    return false;
   }
 
   // Upload bundleFile to pathInfo.url
@@ -288,6 +318,9 @@ async function uploadBundles({
   }
   const bundleFile = path.resolve(bundleFileName);
   const uploadPromise = (async (): Promise<boolean> => {
+    if (!pathInfo) {
+      return true;
+    }
     const bundleStream = fs.createReadStream(bundleFile).pipe(createGzip());
     const bundleData = await new Promise<Buffer>((resolve, reject) => {
       const chunks: Buffer[] = [];
@@ -313,31 +346,34 @@ async function uploadBundles({
   const sourceMapContext = await sourceMapContextPromise;
 
   // Insert the spec as prompt data
-  const functionEntries: FunctionEvent[] = await Promise.all(
-    bundleSpecs.map(async (spec) => ({
-      project_id: spec.project_id,
-      name: spec.name,
-      slug: spec.slug,
-      description: spec.description,
-      function_data: {
-        type: "code",
-        data: {
-          type: "bundle",
-          runtime_context,
-          location: spec.location,
-          bundle_id: pathInfo.bundleId,
-          preview: await findCodeDefinition({
+  const functionEntries: FunctionEvent[] = [
+    ...prompts,
+    ...((await Promise.all(
+      bundleSpecs.map(async (spec) => ({
+        project_id: spec.project_id,
+        name: spec.name,
+        slug: spec.slug,
+        description: spec.description,
+        function_data: {
+          type: "code",
+          data: {
+            type: "bundle",
+            runtime_context,
             location: spec.location,
-            ctx: sourceMapContext,
-          }),
+            bundle_id: pathInfo!.bundleId,
+            preview: await findCodeDefinition({
+              location: spec.location,
+              ctx: sourceMapContext,
+            }),
+          },
         },
-      },
-      origin: spec.origin,
-      function_type: spec.function_type,
-      function_schema: spec.function_schema,
-      if_exists: spec.if_exists,
-    })),
-  );
+        origin: spec.origin,
+        function_type: spec.function_type,
+        function_schema: spec.function_schema,
+        if_exists: spec.if_exists,
+      })),
+    )) as FunctionEvent[]),
+  ];
 
   const logPromise = (async (): Promise<boolean> => {
     try {

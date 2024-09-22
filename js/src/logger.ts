@@ -4003,12 +4003,13 @@ export function renderMessage<T extends Message>(
 }
 
 export type PromptRowWithId<
-  HasId extends boolean,
-  HasVersion extends boolean,
-> = Omit<PromptRow, "log_id" | "org_id" | "id" | "project_id" | "_xact_id"> &
+  HasId extends boolean = true,
+  HasVersion extends boolean = true,
+> = Omit<PromptRow, "log_id" | "org_id" | "project_id" | "id" | "_xact_id"> &
+  Partial<Pick<PromptRow, "project_id">> &
   (HasId extends true
-    ? Pick<PromptRow, "id" | "project_id">
-    : Partial<Pick<PromptRow, "id" | "project_id">>) &
+    ? Pick<PromptRow, "id">
+    : Partial<Pick<PromptRow, "id">>) &
   (HasVersion extends true
     ? Pick<PromptRow, "_xact_id">
     : Partial<Pick<PromptRow, "_xact_id">>);
@@ -4030,10 +4031,8 @@ export class Prompt<
     return this.metadata.id as HasId extends true ? string : string | undefined;
   }
 
-  public get projectId(): HasId extends true ? string : string | undefined {
-    return this.metadata.project_id as HasId extends true
-      ? string
-      : string | undefined;
+  public get projectId(): string | undefined {
+    return this.metadata.project_id;
   }
 
   public get name(): string {

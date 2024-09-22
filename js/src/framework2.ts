@@ -10,6 +10,7 @@ import {
   ModelParams,
   SavedFunctionId,
   PromptBlockData,
+  PromptData,
 } from "@braintrust/core/typespecs";
 import { TransactionId } from "@braintrust/core";
 import { Prompt, PromptRowWithId } from "./logger";
@@ -142,6 +143,33 @@ export class CodeFunction<
   }
 }
 
+export class CodePrompt {
+  public readonly project: Project;
+  public readonly name: string;
+  public readonly slug: string;
+  public readonly prompt: PromptData;
+  public readonly ifExists: IfExists;
+  public readonly description?: string;
+  public readonly id?: string;
+
+  constructor(
+    project: Project,
+    prompt: PromptData,
+    opts: Omit<PromptOpts<false, false>, "name" | "slug"> & {
+      name: string;
+      slug: string;
+    },
+  ) {
+    this.project = project;
+    this.name = opts.name;
+    this.slug = opts.slug;
+    this.prompt = prompt;
+    this.ifExists = opts.ifExists ?? DEFAULT_IF_EXISTS;
+    this.description = opts.description;
+    this.id = opts.id;
+  }
+}
+
 export interface ToolFunctionDefinition {
   name: string;
   description?: string;
@@ -151,7 +179,6 @@ export interface ToolFunctionDefinition {
 
 interface PromptId {
   id: string;
-  projectId: string;
 }
 
 interface PromptVersion {
@@ -187,11 +214,19 @@ export class PromptBuilder {
     HasId extends boolean = false,
     HasVersion extends boolean = false,
   >(opts: PromptOpts<HasId, HasVersion>): Prompt<HasId, HasVersion> {
+    const tool_functions = opts.tools?.filter((tool) => "type" in tool) as
+      | SavedFunctionId[]
+      | undefined;
+    const raw_tools = opts.tools?.filter((tool) => !("type" in tool)) as
+      | ToolFunctionDefinition[]
+      | undefined;
+
     const promptBlock: PromptBlockData =
       "messages" in opts
         ? {
             type: "chat",
             messages: opts.messages,
+            tools: raw_tools ? JSON.stringify(raw_tools) : undefined,
           }
         : {
             type: "completion",
@@ -201,28 +236,36 @@ export class PromptBuilder {
     const slug =
       opts.slug ?? slugifyLib(opts.name, { lower: true, strict: true });
 
+    const promptData: PromptData = {
+      prompt: promptBlock,
+      options: {
+        model: opts.model,
+        params: opts.params,
+      },
+      tool_functions,
+    };
+
+    const promptRow: PromptRowWithId<HasId, HasVersion> = {
+      id: opts.id,
+      _xact_id: opts.version,
+      name: opts.name,
+      slug: slug,
+      prompt_data: promptData,
+    } as PromptRowWithId<HasId, HasVersion>;
+
     const prompt = new Prompt<HasId, HasVersion>(
-      {
-        id: opts.id,
-        project_id: opts.projectId,
-        _xact_id: opts.version,
-        name: opts.name,
-        slug: slug,
-        prompt_data: {
-          prompt: promptBlock,
-          model: opts.model,
-          params: opts.params,
-          tools: opts.tools,
-        },
-      } as PromptRowWithId<HasId, HasVersion>,
+      promptRow,
       {}, // It doesn't make sense to specify defaults here.
       opts.noTrace ?? false,
     );
 
+    const codePrompt = new CodePrompt(this.project, promptData, {
+      ...opts,
+      slug,
+    });
+
     if (globalThis._lazy_load) {
-      globalThis._evals.prompts.push(
-        prompt as Prompt /* this is needed because of HasId, HasVersion*/,
-      );
+      globalThis._evals.prompts.push(codePrompt);
     }
 
     return prompt;

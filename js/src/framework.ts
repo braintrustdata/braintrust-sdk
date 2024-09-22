@@ -16,14 +16,13 @@ import {
   logError as logSpanError,
   withCurrent,
   startSpan,
-  Prompt,
 } from "./logger";
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
 import { isEmpty } from "./util";
 import { queue } from "async";
-import { CodeFunction } from "./framework2";
+import { CodeFunction, CodePrompt } from "./framework2";
 import { GenericFunction } from "./framework-types";
 
 export type BaseExperiment<
@@ -284,7 +283,7 @@ export type EvaluatorFile = {
     unknown,
     GenericFunction<unknown, unknown>
   >[];
-  prompts: Prompt[];
+  prompts: CodePrompt[];
   evaluators: {
     [evalName: string]: {
       evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>;
