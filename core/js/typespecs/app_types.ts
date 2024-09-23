@@ -131,19 +131,19 @@ export const memberSchema = z
   .openapi("Member");
 export type Member = z.infer<typeof memberSchema>;
 
-const orgSecretBaseSchema = generateBaseTableSchema("org secret");
-export const orgSecretSchema = z
+const aiSecretBaseSchema = generateBaseTableSchema("AI secret");
+export const aiSecretSchema = z
   .object({
-    id: orgSecretBaseSchema.shape.id,
-    created: orgSecretBaseSchema.shape.created,
+    id: aiSecretBaseSchema.shape.id,
+    created: aiSecretBaseSchema.shape.created,
     org_id: organizationSchema.shape.id,
-    name: orgSecretBaseSchema.shape.name,
+    name: aiSecretBaseSchema.shape.name,
     type: z.string().nullish(),
     metadata: z.record(customTypes.unknown).nullish(),
     preview_secret: z.string().nullish(),
   })
-  .openapi("OrgSecret");
-export type OrgSecret = z.infer<typeof orgSecretSchema>;
+  .openapi("AISecret");
+export type AISecret = z.infer<typeof aiSecretSchema>;
 
 const apiKeyBaseSchema = generateBaseTableSchema("api key");
 export const apiKeySchema = z
@@ -1158,29 +1158,29 @@ export const patchOrganizationMembersOutputSchema = z.object({
     ),
 });
 
-const createOrgSecretBaseSchema = generateBaseTableOpSchema("Org Secret");
-export const createOrgSecretSchema = z.object({
-  name: orgSecretSchema.shape.name,
-  type: orgSecretSchema.shape.type,
-  metadata: orgSecretSchema.shape.metadata,
+const createAISecretBaseSchema = generateBaseTableOpSchema("AI Secret");
+export const createAISecretSchema = z.object({
+  name: aiSecretSchema.shape.name,
+  type: aiSecretSchema.shape.type,
+  metadata: aiSecretSchema.shape.metadata,
   secret: z
     .string()
     .nullish()
     .describe(
       "Secret value. If omitted in a PUT request, the existing secret value will be left intact, not replaced with null.",
     ),
-  org_name: createOrgSecretBaseSchema.shape.org_name,
+  org_name: createAISecretBaseSchema.shape.org_name,
 });
 
-export const deleteOrgSecretSchema = z.object({
-  name: orgSecretSchema.shape.name,
-  org_name: createOrgSecretBaseSchema.shape.org_name,
+export const deleteAISecretSchema = z.object({
+  name: aiSecretSchema.shape.name,
+  org_name: createAISecretBaseSchema.shape.org_name,
 });
 
-export const patchOrgSecretSchema = z.object({
-  name: orgSecretSchema.shape.name.nullish(),
-  type: orgSecretSchema.shape.type,
-  metadata: orgSecretSchema.shape.metadata,
+export const patchAISecretSchema = z.object({
+  name: aiSecretSchema.shape.name.nullish(),
+  type: aiSecretSchema.shape.type,
+  metadata: aiSecretSchema.shape.metadata,
   secret: z.string().nullish(),
 });
 
@@ -1265,10 +1265,10 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
     object: apiKeySchema,
     create: createApiKeySchema,
   },
-  org_secret: {
-    object: orgSecretSchema,
-    create: createOrgSecretSchema,
-    delete: deleteOrgSecretSchema,
-    patch_id: patchOrgSecretSchema,
+  ai_secret: {
+    object: aiSecretSchema,
+    create: createAISecretSchema,
+    delete: deleteAISecretSchema,
+    patch_id: patchAISecretSchema,
   },
 };
