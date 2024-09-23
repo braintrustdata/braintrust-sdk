@@ -660,7 +660,12 @@ async function collectFiles(
       },
       entryFilter: (entry) => {
         return (
-          entry.dirent.isFile() && checkMatch(entry.path, INCLUDE_EVAL, EXCLUDE)
+          entry.dirent.isFile() &&
+          checkMatch(
+            entry.path,
+            mode === "eval" ? INCLUDE_EVAL : INCLUDE_BUNDLE,
+            EXCLUDE,
+          )
         );
       },
     });

@@ -187,12 +187,15 @@ export class CodePrompt {
   }
 }
 
-export interface ToolFunctionDefinition {
-  name: string;
-  description?: string;
-  parameters?: Record<string, unknown> | z.ZodSchema<Record<string, unknown>>;
-  strict?: boolean | null;
-}
+export const toolFunctionDefinitionSchema = z.object({
+  name: z.string(),
+  description: z.string().optional(),
+  parameters: z.record(z.unknown()).optional(),
+  strict: z.boolean().optional(),
+});
+export type ToolFunctionDefinition = z.infer<
+  typeof toolFunctionDefinitionSchema
+>;
 
 interface PromptId {
   id: string;
