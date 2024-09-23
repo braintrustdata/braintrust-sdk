@@ -16,18 +16,18 @@ class ProjectBuilder {
     return new Project(opts);
   }
 }
-export const project = new ProjectBuilder();
+export const projects = new ProjectBuilder();
 
 export class Project {
   public readonly name?: string;
   public readonly id?: string;
-  public tool: ToolBuilder;
+  public tools: ToolBuilder;
 
   constructor(args: CreateProjectOpts) {
     _initializeSpanContext();
     this.name = "name" in args ? args.name : undefined;
     this.id = "id" in args ? args.id : undefined;
-    this.tool = new ToolBuilder(this);
+    this.tools = new ToolBuilder(this);
   }
 }
 
