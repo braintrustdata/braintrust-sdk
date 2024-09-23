@@ -6,6 +6,7 @@ import { warning } from "../framework";
 import { z } from "zod";
 import { ProjectNameIdMap } from "../functions/upload";
 import fs from "fs";
+import util from "util";
 import slugify from "slugify";
 import path from "path";
 import { currentRepo } from "../gitutil";
@@ -199,7 +200,7 @@ function makeFunctionDefinition({
   const promptContents =
     prompt.type === "completion"
       ? `prompt: ${doubleQuote(prompt.content)}`
-      : `messages: ${JSON.stringify(prompt.messages, null, 2).trimStart()}`;
+      : `messages: ${util.inspect(prompt.messages, { depth: null }).trimStart()}`;
 
   return `export const ${varName} = project.${objectType}.create({
   name: ${doubleQuote(func.name)},
