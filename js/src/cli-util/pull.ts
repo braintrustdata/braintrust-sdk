@@ -216,10 +216,23 @@ function makeFunctionDefinition({
       ? `prompt: ${doubleQuote(prompt.content)}`
       : `messages: ${util.inspect(prompt.messages, { depth: null }).trimStart()}`;
 
-  const rawTools: ToolFunctionDefinition[] =
+  const rawToolsParsed =
     prompt.type === "chat" && prompt.tools && prompt.tools.length > 0
-      ? z.array(toolFunctionDefinitionSchema).parse(JSON.parse(prompt.tools))
-      : [];
+      ? z
+          .array(toolFunctionDefinitionSchema)
+          .safeParse(JSON.parse(prompt.tools))
+      : undefined;
+
+  if (rawToolsParsed && !rawToolsParsed.success) {
+    console.warn(
+      warning(
+        `Prompt ${doubleQuote(func.name)} has an invalid tools definition: ${rawToolsParsed.error.message}. Skipping...`,
+      ),
+    );
+    return null;
+  }
+
+  const rawTools = rawToolsParsed ? rawToolsParsed.data : [];
 
   const { model, params } = func.prompt_data.options ?? {};
 

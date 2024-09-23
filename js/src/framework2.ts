@@ -188,10 +188,13 @@ export class CodePrompt {
 }
 
 export const toolFunctionDefinitionSchema = z.object({
-  name: z.string(),
-  description: z.string().optional(),
-  parameters: z.record(z.unknown()).optional(),
-  strict: z.boolean().optional(),
+  type: z.literal("function"),
+  function: z.object({
+    name: z.string(),
+    description: z.string().optional(),
+    parameters: z.record(z.unknown()).optional(),
+    strict: z.boolean().optional(),
+  }),
 });
 export type ToolFunctionDefinition = z.infer<
   typeof toolFunctionDefinitionSchema
@@ -244,7 +247,7 @@ export class PromptBuilder {
     for (const tool of opts.tools ?? []) {
       if (tool instanceof CodeFunction) {
         toolFunctions.push(tool);
-      } else if ("type" in tool) {
+      } else if ("type" in tool && !("function" in tool)) {
         toolFunctions.push(tool);
       } else {
         rawTools.push(tool);
