@@ -549,17 +549,25 @@ class HTTPConnection {
 
   async get(
     path: string,
-    params: Record<string, string | undefined> | undefined = undefined,
+    params:
+      | Record<string, string | string[] | undefined>
+      | undefined = undefined,
     config?: RequestInit,
   ) {
     const { headers, ...rest } = config || {};
     const url = new URL(_urljoin(this.base_url, path));
     url.search = new URLSearchParams(
       params
-        ? (Object.fromEntries(
-            Object.entries(params).filter(([_, v]) => v !== undefined),
-          ) as Record<string, string>)
-        : {},
+        ? Object.entries(params)
+            .filter(([_, v]) => v !== undefined)
+            .flatMap(([k, v]) =>
+              v !== undefined
+                ? typeof v === "string"
+                  ? [[k, v]]
+                  : v.map((x) => [k, x])
+                : [],
+            )
+        : [],
     ).toString();
     return await checkResponse(
       // Using toString() here makes it work with isomorphic fetch
@@ -604,7 +612,7 @@ class HTTPConnection {
 
   async get_json(
     object_type: string,
-    args: Record<string, string | undefined> | undefined = undefined,
+    args: Record<string, string | string[] | undefined> | undefined = undefined,
     retries: number = 0,
   ) {
     const tries = retries + 1;

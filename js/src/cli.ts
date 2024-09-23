@@ -44,6 +44,7 @@ import { uploadHandleBundles } from "./functions/upload";
 import { loadModule } from "./functions/load-module";
 import { bundleCommand } from "./cli-util/bundle";
 import { RunArgs } from "./cli-util/types";
+import { pullCommand } from "./cli-util/pull";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript
@@ -958,6 +959,30 @@ async function main() {
     help: "A list of files or directories containing functions to bundle. If no files are specified, the current directory is used.",
   });
   parser_push.set_defaults({ func: bundleCommand });
+
+  const parser_pull = subparser.add_parser("pull", {
+    help: "Pull prompts, tools, scorers, and other resources from Braintrust to save in your codebase.",
+  });
+  parser_pull.add_argument("--output-dir", {
+    help: "The directory to output the pulled resources to. If not specified, the current directory is used.",
+  });
+  parser_pull.add_argument("--project-name", {
+    help: "The name of the project to pull from. If not specified, all projects are pulled.",
+  });
+  parser_pull.add_argument("--project-id", {
+    help: "The id of the project to pull from. If not specified, all projects are pulled.",
+  });
+  parser_pull.add_argument("--id", {
+    help: "The id of a specific function to pull.",
+  });
+  parser_pull.add_argument("--slug", {
+    help: "The slug of a specific function to pull.",
+  });
+  parser_pull.add_argument("--force", {
+    action: "store_true",
+    help: "Overwrite local files if they have uncommitted changes.",
+  });
+  parser_pull.set_defaults({ func: pullCommand });
 
   const parsed = parser.parse_args();
 

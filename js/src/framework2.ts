@@ -5,7 +5,6 @@ import { z } from "zod";
 import {
   FunctionType,
   IfExists,
-  DEFAULT_IF_EXISTS,
   Message,
   ModelParams,
   SavedFunctionId,
@@ -115,7 +114,7 @@ export class CodeFunction<
   public readonly description?: string;
   public readonly parameters?: z.ZodSchema<Input>;
   public readonly returns?: z.ZodSchema<Output>;
-  public readonly ifExists: IfExists;
+  public readonly ifExists?: IfExists;
 
   constructor(
     public readonly project: Project,
@@ -132,7 +131,7 @@ export class CodeFunction<
     this.description = opts.description;
     this.type = opts.type;
 
-    this.ifExists = opts.ifExists ?? DEFAULT_IF_EXISTS;
+    this.ifExists = opts.ifExists;
 
     this.parameters = opts.parameters;
     this.returns = opts.returns;
@@ -162,7 +161,7 @@ export class CodePrompt {
   public readonly name: string;
   public readonly slug: string;
   public readonly prompt: PromptData;
-  public readonly ifExists: IfExists;
+  public readonly ifExists?: IfExists;
   public readonly description?: string;
   public readonly id?: string;
 
@@ -182,7 +181,7 @@ export class CodePrompt {
     this.slug = opts.slug;
     this.prompt = prompt;
     this.toolFunctions = toolFunctions;
-    this.ifExists = opts.ifExists ?? DEFAULT_IF_EXISTS;
+    this.ifExists = opts.ifExists;
     this.description = opts.description;
     this.id = opts.id;
   }

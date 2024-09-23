@@ -86,18 +86,12 @@ export async function uploadHandleBundles({
     `Processing ${buildResults.length} ${pluralize("file", buildResults.length)}...`,
   );
 
-  const projectNameToId: Record<string, Promise<string>> = {};
-  const getProjectId = async (projectName: string) => {
-    if (!projectNameToId[projectName]) {
-      projectNameToId[projectName] = loadProjectId(projectName);
-    }
-    return projectNameToId[projectName];
-  };
+  const projectNameToId = new ProjectNameIdMap();
   const resolveProjectId = async (project: Project): Promise<string> => {
     if (project.id) {
       return project.id;
     }
-    return getProjectId(project.name!);
+    return projectNameToId.getId(project.name!);
   };
 
   const uploadPromises = buildResults.map(async (result) => {
@@ -184,7 +178,7 @@ export async function uploadHandleBundles({
       const baseInfo = {
         project_id: experiment
           ? (await experiment.project).id
-          : await getProjectId(evaluator.evaluator.projectName),
+          : await projectNameToId.getId(evaluator.evaluator.projectName),
       };
 
       const namePrefix = setCurrent
@@ -444,18 +438,44 @@ function formatNameAndSlug(pieces: string[]) {
   };
 }
 
-async function loadProjectId(projectName: string): Promise<string> {
-  const response = await _internalGetGlobalState()
-    .appConn()
-    .post_json("api/project/register", {
-      project_name: projectName,
-    });
+export class ProjectNameIdMap {
+  private nameToId: Record<string, string> = {};
+  private idToName: Record<string, string> = {};
 
-  const result = z
-    .object({
-      project: projectSchema,
-    })
-    .parse(response);
+  async getId(projectName: string): Promise<string> {
+    if (!(projectName in this.nameToId)) {
+      const response = await _internalGetGlobalState()
+        .appConn()
+        .post_json("api/project/register", {
+          project_name: projectName,
+        });
 
-  return result.project.id;
+      const result = z
+        .object({
+          project: projectSchema,
+        })
+        .parse(response);
+
+      const projectId = result.project.id;
+
+      this.nameToId[projectName] = projectId;
+      this.idToName[projectId] = projectName;
+    }
+    return this.nameToId[projectName];
+  }
+
+  async getName(projectId: string): Promise<string> {
+    if (!(projectId in this.idToName)) {
+      const response = await _internalGetGlobalState()
+        .appConn()
+        .post_json("api/project/get", {
+          id: projectId,
+        });
+      const result = z.array(projectSchema).parse(response);
+      const projectName = result[0].name;
+      this.idToName[projectId] = projectName;
+      this.nameToId[projectName] = projectId;
+    }
+    return this.idToName[projectId];
+  }
 }
