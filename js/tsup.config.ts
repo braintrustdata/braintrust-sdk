@@ -18,6 +18,6 @@ export default defineConfig([
     entry: ["src/cli.ts"],
     format: ["cjs"],
     outDir: "dist",
-    external: ["esbuild"],
+    external: ["esbuild", "prettier", "typescript"],
   },
 ]);

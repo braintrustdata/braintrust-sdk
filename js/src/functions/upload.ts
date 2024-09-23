@@ -155,7 +155,6 @@ export async function uploadHandleBundles({
           prompt_data.tool_functions =
             resolvableToolFunctions as SavedFunctionId[];
         }
-        console.log(prompt_data.tool_functions);
 
         prompts.push({
           project_id: await resolveProjectId(prompt.project),
