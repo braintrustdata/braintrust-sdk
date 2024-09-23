@@ -72,6 +72,7 @@ export async function uploadHandleBundles({
   handles,
   setCurrent,
   verbose,
+  defaultIfExists,
 }: {
   buildResults: BuildSuccess[];
   evalToExperiment?: Record<string, Record<string, Experiment>>;
@@ -81,6 +82,7 @@ export async function uploadHandleBundles({
   handles: Record<string, FileHandle>;
   verbose: boolean;
   setCurrent: boolean;
+  defaultIfExists: IfExists;
 }) {
   console.error(
     `Processing ${buildResults.length} ${pluralize("file", buildResults.length)}...`,
@@ -254,6 +256,7 @@ export async function uploadHandleBundles({
       bundleSpecs,
       bundlePromises,
       handles,
+      defaultIfExists,
       verbose,
     });
   });
@@ -283,6 +286,7 @@ async function uploadBundles({
   bundleSpecs,
   bundlePromises,
   handles,
+  defaultIfExists,
   verbose,
 }: {
   sourceFile: string;
@@ -292,6 +296,7 @@ async function uploadBundles({
     [k: string]: Promise<esbuild.BuildResult<esbuild.BuildOptions>>;
   };
   handles: Record<string, FileHandle>;
+  defaultIfExists: IfExists;
   verbose: boolean;
 }): Promise<boolean> {
   const orgId = _internalGetGlobalState().orgId;
@@ -400,7 +405,10 @@ async function uploadBundles({
         if_exists: spec.if_exists,
       })),
     )) as FunctionEvent[]),
-  ];
+  ].map((fn) => ({
+    ...fn,
+    if_exists: fn.if_exists ?? defaultIfExists,
+  }));
 
   const logPromise = (async (): Promise<boolean> => {
     try {

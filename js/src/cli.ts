@@ -574,6 +574,7 @@ async function runOnce(
       bundlePromises,
       handles,
       setCurrent: opts.setCurrent,
+      defaultIfExists: "replace",
       verbose: opts.verbose,
     });
   }
@@ -962,6 +963,11 @@ async function main() {
   parser_push.add_argument("files", {
     nargs: "*",
     help: "A list of files or directories containing functions to bundle. If no files are specified, the current directory is used.",
+  });
+  parser_push.add_argument("--if-exists", {
+    choices: ["error", "replace", "ignore"],
+    default: "error",
+    help: "What to do if a function with the same slug already exists. 'error' will cause an error and abort. 'replace' will overwrite the existing function. 'ignore' will ignore the push for this function and continue.",
   });
   parser_push.set_defaults({ func: bundleCommand });
 

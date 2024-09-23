@@ -158,10 +158,6 @@ const project = braintrust.project.create({
   name: ${doubleQuote(projectName)},
 });
 
-// By default, this script will ignore existing objects if they already exist. You can
-// change this by setting the ifExists option to "error" or "replace".
-const ifExists = "ignore";
-
 ${functionDefinitions.join("\n")}
 `;
 
@@ -244,8 +240,7 @@ function makeFunctionDefinition({
 
   return `export const ${varName} = project.${objectType}.create({
   name: ${doubleQuote(func.name)},
-  slug: ${doubleQuote(func.slug)},${printOptionalField("description", func.description)}
-  ifExists,${printOptionalField("model", model)}
+  slug: ${doubleQuote(func.slug)},${printOptionalField("description", func.description)}${printOptionalField("model", model)}
 ${indent(promptContents, 2)},
 ${indent(paramsString, 2)}
 ${indent(toolsString, 2)}
