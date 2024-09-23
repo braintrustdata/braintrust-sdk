@@ -94,7 +94,7 @@ export async function pullCommand(args: PullArgs) {
         );
       }
     } else if (dirtyFiles.has(resolvedProjectFile)) {
-      console.log(
+      console.warn(
         warning(
           `Skipping project ${projectName} because ${doubleQuote(projectFile)} has uncommitted changes.`,
         ),
