@@ -711,7 +711,7 @@ function buildOpts({
     // Remove the leading "v" from process.version
     target: `node${process.version.slice(1)}`,
     tsconfig,
-    external: ["node_modules/*"],
+    external: ["node_modules/*", "fsevents"],
     plugins: plugins,
   };
 }
