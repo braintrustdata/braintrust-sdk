@@ -150,19 +150,22 @@ export const envVarObjectTypeEnum = z
   .describe("The type of the object the environment variable is scoped for");
 
 const envVarBaseSchema = generateBaseTableSchema("environment variable");
-export const envVarSchema = z.object({
-  id: envVarBaseSchema.shape.id,
-  object_type: envVarObjectTypeEnum,
-  object_id: z
-    .string()
-    .uuid()
-    .describe("The id of the object the environment variable is scoped for"),
-  name: z.string().describe("The name of the environment variable"),
-  created: envVarBaseSchema.shape.created,
-  used: datetimeStringSchema
-    .nullish()
-    .describe(`Date the environment variable was last used`),
-});
+export const envVarSchema = z
+  .object({
+    id: envVarBaseSchema.shape.id,
+    object_type: envVarObjectTypeEnum,
+    object_id: z
+      .string()
+      .uuid()
+      .describe("The id of the object the environment variable is scoped for"),
+    name: z.string().describe("The name of the environment variable"),
+    created: envVarBaseSchema.shape.created,
+    used: datetimeStringSchema
+      .nullish()
+      .describe(`Date the environment variable was last used`),
+  })
+  .openapi("EnvVar");
+export type EnvVar = z.infer<typeof envVarSchema>;
 
 const apiKeyBaseSchema = generateBaseTableSchema("api key");
 export const apiKeySchema = z
