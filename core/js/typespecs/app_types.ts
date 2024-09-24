@@ -259,23 +259,27 @@ export type Prompt = z.infer<typeof promptSchema>;
 export const codeBundleSchema = z.object({
   runtime_context: runtimeContextSchema,
   location: z.union([
-    z.object({
-      type: z.literal("experiment"),
-      eval_name: z.string(),
-      position: z.union([
-        z.object({ type: z.literal("task") }),
-        z
-          .object({
-            type: z.literal("scorer"),
-            index: z.number().int().nonnegative(),
-          })
-          .openapi({ title: "scorer" }),
-      ]),
-    }),
-    z.object({
-      type: z.literal("function"),
-      index: z.number().int().nonnegative(),
-    }),
+    z
+      .object({
+        type: z.literal("experiment"),
+        eval_name: z.string(),
+        position: z.union([
+          z.object({ type: z.literal("task") }),
+          z
+            .object({
+              type: z.literal("scorer"),
+              index: z.number().int().nonnegative(),
+            })
+            .openapi({ title: "scorer" }),
+        ]),
+      })
+      .openapi({ title: "experiment" }),
+    z
+      .object({
+        type: z.literal("function"),
+        index: z.number().int().nonnegative(),
+      })
+      .openapi({ title: "function" }),
   ]),
   bundle_id: z.string(),
   preview: z.string().nullish().describe("A preview of the code"),
@@ -339,8 +343,8 @@ export const functionSchema = promptSchemaObject
         .nullish(),
       function_schema: z
         .object({
-          parameters: z.unknown(),
-          returns: z.unknown().optional(),
+          parameters: customTypes.unknown,
+          returns: customTypes.unknown.optional(),
         })
         .nullish()
         .describe("JSON schema for the function's parameters and return type"),
