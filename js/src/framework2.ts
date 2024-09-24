@@ -151,9 +151,14 @@ export class CodeFunction<
 }
 
 type GenericCodeFunction = CodeFunction<
-  unknown,
-  unknown,
-  GenericFunction<unknown, unknown>
+  // This has to be marked as any because we want to support arrays of
+  // functions that return different things.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  GenericFunction<any, any>
 >;
 
 export class CodePrompt {
@@ -226,11 +231,7 @@ export type PromptOpts<
   PromptContents & {
     model: string;
     params?: ModelParams;
-    tools?: (
-      | CodeFunction<unknown, unknown, GenericFunction<unknown, unknown>>
-      | SavedFunctionId
-      | ToolFunctionDefinition
-    )[];
+    tools?: (GenericCodeFunction | SavedFunctionId | ToolFunctionDefinition)[];
     noTrace?: boolean;
   };
 
