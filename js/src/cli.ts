@@ -44,6 +44,7 @@ import { uploadHandleBundles } from "./functions/upload";
 import { loadModule } from "./functions/load-module";
 import { bundleCommand } from "./cli-util/bundle";
 import { RunArgs } from "./cli-util/types";
+import { pullCommand } from "./cli-util/pull";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript
@@ -303,6 +304,7 @@ async function initFile({
         }
         const evaluator = evaluateBuildResults(inFile, result) || {
           functions: [],
+          prompts: [],
           evaluators: {},
           reporters: {},
         };
@@ -572,6 +574,7 @@ async function runOnce(
       bundlePromises,
       handles,
       setCurrent: opts.setCurrent,
+      defaultIfExists: "replace",
       verbose: opts.verbose,
     });
   }
@@ -658,7 +661,12 @@ async function collectFiles(
       },
       entryFilter: (entry) => {
         return (
-          entry.dirent.isFile() && checkMatch(entry.path, INCLUDE_EVAL, EXCLUDE)
+          entry.dirent.isFile() &&
+          checkMatch(
+            entry.path,
+            mode === "eval" ? INCLUDE_EVAL : INCLUDE_BUNDLE,
+            EXCLUDE,
+          )
         );
       },
     });
@@ -956,7 +964,39 @@ async function main() {
     nargs: "*",
     help: "A list of files or directories containing functions to bundle. If no files are specified, the current directory is used.",
   });
+  parser_push.add_argument("--if-exists", {
+    choices: ["error", "replace", "ignore"],
+    default: "error",
+    help: "What to do if a function with the same slug already exists. 'error' will cause an error and abort. 'replace' will overwrite the existing function. 'ignore' will ignore the push for this function and continue.",
+  });
   parser_push.set_defaults({ func: bundleCommand });
+
+  const parser_pull = subparser.add_parser("pull", {
+    help: "Pull prompts, tools, scorers, and other resources from Braintrust to save in your codebase.",
+  });
+  parser_pull.add_argument("--output-dir", {
+    help: "The directory to output the pulled resources to. If not specified, the current directory is used.",
+  });
+  parser_pull.add_argument("--project-name", {
+    help: "The name of the project to pull from. If not specified, all projects are pulled.",
+  });
+  parser_pull.add_argument("--project-id", {
+    help: "The id of the project to pull from. If not specified, all projects are pulled.",
+  });
+  parser_pull.add_argument("--id", {
+    help: "The id of a specific function to pull.",
+  });
+  parser_pull.add_argument("--slug", {
+    help: "The slug of a specific function to pull.",
+  });
+  parser_pull.add_argument("--version", {
+    help: "The version to pull. Will pull the latest version of each prompt that is at or before this version.",
+  });
+  parser_pull.add_argument("--force", {
+    action: "store_true",
+    help: "Overwrite local files if they have uncommitted changes.",
+  });
+  parser_pull.set_defaults({ func: pullCommand });
 
   const parsed = parser.parse_args();
 

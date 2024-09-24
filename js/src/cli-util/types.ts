@@ -1,3 +1,5 @@
+import { IfExists } from "@braintrust/core/typespecs";
+
 export interface CommonArgs {
   verbose: boolean;
 }
@@ -28,4 +30,15 @@ export interface RunArgs extends CommonArgs, AuthArgs, CompileArgs {
 
 export interface BundleArgs extends CommonArgs, AuthArgs, CompileArgs {
   files: string[];
+  if_exists: IfExists;
+}
+
+export interface PullArgs extends CommonArgs, AuthArgs {
+  output_dir: string;
+  project_name?: string;
+  project_id?: string;
+  id?: string;
+  slug?: string;
+  version?: string;
+  force: boolean;
 }

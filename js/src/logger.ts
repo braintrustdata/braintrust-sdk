@@ -549,17 +549,25 @@ class HTTPConnection {
 
   async get(
     path: string,
-    params: Record<string, string | undefined> | undefined = undefined,
+    params:
+      | Record<string, string | string[] | undefined>
+      | undefined = undefined,
     config?: RequestInit,
   ) {
     const { headers, ...rest } = config || {};
     const url = new URL(_urljoin(this.base_url, path));
     url.search = new URLSearchParams(
       params
-        ? (Object.fromEntries(
-            Object.entries(params).filter(([_, v]) => v !== undefined),
-          ) as Record<string, string>)
-        : {},
+        ? Object.entries(params)
+            .filter(([_, v]) => v !== undefined)
+            .flatMap(([k, v]) =>
+              v !== undefined
+                ? typeof v === "string"
+                  ? [[k, v]]
+                  : v.map((x) => [k, x])
+                : [],
+            )
+        : [],
     ).toString();
     return await checkResponse(
       // Using toString() here makes it work with isomorphic fetch
@@ -604,7 +612,7 @@ class HTTPConnection {
 
   async get_json(
     object_type: string,
-    args: Record<string, string | undefined> | undefined = undefined,
+    args: Record<string, string | string[] | undefined> | undefined = undefined,
     retries: number = 0,
   ) {
     const tries = retries + 1;
@@ -4002,21 +4010,36 @@ export function renderMessage<T extends Message>(
   };
 }
 
-export class Prompt {
+export type PromptRowWithId<
+  HasId extends boolean = true,
+  HasVersion extends boolean = true,
+> = Omit<PromptRow, "log_id" | "org_id" | "project_id" | "id" | "_xact_id"> &
+  Partial<Pick<PromptRow, "project_id">> &
+  (HasId extends true
+    ? Pick<PromptRow, "id">
+    : Partial<Pick<PromptRow, "id">>) &
+  (HasVersion extends true
+    ? Pick<PromptRow, "_xact_id">
+    : Partial<Pick<PromptRow, "_xact_id">>);
+
+export class Prompt<
+  HasId extends boolean = true,
+  HasVersion extends boolean = true,
+> {
   private parsedPromptData: PromptData | undefined;
   private hasParsedPromptData = false;
 
   constructor(
-    private metadata: Omit<PromptRow, "log_id"> | PromptSessionEvent,
+    private metadata: PromptRowWithId<HasId, HasVersion> | PromptSessionEvent,
     private defaults: DefaultPromptArgs,
     private noTrace: boolean,
   ) {}
 
-  public get id(): string {
-    return this.metadata.id;
+  public get id(): HasId extends true ? string : string | undefined {
+    return this.metadata.id as HasId extends true ? string : string | undefined;
   }
 
-  public get projectId(): string {
+  public get projectId(): string | undefined {
     return this.metadata.project_id;
   }
 
@@ -4034,8 +4057,12 @@ export class Prompt {
     return this.getParsedPromptData()?.prompt;
   }
 
-  public get version(): TransactionId {
-    return this.metadata[TRANSACTION_ID_FIELD];
+  public get version(): HasId extends true
+    ? TransactionId
+    : TransactionId | undefined {
+    return this.metadata[TRANSACTION_ID_FIELD] as HasId extends true
+      ? TransactionId
+      : TransactionId | undefined;
   }
 
   public get options(): NonNullable<PromptData["options"]> {
@@ -4096,15 +4123,17 @@ export class Prompt {
       : {
           span_info: {
             metadata: {
-              prompt: {
-                variables: buildArgs,
-                id: this.id,
-                project_id: this.projectId,
-                version: this.version,
-                ...("prompt_session_id" in this.metadata
-                  ? { prompt_session_id: this.metadata.prompt_session_id }
-                  : {}),
-              },
+              prompt: this.id
+                ? {
+                    variables: buildArgs,
+                    id: this.id,
+                    project_id: this.projectId,
+                    version: this.version,
+                    ...("prompt_session_id" in this.metadata
+                      ? { prompt_session_id: this.metadata.prompt_session_id }
+                      : {}),
+                  }
+                : undefined,
             },
           },
         };

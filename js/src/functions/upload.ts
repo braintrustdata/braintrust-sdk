@@ -4,6 +4,9 @@ import {
   FunctionObject,
   IfExists,
   projectSchema,
+  PromptData,
+  ExtendedSavedFunctionId,
+  SavedFunctionId,
 } from "@braintrust/core/typespecs";
 import { BuildSuccess, EvaluatorState, FileHandle } from "../cli";
 import { scorerName, warning } from "../framework";
@@ -22,6 +25,8 @@ import { capitalize } from "@braintrust/core";
 import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
 import slugifyLib from "slugify";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import pluralize from "pluralize";
+import { Project } from "../framework2";
 
 export type EvaluatorMap = Record<
   string,
@@ -36,6 +41,7 @@ interface FunctionEvent {
   slug: string;
   name: string;
   description: string;
+  prompt_data?: PromptData;
   function_data: z.infer<typeof functionDataSchema>;
   if_exists?: IfExists;
 }
@@ -66,6 +72,7 @@ export async function uploadHandleBundles({
   handles,
   setCurrent,
   verbose,
+  defaultIfExists,
 }: {
   buildResults: BuildSuccess[];
   evalToExperiment?: Record<string, Record<string, Experiment>>;
@@ -75,15 +82,18 @@ export async function uploadHandleBundles({
   handles: Record<string, FileHandle>;
   verbose: boolean;
   setCurrent: boolean;
+  defaultIfExists: IfExists;
 }) {
-  console.error(`Processing bundles...`);
+  console.error(
+    `Processing ${buildResults.length} ${pluralize("file", buildResults.length)}...`,
+  );
 
-  const projectNameToId: Record<string, Promise<string>> = {};
-  const getProjectId = async (projectName: string) => {
-    if (!projectNameToId[projectName]) {
-      projectNameToId[projectName] = loadProjectId(projectName);
+  const projectNameToId = new ProjectNameIdMap();
+  const resolveProjectId = async (project: Project): Promise<string> => {
+    if (project.id) {
+      return project.id;
     }
-    return projectNameToId[projectName];
+    return projectNameToId.getId(project.name!);
   };
 
   const uploadPromises = buildResults.map(async (result) => {
@@ -93,23 +103,15 @@ export async function uploadHandleBundles({
     const sourceFile = result.sourceFile;
 
     const bundleSpecs: BundledFunctionSpec[] = [];
+    const prompts: FunctionEvent[] = [];
 
     if (setCurrent) {
       for (let i = 0; i < result.evaluator.functions.length; i++) {
         const fn = result.evaluator.functions[i];
-        let project_id = fn.project.id;
-        if (!project_id) {
-          if (!fn.project.name) {
-            throw new Error("Tool project not found");
-          }
-          project_id = await getProjectId(fn.project.name);
-        }
-        const baseInfo = {
-          project_id: project_id,
-        };
+        const project_id = await resolveProjectId(fn.project);
 
         bundleSpecs.push({
-          ...baseInfo,
+          project_id: project_id,
           name: fn.name,
           slug: fn.slug,
           description: fn.description ?? "",
@@ -130,6 +132,44 @@ export async function uploadHandleBundles({
           if_exists: fn.ifExists,
         });
       }
+
+      for (const prompt of result.evaluator.prompts) {
+        const prompt_data = {
+          ...prompt.prompt,
+        };
+        if (prompt.toolFunctions.length > 0) {
+          const resolvableToolFunctions: ExtendedSavedFunctionId[] =
+            await Promise.all(
+              prompt.toolFunctions.map(async (fn) => {
+                if ("slug" in fn) {
+                  return {
+                    type: "slug",
+                    project_id: await resolveProjectId(fn.project),
+                    slug: fn.slug,
+                  };
+                } else {
+                  return fn;
+                }
+              }),
+            );
+
+          // This is a hack because these will be resolved on the server side.
+          prompt_data.tool_functions =
+            resolvableToolFunctions as SavedFunctionId[];
+        }
+
+        prompts.push({
+          project_id: await resolveProjectId(prompt.project),
+          name: prompt.name,
+          slug: prompt.slug,
+          description: prompt.description ?? "",
+          function_data: {
+            type: "prompt",
+          },
+          prompt_data,
+          if_exists: prompt.ifExists,
+        });
+      }
     }
 
     for (const evaluator of Object.values(result.evaluator.evaluators)) {
@@ -139,7 +179,7 @@ export async function uploadHandleBundles({
       const baseInfo = {
         project_id: experiment
           ? (await experiment.project).id
-          : await getProjectId(evaluator.evaluator.projectName),
+          : await projectNameToId.getId(evaluator.evaluator.projectName),
       };
 
       const namePrefix = setCurrent
@@ -196,11 +236,27 @@ export async function uploadHandleBundles({
       bundleSpecs.push(...fileSpecs);
     }
 
+    const slugs: Set<string> = new Set();
+    for (const spec of bundleSpecs) {
+      if (slugs.has(spec.slug)) {
+        throw new Error(`Duplicate slug: ${spec.slug}`);
+      }
+      slugs.add(spec.slug);
+    }
+    for (const prompt of prompts) {
+      if (slugs.has(prompt.slug)) {
+        throw new Error(`Duplicate slug: ${prompt.slug}`);
+      }
+      slugs.add(prompt.slug);
+    }
+
     return await uploadBundles({
       sourceFile,
+      prompts,
       bundleSpecs,
       bundlePromises,
       handles,
+      defaultIfExists,
       verbose,
     });
   });
@@ -210,7 +266,7 @@ export async function uploadHandleBundles({
   const numFailed = uploadResults.filter((result) => !result).length;
 
   console.error(
-    `${numUploaded} Bundle${numUploaded > 1 ? "s" : ""} uploaded ${
+    `${numUploaded} ${pluralize("file", numUploaded)} uploaded ${
       numFailed > 0
         ? `with ${numFailed} error${numFailed > 1 ? "s" : ""}`
         : "successfully"
@@ -226,17 +282,21 @@ export async function uploadHandleBundles({
 
 async function uploadBundles({
   sourceFile,
+  prompts,
   bundleSpecs,
   bundlePromises,
   handles,
+  defaultIfExists,
   verbose,
 }: {
   sourceFile: string;
+  prompts: FunctionEvent[];
   bundleSpecs: BundledFunctionSpec[];
   bundlePromises: {
     [k: string]: Promise<esbuild.BuildResult<esbuild.BuildOptions>>;
   };
   handles: Record<string, FileHandle>;
+  defaultIfExists: IfExists;
   verbose: boolean;
 }): Promise<boolean> {
   const orgId = _internalGetGlobalState().orgId;
@@ -261,24 +321,26 @@ async function uploadBundles({
     sourceMapFile: handles[sourceFile].bundleFile + ".map",
   });
 
-  let pathInfo: z.infer<typeof pathInfoSchema>;
-  try {
-    pathInfo = pathInfoSchema.parse(
-      await loggerConn.post_json("function/code", {
-        org_id: orgId,
-        runtime_context,
-      }),
-    );
-  } catch (e) {
-    if (verbose) {
-      console.error(e);
+  let pathInfo: z.infer<typeof pathInfoSchema> | undefined = undefined;
+  if (bundleSpecs.length > 0) {
+    try {
+      pathInfo = pathInfoSchema.parse(
+        await loggerConn.post_json("function/code", {
+          org_id: orgId,
+          runtime_context,
+        }),
+      );
+    } catch (e) {
+      if (verbose) {
+        console.error(e);
+      }
+      const msg =
+        e instanceof FailedHTTPResponse
+          ? `Unable to upload your code. ${e.status} (${e.text}): ${e.data}`
+          : `Unable to upload your code. You most likely need to update the API: ${e}`;
+      console.error(warning(msg));
+      return false;
     }
-    const msg =
-      e instanceof FailedHTTPResponse
-        ? `Unable to upload your code. ${e.status} (${e.text}): ${e.data}`
-        : `Unable to upload your code. You most likely need to update the API: ${e}`;
-    console.error(warning(msg));
-    return false;
   }
 
   // Upload bundleFile to pathInfo.url
@@ -288,6 +350,9 @@ async function uploadBundles({
   }
   const bundleFile = path.resolve(bundleFileName);
   const uploadPromise = (async (): Promise<boolean> => {
+    if (!pathInfo) {
+      return true;
+    }
     const bundleStream = fs.createReadStream(bundleFile).pipe(createGzip());
     const bundleData = await new Promise<Buffer>((resolve, reject) => {
       const chunks: Buffer[] = [];
@@ -313,31 +378,37 @@ async function uploadBundles({
   const sourceMapContext = await sourceMapContextPromise;
 
   // Insert the spec as prompt data
-  const functionEntries: FunctionEvent[] = await Promise.all(
-    bundleSpecs.map(async (spec) => ({
-      project_id: spec.project_id,
-      name: spec.name,
-      slug: spec.slug,
-      description: spec.description,
-      function_data: {
-        type: "code",
-        data: {
-          type: "bundle",
-          runtime_context,
-          location: spec.location,
-          bundle_id: pathInfo.bundleId,
-          preview: await findCodeDefinition({
+  const functionEntries: FunctionEvent[] = [
+    ...prompts,
+    ...((await Promise.all(
+      bundleSpecs.map(async (spec) => ({
+        project_id: spec.project_id,
+        name: spec.name,
+        slug: spec.slug,
+        description: spec.description,
+        function_data: {
+          type: "code",
+          data: {
+            type: "bundle",
+            runtime_context,
             location: spec.location,
-            ctx: sourceMapContext,
-          }),
+            bundle_id: pathInfo!.bundleId,
+            preview: await findCodeDefinition({
+              location: spec.location,
+              ctx: sourceMapContext,
+            }),
+          },
         },
-      },
-      origin: spec.origin,
-      function_type: spec.function_type,
-      function_schema: spec.function_schema,
-      if_exists: spec.if_exists,
-    })),
-  );
+        origin: spec.origin,
+        function_type: spec.function_type,
+        function_schema: spec.function_schema,
+        if_exists: spec.if_exists,
+      })),
+    )) as FunctionEvent[]),
+  ].map((fn) => ({
+    ...fn,
+    if_exists: fn.if_exists ?? defaultIfExists,
+  }));
 
   const logPromise = (async (): Promise<boolean> => {
     try {
@@ -374,18 +445,44 @@ function formatNameAndSlug(pieces: string[]) {
   };
 }
 
-async function loadProjectId(projectName: string): Promise<string> {
-  const response = await _internalGetGlobalState()
-    .appConn()
-    .post_json("api/project/register", {
-      project_name: projectName,
-    });
+export class ProjectNameIdMap {
+  private nameToId: Record<string, string> = {};
+  private idToName: Record<string, string> = {};
 
-  const result = z
-    .object({
-      project: projectSchema,
-    })
-    .parse(response);
+  async getId(projectName: string): Promise<string> {
+    if (!(projectName in this.nameToId)) {
+      const response = await _internalGetGlobalState()
+        .appConn()
+        .post_json("api/project/register", {
+          project_name: projectName,
+        });
 
-  return result.project.id;
+      const result = z
+        .object({
+          project: projectSchema,
+        })
+        .parse(response);
+
+      const projectId = result.project.id;
+
+      this.nameToId[projectName] = projectId;
+      this.idToName[projectId] = projectName;
+    }
+    return this.nameToId[projectName];
+  }
+
+  async getName(projectId: string): Promise<string> {
+    if (!(projectId in this.idToName)) {
+      const response = await _internalGetGlobalState()
+        .appConn()
+        .post_json("api/project/get", {
+          id: projectId,
+        });
+      const result = z.array(projectSchema).nonempty().parse(response);
+      const projectName = result[0].name;
+      this.idToName[projectId] = projectName;
+      this.nameToId[projectName] = projectId;
+    }
+    return this.idToName[projectId];
+  }
 }

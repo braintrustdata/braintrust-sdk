@@ -22,7 +22,8 @@ import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
 import { isEmpty } from "./util";
 import { queue } from "async";
-import { CodeFunction } from "./framework2";
+import { CodeFunction, CodePrompt } from "./framework2";
+import { GenericFunction } from "./framework-types";
 
 export type BaseExperiment<
   Input,
@@ -239,7 +240,11 @@ export interface ReporterBody<EvalReport> {
    * @param opts
    */
   reportEval(
+    // These any's are required because these function specifications don't know
+    // or need to know the types of the input/output/etc for the evaluator.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     evaluator: EvaluatorDef<any, any, any, any>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     result: EvalResultWithSummary<any, any, any, any>,
     opts: ReporterOpts,
   ): Promise<EvalReport> | EvalReport;
@@ -276,16 +281,13 @@ export type EvaluatorDef<
   evalName: string;
 } & Evaluator<Input, Output, Expected, Metadata>;
 
-export type GenericFunction<Input, Output> =
-  | ((input: Input) => Output)
-  | ((input: Input) => Promise<Output>);
-
 export type EvaluatorFile = {
   functions: CodeFunction<
     unknown,
     unknown,
     GenericFunction<unknown, unknown>
   >[];
+  prompts: CodePrompt[];
   evaluators: {
     [evalName: string]: {
       evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>;
@@ -347,6 +349,7 @@ declare global {
 
 globalThis._evals = {
   functions: [],
+  prompts: [],
   evaluators: {},
   reporters: {},
 };
@@ -522,9 +525,15 @@ export function parseFilters(filters: string[]): Filter[] {
   return result;
 }
 
-function evaluateFilter(object: any, filter: Filter) {
+function evaluateFilter(object: unknown, filter: Filter) {
   const { path, pattern } = filter;
-  const key = path.reduce((acc, p) => acc?.[p], object);
+  const key = path.reduce(
+    (acc, p) =>
+      typeof acc === "object" && acc !== null
+        ? (acc as Record<string, unknown>)[p]
+        : undefined,
+    object,
+  );
   if (key === undefined) {
     return false;
   }
@@ -532,6 +541,7 @@ function evaluateFilter(object: any, filter: Filter) {
 }
 
 export function scorerName(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   scorer: EvalScorer<any, any, any, any>,
   scorer_idx: number,
 ) {
@@ -540,9 +550,11 @@ export function scorerName(
 
 export async function runEvaluator(
   experiment: Experiment | null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evaluator: EvaluatorDef<any, any, any, any>,
   progressReporter: ProgressReporter,
   filters: Filter[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   const result = runEvaluatorInternal(
     experiment,
@@ -569,9 +581,11 @@ export async function runEvaluator(
 
 async function runEvaluatorInternal(
   experiment: Experiment | null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evaluator: EvaluatorDef<any, any, any, any>,
   progressReporter: ProgressReporter,
   filters: Filter[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   if (typeof evaluator.data === "string") {
     throw new Error("Unimplemented: string data paths");
@@ -607,6 +621,7 @@ async function runEvaluatorInternal(
     }).asDataset();
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let data: EvalCase<any, any, any>[] = [];
   if (dataResult instanceof Promise) {
     data = await dataResult;
@@ -629,7 +644,9 @@ async function runEvaluatorInternal(
 
   progressReporter.start(evaluator.evalName, data.length);
   interface EvalResult {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     input: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     output: any;
     tags?: string[];
     metadata: Record<string, unknown>;
@@ -638,12 +655,13 @@ async function runEvaluatorInternal(
   }
   const results: EvalResult[] = [];
   const q = queue(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (datum: EvalCase<any, any, any>) => {
       const callback = async (rootSpan: Span) => {
         let metadata: Record<string, unknown> = {
           ...("metadata" in datum ? datum.metadata : {}),
         };
-        let output: any = undefined;
+        let output: unknown = undefined;
         let error: unknown | undefined = undefined;
         const scores: Record<string, number | null> = {};
         try {
@@ -855,7 +873,9 @@ export function logError(e: unknown, verbose: boolean) {
 }
 
 export function buildLocalSummary(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evaluator: EvaluatorDef<any, any, any, any>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   results: EvalResult<any, any, any, any>[],
 ): ExperimentSummary {
   const scoresByName: { [name: string]: { total: number; count: number } } = {};
@@ -939,7 +959,9 @@ export function reportFailures<
 export const defaultReporter: ReporterDef<boolean> = {
   name: "Braintrust default reporter",
   async reportEval(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     evaluator: EvaluatorDef<any, any, any, any>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     result: EvalResultWithSummary<any, any, any, any>,
     { verbose, jsonl }: ReporterOpts,
   ) {

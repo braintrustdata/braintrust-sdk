@@ -1,12 +1,12 @@
 import { loadEnvConfig } from "@next/env";
 import * as dotenv from "dotenv";
-import { BundleArgs } from "./types";
+import { AuthArgs, BundleArgs } from "./types";
 import { error } from "../framework";
 import { BtBuildResult, handleBuildFailure, initializeHandles } from "../cli";
 import { login } from "../logger";
 import { uploadHandleBundles } from "../functions/upload";
 
-export async function bundleCommand(args: BundleArgs) {
+export async function loadCLIEnv(args: AuthArgs) {
   // Load the environment variables from the .env files using the same rules as Next.js
   loadEnvConfig(process.cwd(), true);
 
@@ -19,16 +19,20 @@ export async function bundleCommand(args: BundleArgs) {
     }
   }
 
-  const handles = await initializeHandles({
-    mode: "bundle",
-    files: args.files,
-    tsconfig: args.tsconfig,
-  });
-
   await login({
     apiKey: args.api_key,
     orgName: args.org_name,
     appUrl: args.app_url,
+  });
+}
+
+export async function bundleCommand(args: BundleArgs) {
+  await loadCLIEnv(args);
+
+  const handles = await initializeHandles({
+    mode: "bundle",
+    files: args.files,
+    tsconfig: args.tsconfig,
   });
 
   try {
@@ -63,6 +67,7 @@ export async function bundleCommand(args: BundleArgs) {
       handles,
       setCurrent: true,
       verbose: args.verbose,
+      defaultIfExists: args.if_exists,
     });
 
     if (numFailed > 0) {
