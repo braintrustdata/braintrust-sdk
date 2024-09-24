@@ -472,7 +472,7 @@ export function _internalSetInitialState() {
 }
 export const _internalGetGlobalState = () => _globalState;
 
-class FailedHTTPResponse extends Error {
+export class FailedHTTPResponse extends Error {
   public status: number;
   public text: string;
   public data: any;
@@ -3624,18 +3624,18 @@ function splitLoggingData({
     if (value instanceof BraintrustStream) {
       const streamCopy = value.copy();
       lazyInternalData[key] = new LazyValue(async () => {
-        return await new Promise((resolve) => {
+        return await new Promise((resolve, reject) => {
           streamCopy
             .toReadableStream()
-            .pipeThrough(createFinalValuePassThroughStream(resolve))
+            .pipeThrough(createFinalValuePassThroughStream(resolve, reject))
             .pipeTo(devNullWritableStream());
         });
       });
     } else if (value instanceof ReadableStream) {
       lazyInternalData[key] = new LazyValue(async () => {
-        return await new Promise((resolve) => {
+        return await new Promise((resolve, reject) => {
           value
-            .pipeThrough(createFinalValuePassThroughStream(resolve))
+            .pipeThrough(createFinalValuePassThroughStream(resolve, reject))
             .pipeTo(devNullWritableStream());
         });
       });
@@ -4053,10 +4053,12 @@ export class Prompt {
     buildArgs: unknown,
     options: {
       flavor?: Flavor;
+      messages?: Message[];
     } = {},
   ): CompiledPrompt<Flavor> {
     return this.runBuild(buildArgs, {
       flavor: options.flavor ?? "chat",
+      messages: options.messages,
     }) as CompiledPrompt<Flavor>;
   }
 
@@ -4064,6 +4066,7 @@ export class Prompt {
     buildArgs: unknown,
     options: {
       flavor: Flavor;
+      messages?: Message[];
     },
   ): CompiledPrompt<Flavor> {
     const { flavor } = options;
@@ -4127,12 +4130,14 @@ export class Prompt {
 
       const render = (template: string) =>
         Mustache.render(template, variables, undefined, {
-          escape: (v: any) => (typeof v === "string" ? v : JSON.stringify(v)),
+          escape: (v: unknown) =>
+            typeof v === "string" ? v : JSON.stringify(v),
         });
 
-      const messages = (prompt.messages || []).map((m) =>
-        renderMessage(render, m),
-      );
+      const messages = [
+        ...(prompt.messages || []).map((m) => renderMessage(render, m)),
+        ...(options.messages ?? []),
+      ];
 
       return {
         ...params,
@@ -4149,6 +4154,11 @@ export class Prompt {
     } else if (flavor === "completion") {
       if (prompt.type !== "completion") {
         throw new Error("Prompt is a chat prompt. Use buildChat() instead");
+      }
+      if (options.messages) {
+        throw new Error(
+          "extra messages are not supported for completion prompts",
+        );
       }
 
       return {

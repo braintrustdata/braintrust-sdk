@@ -8,7 +8,7 @@ import { ObjectType, datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
-import { runtimeContextSchema } from "./functions";
+import { functionTypeEnum, runtimeContextSchema } from "./functions";
 import { savedFunctionIdSchema } from "./function_id";
 
 // Section: App DB table schemas
@@ -227,8 +227,8 @@ const promptSchemaObject = z.object({
     .describe("The prompt, model, and its parameters"),
   tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
   metadata: promptBaseSchema.shape.metadata,
-  // An empty (unspecified) function_type is equivalent to "dynamic".
-  function_type: z.enum(["task", "llm", "scorer"]).nullish(),
+  // An empty (unspecified) function_type is equivalent to "task".
+  function_type: functionTypeEnum.nullish(),
 });
 
 export const promptSchema = promptSchemaObject.openapi("Prompt");
@@ -236,16 +236,25 @@ export type Prompt = z.infer<typeof promptSchema>;
 
 export const codeBundleSchema = z.object({
   runtime_context: runtimeContextSchema,
-  location: z.object({
-    type: z.literal("experiment"),
-    eval_name: z.string(),
-    position: z.union([
-      z.object({ type: z.literal("task") }),
-      z
-        .object({ type: z.literal("scorer"), index: z.number() })
-        .openapi({ title: "scorer" }),
-    ]),
-  }),
+  location: z.union([
+    z.object({
+      type: z.literal("experiment"),
+      eval_name: z.string(),
+      position: z.union([
+        z.object({ type: z.literal("task") }),
+        z
+          .object({
+            type: z.literal("scorer"),
+            index: z.number().int().nonnegative(),
+          })
+          .openapi({ title: "scorer" }),
+      ]),
+    }),
+    z.object({
+      type: z.literal("function"),
+      index: z.number().int().nonnegative(),
+    }),
+  ]),
   bundle_id: z.string(),
   preview: z.string().nullish().describe("A preview of the code"),
 });
@@ -306,6 +315,13 @@ export const functionSchema = promptSchemaObject
             ),
         })
         .nullish(),
+      function_schema: z
+        .object({
+          parameters: z.unknown(),
+          returns: z.unknown().optional(),
+        })
+        .nullish()
+        .describe("JSON schema for the function's parameters and return type"),
     }),
   )
   .openapi("Function");

@@ -4,7 +4,7 @@ import * as esbuild from "esbuild";
 import * as dotenv from "dotenv";
 import fs from "fs";
 import os from "os";
-import path, { dirname } from "path";
+import path from "path";
 import util from "util";
 import * as fsWalk from "@nodelib/fs.walk";
 import { minimatch } from "minimatch";
@@ -14,8 +14,8 @@ import pluralize from "pluralize";
 import {
   login,
   init as initExperiment,
-  _internalGetGlobalState,
   Experiment,
+  BaseMetadata,
 } from "./logger";
 import {
   BarProgressReporter,
@@ -40,44 +40,47 @@ import {
 import { configureNode } from "./node";
 import { isEmpty } from "./util";
 import { loadEnvConfig } from "@next/env";
-import { uploadEvalBundles } from "./functions/upload";
+import { uploadHandleBundles } from "./functions/upload";
 import { loadModule } from "./functions/load-module";
+import { bundleCommand } from "./cli-util/bundle";
+import { RunArgs } from "./cli-util/types";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript
 const { version } = require("../package.json");
 
 // TODO: This could be loaded from configuration
-const INCLUDE = [
+const INCLUDE_EVAL = [
   "**/*.eval.ts",
   "**/*.eval.tsx",
   "**/*.eval.js",
   "**/*.eval.jsx",
 ];
+const INCLUDE_BUNDLE = ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"];
 const EXCLUDE = ["**/node_modules/**", "**/dist/**", "**/build/**"];
 const OUT_EXT = "js";
 
 configureNode();
 
-interface BuildSuccess {
+export interface BuildSuccess {
   type: "success";
   result: esbuild.BuildResult;
   evaluator: EvaluatorFile;
   sourceFile: string;
 }
 
-interface BuildFailure {
+export interface BuildFailure {
   type: "failure";
   error: Error;
   sourceFile: string;
 }
 
-type BuildResult = BuildSuccess | BuildFailure;
+export type BtBuildResult = BuildSuccess | BuildFailure;
 export interface FileHandle {
   inFile: string;
   outFile: string;
   bundleFile?: string;
-  rebuild: () => Promise<BuildResult>;
+  rebuild: () => Promise<BtBuildResult>;
   bundle: () => Promise<esbuild.BuildResult>;
   watch: () => void;
   destroy: () => Promise<void>;
@@ -113,8 +116,8 @@ async function initLogger(
 }
 
 function resolveReporter(
-  reporter: string | ReporterDef<any> | undefined,
-  reporters: Record<string, ReporterDef<any>>,
+  reporter: string | ReporterDef<unknown> | undefined,
+  reporters: Record<string, ReporterDef<unknown>>,
 ) {
   if (typeof reporter === "string") {
     if (!reporters[reporter]) {
@@ -138,15 +141,15 @@ function resolveReporter(
 type AllReports = Record<
   string,
   {
-    reporter: ReporterDef<any>;
-    results: (any | Promise<any>)[];
+    reporter: ReporterDef<unknown>;
+    results: (unknown | Promise<unknown>)[];
   }
 >;
 
 function addReport(
   evalReports: AllReports,
-  reporter: ReporterDef<any>,
-  report: any,
+  reporter: ReporterDef<unknown>,
+  report: unknown,
 ) {
   if (!evalReports[reporter.name]) {
     evalReports[reporter.name] = {
@@ -194,7 +197,12 @@ function buildWatchPluginForEvaluator(
         for (const evaluator of Object.values(evalResult.evaluators)) {
           evaluators.evaluators.push({
             sourceFile: inFile,
-            evaluator: evaluator.evaluator,
+            evaluator: evaluator.evaluator as EvaluatorDef<
+              unknown,
+              unknown,
+              unknown,
+              BaseMetadata
+            >,
             reporter: evaluator.reporter,
           });
         }
@@ -207,8 +215,8 @@ function buildWatchPluginForEvaluator(
         const evalReports: Record<
           string,
           {
-            reporter: ReporterDef<any>;
-            results: any[];
+            reporter: ReporterDef<unknown>;
+            results: unknown[];
           }
         > = {};
         for (const evaluatorDef of Object.values(evalResult.evaluators)) {
@@ -262,16 +270,21 @@ async function initFile({
   inFile,
   outFile,
   bundleFile,
-  opts,
-  args,
+  tsconfig,
+  plugins,
 }: {
   inFile: string;
   outFile: string;
   bundleFile: string;
-  opts: EvaluatorOpts;
-  args: RunArgs;
+  tsconfig?: string;
+  plugins?: PluginMaker[];
 }): Promise<FileHandle> {
-  const buildOptions = buildOpts(inFile, outFile, opts, args);
+  const buildOptions = buildOpts({
+    fileName: inFile,
+    outFile,
+    tsconfig,
+    plugins,
+  });
   const ctx = await esbuild.context(buildOptions);
 
   return {
@@ -289,6 +302,7 @@ async function initFile({
           };
         }
         const evaluator = evaluateBuildResults(inFile, result) || {
+          functions: [],
           evaluators: {},
           reporters: {},
         };
@@ -299,7 +313,12 @@ async function initFile({
     },
     bundle: async () => {
       const buildOptions: esbuild.BuildOptions = {
-        ...buildOpts(inFile, bundleFile, opts, args),
+        ...buildOpts({
+          fileName: inFile,
+          outFile: bundleFile,
+          tsconfig,
+          plugins,
+        }),
         external: [],
         write: true,
         plugins: [],
@@ -320,11 +339,11 @@ async function initFile({
 export interface EvaluatorState {
   evaluators: {
     sourceFile: string;
-    evaluator: EvaluatorDef<any, any, any, any>;
-    reporter: string | ReporterDef<any> | undefined;
+    evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>;
+    reporter: string | ReporterDef<unknown> | undefined;
   }[];
   reporters: {
-    [reporter: string]: ReporterDef<any>;
+    [reporter: string]: ReporterDef<unknown>;
   };
 }
 
@@ -344,30 +363,51 @@ interface EvaluatorOpts {
   progressReporter: ProgressReporter;
 }
 
+export function handleBuildFailure({
+  result,
+  terminateOnFailure,
+  verbose,
+}: {
+  result: BuildFailure;
+  terminateOnFailure: boolean;
+  verbose: boolean;
+}) {
+  if (terminateOnFailure) {
+    throw result.error;
+  } else if (verbose) {
+    console.warn(`Failed to compile ${result.sourceFile}`);
+    console.warn(result.error);
+  } else {
+    console.warn(
+      `Failed to compile ${result.sourceFile}: ${result.error.message}`,
+    );
+  }
+}
+
 function updateEvaluators(
   evaluators: EvaluatorState,
-  buildResults: BuildResult[],
+  buildResults: BtBuildResult[],
   opts: EvaluatorOpts,
 ) {
   for (const result of buildResults) {
     if (result.type === "failure") {
-      if (opts.terminateOnFailure) {
-        throw result.error;
-      } else if (opts.verbose) {
-        console.warn(`Failed to compile ${result.sourceFile}`);
-        console.warn(result.error);
-      } else {
-        console.warn(
-          `Failed to compile ${result.sourceFile}: ${result.error.message}`,
-        );
-      }
+      handleBuildFailure({
+        result,
+        terminateOnFailure: opts.terminateOnFailure,
+        verbose: opts.verbose,
+      });
       continue;
     }
 
     for (const evaluator of Object.values(result.evaluator.evaluators)) {
       evaluators.evaluators.push({
         sourceFile: result.sourceFile,
-        evaluator: evaluator.evaluator,
+        evaluator: evaluator.evaluator as EvaluatorDef<
+          unknown,
+          unknown,
+          unknown,
+          BaseMetadata
+        >,
         reporter: evaluator.reporter,
       });
     }
@@ -391,10 +431,13 @@ function updateEvaluators(
   }
 }
 
-async function runAndWatch(
-  handles: Record<string, FileHandle>,
-  opts: EvaluatorOpts,
-) {
+async function runAndWatch({
+  handles,
+  onExit,
+}: {
+  handles: Record<string, FileHandle>;
+  onExit?: () => void;
+}) {
   const count = Object.keys(handles).length;
   console.error(`Watching ${pluralize("file", count, true)}...`);
 
@@ -406,7 +449,7 @@ async function runAndWatch(
       for (const handle of Object.values(handles)) {
         handle.destroy();
       }
-      opts.progressReporter.stop();
+      onExit?.();
       process.exit(0);
     });
   });
@@ -447,13 +490,9 @@ async function runOnce(
     return true;
   }
 
-  const experimentIdToEvaluator: Record<
-    string,
-    {
-      evaluator: EvaluatorState["evaluators"][number];
-      experiment: Experiment;
-    }
-  > = {};
+  // map from file name -> eval name -> experiment
+  const evalToExperiment: Record<string, Record<string, Experiment>> = {};
+
   const resultPromises = evaluators.evaluators.map(async (evaluator) => {
     const { data, baseExperiment } = callEvaluatorData(
       evaluator.evaluator.data,
@@ -481,10 +520,12 @@ async function runOnce(
       );
     } finally {
       if (logger) {
-        experimentIdToEvaluator[await logger.id] = {
-          evaluator,
-          experiment: logger,
-        };
+        if (!evalToExperiment[evaluator.sourceFile]) {
+          evalToExperiment[evaluator.sourceFile] = {};
+        }
+        evalToExperiment[evaluator.sourceFile][evaluator.evaluator.evalName] =
+          logger;
+
         await logger.flush();
       }
     }
@@ -498,8 +539,8 @@ async function runOnce(
   const evalReports: Record<
     string,
     {
-      reporter: ReporterDef<any>;
-      results: [];
+      reporter: ReporterDef<unknown>;
+      results: unknown[];
     }
   > = {};
   for (let idx = 0; idx < evaluators.evaluators.length; idx++) {
@@ -521,23 +562,13 @@ async function runOnce(
     addReport(evalReports, resolvedReporter, report);
   }
 
-  if (
-    bundlePromises !== null &&
-    Object.entries(experimentIdToEvaluator).length > 0
-  ) {
-    const bundleSpecs: Record<string, Record<string, string>> = {};
-    for (const [experimentId, evaluator] of Object.entries(
-      experimentIdToEvaluator,
-    )) {
-      if (!bundleSpecs[evaluator.evaluator.sourceFile]) {
-        bundleSpecs[evaluator.evaluator.sourceFile] = {};
-      }
-      bundleSpecs[evaluator.evaluator.sourceFile][experimentId] =
-        evaluator.evaluator.evaluator.evalName;
-    }
-
-    await uploadEvalBundles({
-      experimentIdToEvaluator,
+  if (bundlePromises !== null && Object.entries(evalToExperiment).length > 0) {
+    await uploadHandleBundles({
+      buildResults: buildResults.filter(
+        // We handle errors above, so it's fine to filter down to successes here.
+        (result): result is BuildSuccess => result.type === "success",
+      ),
+      evalToExperiment,
       bundlePromises,
       handles,
       setCurrent: opts.setCurrent,
@@ -546,7 +577,7 @@ async function runOnce(
   }
 
   let allSuccess = true;
-  for (const [reporterName, { reporter, results }] of Object.entries(
+  for (const [_reporterName, { reporter, results }] of Object.entries(
     evalReports,
   )) {
     const success = await reporter.reportRun(await Promise.all(results));
@@ -554,25 +585,6 @@ async function runOnce(
   }
 
   return allSuccess;
-}
-
-interface RunArgs {
-  files: string[];
-  watch: boolean;
-  list: boolean;
-  jsonl: boolean;
-  verbose: boolean;
-  api_key?: string;
-  org_name?: string;
-  app_url?: string;
-  filter?: string[];
-  tsconfig?: string;
-  no_send_logs: boolean;
-  no_progress_bars: boolean;
-  terminate_on_failure: boolean;
-  bundle: boolean;
-  set_current: boolean;
-  env_file?: string;
 }
 
 function checkMatch(
@@ -609,7 +621,10 @@ function checkMatch(
   return true;
 }
 
-async function collectFiles(inputPath: string): Promise<string[]> {
+async function collectFiles(
+  inputPath: string,
+  mode: "eval" | "bundle",
+): Promise<string[]> {
   let pathStat = null;
   try {
     pathStat = fs.lstatSync(inputPath);
@@ -620,11 +635,18 @@ async function collectFiles(inputPath: string): Promise<string[]> {
 
   let files: string[] = [];
   if (!pathStat.isDirectory()) {
-    if (!checkMatch(inputPath, INCLUDE, EXCLUDE)) {
+    if (
+      !checkMatch(
+        inputPath,
+        mode === "eval" ? INCLUDE_EVAL : INCLUDE_BUNDLE,
+        EXCLUDE,
+      )
+    ) {
+      const prefix = mode === "eval" ? ".eval" : "";
       console.warn(
         warning(
-          `Reading ${inputPath} because it was specified directly. Rename it to end in .eval.ts or ` +
-            `.eval.js to include it automatically when you specify a directory.`,
+          `Reading ${inputPath} because it was specified directly. Rename it to end in ${prefix}.ts or ` +
+            `.${prefix}.js to include it automatically when you specify a directory.`,
         ),
       );
     }
@@ -636,7 +658,7 @@ async function collectFiles(inputPath: string): Promise<string[]> {
       },
       entryFilter: (entry) => {
         return (
-          entry.dirent.isFile() && checkMatch(entry.path, INCLUDE, EXCLUDE)
+          entry.dirent.isFile() && checkMatch(entry.path, INCLUDE_EVAL, EXCLUDE)
         );
       },
     });
@@ -651,7 +673,7 @@ async function collectFiles(inputPath: string): Promise<string[]> {
 // In addition to marking node_modules external, explicitly mark
 // our packages (braintrust and autoevals) external, in case they're
 // installed in a relative path.
-let markOurPackagesExternalPlugin = {
+const markOurPackagesExternalPlugin = {
   name: "make-all-packages-external",
   setup(build: esbuild.PluginBuild) {
     const filter = /^(braintrust|autoevals|@braintrust\/)/;
@@ -662,16 +684,23 @@ let markOurPackagesExternalPlugin = {
   },
 };
 
-function buildOpts(
-  fileName: string,
-  outFile: string,
-  opts: EvaluatorOpts,
-  args: RunArgs,
-): esbuild.BuildOptions {
-  const plugins = [markOurPackagesExternalPlugin];
-  if (opts.watch) {
-    plugins.push(buildWatchPluginForEvaluator(fileName, opts));
-  }
+export type PluginMaker = (fileName: string) => esbuild.Plugin;
+
+function buildOpts({
+  fileName,
+  outFile,
+  tsconfig,
+  plugins: argPlugins,
+}: {
+  fileName: string;
+  outFile: string;
+  tsconfig?: string;
+  plugins?: PluginMaker[];
+}): esbuild.BuildOptions {
+  const plugins = [
+    markOurPackagesExternalPlugin,
+    ...(argPlugins || []).map((fn) => fn(fileName)),
+  ];
   return {
     entryPoints: [fileName],
     bundle: true,
@@ -681,17 +710,27 @@ function buildOpts(
     write: false,
     // Remove the leading "v" from process.version
     target: `node${process.version.slice(1)}`,
-    tsconfig: args.tsconfig,
+    tsconfig,
     external: ["node_modules/*"],
     plugins: plugins,
   };
 }
 
-async function initializeHandles(args: RunArgs, opts: EvaluatorOpts) {
+export async function initializeHandles({
+  files: inputFiles,
+  mode,
+  plugins,
+  tsconfig,
+}: {
+  files: string[];
+  mode: "eval" | "bundle";
+  plugins?: PluginMaker[];
+  tsconfig?: string;
+}) {
   const files: Record<string, boolean> = {};
-  const inputPaths = args.files.length > 0 ? args.files : ["."];
+  const inputPaths = inputFiles.length > 0 ? inputFiles : ["."];
   for (const inputPath of inputPaths) {
-    const newFiles = await collectFiles(inputPath);
+    const newFiles = await collectFiles(inputPath, mode);
     if (newFiles.length == 0) {
       console.warn(
         warning(
@@ -711,7 +750,7 @@ async function initializeHandles(args: RunArgs, opts: EvaluatorOpts) {
     process.exit(0);
   }
 
-  let tmpDir = path.join(os.tmpdir(), `btevals-${uuidv4().slice(0, 8)}`);
+  const tmpDir = path.join(os.tmpdir(), `btevals-${uuidv4().slice(0, 8)}`);
   // fs.mkdirSync(tmpDir, { recursive: true });
 
   const initPromises = [];
@@ -723,7 +762,13 @@ async function initializeHandles(args: RunArgs, opts: EvaluatorOpts) {
     const outFile = path.join(tmpDir, `${baseName}.${OUT_EXT}`);
     const bundleFile = path.join(tmpDir, `${baseName}.bundle.js`);
     initPromises.push(
-      initFile({ inFile: file, outFile, opts, bundleFile, args }),
+      initFile({
+        inFile: file,
+        outFile,
+        bundleFile,
+        plugins,
+        tsconfig,
+      }),
     );
   }
 
@@ -754,8 +799,8 @@ async function run(args: RunArgs) {
     orgName: args.org_name,
     appUrl: args.app_url,
     noSendLogs: !!args.no_send_logs,
-    bundle: !!args.bundle,
-    setCurrent: !!args.set_current,
+    bundle: !!args.bundle || !!args.push,
+    setCurrent: !!args.push,
     terminateOnFailure: !!args.terminate_on_failure,
     watch: !!args.watch,
     jsonl: args.jsonl,
@@ -771,7 +816,19 @@ async function run(args: RunArgs) {
     process.exit(1);
   }
 
-  const handles = await initializeHandles(args, evaluatorOpts);
+  const plugins = evaluatorOpts.watch
+    ? [
+        (fileName: string) =>
+          buildWatchPluginForEvaluator(fileName, evaluatorOpts),
+      ]
+    : [];
+
+  const handles = await initializeHandles({
+    files: args.files,
+    mode: "eval",
+    tsconfig: args.tsconfig,
+    plugins,
+  });
 
   let success = true;
   try {
@@ -783,7 +840,12 @@ async function run(args: RunArgs) {
       });
     }
     if (args.watch) {
-      await runAndWatch(handles, evaluatorOpts);
+      await runAndWatch({
+        handles,
+        onExit: () => {
+          evaluatorOpts.progressReporter.stop();
+        },
+      });
     } else {
       success = await runOnce(handles, evaluatorOpts);
     }
@@ -799,9 +861,32 @@ async function run(args: RunArgs) {
   }
 }
 
-async function main() {
-  const [, ...args] = process.argv;
+function addAuthArgs(parser: ArgumentParser) {
+  parser.add_argument("--api-key", {
+    help: "Specify a braintrust api key. If the parameter is not specified, the BRAINTRUST_API_KEY environment variable will be used.",
+  });
+  parser.add_argument("--org-name", {
+    help: "The name of a specific organization to connect to. This is useful if you belong to multiple.",
+  });
+  parser.add_argument("--app-url", {
+    help: "Specify a custom braintrust app url. Defaults to https://www.braintrust.dev. This is only necessary if you are using an experimental version of Braintrust",
+  });
+  parser.add_argument("--env-file", {
+    help: "A path to a .env file containing environment variables to load (via dotenv).",
+  });
+}
 
+function addCompileArgs(parser: ArgumentParser) {
+  parser.add_argument("--terminate-on-failure", {
+    action: "store_true",
+    help: "If provided, terminates on a failing eval, instead of the default (moving onto the next one).",
+  });
+  parser.add_argument("--tsconfig", {
+    help: "Specify a custom tsconfig.json file to use.",
+  });
+}
+
+async function main() {
   const parser = new ArgumentParser({
     description: "Braintrust CLI",
   });
@@ -822,19 +907,7 @@ async function main() {
     help: "Run evals locally.",
     parents: [parentParser],
   });
-  parser_run.add_argument("--api-key", {
-    help: "Specify a braintrust api key. If the parameter is not specified, the BRAINTRUST_API_KEY environment variable will be used.",
-  });
-  parser_run.add_argument("--org-name", {
-    help: "The name of a specific organization to connect to. This is useful if you belong to multiple.",
-  });
-  parser_run.add_argument("--app-url", {
-    help: "Specify a custom braintrust app url. Defaults to https://www.braintrust.dev. This is only necessary if you are using an experimental version of Braintrust",
-  });
-  parser_run.add_argument("--watch", {
-    action: "store_true",
-    help: "Watch files for changes and rerun evals when changes are detected",
-  });
+  addAuthArgs(parser_run);
   parser_run.add_argument("--filter", {
     help: "Only run evaluators that match these filters. Each filter is a regular expression (https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp). For example, --filter metadata.priority='^P0$' input.name='foo.*bar' will only run evaluators that have metadata.priority equal to 'P0' and input.name matching the regular expression 'foo.*bar'.",
     nargs: "*",
@@ -847,8 +920,10 @@ async function main() {
     action: "store_true",
     help: "Format score summaries as jsonl, i.e. one JSON-formatted line per summary.",
   });
-  parser_run.add_argument("--tsconfig", {
-    help: "Specify a custom tsconfig.json file to use.",
+  addCompileArgs(parser_run);
+  parser_run.add_argument("--watch", {
+    action: "store_true",
+    help: "Watch files for changes and rerun evals when changes are detected",
   });
   parser_run.add_argument("--no-send-logs", {
     action: "store_true",
@@ -858,26 +933,30 @@ async function main() {
     action: "store_true",
     help: "Do not show progress bars when processing evaluators.",
   });
-  parser_run.add_argument("--terminate-on-failure", {
-    action: "store_true",
-    help: "If provided, terminates on a failing eval, instead of the default (moving onto the next one).",
-  });
   parser_run.add_argument("--bundle", {
     action: "store_true",
     help: "Experimental (do not use unless you know what you're doing)",
   });
-  parser_run.add_argument("--set-current", {
+  parser_run.add_argument("--push", {
     action: "store_true",
-    help: "Mark the current run as the current for all experiments. This updates the bundled scorers in your project to this run.",
-  });
-  parser_run.add_argument("--env-file", {
-    help: "A path to a .env file containing environment variables to load (via dotenv).",
+    help: "Push the scorers from the current run to Braintrust. This will mark the current run's scorers as the latest version in the project.",
   });
   parser_run.add_argument("files", {
     nargs: "*",
     help: "A list of files or directories to run. If no files are specified, the current directory is used.",
   });
   parser_run.set_defaults({ func: run });
+
+  const parser_push = subparser.add_parser("push", {
+    help: "Bundle prompts, tools, scorers, and other resources into Braintrust",
+  });
+  addAuthArgs(parser_push);
+  addCompileArgs(parser_push);
+  parser_push.add_argument("files", {
+    nargs: "*",
+    help: "A list of files or directories containing functions to bundle. If no files are specified, the current directory is used.",
+  });
+  parser_push.set_defaults({ func: bundleCommand });
 
   const parsed = parser.parse_args();
 

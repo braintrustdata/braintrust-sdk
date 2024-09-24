@@ -14,12 +14,15 @@ import {
   FullInitOptions,
   BraintrustState,
   logError as logSpanError,
+  withCurrent,
+  startSpan,
 } from "./logger";
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
 import { isEmpty } from "./util";
 import { queue } from "async";
+import { CodeFunction } from "./framework2";
 
 export type BaseExperiment<
   Input,
@@ -273,10 +276,19 @@ export type EvaluatorDef<
   evalName: string;
 } & Evaluator<Input, Output, Expected, Metadata>;
 
+export type GenericFunction<Input, Output> =
+  | ((input: Input) => Output)
+  | ((input: Input) => Promise<Output>);
+
 export type EvaluatorFile = {
+  functions: CodeFunction<
+    unknown,
+    unknown,
+    GenericFunction<unknown, unknown>
+  >[];
   evaluators: {
     [evalName: string]: {
-      evaluator: EvaluatorDef<any, any, any, any>;
+      evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>;
       reporter?: ReporterDef<unknown> | string;
     };
   };
@@ -304,7 +316,7 @@ export function callEvaluatorData<
   data: EvalData<Input, Expected, Metadata>;
   baseExperiment: string | undefined;
 } {
-  let dataResult = typeof data === "function" ? data() : data;
+  const dataResult = typeof data === "function" ? data() : data;
 
   let baseExperiment: string | undefined = undefined;
   if ("_type" in dataResult && dataResult._type === "BaseExperiment") {
@@ -319,16 +331,22 @@ export function callEvaluatorData<
 
 export type SpanContext = {
   currentSpan: typeof currentSpan;
+  startSpan: typeof startSpan;
+  withCurrent: typeof withCurrent;
   NOOP_SPAN: typeof NOOP_SPAN;
 };
 
 declare global {
+  // eslint-disable-next-line no-var
   var _evals: EvaluatorFile;
+  // eslint-disable-next-line no-var
   var _spanContext: SpanContext | undefined;
+  // eslint-disable-next-line no-var
   var _lazy_load: boolean;
 }
 
 globalThis._evals = {
+  functions: [],
   evaluators: {},
   reporters: {},
 };
@@ -336,6 +354,13 @@ globalThis._evals = {
 export interface EvalOptions<EvalReport> {
   reporter?: ReporterDef<EvalReport> | string;
   onStart?: (metadata: Omit<ExperimentSummary, "scores" | "metrics">) => void;
+}
+
+export function _initializeSpanContext() {
+  // This only needs to be set once, but Eval(), Task(), etc. are the only time
+  // we get to run code while importing a module, so use it to
+  // grab these values.
+  globalThis._spanContext = { currentSpan, withCurrent, startSpan, NOOP_SPAN };
 }
 
 export async function Eval<
@@ -363,14 +388,15 @@ export async function Eval<
   }
   if (globalThis._lazy_load) {
     globalThis._evals.evaluators[evalName] = {
-      evaluator: { evalName, projectName: name, ...evaluator },
+      evaluator: {
+        evalName,
+        projectName: name,
+        ...evaluator,
+      } as EvaluatorDef<unknown, unknown, unknown, BaseMetadata>,
       reporter: options.reporter,
     };
 
-    // This only needs to be set once, but Eval() is the only time
-    // we get to run code while importing a module, so use it to
-    // grab these values.
-    globalThis._spanContext = { currentSpan, NOOP_SPAN };
+    _initializeSpanContext();
 
     // Better to return this empty object than have an annoying-to-use signature
     return new EvalResultWithSummary(
@@ -460,7 +486,7 @@ export interface Filter {
   pattern: RegExp;
 }
 
-export function serializeJSONWithPlainString(v: any) {
+export function serializeJSONWithPlainString(v: unknown) {
   if (typeof v === "string") {
     return v;
   } else {
@@ -518,13 +544,13 @@ export async function runEvaluator(
   progressReporter: ProgressReporter,
   filters: Filter[],
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
-  let result = runEvaluatorInternal(
+  const result = runEvaluatorInternal(
     experiment,
     evaluator,
     progressReporter,
     filters,
   );
-  let timer = async () => {
+  const timer = async () => {
     await new Promise((_, reject) => {
       if (evaluator.timeout) {
         setTimeout(() => {
@@ -534,7 +560,7 @@ export async function runEvaluator(
     });
     return null;
   };
-  let winner = await Promise.race([result, timer()]);
+  const winner = await Promise.race([result, timer()]);
   if (!winner) {
     throw new Error("unreachable");
   }
@@ -610,8 +636,8 @@ async function runEvaluatorInternal(
     scores: Record<string, number | null>;
     error: unknown;
   }
-  let results: EvalResult[] = [];
-  let q = queue(
+  const results: EvalResult[] = [];
+  const q = queue(
     async (datum: EvalCase<any, any, any>) => {
       const callback = async (rootSpan: Span) => {
         let metadata: Record<string, unknown> = {
@@ -619,7 +645,7 @@ async function runEvaluatorInternal(
         };
         let output: any = undefined;
         let error: unknown | undefined = undefined;
-        let scores: Record<string, number | null> = {};
+        const scores: Record<string, number | null> = {};
         try {
           const meta = (o: Record<string, unknown>) =>
             (metadata = { ...metadata, ...o });
@@ -683,7 +709,7 @@ async function runEvaluatorInternal(
                           ];
 
                     const getOtherFields = (s: Score) => {
-                      const { metadata, name, ...rest } = s;
+                      const { metadata: _metadata, name: _name, ...rest } = s;
                       return rest;
                     };
 

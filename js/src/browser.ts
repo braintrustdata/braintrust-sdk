@@ -2,7 +2,7 @@ import { configureBrowser } from "./browser-config";
 
 configureBrowser();
 
-export * from "./logger";
-export * from "./functions/invoke";
-export * from "./functions/stream";
-export * from "./wrappers/oai";
+import * as braintrust from "./exports-browser";
+export * from "./exports-browser";
+
+export default braintrust;

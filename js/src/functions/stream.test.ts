@@ -38,9 +38,14 @@ test("final value passthrough", async () => {
     let finalValue: unknown = null;
     await inputStream
       .pipeThrough(
-        createFinalValuePassThroughStream((v) => {
-          finalValue = v;
-        }),
+        createFinalValuePassThroughStream(
+          (v) => {
+            finalValue = v;
+          },
+          (e) => {
+            console.error("ERROR", e);
+          },
+        ),
       )
       .pipeTo(sink);
 

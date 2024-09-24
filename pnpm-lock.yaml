@@ -121,6 +121,9 @@ importers:
       simple-git:
         specifier: ^3.21.0
         version: 3.21.0
+      slugify:
+        specifier: ^1.6.6
+        version: 1.6.6
       source-map:
         specifier: ^0.7.4
         version: 0.7.4
@@ -130,6 +133,9 @@ importers:
       zod:
         specifier: ^3.22.4
         version: 3.22.4
+      zod-to-json-schema:
+        specifier: ^3.22.5
+        version: 3.23.0(zod@3.22.4)
     devDependencies:
       '@jest/globals':
         specifier: ^29.7.0
@@ -4912,6 +4918,11 @@ packages:
     engines: {node: '>=8'}
     dev: true
 
+  /slugify@1.6.6:
+    resolution: {integrity: sha512-h+z7HKHYXj6wJU+AnS/+IH8Uh9fdcX1Lrhg1/VMdf9PwoBQXFcXiAdsy2tSK0P6gKwJLXp02r90ahUCqHk9rrw==}
+    engines: {node: '>=8.0.0'}
+    dev: false
+
   /source-map-js@1.2.0:
     resolution: {integrity: sha512-itJW8lvSA0TXEphiRoawsCksnlf8SyvmFzIhltqAHluXd88pkCd+cXJVHTDwdCr0IzwptSm035IHQktUu1QUMg==}
     engines: {node: '>=0.10.0'}
@@ -5872,7 +5883,6 @@ packages:
       zod: ^3.23.3
     dependencies:
       zod: 3.22.4
-    dev: true
 
   /zod@3.22.4:
     resolution: {integrity: sha512-iC+8Io04lddc+mVqQ9AZ7OQ2MrUKGN+oIQyq1vemgt46jwCwLfhq7/pwnBnNXXXZb8VTVLKwp9EDkx+ryxIWmg==}

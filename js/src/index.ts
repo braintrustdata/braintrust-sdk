@@ -55,37 +55,6 @@ import { configureNode } from "./node";
 
 configureNode();
 
-export * from "./logger";
-export * from "./functions/stream";
-export * from "./functions/invoke";
-export {
-  BaseExperiment,
-  Evaluator,
-  EvalTask,
-  Eval,
-  EvalResult,
-  EvalScorerArgs,
-  EvalScorer,
-  EvaluatorDef,
-  ReporterBody,
-  Reporter,
-  buildLocalSummary,
-  reportFailures,
-} from "./framework";
-export { LazyValue } from "./util";
-export * from "./wrappers/oai";
-export * from "./wrappers/ai-sdk";
-export type {
-  ParentExperimentIds,
-  ParentProjectLogIds,
-  IdField,
-  InputField,
-  InputsField,
-  OtherExperimentLogFields,
-  ExperimentLogPartialArgs,
-  ExperimentLogFullArgs,
-  LogFeedbackFullArgs,
-  LogCommentFullArgs,
-  CommentEvent,
-  DatasetRecord,
-} from "@braintrust/core";
+export * from "./exports-node";
+import * as braintrust from "./exports-node";
+export default braintrust;
