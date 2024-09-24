@@ -85,9 +85,14 @@ export function getEventObjectDescription(objectType: ObjectTypeWithEvent) {
 }
 
 export function getObjectArticle(objectType: ObjectType) {
-  return ["acl", "api_key", "experiment", "organization", "ai_secret"].includes(
-    objectType,
-  )
+  return [
+    "acl",
+    "api_key",
+    "experiment",
+    "organization",
+    "ai_secret",
+    "env_var",
+  ].includes(objectType)
     ? "an"
     : "a";
 }

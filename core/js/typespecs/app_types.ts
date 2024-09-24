@@ -1226,23 +1226,18 @@ export const patchAISecretSchema = z.object({
   secret: z.string().nullish(),
 });
 
-export const createEnvVarSchema = z.object({
-  object_type: envVarObjectTypeEnum,
-  object_id: z
-    .string()
-    .uuid()
-    .describe("The id of the object the environment variable is scoped for"),
-  name: z.string().describe("The name of the environment variable"),
-  value: z
-    .string()
-    .nullish()
-    .describe(
-      "The value of the environment variable. Will be encrypted at rest.",
-    ),
-});
+export const createEnvVarSchema = envVarSchema
+  .pick({ object_type: true, object_id: true, name: true })
+  .extend({
+    value: z
+      .string()
+      .nullish()
+      .describe(
+        "The value of the environment variable. Will be encrypted at rest.",
+      ),
+  });
 
-export const patchEnvVarSchema = z.object({
-  name: z.string().nullish().describe("The name of the environment variable"),
+export const patchEnvVarSchema = envVarSchema.pick({ name: true }).extend({
   value: z
     .string()
     .nullish()
