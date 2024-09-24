@@ -14,7 +14,7 @@ import util from "util";
 import slugify from "slugify";
 import path from "path";
 import { currentRepo } from "../gitutil";
-import { isEmpty } from "@braintrust/core";
+import { isEmpty, loadPrettyXact } from "@braintrust/core";
 import {
   ToolFunctionDefinition,
   toolFunctionDefinitionSchema,
@@ -30,6 +30,7 @@ export async function pullCommand(args: PullArgs) {
     ...(args.project_name ? { project_name: args.project_name } : {}),
     ...(args.slug ? { slug: args.slug } : {}),
     ...(args.id ? { ids: [args.id] } : {}),
+    ...(args.version ? { version: loadPrettyXact(args.version) } : {}),
   });
   const functionObjects = z
     .object({ objects: z.array(z.unknown()) })

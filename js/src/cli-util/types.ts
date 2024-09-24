@@ -39,5 +39,6 @@ export interface PullArgs extends CommonArgs, AuthArgs {
   project_id?: string;
   id?: string;
   slug?: string;
+  version?: string;
   force: boolean;
 }

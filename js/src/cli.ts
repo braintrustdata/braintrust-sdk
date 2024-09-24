@@ -989,6 +989,9 @@ async function main() {
   parser_pull.add_argument("--slug", {
     help: "The slug of a specific function to pull.",
   });
+  parser_pull.add_argument("--version", {
+    help: "The version to pull. Will pull the latest version of each prompt that is at or before this version.",
+  });
   parser_pull.add_argument("--force", {
     action: "store_true",
     help: "Overwrite local files if they have uncommitted changes.",
