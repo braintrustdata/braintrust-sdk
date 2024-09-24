@@ -170,6 +170,13 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
       .describe(
         "Human-identifying attributes of the span, such as name, type, etc.",
       ),
+    origin: z
+      .object({
+        object_type: z.string(),
+        object_id: z.string().uuid(),
+        id: z.string(),
+      })
+      .optional(),
     [OBJECT_DELETE_FIELD]: z
       .boolean()
       .nullish()
@@ -394,6 +401,7 @@ export const datasetEventSchema = z
     tags: datasetEventBaseSchema.shape.tags,
     span_id: datasetEventBaseSchema.shape.span_id,
     root_span_id: datasetEventBaseSchema.shape.root_span_id,
+    origin: datasetEventBaseSchema.shape.origin,
   })
   .openapi("DatasetEvent");
 export type DatasetEvent = z.infer<typeof datasetEventSchema>;
@@ -453,6 +461,7 @@ export const projectLogsEventSchema = z
     span_parents: projectLogsEventBaseSchema.shape.span_parents,
     root_span_id: projectLogsEventBaseSchema.shape.root_span_id,
     span_attributes: projectLogsEventBaseSchema.shape.span_attributes,
+    origin: projectLogsEventBaseSchema.shape.origin,
   })
   .openapi("ProjectLogsEvent");
 export type ProjectLogsEvent = z.infer<typeof projectLogsEventSchema>;
