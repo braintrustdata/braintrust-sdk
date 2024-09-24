@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { customTypes } from "../custom_types";
 
-export const functionParametersSchema = z.record(z.unknown());
+export const functionParametersSchema = z.record(customTypes.unknown);
 
 export const functionDefinitionSchema = z.object({
   name: z.string(),
