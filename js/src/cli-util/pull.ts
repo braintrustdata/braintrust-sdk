@@ -19,6 +19,7 @@ import {
   ToolFunctionDefinition,
   toolFunctionDefinitionSchema,
 } from "../framework2";
+import pluralize from "pluralize";
 
 export async function pullCommand(args: PullArgs) {
   await loadCLIEnv(args);
@@ -154,7 +155,7 @@ async function makeProjectFile({
 
 import braintrust from "braintrust";
 
-const project = braintrust.project.create({
+const project = braintrust.projects.create({
   name: ${doubleQuote(projectName)},
 });
 
@@ -251,7 +252,7 @@ function makeFunctionDefinition({
       ? `tools: ${util.inspect(tools, { depth: null }).trimStart()},`
       : "";
 
-  return `export const ${varName} = project.${objectType}.create({
+  return `export const ${varName} = project.${pluralize(objectType)}.create({
   name: ${doubleQuote(func.name)},
   slug: ${doubleQuote(func.slug)},${printOptionalField("description", func.description)}${printOptionalField("model", model)}
 ${indent(promptContents, 2)},
