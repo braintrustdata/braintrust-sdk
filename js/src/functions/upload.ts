@@ -478,7 +478,7 @@ export class ProjectNameIdMap {
         .post_json("api/project/get", {
           id: projectId,
         });
-      const result = z.array(projectSchema).parse(response);
+      const result = z.array(projectSchema).nonempty().parse(response);
       const projectName = result[0].name;
       this.idToName[projectId] = projectName;
       this.nameToId[projectName] = projectId;

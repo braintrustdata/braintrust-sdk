@@ -9,7 +9,7 @@ import { PullArgs } from "./types";
 import { warning } from "../framework";
 import { z } from "zod";
 import { ProjectNameIdMap } from "../functions/upload";
-import fs from "fs";
+import fs from "fs/promises";
 import util from "util";
 import slugify from "slugify";
 import path from "path";
@@ -65,7 +65,7 @@ export async function pullCommand(args: PullArgs) {
   }
 
   const outputDir = args.output_dir ?? "./braintrust";
-  fs.mkdirSync(outputDir, { recursive: true });
+  await fs.mkdir(outputDir, { recursive: true });
 
   const git = await currentRepo();
   const diffSummary = await git?.diffSummary("HEAD");
@@ -85,7 +85,10 @@ export async function pullCommand(args: PullArgs) {
       `${slugify(projectName, { lower: true, strict: true, trim: true })}.ts`,
     );
     const resolvedProjectFile = path.resolve(projectFile);
-    const fileExists = fs.existsSync(projectFile);
+    const fileExists = await fs.stat(projectFile).then(
+      () => true,
+      () => false,
+    );
     if (args.force) {
       if (fileExists) {
         console.warn(
@@ -124,7 +127,7 @@ export async function pullCommand(args: PullArgs) {
       functions: projectNameToFunctions[projectName],
       hasSpecifiedFunction: !!args.slug || !!args.id,
     });
-    fs.writeFileSync(projectFile, projectFileContents);
+    await fs.writeFile(projectFile, projectFileContents);
     console.log(`Wrote ${projectName} to ${doubleQuote(projectFile)}`);
   }
 }
