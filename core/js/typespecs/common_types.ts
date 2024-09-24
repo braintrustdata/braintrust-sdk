@@ -61,6 +61,7 @@ export const objectTypes = z.enum([
   "organization",
   "api_key",
   "ai_secret",
+  "env_var",
 ]);
 export type ObjectType = z.infer<typeof objectTypes>;
 
