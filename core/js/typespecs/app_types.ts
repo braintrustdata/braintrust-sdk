@@ -69,7 +69,8 @@ export const aclObjectTypeEnum = z
     "project_log",
     "org_project",
   ])
-  .describe("The object type that the ACL applies to");
+  .describe("The object type that the ACL applies to")
+  .openapi("AclObjectType");
 export type AclObjectType = z.infer<typeof aclObjectTypeEnum>;
 
 const userBaseSchema = generateBaseTableSchema("user");
@@ -180,12 +181,14 @@ export const apiKeySchema = z
   .openapi("ApiKey");
 export type ApiKey = z.infer<typeof apiKeySchema>;
 
-export const projectSettingsSchema = z.object({
-  comparison_key: z
-    .string()
-    .nullish()
-    .describe("The key used to join two experiments (defaults to `input`)."),
-});
+export const projectSettingsSchema = z
+  .object({
+    comparison_key: z
+      .string()
+      .nullish()
+      .describe("The key used to join two experiments (defaults to `input`)."),
+  })
+  .openapi("ProjectSettings");
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
 
 const projectBaseSchema = generateBaseTableSchema("project");
@@ -256,71 +259,75 @@ const promptSchemaObject = z.object({
 export const promptSchema = promptSchemaObject.openapi("Prompt");
 export type Prompt = z.infer<typeof promptSchema>;
 
-export const codeBundleSchema = z.object({
-  runtime_context: runtimeContextSchema,
-  location: z.union([
-    z
-      .object({
-        type: z.literal("experiment"),
-        eval_name: z.string(),
-        position: z.union([
-          z.object({ type: z.literal("task") }),
-          z
-            .object({
-              type: z.literal("scorer"),
-              index: z.number().int().nonnegative(),
-            })
-            .openapi({ title: "scorer" }),
-        ]),
-      })
-      .openapi({ title: "experiment" }),
-    z
-      .object({
-        type: z.literal("function"),
-        index: z.number().int().nonnegative(),
-      })
-      .openapi({ title: "function" }),
-  ]),
-  bundle_id: z.string(),
-  preview: z.string().nullish().describe("A preview of the code"),
-});
+export const codeBundleSchema = z
+  .object({
+    runtime_context: runtimeContextSchema,
+    location: z.union([
+      z
+        .object({
+          type: z.literal("experiment"),
+          eval_name: z.string(),
+          position: z.union([
+            z.object({ type: z.literal("task") }),
+            z
+              .object({
+                type: z.literal("scorer"),
+                index: z.number().int().nonnegative(),
+              })
+              .openapi({ title: "scorer" }),
+          ]),
+        })
+        .openapi({ title: "experiment" }),
+      z
+        .object({
+          type: z.literal("function"),
+          index: z.number().int().nonnegative(),
+        })
+        .openapi({ title: "function" }),
+    ]),
+    bundle_id: z.string(),
+    preview: z.string().nullish().describe("A preview of the code"),
+  })
+  .openapi("CodeBundle");
 export type CodeBundle = z.infer<typeof codeBundleSchema>;
 
-export const functionDataSchema = z.union([
-  z
-    .object({
-      type: z.literal("prompt"),
-      // For backwards compatibility reasons, the prompt definition is hoisted out and stored
-      // in the outer object
-    })
-    .openapi({ title: "prompt" }),
-  z
-    .object({
-      type: z.literal("code"),
-      data: z.union([
-        z
-          .object({
-            type: z.literal("bundle"),
-          })
-          .and(codeBundleSchema)
-          .openapi({ title: "bundle" }),
-        z
-          .object({
-            type: z.literal("inline"),
-            runtime_context: runtimeContextSchema,
-            code: z.string(),
-          })
-          .openapi({ title: "inline" }),
-      ]),
-    })
-    .openapi({ title: "code" }),
-  z
-    .object({
-      type: z.literal("global"),
-      name: z.string(),
-    })
-    .openapi({ title: "global" }),
-]);
+export const functionDataSchema = z
+  .union([
+    z
+      .object({
+        type: z.literal("prompt"),
+        // For backwards compatibility reasons, the prompt definition is hoisted out and stored
+        // in the outer object
+      })
+      .openapi({ title: "prompt" }),
+    z
+      .object({
+        type: z.literal("code"),
+        data: z.union([
+          z
+            .object({
+              type: z.literal("bundle"),
+            })
+            .and(codeBundleSchema)
+            .openapi({ title: "bundle" }),
+          z
+            .object({
+              type: z.literal("inline"),
+              runtime_context: runtimeContextSchema,
+              code: z.string(),
+            })
+            .openapi({ title: "inline" }),
+        ]),
+      })
+      .openapi({ title: "code" }),
+    z
+      .object({
+        type: z.literal("global"),
+        name: z.string(),
+      })
+      .openapi({ title: "global" }),
+  ])
+  .openapi("FunctionData");
 
 export const functionSchema = promptSchemaObject
   .merge(
@@ -481,7 +488,8 @@ export const permissionEnum = z
       "Each permission permits a certain type of operation on an object in the system",
       "Permissions can be assigned to to objects on an individual basis, or grouped into roles",
     ].join("\n\n"),
-  );
+  )
+  .openapi("Permission");
 export type Permission = z.infer<typeof permissionEnum>;
 
 const roleBaseSchema = generateBaseTableSchema("role");
@@ -577,7 +585,8 @@ export type Group = z.infer<typeof groupSchema>;
 
 export const projectScoreTypeEnum = z
   .enum(["slider", "categorical", "weighted", "minimum", "online"])
-  .describe("The type of the configured score");
+  .describe("The type of the configured score")
+  .openapi("ProjectScoreType");
 export type ProjectScoreType = z.infer<typeof projectScoreTypeEnum>;
 
 export const projectScoreCategory = z
@@ -776,7 +785,8 @@ export const appLimitParamSchema = z.coerce
   .number()
   .int()
   .nonnegative()
-  .describe("Limit the number of objects to return");
+  .describe("Limit the number of objects to return")
+  .openapi("AppLimit");
 
 function generateBaseTableOpSchema(objectName: string) {
   return z.object({
@@ -920,7 +930,9 @@ const patchFunctionSchema = z
     name: functionSchema.shape.name.nullish(),
     description: functionSchema.shape.description.nullish(),
     prompt_data: functionSchema.shape.prompt_data.nullish(),
-    function_data: functionSchema.shape.function_data.nullish(),
+    function_data: functionSchema.shape.function_data
+      .nullish()
+      .openapi("FunctionDataNullish"),
     tags: functionSchema.shape.tags.nullish(),
   })
   .openapi("PatchFunction");
@@ -1012,17 +1024,21 @@ export const aclItemSchema = aclSchema
 
 export type AclItem = z.infer<typeof aclItemSchema>;
 
-export const aclBatchUpdateRequestSchema = z.object({
-  add_acls: aclItemSchema.array().nullish(),
-  remove_acls: aclItemSchema.array().nullish(),
-});
+export const aclBatchUpdateRequestSchema = z
+  .object({
+    add_acls: aclItemSchema.array().nullish(),
+    remove_acls: aclItemSchema.array().nullish(),
+  })
+  .openapi("AclBatchUpdateRequest");
 
 export type AclBatchUpdateRequest = z.infer<typeof aclBatchUpdateRequestSchema>;
 
-export const aclBatchUpdateResponseSchema = z.object({
-  added_acls: aclSchema.array(),
-  removed_acls: aclSchema.array(),
-});
+export const aclBatchUpdateResponseSchema = z
+  .object({
+    added_acls: aclSchema.array(),
+    removed_acls: aclSchema.array(),
+  })
+  .openapi("AclBatchUpdateResponse");
 
 export type AclBatchUpdateResponse = z.infer<
   typeof aclBatchUpdateResponseSchema
@@ -1189,41 +1205,49 @@ export const patchOrganizationMembersSchema = z
   })
   .openapi("PatchOrganizationMembers");
 
-export const patchOrganizationMembersOutputSchema = z.object({
-  status: z.literal("success"),
-  send_email_error: z
-    .string()
-    .nullish()
-    .describe(
-      "If invite emails failed to send for some reason, the patch operation will still complete, but we will return an error message here",
-    ),
-});
+export const patchOrganizationMembersOutputSchema = z
+  .object({
+    status: z.literal("success"),
+    send_email_error: z
+      .string()
+      .nullish()
+      .describe(
+        "If invite emails failed to send for some reason, the patch operation will still complete, but we will return an error message here",
+      ),
+  })
+  .openapi("PatchOrganizationMembersOutput");
 
 const createAISecretBaseSchema = generateBaseTableOpSchema("AI Secret");
-export const createAISecretSchema = z.object({
-  name: aiSecretSchema.shape.name,
-  type: aiSecretSchema.shape.type,
-  metadata: aiSecretSchema.shape.metadata,
-  secret: z
-    .string()
-    .nullish()
-    .describe(
-      "Secret value. If omitted in a PUT request, the existing secret value will be left intact, not replaced with null.",
-    ),
-  org_name: createAISecretBaseSchema.shape.org_name,
-});
+export const createAISecretSchema = z
+  .object({
+    name: aiSecretSchema.shape.name,
+    type: aiSecretSchema.shape.type,
+    metadata: aiSecretSchema.shape.metadata,
+    secret: z
+      .string()
+      .nullish()
+      .describe(
+        "Secret value. If omitted in a PUT request, the existing secret value will be left intact, not replaced with null.",
+      ),
+    org_name: createAISecretBaseSchema.shape.org_name,
+  })
+  .openapi("CreateAISecret");
 
-export const deleteAISecretSchema = z.object({
-  name: aiSecretSchema.shape.name,
-  org_name: createAISecretBaseSchema.shape.org_name,
-});
+export const deleteAISecretSchema = z
+  .object({
+    name: aiSecretSchema.shape.name,
+    org_name: createAISecretBaseSchema.shape.org_name,
+  })
+  .openapi("DeleteAISecret");
 
-export const patchAISecretSchema = z.object({
-  name: aiSecretSchema.shape.name.nullish(),
-  type: aiSecretSchema.shape.type,
-  metadata: aiSecretSchema.shape.metadata,
-  secret: z.string().nullish(),
-});
+export const patchAISecretSchema = z
+  .object({
+    name: aiSecretSchema.shape.name.nullish(),
+    type: aiSecretSchema.shape.type,
+    metadata: aiSecretSchema.shape.metadata,
+    secret: z.string().nullish(),
+  })
+  .openapi("PatchAISecret");
 
 export const createEnvVarSchema = envVarSchema
   .pick({ object_type: true, object_id: true, name: true })
