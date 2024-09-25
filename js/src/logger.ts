@@ -408,7 +408,9 @@ export class BraintrustState {
     }
     const newState = await loginToState({
       ...this.loginParams,
-      ...loginParams,
+      ...Object.fromEntries(
+        Object.entries(loginParams).filter(([k, v]) => !isEmpty(v)),
+      ),
     });
     this.copyLoginInfo(newState);
   }
