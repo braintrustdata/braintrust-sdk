@@ -3,7 +3,7 @@
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 extendZodWithOpenApi(z);
-
+import { objectNullish } from "../src/zod_util";
 import { ObjectType, datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
@@ -595,7 +595,8 @@ export const onlineScoreConfigSchema = z
   })
   .refine((val) => val.apply_to_root_span || val.apply_to_span_names?.length, {
     message: "Online scoring rule does not apply to any rows",
-  });
+  })
+  .openapi("OnlineScoreConfig");
 export type OnlineScoreConfig = z.infer<typeof onlineScoreConfigSchema>;
 
 const projectScoreBaseSchema = generateBaseTableSchema("project score");
@@ -629,14 +630,16 @@ export const projectScoreSchema = z
           )
           .openapi({ title: "minimum" }),
       ])
-      .nullish(),
+      .nullish()
+      .openapi("ProjectScoreCategories"),
     config: z
       .object({
         multi_select: z.boolean().nullish(),
         destination: z.literal("expected").nullish(),
         online: onlineScoreConfigSchema.nullish(),
       })
-      .nullish(),
+      .nullish()
+      .openapi("ProjectScoreConfig"),
     position: z
       .string()
       .nullish()
@@ -1003,23 +1006,19 @@ export type AclBatchUpdateResponse = z.infer<
   typeof aclBatchUpdateResponseSchema
 >;
 
-const createProjectScoreSchema = z
-  .object({
-    project_id: projectScoreSchema.shape.project_id,
-    name: projectScoreSchema.shape.name,
-    description: projectScoreSchema.shape.description,
-    score_type: projectScoreSchema.shape.score_type,
-    categories: projectScoreSchema.shape.categories,
+const createProjectScoreSchema = projectScoreSchema
+  .pick({
+    project_id: true,
+    name: true,
+    description: true,
+    score_type: true,
+    categories: true,
+    config: true,
   })
   .openapi("CreateProjectScore");
 
-export const patchProjectScoreSchema = z
-  .object({
-    name: projectScoreSchema.shape.name.nullish(),
-    description: projectScoreSchema.shape.description,
-    score_type: projectScoreSchema.shape.score_type.nullish(),
-    categories: projectScoreSchema.shape.categories,
-  })
+export const patchProjectScoreSchema = objectNullish(createProjectScoreSchema)
+  .omit({ project_id: true })
   .openapi("PatchProjectScore");
 
 const createProjectTagSchema = z
