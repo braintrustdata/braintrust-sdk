@@ -145,6 +145,28 @@ export const aiSecretSchema = z
   .openapi("AISecret");
 export type AISecret = z.infer<typeof aiSecretSchema>;
 
+export const envVarObjectTypeEnum = z
+  .enum(["organization", "project", "function"])
+  .describe("The type of the object the environment variable is scoped for");
+
+const envVarBaseSchema = generateBaseTableSchema("environment variable");
+export const envVarSchema = z
+  .object({
+    id: envVarBaseSchema.shape.id,
+    object_type: envVarObjectTypeEnum,
+    object_id: z
+      .string()
+      .uuid()
+      .describe("The id of the object the environment variable is scoped for"),
+    name: z.string().describe("The name of the environment variable"),
+    created: envVarBaseSchema.shape.created,
+    used: datetimeStringSchema
+      .nullish()
+      .describe(`Date the environment variable was last used`),
+  })
+  .openapi("EnvVar");
+export type EnvVar = z.infer<typeof envVarSchema>;
+
 const apiKeyBaseSchema = generateBaseTableSchema("api key");
 export const apiKeySchema = z
   .object({
@@ -1203,6 +1225,26 @@ export const patchAISecretSchema = z.object({
   secret: z.string().nullish(),
 });
 
+export const createEnvVarSchema = envVarSchema
+  .pick({ object_type: true, object_id: true, name: true })
+  .extend({
+    value: z
+      .string()
+      .nullish()
+      .describe(
+        "The value of the environment variable. Will be encrypted at rest.",
+      ),
+  });
+
+export const patchEnvVarSchema = envVarSchema.pick({ name: true }).extend({
+  value: z
+    .string()
+    .nullish()
+    .describe(
+      "The value of the environment variable. Will be encrypted at rest.",
+    ),
+});
+
 // Section: exported schemas, grouped by object type. The schemas are used for
 // API spec generation, so their types are not fully-specified. If you wish to
 // use individual schema types, import them directly.
@@ -1289,5 +1331,10 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
     create: createAISecretSchema,
     delete: deleteAISecretSchema,
     patch_id: patchAISecretSchema,
+  },
+  env_var: {
+    object: envVarSchema,
+    create: createEnvVarSchema,
+    patch_id: patchEnvVarSchema,
   },
 };

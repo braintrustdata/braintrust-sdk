@@ -1,6 +1,17 @@
 import { z } from "zod";
 import { forEachMissingKey } from "./object_util";
 
+export class ExtraFieldsError extends Error {
+  constructor(
+    public readonly key: string,
+    public readonly path: string[],
+  ) {
+    super(
+      `Extraneous key ${JSON.stringify(key)} at path ${JSON.stringify(path)}`,
+    );
+  }
+}
+
 // Parses a zod schema, checking afterwards that no fields were stripped during
 // parsing. There are several reasons we have this function:
 //
@@ -29,11 +40,7 @@ export function parseNoStrip<T extends z.ZodType>(schema: T, input: unknown) {
     lhs: output,
     rhs: input,
     fn: ({ k, path }) => {
-      throw new Error(
-        `Extraneous key ${JSON.stringify(k)} at path ${JSON.stringify(
-          path,
-        )} in input`,
-      );
+      throw new ExtraFieldsError(k, path);
     },
   });
   return output;

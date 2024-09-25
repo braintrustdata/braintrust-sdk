@@ -14,7 +14,7 @@ test("parseNoStrip basic", () => {
   });
   expect(parseNoStrip(testSchema, { a: "hello" })).toEqual({ a: "hello" });
   expect(() => parseNoStrip(testSchema, { a: "hello", c: 5 })).toThrowError(
-    /Extraneous key.*c.*at path.*in input/,
+    /Extraneous key.*c.*at path.*/,
   );
 });
 
