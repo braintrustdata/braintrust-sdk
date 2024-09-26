@@ -222,7 +222,7 @@ function generateBaseEventFeedbackSchema(objectType: ObjectTypeWithEvent) {
 
 // Pagination for fetching events within data objects.
 
-export const fetchLimitSchema = z
+export const fetchLimitParamSchema = z.coerce
   .number()
   .int()
   .nonnegative()
@@ -298,7 +298,7 @@ export const fetchFiltersSchema = pathTypeFilterSchema
 
 export const fetchEventsRequestSchema = z
   .object({
-    limit: fetchLimitSchema.nullish(),
+    limit: fetchLimitParamSchema.nullish(),
     cursor: fetchPaginationCursorSchema.nullish(),
     max_xact_id: maxXactIdSchema.nullish(),
     max_root_span_id: maxRootSpanIdSchema.nullish(),
@@ -796,7 +796,7 @@ export const crossObjectInsertResponseSchema = z
 
 // Section: Summarization operations.
 
-export const summarizeScoresParamSchema = z
+export const summarizeScoresParamSchema = z.coerce
   .boolean()
   .describe(
     "Whether to summarize the scores and metrics. If false (or omitted), only the metadata will be returned.",
@@ -809,7 +809,7 @@ export const comparisonExperimentIdParamSchema = z
     "The experiment to compare against, if summarizing scores and metrics. If omitted, will fall back to the `base_exp_id` stored in the experiment metadata, and then to the most recent experiment run in the same project. Must pass `summarize_scores=true` for this id to be used",
   );
 
-export const summarizeDataParamSchema = z
+export const summarizeDataParamSchema = z.coerce
   .boolean()
   .describe(
     "Whether to summarize the data. If false (or omitted), only the metadata will be returned.",

@@ -772,7 +772,7 @@ export type Acl = z.infer<typeof aclSchema>;
 
 // Section: Schemas for REST operations on app DB tables
 
-export const appLimitSchema = z
+export const appLimitParamSchema = z.coerce
   .number()
   .int()
   .nonnegative()
