@@ -213,7 +213,7 @@ const datasetBaseSchema = generateBaseTableSchema("dataset", {
 export const datasetSchema = z
   .object({
     id: datasetBaseSchema.shape.id,
-    project_id: datasetBaseSchema.shape.project_id.nullish(),
+    project_id: datasetBaseSchema.shape.project_id,
     name: datasetBaseSchema.shape.name,
     description: datasetBaseSchema.shape.description,
     created: datasetBaseSchema.shape.created,
@@ -825,7 +825,7 @@ export function makeObjectIdsFilterSchema(objectName: string) {
 }
 
 const createProjectBaseSchema = generateBaseTableOpSchema("project");
-const createProjectSchema = z
+export const createProjectSchema = z
   .object({
     name: projectSchema.shape.name,
     org_name: createProjectBaseSchema.shape.org_name,
@@ -843,7 +843,7 @@ export const patchProjectSchema = z
   })
   .openapi("PatchProject");
 
-const createExperimentSchema = z
+export const createExperimentSchema = z
   .object({
     project_id: experimentSchema.shape.project_id,
     name: experimentSchema.shape.name.nullish(),
@@ -867,7 +867,7 @@ export const patchExperimentSchema = createExperimentSchema
   .omit({ project_id: true, ensure_new: true })
   .openapi("PatchExperiment");
 
-const createDatasetSchema = z
+export const createDatasetSchema = z
   .object({
     project_id: datasetSchema.shape.project_id,
     name: datasetSchema.shape.name,
@@ -883,7 +883,7 @@ export const patchDatasetSchema = z
   })
   .openapi("PatchDataset");
 
-const createPromptSchema = promptSchema
+export const createPromptSchema = promptSchema
   .omit({
     id: true,
     _xact_id: true,
@@ -967,7 +967,7 @@ export const patchRoleSchema = createRoleSchema
   .openapi("PatchRole");
 
 const createGroupBaseSchema = generateBaseTableOpSchema("group");
-const createGroupSchema = z
+export const createGroupSchema = z
   .object({
     name: groupSchema.shape.name,
     description: groupSchema.shape.description,
@@ -1028,7 +1028,7 @@ export type AclBatchUpdateResponse = z.infer<
   typeof aclBatchUpdateResponseSchema
 >;
 
-const createProjectScoreSchema = projectScoreSchema
+export const createProjectScoreSchema = projectScoreSchema
   .pick({
     project_id: true,
     name: true,
@@ -1043,7 +1043,7 @@ export const patchProjectScoreSchema = objectNullish(createProjectScoreSchema)
   .omit({ project_id: true })
   .openapi("PatchProjectScore");
 
-const createProjectTagSchema = z
+export const createProjectTagSchema = z
   .object({
     project_id: projectTagSchema.shape.project_id,
     name: projectTagSchema.shape.name,
@@ -1097,7 +1097,7 @@ export const patchOrganizationSchema = z
   .openapi("PatchOrganization");
 
 const createApiKeyBaseSchema = generateBaseTableOpSchema("API key");
-const createApiKeySchema = z.object({
+export const createApiKeySchema = z.object({
   name: z.string().describe("Name of the api key. Does not have to be unique"),
   org_name: createApiKeyBaseSchema.shape.org_name,
 });
