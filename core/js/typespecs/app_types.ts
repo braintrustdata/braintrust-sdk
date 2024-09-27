@@ -692,6 +692,22 @@ export const projectTagSchema = z
   .openapi("ProjectTag");
 export type ProjectTag = z.infer<typeof projectTagSchema>;
 
+export const customViewerBaseSchema = generateBaseTableSchema("custom viewer");
+export const customViewerSchema = z
+  .object({
+    id: customViewerBaseSchema.shape.id,
+    project_id: customViewerBaseSchema.shape.project_id,
+    user_id: customViewerBaseSchema.shape.user_id,
+    created: customViewerBaseSchema.shape.created,
+    name: customViewerBaseSchema.shape.name,
+    description: customViewerBaseSchema.shape.description,
+    iframe_url: z
+      .string()
+      .describe("URL to embed the project viewer in an iframe"),
+  })
+  .openapi("CustomViewer");
+export type CustomViewer = z.infer<typeof customViewerSchema>;
+
 const viewBaseSchema = generateBaseTableSchema("view");
 export const viewSchema = z
   .object({
