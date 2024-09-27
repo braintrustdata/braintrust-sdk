@@ -692,20 +692,20 @@ export const projectTagSchema = z
   .openapi("ProjectTag");
 export type ProjectTag = z.infer<typeof projectTagSchema>;
 
-export const customViewerBaseSchema = generateBaseTableSchema("custom viewer");
-export const customViewerSchema = z
+export const spanIframeBaseSchema = generateBaseTableSchema("span iframe");
+export const spanIframeSchema = z
   .object({
-    id: customViewerBaseSchema.shape.id,
-    project_id: customViewerBaseSchema.shape.project_id,
-    user_id: customViewerBaseSchema.shape.user_id,
-    created: customViewerBaseSchema.shape.created,
-    deleted_at: customViewerBaseSchema.shape.deleted_at,
-    name: customViewerBaseSchema.shape.name,
-    description: customViewerBaseSchema.shape.description,
+    id: spanIframeBaseSchema.shape.id,
+    project_id: spanIframeBaseSchema.shape.project_id,
+    user_id: spanIframeBaseSchema.shape.user_id,
+    created: spanIframeBaseSchema.shape.created,
+    deleted_at: spanIframeBaseSchema.shape.deleted_at,
+    name: spanIframeBaseSchema.shape.name,
+    description: spanIframeBaseSchema.shape.description,
     url: z.string().describe("URL to embed the project viewer in an iframe"),
   })
-  .openapi("CustomViewer");
-export type CustomViewer = z.infer<typeof customViewerSchema>;
+  .openapi("SpanIFrame");
+export type SpanIFrame = z.infer<typeof spanIframeSchema>;
 
 const viewBaseSchema = generateBaseTableSchema("view");
 export const viewSchema = z
@@ -1075,20 +1075,20 @@ export const patchProjectTagSchema = z
   })
   .openapi("PatchProjectTag");
 
-export const createCustomViewerSchema = customViewerSchema
+export const createSpanIframeSchema = spanIframeSchema
   .omit({
     id: true,
     created: true,
     deleted_at: true,
   })
-  .openapi("CreateCustomViewer");
+  .openapi("CreateSpanIFrame");
 
-export const patchCustomViewerSchema = z
+export const patchSpanIframeSchema = z
   .object({
-    name: customViewerSchema.shape.name.nullish(),
-    url: customViewerSchema.shape.url.nullish(),
+    name: spanIframeSchema.shape.name.nullish(),
+    url: spanIframeSchema.shape.url.nullish(),
   })
-  .openapi("PatchCustomViewer");
+  .openapi("PatchSpanIFrame");
 
 export const createViewSchema = viewSchema
   .omit({
@@ -1342,10 +1342,10 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
     create: createProjectTagSchema,
     patch_id: patchProjectTagSchema,
   },
-  custom_viewer: {
-    object: customViewerSchema,
-    create: createCustomViewerSchema,
-    patch_id: patchCustomViewerSchema,
+  span_iframe: {
+    object: spanIframeSchema,
+    create: createSpanIframeSchema,
+    patch_id: patchSpanIframeSchema,
   },
   view: {
     object: viewSchema,
