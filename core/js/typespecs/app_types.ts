@@ -699,11 +699,10 @@ export const customViewerSchema = z
     project_id: customViewerBaseSchema.shape.project_id,
     user_id: customViewerBaseSchema.shape.user_id,
     created: customViewerBaseSchema.shape.created,
+    deleted_at: customViewerBaseSchema.shape.deleted_at,
     name: customViewerBaseSchema.shape.name,
     description: customViewerBaseSchema.shape.description,
-    iframe_url: z
-      .string()
-      .describe("URL to embed the project viewer in an iframe"),
+    url: z.string().describe("URL to embed the project viewer in an iframe"),
   })
   .openapi("CustomViewer");
 export type CustomViewer = z.infer<typeof customViewerSchema>;
@@ -1076,6 +1075,21 @@ export const patchProjectTagSchema = z
   })
   .openapi("PatchProjectTag");
 
+export const createCustomViewerSchema = customViewerSchema
+  .omit({
+    id: true,
+    created: true,
+    deleted_at: true,
+  })
+  .openapi("CreateCustomViewer");
+
+export const patchCustomViewerSchema = z
+  .object({
+    name: customViewerSchema.shape.name.nullish(),
+    url: customViewerSchema.shape.url.nullish(),
+  })
+  .openapi("PatchCustomViewer");
+
 export const createViewSchema = viewSchema
   .omit({
     id: true,
@@ -1327,6 +1341,11 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
     object: projectTagSchema,
     create: createProjectTagSchema,
     patch_id: patchProjectTagSchema,
+  },
+  custom_viewer: {
+    object: customViewerSchema,
+    create: createCustomViewerSchema,
+    patch_id: patchCustomViewerSchema,
   },
   view: {
     object: viewSchema,
