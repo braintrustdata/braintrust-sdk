@@ -167,7 +167,7 @@ def add_report(eval_reports, reporter, report):
     eval_reports[reporter.name]["results"].append(report)
 
 
-async def run_once(handles, evaluator_opts):
+async def run_once(handles: list[FileHandle], evaluator_opts: EvaluatorOpts) -> bool:
     objects = EvaluatorState()
     update_evaluators(objects, handles, terminate_on_failure=evaluator_opts.terminate_on_failure)
 
@@ -260,7 +260,7 @@ def run(args):
         load_dotenv(args.env_file)
 
     evaluator_opts = EvaluatorOpts(
-        verbose=args.verbose,
+        verbose=args.verbose > 0,
         no_send_logs=args.no_send_logs,
         no_progress_bars=args.no_progress_bars,
         terminate_on_failure=args.terminate_on_failure,

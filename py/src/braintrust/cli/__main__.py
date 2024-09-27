@@ -22,9 +22,9 @@ def main(args=None):
     parent_parser.add_argument(
         "--verbose",
         "-v",
-        default=False,
-        action="store_true",
-        help="Include additional details, including full stack traces on errors.",
+        default=0,
+        action="count",
+        help="Include additional details, including full stack traces on errors. Pass twice (-vv) for debug logging.",
     )
 
     parser = argparse.ArgumentParser(
@@ -40,7 +40,7 @@ def main(args=None):
         module.build_parser(subparsers, parent_parser)
 
     args = parser.parse_args(args=args)
-    level = logging.DEBUG if args.verbose else logging.INFO
+    level = logging.DEBUG if args.verbose >= 2 else logging.INFO
     logging.basicConfig(format="%(asctime)s %(levelname)s [%(name)s]: %(message)s", level=level)
 
     return args.func(args)

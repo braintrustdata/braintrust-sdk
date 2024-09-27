@@ -42,7 +42,13 @@ export const chatCompletionContentPartSchema = z.union([
 
 export const chatCompletionContentSchema = z.union([
   z.string().default("").openapi({ title: "text" }),
-  z.array(chatCompletionContentPartSchema).openapi({ title: "array" }),
+  z
+    .array(
+      chatCompletionContentPartSchema.openapi({
+        title: "chat_completion_content_part",
+      }),
+    )
+    .openapi({ title: "array" }),
 ]);
 
 const chatCompletionUserMessageParamSchema = z.object({

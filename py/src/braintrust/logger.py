@@ -1414,6 +1414,14 @@ def _populate_args(d, **kwargs):
     return d
 
 
+def _filter_none_args(args):
+    new_args = {}
+    for k, v in args.items():
+        if v is not None:
+            new_args[k] = v
+    return new_args
+
+
 def validate_tags(tags):
     # Tag should be a list, set, or tuple, not a dict or string
     if not isinstance(tags, (list, set, tuple)):
@@ -2521,7 +2529,49 @@ class Dataset(ObjectFetcher):
         self._lazy_metadata.get()
         return _state
 
-    def insert(self, input, expected=None, tags=None, metadata=None, id=None, output=None):
+    def _validate_event(self, metadata=None, expected=None, output=None, tags=None):
+        if metadata is not None:
+            if not isinstance(metadata, dict):
+                raise ValueError("metadata must be a dictionary")
+            for key in metadata.keys():
+                if not isinstance(key, str):
+                    raise ValueError("metadata keys must be strings")
+
+        if expected is not None and output is not None:
+            raise ValueError("Only one of expected or output (deprecated) can be specified. Prefer expected.")
+
+        if tags:
+            validate_tags(tags)
+
+    def _create_args(self, id, input=None, expected=None, metadata=None, tags=None, output=None, is_merge=False):
+        expected_value = expected if expected is not None else output
+
+        args = _populate_args(
+            {
+                "id": id,
+                "inputs": input,
+                "expected": expected_value,
+                "tags": tags,
+                "created": None if is_merge else datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            },
+            metadata=metadata,
+        )
+
+        if is_merge:
+            args[IS_MERGE_FIELD] = True
+            args = _filter_none_args(args)  # If merging, then remove None values to prevent null value writes
+
+        _check_json_serializable(args)
+
+        def compute_args():
+            return dict(
+                **args,
+                dataset_id=self.id,
+            )
+
+        return LazyValue(compute_args, use_mutex=False)
+
+    def insert(self, input=None, expected=None, tags=None, metadata=None, id=None, output=None):
         """
         Insert a single record to the dataset. The record will be batched and uploaded behind the scenes. If you pass in an `id`,
         and a record with that `id` already exists, it will be overwritten (upsert).
@@ -2537,40 +2587,53 @@ class Dataset(ObjectFetcher):
         :param output: (Deprecated) The output of your application. Use `expected` instead.
         :returns: The `id` of the logged record.
         """
-        if metadata:
-            if not isinstance(metadata, dict):
-                raise ValueError("metadata must be a dictionary")
-            for key in metadata.keys():
-                if not isinstance(key, str):
-                    raise ValueError("metadata keys must be strings")
-
-        if expected is not None and output is not None:
-            raise ValueError("Only one of expected or output (deprecated) can be specified. Prefer expected.")
+        self._validate_event(metadata=metadata, expected=expected, output=output, tags=tags)
 
         row_id = id or str(uuid.uuid4())
-        # Validate the non-lazily-computed part of the record-to-log.
-        partial_args = _populate_args(
-            {
-                "id": row_id,
-                "inputs": input,
-                "expected": expected if expected is not None else output,
-                "tags": tags,
-                "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            },
-            metadata=metadata,
-        )
-        _check_json_serializable(partial_args)
 
-        def compute_args():
-            return dict(
-                **partial_args,
-                dataset_id=self.id,
-            )
+        args = self._create_args(
+            id=row_id,
+            input=input,
+            expected=expected,
+            metadata=metadata,
+            tags=tags,
+            output=output,
+            is_merge=False,
+        )
 
         self._clear_cache()  # We may be able to optimize this
         self.new_records += 1
-        _state.global_bg_logger().log(LazyValue(compute_args, use_mutex=False))
+        _state.global_bg_logger().log(args)
         return row_id
+
+    def update(self, id, input=None, expected=None, tags=None, metadata=None):
+        """
+        Update fields of a single record in the dataset. The updated fields will be batched and uploaded behind the scenes.
+        You must pass in an `id` of the record to update. Only the fields provided will be updated; other fields will remain unchanged.
+
+        :param id: The unique identifier of the record to update.
+        :param input: (Optional) The new input value for the record (an arbitrary, JSON serializable object).
+        :param expected: (Optional) The new expected output value for the record (an arbitrary, JSON serializable object).
+        :param tags: (Optional) A list of strings to update the tags of the record.
+        :param metadata: (Optional) A dictionary to update the metadata of the record. The values in `metadata` can be any
+            JSON-serializable type, but its keys must be strings.
+        :returns: The `id` of the updated record.
+        """
+        self._validate_event(metadata=metadata, expected=expected, tags=tags)
+
+        args = self._create_args(
+            id=id,
+            input=input,
+            expected=expected,
+            metadata=metadata,
+            tags=tags,
+            is_merge=True,
+        )
+
+        self._clear_cache()  # We may be able to optimize this
+        self.new_records += 1
+        _state.global_bg_logger().log(args)
+        return id
 
     def delete(self, id):
         """
@@ -2649,6 +2712,22 @@ class Dataset(ObjectFetcher):
 
     def __exit__(self, exc_type, exc_value, traceback):
         del exc_type, exc_value, traceback
+
+
+def render_message(render, message):
+    return {
+        **{k: v for (k, v) in message.as_dict().items() if v is not None},
+        "content": render(message.content)
+        if isinstance(message.content, str)
+        else [
+            {**c.as_dict(), "text": render(c.text)}
+            if c.type == "text"
+            else {**c.as_dict(), "image_url": {**c.image_url, "url": render(c.image_url.url)}}
+            if c.type == "image_url"
+            else c
+            for c in message.content
+        ],
+    }
 
 
 class Prompt:
@@ -2738,17 +2817,14 @@ class Prompt:
             ret["messages"] = [
                 {
                     **{k: v for (k, v) in m.as_dict().items() if v is not None},
-                    "content": chevron.render(m.content, data=build_args)
-                    if isinstance(m.content, str)
+                    "content": chevron.render(m.content, data=build_args) if isinstance(m.content, str)
+                    # XXX Fix
                     else json.loads(chevron.render(json.dumps(m.content), data=build_args)),
                 }
                 for m in self.prompt.messages
             ]
-            ret["tools"] = (
-                json.loads(chevron.render(self.prompt.tools, data=build_args))
-                if (self.prompt.tools or "").strip()
-                else None
-            )
+            if self.prompt.tools and self.prompt.tools.strip():
+                ret["tools"] = json.loads(chevron.render(self.prompt.tools, data=build_args))
 
         return ret
 
@@ -3081,7 +3157,7 @@ class MetricSummary(SerializableDataClass):
     # Used to help with formatting
     _longest_metric_name: int
 
-    metric: float
+    metric: float | int
     """Average metric across all examples."""
     unit: str
     """Unit label for the metric."""
@@ -3093,8 +3169,8 @@ class MetricSummary(SerializableDataClass):
     """Difference in metric between the current and reference experiment."""
 
     def __str__(self):
-        # format with 2 decimal points
-        metric = f"{self.metric:.2f}"
+        number_fmt = "{:d}" if isinstance(self.metric, int) else "{:.2f}"
+        metric = number_fmt.format(self.metric)
         if self.diff is None:
             return textwrap.dedent(f"""{metric}{self.unit} {self.name}""")
 

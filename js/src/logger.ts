@@ -46,6 +46,7 @@ import {
   toolsSchema,
   PromptSessionEvent,
   OpenAIMessage,
+  Message,
 } from "@braintrust/core/typespecs";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -407,7 +408,9 @@ export class BraintrustState {
     }
     const newState = await loginToState({
       ...this.loginParams,
-      ...loginParams,
+      ...Object.fromEntries(
+        Object.entries(loginParams).filter(([k, v]) => !isEmpty(v)),
+      ),
     });
     this.copyLoginInfo(newState);
   }
@@ -471,7 +474,7 @@ export function _internalSetInitialState() {
 }
 export const _internalGetGlobalState = () => _globalState;
 
-class FailedHTTPResponse extends Error {
+export class FailedHTTPResponse extends Error {
   public status: number;
   public text: string;
   public data: any;
@@ -548,17 +551,25 @@ class HTTPConnection {
 
   async get(
     path: string,
-    params: Record<string, string | undefined> | undefined = undefined,
+    params:
+      | Record<string, string | string[] | undefined>
+      | undefined = undefined,
     config?: RequestInit,
   ) {
     const { headers, ...rest } = config || {};
     const url = new URL(_urljoin(this.base_url, path));
     url.search = new URLSearchParams(
       params
-        ? (Object.fromEntries(
-            Object.entries(params).filter(([_, v]) => v !== undefined),
-          ) as Record<string, string>)
-        : {},
+        ? Object.entries(params)
+            .filter(([_, v]) => v !== undefined)
+            .flatMap(([k, v]) =>
+              v !== undefined
+                ? typeof v === "string"
+                  ? [[k, v]]
+                  : v.map((x) => [k, x])
+                : [],
+            )
+        : [],
     ).toString();
     return await checkResponse(
       // Using toString() here makes it work with isomorphic fetch
@@ -603,7 +614,7 @@ class HTTPConnection {
 
   async get_json(
     object_type: string,
-    args: Record<string, string | undefined> | undefined = undefined,
+    args: Record<string, string | string[] | undefined> | undefined = undefined,
     retries: number = 0,
   ) {
     const tries = retries + 1;
@@ -2287,7 +2298,7 @@ export type FullLoginOptions = LoginOptions & {
 export async function login(
   options: LoginOptions & { forceLogin?: boolean } = {},
 ): Promise<BraintrustState> {
-  let { forceLogin = false } = options || {};
+  const { forceLogin = false } = options || {};
 
   if (_globalState.loggedIn && !forceLogin) {
     // We have already logged in. If any provided login inputs disagree with our
@@ -3626,18 +3637,18 @@ function splitLoggingData({
     if (value instanceof BraintrustStream) {
       const streamCopy = value.copy();
       lazyInternalData[key] = new LazyValue(async () => {
-        return await new Promise((resolve) => {
+        return await new Promise((resolve, reject) => {
           streamCopy
             .toReadableStream()
-            .pipeThrough(createFinalValuePassThroughStream(resolve))
+            .pipeThrough(createFinalValuePassThroughStream(resolve, reject))
             .pipeTo(devNullWritableStream());
         });
       });
     } else if (value instanceof ReadableStream) {
       lazyInternalData[key] = new LazyValue(async () => {
-        return await new Promise((resolve) => {
+        return await new Promise((resolve, reject) => {
           value
-            .pipeThrough(createFinalValuePassThroughStream(resolve))
+            .pipeThrough(createFinalValuePassThroughStream(resolve, reject))
             .pipeTo(devNullWritableStream());
         });
       });
@@ -3704,6 +3715,76 @@ export class Dataset<
     return this.state;
   }
 
+  private validateEvent({
+    metadata,
+    expected,
+    output,
+    tags,
+  }: {
+    metadata?: Record<string, unknown>;
+    expected?: unknown;
+    output?: unknown;
+    tags?: string[];
+  }) {
+    if (metadata !== undefined) {
+      for (const key of Object.keys(metadata)) {
+        if (typeof key !== "string") {
+          throw new Error("metadata keys must be strings");
+        }
+      }
+    }
+
+    if (expected !== undefined && output !== undefined) {
+      throw new Error(
+        "Only one of expected or output (deprecated) can be specified. Prefer expected.",
+      );
+    }
+
+    if (tags) {
+      validateTags(tags);
+    }
+  }
+
+  private createArgs({
+    id,
+    input,
+    expected,
+    metadata,
+    tags,
+    output,
+    isMerge,
+  }: {
+    id: string;
+    input?: unknown;
+    expected?: unknown;
+    metadata?: Record<string, unknown>;
+    tags?: string[];
+    output?: unknown;
+    isMerge?: boolean;
+  }): LazyValue<BackgroundLogEvent> {
+    return new LazyValue(async () => {
+      const dataset_id = await this.id;
+      const expectedValue = expected === undefined ? output : expected;
+
+      const args: BackgroundLogEvent = {
+        id,
+        input,
+        expected: expectedValue,
+        tags,
+        dataset_id,
+        created: !isMerge ? new Date().toISOString() : undefined, //if we're merging/updating an event we will not add this ts
+        metadata,
+        ...(!!isMerge
+          ? {
+              [IS_MERGE_FIELD]: true,
+            }
+          : {}),
+      };
+
+      return args;
+    });
+  }
+
   /**
    * Insert a single record to the dataset. The record will be batched and uploaded behind the scenes. If you pass in an `id`,
    * and a record with that `id` already exists, it will be overwritten (upsert).
@@ -3735,37 +3816,62 @@ export class Dataset<
     readonly id?: string;
     readonly output?: unknown;
   }): string {
-    if (metadata !== undefined) {
-      for (const key of Object.keys(metadata)) {
-        if (typeof key !== "string") {
-          throw new Error("metadata keys must be strings");
-        }
-      }
-    }
-
-    if (expected && output) {
-      throw new Error(
-        "Only one of expected or output (deprecated) can be specified. Prefer expected.",
-      );
-    }
-
-    if (tags) {
-      validateTags(tags);
-    }
+    this.validateEvent({ metadata, expected, output, tags });
 
     const rowId = id || uuidv4();
-    const args = new LazyValue(async () => ({
+    const args = this.createArgs({
       id: rowId,
       input,
-      expected: expected === undefined ? output : expected,
-      tags,
-      dataset_id: await this.id,
-      created: new Date().toISOString(),
+      expected,
       metadata,
-    }));
+      tags,
+      output,
+      isMerge: false,
+    });
 
     this.state.bgLogger().log([args]);
     return rowId;
+  }
+
+  /**
+   * Update fields of a single record in the dataset. The updated fields will be batched and uploaded behind the scenes.
+   * You must pass in an `id` of the record to update. Only the fields provided will be updated; other fields will remain unchanged.
+   *
+   * @param event The fields to update in the record.
+   * @param event.id The unique identifier of the record to update.
+   * @param event.input (Optional) The new input value for the record (an arbitrary, JSON serializable object).
+   * @param event.expected (Optional) The new expected output value for the record (an arbitrary, JSON serializable object).
+   * @param event.tags (Optional) A list of strings to update the tags of the record.
+   * @param event.metadata (Optional) A dictionary to update the metadata of the record. The values in `metadata` can be any
+   * JSON-serializable type, but its keys must be strings.
+   * @returns The `id` of the updated record.
+   */
+  public update({
+    input,
+    expected,
+    metadata,
+    tags,
+    id,
+  }: {
+    readonly id: string;
+    readonly input?: unknown;
+    readonly expected?: unknown;
+    readonly tags?: string[];
+    readonly metadata?: Record<string, unknown>;
+  }): string {
+    this.validateEvent({ metadata, expected, tags });
+
+    const args = this.createArgs({
+      id,
+      input,
+      expected,
+      metadata,
+      tags,
+      isMerge: true,
+    });
+
+    this.state.bgLogger().log([args]);
+    return id;
   }
 
   public delete(id: string): string {
@@ -3789,7 +3895,7 @@ export class Dataset<
   public async summarize(
     options: { readonly summarizeData?: boolean } = {},
   ): Promise<DatasetSummary> {
-    let { summarizeData = true } = options || {};
+    const { summarizeData = true } = options || {};
 
     await this.flush();
     const state = await this.getState();
@@ -3875,21 +3981,70 @@ export type DefaultPromptArgs = Partial<
   CompiledPromptParams & AnyModelParam & ChatPrompt & CompletionPrompt
 >;
 
-export class Prompt {
+export function renderMessage<T extends Message>(
+  render: (template: string) => string,
+  message: T,
+): T {
+  return {
+    ...message,
+    ...("content" in message
+      ? {
+          content: isEmpty(message.content)
+            ? undefined
+            : typeof message.content === "string"
+              ? render(message.content)
+              : message.content.map((c) => {
+                  switch (c.type) {
+                    case "text":
+                      return { ...c, text: render(c.text) };
+                    case "image_url":
+                      return {
+                        ...c,
+                        image_url: {
+                          ...c.image_url,
+                          url: render(c.image_url.url),
+                        },
+                      };
+                    default:
+                      const _exhaustiveCheck: never = c;
+                      return _exhaustiveCheck;
+                  }
+                }),
+        }
+      : {}),
+  };
+}
+
+export type PromptRowWithId<
+  HasId extends boolean = true,
+  HasVersion extends boolean = true,
+> = Omit<PromptRow, "log_id" | "org_id" | "project_id" | "id" | "_xact_id"> &
+  Partial<Pick<PromptRow, "project_id">> &
+  (HasId extends true
+    ? Pick<PromptRow, "id">
+    : Partial<Pick<PromptRow, "id">>) &
+  (HasVersion extends true
+    ? Pick<PromptRow, "_xact_id">
+    : Partial<Pick<PromptRow, "_xact_id">>);
+
+export class Prompt<
+  HasId extends boolean = true,
+  HasVersion extends boolean = true,
+> {
   private parsedPromptData: PromptData | undefined;
   private hasParsedPromptData = false;
 
   constructor(
-    private metadata: Omit<PromptRow, "log_id"> | PromptSessionEvent,
+    private metadata: PromptRowWithId<HasId, HasVersion> | PromptSessionEvent,
     private defaults: DefaultPromptArgs,
     private noTrace: boolean,
   ) {}
 
-  public get id(): string {
-    return this.metadata.id;
+  public get id(): HasId extends true ? string : string | undefined {
+    return this.metadata.id as HasId extends true ? string : string | undefined;
   }
 
-  public get projectId(): string {
+  public get projectId(): string | undefined {
     return this.metadata.project_id;
   }
 
@@ -3907,8 +4062,12 @@ export class Prompt {
     return this.getParsedPromptData()?.prompt;
   }
 
-  public get version(): TransactionId {
-    return this.metadata[TRANSACTION_ID_FIELD];
+  public get version(): HasId extends true
+    ? TransactionId
+    : TransactionId | undefined {
+    return this.metadata[TRANSACTION_ID_FIELD] as HasId extends true
+      ? TransactionId
+      : TransactionId | undefined;
   }
 
   public get options(): NonNullable<PromptData["options"]> {
@@ -3926,10 +4085,12 @@ export class Prompt {
     buildArgs: unknown,
     options: {
       flavor?: Flavor;
+      messages?: Message[];
     } = {},
   ): CompiledPrompt<Flavor> {
     return this.runBuild(buildArgs, {
       flavor: options.flavor ?? "chat",
+      messages: options.messages,
     }) as CompiledPrompt<Flavor>;
   }
 
@@ -3937,6 +4098,7 @@ export class Prompt {
     buildArgs: unknown,
     options: {
       flavor: Flavor;
+      messages?: Message[];
     },
   ): CompiledPrompt<Flavor> {
     const { flavor } = options;
@@ -3966,15 +4128,17 @@ export class Prompt {
       : {
           span_info: {
             metadata: {
-              prompt: {
-                variables: buildArgs,
-                id: this.id,
-                project_id: this.projectId,
-                version: this.version,
-                ...("prompt_session_id" in this.metadata
-                  ? { prompt_session_id: this.metadata.prompt_session_id }
-                  : {}),
-              },
+              prompt: this.id
+                ? {
+                    variables: buildArgs,
+                    id: this.id,
+                    project_id: this.projectId,
+                    version: this.version,
+                    ...("prompt_session_id" in this.metadata
+                      ? { prompt_session_id: this.metadata.prompt_session_id }
+                      : {}),
+                  }
+                : undefined,
             },
           },
         };
@@ -4000,20 +4164,14 @@ export class Prompt {
 
       const render = (template: string) =>
         Mustache.render(template, variables, undefined, {
-          escape: (v: any) => (typeof v === "string" ? v : JSON.stringify(v)),
+          escape: (v: unknown) =>
+            typeof v === "string" ? v : JSON.stringify(v),
         });
 
-      const messages = (prompt.messages || []).map((m) => ({
-        ...m,
-        ...("content" in m
-          ? {
-              content:
-                typeof m.content === "string"
-                  ? render(m.content)
-                  : JSON.parse(render(JSON.stringify(m.content))),
-            }
-          : {}),
-      }));
+      const messages = [
+        ...(prompt.messages || []).map((m) => renderMessage(render, m)),
+        ...(options.messages ?? []),
+      ];
 
       return {
         ...params,
@@ -4030,6 +4188,11 @@ export class Prompt {
     } else if (flavor === "completion") {
       if (prompt.type !== "completion") {
         throw new Error("Prompt is a chat prompt. Use buildChat() instead");
+      }
+      if (options.messages) {
+        throw new Error(
+          "extra messages are not supported for completion prompts",
+        );
       }
 
       return {
