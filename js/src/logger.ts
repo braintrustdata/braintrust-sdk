@@ -3433,8 +3433,6 @@ export class SpanImpl implements Span {
       const parentSpanId = args.parentSpanIds.spanId;
       this.spanParents = parentSpanId ? [parentSpanId] : undefined;
     } else {
-      // XXX: Sub this in to test the root span change
-      // this.rootSpanId = uuidv4();
       this.rootSpanId = this.spanId;
       this.spanParents = undefined;
     }

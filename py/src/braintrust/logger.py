@@ -2279,8 +2279,6 @@ class SpanImpl(Span):
             parent_span_id = parent_span_ids.span_id
             self.span_parents = [parent_span_id] if parent_span_id else None
         else:
-            # XXX: Sub this in to test the root span change
-            # self.root_span_id = str(uuid.uuid4())
             self.root_span_id = self.span_id
             self.span_parents = None
 
