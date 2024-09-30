@@ -24,7 +24,8 @@ export const functionIdSchema = z
         function_id: z.string().describe("The ID of the function"),
         version: z.string().optional().describe("The version of the function"),
       })
-      .describe("Function id"),
+      .describe("Function id")
+      .openapi({ title: "function_id" }),
     z
       .object({
         project_name: z
@@ -33,7 +34,8 @@ export const functionIdSchema = z
         slug: z.string().describe("The slug of the function"),
         version: z.string().optional().describe("The version of the function"),
       })
-      .describe("Project name and slug"),
+      .describe("Project name and slug")
+      .openapi({ title: "project_slug" }),
     z
       .object({
         global_function: z
@@ -42,7 +44,8 @@ export const functionIdSchema = z
             "The name of the global function. Currently, the global namespace includes the functions in autoevals",
           ),
       })
-      .describe("Global function name"),
+      .describe("Global function name")
+      .openapi({ title: "global_function" }),
     z
       .object({
         prompt_session_id: z.string().describe("The ID of the prompt session"),
@@ -51,7 +54,8 @@ export const functionIdSchema = z
           .describe("The ID of the function in the prompt session"),
         version: z.string().optional().describe("The version of the function"),
       })
-      .describe("Prompt session id"),
+      .describe("Prompt session id")
+      .openapi({ title: "prompt_session_id" }),
     z
       .object({
         inline_context: runtimeContextSchema,
@@ -61,13 +65,15 @@ export const functionIdSchema = z
           .nullish()
           .describe("The name of the inline code function"),
       })
-      .describe("Inline code function"),
+      .describe("Inline code function")
+      .openapi({ title: "inline_code" }),
     z
       .object({
         inline_prompt: promptDataSchema,
         name: z.string().nullish().describe("The name of the inline prompt"),
       })
-      .describe("Inline prompt definition"),
+      .describe("Inline prompt definition")
+      .openapi({ title: "inline_prompt" }),
   ])
   .describe("Options for identifying a function")
   .openapi("FunctionId");
@@ -160,13 +166,15 @@ export const runEvalSchema = z
           .object({
             dataset_id: z.string(),
           })
-          .describe("Dataset id"),
+          .describe("Dataset id")
+          .openapi({ title: "dataset_id" }),
         z
           .object({
             project_name: z.string(),
             dataset_name: z.string(),
           })
-          .describe("Project and dataset name"),
+          .describe("Project and dataset name")
+          .openapi({ title: "project_dataset_name" }),
       ])
       .describe("The dataset to use"),
     task: functionIdSchema.describe("The function to evaluate"),
