@@ -1,4 +1,6 @@
+import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
+extendZodWithOpenApi(z);
 import {
   chatCompletionContentPartSchema,
   chatCompletionContentPartImageSchema,
@@ -93,50 +95,58 @@ const openAIModelParamsSchema = z.object({
 });
 export type OpenAIModelParams = z.infer<typeof openAIModelParamsSchema>;
 
-const anthropicModelParamsSchema = z.object({
-  max_tokens: z.number(),
-  temperature: z.number(),
-  top_p: z.number().optional(),
-  top_k: z.number().optional(),
-  stop_sequences: z.array(z.string()).optional(),
-  max_tokens_to_sample: z
-    .number()
-    .optional()
-    .describe("This is a legacy parameter that should not be used."),
-});
-const googleModelParamsSchema = z.object({
-  temperature: z.number().optional(),
-  maxOutputTokens: z.number().optional(),
-  topP: z.number().optional(),
-  topK: z.number().optional(),
-});
-const windowAIModelParamsSchema = z.object({
-  temperature: z.number().optional(),
-  topK: z.number().optional(),
-});
-const jsCompletionParamsSchema = z.object({});
-export const modelParamsSchema = z.union([
-  braintrustModelParamsSchema
-    .merge(openAIModelParamsSchema)
-    .passthrough()
-    .openapi({ title: "OpenAIModelParams" }),
-  braintrustModelParamsSchema
-    .merge(anthropicModelParamsSchema)
-    .passthrough()
-    .openapi({ title: "AnthropicModelParams" }),
-  braintrustModelParamsSchema
-    .merge(googleModelParamsSchema)
-    .passthrough()
-    .openapi({ title: "GoogleModelParams" }),
-  braintrustModelParamsSchema
-    .merge(windowAIModelParamsSchema)
-    .passthrough()
-    .openapi({ title: "WindowAIModelParams" }),
-  braintrustModelParamsSchema
-    .merge(jsCompletionParamsSchema)
-    .passthrough()
-    .openapi({ title: "JsCompletionParams" }),
-]);
+const anthropicModelParamsSchema = z
+  .object({
+    max_tokens: z.number(),
+    temperature: z.number(),
+    top_p: z.number().optional(),
+    top_k: z.number().optional(),
+    stop_sequences: z.array(z.string()).optional(),
+    max_tokens_to_sample: z
+      .number()
+      .optional()
+      .describe("This is a legacy parameter that should not be used."),
+  })
+  .openapi("AntrhopicModelParams");
+const googleModelParamsSchema = z
+  .object({
+    temperature: z.number().optional(),
+    maxOutputTokens: z.number().optional(),
+    topP: z.number().optional(),
+    topK: z.number().optional(),
+  })
+  .openapi("GoogleModelParams");
+const windowAIModelParamsSchema = z
+  .object({
+    temperature: z.number().optional(),
+    topK: z.number().optional(),
+  })
+  .openapi("WindowAIModelParams");
+const jsCompletionParamsSchema = z.object({}).openapi("JsCompletionParams");
+export const modelParamsSchema = z
+  .union([
+    braintrustModelParamsSchema
+      .merge(openAIModelParamsSchema)
+      .passthrough()
+      .openapi({ title: "OpenAIModelParams" }),
+    braintrustModelParamsSchema
+      .merge(anthropicModelParamsSchema)
+      .passthrough()
+      .openapi({ title: "AnthropicModelParams" }),
+    braintrustModelParamsSchema
+      .merge(googleModelParamsSchema)
+      .passthrough()
+      .openapi({ title: "GoogleModelParams" }),
+    braintrustModelParamsSchema
+      .merge(windowAIModelParamsSchema)
+      .passthrough()
+      .openapi({ title: "WindowAIModelParams" }),
+    braintrustModelParamsSchema
+      .merge(jsCompletionParamsSchema)
+      .passthrough()
+      .openapi({ title: "JsCompletionParams" }),
+  ])
+  .openapi("ModelParams");
 
 export type ModelParams = z.infer<typeof modelParamsSchema>;
 
