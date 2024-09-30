@@ -824,10 +824,14 @@ export function makeObjectIdsFilterSchema(objectName: string) {
     .openapi(`${objectName}IdsFilter`);
 }
 
+function makeNonempty(s: z.ZodString): z.ZodString {
+  return (s.minLength ?? 0) > 0 ? s : s.min(1);
+}
+
 const createProjectBaseSchema = generateBaseTableOpSchema("project");
 export const createProjectSchema = z
   .object({
-    name: projectSchema.shape.name,
+    name: makeNonempty(projectSchema.shape.name),
     org_name: createProjectBaseSchema.shape.org_name,
   })
   .openapi("CreateProject");
@@ -846,7 +850,7 @@ export const patchProjectSchema = z
 export const createExperimentSchema = z
   .object({
     project_id: experimentSchema.shape.project_id,
-    name: experimentSchema.shape.name.nullish(),
+    name: makeNonempty(experimentSchema.shape.name).nullish(),
     description: experimentSchema.shape.description,
     repo_info: experimentSchema.shape.repo_info,
     base_exp_id: experimentSchema.shape.base_exp_id,
@@ -865,12 +869,13 @@ export const createExperimentSchema = z
 
 export const patchExperimentSchema = createExperimentSchema
   .omit({ project_id: true, ensure_new: true })
+  .extend({ name: experimentSchema.shape.name.nullish() })
   .openapi("PatchExperiment");
 
 export const createDatasetSchema = z
   .object({
     project_id: datasetSchema.shape.project_id,
-    name: datasetSchema.shape.name,
+    name: makeNonempty(datasetSchema.shape.name),
     description: datasetSchema.shape.description,
   })
   .openapi("CreateDataset");
@@ -892,6 +897,10 @@ export const createPromptSchema = promptSchema
     created: true,
     metadata: true,
   })
+  .extend({
+    name: makeNonempty(promptSchema.shape.name),
+    slug: makeNonempty(promptSchema.shape.slug),
+  })
   .openapi("CreatePrompt");
 
 export const createFunctionSchema = functionSchema
@@ -902,6 +911,10 @@ export const createFunctionSchema = functionSchema
     log_id: true,
     created: true,
     metadata: true,
+  })
+  .extend({
+    name: makeNonempty(promptSchema.shape.name),
+    slug: makeNonempty(promptSchema.shape.slug),
   })
   .openapi("CreateFunction");
 
@@ -928,7 +941,7 @@ const patchFunctionSchema = z
 const createRoleBaseSchema = generateBaseTableOpSchema("role");
 const createRoleSchema = z
   .object({
-    name: roleSchema.shape.name,
+    name: makeNonempty(roleSchema.shape.name),
     description: roleSchema.shape.description,
     member_permissions: roleSchema.shape.member_permissions,
     member_roles: roleSchema.shape.member_roles,
@@ -969,7 +982,7 @@ export const patchRoleSchema = createRoleSchema
 const createGroupBaseSchema = generateBaseTableOpSchema("group");
 export const createGroupSchema = z
   .object({
-    name: groupSchema.shape.name,
+    name: makeNonempty(groupSchema.shape.name),
     description: groupSchema.shape.description,
     member_users: groupSchema.shape.member_users,
     member_groups: groupSchema.shape.member_groups,
