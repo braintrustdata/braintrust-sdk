@@ -171,18 +171,7 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
       .describe(
         "Human-identifying attributes of the span, such as name, type, etc.",
       ),
-    origin: z
-      .object({
-        object_type: eventObjectType.describe(
-          "Type of the object the event is originating from.",
-        ),
-        object_id: z
-          .string()
-          .uuid()
-          .describe("ID of the object the event is originating from."),
-        id: z.string().describe("ID of the original event."),
-        _xact_id: z.string().describe("Transaction ID of the original event."),
-      })
+    origin: objectReferenceSchema
       .nullish()
       .describe("Indicates the event was copied from another object."),
     [OBJECT_DELETE_FIELD]: z
@@ -350,6 +339,18 @@ function makeFetchEventsResponseSchema<T extends z.AnyZodObject>(
     })
     .openapi(`Fetch${eventName}EventsResponse`);
 }
+
+export const objectReferenceSchema = z.object({
+  object_type: eventObjectType.describe(
+    "Type of the object the event is originating from.",
+  ),
+  object_id: z
+    .string()
+    .uuid()
+    .describe("ID of the object the event is originating from."),
+  id: z.string().describe("ID of the original event."),
+  _xact_id: z.string().describe("Transaction ID of the original event."),
+});
 
 const experimentEventBaseSchema = generateBaseEventOpSchema("experiment");
 export const experimentEventSchema = z
