@@ -181,6 +181,7 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
           .uuid()
           .describe("ID of the object the event is originating from."),
         id: z.string().describe("ID of the original event."),
+        _xact_id: z.string().describe("Transaction ID of the original event."),
       })
       .nullish()
       .describe("Indicates the event was copied from another object."),
