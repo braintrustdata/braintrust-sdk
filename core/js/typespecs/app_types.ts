@@ -1102,6 +1102,7 @@ export const createSpanIframeSchema = spanIframeSchema
     id: true,
     created: true,
     deleted_at: true,
+    user_id: true,
   })
   .openapi("CreateSpanIFrame");
 
