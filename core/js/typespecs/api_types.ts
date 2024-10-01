@@ -233,7 +233,8 @@ export const fetchLimitParamSchema = z.coerce
       `Fetch queries may be paginated if the total result size is expected to be large (e.g. project_logs which accumulate over a long time). Note that fetch queries only support pagination in descending time order (from latest to earliest \`${TRANSACTION_ID_FIELD}\`. Furthermore, later pages may return rows which showed up in earlier pages, except with an earlier \`${TRANSACTION_ID_FIELD}\`. This happens because pagination occurs over the whole version history of the event log. You will most likely want to exclude any such duplicate, outdated rows (by \`id\`) from your combined result set.`,
       `The \`limit\` parameter controls the number of full traces to return. So you may end up with more individual rows than the specified limit if you are fetching events containing traces.`,
     ].join("\n\n"),
-  );
+  )
+  .openapi("FetchLimit");
 
 const fetchPaginationCursorDescription = [
   "DEPRECATION NOTICE: The manually-constructed pagination cursor is deprecated in favor of the explicit 'cursor' returned by object fetch requests. Please prefer the 'cursor' argument going forwards.",
@@ -243,11 +244,13 @@ const fetchPaginationCursorDescription = [
 
 export const maxXactIdSchema = z
   .string()
-  .describe(fetchPaginationCursorDescription);
+  .describe(fetchPaginationCursorDescription)
+  .openapi("MaxXactId");
 
 export const maxRootSpanIdSchema = z
   .string()
-  .describe(fetchPaginationCursorDescription);
+  .describe(fetchPaginationCursorDescription)
+  .openapi("MaxRootSpanId");
 
 export const fetchPaginationCursorSchema = z
   .string()
@@ -256,7 +259,8 @@ export const fetchPaginationCursorSchema = z
       "An opaque string to be used as a cursor for the next page of results, in order from latest to earliest.",
       "The string can be obtained directly from the `cursor` property of the previous fetch query",
     ].join("\n\n"),
-  );
+  )
+  .openapi("FetchPaginationCursor");
 
 export const versionSchema = z
   .string()
@@ -265,7 +269,8 @@ export const versionSchema = z
       "Retrieve a snapshot of events from a past time",
       "The version id is essentially a filter on the latest event transaction id. You can use the `max_xact_id` returned by a past fetch as the version to reproduce that exact fetch.",
     ].join("\n\n"),
-  );
+  )
+  .openapi("Version");
 
 const pathTypeFilterSchema = z
   .object({
@@ -287,7 +292,7 @@ const pathTypeFilterSchema = z
   )
   .openapi("PathLookupFilter");
 
-export const fetchFiltersSchema = pathTypeFilterSchema
+export const fetchEventsFiltersSchema = pathTypeFilterSchema
   .array()
   .describe(
     [
@@ -303,7 +308,7 @@ export const fetchEventsRequestSchema = z
     cursor: fetchPaginationCursorSchema.nullish(),
     max_xact_id: maxXactIdSchema.nullish(),
     max_root_span_id: maxRootSpanIdSchema.nullish(),
-    filters: fetchFiltersSchema.nullish(),
+    filters: fetchEventsFiltersSchema.nullish(),
     version: versionSchema.nullish(),
   })
   .openapi("FetchEventsRequest");
@@ -942,34 +947,38 @@ export const objectTypeSummarizeResponseSchemas: {
 
 // Section: async scoring.
 
-export const asyncScoringStateSchema = z.union([
-  z.object({
-    status: z.literal("enabled"),
-    token: z.string(),
-    function_ids: z.array(functionIdSchema).nonempty(),
-  }),
-  // Explicitly disabled.
-  z.object({
-    status: z.literal("disabled"),
-  }),
-  // Inactive but may be selected later.
-  z.null(),
-]);
+export const asyncScoringStateSchema = z
+  .union([
+    z.object({
+      status: z.literal("enabled"),
+      token: z.string(),
+      function_ids: z.array(functionIdSchema).nonempty(),
+    }),
+    // Explicitly disabled.
+    z.object({
+      status: z.literal("disabled"),
+    }),
+    // Inactive but may be selected later.
+    z.null(),
+  ])
+  .openapi("AsyncScoringState");
 
 export type AsyncScoringState = z.infer<typeof asyncScoringStateSchema>;
 
-export const asyncScoringControlSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("score_update"),
-    token: z.string(),
-  }),
-  z.object({
-    kind: z.literal("state_override"),
-    state: asyncScoringStateSchema,
-  }),
-  z.object({
-    kind: z.literal("state_force_reselect"),
-  }),
-]);
+export const asyncScoringControlSchema = z
+  .discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("score_update"),
+      token: z.string(),
+    }),
+    z.object({
+      kind: z.literal("state_override"),
+      state: asyncScoringStateSchema,
+    }),
+    z.object({
+      kind: z.literal("state_force_reselect"),
+    }),
+  ])
+  .openapi("AsyncScoringControl");
 
 export type AsyncScoringControl = z.infer<typeof asyncScoringControlSchema>;
