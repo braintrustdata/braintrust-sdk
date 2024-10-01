@@ -365,13 +365,18 @@ async function uploadBundles({
       bundleStream.on("error", reject);
     });
 
-    await fetch(pathInfo.url, {
+    const resp = await fetch(pathInfo.url, {
       method: "PUT",
       body: bundleData,
       headers: {
         "Content-Encoding": "gzip",
       },
     });
+    if (!resp.ok) {
+      throw new Error(
+        `Failed to upload bundle: ${resp.status} ${await resp.text()}`,
+      );
+    }
     return true;
   })();
 

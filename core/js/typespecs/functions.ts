@@ -1,4 +1,6 @@
+import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
+extendZodWithOpenApi(z);
 import { promptDataSchema } from "./prompt";
 import { chatCompletionMessageParamSchema } from "./openai/messages";
 import { customTypes } from "./custom_types";
@@ -22,7 +24,8 @@ export const functionIdSchema = z
         function_id: z.string().describe("The ID of the function"),
         version: z.string().optional().describe("The version of the function"),
       })
-      .describe("Function id"),
+      .describe("Function id")
+      .openapi({ title: "function_id" }),
     z
       .object({
         project_name: z
@@ -31,7 +34,8 @@ export const functionIdSchema = z
         slug: z.string().describe("The slug of the function"),
         version: z.string().optional().describe("The version of the function"),
       })
-      .describe("Project name and slug"),
+      .describe("Project name and slug")
+      .openapi({ title: "project_slug" }),
     z
       .object({
         global_function: z
@@ -40,7 +44,8 @@ export const functionIdSchema = z
             "The name of the global function. Currently, the global namespace includes the functions in autoevals",
           ),
       })
-      .describe("Global function name"),
+      .describe("Global function name")
+      .openapi({ title: "global_function" }),
     z
       .object({
         prompt_session_id: z.string().describe("The ID of the prompt session"),
@@ -49,7 +54,8 @@ export const functionIdSchema = z
           .describe("The ID of the function in the prompt session"),
         version: z.string().optional().describe("The version of the function"),
       })
-      .describe("Prompt session id"),
+      .describe("Prompt session id")
+      .openapi({ title: "prompt_session_id" }),
     z
       .object({
         inline_context: runtimeContextSchema,
@@ -59,15 +65,18 @@ export const functionIdSchema = z
           .nullish()
           .describe("The name of the inline code function"),
       })
-      .describe("Inline code function"),
+      .describe("Inline code function")
+      .openapi({ title: "inline_code" }),
     z
       .object({
         inline_prompt: promptDataSchema,
         name: z.string().nullish().describe("The name of the inline prompt"),
       })
-      .describe("Inline prompt definition"),
+      .describe("Inline prompt definition")
+      .openapi({ title: "inline_prompt" }),
   ])
-  .describe("Options for identifying a function");
+  .describe("Options for identifying a function")
+  .openapi("FunctionId");
 
 export type FunctionId = z.infer<typeof functionIdSchema>;
 
@@ -132,9 +141,9 @@ export const invokeFunctionNonIdArgsSchema = z.object({
     .describe("The mode format of the returned value (defaults to 'auto')"),
 });
 
-export const invokeFunctionSchema = functionIdSchema.and(
-  invokeFunctionNonIdArgsSchema,
-);
+export const invokeFunctionSchema = functionIdSchema
+  .and(invokeFunctionNonIdArgsSchema)
+  .openapi("InvokeFunction");
 export type InvokeFunctionRequest = z.infer<typeof invokeFunctionSchema>;
 
 export const invokeApiSchema = invokeFunctionNonIdArgsSchema
@@ -143,50 +152,55 @@ export const invokeApiSchema = invokeFunctionNonIdArgsSchema
       version: z.string().optional().describe("The version of the function"),
     }),
   )
-  .describe("The request to invoke a function");
+  .describe("The request to invoke a function")
+  .openapi("InvokeApi");
 
-export const runEvalSchema = z.object({
-  project_id: z
-    .string()
-    .describe("Unique identifier for the project to run the eval in"),
-  data: z
-    .union([
-      z
-        .object({
-          dataset_id: z.string(),
-        })
-        .describe("Dataset id"),
-      z
-        .object({
-          project_name: z.string(),
-          dataset_name: z.string(),
-        })
-        .describe("Project and dataset name"),
-    ])
-    .describe("The dataset to use"),
-  task: functionIdSchema.describe("The function to evaluate"),
-  scores: z
-    .array(functionIdSchema)
-    .describe("The functions to score the eval on"),
-  experiment_name: z
-    .string()
-    .optional()
-    .describe(
-      "An optional name for the experiment created by this eval. If it conflicts with an existing experiment, it will be suffixed with a unique identifier.",
-    ),
-  metadata: z
-    .record(customTypes.unknown)
-    .optional()
-    .describe(
-      "Optional experiment-level metadata to store about the evaluation. You can later use this to slice & dice across experiments.",
-    ),
-  stream: z
-    .boolean()
-    .optional()
-    .describe(
-      "Whether to stream the results of the eval. If true, the request will return two events: one to indicate the experiment has started, and another upon completion. If false, the request will return the evaluation's summary upon completion.",
-    ),
-});
+export const runEvalSchema = z
+  .object({
+    project_id: z
+      .string()
+      .describe("Unique identifier for the project to run the eval in"),
+    data: z
+      .union([
+        z
+          .object({
+            dataset_id: z.string(),
+          })
+          .describe("Dataset id")
+          .openapi({ title: "dataset_id" }),
+        z
+          .object({
+            project_name: z.string(),
+            dataset_name: z.string(),
+          })
+          .describe("Project and dataset name")
+          .openapi({ title: "project_dataset_name" }),
+      ])
+      .describe("The dataset to use"),
+    task: functionIdSchema.describe("The function to evaluate"),
+    scores: z
+      .array(functionIdSchema)
+      .describe("The functions to score the eval on"),
+    experiment_name: z
+      .string()
+      .optional()
+      .describe(
+        "An optional name for the experiment created by this eval. If it conflicts with an existing experiment, it will be suffixed with a unique identifier.",
+      ),
+    metadata: z
+      .record(customTypes.unknown)
+      .optional()
+      .describe(
+        "Optional experiment-level metadata to store about the evaluation. You can later use this to slice & dice across experiments.",
+      ),
+    stream: z
+      .boolean()
+      .optional()
+      .describe(
+        "Whether to stream the results of the eval. If true, the request will return two events: one to indicate the experiment has started, and another upon completion. If false, the request will return the evaluation's summary upon completion.",
+      ),
+  })
+  .openapi("RunEval");
 
 export type RunEvalRequest = z.infer<typeof runEvalSchema>;
 
@@ -236,53 +250,60 @@ export const sseDoneEventSchema = baseSSEEventSchema.omit({ data: true }).merge(
   }),
 );
 
-export const functionObjectTypeEnum = z.enum([
-  "prompt",
-  "tool",
-  "scorer",
-  "task",
-]);
+export const functionObjectTypeEnum = z
+  .enum(["prompt", "tool", "scorer", "task"])
+  .openapi("FunctionObjectType");
 export type FunctionObjectType = z.infer<typeof functionObjectTypeEnum>;
-export const functionFormatEnum = z.enum(["llm", "code", "global"]);
+export const functionFormatEnum = z
+  .enum(["llm", "code", "global"])
+  .openapi("FunctionFormat");
 export type FunctionFormat = z.infer<typeof functionFormatEnum>;
-export const functionOutputTypeEnum = z.enum(["completion", "score", "any"]);
+export const functionOutputTypeEnum = z
+  .enum(["completion", "score", "any"])
+  .openapi("FunctionOutputType");
 export type FunctionOutputType = z.infer<typeof functionOutputTypeEnum>;
 
-export const sseProgressEventDataSchema = z.object({
-  id: z.string().describe("The id of the span this event is for"),
-  object_type: functionObjectTypeEnum,
-  format: functionFormatEnum,
-  output_type: functionOutputTypeEnum,
-  name: z.string(),
-  event: z.enum(["text_delta", "json_delta", "error", "start", "done"]),
-  data: z.string(), // This is the text_delta or json_delta
-});
+export const sseProgressEventDataSchema = z
+  .object({
+    id: z.string().describe("The id of the span this event is for"),
+    object_type: functionObjectTypeEnum,
+    format: functionFormatEnum,
+    output_type: functionOutputTypeEnum,
+    name: z.string(),
+    event: z.enum(["text_delta", "json_delta", "error", "start", "done"]),
+    data: z.string(), // This is the text_delta or json_delta
+  })
+  .openapi("SSEProgressEventData");
 export type SSEProgressEventData = z.infer<typeof sseProgressEventDataSchema>;
 
-export const callEventSchema = z.union([
-  sseTextEventSchema.openapi({ title: "text_delta" }),
-  sseDataEventSchema.openapi({ title: "json_delta" }),
-  sseProgressEventSchema.openapi({ title: "progress" }),
-  sseErrorEventSchema.openapi({ title: "error" }),
-  sseStartEventSchema.openapi({ title: "start" }),
-  sseDoneEventSchema.openapi({ title: "done" }),
-]);
+export const callEventSchema = z
+  .union([
+    sseTextEventSchema.openapi({ title: "text_delta" }),
+    sseDataEventSchema.openapi({ title: "json_delta" }),
+    sseProgressEventSchema.openapi({ title: "progress" }),
+    sseErrorEventSchema.openapi({ title: "error" }),
+    sseStartEventSchema.openapi({ title: "start" }),
+    sseDoneEventSchema.openapi({ title: "done" }),
+  ])
+  .openapi("CallEvent");
 
 export type CallEventSchema = z.infer<typeof callEventSchema>;
 
-export const scoreSchema = z.union([
-  z.object({
-    name: z.string(),
-    score: z.number().min(0).max(1).nullable().default(null), // Sometimes we get an empty value over the wire
-    metadata: z
-      .record(customTypes.unknown)
-      .optional()
-      .transform((data) => data ?? undefined),
-  }),
-  z.number().min(0).max(1),
-  z.boolean().transform((b) => (b ? 1 : 0)),
-  z.null(),
-]);
+export const scoreSchema = z
+  .union([
+    z.object({
+      name: z.string(),
+      score: z.number().min(0).max(1).nullable().default(null), // Sometimes we get an empty value over the wire
+      metadata: z
+        .record(customTypes.unknown)
+        .optional()
+        .transform((data) => data ?? undefined),
+    }),
+    z.number().min(0).max(1),
+    z.boolean().transform((b) => (b ? 1 : 0)),
+    z.null(),
+  ])
+  .openapi("ScorerScore");
 
 export const ifExistsEnum = z.enum(["error", "ignore", "replace"]);
 export type IfExists = z.infer<typeof ifExistsEnum>;
