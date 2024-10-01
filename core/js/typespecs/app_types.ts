@@ -701,6 +701,27 @@ export const projectTagSchema = z
   .openapi("ProjectTag");
 export type ProjectTag = z.infer<typeof projectTagSchema>;
 
+export const spanIframeBaseSchema = generateBaseTableSchema("span iframe");
+export const spanIframeSchema = z
+  .object({
+    id: spanIframeBaseSchema.shape.id,
+    project_id: spanIframeBaseSchema.shape.project_id,
+    user_id: spanIframeBaseSchema.shape.user_id,
+    created: spanIframeBaseSchema.shape.created,
+    deleted_at: spanIframeBaseSchema.shape.deleted_at,
+    name: spanIframeBaseSchema.shape.name,
+    description: spanIframeBaseSchema.shape.description,
+    url: z.string().describe("URL to embed the project viewer in an iframe"),
+    post_message: z
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether to post messages to the iframe containing the span's data. This is useful when you want to render more data than fits in the URL.",
+      ),
+  })
+  .openapi("SpanIFrame");
+export type SpanIFrame = z.infer<typeof spanIframeSchema>;
+
 const viewBaseSchema = generateBaseTableSchema("view");
 export const viewSchema = z
   .object({
@@ -1076,6 +1097,23 @@ export const patchProjectTagSchema = z
   })
   .openapi("PatchProjectTag");
 
+export const createSpanIframeSchema = spanIframeSchema
+  .omit({
+    id: true,
+    created: true,
+    deleted_at: true,
+    user_id: true,
+  })
+  .openapi("CreateSpanIFrame");
+
+export const patchSpanIframeSchema = z
+  .object({
+    name: spanIframeSchema.shape.name.nullish(),
+    url: spanIframeSchema.shape.url.nullish(),
+    post_message: spanIframeSchema.shape.post_message.nullish(),
+  })
+  .openapi("PatchSpanIFrame");
+
 export const createViewSchema = viewSchema
   .omit({
     id: true,
@@ -1335,6 +1373,11 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
     object: projectTagSchema,
     create: createProjectTagSchema,
     patch_id: patchProjectTagSchema,
+  },
+  span_iframe: {
+    object: spanIframeSchema,
+    create: createSpanIframeSchema,
+    patch_id: patchSpanIframeSchema,
   },
   view: {
     object: viewSchema,
