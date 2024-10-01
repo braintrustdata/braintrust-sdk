@@ -182,7 +182,7 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
           .describe("ID of the object the event is originating from."),
         id: z.string().describe("ID of the original event."),
       })
-      .optional()
+      .nullish()
       .describe("Indicates the event was copied from another object."),
     [OBJECT_DELETE_FIELD]: z
       .boolean()
