@@ -584,7 +584,7 @@ export const groupSchema = z
 export type Group = z.infer<typeof groupSchema>;
 
 export const projectScoreTypeEnum = z
-  .enum(["slider", "categorical", "weighted", "minimum", "online"])
+  .enum(["slider", "categorical", "weighted", "minimum", "maximum", "online"])
   .describe("The type of the configured score")
   .openapi("ProjectScoreType");
 export type ProjectScoreType = z.infer<typeof projectScoreTypeEnum>;
