@@ -20,6 +20,7 @@ import {
   getObjectArticle,
   getEventObjectType,
   getEventObjectDescription,
+  eventObjectType,
 } from "./common_types";
 import { customTypes } from "./custom_types";
 import { capitalize } from "../src/string_util";
@@ -172,11 +173,17 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
       ),
     origin: z
       .object({
-        object_type: z.string(),
-        object_id: z.string().uuid(),
-        id: z.string(),
+        object_type: eventObjectType.describe(
+          "Type of the object the event is originating from.",
+        ),
+        object_id: z
+          .string()
+          .uuid()
+          .describe("ID of the object the event is originating from."),
+        id: z.string().describe("ID of the original event."),
       })
-      .optional(),
+      .optional()
+      .describe("Indicates the event was copied from another object."),
     [OBJECT_DELETE_FIELD]: z
       .boolean()
       .nullish()

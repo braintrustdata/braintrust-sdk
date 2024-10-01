@@ -75,10 +75,16 @@ export const objectTypesWithEvent = z.enum([
 ]);
 export type ObjectTypeWithEvent = z.infer<typeof objectTypesWithEvent>;
 
-export function getEventObjectType(objectType: ObjectTypeWithEvent) {
+export const eventObjectType = objectTypesWithEvent
+  .exclude(["project"])
+  .or(z.enum(["project_logs"]));
+export type EventObjectType = z.infer<typeof eventObjectType>;
+
+export function getEventObjectType(
+  objectType: ObjectTypeWithEvent,
+): EventObjectType {
   return objectType === "project" ? "project_logs" : objectType;
 }
-export type EventObjectType = ReturnType<typeof getEventObjectType>;
 
 export function getEventObjectDescription(objectType: ObjectTypeWithEvent) {
   return getEventObjectType(objectType).replace("_", " ");
