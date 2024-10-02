@@ -1755,7 +1755,7 @@ def update_span(exported, **event) -> Span:
 
 @dataclasses.dataclass
 class ParentSpanIds:
-    span_id: Optional[str]
+    span_id: str
     root_span_id: str
 
 
@@ -2276,8 +2276,7 @@ class SpanImpl(Span):
         self.span_id = str(uuid.uuid4())
         if parent_span_ids:
             self.root_span_id = parent_span_ids.root_span_id
-            parent_span_id = parent_span_ids.span_id
-            self.span_parents = [parent_span_id] if parent_span_id else None
+            self.span_parents = [parent_span_ids.span_id]
         else:
             self.root_span_id = self.span_id
             self.span_parents = None

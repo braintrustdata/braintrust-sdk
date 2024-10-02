@@ -827,7 +827,7 @@ export function updateSpan({
 }
 
 interface ParentSpanIds {
-  spanId?: string;
+  spanId: string;
   rootSpanId: string;
 }
 
@@ -3430,8 +3430,7 @@ export class SpanImpl implements Span {
     this.spanId = uuidv4();
     if (args.parentSpanIds) {
       this.rootSpanId = args.parentSpanIds.rootSpanId;
-      const parentSpanId = args.parentSpanIds.spanId;
-      this.spanParents = parentSpanId ? [parentSpanId] : undefined;
+      this.spanParents = [args.parentSpanIds.spanId];
     } else {
       this.rootSpanId = this.spanId;
       this.spanParents = undefined;
