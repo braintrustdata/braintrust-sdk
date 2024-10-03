@@ -180,6 +180,7 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
       .describe(
         `Pass \`${OBJECT_DELETE_FIELD}=true\` to mark the ${eventDescription} event deleted. Deleted events will not show up in subsequent fetches for this ${eventDescription}`,
       ),
+    is_root: z.boolean().nullish().describe(`Whether this span is a root span`),
   });
 }
 
@@ -388,6 +389,7 @@ export const experimentEventSchema = z
     span_parents: experimentEventBaseSchema.shape.span_parents,
     root_span_id: experimentEventBaseSchema.shape.root_span_id,
     span_attributes: experimentEventBaseSchema.shape.span_attributes,
+    is_root: experimentEventBaseSchema.shape.is_root,
   })
   .openapi("ExperimentEvent");
 export type ExperimentEvent = z.infer<typeof experimentEventSchema>;
@@ -410,6 +412,7 @@ export const datasetEventSchema = z
     tags: datasetEventBaseSchema.shape.tags,
     span_id: datasetEventBaseSchema.shape.span_id,
     root_span_id: datasetEventBaseSchema.shape.root_span_id,
+    is_root: datasetEventBaseSchema.shape.is_root,
     origin: datasetEventBaseSchema.shape.origin,
   })
   .openapi("DatasetEvent");
@@ -469,6 +472,7 @@ export const projectLogsEventSchema = z
     span_id: projectLogsEventBaseSchema.shape.span_id,
     span_parents: projectLogsEventBaseSchema.shape.span_parents,
     root_span_id: projectLogsEventBaseSchema.shape.root_span_id,
+    is_root: projectLogsEventBaseSchema.shape.is_root,
     span_attributes: projectLogsEventBaseSchema.shape.span_attributes,
     origin: projectLogsEventBaseSchema.shape.origin,
   })

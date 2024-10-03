@@ -56,6 +56,7 @@ export const objectTypes = z.enum([
   "user",
   "project_score",
   "project_tag",
+  "span_iframe",
   "function",
   "view",
   "organization",

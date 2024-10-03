@@ -584,7 +584,7 @@ export const groupSchema = z
 export type Group = z.infer<typeof groupSchema>;
 
 export const projectScoreTypeEnum = z
-  .enum(["slider", "categorical", "weighted", "minimum", "online"])
+  .enum(["slider", "categorical", "weighted", "minimum", "maximum", "online"])
   .describe("The type of the configured score")
   .openapi("ProjectScoreType");
 export type ProjectScoreType = z.infer<typeof projectScoreTypeEnum>;
@@ -700,6 +700,27 @@ export const projectTagSchema = z
   )
   .openapi("ProjectTag");
 export type ProjectTag = z.infer<typeof projectTagSchema>;
+
+export const spanIframeBaseSchema = generateBaseTableSchema("span iframe");
+export const spanIframeSchema = z
+  .object({
+    id: spanIframeBaseSchema.shape.id,
+    project_id: spanIframeBaseSchema.shape.project_id,
+    user_id: spanIframeBaseSchema.shape.user_id,
+    created: spanIframeBaseSchema.shape.created,
+    deleted_at: spanIframeBaseSchema.shape.deleted_at,
+    name: spanIframeBaseSchema.shape.name,
+    description: spanIframeBaseSchema.shape.description,
+    url: z.string().describe("URL to embed the project viewer in an iframe"),
+    post_message: z
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether to post messages to the iframe containing the span's data. This is useful when you want to render more data than fits in the URL.",
+      ),
+  })
+  .openapi("SpanIFrame");
+export type SpanIFrame = z.infer<typeof spanIframeSchema>;
 
 const viewBaseSchema = generateBaseTableSchema("view");
 export const viewSchema = z
@@ -834,10 +855,14 @@ export function makeObjectIdsFilterSchema(objectName: string) {
     .openapi(`${objectName}IdsFilter`);
 }
 
+function makeNonempty(s: z.ZodString): z.ZodString {
+  return (s.minLength ?? 0) > 0 ? s : s.min(1);
+}
+
 const createProjectBaseSchema = generateBaseTableOpSchema("project");
 export const createProjectSchema = z
   .object({
-    name: projectSchema.shape.name,
+    name: makeNonempty(projectSchema.shape.name),
     org_name: createProjectBaseSchema.shape.org_name,
   })
   .openapi("CreateProject");
@@ -856,7 +881,7 @@ export const patchProjectSchema = z
 export const createExperimentSchema = z
   .object({
     project_id: experimentSchema.shape.project_id,
-    name: experimentSchema.shape.name.nullish(),
+    name: makeNonempty(experimentSchema.shape.name).nullish(),
     description: experimentSchema.shape.description,
     repo_info: experimentSchema.shape.repo_info,
     base_exp_id: experimentSchema.shape.base_exp_id,
@@ -875,12 +900,13 @@ export const createExperimentSchema = z
 
 export const patchExperimentSchema = createExperimentSchema
   .omit({ project_id: true, ensure_new: true })
+  .extend({ name: experimentSchema.shape.name.nullish() })
   .openapi("PatchExperiment");
 
 export const createDatasetSchema = z
   .object({
     project_id: datasetSchema.shape.project_id,
-    name: datasetSchema.shape.name,
+    name: makeNonempty(datasetSchema.shape.name),
     description: datasetSchema.shape.description,
   })
   .openapi("CreateDataset");
@@ -902,6 +928,10 @@ export const createPromptSchema = promptSchema
     created: true,
     metadata: true,
   })
+  .extend({
+    name: makeNonempty(promptSchema.shape.name),
+    slug: makeNonempty(promptSchema.shape.slug),
+  })
   .openapi("CreatePrompt");
 
 export const createFunctionSchema = functionSchema
@@ -912,6 +942,10 @@ export const createFunctionSchema = functionSchema
     log_id: true,
     created: true,
     metadata: true,
+  })
+  .extend({
+    name: makeNonempty(promptSchema.shape.name),
+    slug: makeNonempty(promptSchema.shape.slug),
   })
   .openapi("CreateFunction");
 
@@ -940,7 +974,7 @@ const patchFunctionSchema = z
 const createRoleBaseSchema = generateBaseTableOpSchema("role");
 const createRoleSchema = z
   .object({
-    name: roleSchema.shape.name,
+    name: makeNonempty(roleSchema.shape.name),
     description: roleSchema.shape.description,
     member_permissions: roleSchema.shape.member_permissions,
     member_roles: roleSchema.shape.member_roles,
@@ -981,7 +1015,7 @@ export const patchRoleSchema = createRoleSchema
 const createGroupBaseSchema = generateBaseTableOpSchema("group");
 export const createGroupSchema = z
   .object({
-    name: groupSchema.shape.name,
+    name: makeNonempty(groupSchema.shape.name),
     description: groupSchema.shape.description,
     member_users: groupSchema.shape.member_users,
     member_groups: groupSchema.shape.member_groups,
@@ -1075,6 +1109,23 @@ export const patchProjectTagSchema = z
     color: projectTagSchema.shape.color,
   })
   .openapi("PatchProjectTag");
+
+export const createSpanIframeSchema = spanIframeSchema
+  .omit({
+    id: true,
+    created: true,
+    deleted_at: true,
+    user_id: true,
+  })
+  .openapi("CreateSpanIFrame");
+
+export const patchSpanIframeSchema = z
+  .object({
+    name: spanIframeSchema.shape.name.nullish(),
+    url: spanIframeSchema.shape.url.nullish(),
+    post_message: spanIframeSchema.shape.post_message.nullish(),
+  })
+  .openapi("PatchSpanIFrame");
 
 export const createViewSchema = viewSchema
   .omit({
@@ -1335,6 +1386,11 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
     object: projectTagSchema,
     create: createProjectTagSchema,
     patch_id: patchProjectTagSchema,
+  },
+  span_iframe: {
+    object: spanIframeSchema,
+    create: createSpanIframeSchema,
+    patch_id: patchSpanIframeSchema,
   },
   view: {
     object: viewSchema,
