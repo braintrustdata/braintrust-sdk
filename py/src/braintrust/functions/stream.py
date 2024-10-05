@@ -49,7 +49,7 @@ class BraintrustConsoleChunk:
     A console chunk from a Braintrust stream.
     """
 
-    data: str
+    message: str
     stream: Literal["stderr", "stdout"]
     type: Literal["console"] = "console"
 
@@ -120,7 +120,7 @@ class BraintrustStream:
             elif event.event == "console":
                 event_data = json.loads(event.data)
                 yield BraintrustConsoleChunk(
-                    data=event_data["data"],
+                    message=event_data["message"],
                     stream=event_data["stream"],
                 )
             elif event.event == "progress":
