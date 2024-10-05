@@ -179,7 +179,7 @@ function btStreamParser() {
           case "error":
             controller.enqueue({
               type: "error",
-              data: event.data,
+              data: JSON.parse(event.data),
             });
             break;
           case "progress":

@@ -44,6 +44,17 @@ class BraintrustErrorChunk:
 
 
 @dataclasses.dataclass
+class BraintrustConsoleChunk:
+    """
+    A console chunk from a Braintrust stream.
+    """
+
+    data: str
+    stream: Literal["stderr", "stdout"]
+    type: Literal["console"] = "console"
+
+
+@dataclasses.dataclass
 class BraintrustProgressChunk:
     """
     A progress chunk from a Braintrust stream.
@@ -105,7 +116,13 @@ class BraintrustStream:
             elif event.event == "json_delta":
                 yield BraintrustJsonChunk(data=event.data)
             elif event.event == "error":
-                yield BraintrustErrorChunk(data=event.data)
+                yield BraintrustErrorChunk(data=json.loads(event.data))
+            elif event.event == "console":
+                event_data = json.loads(event.data)
+                yield BraintrustConsoleChunk(
+                    data=event_data["data"],
+                    stream=event_data["stream"],
+                )
             elif event.event == "progress":
                 event_data = json.loads(event.data)
                 yield BraintrustProgressChunk(
@@ -177,8 +194,10 @@ def parse_stream(stream: BraintrustStream):
             json_chunks.append(chunk.data)
         elif isinstance(chunk, BraintrustErrorChunk):
             raise BraintrustInvokeError(chunk.data)
-        elif isinstance(chunk, BraintrustProgressChunk):
+        elif isinstance(chunk, BraintrustProgressChunk) or isinstance(chunk, BraintrustConsoleChunk):
             pass
+        else:
+            raise ValueError(f"Unknown chunk type (you may need to update the SDK): {type(chunk)}")
 
     if json_chunks:
         return json.loads("".join(json_chunks))

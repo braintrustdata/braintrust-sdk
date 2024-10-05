@@ -290,7 +290,7 @@ export const sseProgressEventDataSchema = z
 export type SSEProgressEventData = z.infer<typeof sseProgressEventDataSchema>;
 
 export const sseConsoleEventDataSchema = z.object({
-  type: z.enum(["stderr", "stdout"]),
+  stream: z.enum(["stderr", "stdout"]),
   message: z.string(),
 });
 export type SSEConsoleEventData = z.infer<typeof sseConsoleEventDataSchema>;
