@@ -28,6 +28,11 @@
       "module": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
+    "./browser": {
+      "import": "./dist/browser.mjs",
+      "module": "./dist/browser.mjs",
+      "require": "./dist/browser.js"
+    },
     "./ai-sdk": {
       "types": "./ai-sdk/dist/index.d.ts",
       "import": "./ai-sdk/dist/index.mjs",
