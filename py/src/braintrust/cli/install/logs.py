@@ -11,7 +11,7 @@ def build_parser(subparsers, parents):
     parser = subparsers.add_parser("logs", help="Capture recent logs", parents=parents)
     parser.add_argument("name", help="Name of the CloudFormation stack to collect logs from")
     parser.add_argument("--service", help="Name of the service", default="api", choices=["api"])
-    parser.add_argument("--hours", help="Number of seconds in the past to collect logs from", default=1, type=float)
+    parser.add_argument("--hours", help="Number of hours in the past to collect logs from", default=1, type=float)
     parser.set_defaults(func=main)
 
 
