@@ -862,6 +862,22 @@ function spanComponentsToObjectIdLambda(
   }
 }
 
+// Utility function to resolve the object ID of a SpanComponentsV3 object. This
+// function may trigger a login to braintrust if the object ID is encoded
+// "lazily".
+export async function spanComponentsToObjectId({
+  components,
+  state,
+}: {
+  components: SpanComponentsV3;
+  state?: BraintrustState;
+}): Promise<string> {
+  return await spanComponentsToObjectIdLambda(
+    state ?? _globalState,
+    components,
+  )();
+}
+
 // IMPORTANT NOTE: This function may pass arguments which override those in the
 // main argument set, so if using this in a spread, like `SpanImpl({ ...args,
 // ...startSpanParentArgs(...)})`, make sure to put startSpanParentArgs after
