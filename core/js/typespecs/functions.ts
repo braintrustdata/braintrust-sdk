@@ -233,6 +233,12 @@ export const sseProgressEventSchema = baseSSEEventSchema.merge(
   }),
 );
 
+export const sseConsoleEventSchema = baseSSEEventSchema.merge(
+  z.object({
+    event: z.literal("console"),
+  }),
+);
+
 // Both start and end are no-op events that just help display progress
 export const sseStartEventSchema = baseSSEEventSchema
   .omit({ data: true })
@@ -270,11 +276,24 @@ export const sseProgressEventDataSchema = z
     format: functionFormatEnum,
     output_type: functionOutputTypeEnum,
     name: z.string(),
-    event: z.enum(["text_delta", "json_delta", "error", "start", "done"]),
+    event: z.enum([
+      "text_delta",
+      "json_delta",
+      "error",
+      "console",
+      "start",
+      "done",
+    ]),
     data: z.string(), // This is the text_delta or json_delta
   })
   .openapi("SSEProgressEventData");
 export type SSEProgressEventData = z.infer<typeof sseProgressEventDataSchema>;
+
+export const sseConsoleEventDataSchema = z.object({
+  stream: z.enum(["stderr", "stdout"]),
+  message: z.string(),
+});
+export type SSEConsoleEventData = z.infer<typeof sseConsoleEventDataSchema>;
 
 export const callEventSchema = z
   .union([
@@ -282,6 +301,7 @@ export const callEventSchema = z
     sseDataEventSchema.openapi({ title: "json_delta" }),
     sseProgressEventSchema.openapi({ title: "progress" }),
     sseErrorEventSchema.openapi({ title: "error" }),
+    sseConsoleEventSchema.openapi({ title: "console" }),
     sseStartEventSchema.openapi({ title: "start" }),
     sseDoneEventSchema.openapi({ title: "done" }),
   ])
