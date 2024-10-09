@@ -571,12 +571,17 @@ class HTTPConnection {
             )
         : [],
     ).toString();
+
+    // On platforms like Cloudflare, we lose "this" when we make an async call,
+    // so we need to bind it again.
+    const this_fetch = this.fetch;
+    const this_headers = this.headers;
     return await checkResponse(
       // Using toString() here makes it work with isomorphic fetch
-      await this.fetch(url.toString(), {
+      await this_fetch(url.toString(), {
         headers: {
           Accept: "application/json",
-          ...this.headers,
+          ...this_headers,
           ...headers,
         },
         keepalive: true,
@@ -591,13 +596,19 @@ class HTTPConnection {
     config?: RequestInit,
   ) {
     const { headers, ...rest } = config || {};
+    // On platforms like Cloudflare, we lose "this" when we make an async call,
+    // so we need to bind it again.
+    const this_fetch = this.fetch;
+    const this_base_url = this.base_url;
+    const this_headers = this.headers;
+
     return await checkResponse(
-      await this.fetch(_urljoin(this.base_url, path), {
+      await this_fetch(_urljoin(this_base_url, path), {
         method: "POST",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          ...this.headers,
+          ...this_headers,
           ...headers,
         },
         body:
