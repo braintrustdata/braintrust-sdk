@@ -18,17 +18,17 @@ AdjacencyListGraph = Dict[int, Set[int]]
 
 
 class FirstVisitF(Protocol):
-    def __call__(vertex: int, *, parent_vertex: Optional[int], **kwargs) -> None:
+    def __call__(self, vertex: int, *, parent_vertex: Optional[int], **kwargs) -> None:
         """Extras:
         - parent_vertex: the vertex which spawned the current vertex as its
           child during the depth-first search. `parent_vertex` is guaranteed
           to have been visited before the current one.
         """
-        pass
+        ...
 
 
 class LastVisitF(Protocol):
-    def __call__(vertex: int) -> None:
+    def __call__(self, vertex: int) -> None:
         ...
 
 
@@ -112,6 +112,7 @@ def undirected_connected_components(graph: UndirectedGraph) -> List[List[int]]:
             label = vertex_labels[parent_vertex]
         else:
             nonlocal label_counter
+            # pylint: disable=used-before-assignment
             label = label_counter
             label_counter += 1
         vertex_labels[vertex] = label

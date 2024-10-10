@@ -5,6 +5,7 @@ import contextvars
 import dataclasses
 import datetime
 import inspect
+import itertools
 import json
 import logging
 import os
@@ -823,6 +824,7 @@ def init(
         lazy_metadata = LazyValue(compute_metadata, use_mutex=True)
         return ReadonlyExperiment(lazy_metadata=lazy_metadata)
 
+    # pylint: disable=function-redefined
     def compute_metadata():
         login(org_name=org_name, api_key=api_key, app_url=app_url)
         args = {
@@ -1550,7 +1552,7 @@ class ObjectIterator:
         return value
 
 
-class ObjectFetcher:
+class ObjectFetcher(ABC):
     def __init__(self, object_type, pinned_version=None, mutate_record=None):
         self.object_type = object_type
 
@@ -1591,6 +1593,15 @@ class ObjectFetcher:
             ".fetched_data is deprecated and will be removed in a future version of braintrust. Use .fetch() or the iterator instead"
         )
         return self._refetch()
+
+    @abstractmethod
+    def _get_state(self):
+        ...
+
+    @property
+    @abstractmethod
+    def id(self):
+        ...
 
     def _refetch(self):
         state = self._get_state()
@@ -1681,6 +1692,7 @@ def _log_feedback_impl(
 
     if comment is not None:
 
+        # pylint: disable=function-redefined
         def compute_record():
             return dict(
                 id=str(uuid.uuid4()),
@@ -1768,7 +1780,7 @@ def _span_components_to_object_id_lambda(components: SpanComponentsV3):
     elif components.object_type == SpanObjectTypeV3.PROJECT_LOGS:
         return lambda: _compute_logger_metadata(**components.compute_object_metadata_args).project.id
     else:
-        raise Exception(f"Unknown object type: {object_type}")
+        raise Exception(f"Unknown object type: {components.object_type}")
 
 
 # Utility function to resolve the object ID of a SpanComponentsV3 object. This
@@ -2832,7 +2844,7 @@ class Prompt:
 
         return ret
 
-    def __iter__(self):
+    def _make_iter_list(self):
         meta_keys = list(self.options.keys())
         if self.prompt.type == "completion":
             meta_keys.append("prompt")
@@ -2841,8 +2853,11 @@ class Prompt:
 
         return meta_keys
 
+    def __iter__(self):
+        return iter(self._make_iter_list())
+
     def __len__(self):
-        return len(self.__iter__())
+        return len(self._make_iter_list())
 
     def __getitem__(self, x):
         if x == "prompt":
@@ -3161,7 +3176,7 @@ class MetricSummary(SerializableDataClass):
     # Used to help with formatting
     _longest_metric_name: int
 
-    metric: float | int
+    metric: Union[float, int]
     """Average metric across all examples."""
     unit: str
     """Unit label for the metric."""
