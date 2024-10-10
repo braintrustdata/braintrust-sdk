@@ -32,7 +32,7 @@ jobs:
           python -m pip install -e ./py[all]
       - name: Test whether the Python SDK can be imported
         run: |
-          python -c "import braintrust"
+          python -c 'import braintrust'
       - name: Lint the Python SDK
         run: |
           pylint --errors-only $(git ls-files '*.py')
