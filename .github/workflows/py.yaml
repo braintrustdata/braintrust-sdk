@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
+      # This test takes roughly 40 seconds. There is not much benefit to fail-fast.
+      fail-fast: false
       matrix:
         python-version:
           - "3.8"
