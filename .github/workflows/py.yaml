@@ -12,8 +12,8 @@ jobs:
     strategy:
       matrix:
         python-version:
-          - "3.8"
-          # - "3.9"
+          # - "3.8"
+          - "3.9"
           # - "3.10"
           - "3.11"
           # - "3.12"
@@ -27,9 +27,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip setuptools build twine openai pylint
-      - name: Test if the Python SDK can be installed and imported
+      - name: Test whether the Python SDK can be installed
         run: |
           python -m pip install -e ./py[all]
+      - name: Test whether the Python SDK can be imported
+        run: |
           python -c "import braintrust"
       - name: Lint the Python SDK
         run: |
