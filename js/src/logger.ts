@@ -34,7 +34,6 @@ import {
   SpanObjectTypeV3,
   gitMetadataSettingsSchema,
   _urljoin,
-  AttachmentReference,
 } from "@braintrust/core";
 import {
   AnyModelParam,
@@ -48,6 +47,8 @@ import {
   PromptSessionEvent,
   OpenAIMessage,
   Message,
+  AttachmentReference,
+  BRAINTRUST_ATTACHMENT,
 } from "@braintrust/core/typespecs";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
@@ -677,13 +678,12 @@ export interface LogOptions<IsAsyncFlush> {
 export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
 
 /**
- * A wrapper object that allows lazily uploading attachments and their metadata. This object can be logged in place of an attachment that is being uploaded asynchronously.
+ * Represents an attachment to be uploaded and the associated metadata. Attachment objects can be inserted anywhere in an event or feedback, allowing you to log arbitrary large data. The SDK will asynchronously upload the file to object storage and replace the Attachment object with an AttachmentReference.
  */
-export class LazyAttachmentUpload {
-  filename: string;
-  // The type of the attachment we intend to upload.
-  content_type: string;
+export class Attachment {
   data: string | Blob;
+  filename: string;
+  contentType: string;
   metadata?: AttachmentReference;
   private signedUrl?: string;
 
@@ -691,24 +691,25 @@ export class LazyAttachmentUpload {
   private uploadPromise?: Promise<void>;
 
   /**
-   * Construct a wrapper object to represent a lazy attachment upload.
-   * @param filename The desired name of the file in Braintrust after uploading.
-   * @param content_type The MIME type of the file.
+   * Construct an attachment.
    * @param data A string representing the path of the file on disk, or a `Blob`/`ArrayBuffer` with the file's contents. The caller is responsible for ensuring the file/blob/buffer is not modified until upload is complete.
+   * @param filename The desired name of the file in Braintrust after uploading. This parameter is for visualization purposes only and has no effect on attachment storage.
+   * @param contentType The MIME type of the file.
    */
   constructor(
-    filename: string,
-    content_type: string,
     data: string | Blob | ArrayBuffer,
+    filename: string,
+    contentType: string,
   ) {
-    this.filename = filename;
-    this.content_type = content_type;
     this.data = typeof data === "string" ? data : new Blob([data]);
+    this.filename = filename;
+    this.contentType = contentType;
   }
 
   async upload(): Promise<AttachmentReference> {
     const metadata = await this.uploadMetadata();
     await this.uploadFile();
+    metadata.upload_status = "done";
     return metadata;
   }
 
@@ -721,8 +722,8 @@ export class LazyAttachmentUpload {
         await _globalState.login({});
         const conn = _globalState.apiConn();
         const resp = await conn.post("/attachments/new", {
-          name: this.filename,
-          content_type: this.content_type,
+          filename: this.filename,
+          content_type: this.contentType,
         });
         const parsedResp = z
           .object({
@@ -732,12 +733,15 @@ export class LazyAttachmentUpload {
           .parse(await resp.json());
         this.signedUrl = parsedResp.signedUrl;
 
-        this.metadata = {
-          name: this.filename,
-          content_type: this.content_type,
+        const metadata: AttachmentReference = {
+          type: BRAINTRUST_ATTACHMENT,
+          filename: this.filename,
+          content_type: this.contentType,
           key: parsedResp.key,
+          upload_status: "uploading",
         };
-        return this.metadata;
+        this.metadata = metadata;
+        return metadata;
       })();
     }
 
@@ -770,7 +774,7 @@ export class LazyAttachmentUpload {
         const resp = await fetch(this.signedUrl, {
           method: "PUT",
           headers: {
-            "Content-Type": this.content_type,
+            "Content-Type": this.contentType,
           },
           body: this.data,
         });
@@ -1259,12 +1263,12 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   }
 
   // TODO: do we want convenience methods?
-  public lazyAttachment(
+  public attachment(
+    data: string | Blob | ArrayBuffer,
     filename: string,
     content_type: string,
-    data: string | Blob | ArrayBuffer,
   ) {
-    return new LazyAttachmentUpload(filename, content_type, data);
+    return new Attachment(data, filename, content_type);
   }
 
   /**
@@ -1327,7 +1331,7 @@ export interface BackgroundLoggerOpts {
 class BackgroundLogger {
   private apiConn: LazyValue<HTTPConnection>;
   private items: LazyValue<BackgroundLogEvent>[] = [];
-  private attachments: LazyAttachmentUpload[] = [];
+  private attachments: Attachment[] = [];
   private activeFlush: Promise<void> = Promise.resolve();
   private activeFlushResolved = true;
   private activeFlushError: unknown = undefined;
@@ -1435,7 +1439,7 @@ class BackgroundLogger {
     }
   }
 
-  logAttachments(items: LazyAttachmentUpload[]) {
+  logAttachments(items: Attachment[]) {
     // TODO: queue limit.
     this.attachments.push(...items);
   }
@@ -3005,14 +3009,14 @@ function validateAndSanitizeExperimentLogPartialArgs(
  */
 function extractLazyAttachments<T extends Partial<BackgroundLogEvent>>(
   event: T,
-): [() => Promise<T>, LazyAttachmentUpload[]] {
-  const lazyAttachments: LazyAttachmentUpload[] = [];
+): [() => Promise<T>, Attachment[]] {
+  const lazyAttachments: Attachment[] = [];
 
-  function helper(value: any, f: (arg0: LazyAttachmentUpload) => any) {
+  function helper(value: any, f: (arg0: Attachment) => any) {
     if (typeof value !== "object") {
       return value;
     }
-    if (value instanceof LazyAttachmentUpload) {
+    if (value instanceof Attachment) {
       return f(value);
     }
     for (const key of Object.keys(value)) {
@@ -3681,7 +3685,7 @@ export class SpanImpl implements Span {
       ...serializableInternalData,
       [IS_MERGE_FIELD]: this.isMerge,
     };
-    const lazyAttachments: LazyAttachmentUpload[] = [];
+    const lazyAttachments: Attachment[] = [];
     const serializedPartialRecord = JSON.stringify(partialRecord, (_k, v) => {
       if (v instanceof SpanImpl) {
         return `<span>`;
@@ -3691,7 +3695,7 @@ export class SpanImpl implements Span {
         return `<dataset>`;
       } else if (v instanceof Logger) {
         return `<logger>`;
-      } else if (v instanceof LazyAttachmentUpload) {
+      } else if (v instanceof Attachment) {
         const index = lazyAttachments.push(v) - 1;
         return { _btLazyAttachmentIndex: index };
       }
