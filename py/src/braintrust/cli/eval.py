@@ -167,7 +167,7 @@ def add_report(eval_reports, reporter, report):
     eval_reports[reporter.name]["results"].append(report)
 
 
-async def run_once(handles: list[FileHandle], evaluator_opts: EvaluatorOpts) -> bool:
+async def run_once(handles: List[FileHandle], evaluator_opts: EvaluatorOpts) -> bool:
     objects = EvaluatorState()
     update_evaluators(objects, handles, terminate_on_failure=evaluator_opts.terminate_on_failure)
 

@@ -946,6 +946,7 @@ def build_local_summary(evaluator, results):
         experiment_id=None,
         experiment_name=evaluator.experiment_name,
         project_name=evaluator.project_name,
+        project_id=None,
         project_url=None,
         experiment_url=None,
         comparison_experiment_name=None,
