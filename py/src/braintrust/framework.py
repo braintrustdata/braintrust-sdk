@@ -444,7 +444,7 @@ def Eval(
     project_id: Optional[str] = None,
     base_experiment_name: Optional[str] = None,
     base_experiment_id: Optional[str] = None,
-):
+) -> Union[Awaitable[EvalResultWithSummary], EvalResultWithSummary]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
 
