@@ -34,6 +34,7 @@ import {
   SpanObjectTypeV3,
   gitMetadataSettingsSchema,
   _urljoin,
+  AttachmentReference,
 } from "@braintrust/core";
 import {
   AnyModelParam,
@@ -675,6 +676,114 @@ export interface LogOptions<IsAsyncFlush> {
 
 export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
 
+/**
+ * A wrapper object that allows lazily uploading attachments and their metadata. This object can be logged in place of an attachment that is being uploaded asynchronously.
+ */
+export class LazyAttachmentUpload {
+  filename: string;
+  // The type of the attachment we intend to upload.
+  content_type: string;
+  data: string | Blob;
+  metadata?: AttachmentReference;
+  private signedUrl?: string;
+
+  private metadataPromise?: Promise<AttachmentReference>;
+  private uploadPromise?: Promise<void>;
+
+  /**
+   * Construct a wrapper object to represent a lazy attachment upload.
+   * @param filename The desired name of the file in Braintrust after uploading.
+   * @param content_type The MIME type of the file.
+   * @param data A string representing the path of the file on disk, or a `Blob`/`ArrayBuffer` with the file's contents. The caller is responsible for ensuring the file/blob/buffer is not modified until upload is complete.
+   */
+  constructor(
+    filename: string,
+    content_type: string,
+    data: string | Blob | ArrayBuffer,
+  ) {
+    this.filename = filename;
+    this.content_type = content_type;
+    this.data = typeof data === "string" ? data : new Blob([data]);
+  }
+
+  async upload(): Promise<AttachmentReference> {
+    const metadata = await this.uploadMetadata();
+    await this.uploadFile();
+    return metadata;
+  }
+
+  /**
+   * Request a signed url from data plane without uploading the file.
+   */
+  async uploadMetadata(): Promise<AttachmentReference> {
+    if (!this.metadataPromise) {
+      this.metadataPromise = (async () => {
+        await _globalState.login({});
+        const conn = _globalState.apiConn();
+        const resp = await conn.post("/attachments/new", {
+          name: this.filename,
+          content_type: this.content_type,
+        });
+        const parsedResp = z
+          .object({
+            signedUrl: z.string().min(1),
+            key: z.string().min(1),
+          })
+          .parse(await resp.json());
+        this.signedUrl = parsedResp.signedUrl;
+
+        this.metadata = {
+          name: this.filename,
+          content_type: this.content_type,
+          key: parsedResp.key,
+        };
+        return this.metadata;
+      })();
+    }
+
+    return this.metadataPromise;
+  }
+
+  /**
+   * Upload the file to object store.
+   */
+  private async uploadFile(): Promise<void> {
+    if (!this.uploadPromise) {
+      this.uploadPromise = (async () => {
+        if (!this.signedUrl) {
+          await this.uploadMetadata();
+        }
+        if (!this.signedUrl) {
+          throw new Error("couldn't get metadata");
+        }
+
+        // This could stream the file in the future.
+        if (typeof this.data === "string") {
+          if (!iso.readFile) {
+            throw new Error(
+              "This platform does not support reading filesystem",
+            );
+          }
+          this.data = new Blob([await iso.readFile(this.data)]);
+        }
+
+        const resp = await fetch(this.signedUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": this.content_type,
+          },
+          body: this.data,
+        });
+        if (!resp.ok) {
+          throw new FailedHTTPResponse(resp.status, await resp.text());
+        }
+      })();
+    }
+
+    return this.uploadPromise;
+  }
+}
+
 function logFeedbackImpl(
   state: BraintrustState,
   parentObjectType: SpanObjectTypeV3,
@@ -725,10 +834,12 @@ function logFeedbackImpl(
     }).objectIdFields();
 
   if (Object.keys(updateEvent).length > 0) {
+    const [makeUpdateEvent, lazyAttachments] =
+      extractLazyAttachments(updateEvent);
     const record = new LazyValue(async () => {
       return {
         id,
-        ...updateEvent,
+        ...(await makeUpdateEvent()),
         ...(await parentIds()),
         [AUDIT_SOURCE_FIELD]: source,
         [AUDIT_METADATA_FIELD]: metadata,
@@ -736,6 +847,7 @@ function logFeedbackImpl(
       };
     });
     state.bgLogger().log([record]);
+    state.bgLogger().logAttachments(lazyAttachments);
   }
 
   if (!isEmpty(comment)) {
@@ -784,13 +896,16 @@ function updateSpanImpl({
       object_id: await parentObjectId.get(),
     }).objectIdFields();
 
+  const [getUpdateEvent, lazyAttachments] = extractLazyAttachments(updateEvent);
+
   const record = new LazyValue(async () => ({
     id,
-    ...updateEvent,
+    ...(await getUpdateEvent()),
     ...(await parentIds()),
     [IS_MERGE_FIELD]: true,
   }));
   state.bgLogger().log([record]);
+  state.bgLogger().logAttachments(lazyAttachments);
 }
 
 /**
@@ -1143,6 +1258,15 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     });
   }
 
+  // TODO: do we want convenience methods?
+  public lazyAttachment(
+    filename: string,
+    content_type: string,
+    data: string | Blob | ArrayBuffer,
+  ) {
+    return new LazyAttachmentUpload(filename, content_type, data);
+  }
+
   /**
    * Return a serialized representation of the logger that can be used to start subspans in other places. See `Span.start_span` for more details.
    */
@@ -1203,6 +1327,7 @@ export interface BackgroundLoggerOpts {
 class BackgroundLogger {
   private apiConn: LazyValue<HTTPConnection>;
   private items: LazyValue<BackgroundLogEvent>[] = [];
+  private attachments: LazyAttachmentUpload[] = [];
   private activeFlush: Promise<void> = Promise.resolve();
   private activeFlushResolved = true;
   private activeFlushError: unknown = undefined;
@@ -1310,6 +1435,11 @@ class BackgroundLogger {
     }
   }
 
+  logAttachments(items: LazyAttachmentUpload[]) {
+    // TODO: queue limit.
+    this.attachments.push(...items);
+  }
+
   async flush(): Promise<void> {
     if (this.syncFlush) {
       this.triggerActiveFlush();
@@ -1366,6 +1496,11 @@ class BackgroundLogger {
         );
       }
     }
+
+    const attachments = this.attachments;
+    this.attachments = [];
+    // TODO: Error handling.
+    await Promise.all(attachments.map((x) => x.upload()));
 
     // If more items were added while we were flushing, flush again
     if (this.items.length > 0) {
@@ -2863,6 +2998,54 @@ function validateAndSanitizeExperimentLogPartialArgs(
   }
 }
 
+/**
+ * Helper function for uploading lazy attachments. Recursively extracts `LazyAttachmentUpload` values. Returns an async function that recursively replaces `LazyAttachmentUpload` objects with the corresponding `AttachmentReference` by making a metadata request to the data plane.
+ * @param event The event to be extract. Will be modified.
+ * @returns The function to get the modified event and the extracted `LazyAttachmentUpload` objects.
+ */
+function extractLazyAttachments<T extends Partial<BackgroundLogEvent>>(
+  event: T,
+): [() => Promise<T>, LazyAttachmentUpload[]] {
+  const lazyAttachments: LazyAttachmentUpload[] = [];
+
+  function helper(value: any, f: (arg0: LazyAttachmentUpload) => any) {
+    if (typeof value !== "object") {
+      return value;
+    }
+    if (value instanceof LazyAttachmentUpload) {
+      return f(value);
+    }
+    for (const key of Object.keys(value)) {
+      value[key] = helper(value[key], f);
+    }
+    return value;
+  }
+
+  // Recursively find all attachments.
+  for (const key of Object.keys(event)) {
+    (event as any)[key] = helper((event as any)[key], (attachment) => {
+      lazyAttachments.push(attachment);
+      return attachment;
+    });
+  }
+
+  // Create a function to await the attachments' metadata.
+  const getRecord = async () => {
+    await Promise.all(lazyAttachments.map((x) => x.uploadMetadata()));
+
+    for (const key of Object.keys(event)) {
+      (event as any)[key] = helper(
+        (event as any)[key],
+        (attachment) => attachment.metadata!,
+      );
+    }
+
+    return event;
+  };
+
+  return [getRecord, lazyAttachments];
+}
+
 // Note that this only checks properties that are expected of a complete event.
 // validateAndSanitizeExperimentLogPartialArgs should still be invoked (after
 // handling special fields like 'id').
@@ -3498,6 +3681,7 @@ export class SpanImpl implements Span {
       ...serializableInternalData,
       [IS_MERGE_FIELD]: this.isMerge,
     };
+    const lazyAttachments: LazyAttachmentUpload[] = [];
     const serializedPartialRecord = JSON.stringify(partialRecord, (_k, v) => {
       if (v instanceof SpanImpl) {
         return `<span>`;
@@ -3507,10 +3691,22 @@ export class SpanImpl implements Span {
         return `<dataset>`;
       } else if (v instanceof Logger) {
         return `<logger>`;
+      } else if (v instanceof LazyAttachmentUpload) {
+        const index = lazyAttachments.push(v) - 1;
+        return { _btLazyAttachmentIndex: index };
       }
       return v;
     });
-    partialRecord = JSON.parse(serializedPartialRecord);
+    partialRecord = JSON.parse(serializedPartialRecord, (_k, v) => {
+      if (
+        typeof v === "object" &&
+        "_btLazyAttachmentIndex" in v &&
+        typeof v._btLazyAttachmentIndex === "number"
+      ) {
+        return lazyAttachments[v._btLazyAttachmentIndex];
+      }
+      return v;
+    });
     if (partialRecord.metrics?.end) {
       this.loggedEndTime = partialRecord.metrics?.end as number;
     }
@@ -3519,8 +3715,9 @@ export class SpanImpl implements Span {
       throw new Error("Tags can only be logged to the root span");
     }
 
+    const [getPartialRecord] = extractLazyAttachments(partialRecord);
     const computeRecord = async () => ({
-      ...partialRecord,
+      ...(await getPartialRecord()),
       ...Object.fromEntries(
         await Promise.all(
           Object.entries(lazyInternalData).map(async ([key, value]) => [
@@ -3535,6 +3732,7 @@ export class SpanImpl implements Span {
       }).objectIdFields(),
     });
     this.state.bgLogger().log([new LazyValue(computeRecord)]);
+    this.state.bgLogger().logAttachments(lazyAttachments);
   }
 
   public logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void {
