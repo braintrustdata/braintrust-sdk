@@ -34,6 +34,5 @@ jobs:
         run: |
           python -c "import braintrust"
       - name: Lint the Python SDK
-        # TODO: make pylint blocking.
         run: |
-          pylint --errors-only $(git ls-files '*.py') || true
+          pylint --errors-only $(git ls-files '*.py')
