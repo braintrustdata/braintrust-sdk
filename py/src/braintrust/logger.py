@@ -3161,7 +3161,7 @@ class MetricSummary(SerializableDataClass):
     # Used to help with formatting
     _longest_metric_name: int
 
-    metric: float | int
+    metric: Union[float, int]
     """Average metric across all examples."""
     unit: str
     """Unit label for the metric."""
