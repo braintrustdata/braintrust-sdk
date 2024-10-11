@@ -688,16 +688,13 @@ interface AttachmentUploadResult {
  * Represents an attachment to be uploaded and the associated metadata. Attachment objects can be inserted anywhere in an event or feedback, allowing you to log arbitrary large data. The SDK will asynchronously upload the file to object storage and replace the Attachment object with an AttachmentReference.
  */
 export class Attachment {
-  readonly data: string | Blob;
-  readonly filename: string;
-  readonly contentType: string;
   readonly reference: AttachmentReference;
   /**
    * On first access, (1) reads the attachment from disk if needed, (2) authenticates with the data plane to request a signed URL, and (3) uploads to object store.
    */
   readonly result: LazyValue<AttachmentUploadResult>;
 
-  private readonly uuid: UUID;
+  private readonly data: LazyValue<Blob>;
 
   /**
    * Construct an attachment.
@@ -710,19 +707,16 @@ export class Attachment {
     filename: string,
     contentType: string,
   ) {
-    this.data = typeof data === "string" ? data : new Blob([data]);
-    this.filename = filename;
-    this.contentType = contentType;
-
-    this.uuid = randomUUID();
+    const uuid = randomUUID();
     this.reference = {
       type: BRAINTRUST_ATTACHMENT,
       filename,
       content_type: contentType,
-      key: `attachments/${this.uuid.slice(0, 2)}/${this.uuid}`,
+      key: `attachments/${uuid.slice(0, 2)}/${uuid}`,
       upload_status: "uploading",
     };
 
+    this.data = this.initData(data);
     this.result = this.initUploader();
   }
 
@@ -740,7 +734,7 @@ export class Attachment {
 
         const [metadataResponse, data] = await Promise.all([
           conn.post("/attachments/new", this.reference),
-          this.loadData(),
+          this.data.get(),
         ]);
         ret.metadataResponse = metadataResponse;
         ret.signedUrl = z
@@ -750,7 +744,7 @@ export class Attachment {
         ret.objectStoreResponse = await fetch(ret.signedUrl, {
           method: "PUT",
           headers: {
-            "Content-Type": this.contentType,
+            "Content-Type": this.reference.content_type,
           },
           body: data,
         });
@@ -764,18 +758,20 @@ export class Attachment {
     });
   }
 
-  private async loadData(): Promise<Blob> {
-    // This could stream the file in the future.
-    if (typeof this.data === "string") {
-      if (!iso.readFile) {
+  private initData(data: string | Blob | ArrayBuffer): LazyValue<Blob> {
+    if (typeof data === "string") {
+      const readFile = iso.readFile;
+      if (!readFile) {
         throw new Error(
           `This platform does not support reading the filesystem. Construct the Attachment
 with a Blob/ArrayBuffer, or run the program on Node.js.`,
         );
       }
-      return new Blob([await iso.readFile(this.data)]);
+      // This could stream the file in the future.
+      return new LazyValue(async () => new Blob([await readFile(data)]));
+    } else {
+      return new LazyValue(async () => new Blob([data]));
     }
-    return this.data;
   }
 }
 
