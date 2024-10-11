@@ -67,7 +67,6 @@ import {
   devNullWritableStream,
 } from "./functions/stream";
 import { waitUntil } from "@vercel/functions";
-import { randomUUID, UUID } from "crypto";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -707,7 +706,10 @@ export class Attachment {
     filename: string,
     contentType: string,
   ) {
-    const uuid = randomUUID();
+    if (!iso.randomUUID) {
+      throw new Error("This platform does not support randomUUID");
+    }
+    const uuid = iso.randomUUID();
     this.reference = {
       type: BRAINTRUST_ATTACHMENT,
       filename,
