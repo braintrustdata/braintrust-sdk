@@ -177,7 +177,7 @@ let tsModule: typeof import("typescript") | undefined = undefined;
 async function getTsModule() {
   if (!tsModule) {
     try {
-      tsModule = await import("typescript");
+      tsModule = require("typescript");
     } catch (e) {
       console.warn(
         warning(
