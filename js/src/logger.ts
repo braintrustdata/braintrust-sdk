@@ -829,11 +829,11 @@ function logFeedbackImpl(
     }).objectIdFields();
 
   if (Object.keys(updateEvent).length > 0) {
-    const [makeUpdateEvent, attachments] = extractAttachments(updateEvent);
+    const attachments = extractAttachments(updateEvent);
     const record = new LazyValue(async () => {
       return {
         id,
-        ...(await makeUpdateEvent()),
+        ...updateEvent,
         ...(await parentIds()),
         [AUDIT_SOURCE_FIELD]: source,
         [AUDIT_METADATA_FIELD]: metadata,
@@ -890,11 +890,11 @@ function updateSpanImpl({
       object_id: await parentObjectId.get(),
     }).objectIdFields();
 
-  const [getUpdateEvent, attachments] = extractAttachments(updateEvent);
+  const attachments = extractAttachments(updateEvent);
 
   const record = new LazyValue(async () => ({
     id,
-    ...(await getUpdateEvent()),
+    ...updateEvent,
     ...(await parentIds()),
     [IS_MERGE_FIELD]: true,
   }));
@@ -3001,42 +3001,36 @@ function validateAndSanitizeExperimentLogPartialArgs(
 }
 
 /**
- * Helper function for uploading attachments. Recursively extracts `Attachment` values. Returns an async function that recursively replaces `Attachment` objects with the corresponding `AttachmentReference` by making a metadata request to the data plane.
+ * Helper function for uploading attachments. Recursively extracts `Attachment` values.
  * @param event The event to be extract. Will be modified.
  * @returns The function to get the modified event and the extracted `Attachment` objects.
  */
 function extractAttachments<T extends Partial<BackgroundLogEvent>>(
   event: T,
-): [() => Promise<T>, Attachment[]] {
+): Attachment[] {
   const attachments: Attachment[] = [];
 
-  function helper(value: any, f: (arg0: Attachment) => any) {
+  function helper(value: any) {
     if (typeof value !== "object") {
       return value;
     }
     if (value instanceof Attachment) {
-      return f(value);
+      attachments.push(value);
+      return value;
     }
     for (const key of Object.keys(value)) {
-      value[key] = helper(value[key], f);
+      value[key] = helper(value[key]);
     }
     return value;
   }
 
   // Recursively find all attachments.
-  for (const key of Object.keys(event)) {
-    (event as any)[key] = helper((event as any)[key], (attachment) => {
-      attachments.push(attachment);
-      return attachment.reference;
-    });
+  for (const key of Object.keys(event) as (keyof T)[]) {
+    // The top-level event cannot contain attachments.
+    event[key] = helper(event[key]);
   }
 
-  // Create a function to await the attachments' metadata.
-  const getRecord = async () => {
-    return event;
-  };
-
-  return [getRecord, attachments];
+  return attachments;
 }
 
 // Note that this only checks properties that are expected of a complete event.
@@ -3674,7 +3668,7 @@ export class SpanImpl implements Span {
       ...serializableInternalData,
       [IS_MERGE_FIELD]: this.isMerge,
     };
-    const [, attachments] = extractAttachments(partialRecord);
+    const attachments = extractAttachments(partialRecord);
     const serializedPartialRecord = JSON.stringify(partialRecord, (_k, v) => {
       if (v instanceof SpanImpl) {
         return `<span>`;
