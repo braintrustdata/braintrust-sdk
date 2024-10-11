@@ -732,8 +732,9 @@ export class Attachment {
         await _globalState.login({});
         const conn = _globalState.apiConn();
 
+        // TODO error handling.
         const [metadataResponse, data] = await Promise.all([
-          conn.post("/attachments/new", this.reference),
+          conn.post(`/attachment?${new URLSearchParams(this.reference)}`),
           this.data.get(),
         ]);
         ret.metadataResponse = metadataResponse;
@@ -741,6 +742,7 @@ export class Attachment {
           .object({ signedUrl: z.string().url() })
           .parse(await metadataResponse.json()).signedUrl;
 
+        // TODO multipart upload.
         ret.objectStoreResponse = await fetch(ret.signedUrl, {
           method: "PUT",
           headers: {
