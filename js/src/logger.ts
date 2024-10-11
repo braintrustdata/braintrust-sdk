@@ -67,6 +67,7 @@ import {
   devNullWritableStream,
 } from "./functions/stream";
 import { waitUntil } from "@vercel/functions";
+import { randomUUID, UUID } from "crypto";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -677,18 +678,26 @@ export interface LogOptions<IsAsyncFlush> {
 
 export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
 
+interface AttachmentUploadResult {
+  signedUrl?: string;
+  metadataResponse?: Response;
+  objectStoreResponse?: Response;
+}
+
 /**
  * Represents an attachment to be uploaded and the associated metadata. Attachment objects can be inserted anywhere in an event or feedback, allowing you to log arbitrary large data. The SDK will asynchronously upload the file to object storage and replace the Attachment object with an AttachmentReference.
  */
 export class Attachment {
-  data: string | Blob;
-  filename: string;
-  contentType: string;
-  metadata?: AttachmentReference;
-  private signedUrl?: string;
+  readonly data: string | Blob;
+  readonly filename: string;
+  readonly contentType: string;
+  readonly reference: AttachmentReference;
+  /**
+   * On first access, (1) reads the attachment from disk if needed, (2) authenticates with the data plane to request a signed URL, and (3) uploads to object store.
+   */
+  readonly result: LazyValue<AttachmentUploadResult>;
 
-  private metadataPromise?: Promise<AttachmentReference>;
-  private uploadPromise?: Promise<void>;
+  private readonly uuid: UUID;
 
   /**
    * Construct an attachment.
@@ -704,87 +713,69 @@ export class Attachment {
     this.data = typeof data === "string" ? data : new Blob([data]);
     this.filename = filename;
     this.contentType = contentType;
+
+    this.uuid = randomUUID();
+    this.reference = {
+      type: BRAINTRUST_ATTACHMENT,
+      filename,
+      content_type: contentType,
+      key: `attachments/${this.uuid.slice(0, 2)}/${this.uuid}`,
+      upload_status: "uploading",
+    };
+
+    this.result = this.initUploader();
   }
 
-  async upload(): Promise<AttachmentReference> {
-    const metadata = await this.uploadMetadata();
-    await this.uploadFile();
-    metadata.upload_status = "done";
-    return metadata;
+  toJSON(): AttachmentReference {
+    return this.reference;
   }
 
-  /**
-   * Request a signed url from data plane without uploading the file.
-   */
-  async uploadMetadata(): Promise<AttachmentReference> {
-    if (!this.metadataPromise) {
-      this.metadataPromise = (async () => {
+  private initUploader(): LazyValue<AttachmentUploadResult> {
+    return new LazyValue(async () => {
+      const ret: AttachmentUploadResult = {};
+
+      try {
         await _globalState.login({});
         const conn = _globalState.apiConn();
-        const resp = await conn.post("/attachments/new", {
-          filename: this.filename,
-          content_type: this.contentType,
-        });
-        const parsedResp = z
-          .object({
-            signedUrl: z.string().min(1),
-            key: z.string().min(1),
-          })
-          .parse(await resp.json());
-        this.signedUrl = parsedResp.signedUrl;
 
-        const metadata: AttachmentReference = {
-          type: BRAINTRUST_ATTACHMENT,
-          filename: this.filename,
-          content_type: this.contentType,
-          key: parsedResp.key,
-          upload_status: "uploading",
-        };
-        this.metadata = metadata;
-        return metadata;
-      })();
-    }
+        const [metadataResponse, data] = await Promise.all([
+          conn.post("/attachments/new", this.reference),
+          this.loadData(),
+        ]);
+        ret.metadataResponse = metadataResponse;
+        ret.signedUrl = z
+          .object({ signedUrl: z.string().url() })
+          .parse(await metadataResponse.json()).signedUrl;
 
-    return this.metadataPromise;
-  }
-
-  /**
-   * Upload the file to object store.
-   */
-  private async uploadFile(): Promise<void> {
-    if (!this.uploadPromise) {
-      this.uploadPromise = (async () => {
-        if (!this.signedUrl) {
-          await this.uploadMetadata();
-        }
-        if (!this.signedUrl) {
-          throw new Error("couldn't get metadata");
-        }
-
-        // This could stream the file in the future.
-        if (typeof this.data === "string") {
-          if (!iso.readFile) {
-            throw new Error(
-              "This platform does not support reading filesystem",
-            );
-          }
-          this.data = new Blob([await iso.readFile(this.data)]);
-        }
-
-        const resp = await fetch(this.signedUrl, {
+        ret.objectStoreResponse = await fetch(ret.signedUrl, {
           method: "PUT",
           headers: {
             "Content-Type": this.contentType,
           },
-          body: this.data,
+          body: data,
         });
-        if (!resp.ok) {
-          throw new FailedHTTPResponse(resp.status, await resp.text());
-        }
-      })();
-    }
 
-    return this.uploadPromise;
+        if (ret.objectStoreResponse.ok) {
+          this.reference.upload_status = "done";
+        }
+      } finally {
+        return ret;
+      }
+    });
+  }
+
+  private async loadData(): Promise<Blob> {
+    // This could stream the file in the future.
+    if (typeof this.data === "string") {
+      if (!iso.readFile) {
+        throw new Error(
+          `This platform does not support reading the filesystem. Construct the Attachment
+with a Blob/ArrayBuffer, or run the program on Node.js.`,
+        );
+      }
+      return new Blob([await iso.readFile(this.data)]);
+    }
+    return this.data;
   }
 }
 
@@ -838,8 +829,7 @@ function logFeedbackImpl(
     }).objectIdFields();
 
   if (Object.keys(updateEvent).length > 0) {
-    const [makeUpdateEvent, lazyAttachments] =
-      extractLazyAttachments(updateEvent);
+    const [makeUpdateEvent, attachments] = extractAttachments(updateEvent);
     const record = new LazyValue(async () => {
       return {
         id,
@@ -851,7 +841,7 @@ function logFeedbackImpl(
       };
     });
     state.bgLogger().log([record]);
-    state.bgLogger().logAttachments(lazyAttachments);
+    state.bgLogger().logAttachments(attachments);
   }
 
   if (!isEmpty(comment)) {
@@ -900,7 +890,7 @@ function updateSpanImpl({
       object_id: await parentObjectId.get(),
     }).objectIdFields();
 
-  const [getUpdateEvent, lazyAttachments] = extractLazyAttachments(updateEvent);
+  const [getUpdateEvent, attachments] = extractAttachments(updateEvent);
 
   const record = new LazyValue(async () => ({
     id,
@@ -909,7 +899,7 @@ function updateSpanImpl({
     [IS_MERGE_FIELD]: true,
   }));
   state.bgLogger().log([record]);
-  state.bgLogger().logAttachments(lazyAttachments);
+  state.bgLogger().logAttachments(attachments);
 }
 
 /**
@@ -1504,7 +1494,15 @@ class BackgroundLogger {
     const attachments = this.attachments;
     this.attachments = [];
     // TODO: Error handling.
-    await Promise.all(attachments.map((x) => x.upload()));
+    const uploadResponses = await Promise.all(
+      attachments.map((attachment) => attachment.result.get()),
+    );
+    uploadResponses.forEach((result) => {
+      console.log(
+        result.objectStoreResponse?.ok,
+        result.objectStoreResponse?.url,
+      );
+    });
 
     // If more items were added while we were flushing, flush again
     if (this.items.length > 0) {
@@ -3003,14 +3001,14 @@ function validateAndSanitizeExperimentLogPartialArgs(
 }
 
 /**
- * Helper function for uploading lazy attachments. Recursively extracts `LazyAttachmentUpload` values. Returns an async function that recursively replaces `LazyAttachmentUpload` objects with the corresponding `AttachmentReference` by making a metadata request to the data plane.
+ * Helper function for uploading attachments. Recursively extracts `Attachment` values. Returns an async function that recursively replaces `Attachment` objects with the corresponding `AttachmentReference` by making a metadata request to the data plane.
  * @param event The event to be extract. Will be modified.
- * @returns The function to get the modified event and the extracted `LazyAttachmentUpload` objects.
+ * @returns The function to get the modified event and the extracted `Attachment` objects.
  */
-function extractLazyAttachments<T extends Partial<BackgroundLogEvent>>(
+function extractAttachments<T extends Partial<BackgroundLogEvent>>(
   event: T,
 ): [() => Promise<T>, Attachment[]] {
-  const lazyAttachments: Attachment[] = [];
+  const attachments: Attachment[] = [];
 
   function helper(value: any, f: (arg0: Attachment) => any) {
     if (typeof value !== "object") {
@@ -3028,26 +3026,17 @@ function extractLazyAttachments<T extends Partial<BackgroundLogEvent>>(
   // Recursively find all attachments.
   for (const key of Object.keys(event)) {
     (event as any)[key] = helper((event as any)[key], (attachment) => {
-      lazyAttachments.push(attachment);
-      return attachment;
+      attachments.push(attachment);
+      return attachment.reference;
     });
   }
 
   // Create a function to await the attachments' metadata.
   const getRecord = async () => {
-    await Promise.all(lazyAttachments.map((x) => x.uploadMetadata()));
-
-    for (const key of Object.keys(event)) {
-      (event as any)[key] = helper(
-        (event as any)[key],
-        (attachment) => attachment.metadata!,
-      );
-    }
-
     return event;
   };
 
-  return [getRecord, lazyAttachments];
+  return [getRecord, attachments];
 }
 
 // Note that this only checks properties that are expected of a complete event.
@@ -3685,7 +3674,7 @@ export class SpanImpl implements Span {
       ...serializableInternalData,
       [IS_MERGE_FIELD]: this.isMerge,
     };
-    const lazyAttachments: Attachment[] = [];
+    const [, attachments] = extractAttachments(partialRecord);
     const serializedPartialRecord = JSON.stringify(partialRecord, (_k, v) => {
       if (v instanceof SpanImpl) {
         return `<span>`;
@@ -3695,22 +3684,10 @@ export class SpanImpl implements Span {
         return `<dataset>`;
       } else if (v instanceof Logger) {
         return `<logger>`;
-      } else if (v instanceof Attachment) {
-        const index = lazyAttachments.push(v) - 1;
-        return { _btLazyAttachmentIndex: index };
       }
       return v;
     });
-    partialRecord = JSON.parse(serializedPartialRecord, (_k, v) => {
-      if (
-        typeof v === "object" &&
-        "_btLazyAttachmentIndex" in v &&
-        typeof v._btLazyAttachmentIndex === "number"
-      ) {
-        return lazyAttachments[v._btLazyAttachmentIndex];
-      }
-      return v;
-    });
+    partialRecord = JSON.parse(serializedPartialRecord);
     if (partialRecord.metrics?.end) {
       this.loggedEndTime = partialRecord.metrics?.end as number;
     }
@@ -3719,9 +3696,8 @@ export class SpanImpl implements Span {
       throw new Error("Tags can only be logged to the root span");
     }
 
-    const [getPartialRecord] = extractLazyAttachments(partialRecord);
     const computeRecord = async () => ({
-      ...(await getPartialRecord()),
+      ...partialRecord,
       ...Object.fromEntries(
         await Promise.all(
           Object.entries(lazyInternalData).map(async ([key, value]) => [
@@ -3736,7 +3712,7 @@ export class SpanImpl implements Span {
       }).objectIdFields(),
     });
     this.state.bgLogger().log([new LazyValue(computeRecord)]);
-    this.state.bgLogger().logAttachments(lazyAttachments);
+    this.state.bgLogger().logAttachments(attachments);
   }
 
   public logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void {
