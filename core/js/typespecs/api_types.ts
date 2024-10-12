@@ -20,6 +20,7 @@ import {
   getObjectArticle,
   getEventObjectType,
   getEventObjectDescription,
+  eventObjectType,
 } from "./common_types";
 import { customTypes } from "./custom_types";
 import { capitalize } from "../src/string_util";
@@ -170,6 +171,9 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
       .describe(
         "Human-identifying attributes of the span, such as name, type, etc.",
       ),
+    origin: objectReferenceSchema
+      .nullish()
+      .describe("Indicates the event was copied from another object."),
     [OBJECT_DELETE_FIELD]: z
       .boolean()
       .nullish()
@@ -337,6 +341,18 @@ function makeFetchEventsResponseSchema<T extends z.AnyZodObject>(
     .openapi(`Fetch${eventName}EventsResponse`);
 }
 
+export const objectReferenceSchema = z.object({
+  object_type: eventObjectType.describe(
+    "Type of the object the event is originating from.",
+  ),
+  object_id: z
+    .string()
+    .uuid()
+    .describe("ID of the object the event is originating from."),
+  id: z.string().describe("ID of the original event."),
+  _xact_id: z.string().describe("Transaction ID of the original event."),
+});
+
 const experimentEventBaseSchema = generateBaseEventOpSchema("experiment");
 export const experimentEventSchema = z
   .object({
@@ -397,6 +413,7 @@ export const datasetEventSchema = z
     span_id: datasetEventBaseSchema.shape.span_id,
     root_span_id: datasetEventBaseSchema.shape.root_span_id,
     is_root: datasetEventBaseSchema.shape.is_root,
+    origin: datasetEventBaseSchema.shape.origin,
   })
   .openapi("DatasetEvent");
 export type DatasetEvent = z.infer<typeof datasetEventSchema>;
@@ -457,6 +474,7 @@ export const projectLogsEventSchema = z
     root_span_id: projectLogsEventBaseSchema.shape.root_span_id,
     is_root: projectLogsEventBaseSchema.shape.is_root,
     span_attributes: projectLogsEventBaseSchema.shape.span_attributes,
+    origin: projectLogsEventBaseSchema.shape.origin,
   })
   .openapi("ProjectLogsEvent");
 export type ProjectLogsEvent = z.infer<typeof projectLogsEventSchema>;

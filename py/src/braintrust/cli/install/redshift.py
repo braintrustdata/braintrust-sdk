@@ -4,7 +4,10 @@ import re
 import textwrap
 from hashlib import md5
 
+# pylint: disable=no-name-in-module
 from ... import log_conn, login
+
+# pylint: disable=no-name-in-module
 from ...aws import iam, redshift_serverless
 
 _logger = logging.getLogger("braintrust.install.redshift")

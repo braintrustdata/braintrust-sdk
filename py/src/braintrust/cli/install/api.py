@@ -7,6 +7,7 @@ from botocore.exceptions import ClientError
 
 from braintrust.logger import app_conn, login
 
+# pylint: disable=no-name-in-module
 from ...aws import cloudformation
 from ...util import response_raise_for_status
 

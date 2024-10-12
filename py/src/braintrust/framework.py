@@ -8,12 +8,11 @@ import re
 import sys
 import traceback
 from collections import defaultdict
-from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from enum import Enum
 from multiprocessing import cpu_count
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterator, List, Optional, TypeVar, Union
+from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterable, Iterator, List, Optional, TypeVar, Union
 
 import exceptiongroup
 from braintrust_core.score import Score, Scorer
@@ -445,7 +444,7 @@ def Eval(
     project_id: Optional[str] = None,
     base_experiment_name: Optional[str] = None,
     base_experiment_id: Optional[str] = None,
-):
+) -> Union[Awaitable[EvalResultWithSummary], EvalResultWithSummary]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
 
@@ -947,6 +946,7 @@ def build_local_summary(evaluator, results):
         experiment_id=None,
         experiment_name=evaluator.experiment_name,
         project_name=evaluator.project_name,
+        project_id=None,
         project_url=None,
         experiment_url=None,
         comparison_experiment_name=None,

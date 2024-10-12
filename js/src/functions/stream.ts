@@ -1,5 +1,6 @@
 import {
   callEventSchema,
+  sseConsoleEventDataSchema,
   sseProgressEventDataSchema,
 } from "@braintrust/core/typespecs";
 import {
@@ -22,6 +23,10 @@ export const braintrustStreamChunkSchema = z.union([
   z.object({
     type: z.literal("error"),
     data: z.string(),
+  }),
+  z.object({
+    type: z.literal("console"),
+    data: sseConsoleEventDataSchema,
   }),
   z.object({
     type: z.literal("progress"),
@@ -108,7 +113,7 @@ export class BraintrustStream {
         reader.releaseLock();
         return { done: true, value: undefined };
       },
-      async throw(error: any) {
+      async throw(error: unknown) {
         reader.releaseLock();
         throw error;
       },
@@ -134,7 +139,7 @@ export class BraintrustStream {
       return this.memoizedFinalValue;
     }
     this.memoizedFinalValue = new Promise((resolve, reject) => {
-      const stream = this.stream
+      this.stream
         .pipeThrough(createFinalValuePassThroughStream(resolve, reject))
         .pipeTo(devNullWritableStream());
     });
@@ -174,13 +179,19 @@ function btStreamParser() {
           case "error":
             controller.enqueue({
               type: "error",
-              data: event.data,
+              data: JSON.parse(event.data),
             });
             break;
           case "progress":
             controller.enqueue({
               type: "progress",
               data: sseProgressEventDataSchema.parse(JSON.parse(event.data)),
+            });
+            break;
+          case "console":
+            controller.enqueue({
+              type: "console",
+              data: sseConsoleEventDataSchema.parse(JSON.parse(event.data)),
             });
             break;
           case "start":
@@ -263,6 +274,7 @@ export function createFinalValuePassThroughStream<
           case "progress":
           case "start":
           case "done":
+          case "console":
             break;
           default:
             const _type: never = chunkType;
