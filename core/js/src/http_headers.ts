@@ -7,3 +7,6 @@ export const BT_CURSOR_HEADER = "x-bt-cursor";
 
 // User impersonation header.
 export const BT_IMPERSONATE_USER = "x-bt-impersonate-user";
+
+// Project ID header for OTEL exporters to specify a destination Braintrust project.
+export const BT_PROJECT_ID = "x-bt-project-id";
