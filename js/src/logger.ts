@@ -890,7 +890,7 @@ export async function permalink(
   },
 ): Promise<string> {
   const state = opts?.state ?? _globalState;
-  const orgName = await (async () => {
+  const getOrgName = async () => {
     if (opts?.orgName) {
       return opts.orgName;
     }
@@ -901,8 +901,8 @@ export async function permalink(
       );
     }
     return state.orgName;
-  })();
-  const appUrl = await (async () => {
+  };
+  const getAppUrl = async () => {
     if (opts?.appUrl) {
       return opts.appUrl;
     }
@@ -911,11 +911,15 @@ export async function permalink(
       throw new Error("Must either provide appUrl explicitly or be logged in");
     }
     return state.appUrl;
-  })();
+  };
 
   const components = SpanComponentsV3.fromStr(slug);
   const object_type = spanObjectTypeV3ToString(components.data.object_type);
-  const object_id = await spanComponentsToObjectId({ components, state });
+  const [orgName, appUrl, object_id] = await Promise.all([
+    getOrgName(),
+    getAppUrl(),
+    spanComponentsToObjectId({ components, state }),
+  ]);
   const id = components.data.row_id;
   if (!id) {
     throw new Error("Span slug does not refer to an individual row");
