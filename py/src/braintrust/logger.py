@@ -20,6 +20,7 @@ from abc import ABC, abstractmethod
 from functools import partial, wraps
 from multiprocessing import cpu_count
 from typing import Any, Callable, Dict, Optional, TypeVar, Union, cast, overload
+from urllib.parse import urlencode
 
 import chevron
 import exceptiongroup
@@ -1788,6 +1789,34 @@ def _span_components_to_object_id_lambda(components: SpanComponentsV3):
 # "lazily".
 def span_components_to_object_id(components: SpanComponentsV3) -> str:
     return _span_components_to_object_id_lambda(components)()
+
+
+# Convenience function for constructing a permalink from an exported span. The
+# link will open up the Braintrust UI, pointing to the exported span.
+def permalink(slug: str, org_name=None, app_url=None) -> str:
+    if not org_name:
+        login()
+        if not _state.org_name:
+            raise Exception("Must either provide org_name explicitly or be logged in to a specific org")
+        org_name = _state.org_name
+
+    if not app_url:
+        login()
+        if not _state.app_url:
+            raise Exception("Must either provide app_url explicitly or be logged in")
+        app_url = _state.app_url
+
+    components = SpanComponentsV3.from_str(slug)
+
+    object_type = str(components.object_type)
+    object_id = span_components_to_object_id(components)
+    id = components.row_id
+
+    if not id:
+        raise ValueError("Span slug does not refer to an individual row")
+
+    url_params = urlencode({"object_type": object_type, "object_id": object_id, "id": id})
+    return f"{app_url}/app/{org_name}/object?{url_params}"
 
 
 def _start_span_parent_args(
