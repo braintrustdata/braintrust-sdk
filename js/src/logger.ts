@@ -32,6 +32,7 @@ import {
   batchItems,
   SpanComponentsV3,
   SpanObjectTypeV3,
+  spanObjectTypeV3ToString,
   gitMetadataSettingsSchema,
   _urljoin,
 } from "@braintrust/core";
@@ -887,6 +888,55 @@ export async function spanComponentsToObjectId({
     state ?? _globalState,
     components,
   )();
+}
+
+// Convenience function for constructing a permalink from an exported span. The
+// link will open up the Braintrust UI, pointing to the exported span.
+export async function permalink(
+  slug: string,
+  opts?: {
+    state?: BraintrustState;
+    orgName?: string;
+    appUrl?: string;
+  },
+): Promise<string> {
+  const state = opts?.state ?? _globalState;
+  const getOrgName = async () => {
+    if (opts?.orgName) {
+      return opts.orgName;
+    }
+    await state.login({});
+    if (!state.orgName) {
+      throw new Error(
+        "Must either provide orgName explicitly or be logged in to a specific org",
+      );
+    }
+    return state.orgName;
+  };
+  const getAppUrl = async () => {
+    if (opts?.appUrl) {
+      return opts.appUrl;
+    }
+    await state.login({});
+    if (!state.appUrl) {
+      throw new Error("Must either provide appUrl explicitly or be logged in");
+    }
+    return state.appUrl;
+  };
+
+  const components = SpanComponentsV3.fromStr(slug);
+  const object_type = spanObjectTypeV3ToString(components.data.object_type);
+  const [orgName, appUrl, object_id] = await Promise.all([
+    getOrgName(),
+    getAppUrl(),
+    spanComponentsToObjectId({ components, state }),
+  ]);
+  const id = components.data.row_id;
+  if (!id) {
+    throw new Error("Span slug does not refer to an individual row");
+  }
+  const urlParams = new URLSearchParams({ object_type, object_id, id });
+  return `${appUrl}/app/${orgName}/object?${urlParams}`;
 }
 
 // IMPORTANT NOTE: This function may pass arguments which override those in the
