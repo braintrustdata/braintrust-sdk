@@ -199,6 +199,12 @@ export const runEvalSchema = z
       .describe(
         "Whether to stream the results of the eval. If true, the request will return two events: one to indicate the experiment has started, and another upon completion. If false, the request will return the evaluation's summary upon completion.",
       ),
+    max_concurrency: z
+      .number()
+      .nullish()
+      .describe(
+        "The maximum number of concurrent evaluations to run. This is useful to avoid hitting LLM rate limits.",
+      ),
   })
   .openapi("RunEval");
 
