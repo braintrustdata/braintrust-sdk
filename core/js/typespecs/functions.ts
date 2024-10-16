@@ -199,11 +199,39 @@ export const runEvalSchema = z
       .describe(
         "Whether to stream the results of the eval. If true, the request will return two events: one to indicate the experiment has started, and another upon completion. If false, the request will return the evaluation's summary upon completion.",
       ),
+    trial_count: z
+      .number()
+      .nullish()
+      .describe(
+        "The number of times to run the evaluator per input. This is useful for evaluating applications that have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the variance in the results.",
+      ),
+    is_public: z
+      .boolean()
+      .nullish()
+      .describe("Whether the experiment should be public. Defaults to false."),
+    timeout: z
+      .number()
+      .nullish()
+      .describe(
+        "The maximum duration, in milliseconds, to run the evaluation. Defaults to undefined, in which case there is no timeout.",
+      ),
     max_concurrency: z
       .number()
       .nullish()
       .describe(
-        "The maximum number of concurrent evaluations to run. This is useful to avoid hitting LLM rate limits.",
+        "The maximum number of tasks/scorers that will be run concurrently. Defaults to undefined, in which case there is no max concurrency.",
+      ),
+    base_experiment_name: z
+      .string()
+      .nullish()
+      .describe(
+        "An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this experiment.",
+      ),
+    base_experiment_id: z
+      .string()
+      .nullish()
+      .describe(
+        "An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this experiment.",
       ),
   })
   .openapi("RunEval");
