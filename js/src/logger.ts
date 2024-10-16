@@ -716,7 +716,9 @@ export class Attachment {
       filename,
       content_type: contentType,
       key: `attachments/${uuid.slice(0, 2)}/${uuid}`,
-      upload_status: "uploading",
+      upload_status: "done",
+      // TODO:
+      // upload_status: "uploading",
     };
 
     this.data = this.initData(data);
