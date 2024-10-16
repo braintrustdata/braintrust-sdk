@@ -20,6 +20,7 @@ from abc import ABC, abstractmethod
 from functools import partial, wraps
 from multiprocessing import cpu_count
 from typing import Any, Callable, Dict, Optional, TypeVar, Union, cast, overload
+from urllib.parse import urlencode
 
 import chevron
 import exceptiongroup
@@ -911,6 +912,7 @@ def init_dataset(
     api_key: Optional[str] = None,
     org_name: Optional[str] = None,
     project_id: Optional[str] = None,
+    metadata: Optional[Metadata] = None,
     use_output: bool = DEFAULT_IS_LEGACY_DATASET,
 ):
     """
@@ -925,6 +927,7 @@ def init_dataset(
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
     :param project_id: The id of the project to create the dataset in. This takes precedence over `project` if specified.
+    :param metadata: (Optional) a dictionary with additional data about the dataset. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
     :param use_output: (Deprecated) If True, records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This option will be removed in a future version of Braintrust.
     :returns: The dataset object.
     """
@@ -935,6 +938,7 @@ def init_dataset(
             {"project_name": project, "project_id": project_id, "org_id": _state.org_id},
             dataset_name=name,
             description=description,
+            metadata=metadata,
         )
         response = _state.app_conn().post_json("api/dataset/register", args)
         resp_project = response["project"]
@@ -1788,6 +1792,34 @@ def _span_components_to_object_id_lambda(components: SpanComponentsV3):
 # "lazily".
 def span_components_to_object_id(components: SpanComponentsV3) -> str:
     return _span_components_to_object_id_lambda(components)()
+
+
+# Convenience function for constructing a permalink from an exported span. The
+# link will open up the Braintrust UI, pointing to the exported span.
+def permalink(slug: str, org_name=None, app_url=None) -> str:
+    if not org_name:
+        login()
+        if not _state.org_name:
+            raise Exception("Must either provide org_name explicitly or be logged in to a specific org")
+        org_name = _state.org_name
+
+    if not app_url:
+        login()
+        if not _state.app_url:
+            raise Exception("Must either provide app_url explicitly or be logged in")
+        app_url = _state.app_url
+
+    components = SpanComponentsV3.from_str(slug)
+
+    object_type = str(components.object_type)
+    object_id = span_components_to_object_id(components)
+    id = components.row_id
+
+    if not id:
+        raise ValueError("Span slug does not refer to an individual row")
+
+    url_params = urlencode({"object_type": object_type, "object_id": object_id, "id": id})
+    return f"{app_url}/app/{org_name}/object?{url_params}"
 
 
 def _start_span_parent_args(

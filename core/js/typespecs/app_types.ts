@@ -908,6 +908,7 @@ export const createDatasetSchema = z
     project_id: datasetSchema.shape.project_id,
     name: makeNonempty(datasetSchema.shape.name),
     description: datasetSchema.shape.description,
+    metadata: datasetSchema.shape.metadata,
   })
   .openapi("CreateDataset");
 
