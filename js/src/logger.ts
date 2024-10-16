@@ -2106,6 +2106,7 @@ type InitDatasetOptions<IsLegacyDataset extends boolean> = FullLoginOptions & {
   description?: string;
   version?: string;
   projectId?: string;
+  metadata?: Record<string, unknown>;
   state?: BraintrustState;
 } & UseOutputOption<IsLegacyDataset>;
 
@@ -2124,6 +2125,7 @@ type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
  * @param options.projectId The id of the project to create the dataset in. This takes precedence over `project` if specified.
+ * @param options.metadata A dictionary with additional data about the dataset. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
  * @param options.useOutput (Deprecated) If true, records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This option will be removed in a future version of Braintrust.
  * @returns The newly created Dataset.
  */
@@ -2180,6 +2182,7 @@ export function initDataset<
     fetch,
     forceLogin,
     projectId,
+    metadata,
     useOutput: legacy,
     state: stateArg,
   } = options;
@@ -2202,6 +2205,7 @@ export function initDataset<
         project_id: projectId,
         dataset_name: dataset,
         description,
+        metadata,
       };
       const response = await state
         .appConn()
