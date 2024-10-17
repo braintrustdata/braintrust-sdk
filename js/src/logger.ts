@@ -685,12 +685,19 @@ interface AttachmentUploadResult {
 }
 
 /**
- * Represents an attachment to be uploaded and the associated metadata. Attachment objects can be inserted anywhere in an event or feedback, allowing you to log arbitrary large data. The SDK will asynchronously upload the file to object storage and replace the Attachment object with an AttachmentReference.
+ * Represents an attachment to be uploaded and the associated metadata.
+ * Attachment objects can be inserted anywhere in an event or feedback, allowing
+ * you to log arbitrary large data. The SDK will asynchronously upload the file
+ * to object storage and replace the Attachment object with an
+ * AttachmentReference.
  */
 export class Attachment {
   readonly reference: AttachmentReference;
+
   /**
-   * On first access, (1) reads the attachment from disk if needed, (2) authenticates with the data plane to request a signed URL, and (3) uploads to object store.
+   * On first access, (1) reads the attachment from disk if needed, (2)
+   * authenticates with the data plane to request a signed URL, and (3) uploads
+   * to object store.
    */
   readonly result: LazyValue<AttachmentUploadResult>;
 
@@ -698,8 +705,15 @@ export class Attachment {
 
   /**
    * Construct an attachment.
-   * @param data A string representing the path of the file on disk, or a `Blob`/`ArrayBuffer` with the file's contents. The caller is responsible for ensuring the file/blob/buffer is not modified until upload is complete.
-   * @param filename The desired name of the file in Braintrust after uploading. This parameter is for visualization purposes only and has no effect on attachment storage.
+   *
+   * @param data A string representing the path of the file on disk, or a
+   * `Blob`/`ArrayBuffer` with the file's contents. The caller is responsible
+   * for ensuring the file/blob/buffer is not modified until upload is complete.
+   *
+   * @param filename The desired name of the file in Braintrust after uploading.
+   * This parameter is for visualization purposes only and has no effect on
+   * attachment storage.
+   *
    * @param contentType The MIME type of the file.
    */
   constructor(
@@ -738,8 +752,12 @@ export class Attachment {
         const conn = _globalState.apiConn();
 
         // TODO error handling.
+        const requestParams = new URLSearchParams({
+          ...this.reference,
+          org_id: _globalState.orgId ?? "",
+        }).toString();
         const [metadataResponse, data] = await Promise.all([
-          conn.post(`/attachment?${new URLSearchParams(this.reference)}`),
+          conn.post(`/attachment?${requestParams}`),
           this.data.get(),
         ]);
         ret.metadataResponse = metadataResponse;
