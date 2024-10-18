@@ -10,8 +10,6 @@ import {
   VALID_SOURCES,
   AUDIT_SOURCE_FIELD,
   AUDIT_METADATA_FIELD,
-  GitMetadataSettings,
-  RepoInfo,
   mergeGitMetadataSettings,
   TransactionId,
   IdField,
@@ -33,7 +31,6 @@ import {
   SpanComponentsV3,
   SpanObjectTypeV3,
   spanObjectTypeV3ToString,
-  gitMetadataSettingsSchema,
   _urljoin,
 } from "@braintrust/core";
 import {
@@ -48,6 +45,9 @@ import {
   PromptSessionEvent,
   OpenAIMessage,
   Message,
+  GitMetadataSettings,
+  RepoInfo,
+  gitMetadataSettingsSchema,
 } from "@braintrust/core/typespecs";
 
 import iso, { IsoAsyncLocalStorage } from "./isomorph";

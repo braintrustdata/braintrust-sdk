@@ -1,4 +1,4 @@
-import { GitMetadataSettings, RepoInfo } from "@braintrust/core";
+import { GitMetadataSettings, RepoInfo } from "@braintrust/core/typespecs";
 import { simpleGit } from "simple-git";
 
 const COMMON_BASE_BRANCHES = ["main", "master", "develop"];
