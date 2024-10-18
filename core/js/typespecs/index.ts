@@ -4,5 +4,6 @@ export * from "./common_types";
 export * from "./custom_types";
 export * from "./functions";
 export * from "./function_id";
+export * from "./git_types";
 export * from "./prompt";
 export * from "./view";
