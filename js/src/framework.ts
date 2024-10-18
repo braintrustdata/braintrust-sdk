@@ -17,7 +17,13 @@ import {
   withCurrent,
   startSpan,
 } from "./logger";
-import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
+import {
+  GitMetadataSettings,
+  RepoInfo,
+  Score,
+  SpanTypeAttribute,
+  mergeDicts,
+} from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
 import { isEmpty } from "./util";
@@ -194,6 +200,16 @@ export interface Evaluator<
    * and compared to this experiment. This takes precedence over `baseExperimentName` if specified.
    */
   baseExperimentId?: string;
+
+  /**
+   * Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
+   */
+  gitMetadataSettings?: GitMetadataSettings;
+
+  /**
+   * Optionally explicitly specify the git metadata for this experiment. This takes precedence over `gitMetadataSettings` if specified.
+   */
+  repoInfo?: RepoInfo;
 }
 
 export class EvalResultWithSummary<
@@ -436,6 +452,8 @@ export async function Eval<
       update: evaluator.update,
       baseExperiment: evaluator.baseExperimentName ?? defaultBaseExperiment,
       baseExperimentId: evaluator.baseExperimentId,
+      gitMetadataSettings: evaluator.gitMetadataSettings,
+      repoInfo: evaluator.repoInfo,
     });
 
     if (options.onStart) {
