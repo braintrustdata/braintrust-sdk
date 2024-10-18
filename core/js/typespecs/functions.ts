@@ -4,6 +4,7 @@ extendZodWithOpenApi(z);
 import { promptDataSchema } from "./prompt";
 import { chatCompletionMessageParamSchema } from "./openai/messages";
 import { customTypes } from "./custom_types";
+import { gitMetadataSettingsSchema, repoInfoSchema } from "./git_types";
 
 export const validRuntimesEnum = z.enum(["node", "python"]);
 export type Runtime = z.infer<typeof validRuntimesEnum>;
@@ -232,6 +233,16 @@ export const runEvalSchema = z
       .nullish()
       .describe(
         "An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this experiment.",
+      ),
+    git_metadata_settings: gitMetadataSettingsSchema
+      .nullish()
+      .describe(
+        "Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.",
+      ),
+    repo_info: repoInfoSchema
+      .nullish()
+      .describe(
+        "Optionally explicitly specify the git metadata for this experiment. This takes precedence over `gitMetadataSettings` if specified.",
       ),
   })
   .openapi("RunEval");

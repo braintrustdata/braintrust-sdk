@@ -1,4 +1,4 @@
-import { GitMetadataSettings, RepoInfo } from "@braintrust/core";
+import { GitMetadataSettings, RepoInfo } from "@braintrust/core/typespecs";
 
 export interface CallerLocation {
   caller_functionname: string;
