@@ -8,6 +8,7 @@ export const attachmentReferenceSchema = z.object({
   content_type: z.string().min(1),
   key: z.string().min(1),
   upload_status: z.enum(["uploading", "done", "error"]),
+  error_message: z.string().nullish(),
 });
 
 export type AttachmentReference = z.infer<typeof attachmentReferenceSchema>;

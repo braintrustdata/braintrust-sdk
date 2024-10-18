@@ -61,7 +61,7 @@ import {
   LazyValue,
 } from "./util";
 import Mustache from "mustache";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import {
   BraintrustStream,
   createFinalValuePassThroughStream,
@@ -679,9 +679,9 @@ export interface LogOptions<IsAsyncFlush> {
 export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
 
 interface AttachmentUploadResult {
-  signedUrl?: string;
-  metadataResponse?: Response;
-  objectStoreResponse?: Response;
+  signedUrl: string;
+  metadataResponse: Response;
+  objectStoreResponse: Response;
 }
 
 /**
@@ -730,57 +730,98 @@ export class Attachment {
       filename,
       content_type: contentType,
       key: `attachments/${uuid.slice(0, 2)}/${uuid}`,
-      upload_status: "done",
-      // TODO:
-      // upload_status: "uploading",
+      upload_status: "uploading",
     };
 
     this.data = this.initData(data);
     this.result = this.initUploader();
   }
 
-  toJSON(): AttachmentReference {
+  toJSON() {
     return this.reference;
   }
 
   private initUploader(): LazyValue<AttachmentUploadResult> {
-    return new LazyValue(async () => {
-      const ret: AttachmentUploadResult = {};
+    const getter = async () => {
+      await _globalState.login({});
+      const conn = _globalState.apiConn();
 
+      const requestParams = new URLSearchParams({
+        key: this.reference.key,
+        filename: this.reference.filename,
+        content_type: this.reference.content_type,
+        org_id: _globalState.orgId ?? "",
+      }).toString();
+      let metadataResponse: Response | undefined;
+      let data: Blob | undefined;
       try {
-        await _globalState.login({});
-        const conn = _globalState.apiConn();
-
-        // TODO error handling.
-        const requestParams = new URLSearchParams({
-          ...this.reference,
-          org_id: _globalState.orgId ?? "",
-        }).toString();
-        const [metadataResponse, data] = await Promise.all([
+        [metadataResponse, data] = await Promise.all([
           conn.post(`/attachment?${requestParams}`),
           this.data.get(),
         ]);
-        ret.metadataResponse = metadataResponse;
-        ret.signedUrl = z
+      } catch (error) {
+        if (error instanceof FailedHTTPResponse) {
+          throw new Error(
+            `Failed to request signed URL from API server: ${error.status} ${error.text} ${error.data}`,
+          );
+        } else if (error instanceof Error) {
+          error.message = `Failed to read file: ${error.message}`;
+        }
+        throw error;
+      }
+
+      let signedUrl: string | undefined;
+      try {
+        signedUrl = z
           .object({ signedUrl: z.string().url() })
           .parse(await metadataResponse.json()).signedUrl;
-
-        // TODO multipart upload.
-        ret.objectStoreResponse = await fetch(ret.signedUrl, {
-          method: "PUT",
-          headers: {
-            "Content-Type": this.reference.content_type,
-          },
-          body: data,
-        });
-
-        if (ret.objectStoreResponse.ok) {
-          this.reference.upload_status = "done";
+      } catch (error) {
+        if (error instanceof ZodError) {
+          const zodDetail = JSON.stringify(error.flatten(), null, 2);
+          throw new Error(`Invalid response from API server: ${zodDetail}`);
         }
-      } finally {
-        return ret;
+        throw error;
       }
-    });
+
+      // TODO multipart upload.
+      let objectStoreResponse: Response | undefined;
+      try {
+        objectStoreResponse = await checkResponse(
+          await fetch(signedUrl, {
+            method: "PUT",
+            headers: {
+              "Content-Type": this.reference.content_type,
+            },
+            body: data,
+          }),
+        );
+      } catch (error) {
+        if (error instanceof FailedHTTPResponse) {
+          throw new Error(
+            `Failed to upload attachment to object store: ${error.status} ${error.text} ${error.data}`,
+          );
+        }
+        throw error;
+      }
+
+      this.reference.upload_status = "done";
+
+      return { signedUrl, metadataResponse, objectStoreResponse };
+    };
+
+    // Copies the error messages to `this.reference`.
+    const errorWrapper = async () => {
+      try {
+        return getter();
+      } catch (error) {
+        this.reference.error_message =
+          error instanceof Error ? error.message : JSON.stringify(error);
+        this.reference.upload_status = "error";
+        throw error;
+      }
+    };
+
+    return new LazyValue(errorWrapper);
   }
 
   private initData(data: string | Blob | ArrayBuffer): LazyValue<Blob> {
@@ -850,7 +891,7 @@ function logFeedbackImpl(
     }).objectIdFields();
 
   if (Object.keys(updateEvent).length > 0) {
-    const attachments = extractAttachments(updateEvent);
+    const [attachments, filteredUpdateEvent] = extractAttachments2(updateEvent);
     const record = new LazyValue(async () => {
       return {
         id,
@@ -861,8 +902,16 @@ function logFeedbackImpl(
         [IS_MERGE_FIELD]: true,
       };
     });
+    const recordAttachmentUpdate = new LazyValue(async () => {
+      return {
+        id,
+        ...JSON.parse(JSON.stringify(filteredUpdateEvent)),
+        ...(await parentIds()),
+        [IS_MERGE_FIELD]: true,
+      };
+    });
     state.bgLogger().log([record]);
-    state.bgLogger().logAttachments(attachments);
+    state.bgLogger().logAttachments(attachments, [recordAttachmentUpdate]);
   }
 
   if (!isEmpty(comment)) {
@@ -911,7 +960,7 @@ function updateSpanImpl({
       object_id: await parentObjectId.get(),
     }).objectIdFields();
 
-  const attachments = extractAttachments(updateEvent);
+  const [attachments, filteredUpdateEvent] = extractAttachments2(updateEvent);
 
   const record = new LazyValue(async () => ({
     id,
@@ -919,8 +968,14 @@ function updateSpanImpl({
     ...(await parentIds()),
     [IS_MERGE_FIELD]: true,
   }));
+  const recordAttachmentUpdate = new LazyValue(async () => ({
+    id,
+    ...JSON.parse(JSON.stringify(filteredUpdateEvent)),
+    ...(await parentIds()),
+    [IS_MERGE_FIELD]: true,
+  }));
   state.bgLogger().log([record]);
-  state.bgLogger().logAttachments(attachments);
+  state.bgLogger().logAttachments(attachments, [recordAttachmentUpdate]);
 }
 
 /**
@@ -1190,7 +1245,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
    * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
    * @param options Additional logging options
    * @param options.allowConcurrentWithSpans in rare cases where you need to log at the top level separately from spans on the logger elsewhere, set this to true.
-   * :returns: The `id` of the logged event.
+   * @returns The `id` of the logged event.
    */
   public log(
     event: Readonly<StartSpanEventArgs>,
@@ -1391,7 +1446,8 @@ export interface BackgroundLoggerOpts {
 class BackgroundLogger {
   private apiConn: LazyValue<HTTPConnection>;
   private items: LazyValue<BackgroundLogEvent>[] = [];
-  private attachments: Attachment[] = [];
+  private attachmentsQueue: [Attachment[], LazyValue<BackgroundLogEvent>[]][] =
+    [];
   private activeFlush: Promise<void> = Promise.resolve();
   private activeFlushResolved = true;
   private activeFlushError: unknown = undefined;
@@ -1499,9 +1555,15 @@ class BackgroundLogger {
     }
   }
 
-  logAttachments(items: Attachment[]) {
+  logAttachments(
+    attachments: Attachment[],
+    events: LazyValue<BackgroundLogEvent>[],
+  ) {
+    if (attachments.length === 0) {
+      return;
+    }
     // TODO: queue limit.
-    this.attachments.push(...items);
+    this.attachmentsQueue.push([attachments, events]);
   }
 
   async flush(): Promise<void> {
@@ -1561,18 +1623,30 @@ class BackgroundLogger {
       }
     }
 
-    const attachments = this.attachments;
-    this.attachments = [];
-    // TODO: Error handling.
-    const uploadResponses = await Promise.all(
-      attachments.map((attachment) => attachment.result.get()),
-    );
-    uploadResponses.forEach((result) => {
-      console.log(
-        result.objectStoreResponse?.ok,
-        result.objectStoreResponse?.url,
+    const attachmentsQueue = this.attachmentsQueue;
+    this.attachmentsQueue = [];
+    const attachmentErrors: unknown[] = [];
+    for (const [attachments, events] of attachmentsQueue) {
+      // For now, upload attachments serially.
+      for (const attachment of attachments) {
+        try {
+          await attachment.result.get();
+        } catch (error) {
+          attachmentErrors.push(error);
+        }
+      }
+      // By now we've uploaded or failed all attachments associated with these
+      // events. We can reupload the events to update the attachments'
+      // statuses.
+      // TODO: What if the user logs an update while the attachment is uploading?
+      this.log(events);
+    }
+    if (attachmentErrors.length > 0) {
+      throw new AggregateError(
+        attachmentErrors,
+        `Encountered the following errors while uploading attachments:`,
       );
-    });
+    }
 
     // If more items were added while we were flushing, flush again
     if (this.items.length > 0) {
@@ -1586,7 +1660,11 @@ class BackgroundLogger {
     for (let i = 0; i < this.numTries; ++i) {
       try {
         const itemPromises = wrappedItems.map((x) => x.get());
-        return mergeRowBatch(await Promise.all(itemPromises));
+        const x = await Promise.all(itemPromises);
+        // console.log("[background logger] batch:", x);
+        const y = mergeRowBatch(x);
+        console.log("[background logger] batch:", JSON.stringify(y, null, 2));
+        return y;
       } catch (e) {
         let errmsg = "Encountered error when constructing records to flush";
         const isRetrying = i + 1 < this.numTries;
@@ -3075,36 +3153,72 @@ function validateAndSanitizeExperimentLogPartialArgs(
 }
 
 /**
- * Helper function for uploading attachments. Recursively extracts `Attachment` values.
- * @param event The event to be extract. Will be modified.
- * @returns The function to get the modified event and the extracted `Attachment` objects.
+ * Helper function for uploading attachments. Recursively extracts `Attachment`
+ * values and returns a filtered copy of the input event with non-attachments
+ * removed.
+ *
+ * @param event The event to be extract.
+ * @returns Flat array of extracted attachments. A filtered event suitable for
+ * merging.
  */
-function extractAttachments<T extends Partial<BackgroundLogEvent>>(
+function extractAttachments2<T extends Partial<BackgroundLogEvent>>(
   event: T,
-): Attachment[] {
+): [Attachment[], T] {
   const attachments: Attachment[] = [];
+  const eventCopy = { ...event };
 
-  function helper(value: any) {
+  function helper(value: any): any {
+    // Base case: non-object.
+    // - Nothing to explore recursively.
+    // - Cannot be an attachment.
     if (typeof value !== "object") {
-      return value;
+      return undefined;
     }
+    `  `;
+    // Save a reference to the attachment.
     if (value instanceof Attachment) {
       attachments.push(value);
-      return value;
+      return value; // Attachment cannot be nested.
     }
+    // Recursive case: array.
+    // - Each element needs to be explored/filtered.
+    // - We do NOT filter the array itself, since the backend's merging logic
+    //   will replace the entire array upon upload.
+    if (Array.isArray(value)) {
+      const arrayCopy = value.map(helper);
+      if (arrayCopy.some((x) => !isEmpty(x))) {
+        return arrayCopy;
+      }
+      return undefined;
+    }
+    // Recursive case: object.
+    // - Each value needs to be explored/filtered.
+    // - We DO filter the object. Empty objects do not need to be uploaded.
+    const valueCopy: any = {};
+    let modified = false;
     for (const key of Object.keys(value)) {
-      value[key] = helper(value[key]);
+      const childCopy = helper(value[key]);
+      if (!isEmpty(childCopy)) {
+        valueCopy[key] = childCopy;
+        modified = true;
+      }
     }
-    return value;
+    return modified ? valueCopy : undefined;
   }
 
   // Recursively find all attachments.
   for (const key of Object.keys(event) as (keyof T)[]) {
     // The top-level event cannot contain attachments.
-    event[key] = helper(event[key]);
+    if (typeof event[key] !== "object") {
+      continue; // Do not replace IDs.
+    }
+    eventCopy[key] = helper(event[key]);
+    if (eventCopy[key] === undefined) {
+      delete eventCopy[key];
+    }
   }
 
-  return attachments;
+  return [attachments, eventCopy];
 }
 
 // Note that this only checks properties that are expected of a complete event.
@@ -3309,7 +3423,7 @@ export class Experiment
    * @param event.inputs: (Deprecated) the same as `input` (will be removed in a future version).
    * @param options Additional logging options
    * @param options.allowConcurrentWithSpans in rare cases where you need to log at the top level separately from spans on the experiment elsewhere, set this to true.
-   * :returns: The `id` of the logged event.
+   * @returns The `id` of the logged event.
    */
   public log(
     event: Readonly<ExperimentLogFullArgs>,
@@ -3742,7 +3856,10 @@ export class SpanImpl implements Span {
       ...serializableInternalData,
       [IS_MERGE_FIELD]: this.isMerge,
     };
-    const attachments = extractAttachments(partialRecord);
+    const [attachments, partialRecordAttachmentsOnly] =
+      extractAttachments2(partialRecord);
+    partialRecordAttachmentsOnly[IS_MERGE_FIELD] = true;
+    // TODO(kevin): Factor out to helper & use in all logging paths.
     const serializedPartialRecord = JSON.stringify(partialRecord, (_k, v) => {
       if (v instanceof SpanImpl) {
         return `<span>`;
@@ -3779,8 +3896,22 @@ export class SpanImpl implements Span {
         object_id: await this.parentObjectId.get(),
       }).objectIdFields(),
     });
+
+    const computeRecordAttachmentUpdate = async () => ({
+      // Perform JSON round trip at upload time since attachment state will change.
+      ...JSON.parse(JSON.stringify(partialRecordAttachmentsOnly)),
+      ...new SpanComponentsV3({
+        object_type: this.parentObjectType,
+        object_id: await this.parentObjectId.get(),
+      }).objectIdFields(),
+    });
+
     this.state.bgLogger().log([new LazyValue(computeRecord)]);
-    this.state.bgLogger().logAttachments(attachments);
+    this.state
+      .bgLogger()
+      .logAttachments(attachments, [
+        new LazyValue(computeRecordAttachmentUpdate),
+      ]);
   }
 
   public logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void {
