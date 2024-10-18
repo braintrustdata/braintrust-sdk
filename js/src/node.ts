@@ -6,7 +6,6 @@ import iso from "./isomorph";
 import { getRepoInfo, getPastNAncestors } from "./gitutil";
 import { getCallerLocation } from "./stackutil";
 import { _internalSetInitialState } from "./logger";
-import { randomUUID } from "node:crypto";
 
 export function configureNode() {
   iso.getRepoInfo = getRepoInfo;
@@ -22,7 +21,6 @@ export function configureNode() {
   iso.mkdir = fs.mkdir;
   iso.writeFile = fs.writeFile;
   iso.readFile = fs.readFile;
-  iso.randomUUID = () => randomUUID().toString();
 
   _internalSetInitialState();
 }

@@ -29,7 +29,6 @@ export function configureBrowser() {
     }
     return process.env[name];
   };
-  iso.randomUUID = crypto.randomUUID;
 
   _internalSetInitialState();
   browserConfigured = true;

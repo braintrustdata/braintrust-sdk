@@ -43,9 +43,6 @@ export interface Common {
   ) => Promise<string | undefined>;
   writeFile?: (filename: string, data: string) => Promise<void>;
   readFile?: (filename: string) => Promise<Uint8Array>;
-
-  // Crypto.
-  randomUUID?: () => string;
 }
 
 const iso: Common = {

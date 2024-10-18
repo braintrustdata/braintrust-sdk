@@ -724,10 +724,7 @@ export class Attachment {
     filename: string,
     contentType: string,
   ) {
-    if (!iso.randomUUID) {
-      throw new Error("This platform does not support randomUUID");
-    }
-    const uuid = iso.randomUUID();
+    const uuid = newId();
     this.reference = {
       type: BRAINTRUST_ATTACHMENT,
       filename,
@@ -1391,15 +1388,6 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
       id,
       event: eventRest,
     });
-  }
-
-  // TODO: do we want convenience methods?
-  public attachment(
-    data: string | Blob | ArrayBuffer,
-    filename: string,
-    content_type: string,
-  ) {
-    return new Attachment(data, filename, content_type);
   }
 
   /**
@@ -3182,7 +3170,7 @@ function extractAttachments<T extends Partial<BackgroundLogEvent>>(
     // Base case: non-object.
     // - Nothing to explore recursively.
     // - Cannot be an attachment.
-    if (typeof value !== "object") {
+    if (!(value instanceof Object)) {
       return undefined;
     }
 
