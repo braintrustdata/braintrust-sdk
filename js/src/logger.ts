@@ -459,8 +459,11 @@ export class BraintrustState {
 
 let _globalState: BraintrustState;
 
-// This function should be invoked exactly once after configuring the `iso`
-// object based on the platform. See js/src/node.ts for an example.
+/**
+ * This function should be invoked exactly once after configuring the `iso`
+ * object based on the platform. See js/src/node.ts for an example.
+ * @internal
+ */
 export function _internalSetInitialState() {
   if (_globalState) {
     throw new Error("Cannot set initial state more than once");
@@ -471,6 +474,9 @@ export function _internalSetInitialState() {
       /*empty login options*/
     });
 }
+/**
+ * @internal
+ */
 export const _internalGetGlobalState = () => _globalState;
 
 export class FailedHTTPResponse extends Error {
