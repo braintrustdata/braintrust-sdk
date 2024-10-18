@@ -14,6 +14,7 @@
     "hideInPageTOC": true,
     "excludePrivate": true,
     "hideBreadcrumbs": true,
+    "excludeInternal": true,
     "theme": "markdown",
     "groupOrder": ["Functions", "*"]
 }
