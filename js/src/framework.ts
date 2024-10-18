@@ -17,13 +17,8 @@ import {
   withCurrent,
   startSpan,
 } from "./logger";
-import {
-  GitMetadataSettings,
-  RepoInfo,
-  Score,
-  SpanTypeAttribute,
-  mergeDicts,
-} from "@braintrust/core";
+import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
+import { GitMetadataSettings, RepoInfo } from "@braintrust/core/typespecs";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import pluralize from "pluralize";
 import { isEmpty } from "./util";
