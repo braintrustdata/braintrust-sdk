@@ -1675,11 +1675,7 @@ class BackgroundLogger {
     for (let i = 0; i < this.numTries; ++i) {
       try {
         const itemPromises = wrappedItems.map((x) => x.get());
-        const x = await Promise.all(itemPromises);
-        // console.log("[background logger] batch:", x);
-        const y = mergeRowBatch(x);
-        console.log("[background logger] batch:", JSON.stringify(y, null, 2));
-        return y;
+        return mergeRowBatch(await Promise.all(itemPromises));
       } catch (e) {
         let errmsg = "Encountered error when constructing records to flush";
         const isRetrying = i + 1 < this.numTries;
