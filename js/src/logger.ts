@@ -35,6 +35,8 @@ import {
   spanObjectTypeV3ToString,
   gitMetadataSettingsSchema,
   _urljoin,
+  AttachmentReference,
+  BRAINTRUST_ATTACHMENT,
 } from "@braintrust/core";
 import {
   AnyModelParam,
@@ -48,10 +50,7 @@ import {
   PromptSessionEvent,
   OpenAIMessage,
   Message,
-  AttachmentReference,
-  BRAINTRUST_ATTACHMENT,
 } from "@braintrust/core/typespecs";
-
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
 import {
   runCatchFinally,
@@ -3186,13 +3185,10 @@ function extractAttachments<T extends Partial<BackgroundLogEvent>>(
     if (Array.isArray(value)) {
       const arrayCopy = value.map(helper);
       // If any items are attachment, return original value.
-      if (arrayCopy.some((x) => !isEmpty(x))) {
-        return value;
-      }
-      return undefined;
+      return arrayCopy.some((x) => !isEmpty(x)) ? value : undefined;
     }
     // Recursive case: object.
-    // - Values need to be explored and filtered.
+    // - Values need to be explored AND filtered.
     // - We DO filter the object. Empty objects do not need to be uploaded.
     const valueCopy: any = {};
     let modified = false;
@@ -3208,10 +3204,10 @@ function extractAttachments<T extends Partial<BackgroundLogEvent>>(
 
   // Recursively find all attachments.
   for (const key of Object.keys(event) as (keyof T)[]) {
-    // The top-level event cannot contain attachments.
-    if (typeof event[key] !== "object") {
+    if (!(event[key] instanceof Object)) {
       continue; // Do not replace IDs.
     }
+    // The top-level event cannot be an attachment itself.
     eventCopy[key] = helper(event[key]);
     if (eventCopy[key] === undefined) {
       delete eventCopy[key];
