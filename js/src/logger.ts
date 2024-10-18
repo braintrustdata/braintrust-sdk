@@ -692,6 +692,9 @@ interface AttachmentUploadResult {
  * AttachmentReference.
  */
 export class Attachment {
+  /**
+   * The object that replaces this Attachment at upload time.
+   */
   readonly reference: AttachmentReference;
 
   /**
@@ -741,6 +744,17 @@ export class Attachment {
     return this.reference;
   }
 
+  /**
+   * Set the `reference` to an error state. Users should not need to call this
+   * directly.
+   *
+   * @param message The `error_message` value to set.
+   */
+  setError(message?: string): void {
+    this.reference.upload_status = "error";
+    this.reference.error_message = message;
+  }
+
   private initUploader(): LazyValue<AttachmentUploadResult> {
     const getter = async () => {
       await _globalState.login({});
@@ -777,8 +791,8 @@ export class Attachment {
           .parse(await metadataResponse.json()).signedUrl;
       } catch (error) {
         if (error instanceof ZodError) {
-          const zodDetail = JSON.stringify(error.flatten(), null, 2);
-          throw new Error(`Invalid response from API server: ${zodDetail}`);
+          const errorStr = JSON.stringify(error.flatten(), null, 2);
+          throw new Error(`Invalid response from API server: ${errorStr}`);
         }
         throw error;
       }
@@ -814,9 +828,11 @@ export class Attachment {
       try {
         return getter();
       } catch (error) {
-        this.reference.error_message =
-          error instanceof Error ? error.message : JSON.stringify(error);
-        this.reference.upload_status = "error";
+        const message =
+          error instanceof Error
+            ? error.message
+            : JSON.stringify(error, null, 2);
+        this.setError(message);
         throw error;
       }
     };
@@ -891,7 +907,7 @@ function logFeedbackImpl(
     }).objectIdFields();
 
   if (Object.keys(updateEvent).length > 0) {
-    const [attachments, filteredUpdateEvent] = extractAttachments2(updateEvent);
+    const [attachments, filteredUpdateEvent] = extractAttachments(updateEvent);
     const record = new LazyValue(async () => {
       return {
         id,
@@ -960,7 +976,7 @@ function updateSpanImpl({
       object_id: await parentObjectId.get(),
     }).objectIdFields();
 
-  const [attachments, filteredUpdateEvent] = extractAttachments2(updateEvent);
+  const [attachments, filteredUpdateEvent] = extractAttachments(updateEvent);
 
   const record = new LazyValue(async () => ({
     id,
@@ -1638,7 +1654,6 @@ class BackgroundLogger {
       // By now we've uploaded or failed all attachments associated with these
       // events. We can reupload the events to update the attachments'
       // statuses.
-      // TODO: What if the user logs an update while the attachment is uploading?
       this.log(events);
     }
     if (attachmentErrors.length > 0) {
@@ -3161,7 +3176,7 @@ function validateAndSanitizeExperimentLogPartialArgs(
  * @returns Flat array of extracted attachments. A filtered event suitable for
  * merging.
  */
-function extractAttachments2<T extends Partial<BackgroundLogEvent>>(
+function extractAttachments<T extends Partial<BackgroundLogEvent>>(
   event: T,
 ): [Attachment[], T] {
   const attachments: Attachment[] = [];
@@ -3174,25 +3189,26 @@ function extractAttachments2<T extends Partial<BackgroundLogEvent>>(
     if (typeof value !== "object") {
       return undefined;
     }
-    `  `;
+
     // Save a reference to the attachment.
     if (value instanceof Attachment) {
       attachments.push(value);
       return value; // Attachment cannot be nested.
     }
     // Recursive case: array.
-    // - Each element needs to be explored/filtered.
+    // - Elements need to be explored.
     // - We do NOT filter the array itself, since the backend's merging logic
     //   will replace the entire array upon upload.
     if (Array.isArray(value)) {
       const arrayCopy = value.map(helper);
+      // If any items are attachment, return original value.
       if (arrayCopy.some((x) => !isEmpty(x))) {
-        return arrayCopy;
+        return value;
       }
       return undefined;
     }
     // Recursive case: object.
-    // - Each value needs to be explored/filtered.
+    // - Values need to be explored and filtered.
     // - We DO filter the object. Empty objects do not need to be uploaded.
     const valueCopy: any = {};
     let modified = false;
@@ -3857,7 +3873,7 @@ export class SpanImpl implements Span {
       [IS_MERGE_FIELD]: this.isMerge,
     };
     const [attachments, partialRecordAttachmentsOnly] =
-      extractAttachments2(partialRecord);
+      extractAttachments(partialRecord);
     partialRecordAttachmentsOnly[IS_MERGE_FIELD] = true;
     // TODO(kevin): Factor out to helper & use in all logging paths.
     const serializedPartialRecord = JSON.stringify(partialRecord, (_k, v) => {
