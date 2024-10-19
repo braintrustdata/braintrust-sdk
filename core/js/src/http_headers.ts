@@ -7,3 +7,6 @@ export const BT_CURSOR_HEADER = "x-bt-cursor";
 
 // User impersonation header.
 export const BT_IMPERSONATE_USER = "x-bt-impersonate-user";
+
+// Parent header for OTEL exporters.
+export const BT_PARENT = "x-bt-parent";
