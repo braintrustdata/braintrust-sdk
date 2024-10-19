@@ -37,6 +37,7 @@ import {
   _urljoin,
   AttachmentReference,
   BRAINTRUST_ATTACHMENT,
+  AttachmentStatus,
 } from "@braintrust/core";
 import {
   AnyModelParam,
@@ -677,12 +678,6 @@ export interface LogOptions<IsAsyncFlush> {
 
 export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
 
-interface AttachmentUploadResult {
-  signedUrl: string;
-  metadataResponse: Response;
-  objectStoreResponse: Response;
-}
-
 /**
  * Represents an attachment to be uploaded and the associated metadata.
  * Attachment objects can be inserted anywhere in an event or feedback, allowing
@@ -696,12 +691,7 @@ export class Attachment {
    */
   readonly reference: AttachmentReference;
 
-  /**
-   * On first access, (1) reads the attachment from disk if needed, (2)
-   * authenticates with the data plane to request a signed URL, and (3) uploads
-   * to object store.
-   */
-  readonly result: LazyValue<AttachmentUploadResult>;
+  private readonly uploader: LazyValue<AttachmentStatus>;
 
   private readonly data: LazyValue<Blob>;
 
@@ -729,11 +719,10 @@ export class Attachment {
       filename,
       content_type: contentType,
       key: `attachments/${uuid.slice(0, 2)}/${uuid}`,
-      upload_status: "uploading",
     };
 
     this.data = this.initData(data);
-    this.result = this.initUploader();
+    this.uploader = this.initUploader();
   }
 
   toJSON() {
@@ -741,21 +730,18 @@ export class Attachment {
   }
 
   /**
-   * Set the `reference` to an error state. Users should not need to call this
-   * directly.
+   * On first access, (1) reads the attachment from disk if needed, (2)
+   * authenticates with the data plane to request a signed URL, (3) uploads to
+   * object store, and (4) updates the attachment.
    *
-   * @param message The `error_message` value to set.
+   * @returns The attachment status.
    */
-  setError(message?: string): void {
-    this.reference.upload_status = "error";
-    this.reference.error_message = message;
+  async upload() {
+    return await this.uploader.get();
   }
 
-  private initUploader(): LazyValue<AttachmentUploadResult> {
-    const getter = async () => {
-      await _globalState.login({});
-      const conn = _globalState.apiConn();
-
+  private initUploader(): LazyValue<AttachmentStatus> {
+    const doUpload = async (conn: HTTPConnection) => {
       const requestParams = new URLSearchParams({
         key: this.reference.key,
         filename: this.reference.filename,
@@ -814,23 +800,41 @@ export class Attachment {
         throw error;
       }
 
-      this.reference.upload_status = "done";
-
       return { signedUrl, metadataResponse, objectStoreResponse };
     };
 
-    // Copies the error messages to `this.reference`.
+    // Catches error messages and updates the attachment status.
     const errorWrapper = async () => {
+      const status: AttachmentStatus = { upload_status: "done" };
+
+      await _globalState.login({});
+      const conn = _globalState.apiConn();
+
       try {
-        return getter();
+        await doUpload(conn);
       } catch (error) {
-        const message =
+        status.upload_status = "error";
+        status.error_message =
           error instanceof Error
             ? error.message
             : JSON.stringify(error, null, 2);
-        this.setError(message);
-        throw error;
+      } finally {
+        const requestParams = new URLSearchParams({
+          key: this.reference.key,
+          org_id: _globalState.orgId ?? "",
+        }).toString();
+        const statusResponse = await conn.post(
+          `/attachment/status?${requestParams}`,
+          status,
+        );
+        if (!statusResponse.ok) {
+          throw new Error(
+            `Couldn't log attachment status: ${JSON.stringify(statusResponse)}`,
+          );
+        }
       }
+
+      return status;
     };
 
     return new LazyValue(errorWrapper);
@@ -1560,13 +1564,13 @@ class BackgroundLogger {
 
   logAttachments(
     attachments: Attachment[],
-    events: LazyValue<BackgroundLogEvent>[],
+    _events: LazyValue<BackgroundLogEvent>[],
   ) {
     if (attachments.length === 0) {
       return;
     }
     // TODO: queue limit.
-    this.attachmentsQueue.push([attachments, events]);
+    this.attachmentsQueue.push([attachments, []]);
   }
 
   async flush(): Promise<void> {
@@ -1629,19 +1633,15 @@ class BackgroundLogger {
     const attachmentsQueue = this.attachmentsQueue;
     this.attachmentsQueue = [];
     const attachmentErrors: unknown[] = [];
-    for (const [attachments, events] of attachmentsQueue) {
+    for (const [attachments, _events] of attachmentsQueue) {
       // For now, upload attachments serially.
       for (const attachment of attachments) {
         try {
-          await attachment.result.get();
+          await attachment.upload();
         } catch (error) {
           attachmentErrors.push(error);
         }
       }
-      // By now we've uploaded or failed all attachments associated with these
-      // events. We can reupload the events to update the attachments'
-      // statuses.
-      this.log(events);
     }
     if (attachmentErrors.length > 0) {
       throw new AggregateError(
