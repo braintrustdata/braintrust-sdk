@@ -35,9 +35,6 @@ import {
   spanObjectTypeV3ToString,
   gitMetadataSettingsSchema,
   _urljoin,
-  AttachmentReference,
-  BRAINTRUST_ATTACHMENT,
-  AttachmentStatus,
 } from "@braintrust/core";
 import {
   AnyModelParam,
@@ -51,6 +48,9 @@ import {
   PromptSessionEvent,
   OpenAIMessage,
   Message,
+  AttachmentReference,
+  AttachmentStatus,
+  BRAINTRUST_ATTACHMENT,
 } from "@braintrust/core/typespecs";
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
 import {
@@ -707,11 +707,14 @@ export class Attachment {
    * attachment storage.
    *
    * @param contentType The MIME type of the file.
+   *
+   * @param state For internal use.
    */
   constructor(
     data: string | Blob | ArrayBuffer,
     filename: string,
     contentType: string,
+    private state?: BraintrustState,
   ) {
     const uuid = newId();
     this.reference = {
@@ -737,30 +740,30 @@ export class Attachment {
   }
 
   private initUploader(): LazyValue<AttachmentStatus> {
-    const doUpload = async (conn: HTTPConnection) => {
+    const doUpload = async (conn: HTTPConnection, orgId: string) => {
       const requestParams = new URLSearchParams({
         key: this.reference.key,
         filename: this.reference.filename,
         content_type: this.reference.content_type,
-        org_id: _globalState.orgId ?? "",
+        org_id: orgId,
       }).toString();
-      let metadataResponse: Response | undefined;
-      let data: Blob | undefined;
-      try {
-        [metadataResponse, data] = await Promise.all([
+      const [metadataPromiseResult, dataPromiseResult] =
+        await Promise.allSettled([
           conn.post(`/attachment?${requestParams}`),
           this.data.get(),
         ]);
-      } catch (error) {
-        if (error instanceof FailedHTTPResponse) {
-          throw new Error(
-            `Failed to request signed URL from API server: ${error.status} ${error.text} ${error.data}`,
-          );
-        } else if (error instanceof Error) {
-          error.message = `Failed to read file: ${error.message}`;
-        }
-        throw error;
+      if (metadataPromiseResult.status === "rejected") {
+        const errorStr = JSON.stringify(metadataPromiseResult.reason);
+        throw new Error(
+          `Failed to request signed URL from API server: ${errorStr}`,
+        );
       }
+      if (dataPromiseResult.status === "rejected") {
+        const errorStr = JSON.stringify(dataPromiseResult.reason);
+        throw new Error(`Failed to read file: ${errorStr}`);
+      }
+      const metadataResponse = metadataPromiseResult.value;
+      const data = dataPromiseResult.value;
 
       let signedUrl: string | undefined;
       try {
@@ -769,7 +772,7 @@ export class Attachment {
           .parse(await metadataResponse.json()).signedUrl;
       } catch (error) {
         if (error instanceof ZodError) {
-          const errorStr = JSON.stringify(error.flatten(), null, 2);
+          const errorStr = JSON.stringify(error.flatten());
           throw new Error(`Invalid response from API server: ${errorStr}`);
         }
         throw error;
@@ -803,11 +806,15 @@ export class Attachment {
     const errorWrapper = async () => {
       const status: AttachmentStatus = { upload_status: "done" };
 
-      await _globalState.login({});
-      const conn = _globalState.apiConn();
+      if (!this.state) {
+        await _globalState.login({});
+        this.state = _globalState;
+      }
+      const conn = this.state.apiConn();
+      const orgId = this.state.orgId ?? "";
 
       try {
-        await doUpload(conn);
+        await doUpload(conn, orgId);
       } catch (error) {
         status.upload_status = "error";
         status.error_message =
@@ -815,16 +822,15 @@ export class Attachment {
       } finally {
         const requestParams = new URLSearchParams({
           key: this.reference.key,
-          org_id: _globalState.orgId ?? "",
+          org_id: orgId,
         }).toString();
         const statusResponse = await conn.post(
           `/attachment/status?${requestParams}`,
           status,
         );
         if (!statusResponse.ok) {
-          throw new Error(
-            `Couldn't log attachment status: ${JSON.stringify(statusResponse)}`,
-          );
+          const errorStr = JSON.stringify(statusResponse);
+          throw new Error(`Couldn't log attachment status: ${errorStr}`);
         }
       }
 

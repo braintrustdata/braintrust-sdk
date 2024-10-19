@@ -34,5 +34,4 @@ export type {
   LogCommentFullArgs,
   CommentEvent,
   DatasetRecord,
-  AttachmentReference,
 } from "@braintrust/core";
