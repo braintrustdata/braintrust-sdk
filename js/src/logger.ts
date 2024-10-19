@@ -10,8 +10,6 @@ import {
   VALID_SOURCES,
   AUDIT_SOURCE_FIELD,
   AUDIT_METADATA_FIELD,
-  GitMetadataSettings,
-  RepoInfo,
   mergeGitMetadataSettings,
   TransactionId,
   IdField,
@@ -33,7 +31,6 @@ import {
   SpanComponentsV3,
   SpanObjectTypeV3,
   spanObjectTypeV3ToString,
-  gitMetadataSettingsSchema,
   _urljoin,
 } from "@braintrust/core";
 import {
@@ -48,6 +45,9 @@ import {
   PromptSessionEvent,
   OpenAIMessage,
   Message,
+  GitMetadataSettings,
+  RepoInfo,
+  gitMetadataSettingsSchema,
   AttachmentReference,
   AttachmentStatus,
   BRAINTRUST_ATTACHMENT,
@@ -89,7 +89,7 @@ export type EndSpanArgs = {
 
 export interface Exportable {
   /**
-   * Return a serialized representation of the object that can be used to start subspans in other places. See `Span.traced` for more details.
+   * Return a serialized representation of the object that can be used to start subspans in other places. See {@link Span.traced} for more details.
    */
   export(): Promise<string>;
 }
@@ -97,9 +97,7 @@ export interface Exportable {
 /**
  * A Span encapsulates logged data and metrics for a unit of work. This interface is shared by all span implementations.
  *
- * We suggest using one of the various `traced` methods, instead of creating Spans directly.
- *
- * See `Span.traced` for full details.
+ * We suggest using one of the various `traced` methods, instead of creating Spans directly. See {@link Span.traced} for full details.
  */
 export interface Span extends Exportable {
   /**
@@ -110,14 +108,14 @@ export interface Span extends Exportable {
   /**
    * Incrementally update the current span with new data. The event will be batched and uploaded behind the scenes.
    *
-   * @param event: Data to be logged. See `Experiment.log` for full details.
+   * @param event: Data to be logged. See {@link Experiment.log} for full details.
    */
   log(event: ExperimentLogPartialArgs): void;
 
   /**
    * Add feedback to the current span. Unlike `Experiment.logFeedback` and `Logger.logFeedback`, this method does not accept an id parameter, because it logs feedback to the current span.
    *
-   * @param event: Data to be logged. See `Experiment.logFeedback` for full details.
+   * @param event: Data to be logged. See {@link Experiment.logFeedback} for full details.
    */
   logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void;
 
@@ -133,8 +131,8 @@ export interface Span extends Exportable {
    * @param args.start_time Optional start time of the span, as a timestamp in seconds.
    * @param args.setCurrent If true (the default), the span will be marked as the currently-active span for the duration of the callback.
    * @param args.parent Optional parent info string for the span. The string can be generated from `[Span,Experiment,Logger].export`. If not provided, the current span will be used (depending on context). This is useful for adding spans to an existing trace.
-   * @param args.event Data to be logged. See `Experiment.log` for full details.
-   * @Returns The result of running `callback`.
+   * @param args.event Data to be logged. See {@link Experiment.log} for full details.
+   * @returns The result of running `callback`.
    */
   traced<R>(
     callback: (span: Span) => R,
@@ -146,7 +144,7 @@ export interface Span extends Exportable {
    * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
    * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
    *
-   * See `traced` for full details.
+   * See {@link Span.traced} for full details.
    *
    * @returns The newly-created `Span`
    */
@@ -463,8 +461,11 @@ export class BraintrustState {
 
 let _globalState: BraintrustState;
 
-// This function should be invoked exactly once after configuring the `iso`
-// object based on the platform. See js/src/node.ts for an example.
+/**
+ * This function should be invoked exactly once after configuring the `iso`
+ * object based on the platform. See js/src/node.ts for an example.
+ * @internal
+ */
 export function _internalSetInitialState() {
   if (_globalState) {
     throw new Error("Cannot set initial state more than once");
@@ -475,6 +476,9 @@ export function _internalSetInitialState() {
       /*empty login options*/
     });
 }
+/**
+ * @internal
+ */
 export const _internalGetGlobalState = () => _globalState;
 
 export class FailedHTTPResponse extends Error {
@@ -983,7 +987,7 @@ function updateSpanImpl({
  * the span may conflict with the original span.
  *
  * @param exported The output of `span.export()`.
- * @param event The event data to update the span with. See `Experiment.log` for a full list of valid fields.
+ * @param event The event data to update the span with. See {@link Experiment.log} for a full list of valid fields.
  * @param state (optional) Login state to use. If not provided, the global state will be used.
  */
 export function updateSpan({
@@ -1273,7 +1277,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   /**
    * Create a new toplevel span underneath the logger. The name defaults to "root".
    *
-   * See `Span.traced` for full details.
+   * See {@link Span.traced} for full details.
    */
   public traced<R>(
     callback: (span: Span) => R,
@@ -1314,7 +1318,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
    * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
    * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
    *
-   * See `traced` for full details.
+   * See {@link traced} for full details.
    */
   public startSpan(args?: StartSpanArgs): Span {
     this.calledStartSpan = true;
@@ -1357,7 +1361,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
    * Update a span in the experiment using its id. It is important that you only update a span once the original span has been fully written and flushed,
    * since otherwise updates to the span may conflict with the original span.
    *
-   * @param event The event data to update the span with. Must include `id`. See `Experiment.log` for a full list of valid fields.
+   * @param event The event data to update the span with. Must include `id`. See {@link Experiment.log} for a full list of valid fields.
    */
   public updateSpan(
     event: Omit<Partial<ExperimentEvent>, "id"> &
@@ -1377,7 +1381,9 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   }
 
   /**
-   * Return a serialized representation of the logger that can be used to start subspans in other places. See `Span.start_span` for more details.
+   * Return a serialized representation of the logger that can be used to start subspans in other places.
+   *
+   * See {@link Span.startSpan} for more details.
    */
   public async export(): Promise<string> {
     // Note: it is important that the object id we are checking for
@@ -2139,7 +2145,7 @@ export function initExperiment<IsOpen extends boolean = false>(
 }
 
 /**
- * This function is deprecated. Use `init` instead.
+ * @deprecated Use {@link init} instead.
  */
 export function withExperiment<R>(
   project: string,
@@ -2154,7 +2160,7 @@ export function withExperiment<R>(
 }
 
 /**
- * This function is deprecated. Use `initLogger` instead.
+ * @deprecated Use {@link initLogger} instead.
  */
 export function withLogger<IsAsyncFlush extends boolean = false, R = void>(
   callback: (logger: Logger<IsAsyncFlush>) => R,
@@ -2207,8 +2213,9 @@ export function initDataset<
 
 /**
  * Legacy form of `initDataset` which accepts the project name as the first
- * parameter, separately from the remaining options. See
- * `initDataset(options)` for full details.
+ * parameter, separately from the remaining options.
+ *
+ * See `initDataset(options)` for full details.
  */
 export function initDataset<
   IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET,
@@ -2300,7 +2307,7 @@ export function initDataset<
 }
 
 /**
- * This function is deprecated. Use `initDataset` instead.
+ * @deprecated Use {@link initDataset} instead.
  */
 export function withDataset<
   R,
@@ -2673,7 +2680,7 @@ export async function loginToState(options: LoginOptions = {}) {
 /**
  * Log a single event to the current experiment. The event will be batched and uploaded behind the scenes.
  *
- * @param event The event to log. See `Experiment.log` for full details.
+ * @param event The event to log. See {@link Experiment.log} for full details.
  * @returns The `id` of the logged event.
  */
 export function log(event: ExperimentLogFullArgs): string {
@@ -2716,7 +2723,7 @@ type OptionalStateArg = {
 };
 
 /**
- * Returns the currently-active experiment (set by `braintrust.init`). Returns undefined if no current experiment has been set.
+ * Returns the currently-active experiment (set by {@link init}). Returns undefined if no current experiment has been set.
  */
 export function currentExperiment(
   options?: OptionalStateArg,
@@ -2726,7 +2733,7 @@ export function currentExperiment(
 }
 
 /**
- * Returns the currently-active logger (set by `braintrust.initLogger`). Returns undefined if no current logger has been set.
+ * Returns the currently-active logger (set by {@link initLogger}). Returns undefined if no current logger has been set.
  */
 export function currentLogger<IsAsyncFlush extends boolean>(
   options?: AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
@@ -2738,7 +2745,7 @@ export function currentLogger<IsAsyncFlush extends boolean>(
 /**
  * Return the currently-active span for logging (set by one of the `traced` methods). If there is no active span, returns a no-op span object, which supports the same interface as spans but does no logging.
  *
- * See `Span` for full details.
+ * See {@link Span} for full details.
  */
 export function currentSpan(options?: OptionalStateArg): Span {
   const state = options?.state ?? _globalState;
@@ -2787,7 +2794,7 @@ export function logError(span: Span, error: unknown) {
  *
  * and creates a span under the first one that is active. Alternatively, if `parent` is specified, it creates a span under the specified parent row. If none of these are active, it returns a no-op span object.
  *
- * See `Span.traced` for full details.
+ * See {@link Span.traced} for full details.
  */
 export function traced<IsAsyncFlush extends boolean = false, R = void>(
   callback: (span: Span) => R,
@@ -2928,7 +2935,7 @@ export const traceable = wrapTraced;
  * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
  * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
  *
- * See `traced` for full details.
+ * See {@link traced} for full details.
  */
 export function startSpan<IsAsyncFlush extends boolean = false>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
@@ -3419,7 +3426,7 @@ export class Experiment
   /**
    * Create a new toplevel span underneath the experiment. The name defaults to "root".
    *
-   * See `Span.traced` for full details.
+   * See {@link Span.traced} for full details.
    */
   public traced<R>(
     callback: (span: Span) => R,
@@ -3451,7 +3458,7 @@ export class Experiment
    * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
    * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
    *
-   * See `traced` for full details.
+   * See {@link traced} for full details.
    */
   public startSpan(args?: StartSpanArgs): Span {
     this.calledStartSpan = true;
@@ -3582,7 +3589,7 @@ export class Experiment
    * Update a span in the experiment using its id. It is important that you only update a span once the original span has been fully written and flushed,
    * since otherwise updates to the span may conflict with the original span.
    *
-   * @param event The event data to update the span with. Must include `id`. See `Experiment.log` for a full list of valid fields.
+   * @param event The event data to update the span with. Must include `id`. See {@link Experiment.log} for a full list of valid fields.
    */
   public updateSpan(
     event: Omit<Partial<ExperimentEvent>, "id"> &
@@ -3602,7 +3609,9 @@ export class Experiment
   }
 
   /**
-   * Return a serialized representation of the experiment that can be used to start subspans in other places. See `Span.start_span` for more details.
+   * Return a serialized representation of the experiment that can be used to start subspans in other places.
+   *
+   * See {@link Span.startSpan} for more details.
    */
   public async export(): Promise<string> {
     return new SpanComponentsV3({
@@ -3619,7 +3628,7 @@ export class Experiment
   }
 
   /**
-   * This function is deprecated. You can simply remove it from your code.
+   * @deprecated This function is deprecated. You can simply remove it from your code.
    */
   public async close(): Promise<string> {
     console.warn(
@@ -3693,9 +3702,9 @@ export function newId() {
 }
 
 /**
- * Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
+ * Primary implementation of the `Span` interface. See {@link Span} for full details on each method.
  *
- * We suggest using one of the various `traced` methods, instead of creating Spans directly. See `Span.startSpan` for full details.
+ * We suggest using one of the various `traced` methods, instead of creating Spans directly. See {@link Span.startSpan} for full details.
  */
 export class SpanImpl implements Span {
   private state: BraintrustState;
@@ -4268,7 +4277,7 @@ export class Dataset<
   }
 
   /**
-   * This function is deprecated. You can simply remove it from your code.
+   * @deprecated This function is deprecated. You can simply remove it from your code.
    */
   public async close(): Promise<string> {
     console.warn(
