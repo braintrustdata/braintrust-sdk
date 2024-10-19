@@ -725,10 +725,6 @@ export class Attachment {
     this.uploader = this.initUploader();
   }
 
-  toJSON() {
-    return this.reference;
-  }
-
   /**
    * On first access, (1) reads the attachment from disk if needed, (2)
    * authenticates with the data plane to request a signed URL, (3) uploads to
@@ -815,9 +811,7 @@ export class Attachment {
       } catch (error) {
         status.upload_status = "error";
         status.error_message =
-          error instanceof Error
-            ? error.message
-            : JSON.stringify(error, null, 2);
+          error instanceof Error ? error.message : JSON.stringify(error);
       } finally {
         const requestParams = new URLSearchParams({
           key: this.reference.key,
@@ -895,7 +889,7 @@ function logFeedbackImpl(
     tags,
   });
 
-  let { metadata, ...updateEvent } = validatedEvent;
+  let { metadata, ...updateEvent } = deepCopyEvent(validatedEvent);
   updateEvent = Object.fromEntries(
     Object.entries(updateEvent).filter(([_, v]) => !isEmpty(v)),
   );
@@ -907,7 +901,6 @@ function logFeedbackImpl(
     }).objectIdFields();
 
   if (Object.keys(updateEvent).length > 0) {
-    const [attachments, filteredUpdateEvent] = extractAttachments(updateEvent);
     const record = new LazyValue(async () => {
       return {
         id,
@@ -918,16 +911,7 @@ function logFeedbackImpl(
         [IS_MERGE_FIELD]: true,
       };
     });
-    const recordAttachmentUpdate = new LazyValue(async () => {
-      return {
-        id,
-        ...JSON.parse(JSON.stringify(filteredUpdateEvent)),
-        ...(await parentIds()),
-        [IS_MERGE_FIELD]: true,
-      };
-    });
     state.bgLogger().log([record]);
-    state.bgLogger().logAttachments(attachments, [recordAttachmentUpdate]);
   }
 
   if (!isEmpty(comment)) {
@@ -965,10 +949,12 @@ function updateSpanImpl({
   id: string;
   event: Omit<Partial<ExperimentEvent>, "id">;
 }): void {
-  const updateEvent = validateAndSanitizeExperimentLogPartialArgs({
-    id,
-    ...event,
-  } as Partial<ExperimentEvent>);
+  const updateEvent = deepCopyEvent(
+    validateAndSanitizeExperimentLogPartialArgs({
+      id,
+      ...event,
+    } as Partial<ExperimentEvent>),
+  );
 
   const parentIds = async () =>
     new SpanComponentsV3({
@@ -976,22 +962,13 @@ function updateSpanImpl({
       object_id: await parentObjectId.get(),
     }).objectIdFields();
 
-  const [attachments, filteredUpdateEvent] = extractAttachments(updateEvent);
-
   const record = new LazyValue(async () => ({
     id,
     ...updateEvent,
     ...(await parentIds()),
     [IS_MERGE_FIELD]: true,
   }));
-  const recordAttachmentUpdate = new LazyValue(async () => ({
-    id,
-    ...JSON.parse(JSON.stringify(filteredUpdateEvent)),
-    ...(await parentIds()),
-    [IS_MERGE_FIELD]: true,
-  }));
   state.bgLogger().log([record]);
-  state.bgLogger().logAttachments(attachments, [recordAttachmentUpdate]);
 }
 
 /**
@@ -1453,8 +1430,6 @@ export interface BackgroundLoggerOpts {
 class BackgroundLogger {
   private apiConn: LazyValue<HTTPConnection>;
   private items: LazyValue<BackgroundLogEvent>[] = [];
-  private attachmentsQueue: [Attachment[], LazyValue<BackgroundLogEvent>[]][] =
-    [];
   private activeFlush: Promise<void> = Promise.resolve();
   private activeFlushResolved = true;
   private activeFlushError: unknown = undefined;
@@ -1562,17 +1537,6 @@ class BackgroundLogger {
     }
   }
 
-  logAttachments(
-    attachments: Attachment[],
-    _events: LazyValue<BackgroundLogEvent>[],
-  ) {
-    if (attachments.length === 0) {
-      return;
-    }
-    // TODO: queue limit.
-    this.attachmentsQueue.push([attachments, []]);
-  }
-
   async flush(): Promise<void> {
     if (this.syncFlush) {
       this.triggerActiveFlush();
@@ -1592,7 +1556,7 @@ class BackgroundLogger {
     const wrappedItems = this.items;
     this.items = [];
 
-    const allItems = await this.unwrapLazyValues(wrappedItems);
+    const [allItems, attachments] = await this.unwrapLazyValues(wrappedItems);
     if (allItems.length === 0) {
       return;
     }
@@ -1630,17 +1594,16 @@ class BackgroundLogger {
       }
     }
 
-    const attachmentsQueue = this.attachmentsQueue;
-    this.attachmentsQueue = [];
     const attachmentErrors: unknown[] = [];
-    for (const [attachments, _events] of attachmentsQueue) {
-      // For now, upload attachments serially.
-      for (const attachment of attachments) {
-        try {
-          await attachment.upload();
-        } catch (error) {
-          attachmentErrors.push(error);
+    // For now, upload attachments serially.
+    for (const attachment of attachments) {
+      try {
+        const result = await attachment.upload();
+        if (result.upload_status === "error" && result.error_message) {
+          attachmentErrors.push(new Error(result.error_message));
         }
+      } catch (error) {
+        attachmentErrors.push(error);
       }
     }
     if (attachmentErrors.length > 0) {
@@ -1658,11 +1621,15 @@ class BackgroundLogger {
 
   private async unwrapLazyValues(
     wrappedItems: LazyValue<BackgroundLogEvent>[],
-  ): Promise<BackgroundLogEvent[][]> {
+  ): Promise<[BackgroundLogEvent[][], Attachment[]]> {
     for (let i = 0; i < this.numTries; ++i) {
       try {
-        const itemPromises = wrappedItems.map((x) => x.get());
-        return mergeRowBatch(await Promise.all(itemPromises));
+        const items = await Promise.all(wrappedItems.map((x) => x.get()));
+
+        const attachments: Attachment[] = [];
+        items.forEach((item) => extractAttachments(item, attachments));
+
+        return [mergeRowBatch(items), attachments];
       } catch (e) {
         let errmsg = "Encountered error when constructing records to flush";
         const isRetrying = i + 1 < this.numTries;
@@ -1682,7 +1649,7 @@ class BackgroundLogger {
     console.warn(
       `Failed to construct log records to flush after ${this.numTries} attempts. Dropping batch`,
     );
-    return [];
+    return [[], []];
   }
 
   private async submitLogsRequest(items: string[]): Promise<void> {
@@ -1788,7 +1755,8 @@ class BackgroundLogger {
       return;
     }
     try {
-      const allItems = await this.unwrapLazyValues(wrappedItems);
+      // TODO: come up with a representation of attachments.
+      const [allItems, _] = await this.unwrapLazyValues(wrappedItems);
       const dataStr = constructLogs3Data(
         allItems.map((x) => JSON.stringify(x)),
       );
@@ -3151,70 +3119,75 @@ function validateAndSanitizeExperimentLogPartialArgs(
 }
 
 /**
- * Helper function for uploading attachments. Recursively extracts `Attachment`
- * values and returns a filtered copy of the input event with non-attachments
- * removed.
- *
- * @param event The event to be extract.
- * @returns Flat array of extracted attachments. A filtered event suitable for
- * merging.
+ * Creates a deep copy of the given event. Replaces references to user objects
+ * with placeholder strings to ensure serializability, except for
+ * {@link Attachment} objects, which are preserved.
  */
-function extractAttachments<T extends Partial<BackgroundLogEvent>>(
-  event: T,
-): [Attachment[], T] {
-  const attachments: Attachment[] = [];
-  const eventCopy = { ...event };
+function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
+  // We both check for serializability and round-trip `partialRecord` through
+  // JSON in order to create a "deep copy". This has the benefit of cutting
+  // out any reference to user objects when the object is logged
+  // asynchronously, so that in case the objects are modified, the logging is
+  // unaffected. In the future, this could be changed to a "real" deep copy so
+  // that immutable types (large strings) do not have to be copied.
 
-  function helper(value: any): any {
+  const attachments: Attachment[] = [];
+  const IDENTIFIER = "_bt_saved_attachment";
+
+  const serialized = JSON.stringify(event, (_k, v) => {
+    if (v instanceof SpanImpl) {
+      return `<span>`;
+    } else if (v instanceof Experiment) {
+      return `<experiment>`;
+    } else if (v instanceof Dataset) {
+      return `<dataset>`;
+    } else if (v instanceof Logger) {
+      return `<logger>`;
+    } else if (v instanceof Attachment) {
+      const idx = attachments.push(v);
+      return { [IDENTIFIER]: idx - 1 };
+    }
+    return v;
+  });
+  const x = JSON.parse(serialized, (_k, v) => {
+    if (
+      v instanceof Object &&
+      IDENTIFIER in v &&
+      typeof v[IDENTIFIER] === "number"
+    ) {
+      return attachments[v[IDENTIFIER]];
+    }
+    return v;
+  });
+  return x;
+}
+
+/**
+ * Helper function for uploading attachments. Recursively extracts `Attachment`
+ * values and replaces them with their `AttachmentReferences`.
+ *
+ * @param value The event to filter. Will be modified in-place.
+ * @param attachments Flat array of extracted attachments.
+ */
+function extractAttachments(value: any, attachments: Attachment[]): void {
+  for (const key of Object.keys(value)) {
     // Base case: non-object.
     // - Nothing to explore recursively.
     // - Cannot be an attachment.
-    if (!(value instanceof Object)) {
-      return undefined;
+    if (!(value[key] instanceof Object)) {
+      continue;
     }
 
-    // Save a reference to the attachment.
-    if (value instanceof Attachment) {
-      attachments.push(value);
-      return value; // Attachment cannot be nested.
+    // Base case: Attachment.
+    if (value[key] instanceof Attachment) {
+      attachments.push(value[key]);
+      value[key] = value[key].reference;
+      continue; // Attachment cannot be nested.
     }
-    // Recursive case: array.
-    // - Elements need to be explored.
-    // - We do NOT filter the array itself, since the backend's merging logic
-    //   will replace the entire array upon upload.
-    if (Array.isArray(value)) {
-      const arrayCopy = value.map(helper);
-      // If any items are attachment, return original value.
-      return arrayCopy.some((x) => !isEmpty(x)) ? value : undefined;
-    }
-    // Recursive case: object.
-    // - Values need to be explored AND filtered.
-    // - We DO filter the object. Empty objects do not need to be uploaded.
-    const valueCopy: any = {};
-    let modified = false;
-    for (const key of Object.keys(value)) {
-      const childCopy = helper(value[key]);
-      if (!isEmpty(childCopy)) {
-        valueCopy[key] = childCopy;
-        modified = true;
-      }
-    }
-    return modified ? valueCopy : undefined;
+
+    // Recursive case.
+    extractAttachments(value[key], attachments);
   }
-
-  // Recursively find all attachments.
-  for (const key of Object.keys(event) as (keyof T)[]) {
-    if (!(event[key] instanceof Object)) {
-      continue; // Do not replace IDs.
-    }
-    // The top-level event cannot be an attachment itself.
-    eventCopy[key] = helper(event[key]);
-    if (eventCopy[key] === undefined) {
-      delete eventCopy[key];
-    }
-  }
-
-  return [attachments, eventCopy];
 }
 
 // Note that this only checks properties that are expected of a complete event.
@@ -3839,36 +3812,16 @@ export class SpanImpl implements Span {
       internalData,
     });
 
-    // We both check for serializability and round-trip `partialRecord` through
-    // JSON in order to create a "deep copy". This has the benefit of cutting
-    // out any reference to user objects when the object is logged
-    // asynchronously, so that in case the objects are modified, the logging is
-    // unaffected.
-    let partialRecord = {
+    // Deep copy mutable user data.
+    const partialRecord = deepCopyEvent({
       id: this.id,
       span_id: this.spanId,
       root_span_id: this.rootSpanId,
       span_parents: this.spanParents,
       ...serializableInternalData,
       [IS_MERGE_FIELD]: this.isMerge,
-    };
-    const [attachments, partialRecordAttachmentsOnly] =
-      extractAttachments(partialRecord);
-    partialRecordAttachmentsOnly[IS_MERGE_FIELD] = true;
-    // TODO(kevin): Factor out to helper & use in all logging paths.
-    const serializedPartialRecord = JSON.stringify(partialRecord, (_k, v) => {
-      if (v instanceof SpanImpl) {
-        return `<span>`;
-      } else if (v instanceof Experiment) {
-        return `<experiment>`;
-      } else if (v instanceof Dataset) {
-        return `<dataset>`;
-      } else if (v instanceof Logger) {
-        return `<logger>`;
-      }
-      return v;
     });
-    partialRecord = JSON.parse(serializedPartialRecord);
+
     if (partialRecord.metrics?.end) {
       this.loggedEndTime = partialRecord.metrics?.end as number;
     }
@@ -3892,22 +3845,7 @@ export class SpanImpl implements Span {
         object_id: await this.parentObjectId.get(),
       }).objectIdFields(),
     });
-
-    const computeRecordAttachmentUpdate = async () => ({
-      // Perform JSON round trip at upload time since attachment state will change.
-      ...JSON.parse(JSON.stringify(partialRecordAttachmentsOnly)),
-      ...new SpanComponentsV3({
-        object_type: this.parentObjectType,
-        object_id: await this.parentObjectId.get(),
-      }).objectIdFields(),
-    });
-
     this.state.bgLogger().log([new LazyValue(computeRecord)]);
-    this.state
-      .bgLogger()
-      .logAttachments(attachments, [
-        new LazyValue(computeRecordAttachmentUpdate),
-      ]);
   }
 
   public logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void {
@@ -4205,15 +4143,17 @@ export class Dataset<
     this.validateEvent({ metadata, expected, output, tags });
 
     const rowId = id || uuidv4();
-    const args = this.createArgs({
-      id: rowId,
-      input,
-      expected,
-      metadata,
-      tags,
-      output,
-      isMerge: false,
-    });
+    const args = this.createArgs(
+      deepCopyEvent({
+        id: rowId,
+        input,
+        expected,
+        metadata,
+        tags,
+        output,
+        isMerge: false,
+      }),
+    );
 
     this.state.bgLogger().log([args]);
     return rowId;
@@ -4247,14 +4187,16 @@ export class Dataset<
   }): string {
     this.validateEvent({ metadata, expected, tags });
 
-    const args = this.createArgs({
-      id,
-      input,
-      expected,
-      metadata,
-      tags,
-      isMerge: true,
-    });
+    const args = this.createArgs(
+      deepCopyEvent({
+        id,
+        input,
+        expected,
+        metadata,
+        tags,
+        isMerge: true,
+      }),
+    );
 
     this.state.bgLogger().log([args]);
     return id;
