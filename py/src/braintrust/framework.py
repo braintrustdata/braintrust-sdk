@@ -20,6 +20,7 @@ from braintrust_core.serializable_data_class import SerializableDataClass
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 
+from .git_fields import GitMetadataSettings, RepoInfo
 from .logger import NOOP_SPAN, ExperimentSummary, Metadata, ScoreSummary, Span, stringify_exception
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
@@ -237,6 +238,18 @@ class Evaluator:
     compared to this experiment. This takes precedence over `base_experiment_name` if specified.
     """
 
+    git_metadata_settings: Optional[GitMetadataSettings] = None
+    """
+    Optional settings for collecting git metadata. By default, will collect all
+    git metadata fields allowed in org-level settings.
+    """
+
+    repo_info: Optional[RepoInfo] = None
+    """
+    Optionally explicitly specify the git metadata for this experiment. This
+    takes precedence over `git_metadata_settings` if specified.
+    """
+
 
 @dataclasses.dataclass
 class EvalResultWithSummary(SerializableDataClass):
@@ -444,6 +457,8 @@ def Eval(
     project_id: Optional[str] = None,
     base_experiment_name: Optional[str] = None,
     base_experiment_id: Optional[str] = None,
+    git_metadata_settings: Optional[GitMetadataSettings] = None,
+    repo_info: Optional[RepoInfo] = None,
 ) -> Union[Awaitable[EvalResultWithSummary], EvalResultWithSummary]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -487,6 +502,8 @@ def Eval(
     summarized and compared to this experiment.
     :param base_experiment_id: An optional experiment id to use as a base. If specified, the new experiment will be
     summarized and compared to this experiment. This takes precedence over `base_experiment_name` if specified.
+    :param git_metadata_settings: Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
+    :param repo_info: Optionally explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
     eval_name = _make_eval_name(name, experiment_name)
@@ -511,6 +528,8 @@ def Eval(
         project_id=project_id,
         base_experiment_name=base_experiment_name,
         base_experiment_id=base_experiment_id,
+        git_metadata_settings=git_metadata_settings,
+        repo_info=repo_info,
     )
 
     if _lazy_load:
@@ -542,6 +561,8 @@ def Eval(
                 update=evaluator.update,
                 base_experiment=base_experiment_name,
                 base_experiment_id=base_experiment_id,
+                git_metadata_settings=evaluator.git_metadata_settings,
+                repo_info=evaluator.repo_info,
             )
             try:
                 ret = await run_evaluator(experiment, evaluator, 0, [])
