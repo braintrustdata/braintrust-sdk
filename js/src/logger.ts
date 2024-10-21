@@ -682,6 +682,13 @@ export interface LogOptions<IsAsyncFlush> {
 
 export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
 
+export interface AttachmentParams {
+  data: string | Blob | ArrayBuffer;
+  filename: string;
+  contentType: string;
+  state?: BraintrustState;
+}
+
 /**
  * Represents an attachment to be uploaded and the associated metadata.
  * Attachment objects can be inserted anywhere in an event or feedback, allowing
@@ -696,8 +703,10 @@ export class Attachment {
   readonly reference: AttachmentReference;
 
   private readonly uploader: LazyValue<AttachmentStatus>;
-
   private readonly data: LazyValue<Blob>;
+  private readonly state?: BraintrustState;
+  // For debug logging only.
+  private readonly dataDebugString: string;
 
   /**
    * Construct an attachment.
@@ -712,21 +721,17 @@ export class Attachment {
    *
    * @param contentType The MIME type of the file.
    *
-   * @param state For internal use.
+   * @param state (Optional) For internal use.
    */
-  constructor(
-    data: string | Blob | ArrayBuffer,
-    filename: string,
-    contentType: string,
-    private state?: BraintrustState,
-  ) {
-    const uuid = newId();
+  constructor({ data, filename, contentType, state }: AttachmentParams) {
     this.reference = {
       type: BRAINTRUST_ATTACHMENT,
       filename,
       content_type: contentType,
-      key: `attachments/${uuid.slice(0, 2)}/${uuid}`,
+      key: newId(),
     };
+    this.state = state;
+    this.dataDebugString = typeof data === "string" ? data : "<in-memory data>";
 
     this.data = this.initData(data);
     this.uploader = this.initUploader();
@@ -743,17 +748,31 @@ export class Attachment {
     return await this.uploader.get();
   }
 
+  /**
+   * A human-readable description for logging and debugging.
+   *
+   * @returns The debug object. The return type is not stable and may change in
+   * a future release.
+   */
+  debugInfo(): Record<string, unknown> {
+    return {
+      inputData: this.dataDebugString,
+      reference: this.reference,
+      state: this.state,
+    };
+  }
+
   private initUploader(): LazyValue<AttachmentStatus> {
     const doUpload = async (conn: HTTPConnection, orgId: string) => {
-      const requestParams = new URLSearchParams({
+      const requestParams = {
         key: this.reference.key,
         filename: this.reference.filename,
         content_type: this.reference.content_type,
         org_id: orgId,
-      }).toString();
+      };
       const [metadataPromiseResult, dataPromiseResult] =
         await Promise.allSettled([
-          conn.post(`/attachment?${requestParams}`),
+          conn.post("/attachment", requestParams),
           this.data.get(),
         ]);
       if (metadataPromiseResult.status === "rejected") {
@@ -790,6 +809,7 @@ export class Attachment {
             method: "PUT",
             headers: {
               "Content-Type": this.reference.content_type,
+              "If-None-Match": "*",
             },
             body: data,
           }),
@@ -810,12 +830,11 @@ export class Attachment {
     const errorWrapper = async () => {
       const status: AttachmentStatus = { upload_status: "done" };
 
-      if (!this.state) {
-        await _globalState.login({});
-        this.state = _globalState;
-      }
-      const conn = this.state.apiConn();
-      const orgId = this.state.orgId ?? "";
+      const state = this.state ?? _globalState;
+      await state.login({});
+
+      const conn = state.apiConn();
+      const orgId = state.orgId ?? "";
 
       try {
         await doUpload(conn, orgId);
@@ -823,19 +842,20 @@ export class Attachment {
         status.upload_status = "error";
         status.error_message =
           error instanceof Error ? error.message : JSON.stringify(error);
-      } finally {
-        const requestParams = new URLSearchParams({
-          key: this.reference.key,
-          org_id: orgId,
-        }).toString();
-        const statusResponse = await conn.post(
-          `/attachment/status?${requestParams}`,
-          status,
-        );
-        if (!statusResponse.ok) {
-          const errorStr = JSON.stringify(statusResponse);
-          throw new Error(`Couldn't log attachment status: ${errorStr}`);
-        }
+      }
+
+      const requestParams = {
+        key: this.reference.key,
+        org_id: orgId,
+        status,
+      };
+      const statusResponse = await conn.post(
+        "/attachment/status",
+        requestParams,
+      );
+      if (!statusResponse.ok) {
+        const errorStr = JSON.stringify(statusResponse);
+        throw new Error(`Couldn't log attachment status: ${errorStr}`);
       }
 
       return status;
@@ -1638,6 +1658,11 @@ class BackgroundLogger {
       try {
         const items = await Promise.all(wrappedItems.map((x) => x.get()));
 
+        // TODO(kevin): `extractAttachments` should ideally come after
+        // `mergeRowBatch`, since merge-overwriting could result in some
+        // attachments that no longer need to be uploaded. This would require
+        // modifying the merge logic to treat the Attachment object as a "leaf"
+        // rather than attempting to merge the keys of the Attachment.
         const attachments: Attachment[] = [];
         items.forEach((item) => extractAttachments(item, attachments));
 
@@ -1767,17 +1792,24 @@ class BackgroundLogger {
       return;
     }
     try {
-      // TODO: come up with a representation of attachments.
-      const [allItems, _] = await this.unwrapLazyValues(wrappedItems);
+      const [allItems, allAttachments] =
+        await this.unwrapLazyValues(wrappedItems);
       const dataStr = constructLogs3Data(
         allItems.map((x) => JSON.stringify(x)),
       );
+      const attachmentStr = JSON.stringify(
+        allAttachments.map((a) => a.debugInfo()),
+      );
+
+      const promises: Promise<void>[] = [];
       for (const payloadDir of publishPayloadsDir) {
-        await BackgroundLogger.writePayloadToDir({
-          payloadDir,
-          payload: dataStr,
-        });
+        const write = (payload: string) =>
+          BackgroundLogger.writePayloadToDir({ payloadDir, payload });
+        promises.push(write(dataStr));
+        promises.push(write(attachmentStr));
       }
+
+      await Promise.allSettled(promises);
     } catch (e) {
       console.error(e);
     }
@@ -3134,19 +3166,19 @@ function validateAndSanitizeExperimentLogPartialArgs(
 /**
  * Creates a deep copy of the given event. Replaces references to user objects
  * with placeholder strings to ensure serializability, except for
- * {@link Attachment} objects, which are preserved.
+ * {@link Attachment} objects, which are preserved and not deep-copied.
  */
 function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
-  // We both check for serializability and round-trip `partialRecord` through
-  // JSON in order to create a "deep copy". This has the benefit of cutting
-  // out any reference to user objects when the object is logged
-  // asynchronously, so that in case the objects are modified, the logging is
-  // unaffected. In the future, this could be changed to a "real" deep copy so
-  // that immutable types (large strings) do not have to be copied.
-
   const attachments: Attachment[] = [];
-  const IDENTIFIER = "_bt_saved_attachment";
+  const IDENTIFIER = "_bt_internal_saved_attachment";
+  const savedAttachmentSchema = z.strictObject({ [IDENTIFIER]: z.number() });
 
+  // We both check for serializability and round-trip `event` through JSON in
+  // order to create a "deep copy". This has the benefit of cutting out any
+  // reference to user objects when the object is logged asynchronously, so that
+  // in case the objects are modified, the logging is unaffected. In the future,
+  // this could be changed to a "real" deep copy so that immutable types (long
+  // strings) do not have to be copied.
   const serialized = JSON.stringify(event, (_k, v) => {
     if (v instanceof SpanImpl) {
       return `<span>`;
@@ -3163,12 +3195,9 @@ function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
     return v;
   });
   const x = JSON.parse(serialized, (_k, v) => {
-    if (
-      v instanceof Object &&
-      IDENTIFIER in v &&
-      typeof v[IDENTIFIER] === "number"
-    ) {
-      return attachments[v[IDENTIFIER]];
+    const parsedAttachment = savedAttachmentSchema.safeParse(v);
+    if (parsedAttachment.success) {
+      return attachments[parsedAttachment.data[IDENTIFIER]];
     }
     return v;
   });
@@ -3179,27 +3208,30 @@ function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
  * Helper function for uploading attachments. Recursively extracts `Attachment`
  * values and replaces them with their `AttachmentReferences`.
  *
- * @param value The event to filter. Will be modified in-place.
- * @param attachments Flat array of extracted attachments.
+ * @param event The event to filter. Will be modified in-place.
+ * @param attachments Flat array of extracted attachments (output parameter).
  */
-function extractAttachments(value: any, attachments: Attachment[]): void {
-  for (const key of Object.keys(value)) {
+function extractAttachments(
+  event: Record<string, any>,
+  attachments: Attachment[],
+): void {
+  for (const [key, value] of Object.entries(event)) {
     // Base case: non-object.
     // - Nothing to explore recursively.
     // - Cannot be an attachment.
-    if (!(value[key] instanceof Object)) {
+    if (!(value instanceof Object)) {
       continue;
     }
 
     // Base case: Attachment.
-    if (value[key] instanceof Attachment) {
-      attachments.push(value[key]);
-      value[key] = value[key].reference;
+    if (value instanceof Attachment) {
+      attachments.push(value);
+      event[key] = value.reference;
       continue; // Attachment cannot be nested.
     }
 
     // Recursive case.
-    extractAttachments(value[key], attachments);
+    extractAttachments(value, attachments);
   }
 }
 
@@ -4642,3 +4674,9 @@ export interface DatasetSummary {
   datasetUrl: string;
   dataSummary: DataSummary;
 }
+
+/**
+ * Allows accessing helper functions for testing.
+ * @internal
+ */
+export const _exportsForTestingOnly = { extractAttachments, deepCopyEvent };

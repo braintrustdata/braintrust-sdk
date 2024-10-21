@@ -10,6 +10,7 @@ export const attachmentReferenceSchema = z.object({
 });
 
 /**
+ * Represents an attachment in an external object store.
  *
  * @property type An identifier to help disambiguate parsing.
  * @property filename Human-readable filename for user interfaces. Not related to attachment storage.
@@ -29,10 +30,16 @@ export type UploadStatus = z.infer<typeof uploadStatusSchema>;
 
 export const attachmentStatusSchema = z.object({
   upload_status: uploadStatusSchema,
-  error_message: z.string().optional(),
+  error_message: z
+    .string()
+    .nullish()
+    .transform((x) => x || undefined),
 });
 
 /**
+ * Attachments may be uploaded asynchronously with respect to the containing
+ * log. This object is used to track the status and error, if any.
+ *
  * @property upload_status See {@link UploadStatus}.
  * @property error_message Describes the error encountered while uploading.
  */
