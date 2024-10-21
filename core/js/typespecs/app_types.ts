@@ -183,7 +183,11 @@ export const customColumnSchema = z
       .uuid()
       .describe("The id of the object the custom column is scoped for"),
     name: z.string().describe("The name of the custom column"),
-    value: z.string().describe("The name of the custom column"),
+    expr: z
+      .string()
+      .describe(
+        "The expression used to extract the value for the custom column",
+      ),
     project_id: customColumnBaseSchema.shape.project_id,
     created: customColumnBaseSchema.shape.created,
   })
