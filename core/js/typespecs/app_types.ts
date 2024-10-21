@@ -169,6 +169,31 @@ export const envVarSchema = z
   .openapi("EnvVar");
 export type EnvVar = z.infer<typeof envVarSchema>;
 
+export const customColumnObjectTypeEnum = z
+  .enum(["experiment", "dataset", "project_log"])
+  .describe("The type of the object the custom column is scoped for");
+
+const customColumnBaseSchema = generateBaseTableSchema("custom columns");
+export const customColumnSchema = z
+  .object({
+    id: customColumnBaseSchema.shape.id,
+    object_type: customColumnObjectTypeEnum,
+    object_id: z
+      .string()
+      .uuid()
+      .describe("The id of the object the custom column is scoped for"),
+    name: z.string().describe("The name of the custom column"),
+    expr: z
+      .string()
+      .describe(
+        "The expression used to extract the value for the custom column",
+      ),
+    project_id: customColumnBaseSchema.shape.project_id,
+    created: customColumnBaseSchema.shape.created,
+  })
+  .openapi("CustomColumn");
+export type CustomColumn = z.infer<typeof customColumnSchema>;
+
 const apiKeyBaseSchema = generateBaseTableSchema("api key");
 export const apiKeySchema = z
   .object({
