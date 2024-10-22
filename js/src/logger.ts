@@ -789,10 +789,14 @@ export class Attachment {
       const data = dataPromiseResult.value;
 
       let signedUrl: string | undefined;
+      let headers: Record<string, string>;
       try {
-        signedUrl = z
-          .object({ signedUrl: z.string().url() })
-          .parse(await metadataResponse.json()).signedUrl;
+        ({ signedUrl, headers } = z
+          .object({
+            signedUrl: z.string().url(),
+            headers: z.record(z.string()),
+          })
+          .parse(await metadataResponse.json()));
       } catch (error) {
         if (error instanceof ZodError) {
           const errorStr = JSON.stringify(error.flatten());
@@ -807,10 +811,7 @@ export class Attachment {
         objectStoreResponse = await checkResponse(
           await fetch(signedUrl, {
             method: "PUT",
-            headers: {
-              "Content-Type": this.reference.content_type,
-              "If-None-Match": "*",
-            },
+            headers,
             body: data,
           }),
         );
@@ -1794,6 +1795,7 @@ class BackgroundLogger {
     try {
       const [allItems, allAttachments] =
         await this.unwrapLazyValues(wrappedItems);
+
       const dataStr = constructLogs3Data(
         allItems.map((x) => JSON.stringify(x)),
       );
@@ -1801,15 +1803,11 @@ class BackgroundLogger {
         allAttachments.map((a) => a.debugInfo()),
       );
 
-      const promises: Promise<void>[] = [];
-      for (const payloadDir of publishPayloadsDir) {
-        const write = (payload: string) =>
-          BackgroundLogger.writePayloadToDir({ payloadDir, payload });
-        promises.push(write(dataStr));
-        promises.push(write(attachmentStr));
-      }
+      const payload = `{"data": ${dataStr}, "attachments": ${attachmentStr}}\n`;
 
-      await Promise.allSettled(promises);
+      for (const payloadDir of publishPayloadsDir) {
+        await BackgroundLogger.writePayloadToDir({ payloadDir, payload });
+      }
     } catch (e) {
       console.error(e);
     }
