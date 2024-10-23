@@ -691,14 +691,14 @@ export interface AttachmentParams {
 
 /**
  * Represents an attachment to be uploaded and the associated metadata.
- * Attachment objects can be inserted anywhere in an event or feedback, allowing
- * you to log arbitrary large data. The SDK will asynchronously upload the file
- * to object storage and replace the Attachment object with an
- * AttachmentReference.
+ * `Attachment` objects can be inserted anywhere in an event, allowing you to
+ * log arbitrary file data. The SDK will asynchronously upload the file to
+ * object storage and replace the `Attachment` object with an
+ * {@link AttachmentReference}.
  */
 export class Attachment {
   /**
-   * The object that replaces this Attachment at upload time.
+   * The object that replaces this `Attachment` at upload time.
    */
   readonly reference: AttachmentReference;
 
@@ -3226,7 +3226,7 @@ function extractAttachments(
       continue; // Nothing to explore recursively.
     }
 
-    // Recursive case.
+    // Recursive case: object or array.
     extractAttachments(value, attachments);
   }
 }
