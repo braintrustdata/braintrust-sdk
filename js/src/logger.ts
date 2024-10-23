@@ -694,7 +694,7 @@ export interface AttachmentParams {
  * `Attachment` objects can be inserted anywhere in an event, allowing you to
  * log arbitrary file data. The SDK will asynchronously upload the file to
  * object storage and replace the `Attachment` object with an
- * {@link AttachmentReference}.
+ * `AttachmentReference`.
  */
 export class Attachment {
   /**
@@ -3204,7 +3204,7 @@ function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
 
 /**
  * Helper function for uploading attachments. Recursively extracts `Attachment`
- * values and replaces them with their `AttachmentReferences`.
+ * values and replaces them with their associated `AttachmentReference` objects.
  *
  * @param event The event to filter. Will be modified in-place.
  * @param attachments Flat array of extracted attachments (output parameter).
