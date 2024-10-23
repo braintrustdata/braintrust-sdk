@@ -20,13 +20,13 @@ test("extractAttachments no op", () => {
   extractAttachments({}, attachments);
   expect(attachments).toHaveLength(0);
 
-  const event = { foo: "bar", baz: [1, 2, 3] };
+  const event = { foo: "foo", bar: null, baz: [1, 2, 3] };
   extractAttachments(event, attachments);
   expect(attachments).toHaveLength(0);
   // Same instance.
   expect(event.baz).toBe(event.baz);
   // Same content.
-  expect(event).toEqual({ foo: "bar", baz: [1, 2, 3] });
+  expect(event).toEqual({ foo: "foo", bar: null, baz: [1, 2, 3] });
 });
 
 test("extractAttachments with attachments", () => {
@@ -40,6 +40,7 @@ test("extractAttachments with attachments", () => {
     filename: "filename2",
     contentType: "text/plain",
   });
+  const date = new Date();
   const event = {
     foo: "bar",
     baz: [1, 2],
@@ -47,8 +48,13 @@ test("extractAttachments with attachments", () => {
     nested: {
       attachment2,
       info: "another string",
-      anArray: [attachment1, attachment2, attachment1],
+      anArray: [attachment1, null, "string", attachment2, attachment1],
     },
+    null: null,
+    undefined: undefined,
+    date,
+    f: Math.max,
+    empty: {},
   };
   const savedNested = event.nested;
 
@@ -79,17 +85,24 @@ test("extractAttachments with attachments", () => {
       info: "another string",
       anArray: [
         attachment1.reference,
+        null,
+        "string",
         attachment2.reference,
         attachment1.reference,
       ],
     },
+    null: null,
+    undefined: undefined,
+    date,
+    f: Math.max,
+    empty: {},
   });
 });
 
 test("deepCopyEvent basic", () => {
   const original: Partial<BackgroundLogEvent> = {
-    input: { foo: "bar" },
-    output: [1, 2],
+    input: { foo: "bar", null: null, empty: {} },
+    output: [1, 2, "3", null, {}],
   };
   const copy = deepCopyEvent(original);
   expect(copy).toEqual(original);
@@ -109,6 +122,7 @@ test("deepCopyEvent with attachments", () => {
     filename: "filename2",
     contentType: "text/plain",
   });
+  const date = new Date("2024-10-23T05:02:48.796Z");
 
   const span = NOOP_SPAN;
   const logger = initLogger();
@@ -120,6 +134,7 @@ test("deepCopyEvent with attachments", () => {
     output: {
       span,
       myIllegalObjects: [experiment, dataset, logger],
+      myOtherWeirdObjects: [Math.max, date, null, undefined],
       attachment: attachment1,
       attachmentList: [attachment1, attachment2, "string"],
       nestedAttachment: {
@@ -138,6 +153,7 @@ test("deepCopyEvent with attachments", () => {
     output: {
       span: "<span>",
       myIllegalObjects: ["<experiment>", "<dataset>", "<logger>"],
+      myOtherWeirdObjects: [null, "2024-10-23T05:02:48.796Z", null, null],
       attachment: attachment1,
       attachmentList: [attachment1, attachment2, "string"],
       nestedAttachment: {

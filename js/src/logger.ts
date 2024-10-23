@@ -3214,18 +3214,16 @@ function extractAttachments(
   attachments: Attachment[],
 ): void {
   for (const [key, value] of Object.entries(event)) {
-    // Base case: non-object.
-    // - Nothing to explore recursively.
-    // - Cannot be an attachment.
-    if (!(value instanceof Object)) {
-      continue;
-    }
-
     // Base case: Attachment.
     if (value instanceof Attachment) {
       attachments.push(value);
       event[key] = value.reference;
       continue; // Attachment cannot be nested.
+    }
+
+    // Base case: non-object.
+    if (!(value instanceof Object)) {
+      continue; // Nothing to explore recursively.
     }
 
     // Recursive case.
