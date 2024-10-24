@@ -10,6 +10,7 @@ import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
 import { functionTypeEnum, runtimeContextSchema } from "./functions";
 import { savedFunctionIdSchema } from "./function_id";
+import { repoInfoSchema } from "./git_types";
 
 // Section: App DB table schemas
 
@@ -361,48 +362,6 @@ export const functionSchema = promptSchemaObject
 
 // NOTE: suffix "Object" helps avoid a name conflict with the built-in `Function` type
 export type FunctionObject = z.infer<typeof functionSchema>;
-
-export const repoInfoSchema = z
-  .object({
-    commit: z.string().nullish().describe("SHA of most recent commit"),
-    branch: z
-      .string()
-      .nullish()
-      .describe("Name of the branch the most recent commit belongs to"),
-    tag: z
-      .string()
-      .nullish()
-      .describe("Name of the tag on the most recent commit"),
-    dirty: z
-      .boolean()
-      .nullish()
-      .describe(
-        "Whether or not the repo had uncommitted changes when snapshotted",
-      ),
-    author_name: z
-      .string()
-      .nullish()
-      .describe("Name of the author of the most recent commit"),
-    author_email: z
-      .string()
-      .nullish()
-      .describe("Email of the author of the most recent commit"),
-    commit_message: z.string().nullish().describe("Most recent commit message"),
-    commit_time: z
-      .string()
-      .nullish()
-      .describe("Time of the most recent commit"),
-    git_diff: z
-      .string()
-      .nullish()
-      .describe(
-        "If the repo was dirty when run, this includes the diff between the current state of the repo and the most recent commit.",
-      ),
-  })
-  .describe(
-    "Metadata about the state of the repo when the experiment was created",
-  )
-  .openapi("RepoInfo");
 
 const experimentBaseSchema = generateBaseTableSchema("experiment", {
   uniqueName: true,
@@ -908,6 +867,7 @@ export const createDatasetSchema = z
     project_id: datasetSchema.shape.project_id,
     name: makeNonempty(datasetSchema.shape.name),
     description: datasetSchema.shape.description,
+    metadata: datasetSchema.shape.metadata,
   })
   .openapi("CreateDataset");
 

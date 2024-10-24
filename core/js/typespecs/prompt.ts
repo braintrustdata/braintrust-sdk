@@ -9,13 +9,19 @@ import {
   chatCompletionOpenAIMessageParamSchema,
 } from "./openai/messages";
 import { savedFunctionIdSchema } from "./function_id";
+
+export {
+  chatCompletionMessageParamSchema,
+  chatCompletionContentPartSchema,
+  chatCompletionContentPartImageSchema,
+  chatCompletionContentPartTextSchema,
+};
 export {
   ToolCall,
   messageRoleSchema,
   chatCompletionMessageToolCallSchema,
   MessageRole,
 } from "./openai/messages";
-export { chatCompletionContentPartImageSchema };
 
 export { toolsSchema } from "./openai/tools";
 export type { Tools } from "./openai/tools";

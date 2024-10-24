@@ -1,4 +1,4 @@
-import { GitMetadataSettings, RepoInfo } from "@braintrust/core";
+import { GitMetadataSettings, RepoInfo } from "@braintrust/core/typespecs";
 
 export interface CallerLocation {
   caller_functionname: string;
@@ -42,6 +42,7 @@ export interface Common {
     opts?: { recursive?: boolean },
   ) => Promise<string | undefined>;
   writeFile?: (filename: string, data: string) => Promise<void>;
+  readFile?: (filename: string) => Promise<Uint8Array>;
 }
 
 const iso: Common = {

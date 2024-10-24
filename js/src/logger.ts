@@ -10,8 +10,6 @@ import {
   VALID_SOURCES,
   AUDIT_SOURCE_FIELD,
   AUDIT_METADATA_FIELD,
-  GitMetadataSettings,
-  RepoInfo,
   mergeGitMetadataSettings,
   TransactionId,
   IdField,
@@ -33,7 +31,6 @@ import {
   SpanComponentsV3,
   SpanObjectTypeV3,
   spanObjectTypeV3ToString,
-  gitMetadataSettingsSchema,
   _urljoin,
 } from "@braintrust/core";
 import {
@@ -48,8 +45,13 @@ import {
   PromptSessionEvent,
   OpenAIMessage,
   Message,
+  GitMetadataSettings,
+  RepoInfo,
+  gitMetadataSettingsSchema,
+  AttachmentReference,
+  AttachmentStatus,
+  BRAINTRUST_ATTACHMENT,
 } from "@braintrust/core/typespecs";
-
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
 import {
   runCatchFinally,
@@ -59,7 +61,7 @@ import {
   LazyValue,
 } from "./util";
 import Mustache from "mustache";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import {
   BraintrustStream,
   createFinalValuePassThroughStream,
@@ -87,7 +89,7 @@ export type EndSpanArgs = {
 
 export interface Exportable {
   /**
-   * Return a serialized representation of the object that can be used to start subspans in other places. See `Span.traced` for more details.
+   * Return a serialized representation of the object that can be used to start subspans in other places. See {@link Span.traced} for more details.
    */
   export(): Promise<string>;
 }
@@ -95,9 +97,7 @@ export interface Exportable {
 /**
  * A Span encapsulates logged data and metrics for a unit of work. This interface is shared by all span implementations.
  *
- * We suggest using one of the various `traced` methods, instead of creating Spans directly.
- *
- * See `Span.traced` for full details.
+ * We suggest using one of the various `traced` methods, instead of creating Spans directly. See {@link Span.traced} for full details.
  */
 export interface Span extends Exportable {
   /**
@@ -108,14 +108,14 @@ export interface Span extends Exportable {
   /**
    * Incrementally update the current span with new data. The event will be batched and uploaded behind the scenes.
    *
-   * @param event: Data to be logged. See `Experiment.log` for full details.
+   * @param event: Data to be logged. See {@link Experiment.log} for full details.
    */
   log(event: ExperimentLogPartialArgs): void;
 
   /**
    * Add feedback to the current span. Unlike `Experiment.logFeedback` and `Logger.logFeedback`, this method does not accept an id parameter, because it logs feedback to the current span.
    *
-   * @param event: Data to be logged. See `Experiment.logFeedback` for full details.
+   * @param event: Data to be logged. See {@link Experiment.logFeedback} for full details.
    */
   logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void;
 
@@ -131,8 +131,8 @@ export interface Span extends Exportable {
    * @param args.start_time Optional start time of the span, as a timestamp in seconds.
    * @param args.setCurrent If true (the default), the span will be marked as the currently-active span for the duration of the callback.
    * @param args.parent Optional parent info string for the span. The string can be generated from `[Span,Experiment,Logger].export`. If not provided, the current span will be used (depending on context). This is useful for adding spans to an existing trace.
-   * @param args.event Data to be logged. See `Experiment.log` for full details.
-   * @Returns The result of running `callback`.
+   * @param args.event Data to be logged. See {@link Experiment.log} for full details.
+   * @returns The result of running `callback`.
    */
   traced<R>(
     callback: (span: Span) => R,
@@ -144,7 +144,7 @@ export interface Span extends Exportable {
    * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
    * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
    *
-   * See `traced` for full details.
+   * See {@link Span.traced} for full details.
    *
    * @returns The newly-created `Span`
    */
@@ -461,8 +461,11 @@ export class BraintrustState {
 
 let _globalState: BraintrustState;
 
-// This function should be invoked exactly once after configuring the `iso`
-// object based on the platform. See js/src/node.ts for an example.
+/**
+ * This function should be invoked exactly once after configuring the `iso`
+ * object based on the platform. See js/src/node.ts for an example.
+ * @internal
+ */
 export function _internalSetInitialState() {
   if (_globalState) {
     throw new Error("Cannot set initial state more than once");
@@ -473,6 +476,9 @@ export function _internalSetInitialState() {
       /*empty login options*/
     });
 }
+/**
+ * @internal
+ */
 export const _internalGetGlobalState = () => _globalState;
 
 export class FailedHTTPResponse extends Error {
@@ -687,6 +693,206 @@ export interface LogOptions<IsAsyncFlush> {
 
 export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
 
+export interface AttachmentParams {
+  data: string | Blob | ArrayBuffer;
+  filename: string;
+  contentType: string;
+  state?: BraintrustState;
+}
+
+/**
+ * Represents an attachment to be uploaded and the associated metadata.
+ * `Attachment` objects can be inserted anywhere in an event, allowing you to
+ * log arbitrary file data. The SDK will asynchronously upload the file to
+ * object storage and replace the `Attachment` object with an
+ * `AttachmentReference`.
+ */
+export class Attachment {
+  /**
+   * The object that replaces this `Attachment` at upload time.
+   */
+  readonly reference: AttachmentReference;
+
+  private readonly uploader: LazyValue<AttachmentStatus>;
+  private readonly data: LazyValue<Blob>;
+  private readonly state?: BraintrustState;
+  // For debug logging only.
+  private readonly dataDebugString: string;
+
+  /**
+   * Construct an attachment.
+   *
+   * @param data A string representing the path of the file on disk, or a
+   * `Blob`/`ArrayBuffer` with the file's contents. The caller is responsible
+   * for ensuring the file/blob/buffer is not modified until upload is complete.
+   *
+   * @param filename The desired name of the file in Braintrust after uploading.
+   * This parameter is for visualization purposes only and has no effect on
+   * attachment storage.
+   *
+   * @param contentType The MIME type of the file.
+   *
+   * @param state (Optional) For internal use.
+   */
+  constructor({ data, filename, contentType, state }: AttachmentParams) {
+    this.reference = {
+      type: BRAINTRUST_ATTACHMENT,
+      filename,
+      content_type: contentType,
+      key: newId(),
+    };
+    this.state = state;
+    this.dataDebugString = typeof data === "string" ? data : "<in-memory data>";
+
+    this.data = this.initData(data);
+    this.uploader = this.initUploader();
+  }
+
+  /**
+   * On first access, (1) reads the attachment from disk if needed, (2)
+   * authenticates with the data plane to request a signed URL, (3) uploads to
+   * object store, and (4) updates the attachment.
+   *
+   * @returns The attachment status.
+   */
+  async upload() {
+    return await this.uploader.get();
+  }
+
+  /**
+   * A human-readable description for logging and debugging.
+   *
+   * @returns The debug object. The return type is not stable and may change in
+   * a future release.
+   */
+  debugInfo(): Record<string, unknown> {
+    return {
+      inputData: this.dataDebugString,
+      reference: this.reference,
+      state: this.state,
+    };
+  }
+
+  private initUploader(): LazyValue<AttachmentStatus> {
+    const doUpload = async (conn: HTTPConnection, orgId: string) => {
+      const requestParams = {
+        key: this.reference.key,
+        filename: this.reference.filename,
+        content_type: this.reference.content_type,
+        org_id: orgId,
+      };
+      const [metadataPromiseResult, dataPromiseResult] =
+        await Promise.allSettled([
+          conn.post("/attachment", requestParams),
+          this.data.get(),
+        ]);
+      if (metadataPromiseResult.status === "rejected") {
+        const errorStr = JSON.stringify(metadataPromiseResult.reason);
+        throw new Error(
+          `Failed to request signed URL from API server: ${errorStr}`,
+        );
+      }
+      if (dataPromiseResult.status === "rejected") {
+        const errorStr = JSON.stringify(dataPromiseResult.reason);
+        throw new Error(`Failed to read file: ${errorStr}`);
+      }
+      const metadataResponse = metadataPromiseResult.value;
+      const data = dataPromiseResult.value;
+
+      let signedUrl: string | undefined;
+      let headers: Record<string, string>;
+      try {
+        ({ signedUrl, headers } = z
+          .object({
+            signedUrl: z.string().url(),
+            headers: z.record(z.string()),
+          })
+          .parse(await metadataResponse.json()));
+      } catch (error) {
+        if (error instanceof ZodError) {
+          const errorStr = JSON.stringify(error.flatten());
+          throw new Error(`Invalid response from API server: ${errorStr}`);
+        }
+        throw error;
+      }
+
+      // TODO multipart upload.
+      let objectStoreResponse: Response | undefined;
+      try {
+        objectStoreResponse = await checkResponse(
+          await fetch(signedUrl, {
+            method: "PUT",
+            headers,
+            body: data,
+          }),
+        );
+      } catch (error) {
+        if (error instanceof FailedHTTPResponse) {
+          throw new Error(
+            `Failed to upload attachment to object store: ${error.status} ${error.text} ${error.data}`,
+          );
+        }
+        throw error;
+      }
+
+      return { signedUrl, metadataResponse, objectStoreResponse };
+    };
+
+    // Catches error messages and updates the attachment status.
+    const errorWrapper = async () => {
+      const status: AttachmentStatus = { upload_status: "done" };
+
+      const state = this.state ?? _globalState;
+      await state.login({});
+
+      const conn = state.apiConn();
+      const orgId = state.orgId ?? "";
+
+      try {
+        await doUpload(conn, orgId);
+      } catch (error) {
+        status.upload_status = "error";
+        status.error_message =
+          error instanceof Error ? error.message : JSON.stringify(error);
+      }
+
+      const requestParams = {
+        key: this.reference.key,
+        org_id: orgId,
+        status,
+      };
+      const statusResponse = await conn.post(
+        "/attachment/status",
+        requestParams,
+      );
+      if (!statusResponse.ok) {
+        const errorStr = JSON.stringify(statusResponse);
+        throw new Error(`Couldn't log attachment status: ${errorStr}`);
+      }
+
+      return status;
+    };
+
+    return new LazyValue(errorWrapper);
+  }
+
+  private initData(data: string | Blob | ArrayBuffer): LazyValue<Blob> {
+    if (typeof data === "string") {
+      const readFile = iso.readFile;
+      if (!readFile) {
+        throw new Error(
+          `This platform does not support reading the filesystem. Construct the Attachment
+with a Blob/ArrayBuffer, or run the program on Node.js.`,
+        );
+      }
+      // This could stream the file in the future.
+      return new LazyValue(async () => new Blob([await readFile(data)]));
+    } else {
+      return new LazyValue(async () => new Blob([data]));
+    }
+  }
+}
+
 function logFeedbackImpl(
   state: BraintrustState,
   parentObjectType: SpanObjectTypeV3,
@@ -725,7 +931,7 @@ function logFeedbackImpl(
     tags,
   });
 
-  let { metadata, ...updateEvent } = validatedEvent;
+  let { metadata, ...updateEvent } = deepCopyEvent(validatedEvent);
   updateEvent = Object.fromEntries(
     Object.entries(updateEvent).filter(([_, v]) => !isEmpty(v)),
   );
@@ -785,10 +991,12 @@ function updateSpanImpl({
   id: string;
   event: Omit<Partial<ExperimentEvent>, "id">;
 }): void {
-  const updateEvent = validateAndSanitizeExperimentLogPartialArgs({
-    id,
-    ...event,
-  } as Partial<ExperimentEvent>);
+  const updateEvent = deepCopyEvent(
+    validateAndSanitizeExperimentLogPartialArgs({
+      id,
+      ...event,
+    } as Partial<ExperimentEvent>),
+  );
 
   const parentIds = async () =>
     new SpanComponentsV3({
@@ -811,7 +1019,7 @@ function updateSpanImpl({
  * the span may conflict with the original span.
  *
  * @param exported The output of `span.export()`.
- * @param event The event data to update the span with. See `Experiment.log` for a full list of valid fields.
+ * @param event The event data to update the span with. See {@link Experiment.log} for a full list of valid fields.
  * @param state (optional) Login state to use. If not provided, the global state will be used.
  */
 export function updateSpan({
@@ -1072,7 +1280,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
    * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
    * @param options Additional logging options
    * @param options.allowConcurrentWithSpans in rare cases where you need to log at the top level separately from spans on the logger elsewhere, set this to true.
-   * :returns: The `id` of the logged event.
+   * @returns The `id` of the logged event.
    */
   public log(
     event: Readonly<StartSpanEventArgs>,
@@ -1101,7 +1309,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   /**
    * Create a new toplevel span underneath the logger. The name defaults to "root".
    *
-   * See `Span.traced` for full details.
+   * See {@link Span.traced} for full details.
    */
   public traced<R>(
     callback: (span: Span) => R,
@@ -1142,7 +1350,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
    * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
    * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
    *
-   * See `traced` for full details.
+   * See {@link traced} for full details.
    */
   public startSpan(args?: StartSpanArgs): Span {
     this.calledStartSpan = true;
@@ -1185,7 +1393,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
    * Update a span in the experiment using its id. It is important that you only update a span once the original span has been fully written and flushed,
    * since otherwise updates to the span may conflict with the original span.
    *
-   * @param event The event data to update the span with. Must include `id`. See `Experiment.log` for a full list of valid fields.
+   * @param event The event data to update the span with. Must include `id`. See {@link Experiment.log} for a full list of valid fields.
    */
   public updateSpan(
     event: Omit<Partial<ExperimentEvent>, "id"> &
@@ -1205,7 +1413,9 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   }
 
   /**
-   * Return a serialized representation of the logger that can be used to start subspans in other places. See `Span.start_span` for more details.
+   * Return a serialized representation of the logger that can be used to start subspans in other places.
+   *
+   * See {@link Span.startSpan} for more details.
    */
   public async export(): Promise<string> {
     // Note: it is important that the object id we are checking for
@@ -1390,7 +1600,7 @@ class BackgroundLogger {
     const wrappedItems = this.items;
     this.items = [];
 
-    const allItems = await this.unwrapLazyValues(wrappedItems);
+    const [allItems, attachments] = await this.unwrapLazyValues(wrappedItems);
     if (allItems.length === 0) {
       return;
     }
@@ -1428,6 +1638,25 @@ class BackgroundLogger {
       }
     }
 
+    const attachmentErrors: unknown[] = [];
+    // For now, upload attachments serially.
+    for (const attachment of attachments) {
+      try {
+        const result = await attachment.upload();
+        if (result.upload_status === "error" && result.error_message) {
+          attachmentErrors.push(new Error(result.error_message));
+        }
+      } catch (error) {
+        attachmentErrors.push(error);
+      }
+    }
+    if (attachmentErrors.length > 0) {
+      throw new AggregateError(
+        attachmentErrors,
+        `Encountered the following errors while uploading attachments:`,
+      );
+    }
+
     // If more items were added while we were flushing, flush again
     if (this.items.length > 0) {
       await this.flushOnce(args);
@@ -1436,11 +1665,20 @@ class BackgroundLogger {
 
   private async unwrapLazyValues(
     wrappedItems: LazyValue<BackgroundLogEvent>[],
-  ): Promise<BackgroundLogEvent[][]> {
+  ): Promise<[BackgroundLogEvent[][], Attachment[]]> {
     for (let i = 0; i < this.numTries; ++i) {
       try {
-        const itemPromises = wrappedItems.map((x) => x.get());
-        return mergeRowBatch(await Promise.all(itemPromises));
+        const items = await Promise.all(wrappedItems.map((x) => x.get()));
+
+        // TODO(kevin): `extractAttachments` should ideally come after
+        // `mergeRowBatch`, since merge-overwriting could result in some
+        // attachments that no longer need to be uploaded. This would require
+        // modifying the merge logic to treat the Attachment object as a "leaf"
+        // rather than attempting to merge the keys of the Attachment.
+        const attachments: Attachment[] = [];
+        items.forEach((item) => extractAttachments(item, attachments));
+
+        return [mergeRowBatch(items), attachments];
       } catch (e) {
         let errmsg = "Encountered error when constructing records to flush";
         const isRetrying = i + 1 < this.numTries;
@@ -1460,7 +1698,7 @@ class BackgroundLogger {
     console.warn(
       `Failed to construct log records to flush after ${this.numTries} attempts. Dropping batch`,
     );
-    return [];
+    return [[], []];
   }
 
   private async submitLogsRequest(items: string[]): Promise<void> {
@@ -1566,15 +1804,20 @@ class BackgroundLogger {
       return;
     }
     try {
-      const allItems = await this.unwrapLazyValues(wrappedItems);
+      const [allItems, allAttachments] =
+        await this.unwrapLazyValues(wrappedItems);
+
       const dataStr = constructLogs3Data(
         allItems.map((x) => JSON.stringify(x)),
       );
+      const attachmentStr = JSON.stringify(
+        allAttachments.map((a) => a.debugInfo()),
+      );
+
+      const payload = `{"data": ${dataStr}, "attachments": ${attachmentStr}}\n`;
+
       for (const payloadDir of publishPayloadsDir) {
-        await BackgroundLogger.writePayloadToDir({
-          payloadDir,
-          payload: dataStr,
-        });
+        await BackgroundLogger.writePayloadToDir({ payloadDir, payload });
       }
     } catch (e) {
       console.error(e);
@@ -1943,7 +2186,7 @@ export function initExperiment<IsOpen extends boolean = false>(
 }
 
 /**
- * This function is deprecated. Use `init` instead.
+ * @deprecated Use {@link init} instead.
  */
 export function withExperiment<R>(
   project: string,
@@ -1958,7 +2201,7 @@ export function withExperiment<R>(
 }
 
 /**
- * This function is deprecated. Use `initLogger` instead.
+ * @deprecated Use {@link initLogger} instead.
  */
 export function withLogger<IsAsyncFlush extends boolean = false, R = void>(
   callback: (logger: Logger<IsAsyncFlush>) => R,
@@ -1980,6 +2223,7 @@ type InitDatasetOptions<IsLegacyDataset extends boolean> = FullLoginOptions & {
   description?: string;
   version?: string;
   projectId?: string;
+  metadata?: Record<string, unknown>;
   state?: BraintrustState;
 } & UseOutputOption<IsLegacyDataset>;
 
@@ -1998,6 +2242,7 @@ type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
  * @param options.projectId The id of the project to create the dataset in. This takes precedence over `project` if specified.
+ * @param options.metadata A dictionary with additional data about the dataset. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
  * @param options.useOutput (Deprecated) If true, records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This option will be removed in a future version of Braintrust.
  * @returns The newly created Dataset.
  */
@@ -2009,8 +2254,9 @@ export function initDataset<
 
 /**
  * Legacy form of `initDataset` which accepts the project name as the first
- * parameter, separately from the remaining options. See
- * `initDataset(options)` for full details.
+ * parameter, separately from the remaining options.
+ *
+ * See `initDataset(options)` for full details.
  */
 export function initDataset<
   IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET,
@@ -2054,6 +2300,7 @@ export function initDataset<
     fetch,
     forceLogin,
     projectId,
+    metadata,
     useOutput: legacy,
     state: stateArg,
   } = options;
@@ -2076,6 +2323,7 @@ export function initDataset<
         project_id: projectId,
         dataset_name: dataset,
         description,
+        metadata,
       };
       const response = await state
         .appConn()
@@ -2100,7 +2348,7 @@ export function initDataset<
 }
 
 /**
- * This function is deprecated. Use `initDataset` instead.
+ * @deprecated Use {@link initDataset} instead.
  */
 export function withDataset<
   R,
@@ -2473,7 +2721,7 @@ export async function loginToState(options: LoginOptions = {}) {
 /**
  * Log a single event to the current experiment. The event will be batched and uploaded behind the scenes.
  *
- * @param event The event to log. See `Experiment.log` for full details.
+ * @param event The event to log. See {@link Experiment.log} for full details.
  * @returns The `id` of the logged event.
  */
 export function log(event: ExperimentLogFullArgs): string {
@@ -2516,7 +2764,7 @@ type OptionalStateArg = {
 };
 
 /**
- * Returns the currently-active experiment (set by `braintrust.init`). Returns undefined if no current experiment has been set.
+ * Returns the currently-active experiment (set by {@link init}). Returns undefined if no current experiment has been set.
  */
 export function currentExperiment(
   options?: OptionalStateArg,
@@ -2526,7 +2774,7 @@ export function currentExperiment(
 }
 
 /**
- * Returns the currently-active logger (set by `braintrust.initLogger`). Returns undefined if no current logger has been set.
+ * Returns the currently-active logger (set by {@link initLogger}). Returns undefined if no current logger has been set.
  */
 export function currentLogger<IsAsyncFlush extends boolean>(
   options?: AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
@@ -2538,7 +2786,7 @@ export function currentLogger<IsAsyncFlush extends boolean>(
 /**
  * Return the currently-active span for logging (set by one of the `traced` methods). If there is no active span, returns a no-op span object, which supports the same interface as spans but does no logging.
  *
- * See `Span` for full details.
+ * See {@link Span} for full details.
  */
 export function currentSpan(options?: OptionalStateArg): Span {
   const state = options?.state ?? _globalState;
@@ -2587,7 +2835,7 @@ export function logError(span: Span, error: unknown) {
  *
  * and creates a span under the first one that is active. Alternatively, if `parent` is specified, it creates a span under the specified parent row. If none of these are active, it returns a no-op span object.
  *
- * See `Span.traced` for full details.
+ * See {@link Span.traced} for full details.
  */
 export function traced<IsAsyncFlush extends boolean = false, R = void>(
   callback: (span: Span) => R,
@@ -2728,7 +2976,7 @@ export const traceable = wrapTraced;
  * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
  * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
  *
- * See `traced` for full details.
+ * See {@link traced} for full details.
  */
 export function startSpan<IsAsyncFlush extends boolean = false>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
@@ -2921,6 +3169,76 @@ function validateAndSanitizeExperimentLogPartialArgs(
     return { input: inputs, ...rest };
   } else {
     return { ...event };
+  }
+}
+
+/**
+ * Creates a deep copy of the given event. Replaces references to user objects
+ * with placeholder strings to ensure serializability, except for
+ * {@link Attachment} objects, which are preserved and not deep-copied.
+ */
+function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
+  const attachments: Attachment[] = [];
+  const IDENTIFIER = "_bt_internal_saved_attachment";
+  const savedAttachmentSchema = z.strictObject({ [IDENTIFIER]: z.number() });
+
+  // We both check for serializability and round-trip `event` through JSON in
+  // order to create a "deep copy". This has the benefit of cutting out any
+  // reference to user objects when the object is logged asynchronously, so that
+  // in case the objects are modified, the logging is unaffected. In the future,
+  // this could be changed to a "real" deep copy so that immutable types (long
+  // strings) do not have to be copied.
+  const serialized = JSON.stringify(event, (_k, v) => {
+    if (v instanceof SpanImpl || v instanceof NoopSpan) {
+      return `<span>`;
+    } else if (v instanceof Experiment) {
+      return `<experiment>`;
+    } else if (v instanceof Dataset) {
+      return `<dataset>`;
+    } else if (v instanceof Logger) {
+      return `<logger>`;
+    } else if (v instanceof Attachment) {
+      const idx = attachments.push(v);
+      return { [IDENTIFIER]: idx - 1 };
+    }
+    return v;
+  });
+  const x = JSON.parse(serialized, (_k, v) => {
+    const parsedAttachment = savedAttachmentSchema.safeParse(v);
+    if (parsedAttachment.success) {
+      return attachments[parsedAttachment.data[IDENTIFIER]];
+    }
+    return v;
+  });
+  return x;
+}
+
+/**
+ * Helper function for uploading attachments. Recursively extracts `Attachment`
+ * values and replaces them with their associated `AttachmentReference` objects.
+ *
+ * @param event The event to filter. Will be modified in-place.
+ * @param attachments Flat array of extracted attachments (output parameter).
+ */
+function extractAttachments(
+  event: Record<string, any>,
+  attachments: Attachment[],
+): void {
+  for (const [key, value] of Object.entries(event)) {
+    // Base case: Attachment.
+    if (value instanceof Attachment) {
+      attachments.push(value);
+      event[key] = value.reference;
+      continue; // Attachment cannot be nested.
+    }
+
+    // Base case: non-object.
+    if (!(value instanceof Object)) {
+      continue; // Nothing to explore recursively.
+    }
+
+    // Recursive case: object or array.
+    extractAttachments(value, attachments);
   }
 }
 
@@ -3126,7 +3444,7 @@ export class Experiment
    * @param event.inputs: (Deprecated) the same as `input` (will be removed in a future version).
    * @param options Additional logging options
    * @param options.allowConcurrentWithSpans in rare cases where you need to log at the top level separately from spans on the experiment elsewhere, set this to true.
-   * :returns: The `id` of the logged event.
+   * @returns The `id` of the logged event.
    */
   public log(
     event: Readonly<ExperimentLogFullArgs>,
@@ -3147,7 +3465,7 @@ export class Experiment
   /**
    * Create a new toplevel span underneath the experiment. The name defaults to "root".
    *
-   * See `Span.traced` for full details.
+   * See {@link Span.traced} for full details.
    */
   public traced<R>(
     callback: (span: Span) => R,
@@ -3179,7 +3497,7 @@ export class Experiment
    * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
    * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
    *
-   * See `traced` for full details.
+   * See {@link traced} for full details.
    */
   public startSpan(args?: StartSpanArgs): Span {
     this.calledStartSpan = true;
@@ -3310,7 +3628,7 @@ export class Experiment
    * Update a span in the experiment using its id. It is important that you only update a span once the original span has been fully written and flushed,
    * since otherwise updates to the span may conflict with the original span.
    *
-   * @param event The event data to update the span with. Must include `id`. See `Experiment.log` for a full list of valid fields.
+   * @param event The event data to update the span with. Must include `id`. See {@link Experiment.log} for a full list of valid fields.
    */
   public updateSpan(
     event: Omit<Partial<ExperimentEvent>, "id"> &
@@ -3330,7 +3648,9 @@ export class Experiment
   }
 
   /**
-   * Return a serialized representation of the experiment that can be used to start subspans in other places. See `Span.start_span` for more details.
+   * Return a serialized representation of the experiment that can be used to start subspans in other places.
+   *
+   * See {@link Span.startSpan} for more details.
    */
   public async export(): Promise<string> {
     return new SpanComponentsV3({
@@ -3347,7 +3667,7 @@ export class Experiment
   }
 
   /**
-   * This function is deprecated. You can simply remove it from your code.
+   * @deprecated This function is deprecated. You can simply remove it from your code.
    */
   public async close(): Promise<string> {
     console.warn(
@@ -3421,9 +3741,9 @@ export function newId() {
 }
 
 /**
- * Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
+ * Primary implementation of the `Span` interface. See {@link Span} for full details on each method.
  *
- * We suggest using one of the various `traced` methods, instead of creating Spans directly. See `Span.startSpan` for full details.
+ * We suggest using one of the various `traced` methods, instead of creating Spans directly. See {@link Span.startSpan} for full details.
  */
 export class SpanImpl implements Span {
   private state: BraintrustState;
@@ -3546,32 +3866,16 @@ export class SpanImpl implements Span {
       internalData,
     });
 
-    // We both check for serializability and round-trip `partialRecord` through
-    // JSON in order to create a "deep copy". This has the benefit of cutting
-    // out any reference to user objects when the object is logged
-    // asynchronously, so that in case the objects are modified, the logging is
-    // unaffected.
-    let partialRecord = {
+    // Deep copy mutable user data.
+    const partialRecord = deepCopyEvent({
       id: this.id,
       span_id: this.spanId,
       root_span_id: this.rootSpanId,
       span_parents: this.spanParents,
       ...serializableInternalData,
       [IS_MERGE_FIELD]: this.isMerge,
-    };
-    const serializedPartialRecord = JSON.stringify(partialRecord, (_k, v) => {
-      if (v instanceof SpanImpl) {
-        return `<span>`;
-      } else if (v instanceof Experiment) {
-        return `<experiment>`;
-      } else if (v instanceof Dataset) {
-        return `<dataset>`;
-      } else if (v instanceof Logger) {
-        return `<logger>`;
-      }
-      return v;
     });
-    partialRecord = JSON.parse(serializedPartialRecord);
+
     if (partialRecord.metrics?.end) {
       this.loggedEndTime = partialRecord.metrics?.end as number;
     }
@@ -3893,15 +4197,17 @@ export class Dataset<
     this.validateEvent({ metadata, expected, output, tags });
 
     const rowId = id || uuidv4();
-    const args = this.createArgs({
-      id: rowId,
-      input,
-      expected,
-      metadata,
-      tags,
-      output,
-      isMerge: false,
-    });
+    const args = this.createArgs(
+      deepCopyEvent({
+        id: rowId,
+        input,
+        expected,
+        metadata,
+        tags,
+        output,
+        isMerge: false,
+      }),
+    );
 
     this.state.bgLogger().log([args]);
     return rowId;
@@ -3935,14 +4241,16 @@ export class Dataset<
   }): string {
     this.validateEvent({ metadata, expected, tags });
 
-    const args = this.createArgs({
-      id,
-      input,
-      expected,
-      metadata,
-      tags,
-      isMerge: true,
-    });
+    const args = this.createArgs(
+      deepCopyEvent({
+        id,
+        input,
+        expected,
+        metadata,
+        tags,
+        isMerge: true,
+      }),
+    );
 
     this.state.bgLogger().log([args]);
     return id;
@@ -4008,7 +4316,7 @@ export class Dataset<
   }
 
   /**
-   * This function is deprecated. You can simply remove it from your code.
+   * @deprecated This function is deprecated. You can simply remove it from your code.
    */
   public async close(): Promise<string> {
     console.warn(
@@ -4373,3 +4681,9 @@ export interface DatasetSummary {
   datasetUrl: string;
   dataSummary: DataSummary;
 }
+
+/**
+ * Allows accessing helper functions for testing.
+ * @internal
+ */
+export const _exportsForTestingOnly = { extractAttachments, deepCopyEvent };
