@@ -48,8 +48,10 @@ import {
   GitMetadataSettings,
   RepoInfo,
   gitMetadataSettingsSchema,
+  AttachmentReference,
+  AttachmentStatus,
+  BRAINTRUST_ATTACHMENT,
 } from "@braintrust/core/typespecs";
-
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
 import {
   runCatchFinally,
@@ -59,7 +61,7 @@ import {
   LazyValue,
 } from "./util";
 import Mustache from "mustache";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import {
   BraintrustStream,
   createFinalValuePassThroughStream,
@@ -680,6 +682,206 @@ export interface LogOptions<IsAsyncFlush> {
 
 export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
 
+export interface AttachmentParams {
+  data: string | Blob | ArrayBuffer;
+  filename: string;
+  contentType: string;
+  state?: BraintrustState;
+}
+
+/**
+ * Represents an attachment to be uploaded and the associated metadata.
+ * `Attachment` objects can be inserted anywhere in an event, allowing you to
+ * log arbitrary file data. The SDK will asynchronously upload the file to
+ * object storage and replace the `Attachment` object with an
+ * `AttachmentReference`.
+ */
+export class Attachment {
+  /**
+   * The object that replaces this `Attachment` at upload time.
+   */
+  readonly reference: AttachmentReference;
+
+  private readonly uploader: LazyValue<AttachmentStatus>;
+  private readonly data: LazyValue<Blob>;
+  private readonly state?: BraintrustState;
+  // For debug logging only.
+  private readonly dataDebugString: string;
+
+  /**
+   * Construct an attachment.
+   *
+   * @param data A string representing the path of the file on disk, or a
+   * `Blob`/`ArrayBuffer` with the file's contents. The caller is responsible
+   * for ensuring the file/blob/buffer is not modified until upload is complete.
+   *
+   * @param filename The desired name of the file in Braintrust after uploading.
+   * This parameter is for visualization purposes only and has no effect on
+   * attachment storage.
+   *
+   * @param contentType The MIME type of the file.
+   *
+   * @param state (Optional) For internal use.
+   */
+  constructor({ data, filename, contentType, state }: AttachmentParams) {
+    this.reference = {
+      type: BRAINTRUST_ATTACHMENT,
+      filename,
+      content_type: contentType,
+      key: newId(),
+    };
+    this.state = state;
+    this.dataDebugString = typeof data === "string" ? data : "<in-memory data>";
+
+    this.data = this.initData(data);
+    this.uploader = this.initUploader();
+  }
+
+  /**
+   * On first access, (1) reads the attachment from disk if needed, (2)
+   * authenticates with the data plane to request a signed URL, (3) uploads to
+   * object store, and (4) updates the attachment.
+   *
+   * @returns The attachment status.
+   */
+  async upload() {
+    return await this.uploader.get();
+  }
+
+  /**
+   * A human-readable description for logging and debugging.
+   *
+   * @returns The debug object. The return type is not stable and may change in
+   * a future release.
+   */
+  debugInfo(): Record<string, unknown> {
+    return {
+      inputData: this.dataDebugString,
+      reference: this.reference,
+      state: this.state,
+    };
+  }
+
+  private initUploader(): LazyValue<AttachmentStatus> {
+    const doUpload = async (conn: HTTPConnection, orgId: string) => {
+      const requestParams = {
+        key: this.reference.key,
+        filename: this.reference.filename,
+        content_type: this.reference.content_type,
+        org_id: orgId,
+      };
+      const [metadataPromiseResult, dataPromiseResult] =
+        await Promise.allSettled([
+          conn.post("/attachment", requestParams),
+          this.data.get(),
+        ]);
+      if (metadataPromiseResult.status === "rejected") {
+        const errorStr = JSON.stringify(metadataPromiseResult.reason);
+        throw new Error(
+          `Failed to request signed URL from API server: ${errorStr}`,
+        );
+      }
+      if (dataPromiseResult.status === "rejected") {
+        const errorStr = JSON.stringify(dataPromiseResult.reason);
+        throw new Error(`Failed to read file: ${errorStr}`);
+      }
+      const metadataResponse = metadataPromiseResult.value;
+      const data = dataPromiseResult.value;
+
+      let signedUrl: string | undefined;
+      let headers: Record<string, string>;
+      try {
+        ({ signedUrl, headers } = z
+          .object({
+            signedUrl: z.string().url(),
+            headers: z.record(z.string()),
+          })
+          .parse(await metadataResponse.json()));
+      } catch (error) {
+        if (error instanceof ZodError) {
+          const errorStr = JSON.stringify(error.flatten());
+          throw new Error(`Invalid response from API server: ${errorStr}`);
+        }
+        throw error;
+      }
+
+      // TODO multipart upload.
+      let objectStoreResponse: Response | undefined;
+      try {
+        objectStoreResponse = await checkResponse(
+          await fetch(signedUrl, {
+            method: "PUT",
+            headers,
+            body: data,
+          }),
+        );
+      } catch (error) {
+        if (error instanceof FailedHTTPResponse) {
+          throw new Error(
+            `Failed to upload attachment to object store: ${error.status} ${error.text} ${error.data}`,
+          );
+        }
+        throw error;
+      }
+
+      return { signedUrl, metadataResponse, objectStoreResponse };
+    };
+
+    // Catches error messages and updates the attachment status.
+    const errorWrapper = async () => {
+      const status: AttachmentStatus = { upload_status: "done" };
+
+      const state = this.state ?? _globalState;
+      await state.login({});
+
+      const conn = state.apiConn();
+      const orgId = state.orgId ?? "";
+
+      try {
+        await doUpload(conn, orgId);
+      } catch (error) {
+        status.upload_status = "error";
+        status.error_message =
+          error instanceof Error ? error.message : JSON.stringify(error);
+      }
+
+      const requestParams = {
+        key: this.reference.key,
+        org_id: orgId,
+        status,
+      };
+      const statusResponse = await conn.post(
+        "/attachment/status",
+        requestParams,
+      );
+      if (!statusResponse.ok) {
+        const errorStr = JSON.stringify(statusResponse);
+        throw new Error(`Couldn't log attachment status: ${errorStr}`);
+      }
+
+      return status;
+    };
+
+    return new LazyValue(errorWrapper);
+  }
+
+  private initData(data: string | Blob | ArrayBuffer): LazyValue<Blob> {
+    if (typeof data === "string") {
+      const readFile = iso.readFile;
+      if (!readFile) {
+        throw new Error(
+          `This platform does not support reading the filesystem. Construct the Attachment
+with a Blob/ArrayBuffer, or run the program on Node.js.`,
+        );
+      }
+      // This could stream the file in the future.
+      return new LazyValue(async () => new Blob([await readFile(data)]));
+    } else {
+      return new LazyValue(async () => new Blob([data]));
+    }
+  }
+}
+
 function logFeedbackImpl(
   state: BraintrustState,
   parentObjectType: SpanObjectTypeV3,
@@ -718,7 +920,7 @@ function logFeedbackImpl(
     tags,
   });
 
-  let { metadata, ...updateEvent } = validatedEvent;
+  let { metadata, ...updateEvent } = deepCopyEvent(validatedEvent);
   updateEvent = Object.fromEntries(
     Object.entries(updateEvent).filter(([_, v]) => !isEmpty(v)),
   );
@@ -778,10 +980,12 @@ function updateSpanImpl({
   id: string;
   event: Omit<Partial<ExperimentEvent>, "id">;
 }): void {
-  const updateEvent = validateAndSanitizeExperimentLogPartialArgs({
-    id,
-    ...event,
-  } as Partial<ExperimentEvent>);
+  const updateEvent = deepCopyEvent(
+    validateAndSanitizeExperimentLogPartialArgs({
+      id,
+      ...event,
+    } as Partial<ExperimentEvent>),
+  );
 
   const parentIds = async () =>
     new SpanComponentsV3({
@@ -1385,7 +1589,7 @@ class BackgroundLogger {
     const wrappedItems = this.items;
     this.items = [];
 
-    const allItems = await this.unwrapLazyValues(wrappedItems);
+    const [allItems, attachments] = await this.unwrapLazyValues(wrappedItems);
     if (allItems.length === 0) {
       return;
     }
@@ -1423,6 +1627,25 @@ class BackgroundLogger {
       }
     }
 
+    const attachmentErrors: unknown[] = [];
+    // For now, upload attachments serially.
+    for (const attachment of attachments) {
+      try {
+        const result = await attachment.upload();
+        if (result.upload_status === "error" && result.error_message) {
+          attachmentErrors.push(new Error(result.error_message));
+        }
+      } catch (error) {
+        attachmentErrors.push(error);
+      }
+    }
+    if (attachmentErrors.length > 0) {
+      throw new AggregateError(
+        attachmentErrors,
+        `Encountered the following errors while uploading attachments:`,
+      );
+    }
+
     // If more items were added while we were flushing, flush again
     if (this.items.length > 0) {
       await this.flushOnce(args);
@@ -1431,11 +1654,20 @@ class BackgroundLogger {
 
   private async unwrapLazyValues(
     wrappedItems: LazyValue<BackgroundLogEvent>[],
-  ): Promise<BackgroundLogEvent[][]> {
+  ): Promise<[BackgroundLogEvent[][], Attachment[]]> {
     for (let i = 0; i < this.numTries; ++i) {
       try {
-        const itemPromises = wrappedItems.map((x) => x.get());
-        return mergeRowBatch(await Promise.all(itemPromises));
+        const items = await Promise.all(wrappedItems.map((x) => x.get()));
+
+        // TODO(kevin): `extractAttachments` should ideally come after
+        // `mergeRowBatch`, since merge-overwriting could result in some
+        // attachments that no longer need to be uploaded. This would require
+        // modifying the merge logic to treat the Attachment object as a "leaf"
+        // rather than attempting to merge the keys of the Attachment.
+        const attachments: Attachment[] = [];
+        items.forEach((item) => extractAttachments(item, attachments));
+
+        return [mergeRowBatch(items), attachments];
       } catch (e) {
         let errmsg = "Encountered error when constructing records to flush";
         const isRetrying = i + 1 < this.numTries;
@@ -1455,7 +1687,7 @@ class BackgroundLogger {
     console.warn(
       `Failed to construct log records to flush after ${this.numTries} attempts. Dropping batch`,
     );
-    return [];
+    return [[], []];
   }
 
   private async submitLogsRequest(items: string[]): Promise<void> {
@@ -1561,15 +1793,20 @@ class BackgroundLogger {
       return;
     }
     try {
-      const allItems = await this.unwrapLazyValues(wrappedItems);
+      const [allItems, allAttachments] =
+        await this.unwrapLazyValues(wrappedItems);
+
       const dataStr = constructLogs3Data(
         allItems.map((x) => JSON.stringify(x)),
       );
+      const attachmentStr = JSON.stringify(
+        allAttachments.map((a) => a.debugInfo()),
+      );
+
+      const payload = `{"data": ${dataStr}, "attachments": ${attachmentStr}}\n`;
+
       for (const payloadDir of publishPayloadsDir) {
-        await BackgroundLogger.writePayloadToDir({
-          payloadDir,
-          payload: dataStr,
-        });
+        await BackgroundLogger.writePayloadToDir({ payloadDir, payload });
       }
     } catch (e) {
       console.error(e);
@@ -2924,6 +3161,76 @@ function validateAndSanitizeExperimentLogPartialArgs(
   }
 }
 
+/**
+ * Creates a deep copy of the given event. Replaces references to user objects
+ * with placeholder strings to ensure serializability, except for
+ * {@link Attachment} objects, which are preserved and not deep-copied.
+ */
+function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
+  const attachments: Attachment[] = [];
+  const IDENTIFIER = "_bt_internal_saved_attachment";
+  const savedAttachmentSchema = z.strictObject({ [IDENTIFIER]: z.number() });
+
+  // We both check for serializability and round-trip `event` through JSON in
+  // order to create a "deep copy". This has the benefit of cutting out any
+  // reference to user objects when the object is logged asynchronously, so that
+  // in case the objects are modified, the logging is unaffected. In the future,
+  // this could be changed to a "real" deep copy so that immutable types (long
+  // strings) do not have to be copied.
+  const serialized = JSON.stringify(event, (_k, v) => {
+    if (v instanceof SpanImpl || v instanceof NoopSpan) {
+      return `<span>`;
+    } else if (v instanceof Experiment) {
+      return `<experiment>`;
+    } else if (v instanceof Dataset) {
+      return `<dataset>`;
+    } else if (v instanceof Logger) {
+      return `<logger>`;
+    } else if (v instanceof Attachment) {
+      const idx = attachments.push(v);
+      return { [IDENTIFIER]: idx - 1 };
+    }
+    return v;
+  });
+  const x = JSON.parse(serialized, (_k, v) => {
+    const parsedAttachment = savedAttachmentSchema.safeParse(v);
+    if (parsedAttachment.success) {
+      return attachments[parsedAttachment.data[IDENTIFIER]];
+    }
+    return v;
+  });
+  return x;
+}
+
+/**
+ * Helper function for uploading attachments. Recursively extracts `Attachment`
+ * values and replaces them with their associated `AttachmentReference` objects.
+ *
+ * @param event The event to filter. Will be modified in-place.
+ * @param attachments Flat array of extracted attachments (output parameter).
+ */
+function extractAttachments(
+  event: Record<string, any>,
+  attachments: Attachment[],
+): void {
+  for (const [key, value] of Object.entries(event)) {
+    // Base case: Attachment.
+    if (value instanceof Attachment) {
+      attachments.push(value);
+      event[key] = value.reference;
+      continue; // Attachment cannot be nested.
+    }
+
+    // Base case: non-object.
+    if (!(value instanceof Object)) {
+      continue; // Nothing to explore recursively.
+    }
+
+    // Recursive case: object or array.
+    extractAttachments(value, attachments);
+  }
+}
+
 // Note that this only checks properties that are expected of a complete event.
 // validateAndSanitizeExperimentLogPartialArgs should still be invoked (after
 // handling special fields like 'id').
@@ -3548,32 +3855,16 @@ export class SpanImpl implements Span {
       internalData,
     });
 
-    // We both check for serializability and round-trip `partialRecord` through
-    // JSON in order to create a "deep copy". This has the benefit of cutting
-    // out any reference to user objects when the object is logged
-    // asynchronously, so that in case the objects are modified, the logging is
-    // unaffected.
-    let partialRecord = {
+    // Deep copy mutable user data.
+    const partialRecord = deepCopyEvent({
       id: this.id,
       span_id: this.spanId,
       root_span_id: this.rootSpanId,
       span_parents: this.spanParents,
       ...serializableInternalData,
       [IS_MERGE_FIELD]: this.isMerge,
-    };
-    const serializedPartialRecord = JSON.stringify(partialRecord, (_k, v) => {
-      if (v instanceof SpanImpl) {
-        return `<span>`;
-      } else if (v instanceof Experiment) {
-        return `<experiment>`;
-      } else if (v instanceof Dataset) {
-        return `<dataset>`;
-      } else if (v instanceof Logger) {
-        return `<logger>`;
-      }
-      return v;
     });
-    partialRecord = JSON.parse(serializedPartialRecord);
+
     if (partialRecord.metrics?.end) {
       this.loggedEndTime = partialRecord.metrics?.end as number;
     }
@@ -3895,15 +4186,17 @@ export class Dataset<
     this.validateEvent({ metadata, expected, output, tags });
 
     const rowId = id || uuidv4();
-    const args = this.createArgs({
-      id: rowId,
-      input,
-      expected,
-      metadata,
-      tags,
-      output,
-      isMerge: false,
-    });
+    const args = this.createArgs(
+      deepCopyEvent({
+        id: rowId,
+        input,
+        expected,
+        metadata,
+        tags,
+        output,
+        isMerge: false,
+      }),
+    );
 
     this.state.bgLogger().log([args]);
     return rowId;
@@ -3937,14 +4230,16 @@ export class Dataset<
   }): string {
     this.validateEvent({ metadata, expected, tags });
 
-    const args = this.createArgs({
-      id,
-      input,
-      expected,
-      metadata,
-      tags,
-      isMerge: true,
-    });
+    const args = this.createArgs(
+      deepCopyEvent({
+        id,
+        input,
+        expected,
+        metadata,
+        tags,
+        isMerge: true,
+      }),
+    );
 
     this.state.bgLogger().log([args]);
     return id;
@@ -4375,3 +4670,9 @@ export interface DatasetSummary {
   datasetUrl: string;
   dataSummary: DataSummary;
 }
+
+/**
+ * Allows accessing helper functions for testing.
+ * @internal
+ */
+export const _exportsForTestingOnly = { extractAttachments, deepCopyEvent };

@@ -20,6 +20,7 @@ export function configureNode() {
   iso.pathDirname = path.dirname;
   iso.mkdir = fs.mkdir;
   iso.writeFile = fs.writeFile;
+  iso.readFile = fs.readFile;
 
   _internalSetInitialState();
 }
