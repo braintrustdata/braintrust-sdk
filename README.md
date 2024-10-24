@@ -9,7 +9,7 @@ This repository contains the Python and Javascript SDKs for Braintrust. The SDKs
 - Run evaluations (via the `Eval` framework)
 - Manage an on-premises installation of Braintrust (Python)
 
-## Quickstart: Typescript
+## Quickstart: TypeScript
 
 First, install the Braintrust SDK:
 
@@ -100,5 +100,5 @@ BRAINTRUST_API_KEY=<YOUR_API_KEY> \
 
 For more information, check out the [docs](https://www.braintrust.dev/docs):
 
-- [Typescript](https://www.braintrust.dev/docs/libs/nodejs)
+- [TypeScript](https://www.braintrust.dev/docs/libs/nodejs)
 - [Python](https://www.braintrust.dev/docs/libs/python)

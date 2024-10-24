@@ -181,7 +181,7 @@ async function getTsModule() {
     } catch (e) {
       console.warn(
         warning(
-          "Failed to load TypeScript module. Will not use Typescript to derive previe.",
+          "Failed to load TypeScript module. Will not use TypeScript to derive preview.",
         ),
       );
     }
