@@ -578,12 +578,17 @@ class HTTPConnection {
             )
         : [],
     ).toString();
+
+    // On platforms like Cloudflare, we lose "this" when we make an async call,
+    // so we need to bind it again.
+    const this_fetch = this.fetch;
+    const this_headers = this.headers;
     return await checkResponse(
       // Using toString() here makes it work with isomorphic fetch
-      await this.fetch(url.toString(), {
+      await this_fetch(url.toString(), {
         headers: {
           Accept: "application/json",
-          ...this.headers,
+          ...this_headers,
           ...headers,
         },
         keepalive: true,
@@ -598,13 +603,19 @@ class HTTPConnection {
     config?: RequestInit,
   ) {
     const { headers, ...rest } = config || {};
+    // On platforms like Cloudflare, we lose "this" when we make an async call,
+    // so we need to bind it again.
+    const this_fetch = this.fetch;
+    const this_base_url = this.base_url;
+    const this_headers = this.headers;
+
     return await checkResponse(
-      await this.fetch(_urljoin(this.base_url, path), {
+      await this_fetch(_urljoin(this_base_url, path), {
         method: "POST",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          ...this.headers,
+          ...this_headers,
           ...headers,
         },
         body:
@@ -3430,7 +3441,7 @@ export class Experiment
    * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
    * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
    * @param event.dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
-   * @param event.inputs: (Deprecated) the same as `input` (will be removed in a future version).
+   * @deprecated @param event.inputs: (Deprecated) the same as `input` (will be removed in a future version).
    * @param options Additional logging options
    * @param options.allowConcurrentWithSpans in rare cases where you need to log at the top level separately from spans on the experiment elsewhere, set this to true.
    * @returns The `id` of the logged event.
