@@ -19,6 +19,13 @@ export const jsonSchema: z.ZodType<Json> = z.lazy(() =>
   ]),
 );
 
+function msUnixTimestampToISO(ms: number) {
+  // https://stackoverflow.com/questions/59394911/get-isostring-in-microseconds-from-unix-timestamp
+  return new Date(ms)
+    .toISOString()
+    .replace(/\d+Z$/, String(Math.round(ms * 1000)).slice(-6) + "Z");
+}
+
 // It is often hard for us to control every piece of code that serializes
 // datetimes to strings to ensure they are always strictly ISO8601-compliant.
 // Thus asserting `z.string().datetime()` will not often work. While
@@ -40,7 +47,16 @@ export const datetimeStringSchema = z
       });
       return z.NEVER;
     }
-    return d.toISOString();
+
+    const iso = d.toISOString();
+
+    // Check if original string had microsecond precision (6 decimal digits).
+    // If so, preserve them.
+    const match = x.match(/\.\d{6}(?=[Z+-])/);
+    if (match) {
+      return iso.replace(/\.\d+Z/, match[0] + "Z");
+    }
+    return iso;
   })
   .openapi({ format: "date-time" });
 
