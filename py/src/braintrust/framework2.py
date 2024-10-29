@@ -157,6 +157,45 @@ class PromptBuilder:
         return p
 
 
+class ScorerBuilder:
+    """Builder to create a scorer in braintrust.
+
+    NOTE: This class is not yet stable.
+    """
+
+    def __init__(self, project: "Project"):
+        self.project = project
+
+    def create(
+        self,
+        handler: Any,
+        name: Optional[str] = None,
+        slug: Optional[str] = None,
+        description: Optional[str] = None,
+        parameters: Optional[Any] = None,
+        returns: Optional[Any] = None,
+        if_exists: Optional[str] = None,
+    ):
+        """Creates a scorer from handler."""
+        if not name:
+            name = handler.__name__
+        if not slug:
+            slug = slugify.slugify(name)
+        global_.functions.append(
+            CodeFunction(
+                project=self.project,
+                handler=handler,
+                name=name,
+                slug=slug,
+                type_="scorer",
+                description=description,
+                parameters=parameters,
+                returns=returns,
+                if_exists=if_exists,
+            )
+        )
+
+
 class Project:
     """A handle to a braintrust project."""
 
@@ -164,6 +203,7 @@ class Project:
         self.name = name
         self.tools = ToolBuilder(self)
         self.prompts = PromptBuilder(self)
+        self.scorers = ScorerBuilder(self)
 
 
 class ProjectBuilder:
