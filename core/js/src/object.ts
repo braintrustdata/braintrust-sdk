@@ -12,7 +12,6 @@ import {
 
 export type IdField = { id: string };
 export type InputField = { input: unknown };
-export type InputsField = { inputs: unknown };
 export type OtherExperimentLogFields = {
   output: unknown;
   expected: unknown;
@@ -28,13 +27,13 @@ export type OtherExperimentLogFields = {
 };
 
 export type ExperimentLogPartialArgs = Partial<OtherExperimentLogFields> &
-  Partial<InputField | InputsField>;
+  Partial<InputField>;
 
 export type ExperimentLogFullArgs = Partial<
   Omit<OtherExperimentLogFields, "output" | "scores">
 > &
   Required<Pick<OtherExperimentLogFields, "output" | "scores">> &
-  Partial<InputField | InputsField> &
+  Partial<InputField> &
   Partial<IdField>;
 
 export type LogFeedbackFullArgs = IdField &

@@ -26,7 +26,6 @@ export type {
   ParentProjectLogIds,
   IdField,
   InputField,
-  InputsField,
   OtherExperimentLogFields,
   ExperimentLogPartialArgs,
   ExperimentLogFullArgs,
