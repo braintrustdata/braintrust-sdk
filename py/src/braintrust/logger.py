@@ -1695,7 +1695,6 @@ def _log_feedback_impl(
         _state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
 
     if comment is not None:
-
         # pylint: disable=function-redefined
         def compute_record():
             return dict(
@@ -1905,7 +1904,7 @@ class Experiment(ObjectFetcher, Exportable):
     comparison metrics (scores), and any other metadata you want to include.
 
     Experiments are associated with a project, and two experiments are meant to be easily comparable via
-    their `inputs`. You can change the attributes of the experiments in a project (e.g. scoring functions)
+    their `input`. You can change the attributes of the experiments in a project (e.g. scoring functions)
     over time, simply by changing what you log.
 
     You should not create `Experiment` objects directly. Instead, use the `braintrust.init()` method.
@@ -1965,7 +1964,6 @@ class Experiment(ObjectFetcher, Exportable):
         metrics=None,
         id=None,
         dataset_record_id=None,
-        inputs=None,
         allow_concurrent_with_spans=False,
     ):
         """
@@ -1981,7 +1979,6 @@ class Experiment(ObjectFetcher, Exportable):
         :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
         :param dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
-        :param inputs: (Deprecated) the same as `input` (will be removed in a future version).
         :param allow_concurrent_with_spans: (Optional) in rare cases where you need to log at the top level separately from using spans on the experiment elsewhere, set this to True.
         :returns: The `id` of the logged event.
         """
@@ -2002,7 +1999,6 @@ class Experiment(ObjectFetcher, Exportable):
                 metrics=metrics,
                 id=id,
                 dataset_record_id=dataset_record_id,
-                inputs=inputs,
             ),
             self.dataset is not None,
         )
@@ -2597,7 +2593,7 @@ class Dataset(ObjectFetcher):
         args = _populate_args(
             {
                 "id": id,
-                "inputs": input,
+                "input": input,
                 "expected": expected_value,
                 "tags": tags,
                 "created": None if is_merge else datetime.datetime.now(datetime.timezone.utc).isoformat(),
