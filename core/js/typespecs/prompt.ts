@@ -77,6 +77,7 @@ const openAIModelParamsSchema = z.object({
     .union([
       z.literal("auto").openapi({ title: "auto" }),
       z.literal("none").openapi({ title: "none" }),
+      z.literal("required").openapi({ title: "none" }),
       z
         .object({
           type: z.literal("function"),
