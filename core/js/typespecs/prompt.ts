@@ -72,7 +72,21 @@ const openAIModelParamsSchema = z.object({
   max_tokens: z.number().optional(),
   frequency_penalty: z.number().optional(),
   presence_penalty: z.number().optional(),
-  response_format: z.object({ type: z.literal("json_object") }).nullish(),
+  response_format: z
+    .union([
+      z.object({ type: z.literal("json_object") }),
+      z.object({
+        type: z.literal("json_schema"),
+        json_schema: z.object({
+          name: z.string(),
+          description: z.string().optional(),
+          schema: z.record(z.unknown()).optional(),
+          strict: z.boolean().nullish(),
+        }),
+      }),
+      z.object({ type: z.literal("text") }),
+    ])
+    .nullish(),
   tool_choice: z
     .union([
       z.literal("auto").openapi({ title: "auto" }),
