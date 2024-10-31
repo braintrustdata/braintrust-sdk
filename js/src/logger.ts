@@ -1592,7 +1592,9 @@ class BackgroundLogger {
     if (this.activeFlushError) {
       const err = this.activeFlushError;
       this.activeFlushError = undefined;
-      throw err;
+      if (this.syncFlush) {
+        throw err;
+      }
     }
   }
 
@@ -1634,9 +1636,6 @@ class BackgroundLogger {
         .map((r) => (r.type === "success" ? undefined : r.value))
         .filter((r) => r !== undefined);
       if (failingResultErrors.length) {
-        for (const err of failingResultErrors) {
-          this.onFlushError?.(err);
-        }
         throw new AggregateError(
           failingResultErrors,
           `Encountered the following errors while logging:`,
@@ -1693,7 +1692,10 @@ class BackgroundLogger {
         }
 
         console.warn(errmsg);
-        if (!isRetrying && this.syncFlush) {
+        if (!isRetrying) {
+          console.warn(
+            `Failed to construct log records to flush after ${this.numTries} attempts. Dropping batch`,
+          );
           throw e;
         } else {
           console.warn(e);
@@ -1701,10 +1703,7 @@ class BackgroundLogger {
         }
       }
     }
-    console.warn(
-      `Failed to construct log records to flush after ${this.numTries} attempts. Dropping batch`,
-    );
-    return [[], []];
+    throw new Error("Impossible");
   }
 
   private async submitLogsRequest(items: string[]): Promise<void> {
@@ -1722,13 +1721,11 @@ class BackgroundLogger {
       let error: unknown = undefined;
       try {
         await conn.post_json("logs3", dataStr);
-      } catch (e) {
+      } catch {
         // Fallback to legacy API. Remove once all API endpoints are updated.
         try {
           const legacyDataS = constructJsonArray(
-            items.map((r: any) =>
-              JSON.stringify(makeLegacyEvent(JSON.parse(r))),
-            ),
+            items.map((r) => JSON.stringify(makeLegacyEvent(JSON.parse(r)))),
           );
           await conn.post_json("logs", legacyDataS);
         } catch (e) {
@@ -1738,8 +1735,6 @@ class BackgroundLogger {
       if (error === undefined) {
         return;
       }
-
-      this.onFlushError?.(error);
 
       const isRetrying = i + 1 < this.numTries;
       const retryingText = isRetrying ? "" : " Retrying";
@@ -1764,7 +1759,10 @@ class BackgroundLogger {
         this.logFailedPayloadsDir();
       }
 
-      if (!isRetrying && this.syncFlush) {
+      if (!isRetrying) {
+        console.warn(
+          `log request failed after ${this.numTries} retries. Dropping batch`,
+        );
         throw new Error(errMsg);
       } else {
         console.warn(errMsg);
@@ -1773,11 +1771,6 @@ class BackgroundLogger {
         }
       }
     }
-
-    console.warn(
-      `log request failed after ${this.numTries} retries. Dropping batch`,
-    );
-    return;
   }
 
   private registerDroppedItemCount(numItems: number) {
@@ -1868,6 +1861,8 @@ class BackgroundLogger {
         try {
           await this.flushOnce();
         } catch (err) {
+          console.error(err);
+          this.onFlushError?.(err);
           this.activeFlushError = err;
         } finally {
           this.activeFlushResolved = true;
