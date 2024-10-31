@@ -798,7 +798,6 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
         error = None
         exc_info = None
         scores = {}
-        in_dataset = False
 
         if experiment:
             root_span = experiment.start_span(
@@ -813,7 +812,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                     "id": datum.id,
                     "_xact_id": datum._xact_id,
                 }
-                if experiment.dataset
+                if experiment.dataset and datum.id and datum._xact_id
                 else None,
             )
         else:

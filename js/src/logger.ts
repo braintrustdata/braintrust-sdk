@@ -76,6 +76,7 @@ type StartSpanEventArgs = ExperimentLogPartialArgs & Partial<IdField>;
 export type StartSpanArgs = {
   name?: string;
   type?: SpanType;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   spanAttributes?: Record<any, any>;
   startTime?: number;
   parent?: string;
@@ -3357,8 +3358,11 @@ export type DefaultMetadataType = void;
 export type EvalCase<Input, Expected, Metadata> = {
   input: Input;
   tags?: string[];
-} & (Expected extends void ? {} : { expected: Expected }) &
-  (Metadata extends void ? {} : { metadata: Metadata });
+  // These fields are only set if the EvalCase is part of a Dataset.
+  id?: string;
+  _xact_id?: TransactionId;
+} & (Expected extends void ? object : { expected: Expected }) &
+  (Metadata extends void ? object : { metadata: Metadata });
 
 /**
  * An experiment is a collection of logged events, such as model inputs and outputs, which represent
@@ -3384,7 +3388,7 @@ export class Experiment
   private state: BraintrustState;
 
   // For type identification.
-  public kind: "experiment" = "experiment";
+  public kind = "experiment" as const;
 
   constructor(
     state: BraintrustState,
