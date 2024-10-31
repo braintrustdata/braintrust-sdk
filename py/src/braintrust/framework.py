@@ -61,6 +61,7 @@ class EvalCase(SerializableDataClass):
 
     # Id is only set if the EvalCase is part of a Dataset.
     id: Optional[str] = None
+    _xact_id: Optional[str] = None
 
 
 # Inheritance doesn't quite work for dataclasses, so we redefine the fields
@@ -806,7 +807,14 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                 input=datum.input,
                 expected=datum.expected,
                 tags=datum.tags,
-                dataset_record_id=datum.id if experiment.dataset else None,
+                origin={
+                    "object_type": "dataset",
+                    "object_id": experiment.dataset.id,
+                    "id": datum.id,
+                    "_xact_id": datum._xact_id,
+                }
+                if experiment.dataset
+                else None,
             )
         else:
             root_span = NOOP_SPAN
