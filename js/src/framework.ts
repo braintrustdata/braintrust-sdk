@@ -470,7 +470,9 @@ export async function Eval<
       });
       return ret;
     } finally {
-      experiment.flush();
+      experiment.flush().catch((e) => {
+        console.error("[EXCEPTION!!!] Error flushing experiment", e);
+      });
     }
   } finally {
     progressReporter.stop();

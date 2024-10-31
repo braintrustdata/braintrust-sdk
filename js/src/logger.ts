@@ -1465,6 +1465,7 @@ function now() {
 
 export interface BackgroundLoggerOpts {
   noExitFlush?: boolean;
+  onFlushError?: (error: unknown) => void;
 }
 
 // We should only have one instance of this object per state object in
@@ -1477,6 +1478,7 @@ class BackgroundLogger {
   private activeFlush: Promise<void> = Promise.resolve();
   private activeFlushResolved = true;
   private activeFlushError: unknown = undefined;
+  private onFlushError?: (error: unknown) => void;
 
   public syncFlush: boolean = false;
   // 6 MB for the AWS lambda gateway (from our own testing).
@@ -1555,6 +1557,7 @@ class BackgroundLogger {
         await this.flush();
       });
     }
+    this.onFlushError = opts.onFlushError;
   }
 
   log(items: LazyValue<BackgroundLogEvent>[]) {
@@ -1631,6 +1634,9 @@ class BackgroundLogger {
         .map((r) => (r.type === "success" ? undefined : r.value))
         .filter((r) => r !== undefined);
       if (failingResultErrors.length) {
+        for (const err of failingResultErrors) {
+          this.onFlushError?.(err);
+        }
         throw new AggregateError(
           failingResultErrors,
           `Encountered the following errors while logging:`,
@@ -1732,6 +1738,8 @@ class BackgroundLogger {
       if (error === undefined) {
         return;
       }
+
+      this.onFlushError?.(error);
 
       const isRetrying = i + 1 < this.numTries;
       const retryingText = isRetrying ? "" : " Retrying";
@@ -2603,6 +2611,10 @@ export interface LoginOptions {
    * If true, this event handler will _not_ be installed.
    */
   noExitFlush?: boolean;
+  /**
+   * Calls this function if there's an error in the background flusher.
+   */
+  onFlushError?: (error: unknown) => void;
 }
 
 export type FullLoginOptions = LoginOptions & {
