@@ -16,6 +16,7 @@ import {
   logError as logSpanError,
   withCurrent,
   startSpan,
+  Dataset,
 } from "./logger";
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import { GitMetadataSettings, RepoInfo } from "@braintrust/core/typespecs";
@@ -402,6 +403,7 @@ export async function Eval<
   }
   if (globalThis._lazy_load) {
     globalThis._evals.evaluators[evalName] = {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       evaluator: {
         evalName,
         projectName: name,
@@ -449,6 +451,7 @@ export async function Eval<
       baseExperimentId: evaluator.baseExperimentId,
       gitMetadataSettings: evaluator.gitMetadataSettings,
       repoInfo: evaluator.repoInfo,
+      dataset: data instanceof Dataset ? data : undefined,
     });
 
     if (options.onStart) {
@@ -543,7 +546,8 @@ function evaluateFilter(object: unknown, filter: Filter) {
   const key = path.reduce(
     (acc, p) =>
       typeof acc === "object" && acc !== null
-        ? (acc as Record<string, unknown>)[p]
+        ? // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          (acc as Record<string, unknown>)[p]
         : undefined,
     object,
   );
@@ -699,7 +703,12 @@ async function runEvaluatorInternal(
           );
           rootSpan.log({ output, metadata });
 
-          const scoringArgs = { ...datum, metadata, output };
+          const scoringArgs = {
+            input: datum.input,
+            expected: "expected" in datum ? datum.expected : undefined,
+            metadata,
+            output,
+          };
           const scorerNames = evaluator.scores.map(scorerName);
           const scoreResults = await Promise.all(
             evaluator.scores.map(async (score, score_idx) => {
@@ -859,6 +868,15 @@ async function runEvaluatorInternal(
             input: datum.input,
             expected: "expected" in datum ? datum.expected : undefined,
             tags: datum.tags,
+            origin:
+              experiment.dataset && datum.id && datum._xact_id
+                ? {
+                    object_type: "dataset",
+                    object_id: await experiment.dataset.id,
+                    id: datum.id,
+                    _xact_id: datum._xact_id,
+                  }
+                : undefined,
           },
         });
       }

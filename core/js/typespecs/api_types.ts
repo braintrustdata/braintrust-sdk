@@ -390,6 +390,7 @@ export const experimentEventSchema = z
     root_span_id: experimentEventBaseSchema.shape.root_span_id,
     span_attributes: experimentEventBaseSchema.shape.span_attributes,
     is_root: experimentEventBaseSchema.shape.is_root,
+    origin: experimentEventBaseSchema.shape.origin,
   })
   .openapi("ExperimentEvent");
 export type ExperimentEvent = z.infer<typeof experimentEventSchema>;
