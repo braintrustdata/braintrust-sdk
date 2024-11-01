@@ -1465,6 +1465,7 @@ function now() {
 
 export interface BackgroundLoggerOpts {
   noExitFlush?: boolean;
+  onFlushError?: (error: unknown) => void;
 }
 
 // We should only have one instance of this object per state object in
@@ -1477,6 +1478,7 @@ class BackgroundLogger {
   private activeFlush: Promise<void> = Promise.resolve();
   private activeFlushResolved = true;
   private activeFlushError: unknown = undefined;
+  private onFlushError?: (error: unknown) => void;
 
   public syncFlush: boolean = false;
   // 6 MB for the AWS lambda gateway (from our own testing).
@@ -1555,6 +1557,7 @@ class BackgroundLogger {
         await this.flush();
       });
     }
+    this.onFlushError = opts.onFlushError;
   }
 
   log(items: LazyValue<BackgroundLogEvent>[]) {
@@ -1589,7 +1592,9 @@ class BackgroundLogger {
     if (this.activeFlushError) {
       const err = this.activeFlushError;
       this.activeFlushError = undefined;
-      throw err;
+      if (this.syncFlush) {
+        throw err;
+      }
     }
   }
 
@@ -1687,7 +1692,10 @@ class BackgroundLogger {
         }
 
         console.warn(errmsg);
-        if (!isRetrying && this.syncFlush) {
+        if (!isRetrying) {
+          console.warn(
+            `Failed to construct log records to flush after ${this.numTries} attempts. Dropping batch`,
+          );
           throw e;
         } else {
           console.warn(e);
@@ -1695,10 +1703,7 @@ class BackgroundLogger {
         }
       }
     }
-    console.warn(
-      `Failed to construct log records to flush after ${this.numTries} attempts. Dropping batch`,
-    );
-    return [[], []];
+    throw new Error("Impossible");
   }
 
   private async submitLogsRequest(items: string[]): Promise<void> {
@@ -1716,13 +1721,11 @@ class BackgroundLogger {
       let error: unknown = undefined;
       try {
         await conn.post_json("logs3", dataStr);
-      } catch (e) {
+      } catch {
         // Fallback to legacy API. Remove once all API endpoints are updated.
         try {
           const legacyDataS = constructJsonArray(
-            items.map((r: any) =>
-              JSON.stringify(makeLegacyEvent(JSON.parse(r))),
-            ),
+            items.map((r) => JSON.stringify(makeLegacyEvent(JSON.parse(r)))),
           );
           await conn.post_json("logs", legacyDataS);
         } catch (e) {
@@ -1756,7 +1759,10 @@ class BackgroundLogger {
         this.logFailedPayloadsDir();
       }
 
-      if (!isRetrying && this.syncFlush) {
+      if (!isRetrying) {
+        console.warn(
+          `log request failed after ${this.numTries} retries. Dropping batch`,
+        );
         throw new Error(errMsg);
       } else {
         console.warn(errMsg);
@@ -1765,11 +1771,6 @@ class BackgroundLogger {
         }
       }
     }
-
-    console.warn(
-      `log request failed after ${this.numTries} retries. Dropping batch`,
-    );
-    return;
   }
 
   private registerDroppedItemCount(numItems: number) {
@@ -1860,6 +1861,14 @@ class BackgroundLogger {
         try {
           await this.flushOnce();
         } catch (err) {
+          if (err instanceof AggregateError) {
+            for (const e of err.errors) {
+              this.onFlushError?.(e);
+            }
+          } else {
+            this.onFlushError?.(err);
+          }
+
           this.activeFlushError = err;
         } finally {
           this.activeFlushResolved = true;
@@ -2603,6 +2612,10 @@ export interface LoginOptions {
    * If true, this event handler will _not_ be installed.
    */
   noExitFlush?: boolean;
+  /**
+   * Calls this function if there's an error in the background flusher.
+   */
+  onFlushError?: (error: unknown) => void;
 }
 
 export type FullLoginOptions = LoginOptions & {
