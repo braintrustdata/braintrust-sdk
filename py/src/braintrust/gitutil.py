@@ -105,7 +105,8 @@ def get_past_n_ancestors(n=10, remote=None):
 def attempt(op):
     try:
         return op()
-    except (TypeError, ValueError, git.GitCommandError):
+    # OSError covers FileNotFoundError, FileExistsError, etc.
+    except (TypeError, ValueError, OSError, git.GitCommandError):
         return None
 
 
