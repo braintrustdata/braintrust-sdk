@@ -1,4 +1,8 @@
-import { AsyncScoringControl } from "../typespecs/api_types";
+import { z } from "zod";
+import {
+  AsyncScoringControl,
+  objectReferenceSchema,
+} from "../typespecs/api_types";
 import {
   Source,
   ASYNC_SCORING_CONTROL_FIELD,
@@ -21,6 +25,7 @@ export type OtherExperimentLogFields = {
   metadata: Record<string, unknown>;
   metrics: Record<string, unknown>;
   datasetRecordId: string;
+  origin: z.infer<typeof objectReferenceSchema>;
   [ASYNC_SCORING_CONTROL_FIELD]: AsyncScoringControl;
   [MERGE_PATHS_FIELD]: string[][];
   [SKIP_ASYNC_SCORING_FIELD]: boolean;
@@ -121,16 +126,23 @@ export const DEFAULT_IS_LEGACY_DATASET = false;
 
 interface LegacyDatasetRecord {
   id: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   input: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   output: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata: any;
 }
 
 interface NewDatasetRecord {
   id: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   input: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   expected: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tags: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata: any;
 }
 
@@ -147,8 +159,10 @@ export function ensureDatasetRecord<
   legacy: IsLegacyDataset,
 ): DatasetRecord<IsLegacyDataset> {
   if (legacy) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return ensureLegacyDatasetRecord(r) as DatasetRecord<IsLegacyDataset>;
   } else {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return ensureNewDatasetRecord(r) as DatasetRecord<IsLegacyDataset>;
   }
 }
@@ -194,6 +208,7 @@ export function makeLegacyEvent(e: BackgroundLogEvent): BackgroundLogEvent {
   delete event.expected;
 
   if (MERGE_PATHS_FIELD in event) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     for (const path of (event[MERGE_PATHS_FIELD] || []) as string[][]) {
       if (path.length > 0 && path[0] === "expected") {
         path[0] = "output";

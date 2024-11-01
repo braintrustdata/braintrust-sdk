@@ -1454,6 +1454,7 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
         "metrics",
         "error",
         "dataset_record_id",
+        "origin",
         "inputs",
         ASYNC_SCORING_CONTROL_FIELD,
         MERGE_PATHS_FIELD,

@@ -21,7 +21,7 @@ from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 
 from .git_fields import GitMetadataSettings, RepoInfo
-from .logger import NOOP_SPAN, ExperimentSummary, Metadata, ScoreSummary, Span, stringify_exception
+from .logger import NOOP_SPAN, Dataset, ExperimentSummary, Metadata, ScoreSummary, Span, stringify_exception
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
 from .span_types import SpanTypeAttribute
@@ -58,6 +58,10 @@ class EvalCase(SerializableDataClass):
     expected: Optional[Output] = None
     metadata: Optional[Metadata] = None
     tags: Optional[List[str]] = None
+
+    # Id is only set if the EvalCase is part of a Dataset.
+    id: Optional[str] = None
+    _xact_id: Optional[str] = None
 
 
 # Inheritance doesn't quite work for dataclasses, so we redefine the fields
@@ -551,6 +555,10 @@ def Eval(
         if base_experiment_name is None and isinstance(evaluator.data, BaseExperiment):
             base_experiment_name = evaluator.data.name
 
+        dataset = None
+        if isinstance(evaluator.data, Dataset):
+            dataset = evaluator.data
+
         async def run_to_completion():
             experiment = init_experiment(
                 project_name=evaluator.project_name if evaluator.project_id is None else None,
@@ -563,6 +571,7 @@ def Eval(
                 base_experiment_id=base_experiment_id,
                 git_metadata_settings=evaluator.git_metadata_settings,
                 repo_info=evaluator.repo_info,
+                dataset=dataset,
             )
             try:
                 ret = await run_evaluator(experiment, evaluator, 0, [])
@@ -797,6 +806,14 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                 input=datum.input,
                 expected=datum.expected,
                 tags=datum.tags,
+                origin={
+                    "object_type": "dataset",
+                    "object_id": experiment.dataset.id,
+                    "id": datum.id,
+                    "_xact_id": datum._xact_id,
+                }
+                if experiment.dataset and datum.id and datum._xact_id
+                else None,
             )
         else:
             root_span = NOOP_SPAN
@@ -827,7 +844,15 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                 score_promises = [
                     asyncio.create_task(
                         await_or_run_scorer(
-                            root_span, score, name, **{**datum.as_dict(), "metadata": metadata, "output": output}
+                            root_span,
+                            score,
+                            name,
+                            **{
+                                "input": datum.input,
+                                "expected": datum.expected,
+                                "metadata": metadata,
+                                "output": output,
+                            },
                         )
                     )
                     for score, name in zip(scorers, scorer_names)
