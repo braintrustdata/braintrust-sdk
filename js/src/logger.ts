@@ -1861,8 +1861,6 @@ class BackgroundLogger {
         try {
           await this.flushOnce();
         } catch (err) {
-          console.error(err);
-
           if (err instanceof AggregateError) {
             for (const e of err.errors) {
               this.onFlushError?.(e);
