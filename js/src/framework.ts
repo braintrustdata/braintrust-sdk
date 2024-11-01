@@ -703,7 +703,12 @@ async function runEvaluatorInternal(
           );
           rootSpan.log({ output, metadata });
 
-          const scoringArgs = { ...datum, metadata, output };
+          const scoringArgs = {
+            input: datum.input,
+            expected: "expected" in datum ? datum.expected : undefined,
+            metadata,
+            output,
+          };
           const scorerNames = evaluator.scores.map(scorerName);
           const scoreResults = await Promise.all(
             evaluator.scores.map(async (score, score_idx) => {
