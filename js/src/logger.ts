@@ -1862,7 +1862,15 @@ class BackgroundLogger {
           await this.flushOnce();
         } catch (err) {
           console.error(err);
-          this.onFlushError?.(err);
+
+          if (err instanceof AggregateError) {
+            for (const e of err.errors) {
+              this.onFlushError?.(e);
+            }
+          } else {
+            this.onFlushError?.(err);
+          }
+
           this.activeFlushError = err;
         } finally {
           this.activeFlushResolved = true;
