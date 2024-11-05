@@ -14,7 +14,7 @@ function tryMakeUuid(
       throw new Error();
     }
     return { bytes: Buffer.from(ret), isUUID: true };
-  } catch (e) {
+  } catch {
     return { bytes: undefined, isUUID: false };
   }
 }
@@ -26,6 +26,7 @@ const INVALID_ENCODING_ERRMSG = `SpanComponents string is not properly encoded. 
 export enum SpanObjectTypeV3 {
   EXPERIMENT = 1,
   PROJECT_LOGS = 2,
+  PROMPT_SESSION = 3,
 }
 
 export const spanObjectTypeV3EnumSchema = z.nativeEnum(SpanObjectTypeV3);
@@ -36,6 +37,8 @@ export function spanObjectTypeV3ToString(objectType: SpanObjectTypeV3): string {
       return "experiment";
     case SpanObjectTypeV3.PROJECT_LOGS:
       return "project_logs";
+    case SpanObjectTypeV3.PROMPT_SESSION:
+      return "prompt_session";
     default:
       const x: never = objectType;
       throw new Error(`Unknown SpanObjectTypeV3: ${x}`);
@@ -195,7 +198,7 @@ export class SpanComponentsV3 {
         }
       }
       return SpanComponentsV3.fromJsonObj(jsonObj);
-    } catch (e) {
+    } catch {
       throw new Error(INVALID_ENCODING_ERRMSG);
     }
   }
