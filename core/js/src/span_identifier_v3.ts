@@ -1,7 +1,11 @@
 // Mirror of core/py/src/braintrust_core/span_identifier_v3.py.
 
 import * as uuid from "uuid";
-import { ParentExperimentIds, ParentProjectLogIds } from "./object";
+import {
+  ParentExperimentIds,
+  ParentProjectLogIds,
+  ParentPromptSessionIds,
+} from "./object";
 import { SpanComponentsV2 } from "./span_identifier_v2";
 import { z } from "zod";
 
@@ -203,7 +207,10 @@ export class SpanComponentsV3 {
     }
   }
 
-  public objectIdFields(): ParentExperimentIds | ParentProjectLogIds {
+  public objectIdFields():
+    | ParentExperimentIds
+    | ParentProjectLogIds
+    | ParentPromptSessionIds {
     if (!this.data.object_id) {
       throw new Error(
         "Impossible: cannot invoke `objectIdFields` unless SpanComponentsV3 is initialized with an `object_id`",
@@ -214,7 +221,10 @@ export class SpanComponentsV3 {
         return { experiment_id: this.data.object_id };
       case SpanObjectTypeV3.PROJECT_LOGS:
         return { project_id: this.data.object_id, log_id: "g" };
+      case SpanObjectTypeV3.PROMPT_SESSION:
+        return { prompt_session_id: this.data.object_id, log_id: "x" };
       default:
+        const _: never = this.data.object_type;
         throw new Error("Impossible");
     }
   }
