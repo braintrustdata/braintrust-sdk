@@ -106,7 +106,7 @@ class PromptBuilder:
         prompt: Optional[str] = None,
         messages: Optional[List[Any]] = None,
         params: Optional[Any] = None,
-        tools: Optional[List[Union[CodeFunction | Any]]] = None,
+        tools: Optional[List[Union[CodeFunction, Any]]] = None,
         if_exists: Optional[str] = None,
     ):
         """Creates a prompt."""
