@@ -122,9 +122,9 @@ class PromptBuilder:
             if isinstance(tool, CodeFunction):
                 tool_functions.append(tool)
             elif "type" in tool and "function" not in tool:
-                tool_functions.push(tool)
+                tool_functions.append(tool)
             else:
-                raw_tools.push(tool)
+                raw_tools.append(tool)
 
         if messages is not None:
             prompt_block = {
