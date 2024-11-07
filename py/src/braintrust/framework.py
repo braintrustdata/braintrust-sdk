@@ -21,7 +21,17 @@ from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 
 from .git_fields import GitMetadataSettings, RepoInfo
-from .logger import NOOP_SPAN, Dataset, ExperimentSummary, Metadata, ScoreSummary, Span, stringify_exception
+from .logger import (
+    NOOP_SPAN,
+    Dataset,
+    DatasetRow,
+    ExperimentSummary,
+    Metadata,
+    ScoreSummary,
+    Span,
+    init_dataset,
+    stringify_exception,
+)
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
 from .span_types import SpanTypeAttribute
@@ -445,9 +455,13 @@ def _make_eval_name(name: str, experiment_name: Optional[str]):
     return out
 
 
+# The type annotation `EvalCase | DatasetRow` is a workaround to pass the type
+# checker when iterating a dataset and passing to Eval, while allowing looser
+# input for other use cases. Ideally these would be the same type. We should
+# think about how to type API responses in the Python SDK.
 def Eval(
     name: str,
-    data: Callable[[], Union[Iterator[EvalCase], AsyncIterator[EvalCase]]],
+    data: Callable[[], Union[Iterator[Union[EvalCase, DatasetRow]], AsyncIterator[Union[EvalCase, DatasetRow]]]],
     task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
     scores: List[EvalScorer],
     experiment_name: Optional[str] = None,

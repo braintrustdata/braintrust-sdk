@@ -19,7 +19,7 @@ import uuid
 from abc import ABC, abstractmethod
 from functools import partial, wraps
 from multiprocessing import cpu_count
-from typing import Any, Callable, Dict, Optional, TypeVar, Union, cast, overload
+from typing import Any, Callable, Dict, Generic, List, Optional, TypedDict, TypeVar, Union, cast, overload
 from urllib.parse import urlencode
 
 import chevron
@@ -65,6 +65,8 @@ from .util import (
 
 Metadata = Dict[str, Any]
 DATA_API_VERSION = 2
+
+T = TypeVar("T")
 
 
 class Exportable(ABC):
@@ -1539,8 +1541,8 @@ def _validate_and_sanitize_experiment_log_full_args(event, has_dataset):
     return event
 
 
-class ObjectIterator:
-    def __init__(self, refetch_fn):
+class ObjectIterator(Generic[T]):
+    def __init__(self, refetch_fn: Callable[[], List[T]]):
         self.refetch_fn = refetch_fn
         self.idx = 0
 
@@ -1557,8 +1559,13 @@ class ObjectIterator:
         return value
 
 
-class ObjectFetcher(ABC):
-    def __init__(self, object_type, pinned_version=None, mutate_record=None):
+class ObjectFetcher(ABC, Generic[T]):
+    def __init__(
+        self,
+        object_type: str,
+        pinned_version: Union[None, int, str] = None,
+        mutate_record: Optional[Callable[[T], T]] = None,
+    ):
         self.object_type = object_type
 
         if pinned_version is not None:
@@ -1571,7 +1578,7 @@ class ObjectFetcher(ABC):
         self._pinned_version = str(pinned_version) if pinned_version is not None else None
         self._mutate_record = mutate_record
 
-        self._fetched_data = None
+        self._fetched_data: Optional[List[T]] = None
 
     def fetch(self):
         """
@@ -1600,15 +1607,15 @@ class ObjectFetcher(ABC):
         return self._refetch()
 
     @abstractmethod
-    def _get_state(self):
+    def _get_state(self) -> BraintrustState:
         ...
 
     @property
     @abstractmethod
-    def id(self):
+    def id(self) -> str:
         ...
 
-    def _refetch(self):
+    def _refetch(self) -> List[T]:
         state = self._get_state()
         if self._fetched_data is None:
             resp = state.api_conn().get(
@@ -1622,6 +1629,8 @@ class ObjectFetcher(ABC):
             )
             response_raise_for_status(resp)
             data = resp.json()["events"]
+            if not isinstance(data, list):
+                raise ValueError(f"Expected a list in the response, got {type(data)}")
 
             if self._mutate_record is not None:
                 self._fetched_data = [self._mutate_record(r) for r in data]
@@ -1630,7 +1639,7 @@ class ObjectFetcher(ABC):
 
         return self._fetched_data
 
-    def _clear_cache(self):
+    def _clear_cache(self) -> None:
         self._fetched_data = None
 
     @property
@@ -2523,7 +2532,31 @@ def split_logging_data(event, internal_data):
     return serializable_partial_record, lazy_partial_record
 
 
-class Dataset(ObjectFetcher):
+class Origin(TypedDict):
+    object_type: str
+    object_id: str
+    id: str
+    _xact_id: str
+
+
+class DatasetRow(TypedDict):
+    id: str
+    _xact_id: str
+    created: str
+    project_id: str
+    dataset_id: str
+    input: Optional[Dict[str, Any]]
+    output: Optional[Dict[str, Any]]
+    expected: Optional[Dict[str, Any]]
+    metadata: Optional[Dict[str, Any]]
+    tags: Optional[List[str]]
+    span_id: str
+    root_span_id: str
+    is_root: Optional[bool]
+    origin: Optional[Origin]
+
+
+class Dataset(ObjectFetcher[DatasetRow]):
     """
     A dataset is a collection of records, such as model inputs and outputs, which represent
     data you can use to evaluate and fine-tune models. You can log production data to datasets,
@@ -2550,11 +2583,11 @@ class Dataset(ObjectFetcher):
         ObjectFetcher.__init__(self, object_type="dataset", pinned_version=version, mutate_record=mutate_record)
 
     @property
-    def id(self):
+    def id(self) -> str:
         return self._lazy_metadata.get().dataset.id
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self._lazy_metadata.get().dataset.name
 
     @property
