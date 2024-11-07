@@ -5,7 +5,6 @@ import contextvars
 import dataclasses
 import datetime
 import inspect
-import itertools
 import json
 import logging
 import os
@@ -1906,7 +1905,7 @@ class ExperimentDatasetIterator:
             }
 
 
-class Experiment(ObjectFetcher, Exportable):
+class Experiment(ObjectFetcher[Dict[str, Any]], Exportable):
     """
     An experiment is a collection of logged events, such as model inputs and outputs, which represent
     a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -2224,7 +2223,7 @@ class Experiment(ObjectFetcher, Exportable):
         del exc_type, exc_value, traceback
 
 
-class ReadonlyExperiment(ObjectFetcher):
+class ReadonlyExperiment(ObjectFetcher[Dict[str, Any]]):
     """
     A read-only view of an experiment, initialized by passing `open=True` to `init()`.
     """
