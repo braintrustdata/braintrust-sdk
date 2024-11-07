@@ -20,16 +20,7 @@ from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 
 from .git_fields import GitMetadataSettings, RepoInfo
-from .logger import (
-    NOOP_SPAN,
-    Dataset,
-    DatasetRow,
-    ExperimentSummary,
-    Metadata,
-    ScoreSummary,
-    Span,
-    stringify_exception,
-)
+from .logger import NOOP_SPAN, Dataset, ExperimentSummary, Metadata, ScoreSummary, Span, stringify_exception
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
 from .span_types import SpanTypeAttribute
@@ -144,6 +135,16 @@ class BaseExperiment:
     """
 
 
+EvalData = Union[
+    Iterator[EvalCase],
+    Awaitable[Iterator[EvalCase]],
+    Callable[[], Union[Iterator[EvalCase], Awaitable[Iterator[EvalCase]]]],
+    BaseExperiment,
+    Dataset,
+    type,
+]
+
+
 @dataclasses.dataclass
 class Evaluator:
     """
@@ -165,13 +166,7 @@ class Evaluator:
     A name that describes the experiment. You do not need to change it each time the experiment runs.
     """
 
-    data: Union[
-        Iterator[EvalCase],
-        Awaitable[Iterator[EvalCase]],
-        Callable[[], Union[Iterator[EvalCase], Awaitable[Iterator[EvalCase]]]],
-        BaseExperiment,
-        type,
-    ]
+    data: EvalData
     """
     Returns an iterator over the evaluation dataset. Each element of the iterator should be an `EvalCase` or a dict
     with the same fields as an `EvalCase` (`input`, `expected`, `metadata`).
@@ -453,13 +448,9 @@ def _make_eval_name(name: str, experiment_name: Optional[str]):
     return out
 
 
-# The type annotation `EvalCase | DatasetRow` is a workaround to pass the type
-# checker when iterating a dataset and passing to Eval, while allowing looser
-# input for other use cases. Ideally these would be the same type. We should
-# think about how to type API responses in the Python SDK.
 def Eval(
     name: str,
-    data: Callable[[], Union[Iterator[Union[EvalCase, DatasetRow]], AsyncIterator[Union[EvalCase, DatasetRow]]]],
+    data: EvalData,
     task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
     scores: List[EvalScorer],
     experiment_name: Optional[str] = None,
@@ -475,7 +466,7 @@ def Eval(
     base_experiment_id: Optional[str] = None,
     git_metadata_settings: Optional[GitMetadataSettings] = None,
     repo_info: Optional[RepoInfo] = None,
-) -> Union[Awaitable[EvalResultWithSummary], EvalResultWithSummary]:
+) -> Awaitable[EvalResultWithSummary]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
 
@@ -520,7 +511,7 @@ def Eval(
     summarized and compared to this experiment. This takes precedence over `base_experiment_name` if specified.
     :param git_metadata_settings: Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param repo_info: Optionally explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
-    :return: An `EvalResultWithSummary` object, which contains all results and a summary.
+    :return: An `Awaitable` that resolves to an `EvalResultWithSummary` object, which contains all results and a summary.
     """
     eval_name = _make_eval_name(name, experiment_name)
 
@@ -550,6 +541,10 @@ def Eval(
 
     if _lazy_load:
         _evals.evaluators[eval_name] = EvaluatorInstance(evaluator=evaluator, reporter=reporter)
+        # Needed to have consistent return type.
+        future = asyncio.Future()
+        future.set_result(EvalResultWithSummary(summary=build_local_summary(evaluator, [])))
+        return future
     else:
         if isinstance(reporter, str):
             raise ValueError(
@@ -595,7 +590,9 @@ def Eval(
         if loop:
             return loop.create_task(run_to_completion())
         else:
-            return asyncio.run(run_to_completion())
+            future = asyncio.Future()
+            future.set_result(asyncio.run(run_to_completion()))
+            return future
 
 
 def Reporter(
