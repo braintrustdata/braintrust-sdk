@@ -543,7 +543,7 @@ def Eval(
         _evals.evaluators[eval_name] = EvaluatorInstance(evaluator=evaluator, reporter=reporter)
         # Needed to have consistent return type.
         future = asyncio.Future()
-        future.set_result(EvalResultWithSummary(summary=build_local_summary(evaluator, [])))
+        future.set_result(EvalResultWithSummary(summary=build_local_summary(evaluator, []), results=[]))
         return future
     else:
         if isinstance(reporter, str):
