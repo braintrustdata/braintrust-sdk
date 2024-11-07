@@ -20,7 +20,16 @@ from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 
 from .git_fields import GitMetadataSettings, RepoInfo
-from .logger import NOOP_SPAN, Dataset, ExperimentSummary, Metadata, ScoreSummary, Span, stringify_exception
+from .logger import (
+    NOOP_SPAN,
+    Dataset,
+    DatasetRow,
+    ExperimentSummary,
+    Metadata,
+    ScoreSummary,
+    Span,
+    stringify_exception,
+)
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
 from .span_types import SpanTypeAttribute
