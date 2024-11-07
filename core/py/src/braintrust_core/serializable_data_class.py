@@ -12,6 +12,9 @@ class SerializableDataClass:
         """Serialize the object to JSON."""
         return json.dumps(self.as_dict(), **kwargs)
 
+    def __getitem__(self, item: str):
+        return getattr(self, item)
+
     @classmethod
     def from_dict(cls, d: Dict):
         """Deserialize the object from a dictionary. This method

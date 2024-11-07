@@ -5,7 +5,6 @@ import contextvars
 import dataclasses
 import datetime
 import inspect
-import itertools
 import json
 import logging
 import os
@@ -19,13 +18,27 @@ import uuid
 from abc import ABC, abstractmethod
 from functools import partial, wraps
 from multiprocessing import cpu_count
-from typing import Any, Callable, Dict, Optional, TypeVar, Union, cast, overload
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generic,
+    Iterator,
+    List,
+    Optional,
+    Type,
+    TypeVar,
+    Union,
+    cast,
+    overload,
+)
 from urllib.parse import urlencode
 
 import chevron
 import exceptiongroup
 import requests
 from braintrust_core.serializable_data_class import SerializableDataClass
+from braintrust_core.types import DatasetEvent, ExperimentEvent
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -65,6 +78,8 @@ from .util import (
 
 Metadata = Dict[str, Any]
 DATA_API_VERSION = 2
+
+T = TypeVar("T")
 
 
 class Exportable(ABC):
@@ -1539,8 +1554,8 @@ def _validate_and_sanitize_experiment_log_full_args(event, has_dataset):
     return event
 
 
-class ObjectIterator:
-    def __init__(self, refetch_fn):
+class ObjectIterator(Generic[T]):
+    def __init__(self, refetch_fn: Callable[[], List[T]]):
         self.refetch_fn = refetch_fn
         self.idx = 0
 
@@ -1557,9 +1572,19 @@ class ObjectIterator:
         return value
 
 
-class ObjectFetcher(ABC):
-    def __init__(self, object_type, pinned_version=None, mutate_record=None):
+_TSerializable = TypeVar("_TSerializable", bound=SerializableDataClass)
+
+
+class ObjectFetcher(ABC, Generic[_TSerializable]):
+    def __init__(
+        self,
+        object_type: str,
+        object_cls: Type[_TSerializable],
+        pinned_version: Union[None, int, str] = None,
+        mutate_record: Optional[Callable[[_TSerializable], _TSerializable]] = None,
+    ):
         self.object_type = object_type
+        self.object_cls = object_cls
 
         if pinned_version is not None:
             try:
@@ -1571,7 +1596,7 @@ class ObjectFetcher(ABC):
         self._pinned_version = str(pinned_version) if pinned_version is not None else None
         self._mutate_record = mutate_record
 
-        self._fetched_data = None
+        self._fetched_data: Optional[List[_TSerializable]] = None
 
     def fetch(self):
         """
@@ -1600,15 +1625,15 @@ class ObjectFetcher(ABC):
         return self._refetch()
 
     @abstractmethod
-    def _get_state(self):
+    def _get_state(self) -> BraintrustState:
         ...
 
     @property
     @abstractmethod
-    def id(self):
+    def id(self) -> str:
         ...
 
-    def _refetch(self):
+    def _refetch(self) -> List[_TSerializable]:
         state = self._get_state()
         if self._fetched_data is None:
             resp = state.api_conn().get(
@@ -1622,6 +1647,10 @@ class ObjectFetcher(ABC):
             )
             response_raise_for_status(resp)
             data = resp.json()["events"]
+            if not isinstance(data, list):
+                raise ValueError(f"Expected a list in the response, got {type(data)}")
+            parsed_data = [self.object_cls.from_dict_deep(x) for x in data]
+            print(parsed_data[0])
 
             if self._mutate_record is not None:
                 self._fetched_data = [self._mutate_record(r) for r in data]
@@ -1630,7 +1659,7 @@ class ObjectFetcher(ABC):
 
         return self._fetched_data
 
-    def _clear_cache(self):
+    def _clear_cache(self) -> None:
         self._fetched_data = None
 
     @property
@@ -1875,7 +1904,7 @@ class ExperimentIdentifier:
 
 
 class ExperimentDatasetIterator:
-    def __init__(self, iterator):
+    def __init__(self, iterator: Iterator[ExperimentEvent]):
         self.iterator = iterator
 
     def __iter__(self):
@@ -1888,16 +1917,16 @@ class ExperimentDatasetIterator:
                 continue
 
             output, expected = value.get("output"), value.get("expected")
-            return {
-                "input": value.get("input"),
-                "expected": expected if expected is not None else output,
-                "tags": value.get("tags"),
+            return ExperimentEvent(
+                input=value["input"],
+                expected=expected if expected is not None else output,
+                tags=value.tags,
                 # NOTE: We'll eventually want to track origin information here (and generalize
                 # the `dataset_record_id` field)
-            }
+            )
 
 
-class Experiment(ObjectFetcher, Exportable):
+class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
     """
     An experiment is a collection of logged events, such as model inputs and outputs, which represent
     a snapshot of your application at a particular point in time. An experiment is meant to capture more
@@ -1922,7 +1951,7 @@ class Experiment(ObjectFetcher, Exportable):
         self._lazy_id = LazyValue(lambda: self.id, use_mutex=False)
         self._called_start_span = False
 
-        ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
+        ObjectFetcher.__init__(self, object_type="experiment", object_cls=ExperimentEvent, pinned_version=None)
 
     @property
     def id(self):
@@ -2215,7 +2244,7 @@ class Experiment(ObjectFetcher, Exportable):
         del exc_type, exc_value, traceback
 
 
-class ReadonlyExperiment(ObjectFetcher):
+class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
     """
     A read-only view of an experiment, initialized by passing `open=True` to `init()`.
     """
@@ -2226,7 +2255,7 @@ class ReadonlyExperiment(ObjectFetcher):
     ):
         self._lazy_metadata = lazy_metadata
 
-        ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
+        ObjectFetcher.__init__(self, object_type="experiment", object_cls=ExperimentEvent, pinned_version=None)
 
     @property
     def id(self):
@@ -2523,7 +2552,7 @@ def split_logging_data(event, internal_data):
     return serializable_partial_record, lazy_partial_record
 
 
-class Dataset(ObjectFetcher):
+class Dataset(ObjectFetcher[DatasetEvent]):
     """
     A dataset is a collection of records, such as model inputs and outputs, which represent
     data you can use to evaluate and fine-tune models. You can log production data to datasets,
@@ -2547,14 +2576,16 @@ class Dataset(ObjectFetcher):
         self._lazy_metadata = lazy_metadata
         self.new_records = 0
 
-        ObjectFetcher.__init__(self, object_type="dataset", pinned_version=version, mutate_record=mutate_record)
+        ObjectFetcher.__init__(
+            self, object_type="dataset", object_cls=DatasetEvent, pinned_version=version, mutate_record=mutate_record
+        )
 
     @property
-    def id(self):
+    def id(self) -> str:
         return self._lazy_metadata.get().dataset.id
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self._lazy_metadata.get().dataset.name
 
     @property
