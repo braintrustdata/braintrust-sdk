@@ -317,7 +317,7 @@ class BraintrustState:
         self._global_bg_logger.internal_replace_api_conn(api_conn)
 
 
-_state = BraintrustState()
+_state: BraintrustState = None  # type: ignore
 
 
 _http_adapter = None
