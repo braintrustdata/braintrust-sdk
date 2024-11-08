@@ -1,12 +1,12 @@
-"""Auto-generated file -- do not modify."""
+"""Do not import this file directly. See __init__.py for the classes that are considered stable.
+
+Auto-generated file -- do not modify."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Literal, Mapping, Optional, Sequence, TypedDict, Union
 
-from braintrust_core.serializable_data_class import SerializableDataClass
+from typing_extensions import NotRequired
 
 ProjectIdParam = str
 
@@ -113,7 +113,7 @@ EnvVarName = str
 OrgName = str
 
 
-Ids = Union[str, List[str]]
+Ids = Union[str, Sequence[str]]
 
 
 AppLimitParam = Optional[int]
@@ -152,77 +152,56 @@ SummarizeData = Optional[bool]
 Slug = str
 
 
-class ViewTypeEnum(Enum):
-    PROJECTS = "projects"
-    LOGS = "logs"
-    EXPERIMENTS = "experiments"
-    DATASETS = "datasets"
-    PROMPTS = "prompts"
-    PLAYGROUNDS = "playgrounds"
-    EXPERIMENT = "experiment"
-    DATASET = "dataset"
+ViewType = Literal["projects", "logs", "experiments", "datasets", "prompts", "playgrounds", "experiment", "dataset"]
 
 
-ViewType = Optional[ViewTypeEnum]
+UserGivenName = Union[str, Sequence[str]]
 
 
-UserGivenName = Union[str, List[str]]
+UserFamilyName = Union[str, Sequence[str]]
 
 
-UserFamilyName = Union[str, List[str]]
+UserEmail = Union[str, Sequence[str]]
 
 
-UserEmail = Union[str, List[str]]
-
-
-class AclObjectType(Enum):
-    ORGANIZATION = "organization"
-    PROJECT = "project"
-    EXPERIMENT = "experiment"
-    DATASET = "dataset"
-    PROMPT = "prompt"
-    PROMPT_SESSION = "prompt_session"
-    GROUP = "group"
-    ROLE = "role"
-    ORG_MEMBER = "org_member"
-    PROJECT_LOG = "project_log"
-    ORG_PROJECT = "org_project"
+AclObjectType = Literal[
+    "organization",
+    "project",
+    "experiment",
+    "dataset",
+    "prompt",
+    "prompt_session",
+    "group",
+    "role",
+    "org_member",
+    "project_log",
+    "org_project",
+]
 
 
 AclObjectId = str
 
 
-class ProjectScoreType(Enum):
-    SLIDER = "slider"
-    CATEGORICAL = "categorical"
-    WEIGHTED = "weighted"
-    MINIMUM = "minimum"
-    MAXIMUM = "maximum"
-    ONLINE = "online"
+ProjectScoreType = Literal["slider", "categorical", "weighted", "minimum", "maximum", "online"]
 
 
-AISecretType = Union[str, List[str]]
+AISecretType = Union[str, Sequence[str]]
 
 
-class EnvVarObjectType(Enum):
-    ORGANIZATION = "organization"
-    PROJECT = "project"
-    FUNCTION = "function"
+EnvVarObjectType = Literal["organization", "project", "function"]
 
 
 EnvVarObjectId = str
 
 
-@dataclass
-class ProjectSettings(SerializableDataClass):
-    comparison_key: Optional[str] = None
+class ProjectSettings(TypedDict):
+    comparison_key: NotRequired[str]
     """
     The key used to join two experiments (defaults to `input`).
     """
 
 
-@dataclass
-class Project(SerializableDataClass):
+class Project(TypedDict):
     id: str
     """
     Unique identifier for the project
@@ -235,180 +214,156 @@ class Project(SerializableDataClass):
     """
     Name of the project
     """
-    created: Optional[str] = None
+    created: NotRequired[str]
     """
     Date of project creation
     """
-    deleted_at: Optional[str] = None
+    deleted_at: NotRequired[str]
     """
     Date of project deletion, or null if the project is still active
     """
-    user_id: Optional[str] = None
+    user_id: NotRequired[str]
     """
     Identifies the user who created the project
     """
-    settings: Optional[ProjectSettings] = None
+    settings: NotRequired[ProjectSettings]
 
 
-@dataclass
-class CreateProject(SerializableDataClass):
+class CreateProject(TypedDict):
     name: str
     """
     Name of the project
     """
-    org_name: Optional[str] = None
+    org_name: NotRequired[str]
     """
     For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, you may specify the name of the organization the project belongs in.
     """
 
 
-@dataclass
-class PatchProject(SerializableDataClass):
-    name: Optional[str] = None
+class PatchProject(TypedDict):
+    name: NotRequired[str]
     """
     Name of the project
     """
-    settings: Optional[ProjectSettings] = None
+    settings: NotRequired[ProjectSettings]
 
 
-@dataclass
-class InsertEventsResponse(SerializableDataClass):
-    row_ids: List[str]
+class InsertEventsResponse(TypedDict):
+    row_ids: Sequence[str]
     """
     The ids of all rows that were inserted, aligning one-to-one with the rows provided as input
     """
 
 
-@dataclass
-class Metrics(SerializableDataClass):
-    start: Optional[float] = None
+class Metrics(TypedDict):
+    start: NotRequired[float]
     """
     A unix timestamp recording when the section of code which produced the project logs event started
     """
-    end: Optional[float] = None
+    end: NotRequired[float]
     """
     A unix timestamp recording when the section of code which produced the project logs event finished
     """
-    prompt_tokens: Optional[int] = None
+    prompt_tokens: NotRequired[int]
     """
     The number of tokens in the prompt used to generate the project logs event (only set if this is an LLM span)
     """
-    completion_tokens: Optional[int] = None
+    completion_tokens: NotRequired[int]
     """
     The number of tokens in the completion generated by the model (only set if this is an LLM span)
     """
-    tokens: Optional[int] = None
+    tokens: NotRequired[int]
     """
     The total number of tokens in the input and output of the project logs event.
     """
 
 
-@dataclass
-class Context(SerializableDataClass):
-    caller_functionname: Optional[str] = None
+class Context(TypedDict):
+    caller_functionname: NotRequired[str]
     """
     The function in code which created the project logs event
     """
-    caller_filename: Optional[str] = None
+    caller_filename: NotRequired[str]
     """
     Name of the file in code where the project logs event was created
     """
-    caller_lineno: Optional[int] = None
+    caller_lineno: NotRequired[int]
     """
     Line of code where the project logs event was created
     """
 
 
-class TypeEnum(Enum):
-    LLM = "llm"
-    SCORE = "score"
-    FUNCTION = "function"
-    EVAL = "eval"
-    TASK = "task"
-    TOOL = "tool"
-
-
-Type = Optional[TypeEnum]
-
-
-@dataclass
-class SpanAttributes(SerializableDataClass):
-    name: Optional[str] = None
+class SpanAttributes(TypedDict):
+    name: NotRequired[str]
     """
     Name of the span, for display purposes only
     """
-    type: Optional[Type] = None
+    type: NotRequired[Literal["llm", "score", "function", "eval", "task", "tool"]]
     """
     Type of the span, for display purposes only
     """
 
 
-class FieldIsMerge(Enum):
-    BOOLEAN_FALSE = False
-    BOOLEAN_NONE = None
-
-
-@dataclass
-class InsertProjectLogsEventReplace(SerializableDataClass):
-    input: Optional[Any] = None
+class InsertProjectLogsEventReplace(TypedDict):
+    input: NotRequired[Any]
     """
     The arguments that uniquely define a user input (an arbitrary, JSON serializable object).
     """
-    output: Optional[Any] = None
+    output: NotRequired[Any]
     """
     The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
     """
-    expected: Optional[Any] = None
+    expected: NotRequired[Any]
     """
     The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
     """
-    error: Optional[Any] = None
+    error: NotRequired[Any]
     """
     The error that occurred, if any.
     """
-    scores: Optional[Dict[str, float]] = None
+    scores: NotRequired[Mapping[str, float]]
     """
     A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
     """
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: NotRequired[Mapping[str, Any]]
     """
     A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
     """
-    tags: Optional[List[str]] = None
+    tags: NotRequired[Sequence[str]]
     """
     A list of tags to log
     """
-    metrics: Optional[Metrics] = None
+    metrics: NotRequired[Metrics]
     """
     Metrics are numerical measurements tracking the execution of the code that produced the project logs event. Use "start" and "end" to track the time span over which the project logs event was produced
     """
-    context: Optional[Context] = None
+    context: NotRequired[Context]
     """
     Context is additional information about the code that produced the project logs event. It is essentially the textual counterpart to `metrics`. Use the `caller_*` attributes to track the location in code which produced the project logs event
     """
-    span_attributes: Optional[SpanAttributes] = None
+    span_attributes: NotRequired[SpanAttributes]
     """
     Human-identifying attributes of the span, such as name, type, etc.
     """
-    id: Optional[str] = None
+    id: NotRequired[str]
     """
     A unique identifier for the project logs event. If you don't provide one, BrainTrust will generate one for you
     """
-    created: Optional[str] = None
+    created: NotRequired[str]
     """
     The timestamp the project logs event was created
     """
-    _object_delete: Optional[bool] = None
+    _object_delete: NotRequired[bool]
     """
     Pass `_object_delete=true` to mark the project logs event deleted. Deleted events will not show up in subsequent fetches for this project logs
     """
-    _is_merge: Optional[FieldIsMerge] = None
+    _is_merge: NotRequired[Literal[False]]
     """
     The `_is_merge` field controls how the row is merged with any existing row with the same id in the DB. By default (or when set to `false`), the existing row is completely replaced by the new row. When set to `true`, the new row is deep-merged into the existing row
 
     For example, say there is an existing row in the DB `{"id": "foo", "input": {"a": 5, "b": 10}}`. If we merge a new row as `{"_is_merge": true, "id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"a": 5, "b": 11, "c": 20}}`. If we replace the new row as `{"id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"b": 11, "c": 20}}`
     """
-    _parent_id: Optional[str] = None
+    _parent_id: NotRequired[str]
     """
     Use the `_parent_id` field to create this row as a subspan of an existing row. It cannot be specified alongside `_is_merge=true`. Tracking hierarchical relationships are important for tracing (see the [guide](https://www.braintrust.dev/docs/guides/tracing) for full details).
 
@@ -416,91 +371,66 @@ class InsertProjectLogsEventReplace(SerializableDataClass):
     """
 
 
-class Type1Enum(Enum):
-    LLM = "llm"
-    SCORE = "score"
-    FUNCTION = "function"
-    EVAL = "eval"
-    TASK = "task"
-    TOOL = "tool"
-
-
-Type1 = Optional[Type1Enum]
-
-
-@dataclass
-class SpanAttributes1(SerializableDataClass):
-    name: Optional[str] = None
+class InsertProjectLogsEventMerge(TypedDict):
+    input: NotRequired[Any]
     """
-    Name of the span, for display purposes only
+    The arguments that uniquely define a user input (an arbitrary, JSON serializable object).
     """
-    type: Optional[Type1] = None
+    output: NotRequired[Any]
     """
-    Type of the span, for display purposes only
+    The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
     """
-
-
-@dataclass
-class InsertProjectLogsEventMerge(SerializableDataClass):
+    expected: NotRequired[Any]
+    """
+    The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
+    """
+    error: NotRequired[Any]
+    """
+    The error that occurred, if any.
+    """
+    scores: NotRequired[Mapping[str, float]]
+    """
+    A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
+    """
+    metadata: NotRequired[Mapping[str, Any]]
+    """
+    A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
+    """
+    tags: NotRequired[Sequence[str]]
+    """
+    A list of tags to log
+    """
+    metrics: NotRequired[Metrics]
+    """
+    Metrics are numerical measurements tracking the execution of the code that produced the project logs event. Use "start" and "end" to track the time span over which the project logs event was produced
+    """
+    context: NotRequired[Context]
+    """
+    Context is additional information about the code that produced the project logs event. It is essentially the textual counterpart to `metrics`. Use the `caller_*` attributes to track the location in code which produced the project logs event
+    """
+    span_attributes: NotRequired[SpanAttributes]
+    """
+    Human-identifying attributes of the span, such as name, type, etc.
+    """
+    id: NotRequired[str]
+    """
+    A unique identifier for the project logs event. If you don't provide one, BrainTrust will generate one for you
+    """
+    created: NotRequired[str]
+    """
+    The timestamp the project logs event was created
+    """
+    _object_delete: NotRequired[bool]
+    """
+    Pass `_object_delete=true` to mark the project logs event deleted. Deleted events will not show up in subsequent fetches for this project logs
+    """
     _is_merge: Literal[True]
     """
     The `_is_merge` field controls how the row is merged with any existing row with the same id in the DB. By default (or when set to `false`), the existing row is completely replaced by the new row. When set to `true`, the new row is deep-merged into the existing row
 
     For example, say there is an existing row in the DB `{"id": "foo", "input": {"a": 5, "b": 10}}`. If we merge a new row as `{"_is_merge": true, "id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"a": 5, "b": 11, "c": 20}}`. If we replace the new row as `{"id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"b": 11, "c": 20}}`
     """
-    input: Optional[Any] = None
-    """
-    The arguments that uniquely define a user input (an arbitrary, JSON serializable object).
-    """
-    output: Optional[Any] = None
-    """
-    The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
-    """
-    expected: Optional[Any] = None
-    """
-    The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
-    """
-    error: Optional[Any] = None
-    """
-    The error that occurred, if any.
-    """
-    scores: Optional[Dict[str, float]] = None
-    """
-    A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
-    """
-    metadata: Optional[Dict[str, Any]] = None
-    """
-    A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
-    """
-    tags: Optional[List[str]] = None
-    """
-    A list of tags to log
-    """
-    metrics: Optional[Metrics] = None
-    """
-    Metrics are numerical measurements tracking the execution of the code that produced the project logs event. Use "start" and "end" to track the time span over which the project logs event was produced
-    """
-    context: Optional[Context] = None
-    """
-    Context is additional information about the code that produced the project logs event. It is essentially the textual counterpart to `metrics`. Use the `caller_*` attributes to track the location in code which produced the project logs event
-    """
-    span_attributes: Optional[SpanAttributes1] = None
-    """
-    Human-identifying attributes of the span, such as name, type, etc.
-    """
-    id: Optional[str] = None
-    """
-    A unique identifier for the project logs event. If you don't provide one, BrainTrust will generate one for you
-    """
-    created: Optional[str] = None
-    """
-    The timestamp the project logs event was created
-    """
-    _object_delete: Optional[bool] = None
-    """
-    Pass `_object_delete=true` to mark the project logs event deleted. Deleted events will not show up in subsequent fetches for this project logs
-    """
-    _merge_paths: Optional[List[List[str]]] = None
+    _merge_paths: NotRequired[Sequence[Sequence[str]]]
     """
     The `_merge_paths` field allows controlling the depth of the merge. It can only be specified alongside `_is_merge=true`. `_merge_paths` is a list of paths, where each path is a list of field names. The deep merge will not descend below any of the specified merge paths.
 
@@ -511,49 +441,17 @@ class InsertProjectLogsEventMerge(SerializableDataClass):
 InsertProjectLogsEvent = Union[InsertProjectLogsEventReplace, InsertProjectLogsEventMerge]
 
 
-@dataclass
-class InsertProjectLogsEventRequest(SerializableDataClass):
-    events: List[InsertProjectLogsEvent]
+class InsertProjectLogsEventRequest(TypedDict):
+    events: Sequence[InsertProjectLogsEvent]
     """
     A list of project logs events to insert
     """
 
 
-class Type2Enum(Enum):
-    LLM = "llm"
-    SCORE = "score"
-    FUNCTION = "function"
-    EVAL = "eval"
-    TASK = "task"
-    TOOL = "tool"
-
-
-Type2 = Optional[Type2Enum]
-
-
-@dataclass
-class SpanAttributes2(SerializableDataClass):
-    name: Optional[str] = None
-    """
-    Name of the span, for display purposes only
-    """
-    type: Optional[Type2] = None
-    """
-    Type of the span, for display purposes only
-    """
-
-
-class ObjectType(Enum):
-    EXPERIMENT = "experiment"
-    DATASET = "dataset"
-    PROMPT = "prompt"
-    FUNCTION = "function"
-    PROMPT_SESSION = "prompt_session"
-
-
-@dataclass
-class Origin(SerializableDataClass):
-    object_type: Union[ObjectType, Literal["project_logs"]]
+class Origin(TypedDict):
+    object_type: Union[
+        Literal["experiment", "dataset", "prompt", "function", "prompt_session"], Literal["project_logs"]
+    ]
     """
     Type of the object the event is originating from.
     """
@@ -571,8 +469,7 @@ class Origin(SerializableDataClass):
     """
 
 
-@dataclass
-class ProjectLogsEvent(SerializableDataClass):
+class ProjectLogsEvent(TypedDict):
     id: str
     """
     A unique identifier for the project logs event. If you don't provide one, BrainTrust will generate one for you
@@ -597,75 +494,74 @@ class ProjectLogsEvent(SerializableDataClass):
     """
     A literal 'g' which identifies the log as a project log
     """
+    input: NotRequired[Any]
+    """
+    The arguments that uniquely define a user input (an arbitrary, JSON serializable object).
+    """
+    output: NotRequired[Any]
+    """
+    The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
+    """
+    expected: NotRequired[Any]
+    """
+    The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
+    """
+    error: NotRequired[Any]
+    """
+    The error that occurred, if any.
+    """
+    scores: NotRequired[Mapping[str, float]]
+    """
+    A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
+    """
+    metadata: NotRequired[Mapping[str, Any]]
+    """
+    A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
+    """
+    tags: NotRequired[Sequence[str]]
+    """
+    A list of tags to log
+    """
+    metrics: NotRequired[Metrics]
+    """
+    Metrics are numerical measurements tracking the execution of the code that produced the project logs event. Use "start" and "end" to track the time span over which the project logs event was produced
+    """
+    context: NotRequired[Context]
+    """
+    Context is additional information about the code that produced the project logs event. It is essentially the textual counterpart to `metrics`. Use the `caller_*` attributes to track the location in code which produced the project logs event
+    """
     span_id: str
     """
     A unique identifier used to link different project logs events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing
+    """
+    span_parents: NotRequired[Sequence[str]]
+    """
+    An array of the parent `span_ids` of this project logs event. This should be empty for the root span of a trace, and should most often contain just one parent element for subspans
     """
     root_span_id: str
     """
     The `span_id` of the root of the trace this project logs event belongs to
     """
-    input: Optional[Any] = None
-    """
-    The arguments that uniquely define a user input (an arbitrary, JSON serializable object).
-    """
-    output: Optional[Any] = None
-    """
-    The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question.
-    """
-    expected: Optional[Any] = None
-    """
-    The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models.
-    """
-    error: Optional[Any] = None
-    """
-    The error that occurred, if any.
-    """
-    scores: Optional[Dict[str, float]] = None
-    """
-    A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare logs.
-    """
-    metadata: Optional[Dict[str, Any]] = None
-    """
-    A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
-    """
-    tags: Optional[List[str]] = None
-    """
-    A list of tags to log
-    """
-    metrics: Optional[Metrics] = None
-    """
-    Metrics are numerical measurements tracking the execution of the code that produced the project logs event. Use "start" and "end" to track the time span over which the project logs event was produced
-    """
-    context: Optional[Context] = None
-    """
-    Context is additional information about the code that produced the project logs event. It is essentially the textual counterpart to `metrics`. Use the `caller_*` attributes to track the location in code which produced the project logs event
-    """
-    span_parents: Optional[List[str]] = None
-    """
-    An array of the parent `span_ids` of this project logs event. This should be empty for the root span of a trace, and should most often contain just one parent element for subspans
-    """
-    is_root: Optional[bool] = None
+    is_root: NotRequired[bool]
     """
     Whether this span is a root span
     """
-    span_attributes: Optional[SpanAttributes2] = None
+    span_attributes: NotRequired[SpanAttributes]
     """
     Human-identifying attributes of the span, such as name, type, etc.
     """
-    origin: Optional[Origin] = None
+    origin: NotRequired[Origin]
     """
     Indicates the event was copied from another object.
     """
 
 
-@dataclass
-class FetchProjectLogsEventsResponse(SerializableDataClass):
-    events: List[ProjectLogsEvent]
+class FetchProjectLogsEventsResponse(TypedDict):
+    events: Sequence[ProjectLogsEvent]
     """
     A list of fetched events
     """
-    cursor: Optional[str] = None
+    cursor: NotRequired[str]
     """
     Pagination cursor
 
@@ -679,127 +575,111 @@ FetchLimit = Optional[int]
 FetchPaginationCursor = Optional[str]
 
 
-@dataclass
-class PathLookupFilter(SerializableDataClass):
+class PathLookupFilter(TypedDict):
     type: Literal["path_lookup"]
     """
     Denotes the type of filter as a path-lookup filter
     """
-    path: List[str]
+    path: Sequence[str]
     """
     List of fields describing the path to the value to be checked against. For instance, if you wish to filter on the value of `c` in `{"input": {"a": {"b": {"c": "hello"}}}}`, pass `path=["input", "a", "b", "c"]`
     """
-    value: Optional[Any] = None
+    value: NotRequired[Any]
     """
     The value to compare equality-wise against the event value at the specified `path`. The value must be a "primitive", that is, any JSON-serializable object except for objects and arrays. For instance, if you wish to filter on the value of "input.a.b.c" in the object `{"input": {"a": {"b": {"c": "hello"}}}}`, pass `value="hello"`
     """
 
 
-FetchEventsFilters = Optional[List[PathLookupFilter]]
+FetchEventsFilters = Optional[Sequence[PathLookupFilter]]
 
 
-@dataclass
-class FetchEventsRequest(SerializableDataClass):
-    limit: Optional[FetchLimit] = None
-    cursor: Optional[FetchPaginationCursor] = None
-    max_xact_id: Optional[MaxXactId] = None
-    max_root_span_id: Optional[MaxRootSpanId] = None
-    filters: Optional[FetchEventsFilters] = None
-    version: Optional[Version] = None
+class FetchEventsRequest(TypedDict):
+    limit: NotRequired[FetchLimit]
+    cursor: NotRequired[FetchPaginationCursor]
+    max_xact_id: NotRequired[MaxXactId]
+    max_root_span_id: NotRequired[MaxRootSpanId]
+    filters: NotRequired[FetchEventsFilters]
+    version: NotRequired[Version]
 
 
-@dataclass
-class FeedbackResponseSchema(SerializableDataClass):
+class FeedbackResponseSchema(TypedDict):
     status: Literal["success"]
 
 
-class SourceEnum(Enum):
-    APP = "app"
-    API = "api"
-    EXTERNAL = "external"
-
-
-Source = Optional[SourceEnum]
-
-
-@dataclass
-class FeedbackProjectLogsItem(SerializableDataClass):
+class FeedbackProjectLogsItem(TypedDict):
     id: str
     """
     The id of the project logs event to log feedback for. This is the row `id` returned by `POST /v1/project_logs/{project_id}/insert`
     """
-    scores: Optional[Dict[str, float]] = None
+    scores: NotRequired[Mapping[str, float]]
     """
     A dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the project logs event
     """
-    expected: Optional[Any] = None
+    expected: NotRequired[Any]
     """
     The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not
     """
-    comment: Optional[str] = None
+    comment: NotRequired[str]
     """
     An optional comment string to log about the project logs event
     """
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: NotRequired[Mapping[str, Any]]
     """
     A dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
     """
-    source: Optional[Source] = None
+    source: NotRequired[Literal["app", "api", "external"]]
     """
     The source of the feedback. Must be one of "external" (default), "app", or "api"
     """
 
 
-@dataclass
-class FeedbackProjectLogsEventRequest(SerializableDataClass):
-    feedback: List[FeedbackProjectLogsItem]
+class FeedbackProjectLogsEventRequest(TypedDict):
+    feedback: Sequence[FeedbackProjectLogsItem]
     """
     A list of project logs feedback items
     """
 
 
-@dataclass
-class RepoInfo(SerializableDataClass):
-    commit: Optional[str] = None
+class RepoInfo(TypedDict):
+    commit: NotRequired[str]
     """
     SHA of most recent commit
     """
-    branch: Optional[str] = None
+    branch: NotRequired[str]
     """
     Name of the branch the most recent commit belongs to
     """
-    tag: Optional[str] = None
+    tag: NotRequired[str]
     """
     Name of the tag on the most recent commit
     """
-    dirty: Optional[bool] = None
+    dirty: NotRequired[bool]
     """
     Whether or not the repo had uncommitted changes when snapshotted
     """
-    author_name: Optional[str] = None
+    author_name: NotRequired[str]
     """
     Name of the author of the most recent commit
     """
-    author_email: Optional[str] = None
+    author_email: NotRequired[str]
     """
     Email of the author of the most recent commit
     """
-    commit_message: Optional[str] = None
+    commit_message: NotRequired[str]
     """
     Most recent commit message
     """
-    commit_time: Optional[str] = None
+    commit_time: NotRequired[str]
     """
     Time of the most recent commit
     """
-    git_diff: Optional[str] = None
+    git_diff: NotRequired[str]
     """
     If the repo was dirty when run, this includes the diff between the current state of the repo and the most recent commit.
     """
 
 
-@dataclass
-class Experiment(SerializableDataClass):
+class Experiment(TypedDict):
     id: str
     """
     Unique identifier for the experiment
@@ -812,252 +692,223 @@ class Experiment(SerializableDataClass):
     """
     Name of the experiment. Within a project, experiment names are unique
     """
+    description: NotRequired[str]
+    """
+    Textual description of the experiment
+    """
+    created: NotRequired[str]
+    """
+    Date of experiment creation
+    """
+    repo_info: NotRequired[RepoInfo]
+    commit: NotRequired[str]
+    """
+    Commit, taken directly from `repo_info.commit`
+    """
+    base_exp_id: NotRequired[str]
+    """
+    Id of default base experiment to compare against when viewing this experiment
+    """
+    deleted_at: NotRequired[str]
+    """
+    Date of experiment deletion, or null if the experiment is still active
+    """
+    dataset_id: NotRequired[str]
+    """
+    Identifier of the linked dataset, or null if the experiment is not linked to a dataset
+    """
+    dataset_version: NotRequired[str]
+    """
+    Version number of the linked dataset the experiment was run against. This can be used to reproduce the experiment after the dataset has been modified.
+    """
     public: bool
     """
     Whether or not the experiment is public. Public experiments can be viewed by anybody inside or outside the organization
     """
-    description: Optional[str] = None
-    """
-    Textual description of the experiment
-    """
-    created: Optional[str] = None
-    """
-    Date of experiment creation
-    """
-    repo_info: Optional[RepoInfo] = None
-    commit: Optional[str] = None
-    """
-    Commit, taken directly from `repo_info.commit`
-    """
-    base_exp_id: Optional[str] = None
-    """
-    Id of default base experiment to compare against when viewing this experiment
-    """
-    deleted_at: Optional[str] = None
-    """
-    Date of experiment deletion, or null if the experiment is still active
-    """
-    dataset_id: Optional[str] = None
-    """
-    Identifier of the linked dataset, or null if the experiment is not linked to a dataset
-    """
-    dataset_version: Optional[str] = None
-    """
-    Version number of the linked dataset the experiment was run against. This can be used to reproduce the experiment after the dataset has been modified.
-    """
-    user_id: Optional[str] = None
+    user_id: NotRequired[str]
     """
     Identifies the user who created the experiment
     """
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: NotRequired[Mapping[str, Any]]
     """
     User-controlled metadata about the experiment
     """
 
 
-@dataclass
-class CreateExperiment(SerializableDataClass):
+class CreateExperiment(TypedDict):
     project_id: str
     """
     Unique identifier for the project that the experiment belongs under
     """
-    name: Optional[str] = None
+    name: NotRequired[str]
     """
     Name of the experiment. Within a project, experiment names are unique
     """
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the experiment
     """
-    repo_info: Optional[RepoInfo] = None
-    base_exp_id: Optional[str] = None
+    repo_info: NotRequired[RepoInfo]
+    base_exp_id: NotRequired[str]
     """
     Id of default base experiment to compare against when viewing this experiment
     """
-    dataset_id: Optional[str] = None
+    dataset_id: NotRequired[str]
     """
     Identifier of the linked dataset, or null if the experiment is not linked to a dataset
     """
-    dataset_version: Optional[str] = None
+    dataset_version: NotRequired[str]
     """
     Version number of the linked dataset the experiment was run against. This can be used to reproduce the experiment after the dataset has been modified.
     """
-    public: Optional[bool] = None
+    public: NotRequired[bool]
     """
     Whether or not the experiment is public. Public experiments can be viewed by anybody inside or outside the organization
     """
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: NotRequired[Mapping[str, Any]]
     """
     User-controlled metadata about the experiment
     """
-    ensure_new: Optional[bool] = None
+    ensure_new: NotRequired[bool]
     """
     Normally, creating an experiment with the same name as an existing experiment will return the existing one un-modified. But if `ensure_new` is true, registration will generate a new experiment with a unique name in case of a conflict.
     """
 
 
-@dataclass
-class PatchExperiment(SerializableDataClass):
-    name: Optional[str] = None
+class PatchExperiment(TypedDict):
+    name: NotRequired[str]
     """
     Name of the experiment. Within a project, experiment names are unique
     """
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the experiment
     """
-    repo_info: Optional[RepoInfo] = None
-    base_exp_id: Optional[str] = None
+    repo_info: NotRequired[RepoInfo]
+    base_exp_id: NotRequired[str]
     """
     Id of default base experiment to compare against when viewing this experiment
     """
-    dataset_id: Optional[str] = None
+    dataset_id: NotRequired[str]
     """
     Identifier of the linked dataset, or null if the experiment is not linked to a dataset
     """
-    dataset_version: Optional[str] = None
+    dataset_version: NotRequired[str]
     """
     Version number of the linked dataset the experiment was run against. This can be used to reproduce the experiment after the dataset has been modified.
     """
-    public: Optional[bool] = None
+    public: NotRequired[bool]
     """
     Whether or not the experiment is public. Public experiments can be viewed by anybody inside or outside the organization
     """
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: NotRequired[Mapping[str, Any]]
     """
     User-controlled metadata about the experiment
     """
 
 
-@dataclass
-class Metrics3(SerializableDataClass):
-    start: Optional[float] = None
+class Metrics3(TypedDict):
+    start: NotRequired[float]
     """
     A unix timestamp recording when the section of code which produced the experiment event started
     """
-    end: Optional[float] = None
+    end: NotRequired[float]
     """
     A unix timestamp recording when the section of code which produced the experiment event finished
     """
-    prompt_tokens: Optional[int] = None
+    prompt_tokens: NotRequired[int]
     """
     The number of tokens in the prompt used to generate the experiment event (only set if this is an LLM span)
     """
-    completion_tokens: Optional[int] = None
+    completion_tokens: NotRequired[int]
     """
     The number of tokens in the completion generated by the model (only set if this is an LLM span)
     """
-    tokens: Optional[int] = None
+    tokens: NotRequired[int]
     """
     The total number of tokens in the input and output of the experiment event.
     """
 
 
-@dataclass
-class Context3(SerializableDataClass):
-    caller_functionname: Optional[str] = None
+class Context3(TypedDict):
+    caller_functionname: NotRequired[str]
     """
     The function in code which created the experiment event
     """
-    caller_filename: Optional[str] = None
+    caller_filename: NotRequired[str]
     """
     Name of the file in code where the experiment event was created
     """
-    caller_lineno: Optional[int] = None
+    caller_lineno: NotRequired[int]
     """
     Line of code where the experiment event was created
     """
 
 
-class Type3Enum(Enum):
-    LLM = "llm"
-    SCORE = "score"
-    FUNCTION = "function"
-    EVAL = "eval"
-    TASK = "task"
-    TOOL = "tool"
-
-
-Type3 = Optional[Type3Enum]
-
-
-@dataclass
-class SpanAttributes3(SerializableDataClass):
-    name: Optional[str] = None
-    """
-    Name of the span, for display purposes only
-    """
-    type: Optional[Type3] = None
-    """
-    Type of the span, for display purposes only
-    """
-
-
-@dataclass
-class InsertExperimentEventReplace(SerializableDataClass):
-    input: Optional[Any] = None
+class InsertExperimentEventReplace(TypedDict):
+    input: NotRequired[Any]
     """
     The arguments that uniquely define a test case (an arbitrary, JSON serializable object). Later on, Braintrust will use the `input` to know whether two test cases are the same between experiments, so they should not contain experiment-specific state. A simple rule of thumb is that if you run the same experiment twice, the `input` should be identical
     """
-    output: Optional[Any] = None
+    output: NotRequired[Any]
     """
     The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question
     """
-    expected: Optional[Any] = None
+    expected: NotRequired[Any]
     """
     The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models
     """
-    error: Optional[Any] = None
+    error: NotRequired[Any]
     """
     The error that occurred, if any.
     """
-    scores: Optional[Dict[str, float]] = None
+    scores: NotRequired[Mapping[str, float]]
     """
     A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments
     """
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: NotRequired[Mapping[str, Any]]
     """
     A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
     """
-    tags: Optional[List[str]] = None
+    tags: NotRequired[Sequence[str]]
     """
     A list of tags to log
     """
-    metrics: Optional[Metrics3] = None
+    metrics: NotRequired[Metrics3]
     """
     Metrics are numerical measurements tracking the execution of the code that produced the experiment event. Use "start" and "end" to track the time span over which the experiment event was produced
     """
-    context: Optional[Context3] = None
+    context: NotRequired[Context3]
     """
     Context is additional information about the code that produced the experiment event. It is essentially the textual counterpart to `metrics`. Use the `caller_*` attributes to track the location in code which produced the experiment event
     """
-    span_attributes: Optional[SpanAttributes3] = None
+    span_attributes: NotRequired[SpanAttributes]
     """
     Human-identifying attributes of the span, such as name, type, etc.
     """
-    id: Optional[str] = None
+    id: NotRequired[str]
     """
     A unique identifier for the experiment event. If you don't provide one, BrainTrust will generate one for you
     """
-    dataset_record_id: Optional[str] = None
+    dataset_record_id: NotRequired[str]
     """
     If the experiment is associated to a dataset, this is the event-level dataset id this experiment event is tied to
     """
-    created: Optional[str] = None
+    created: NotRequired[str]
     """
     The timestamp the experiment event was created
     """
-    _object_delete: Optional[bool] = None
+    _object_delete: NotRequired[bool]
     """
     Pass `_object_delete=true` to mark the experiment event deleted. Deleted events will not show up in subsequent fetches for this experiment
     """
-    _is_merge: Optional[FieldIsMerge] = None
+    _is_merge: NotRequired[Literal[False]]
     """
     The `_is_merge` field controls how the row is merged with any existing row with the same id in the DB. By default (or when set to `false`), the existing row is completely replaced by the new row. When set to `true`, the new row is deep-merged into the existing row
 
     For example, say there is an existing row in the DB `{"id": "foo", "input": {"a": 5, "b": 10}}`. If we merge a new row as `{"_is_merge": true, "id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"a": 5, "b": 11, "c": 20}}`. If we replace the new row as `{"id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"b": 11, "c": 20}}`
     """
-    _parent_id: Optional[str] = None
+    _parent_id: NotRequired[str]
     """
     Use the `_parent_id` field to create this row as a subspan of an existing row. It cannot be specified alongside `_is_merge=true`. Tracking hierarchical relationships are important for tracing (see the [guide](https://www.braintrust.dev/docs/guides/tracing) for full details).
 
@@ -1065,95 +916,70 @@ class InsertExperimentEventReplace(SerializableDataClass):
     """
 
 
-class Type4Enum(Enum):
-    LLM = "llm"
-    SCORE = "score"
-    FUNCTION = "function"
-    EVAL = "eval"
-    TASK = "task"
-    TOOL = "tool"
-
-
-Type4 = Optional[Type4Enum]
-
-
-@dataclass
-class SpanAttributes4(SerializableDataClass):
-    name: Optional[str] = None
+class InsertExperimentEventMerge(TypedDict):
+    input: NotRequired[Any]
     """
-    Name of the span, for display purposes only
+    The arguments that uniquely define a test case (an arbitrary, JSON serializable object). Later on, Braintrust will use the `input` to know whether two test cases are the same between experiments, so they should not contain experiment-specific state. A simple rule of thumb is that if you run the same experiment twice, the `input` should be identical
     """
-    type: Optional[Type4] = None
+    output: NotRequired[Any]
     """
-    Type of the span, for display purposes only
+    The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question
     """
-
-
-@dataclass
-class InsertExperimentEventMerge(SerializableDataClass):
+    expected: NotRequired[Any]
+    """
+    The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models
+    """
+    error: NotRequired[Any]
+    """
+    The error that occurred, if any.
+    """
+    scores: NotRequired[Mapping[str, float]]
+    """
+    A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments
+    """
+    metadata: NotRequired[Mapping[str, Any]]
+    """
+    A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
+    """
+    tags: NotRequired[Sequence[str]]
+    """
+    A list of tags to log
+    """
+    metrics: NotRequired[Metrics3]
+    """
+    Metrics are numerical measurements tracking the execution of the code that produced the experiment event. Use "start" and "end" to track the time span over which the experiment event was produced
+    """
+    context: NotRequired[Context3]
+    """
+    Context is additional information about the code that produced the experiment event. It is essentially the textual counterpart to `metrics`. Use the `caller_*` attributes to track the location in code which produced the experiment event
+    """
+    span_attributes: NotRequired[SpanAttributes]
+    """
+    Human-identifying attributes of the span, such as name, type, etc.
+    """
+    id: NotRequired[str]
+    """
+    A unique identifier for the experiment event. If you don't provide one, BrainTrust will generate one for you
+    """
+    dataset_record_id: NotRequired[str]
+    """
+    If the experiment is associated to a dataset, this is the event-level dataset id this experiment event is tied to
+    """
+    created: NotRequired[str]
+    """
+    The timestamp the experiment event was created
+    """
+    _object_delete: NotRequired[bool]
+    """
+    Pass `_object_delete=true` to mark the experiment event deleted. Deleted events will not show up in subsequent fetches for this experiment
+    """
     _is_merge: Literal[True]
     """
     The `_is_merge` field controls how the row is merged with any existing row with the same id in the DB. By default (or when set to `false`), the existing row is completely replaced by the new row. When set to `true`, the new row is deep-merged into the existing row
 
     For example, say there is an existing row in the DB `{"id": "foo", "input": {"a": 5, "b": 10}}`. If we merge a new row as `{"_is_merge": true, "id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"a": 5, "b": 11, "c": 20}}`. If we replace the new row as `{"id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"b": 11, "c": 20}}`
     """
-    input: Optional[Any] = None
-    """
-    The arguments that uniquely define a test case (an arbitrary, JSON serializable object). Later on, Braintrust will use the `input` to know whether two test cases are the same between experiments, so they should not contain experiment-specific state. A simple rule of thumb is that if you run the same experiment twice, the `input` should be identical
-    """
-    output: Optional[Any] = None
-    """
-    The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question
-    """
-    expected: Optional[Any] = None
-    """
-    The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models
-    """
-    error: Optional[Any] = None
-    """
-    The error that occurred, if any.
-    """
-    scores: Optional[Dict[str, float]] = None
-    """
-    A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments
-    """
-    metadata: Optional[Dict[str, Any]] = None
-    """
-    A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
-    """
-    tags: Optional[List[str]] = None
-    """
-    A list of tags to log
-    """
-    metrics: Optional[Metrics3] = None
-    """
-    Metrics are numerical measurements tracking the execution of the code that produced the experiment event. Use "start" and "end" to track the time span over which the experiment event was produced
-    """
-    context: Optional[Context3] = None
-    """
-    Context is additional information about the code that produced the experiment event. It is essentially the textual counterpart to `metrics`. Use the `caller_*` attributes to track the location in code which produced the experiment event
-    """
-    span_attributes: Optional[SpanAttributes4] = None
-    """
-    Human-identifying attributes of the span, such as name, type, etc.
-    """
-    id: Optional[str] = None
-    """
-    A unique identifier for the experiment event. If you don't provide one, BrainTrust will generate one for you
-    """
-    dataset_record_id: Optional[str] = None
-    """
-    If the experiment is associated to a dataset, this is the event-level dataset id this experiment event is tied to
-    """
-    created: Optional[str] = None
-    """
-    The timestamp the experiment event was created
-    """
-    _object_delete: Optional[bool] = None
-    """
-    Pass `_object_delete=true` to mark the experiment event deleted. Deleted events will not show up in subsequent fetches for this experiment
-    """
-    _merge_paths: Optional[List[List[str]]] = None
+    _merge_paths: NotRequired[Sequence[Sequence[str]]]
     """
     The `_merge_paths` field allows controlling the depth of the merge. It can only be specified alongside `_is_merge=true`. `_merge_paths` is a list of paths, where each path is a list of field names. The deep merge will not descend below any of the specified merge paths.
 
@@ -1164,63 +990,21 @@ class InsertExperimentEventMerge(SerializableDataClass):
 InsertExperimentEvent = Union[InsertExperimentEventReplace, InsertExperimentEventMerge]
 
 
-@dataclass
-class InsertExperimentEventRequest(SerializableDataClass):
-    events: List[InsertExperimentEvent]
+class InsertExperimentEventRequest(TypedDict):
+    events: Sequence[InsertExperimentEvent]
     """
     A list of experiment events to insert
     """
 
 
-class Type5Enum(Enum):
-    LLM = "llm"
-    SCORE = "score"
-    FUNCTION = "function"
-    EVAL = "eval"
-    TASK = "task"
-    TOOL = "tool"
-
-
-Type5 = Optional[Type5Enum]
-
-
-@dataclass
-class SpanAttributes5(SerializableDataClass):
-    name: Optional[str] = None
-    """
-    Name of the span, for display purposes only
-    """
-    type: Optional[Type5] = None
-    """
-    Type of the span, for display purposes only
-    """
-
-
-@dataclass
-class Origin1(SerializableDataClass):
-    object_type: Union[ObjectType, Literal["project_logs"]]
-    """
-    Type of the object the event is originating from.
-    """
-    object_id: str
-    """
-    ID of the object the event is originating from.
-    """
-    id: str
-    """
-    ID of the original event.
-    """
-    _xact_id: str
-    """
-    Transaction ID of the original event.
-    """
-
-
-@dataclass
-class ExperimentEvent(SerializableDataClass):
+class ExperimentEvent(TypedDict):
     id: str
     """
     A unique identifier for the experiment event. If you don't provide one, BrainTrust will generate one for you
+    """
+    dataset_record_id: NotRequired[str]
+    """
+    If the experiment is associated to a dataset, this is the event-level dataset id this experiment event is tied to
     """
     _xact_id: str
     """
@@ -1238,79 +1022,74 @@ class ExperimentEvent(SerializableDataClass):
     """
     Unique identifier for the experiment
     """
+    input: NotRequired[Any]
+    """
+    The arguments that uniquely define a test case (an arbitrary, JSON serializable object). Later on, Braintrust will use the `input` to know whether two test cases are the same between experiments, so they should not contain experiment-specific state. A simple rule of thumb is that if you run the same experiment twice, the `input` should be identical
+    """
+    output: NotRequired[Any]
+    """
+    The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question
+    """
+    expected: NotRequired[Any]
+    """
+    The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models
+    """
+    error: NotRequired[Any]
+    """
+    The error that occurred, if any.
+    """
+    scores: NotRequired[Mapping[str, float]]
+    """
+    A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments
+    """
+    metadata: NotRequired[Mapping[str, Any]]
+    """
+    A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
+    """
+    tags: NotRequired[Sequence[str]]
+    """
+    A list of tags to log
+    """
+    metrics: NotRequired[Metrics3]
+    """
+    Metrics are numerical measurements tracking the execution of the code that produced the experiment event. Use "start" and "end" to track the time span over which the experiment event was produced
+    """
+    context: NotRequired[Context3]
+    """
+    Context is additional information about the code that produced the experiment event. It is essentially the textual counterpart to `metrics`. Use the `caller_*` attributes to track the location in code which produced the experiment event
+    """
     span_id: str
     """
     A unique identifier used to link different experiment events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing
+    """
+    span_parents: NotRequired[Sequence[str]]
+    """
+    An array of the parent `span_ids` of this experiment event. This should be empty for the root span of a trace, and should most often contain just one parent element for subspans
     """
     root_span_id: str
     """
     The `span_id` of the root of the trace this experiment event belongs to
     """
-    dataset_record_id: Optional[str] = None
-    """
-    If the experiment is associated to a dataset, this is the event-level dataset id this experiment event is tied to
-    """
-    input: Optional[Any] = None
-    """
-    The arguments that uniquely define a test case (an arbitrary, JSON serializable object). Later on, Braintrust will use the `input` to know whether two test cases are the same between experiments, so they should not contain experiment-specific state. A simple rule of thumb is that if you run the same experiment twice, the `input` should be identical
-    """
-    output: Optional[Any] = None
-    """
-    The output of your application, including post-processing (an arbitrary, JSON serializable object), that allows you to determine whether the result is correct or not. For example, in an app that generates SQL queries, the `output` should be the _result_ of the SQL query generated by the model, not the query itself, because there may be multiple valid queries that answer a single question
-    """
-    expected: Optional[Any] = None
-    """
-    The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not. Braintrust currently does not compare `output` to `expected` for you, since there are so many different ways to do that correctly. Instead, these values are just used to help you navigate your experiments while digging into analyses. However, we may later use these values to re-score outputs or fine-tune your models
-    """
-    error: Optional[Any] = None
-    """
-    The error that occurred, if any.
-    """
-    scores: Optional[Dict[str, float]] = None
-    """
-    A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments
-    """
-    metadata: Optional[Dict[str, Any]] = None
-    """
-    A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
-    """
-    tags: Optional[List[str]] = None
-    """
-    A list of tags to log
-    """
-    metrics: Optional[Metrics3] = None
-    """
-    Metrics are numerical measurements tracking the execution of the code that produced the experiment event. Use "start" and "end" to track the time span over which the experiment event was produced
-    """
-    context: Optional[Context3] = None
-    """
-    Context is additional information about the code that produced the experiment event. It is essentially the textual counterpart to `metrics`. Use the `caller_*` attributes to track the location in code which produced the experiment event
-    """
-    span_parents: Optional[List[str]] = None
-    """
-    An array of the parent `span_ids` of this experiment event. This should be empty for the root span of a trace, and should most often contain just one parent element for subspans
-    """
-    span_attributes: Optional[SpanAttributes5] = None
+    span_attributes: NotRequired[SpanAttributes]
     """
     Human-identifying attributes of the span, such as name, type, etc.
     """
-    is_root: Optional[bool] = None
+    is_root: NotRequired[bool]
     """
     Whether this span is a root span
     """
-    origin: Optional[Origin1] = None
+    origin: NotRequired[Origin]
     """
     Indicates the event was copied from another object.
     """
 
 
-@dataclass
-class FetchExperimentEventsResponse(SerializableDataClass):
-    events: List[ExperimentEvent]
+class FetchExperimentEventsResponse(TypedDict):
+    events: Sequence[ExperimentEvent]
     """
     A list of fetched events
     """
-    cursor: Optional[str] = None
+    cursor: NotRequired[str]
     """
     Pagination cursor
 
@@ -1318,53 +1097,41 @@ class FetchExperimentEventsResponse(SerializableDataClass):
     """
 
 
-class Source1Enum(Enum):
-    APP = "app"
-    API = "api"
-    EXTERNAL = "external"
-
-
-Source1 = Optional[Source1Enum]
-
-
-@dataclass
-class FeedbackExperimentItem(SerializableDataClass):
+class FeedbackExperimentItem(TypedDict):
     id: str
     """
     The id of the experiment event to log feedback for. This is the row `id` returned by `POST /v1/experiment/{experiment_id}/insert`
     """
-    scores: Optional[Dict[str, float]] = None
+    scores: NotRequired[Mapping[str, float]]
     """
     A dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the experiment event
     """
-    expected: Optional[Any] = None
+    expected: NotRequired[Any]
     """
     The ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not
     """
-    comment: Optional[str] = None
+    comment: NotRequired[str]
     """
     An optional comment string to log about the experiment event
     """
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: NotRequired[Mapping[str, Any]]
     """
     A dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
     """
-    source: Optional[Source1] = None
+    source: NotRequired[Literal["app", "api", "external"]]
     """
     The source of the feedback. Must be one of "external" (default), "app", or "api"
     """
 
 
-@dataclass
-class FeedbackExperimentEventRequest(SerializableDataClass):
-    feedback: List[FeedbackExperimentItem]
+class FeedbackExperimentEventRequest(TypedDict):
+    feedback: Sequence[FeedbackExperimentItem]
     """
     A list of experiment feedback items
     """
 
 
-@dataclass
-class ScoreSummary(SerializableDataClass):
+class ScoreSummary(TypedDict):
     name: str
     """
     Name of the score
@@ -1372,6 +1139,10 @@ class ScoreSummary(SerializableDataClass):
     score: float
     """
     Average score across all examples
+    """
+    diff: NotRequired[float]
+    """
+    Difference in score between the current and comparison experiment
     """
     improvements: int
     """
@@ -1381,14 +1152,9 @@ class ScoreSummary(SerializableDataClass):
     """
     Number of regressions in the score
     """
-    diff: Optional[float] = None
-    """
-    Difference in score between the current and comparison experiment
-    """
 
 
-@dataclass
-class MetricSummary(SerializableDataClass):
+class MetricSummary(TypedDict):
     name: str
     """
     Name of the metric
@@ -1401,6 +1167,10 @@ class MetricSummary(SerializableDataClass):
     """
     Unit label for the metric
     """
+    diff: NotRequired[float]
+    """
+    Difference in metric between the current and comparison experiment
+    """
     improvements: int
     """
     Number of improvements in the metric
@@ -1409,14 +1179,9 @@ class MetricSummary(SerializableDataClass):
     """
     Number of regressions in the metric
     """
-    diff: Optional[float] = None
-    """
-    Difference in metric between the current and comparison experiment
-    """
 
 
-@dataclass
-class SummarizeExperimentResponse(SerializableDataClass):
+class SummarizeExperimentResponse(TypedDict):
     project_name: str
     """
     Name of the project that the experiment belongs to
@@ -1433,22 +1198,21 @@ class SummarizeExperimentResponse(SerializableDataClass):
     """
     URL to the experiment's page in the Braintrust app
     """
-    comparison_experiment_name: Optional[str] = None
+    comparison_experiment_name: NotRequired[str]
     """
     The experiment which scores are baselined against
     """
-    scores: Optional[Dict[str, ScoreSummary]] = None
+    scores: NotRequired[Mapping[str, ScoreSummary]]
     """
     Summary of the experiment's scores
     """
-    metrics: Optional[Dict[str, MetricSummary]] = None
+    metrics: NotRequired[Mapping[str, MetricSummary]]
     """
     Summary of the experiment's metrics
     """
 
 
-@dataclass
-class Dataset(SerializableDataClass):
+class Dataset(TypedDict):
     id: str
     """
     Unique identifier for the dataset
@@ -1461,30 +1225,29 @@ class Dataset(SerializableDataClass):
     """
     Name of the dataset. Within a project, dataset names are unique
     """
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the dataset
     """
-    created: Optional[str] = None
+    created: NotRequired[str]
     """
     Date of dataset creation
     """
-    deleted_at: Optional[str] = None
+    deleted_at: NotRequired[str]
     """
     Date of dataset deletion, or null if the dataset is still active
     """
-    user_id: Optional[str] = None
+    user_id: NotRequired[str]
     """
     Identifies the user who created the dataset
     """
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: NotRequired[Mapping[str, Any]]
     """
     User-controlled metadata about the dataset
     """
 
 
-@dataclass
-class CreateDataset(SerializableDataClass):
+class CreateDataset(TypedDict):
     project_id: str
     """
     Unique identifier for the project that the dataset belongs under
@@ -1493,69 +1256,67 @@ class CreateDataset(SerializableDataClass):
     """
     Name of the dataset. Within a project, dataset names are unique
     """
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the dataset
     """
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: NotRequired[Mapping[str, Any]]
     """
     User-controlled metadata about the dataset
     """
 
 
-@dataclass
-class PatchDataset(SerializableDataClass):
-    name: Optional[str] = None
+class PatchDataset(TypedDict):
+    name: NotRequired[str]
     """
     Name of the dataset. Within a project, dataset names are unique
     """
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the dataset
     """
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: NotRequired[Mapping[str, Any]]
     """
     User-controlled metadata about the dataset
     """
 
 
-@dataclass
-class InsertDatasetEventReplace(SerializableDataClass):
-    input: Optional[Any] = None
+class InsertDatasetEventReplace(TypedDict):
+    input: NotRequired[Any]
     """
     The argument that uniquely define an input case (an arbitrary, JSON serializable object)
     """
-    expected: Optional[Any] = None
+    expected: NotRequired[Any]
     """
     The output of your application, including post-processing (an arbitrary, JSON serializable object)
     """
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: NotRequired[Mapping[str, Any]]
     """
     A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
     """
-    tags: Optional[List[str]] = None
+    tags: NotRequired[Sequence[str]]
     """
     A list of tags to log
     """
-    id: Optional[str] = None
+    id: NotRequired[str]
     """
     A unique identifier for the dataset event. If you don't provide one, BrainTrust will generate one for you
     """
-    created: Optional[str] = None
+    created: NotRequired[str]
     """
     The timestamp the dataset event was created
     """
-    _object_delete: Optional[bool] = None
+    _object_delete: NotRequired[bool]
     """
     Pass `_object_delete=true` to mark the dataset event deleted. Deleted events will not show up in subsequent fetches for this dataset
     """
-    _is_merge: Optional[FieldIsMerge] = None
+    _is_merge: NotRequired[Literal[False]]
     """
     The `_is_merge` field controls how the row is merged with any existing row with the same id in the DB. By default (or when set to `false`), the existing row is completely replaced by the new row. When set to `true`, the new row is deep-merged into the existing row
 
     For example, say there is an existing row in the DB `{"id": "foo", "input": {"a": 5, "b": 10}}`. If we merge a new row as `{"_is_merge": true, "id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"a": 5, "b": 11, "c": 20}}`. If we replace the new row as `{"id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"b": 11, "c": 20}}`
     """
-    _parent_id: Optional[str] = None
+    _parent_id: NotRequired[str]
     """
     Use the `_parent_id` field to create this row as a subspan of an existing row. It cannot be specified alongside `_is_merge=true`. Tracking hierarchical relationships are important for tracing (see the [guide](https://www.braintrust.dev/docs/guides/tracing) for full details).
 
@@ -1563,43 +1324,42 @@ class InsertDatasetEventReplace(SerializableDataClass):
     """
 
 
-@dataclass
-class InsertDatasetEventMerge(SerializableDataClass):
+class InsertDatasetEventMerge(TypedDict):
+    input: NotRequired[Any]
+    """
+    The argument that uniquely define an input case (an arbitrary, JSON serializable object)
+    """
+    expected: NotRequired[Any]
+    """
+    The output of your application, including post-processing (an arbitrary, JSON serializable object)
+    """
+    metadata: NotRequired[Mapping[str, Any]]
+    """
+    A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
+    """
+    tags: NotRequired[Sequence[str]]
+    """
+    A list of tags to log
+    """
+    id: NotRequired[str]
+    """
+    A unique identifier for the dataset event. If you don't provide one, BrainTrust will generate one for you
+    """
+    created: NotRequired[str]
+    """
+    The timestamp the dataset event was created
+    """
+    _object_delete: NotRequired[bool]
+    """
+    Pass `_object_delete=true` to mark the dataset event deleted. Deleted events will not show up in subsequent fetches for this dataset
+    """
     _is_merge: Literal[True]
     """
     The `_is_merge` field controls how the row is merged with any existing row with the same id in the DB. By default (or when set to `false`), the existing row is completely replaced by the new row. When set to `true`, the new row is deep-merged into the existing row
 
     For example, say there is an existing row in the DB `{"id": "foo", "input": {"a": 5, "b": 10}}`. If we merge a new row as `{"_is_merge": true, "id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"a": 5, "b": 11, "c": 20}}`. If we replace the new row as `{"id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"b": 11, "c": 20}}`
     """
-    input: Optional[Any] = None
-    """
-    The argument that uniquely define an input case (an arbitrary, JSON serializable object)
-    """
-    expected: Optional[Any] = None
-    """
-    The output of your application, including post-processing (an arbitrary, JSON serializable object)
-    """
-    metadata: Optional[Dict[str, Any]] = None
-    """
-    A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
-    """
-    tags: Optional[List[str]] = None
-    """
-    A list of tags to log
-    """
-    id: Optional[str] = None
-    """
-    A unique identifier for the dataset event. If you don't provide one, BrainTrust will generate one for you
-    """
-    created: Optional[str] = None
-    """
-    The timestamp the dataset event was created
-    """
-    _object_delete: Optional[bool] = None
-    """
-    Pass `_object_delete=true` to mark the dataset event deleted. Deleted events will not show up in subsequent fetches for this dataset
-    """
-    _merge_paths: Optional[List[List[str]]] = None
+    _merge_paths: NotRequired[Sequence[Sequence[str]]]
     """
     The `_merge_paths` field allows controlling the depth of the merge. It can only be specified alongside `_is_merge=true`. `_merge_paths` is a list of paths, where each path is a list of field names. The deep merge will not descend below any of the specified merge paths.
 
@@ -1610,36 +1370,14 @@ class InsertDatasetEventMerge(SerializableDataClass):
 InsertDatasetEvent = Union[InsertDatasetEventReplace, InsertDatasetEventMerge]
 
 
-@dataclass
-class InsertDatasetEventRequest(SerializableDataClass):
-    events: List[InsertDatasetEvent]
+class InsertDatasetEventRequest(TypedDict):
+    events: Sequence[InsertDatasetEvent]
     """
     A list of dataset events to insert
     """
 
 
-@dataclass
-class Origin2(SerializableDataClass):
-    object_type: Union[ObjectType, Literal["project_logs"]]
-    """
-    Type of the object the event is originating from.
-    """
-    object_id: str
-    """
-    ID of the object the event is originating from.
-    """
-    id: str
-    """
-    ID of the original event.
-    """
-    _xact_id: str
-    """
-    Transaction ID of the original event.
-    """
-
-
-@dataclass
-class DatasetEvent(SerializableDataClass):
+class DatasetEvent(TypedDict):
     id: str
     """
     A unique identifier for the dataset event. If you don't provide one, BrainTrust will generate one for you
@@ -1660,6 +1398,22 @@ class DatasetEvent(SerializableDataClass):
     """
     Unique identifier for the dataset
     """
+    input: NotRequired[Any]
+    """
+    The argument that uniquely define an input case (an arbitrary, JSON serializable object)
+    """
+    expected: NotRequired[Any]
+    """
+    The output of your application, including post-processing (an arbitrary, JSON serializable object)
+    """
+    metadata: NotRequired[Mapping[str, Any]]
+    """
+    A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
+    """
+    tags: NotRequired[Sequence[str]]
+    """
+    A list of tags to log
+    """
     span_id: str
     """
     A unique identifier used to link different dataset events together as part of a full trace. See the [tracing guide](https://www.braintrust.dev/docs/guides/tracing) for full details on tracing
@@ -1668,39 +1422,22 @@ class DatasetEvent(SerializableDataClass):
     """
     The `span_id` of the root of the trace this dataset event belongs to
     """
-    input: Optional[Any] = None
-    """
-    The argument that uniquely define an input case (an arbitrary, JSON serializable object)
-    """
-    expected: Optional[Any] = None
-    """
-    The output of your application, including post-processing (an arbitrary, JSON serializable object)
-    """
-    metadata: Optional[Dict[str, Any]] = None
-    """
-    A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
-    """
-    tags: Optional[List[str]] = None
-    """
-    A list of tags to log
-    """
-    is_root: Optional[bool] = None
+    is_root: NotRequired[bool]
     """
     Whether this span is a root span
     """
-    origin: Optional[Origin2] = None
+    origin: NotRequired[Origin]
     """
     Indicates the event was copied from another object.
     """
 
 
-@dataclass
-class FetchDatasetEventsResponse(SerializableDataClass):
-    events: List[DatasetEvent]
+class FetchDatasetEventsResponse(TypedDict):
+    events: Sequence[DatasetEvent]
     """
     A list of fetched events
     """
-    cursor: Optional[str] = None
+    cursor: NotRequired[str]
     """
     Pagination cursor
 
@@ -1708,53 +1445,40 @@ class FetchDatasetEventsResponse(SerializableDataClass):
     """
 
 
-class Source2Enum(Enum):
-    APP = "app"
-    API = "api"
-    EXTERNAL = "external"
-
-
-Source2 = Optional[Source2Enum]
-
-
-@dataclass
-class FeedbackDatasetItem(SerializableDataClass):
+class FeedbackDatasetItem(TypedDict):
     id: str
     """
     The id of the dataset event to log feedback for. This is the row `id` returned by `POST /v1/dataset/{dataset_id}/insert`
     """
-    comment: Optional[str] = None
+    comment: NotRequired[str]
     """
     An optional comment string to log about the dataset event
     """
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: NotRequired[Mapping[str, Any]]
     """
     A dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
     """
-    source: Optional[Source2] = None
+    source: NotRequired[Literal["app", "api", "external"]]
     """
     The source of the feedback. Must be one of "external" (default), "app", or "api"
     """
 
 
-@dataclass
-class FeedbackDatasetEventRequest(SerializableDataClass):
-    feedback: List[FeedbackDatasetItem]
+class FeedbackDatasetEventRequest(TypedDict):
+    feedback: Sequence[FeedbackDatasetItem]
     """
     A list of dataset feedback items
     """
 
 
-@dataclass
-class DataSummary(SerializableDataClass):
+class DataSummary(TypedDict):
     total_records: int
     """
     Total number of records in the dataset
     """
 
 
-@dataclass
-class SummarizeDatasetResponse(SerializableDataClass):
+class SummarizeDatasetResponse(TypedDict):
     project_name: str
     """
     Name of the project that the dataset belongs to
@@ -1771,23 +1495,20 @@ class SummarizeDatasetResponse(SerializableDataClass):
     """
     URL to the dataset's page in the Braintrust app
     """
-    data_summary: Optional[DataSummary] = None
+    data_summary: NotRequired[DataSummary]
 
 
-@dataclass
-class ChatCompletionContentPartText(SerializableDataClass):
+class ChatCompletionContentPartText(TypedDict):
+    text: NotRequired[str]
     type: Literal["text"]
-    text: Optional[str] = ""
 
 
-@dataclass
-class ImageUrl(SerializableDataClass):
+class ImageUrl(TypedDict):
     url: str
-    detail: Optional[Union[Literal["auto"], Literal["low"], Literal["high"]]] = None
+    detail: NotRequired[Union[Literal["auto"], Literal["low"], Literal["high"]]]
 
 
-@dataclass
-class ChatCompletionContentPartImage(SerializableDataClass):
+class ChatCompletionContentPartImage(TypedDict):
     image_url: ImageUrl
     type: Literal["image_url"]
 
@@ -1795,69 +1516,60 @@ class ChatCompletionContentPartImage(SerializableDataClass):
 ChatCompletionContentPart = Union[ChatCompletionContentPartText, ChatCompletionContentPartImage]
 
 
-ChatCompletionContent = Union[str, List[ChatCompletionContentPart]]
+ChatCompletionContent = Union[str, Sequence[ChatCompletionContentPart]]
 
 
-@dataclass
-class Function(SerializableDataClass):
+class Function(TypedDict):
     arguments: str
     name: str
 
 
-@dataclass
-class ChatCompletionMessageToolCall(SerializableDataClass):
+class ChatCompletionMessageToolCall(TypedDict):
     id: str
     function: Function
     type: Literal["function"]
 
 
-@dataclass
-class ChatCompletionMessageParam1(SerializableDataClass):
+class ChatCompletionMessageParam1(TypedDict):
+    content: NotRequired[str]
     role: Literal["system"]
-    content: Optional[str] = ""
-    name: Optional[str] = None
+    name: NotRequired[str]
 
 
-@dataclass
-class ChatCompletionMessageParam2(SerializableDataClass):
+class ChatCompletionMessageParam2(TypedDict):
+    content: NotRequired[ChatCompletionContent]
     role: Literal["user"]
-    content: Optional[ChatCompletionContent] = None
-    name: Optional[str] = None
+    name: NotRequired[str]
 
 
-@dataclass
-class FunctionCall(SerializableDataClass):
+class FunctionCall(TypedDict):
     arguments: str
     name: str
 
 
-@dataclass
-class ChatCompletionMessageParam3(SerializableDataClass):
+class ChatCompletionMessageParam3(TypedDict):
     role: Literal["assistant"]
-    content: Optional[str] = None
-    function_call: Optional[FunctionCall] = None
-    name: Optional[str] = None
-    tool_calls: Optional[List[ChatCompletionMessageToolCall]] = None
+    content: NotRequired[str]
+    function_call: NotRequired[FunctionCall]
+    name: NotRequired[str]
+    tool_calls: NotRequired[Sequence[ChatCompletionMessageToolCall]]
 
 
-@dataclass
-class ChatCompletionMessageParam4(SerializableDataClass):
+class ChatCompletionMessageParam4(TypedDict):
+    content: NotRequired[str]
     role: Literal["tool"]
-    content: Optional[str] = ""
-    tool_call_id: Optional[str] = ""
+    tool_call_id: NotRequired[str]
 
 
-@dataclass
-class ChatCompletionMessageParam5(SerializableDataClass):
+class ChatCompletionMessageParam5(TypedDict):
+    content: NotRequired[str]
     name: str
     role: Literal["function"]
-    content: Optional[str] = ""
 
 
-@dataclass
-class ChatCompletionMessageParam6(SerializableDataClass):
+class ChatCompletionMessageParam6(TypedDict):
     role: Literal["model"]
-    content: Optional[str] = None
+    content: NotRequired[str]
 
 
 ChatCompletionMessageParam = Union[
@@ -1870,107 +1582,93 @@ ChatCompletionMessageParam = Union[
 ]
 
 
-@dataclass
-class ResponseFormat(SerializableDataClass):
+class ResponseFormat(TypedDict):
     type: Literal["json_object"]
 
 
-@dataclass
-class JsonSchema(SerializableDataClass):
+class JsonSchema(TypedDict):
     name: str
-    description: Optional[str] = None
-    schema_: Optional[Dict[str, Any]] = None
-    strict: Optional[bool] = None
+    description: NotRequired[str]
+    schema_: NotRequired[Mapping[str, Any]]
+    strict: NotRequired[bool]
 
 
-@dataclass
-class ResponseFormat1(SerializableDataClass):
+class ResponseFormat1(TypedDict):
     type: Literal["json_schema"]
     json_schema: JsonSchema
 
 
-@dataclass
-class ResponseFormat2(SerializableDataClass):
+class ResponseFormat2(TypedDict):
     type: Literal["text"]
 
 
-@dataclass
-class Function1(SerializableDataClass):
+class Function1(TypedDict):
     name: str
 
 
-@dataclass
-class ToolChoice(SerializableDataClass):
+class ToolChoice(TypedDict):
     type: Literal["function"]
     function: Function1
 
 
-@dataclass
-class FunctionCall1(SerializableDataClass):
+class FunctionCall1(TypedDict):
     name: str
 
 
-@dataclass
-class ModelParams1(SerializableDataClass):
-    use_cache: Optional[bool] = None
-    temperature: Optional[float] = None
-    top_p: Optional[float] = None
-    max_tokens: Optional[float] = None
-    frequency_penalty: Optional[float] = None
-    presence_penalty: Optional[float] = None
-    response_format: Optional[Union[ResponseFormat, ResponseFormat1, ResponseFormat2, Dict[str, Any]]] = None
-    tool_choice: Optional[Union[Literal["auto"], Literal["none"], Literal["required"], ToolChoice]] = None
-    function_call: Optional[Union[Literal["auto"], Literal["none"], FunctionCall1]] = None
-    n: Optional[float] = None
-    stop: Optional[List[str]] = None
+class ModelParams1(TypedDict):
+    use_cache: NotRequired[bool]
+    temperature: NotRequired[float]
+    top_p: NotRequired[float]
+    max_tokens: NotRequired[float]
+    frequency_penalty: NotRequired[float]
+    presence_penalty: NotRequired[float]
+    response_format: NotRequired[Union[ResponseFormat, ResponseFormat1, ResponseFormat2, Mapping[str, Any]]]
+    tool_choice: NotRequired[Union[Literal["auto"], Literal["none"], Literal["required"], ToolChoice]]
+    function_call: NotRequired[Union[Literal["auto"], Literal["none"], FunctionCall1]]
+    n: NotRequired[float]
+    stop: NotRequired[Sequence[str]]
 
 
-@dataclass
-class ModelParams2(SerializableDataClass):
+class ModelParams2(TypedDict):
+    use_cache: NotRequired[bool]
     max_tokens: float
     temperature: float
-    use_cache: Optional[bool] = None
-    top_p: Optional[float] = None
-    top_k: Optional[float] = None
-    stop_sequences: Optional[List[str]] = None
-    max_tokens_to_sample: Optional[float] = None
+    top_p: NotRequired[float]
+    top_k: NotRequired[float]
+    stop_sequences: NotRequired[Sequence[str]]
+    max_tokens_to_sample: NotRequired[float]
     """
     This is a legacy parameter that should not be used.
     """
 
 
-@dataclass
-class ModelParams3(SerializableDataClass):
-    use_cache: Optional[bool] = None
-    temperature: Optional[float] = None
-    maxOutputTokens: Optional[float] = None
-    topP: Optional[float] = None
-    topK: Optional[float] = None
+class ModelParams3(TypedDict):
+    use_cache: NotRequired[bool]
+    temperature: NotRequired[float]
+    maxOutputTokens: NotRequired[float]
+    topP: NotRequired[float]
+    topK: NotRequired[float]
 
 
-@dataclass
-class ModelParams4(SerializableDataClass):
-    use_cache: Optional[bool] = None
-    temperature: Optional[float] = None
-    topK: Optional[float] = None
+class ModelParams4(TypedDict):
+    use_cache: NotRequired[bool]
+    temperature: NotRequired[float]
+    topK: NotRequired[float]
 
 
-@dataclass
-class ModelParams5(SerializableDataClass):
-    use_cache: Optional[bool] = None
+class ModelParams5(TypedDict):
+    use_cache: NotRequired[bool]
 
 
 ModelParams = Union[ModelParams1, ModelParams2, ModelParams3, ModelParams4, ModelParams5]
 
 
-@dataclass
-class SavedFunctionId1(SerializableDataClass):
+class SavedFunctionId1(TypedDict):
     type: Literal["function"]
     id: str
 
 
-@dataclass
-class SavedFunctionId2(SerializableDataClass):
+class SavedFunctionId2(TypedDict):
     type: Literal["global"]
     name: str
 
@@ -1978,61 +1676,44 @@ class SavedFunctionId2(SerializableDataClass):
 SavedFunctionId = Union[SavedFunctionId1, SavedFunctionId2]
 
 
-@dataclass
-class Prompt(SerializableDataClass):
+class Prompt(TypedDict):
     type: Literal["completion"]
     content: str
 
 
-@dataclass
-class Prompt1(SerializableDataClass):
+class Prompt1(TypedDict):
     type: Literal["chat"]
-    messages: List[ChatCompletionMessageParam]
-    tools: Optional[str] = None
+    messages: Sequence[ChatCompletionMessageParam]
+    tools: NotRequired[str]
 
 
-@dataclass
-class Options(SerializableDataClass):
-    model: Optional[str] = None
-    params: Optional[ModelParams] = None
-    position: Optional[str] = None
+class Options(TypedDict):
+    model: NotRequired[str]
+    params: NotRequired[ModelParams]
+    position: NotRequired[str]
 
 
-@dataclass
-class Parser(SerializableDataClass):
+class Parser(TypedDict):
     type: Literal["llm_classifier"]
     use_cot: bool
-    choice_scores: Dict[str, float]
+    choice_scores: Mapping[str, float]
 
 
-@dataclass
-class Origin3(SerializableDataClass):
-    prompt_id: Optional[str] = None
-    project_id: Optional[str] = None
-    prompt_version: Optional[str] = None
+class Origin3(TypedDict):
+    prompt_id: NotRequired[str]
+    project_id: NotRequired[str]
+    prompt_version: NotRequired[str]
 
 
-@dataclass
-class PromptData(SerializableDataClass):
-    prompt: Optional[Union[Prompt, Prompt1, Dict[str, Any]]] = None
-    options: Optional[Options] = None
-    parser: Optional[Parser] = None
-    tool_functions: Optional[List[SavedFunctionId]] = None
-    origin: Optional[Origin3] = None
+class PromptData(TypedDict):
+    prompt: NotRequired[Union[Prompt, Prompt1, Mapping[str, Any]]]
+    options: NotRequired[Options]
+    parser: NotRequired[Parser]
+    tool_functions: NotRequired[Sequence[SavedFunctionId]]
+    origin: NotRequired[Origin3]
 
 
-class FunctionTypeEnum(Enum):
-    LLM = "llm"
-    SCORER = "scorer"
-    TASK = "task"
-    TOOL = "tool"
-
-
-FunctionType = Optional[FunctionTypeEnum]
-
-
-@dataclass
-class Prompt2(SerializableDataClass):
+class Prompt2(TypedDict):
     id: str
     """
     Unique identifier for the prompt
@@ -2061,38 +1742,27 @@ class Prompt2(SerializableDataClass):
     """
     Unique identifier for the prompt
     """
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the prompt
     """
-    created: Optional[str] = None
+    created: NotRequired[str]
     """
     Date of prompt creation
     """
-    prompt_data: Optional[PromptData] = None
-    tags: Optional[List[str]] = None
+    prompt_data: NotRequired[PromptData]
+    tags: NotRequired[Sequence[str]]
     """
     A list of tags for the prompt
     """
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: NotRequired[Mapping[str, Any]]
     """
     User-controlled metadata about the prompt
     """
-    function_type: Optional[FunctionType] = None
+    function_type: NotRequired[Literal["llm", "scorer", "task", "tool"]]
 
 
-class FunctionType1Enum(Enum):
-    LLM = "llm"
-    SCORER = "scorer"
-    TASK = "task"
-    TOOL = "tool"
-
-
-FunctionType1 = Optional[FunctionType1Enum]
-
-
-@dataclass
-class CreatePrompt(SerializableDataClass):
+class CreatePrompt(TypedDict):
     project_id: str
     """
     Unique identifier for the project that the prompt belongs under
@@ -2105,67 +1775,52 @@ class CreatePrompt(SerializableDataClass):
     """
     Unique identifier for the prompt
     """
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the prompt
     """
-    prompt_data: Optional[PromptData] = None
-    tags: Optional[List[str]] = None
+    prompt_data: NotRequired[PromptData]
+    tags: NotRequired[Sequence[str]]
     """
     A list of tags for the prompt
     """
-    function_type: Optional[FunctionType1] = None
+    function_type: NotRequired[Literal["llm", "scorer", "task", "tool"]]
 
 
-@dataclass
-class PatchPrompt(SerializableDataClass):
-    name: Optional[str] = None
+class PatchPrompt(TypedDict):
+    name: NotRequired[str]
     """
     Name of the prompt
     """
-    slug: Optional[str] = None
+    slug: NotRequired[str]
     """
     Unique identifier for the prompt
     """
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the prompt
     """
-    prompt_data: Optional[PromptData] = None
-    tags: Optional[List[str]] = None
+    prompt_data: NotRequired[PromptData]
+    tags: NotRequired[Sequence[str]]
     """
     A list of tags for the prompt
     """
 
 
-class Permission(Enum):
-    CREATE = "create"
-    READ = "read"
-    UPDATE = "update"
-    DELETE = "delete"
-    CREATE_ACLS = "create_acls"
-    READ_ACLS = "read_acls"
-    UPDATE_ACLS = "update_acls"
-    DELETE_ACLS = "delete_acls"
+Permission = Literal["create", "read", "update", "delete", "create_acls", "read_acls", "update_acls", "delete_acls"]
 
 
-@dataclass
-class MemberPermission(SerializableDataClass):
+class MemberPermission(TypedDict):
     permission: Permission
-    restrict_object_type: Optional[AclObjectType] = None
+    restrict_object_type: NotRequired[AclObjectType]
 
 
-@dataclass
-class Role(SerializableDataClass):
+class Role(TypedDict):
     id: str
     """
     Unique identifier for the role
     """
-    name: str
-    """
-    Name of the role
-    """
-    org_id: Optional[str] = None
+    org_id: NotRequired[str]
     """
     Unique id for the organization that the role belongs under
 
@@ -2173,102 +1828,101 @@ class Role(SerializableDataClass):
 
     It is forbidden to change the org after creating a role
     """
-    user_id: Optional[str] = None
+    user_id: NotRequired[str]
     """
     Identifies the user who created the role
     """
-    created: Optional[str] = None
+    created: NotRequired[str]
     """
     Date of role creation
     """
-    description: Optional[str] = None
-    """
-    Textual description of the role
-    """
-    deleted_at: Optional[str] = None
-    """
-    Date of role deletion, or null if the role is still active
-    """
-    member_permissions: Optional[List[MemberPermission]] = None
-    """
-    (permission, restrict_object_type) tuples which belong to this role
-    """
-    member_roles: Optional[List[str]] = None
-    """
-    Ids of the roles this role inherits from
-
-    An inheriting role has all the permissions contained in its member roles, as well as all of their inherited permissions
-    """
-
-
-@dataclass
-class CreateRole(SerializableDataClass):
     name: str
     """
     Name of the role
     """
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the role
     """
-    member_permissions: Optional[List[MemberPermission]] = None
+    deleted_at: NotRequired[str]
+    """
+    Date of role deletion, or null if the role is still active
+    """
+    member_permissions: NotRequired[Sequence[MemberPermission]]
     """
     (permission, restrict_object_type) tuples which belong to this role
     """
-    member_roles: Optional[List[str]] = None
+    member_roles: NotRequired[Sequence[str]]
     """
     Ids of the roles this role inherits from
 
     An inheriting role has all the permissions contained in its member roles, as well as all of their inherited permissions
     """
-    org_name: Optional[str] = None
+
+
+class CreateRole(TypedDict):
+    name: str
+    """
+    Name of the role
+    """
+    description: NotRequired[str]
+    """
+    Textual description of the role
+    """
+    member_permissions: NotRequired[Sequence[MemberPermission]]
+    """
+    (permission, restrict_object_type) tuples which belong to this role
+    """
+    member_roles: NotRequired[Sequence[str]]
+    """
+    Ids of the roles this role inherits from
+
+    An inheriting role has all the permissions contained in its member roles, as well as all of their inherited permissions
+    """
+    org_name: NotRequired[str]
     """
     For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, you may specify the name of the organization the role belongs in.
     """
 
 
-@dataclass
-class AddMemberPermission(SerializableDataClass):
+class AddMemberPermission(TypedDict):
     permission: Permission
-    restrict_object_type: Optional[AclObjectType] = None
+    restrict_object_type: NotRequired[AclObjectType]
 
 
-@dataclass
-class RemoveMemberPermission(SerializableDataClass):
+class RemoveMemberPermission(TypedDict):
     permission: Permission
-    restrict_object_type: Optional[AclObjectType] = None
+    restrict_object_type: NotRequired[AclObjectType]
 
 
-@dataclass
-class PatchRole(SerializableDataClass):
-    description: Optional[str] = None
+class PatchRole(TypedDict):
+    description: NotRequired[str]
     """
     Textual description of the role
     """
-    name: Optional[str] = None
+    name: NotRequired[str]
     """
     Name of the role
     """
-    add_member_permissions: Optional[List[AddMemberPermission]] = None
+    add_member_permissions: NotRequired[Sequence[AddMemberPermission]]
     """
     A list of permissions to add to the role
     """
-    remove_member_permissions: Optional[List[RemoveMemberPermission]] = None
+    remove_member_permissions: NotRequired[Sequence[RemoveMemberPermission]]
     """
     A list of permissions to remove from the role
     """
-    add_member_roles: Optional[List[str]] = None
+    add_member_roles: NotRequired[Sequence[str]]
     """
     A list of role IDs to add to the role's inheriting-from set
     """
-    remove_member_roles: Optional[List[str]] = None
+    remove_member_roles: NotRequired[Sequence[str]]
     """
     A list of role IDs to remove from the role's inheriting-from set
     """
 
 
-@dataclass
-class Group(SerializableDataClass):
+class Group(TypedDict):
     id: str
     """
     Unique identifier for the group
@@ -2279,94 +1933,91 @@ class Group(SerializableDataClass):
 
     It is forbidden to change the org after creating a group
     """
-    name: str
-    """
-    Name of the group
-    """
-    user_id: Optional[str] = None
+    user_id: NotRequired[str]
     """
     Identifies the user who created the group
     """
-    created: Optional[str] = None
+    created: NotRequired[str]
     """
     Date of group creation
     """
-    description: Optional[str] = None
-    """
-    Textual description of the group
-    """
-    deleted_at: Optional[str] = None
-    """
-    Date of group deletion, or null if the group is still active
-    """
-    member_users: Optional[List[str]] = None
-    """
-    Ids of users which belong to this group
-    """
-    member_groups: Optional[List[str]] = None
-    """
-    Ids of the groups this group inherits from
-
-    An inheriting group has all the users contained in its member groups, as well as all of their inherited users
-    """
-
-
-@dataclass
-class CreateGroup(SerializableDataClass):
     name: str
     """
     Name of the group
     """
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the group
     """
-    member_users: Optional[List[str]] = None
+    deleted_at: NotRequired[str]
+    """
+    Date of group deletion, or null if the group is still active
+    """
+    member_users: NotRequired[Sequence[str]]
     """
     Ids of users which belong to this group
     """
-    member_groups: Optional[List[str]] = None
+    member_groups: NotRequired[Sequence[str]]
     """
     Ids of the groups this group inherits from
 
     An inheriting group has all the users contained in its member groups, as well as all of their inherited users
     """
-    org_name: Optional[str] = None
+
+
+class CreateGroup(TypedDict):
+    name: str
+    """
+    Name of the group
+    """
+    description: NotRequired[str]
+    """
+    Textual description of the group
+    """
+    member_users: NotRequired[Sequence[str]]
+    """
+    Ids of users which belong to this group
+    """
+    member_groups: NotRequired[Sequence[str]]
+    """
+    Ids of the groups this group inherits from
+
+    An inheriting group has all the users contained in its member groups, as well as all of their inherited users
+    """
+    org_name: NotRequired[str]
     """
     For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, you may specify the name of the organization the group belongs in.
     """
 
 
-@dataclass
-class PatchGroup(SerializableDataClass):
-    description: Optional[str] = None
+class PatchGroup(TypedDict):
+    description: NotRequired[str]
     """
     Textual description of the group
     """
-    name: Optional[str] = None
+    name: NotRequired[str]
     """
     Name of the group
     """
-    add_member_users: Optional[List[str]] = None
+    add_member_users: NotRequired[Sequence[str]]
     """
     A list of user IDs to add to the group
     """
-    remove_member_users: Optional[List[str]] = None
+    remove_member_users: NotRequired[Sequence[str]]
     """
     A list of user IDs to remove from the group
     """
-    add_member_groups: Optional[List[str]] = None
+    add_member_groups: NotRequired[Sequence[str]]
     """
     A list of group IDs to add to the group's inheriting-from set
     """
-    remove_member_groups: Optional[List[str]] = None
+    remove_member_groups: NotRequired[Sequence[str]]
     """
     A list of group IDs to remove from the group's inheriting-from set
     """
 
 
-@dataclass
-class Acl(SerializableDataClass):
+class Acl(TypedDict):
     id: str
     """
     Unique identifier for the acl
@@ -2376,68 +2027,66 @@ class Acl(SerializableDataClass):
     """
     The id of the object the ACL applies to
     """
+    user_id: NotRequired[str]
+    """
+    Id of the user the ACL applies to. Exactly one of `user_id` and `group_id` will be provided
+    """
+    group_id: NotRequired[str]
+    """
+    Id of the group the ACL applies to. Exactly one of `user_id` and `group_id` will be provided
+    """
+    permission: NotRequired[Permission]
+    """
+    Permission the ACL grants. Exactly one of `permission` and `role_id` will be provided
+    """
+    restrict_object_type: NotRequired[AclObjectType]
+    """
+    When setting a permission directly, optionally restricts the permission grant to just the specified object type. Cannot be set alongside a `role_id`.
+    """
+    role_id: NotRequired[str]
+    """
+    Id of the role the ACL grants. Exactly one of `permission` and `role_id` will be provided
+    """
     _object_org_id: str
     """
     The organization the ACL's referred object belongs to
     """
-    user_id: Optional[str] = None
-    """
-    Id of the user the ACL applies to. Exactly one of `user_id` and `group_id` will be provided
-    """
-    group_id: Optional[str] = None
-    """
-    Id of the group the ACL applies to. Exactly one of `user_id` and `group_id` will be provided
-    """
-    permission: Optional[Permission] = None
-    """
-    Permission the ACL grants. Exactly one of `permission` and `role_id` will be provided
-    """
-    restrict_object_type: Optional[AclObjectType] = None
-    """
-    When setting a permission directly, optionally restricts the permission grant to just the specified object type. Cannot be set alongside a `role_id`.
-    """
-    role_id: Optional[str] = None
-    """
-    Id of the role the ACL grants. Exactly one of `permission` and `role_id` will be provided
-    """
-    created: Optional[str] = None
+    created: NotRequired[str]
     """
     Date of acl creation
     """
 
 
-@dataclass
-class AclItem(SerializableDataClass):
+class AclItem(TypedDict):
     object_type: AclObjectType
     object_id: str
     """
     The id of the object the ACL applies to
     """
-    user_id: Optional[str] = None
+    user_id: NotRequired[str]
     """
     Id of the user the ACL applies to. Exactly one of `user_id` and `group_id` will be provided
     """
-    group_id: Optional[str] = None
+    group_id: NotRequired[str]
     """
     Id of the group the ACL applies to. Exactly one of `user_id` and `group_id` will be provided
     """
-    permission: Optional[Permission] = None
+    permission: NotRequired[Permission]
     """
     Permission the ACL grants. Exactly one of `permission` and `role_id` will be provided
     """
-    restrict_object_type: Optional[AclObjectType] = None
+    restrict_object_type: NotRequired[AclObjectType]
     """
     When setting a permission directly, optionally restricts the permission grant to just the specified object type. Cannot be set alongside a `role_id`.
     """
-    role_id: Optional[str] = None
+    role_id: NotRequired[str]
     """
     Id of the role the ACL grants. Exactly one of `permission` and `role_id` will be provided
     """
 
 
-@dataclass
-class AclBatchUpdateResponse(SerializableDataClass):
-    added_acls: List[Acl]
+class AclBatchUpdateResponse(TypedDict):
+    added_acls: Sequence[Acl]
     """
     An ACL grants a certain permission or role to a certain user or group on an object.
 
@@ -2445,27 +2094,7 @@ class AclBatchUpdateResponse(SerializableDataClass):
 
     To restrict a grant to a particular sub-object, you may specify `restrict_object_type` in the ACL, as part of a direct permission grant or as part of a role.
     """
-    removed_acls: List[Acl]
-    """
-    An ACL grants a certain permission or role to a certain user or group on an object.
-
-    ACLs are inherited across the object hierarchy. So for example, if a user has read permissions on a project, they will also have read permissions on any experiment, dataset, etc. created within that project.
-
-    To restrict a grant to a particular sub-object, you may specify `restrict_object_type` in the ACL, as part of a direct permission grant or as part of a role.
-    """
-
-
-@dataclass
-class AclBatchUpdateRequest(SerializableDataClass):
-    add_acls: Optional[List[AclItem]] = None
-    """
-    An ACL grants a certain permission or role to a certain user or group on an object.
-
-    ACLs are inherited across the object hierarchy. So for example, if a user has read permissions on a project, they will also have read permissions on any experiment, dataset, etc. created within that project.
-
-    To restrict a grant to a particular sub-object, you may specify `restrict_object_type` in the ACL, as part of a direct permission grant or as part of a role.
-    """
-    remove_acls: Optional[List[AclItem]] = None
+    removed_acls: Sequence[Acl]
     """
     An ACL grants a certain permission or role to a certain user or group on an object.
 
@@ -2475,36 +2104,53 @@ class AclBatchUpdateRequest(SerializableDataClass):
     """
 
 
-@dataclass
-class User(SerializableDataClass):
+class AclBatchUpdateRequest(TypedDict):
+    add_acls: NotRequired[Sequence[AclItem]]
+    """
+    An ACL grants a certain permission or role to a certain user or group on an object.
+
+    ACLs are inherited across the object hierarchy. So for example, if a user has read permissions on a project, they will also have read permissions on any experiment, dataset, etc. created within that project.
+
+    To restrict a grant to a particular sub-object, you may specify `restrict_object_type` in the ACL, as part of a direct permission grant or as part of a role.
+    """
+    remove_acls: NotRequired[Sequence[AclItem]]
+    """
+    An ACL grants a certain permission or role to a certain user or group on an object.
+
+    ACLs are inherited across the object hierarchy. So for example, if a user has read permissions on a project, they will also have read permissions on any experiment, dataset, etc. created within that project.
+
+    To restrict a grant to a particular sub-object, you may specify `restrict_object_type` in the ACL, as part of a direct permission grant or as part of a role.
+    """
+
+
+class User(TypedDict):
     id: str
     """
     Unique identifier for the user
     """
-    given_name: Optional[str] = None
+    given_name: NotRequired[str]
     """
     Given name of the user
     """
-    family_name: Optional[str] = None
+    family_name: NotRequired[str]
     """
     Family name of the user
     """
-    email: Optional[str] = None
+    email: NotRequired[str]
     """
     The user's email
     """
-    avatar_url: Optional[str] = None
+    avatar_url: NotRequired[str]
     """
     URL of the user's Avatar image
     """
-    created: Optional[str] = None
+    created: NotRequired[str]
     """
     Date of user creation
     """
 
 
-@dataclass
-class ProjectScoreCategory(SerializableDataClass):
+class ProjectScoreCategory(TypedDict):
     name: str
     """
     Name of the category
@@ -2515,45 +2161,35 @@ class ProjectScoreCategory(SerializableDataClass):
     """
 
 
-ProjectScoreCategories = Union[List[ProjectScoreCategory], Dict[str, float], List[str], Dict[str, Any]]
+ProjectScoreCategories = Union[Sequence[ProjectScoreCategory], Mapping[str, float], Sequence[str], Mapping[str, Any]]
 
 
-@dataclass
-class OnlineScoreConfig(SerializableDataClass):
+class OnlineScoreConfig(TypedDict):
     sampling_rate: float
     """
     The sampling rate for online scoring
     """
-    scorers: List[SavedFunctionId]
+    scorers: Sequence[SavedFunctionId]
     """
     The list of scorers to use for online scoring
     """
-    apply_to_root_span: Optional[bool] = None
+    apply_to_root_span: NotRequired[bool]
     """
     Whether to trigger online scoring on the root span of each trace
     """
-    apply_to_span_names: Optional[List[str]] = None
+    apply_to_span_names: NotRequired[Sequence[str]]
     """
     Trigger online scoring on any spans with a name in this list
     """
 
 
-class DestinationEnum(Enum):
-    EXPECTED = "expected"
+class ProjectScoreConfig(TypedDict):
+    multi_select: NotRequired[bool]
+    destination: NotRequired[Literal["expected"]]
+    online: NotRequired[OnlineScoreConfig]
 
 
-Destination = Optional[DestinationEnum]
-
-
-@dataclass
-class ProjectScoreConfig(SerializableDataClass):
-    multi_select: Optional[bool] = None
-    destination: Optional[Destination] = None
-    online: Optional[OnlineScoreConfig] = None
-
-
-@dataclass
-class ProjectScore(SerializableDataClass):
+class ProjectScore(TypedDict):
     id: str
     """
     Unique identifier for the project score
@@ -2563,29 +2199,28 @@ class ProjectScore(SerializableDataClass):
     Unique identifier for the project that the project score belongs under
     """
     user_id: str
+    created: NotRequired[str]
+    """
+    Date of project score creation
+    """
     name: str
     """
     Name of the project score
     """
-    score_type: ProjectScoreType
-    created: Optional[str] = None
-    """
-    Date of project score creation
-    """
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the project score
     """
-    categories: Optional[ProjectScoreCategories] = None
-    config: Optional[ProjectScoreConfig] = None
-    position: Optional[str] = None
+    score_type: ProjectScoreType
+    categories: NotRequired[ProjectScoreCategories]
+    config: NotRequired[ProjectScoreConfig]
+    position: NotRequired[str]
     """
     An optional LexoRank-based string that sets the sort position for the score in the UI
     """
 
 
-@dataclass
-class CreateProjectScore(SerializableDataClass):
+class CreateProjectScore(TypedDict):
     project_id: str
     """
     Unique identifier for the project that the project score belongs under
@@ -2594,32 +2229,30 @@ class CreateProjectScore(SerializableDataClass):
     """
     Name of the project score
     """
-    score_type: ProjectScoreType
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the project score
     """
-    categories: Optional[ProjectScoreCategories] = None
-    config: Optional[ProjectScoreConfig] = None
+    score_type: ProjectScoreType
+    categories: NotRequired[ProjectScoreCategories]
+    config: NotRequired[ProjectScoreConfig]
 
 
-@dataclass
-class PatchProjectScore(SerializableDataClass):
-    name: Optional[str] = None
+class PatchProjectScore(TypedDict):
+    name: NotRequired[str]
     """
     Name of the project score
     """
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the project score
     """
-    score_type: Optional[ProjectScoreType] = None
-    categories: Optional[ProjectScoreCategories] = None
-    config: Optional[ProjectScoreConfig] = None
+    score_type: NotRequired[ProjectScoreType]
+    categories: NotRequired[ProjectScoreCategories]
+    config: NotRequired[ProjectScoreConfig]
 
 
-@dataclass
-class ProjectTag(SerializableDataClass):
+class ProjectTag(TypedDict):
     id: str
     """
     Unique identifier for the project tag
@@ -2629,26 +2262,25 @@ class ProjectTag(SerializableDataClass):
     Unique identifier for the project that the project tag belongs under
     """
     user_id: str
+    created: NotRequired[str]
+    """
+    Date of project tag creation
+    """
     name: str
     """
     Name of the project tag
     """
-    created: Optional[str] = None
-    """
-    Date of project tag creation
-    """
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the project tag
     """
-    color: Optional[str] = None
+    color: NotRequired[str]
     """
     Color of the tag for the UI
     """
 
 
-@dataclass
-class CreateProjectTag(SerializableDataClass):
+class CreateProjectTag(TypedDict):
     project_id: str
     """
     Unique identifier for the project that the project tag belongs under
@@ -2657,34 +2289,32 @@ class CreateProjectTag(SerializableDataClass):
     """
     Name of the project tag
     """
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the project tag
     """
-    color: Optional[str] = None
+    color: NotRequired[str]
     """
     Color of the tag for the UI
     """
 
 
-@dataclass
-class PatchProjectTag(SerializableDataClass):
-    name: Optional[str] = None
+class PatchProjectTag(TypedDict):
+    name: NotRequired[str]
     """
     Name of the project tag
     """
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the project tag
     """
-    color: Optional[str] = None
+    color: NotRequired[str]
     """
     Color of the tag for the UI
     """
 
 
-@dataclass
-class SpanIFrame(SerializableDataClass):
+class SpanIFrame(TypedDict):
     id: str
     """
     Unique identifier for the span iframe
@@ -2693,38 +2323,37 @@ class SpanIFrame(SerializableDataClass):
     """
     Unique identifier for the project that the span iframe belongs under
     """
+    user_id: NotRequired[str]
+    """
+    Identifies the user who created the span iframe
+    """
+    created: NotRequired[str]
+    """
+    Date of span iframe creation
+    """
+    deleted_at: NotRequired[str]
+    """
+    Date of span iframe deletion, or null if the span iframe is still active
+    """
     name: str
     """
     Name of the span iframe
+    """
+    description: NotRequired[str]
+    """
+    Textual description of the span iframe
     """
     url: str
     """
     URL to embed the project viewer in an iframe
     """
-    user_id: Optional[str] = None
-    """
-    Identifies the user who created the span iframe
-    """
-    created: Optional[str] = None
-    """
-    Date of span iframe creation
-    """
-    deleted_at: Optional[str] = None
-    """
-    Date of span iframe deletion, or null if the span iframe is still active
-    """
-    description: Optional[str] = None
-    """
-    Textual description of the span iframe
-    """
-    post_message: Optional[bool] = None
+    post_message: NotRequired[bool]
     """
     Whether to post messages to the iframe containing the span's data. This is useful when you want to render more data than fits in the URL.
     """
 
 
-@dataclass
-class CreateSpanIFrame(SerializableDataClass):
+class CreateSpanIFrame(TypedDict):
     project_id: str
     """
     Unique identifier for the project that the span iframe belongs under
@@ -2733,113 +2362,90 @@ class CreateSpanIFrame(SerializableDataClass):
     """
     Name of the span iframe
     """
+    description: NotRequired[str]
+    """
+    Textual description of the span iframe
+    """
     url: str
     """
     URL to embed the project viewer in an iframe
     """
-    description: Optional[str] = None
-    """
-    Textual description of the span iframe
-    """
-    post_message: Optional[bool] = None
+    post_message: NotRequired[bool]
     """
     Whether to post messages to the iframe containing the span's data. This is useful when you want to render more data than fits in the URL.
     """
 
 
-@dataclass
-class PatchSpanIFrame(SerializableDataClass):
-    name: Optional[str] = None
+class PatchSpanIFrame(TypedDict):
+    name: NotRequired[str]
     """
     Name of the span iframe
     """
-    url: Optional[str] = None
+    url: NotRequired[str]
     """
     URL to embed the project viewer in an iframe
     """
-    post_message: Optional[bool] = None
+    post_message: NotRequired[bool]
     """
     Whether to post messages to the iframe containing the span's data. This is useful when you want to render more data than fits in the URL.
     """
 
 
-class Runtime(Enum):
-    NODE = "node"
-    PYTHON = "python"
-
-
-@dataclass
-class RuntimeContext(SerializableDataClass):
-    runtime: Runtime
+class RuntimeContext(TypedDict):
+    runtime: Literal["node", "python"]
     version: str
 
 
-@dataclass
-class Position(SerializableDataClass):
+class Position(TypedDict):
     type: Literal["task"]
 
 
-@dataclass
-class Position1(SerializableDataClass):
+class Position1(TypedDict):
     type: Literal["scorer"]
     index: int
 
 
-@dataclass
-class Location(SerializableDataClass):
+class Location(TypedDict):
     type: Literal["experiment"]
     eval_name: str
     position: Union[Position, Position1]
 
 
-@dataclass
-class Location1(SerializableDataClass):
+class Location1(TypedDict):
     type: Literal["function"]
     index: int
 
 
-@dataclass
-class CodeBundle(SerializableDataClass):
+class CodeBundle(TypedDict):
     runtime_context: RuntimeContext
     location: Union[Location, Location1]
     bundle_id: str
-    preview: Optional[str]
+    preview: NotRequired[str]
     """
     A preview of the code
     """
 
 
-@dataclass
-class FunctionData1(SerializableDataClass):
+class FunctionData1(TypedDict):
     type: Literal["prompt"]
 
 
-@dataclass
 class Data(CodeBundle):
     type: Literal["bundle"]
 
 
-@dataclass
-class RuntimeContext1(SerializableDataClass):
-    runtime: Runtime
-    version: str
-
-
-@dataclass
-class Data1(SerializableDataClass):
+class Data1(TypedDict):
     type: Literal["inline"]
-    runtime_context: RuntimeContext1
+    runtime_context: RuntimeContext
     code: str
 
 
-@dataclass
-class FunctionData2(SerializableDataClass):
+class FunctionData2(TypedDict):
     type: Literal["code"]
     data: Union[Data, Data1]
 
 
-@dataclass
-class FunctionData3(SerializableDataClass):
+class FunctionData3(TypedDict):
     type: Literal["global"]
     name: str
 
@@ -2847,37 +2453,24 @@ class FunctionData3(SerializableDataClass):
 FunctionData = Union[FunctionData1, FunctionData2, FunctionData3]
 
 
-class FunctionType2Enum(Enum):
-    LLM = "llm"
-    SCORER = "scorer"
-    TASK = "task"
-    TOOL = "tool"
-
-
-FunctionType2 = Optional[FunctionType2Enum]
-
-
-@dataclass
-class Origin4(SerializableDataClass):
+class Origin4(TypedDict):
     object_type: AclObjectType
     object_id: str
     """
     Id of the object the function is originating from
     """
-    internal: Optional[bool] = None
+    internal: NotRequired[bool]
     """
     The function exists for internal purposes and should not be displayed in the list of functions.
     """
 
 
-@dataclass
-class FunctionSchema(SerializableDataClass):
-    parameters: Optional[Any] = None
-    returns: Optional[Any] = None
+class FunctionSchema(TypedDict):
+    parameters: NotRequired[Any]
+    returns: NotRequired[Any]
 
 
-@dataclass
-class Function2(SerializableDataClass):
+class Function2(TypedDict):
     id: str
     """
     Unique identifier for the prompt
@@ -2906,44 +2499,33 @@ class Function2(SerializableDataClass):
     """
     Unique identifier for the prompt
     """
-    function_data: FunctionData
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the prompt
     """
-    created: Optional[str] = None
+    created: NotRequired[str]
     """
     Date of prompt creation
     """
-    prompt_data: Optional[PromptData] = None
-    tags: Optional[List[str]] = None
+    prompt_data: NotRequired[PromptData]
+    tags: NotRequired[Sequence[str]]
     """
     A list of tags for the prompt
     """
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: NotRequired[Mapping[str, Any]]
     """
     User-controlled metadata about the prompt
     """
-    function_type: Optional[FunctionType2] = None
-    origin: Optional[Origin4] = None
-    function_schema: Optional[FunctionSchema] = None
+    function_type: NotRequired[Literal["llm", "scorer", "task", "tool"]]
+    function_data: FunctionData
+    origin: NotRequired[Origin4]
+    function_schema: NotRequired[FunctionSchema]
     """
     JSON schema for the function's parameters and return type
     """
 
 
-class FunctionType3Enum(Enum):
-    LLM = "llm"
-    SCORER = "scorer"
-    TASK = "task"
-    TOOL = "tool"
-
-
-FunctionType3 = Optional[FunctionType3Enum]
-
-
-@dataclass
-class CreateFunction(SerializableDataClass):
+class CreateFunction(TypedDict):
     project_id: str
     """
     Unique identifier for the project that the prompt belongs under
@@ -2956,87 +2538,69 @@ class CreateFunction(SerializableDataClass):
     """
     Unique identifier for the prompt
     """
-    function_data: FunctionData
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the prompt
     """
-    prompt_data: Optional[PromptData] = None
-    tags: Optional[List[str]] = None
+    prompt_data: NotRequired[PromptData]
+    tags: NotRequired[Sequence[str]]
     """
     A list of tags for the prompt
     """
-    function_type: Optional[FunctionType3] = None
-    origin: Optional[Origin4] = None
-    function_schema: Optional[FunctionSchema] = None
+    function_type: NotRequired[Literal["llm", "scorer", "task", "tool"]]
+    function_data: FunctionData
+    origin: NotRequired[Origin4]
+    function_schema: NotRequired[FunctionSchema]
     """
     JSON schema for the function's parameters and return type
     """
 
 
-@dataclass
-class FunctionDataNullish1(SerializableDataClass):
+class FunctionDataNullish1(TypedDict):
     type: Literal["prompt"]
 
 
-@dataclass
 class Data2(CodeBundle):
     type: Literal["bundle"]
 
 
-@dataclass
-class RuntimeContext2(SerializableDataClass):
-    runtime: Runtime
-    version: str
-
-
-@dataclass
-class Data3(SerializableDataClass):
+class Data3(TypedDict):
     type: Literal["inline"]
-    runtime_context: RuntimeContext2
+    runtime_context: RuntimeContext
     code: str
 
 
-@dataclass
-class FunctionDataNullish2(SerializableDataClass):
+class FunctionDataNullish2(TypedDict):
     type: Literal["code"]
     data: Union[Data2, Data3]
 
 
-@dataclass
-class FunctionDataNullish3(SerializableDataClass):
+class FunctionDataNullish3(TypedDict):
     type: Literal["global"]
     name: str
 
 
-FunctionDataNullish = Union[FunctionDataNullish1, FunctionDataNullish2, FunctionDataNullish3, Dict[str, Any]]
+FunctionDataNullish = Union[FunctionDataNullish1, FunctionDataNullish2, FunctionDataNullish3, Mapping[str, Any]]
 
 
-@dataclass
-class PatchFunction(SerializableDataClass):
-    name: Optional[str] = None
+class PatchFunction(TypedDict):
+    name: NotRequired[str]
     """
     Name of the prompt
     """
-    description: Optional[str] = None
+    description: NotRequired[str]
     """
     Textual description of the prompt
     """
-    prompt_data: Optional[PromptData] = None
-    function_data: Optional[FunctionDataNullish] = None
-    tags: Optional[List[str]] = None
+    prompt_data: NotRequired[PromptData]
+    function_data: NotRequired[FunctionDataNullish]
+    tags: NotRequired[Sequence[str]]
     """
     A list of tags for the prompt
     """
 
 
-class ObjectType3(Enum):
-    PROJECT_LOGS = "project_logs"
-    EXPERIMENT = "experiment"
-
-
-@dataclass
-class RowIds(SerializableDataClass):
+class RowIds(TypedDict):
     id: str
     """
     The id of the row
@@ -3051,95 +2615,67 @@ class RowIds(SerializableDataClass):
     """
 
 
-@dataclass
-class Parent(SerializableDataClass):
-    object_type: ObjectType3
+class Parent(TypedDict):
+    object_type: Literal["project_logs", "experiment"]
     object_id: str
     """
     The id of the container object you are logging to
     """
-    row_ids: Optional[RowIds] = None
+    row_ids: NotRequired[RowIds]
     """
     Identifiers for the row to to log a subspan under
     """
-    propagated_event: Optional[Dict[str, Any]] = None
+    propagated_event: NotRequired[Mapping[str, Any]]
     """
     Include these properties in every span created under this parent
     """
 
 
-class ModeEnum(Enum):
-    AUTO = "auto"
-    PARALLEL = "parallel"
-
-
-Mode = Optional[ModeEnum]
-
-
-@dataclass
-class InvokeApi(SerializableDataClass):
-    input: Optional[Any] = None
+class InvokeApi(TypedDict):
+    input: NotRequired[Any]
     """
     Argument to the function, which can be any JSON serializable value
     """
-    messages: Optional[List[ChatCompletionMessageParam]] = None
+    messages: NotRequired[Sequence[ChatCompletionMessageParam]]
     """
     If the function is an LLM, additional messages to pass along to it
     """
-    parent: Optional[Union[Parent, str]] = None
+    parent: NotRequired[Union[Parent, str]]
     """
     Options for tracing the function call
     """
-    stream: Optional[bool] = None
+    stream: NotRequired[bool]
     """
     Whether to stream the response. If true, results will be returned in the Braintrust SSE format.
     """
-    mode: Optional[Mode] = None
+    mode: NotRequired[Literal["auto", "parallel"]]
     """
     The mode format of the returned value (defaults to 'auto')
     """
-    version: Optional[str] = None
+    version: NotRequired[str]
     """
     The version of the function
     """
 
 
-@dataclass
-class ViewDataSearch(SerializableDataClass):
-    filter: Optional[List[Any]] = None
-    tag: Optional[List[Any]] = None
-    match: Optional[List[Any]] = None
-    sort: Optional[List[Any]] = None
+class ViewDataSearch(TypedDict):
+    filter: NotRequired[Sequence[Any]]
+    tag: NotRequired[Sequence[Any]]
+    match: NotRequired[Sequence[Any]]
+    sort: NotRequired[Sequence[Any]]
 
 
-@dataclass
-class ViewData(SerializableDataClass):
-    search: Optional[ViewDataSearch] = None
+class ViewData(TypedDict):
+    search: NotRequired[ViewDataSearch]
 
 
-@dataclass
-class ViewOptions(SerializableDataClass):
-    columnVisibility: Optional[Dict[str, bool]] = None
-    columnOrder: Optional[List[str]] = None
-    columnSizing: Optional[Dict[str, float]] = None
+class ViewOptions(TypedDict):
+    columnVisibility: NotRequired[Mapping[str, bool]]
+    columnOrder: NotRequired[Sequence[str]]
+    columnSizing: NotRequired[Mapping[str, float]]
 
 
-class ViewType1Enum(Enum):
-    PROJECTS = "projects"
-    LOGS = "logs"
-    EXPERIMENTS = "experiments"
-    DATASETS = "datasets"
-    PROMPTS = "prompts"
-    PLAYGROUNDS = "playgrounds"
-    EXPERIMENT = "experiment"
-    DATASET = "dataset"
-
-
-ViewType1 = Optional[ViewType1Enum]
-
-
-@dataclass
-class View(SerializableDataClass):
+class View(TypedDict):
     id: str
     """
     Unique identifier for the view
@@ -3149,7 +2685,9 @@ class View(SerializableDataClass):
     """
     The id of the object the view applies to
     """
-    view_type: ViewType1
+    view_type: Literal[
+        "projects", "logs", "experiments", "datasets", "prompts", "playgrounds", "experiment", "dataset"
+    ]
     """
     Type of table that the view corresponds to.
     """
@@ -3157,44 +2695,31 @@ class View(SerializableDataClass):
     """
     Name of the view
     """
-    created: Optional[str] = None
+    created: NotRequired[str]
     """
     Date of view creation
     """
-    view_data: Optional[ViewData] = None
-    options: Optional[ViewOptions] = None
-    user_id: Optional[str] = None
+    view_data: NotRequired[ViewData]
+    options: NotRequired[ViewOptions]
+    user_id: NotRequired[str]
     """
     Identifies the user who created the view
     """
-    deleted_at: Optional[str] = None
+    deleted_at: NotRequired[str]
     """
     Date of role deletion, or null if the role is still active
     """
 
 
-class ViewType2Enum(Enum):
-    PROJECTS = "projects"
-    LOGS = "logs"
-    EXPERIMENTS = "experiments"
-    DATASETS = "datasets"
-    PROMPTS = "prompts"
-    PLAYGROUNDS = "playgrounds"
-    EXPERIMENT = "experiment"
-    DATASET = "dataset"
-
-
-ViewType2 = Optional[ViewType2Enum]
-
-
-@dataclass
-class CreateView(SerializableDataClass):
+class CreateView(TypedDict):
     object_type: AclObjectType
     object_id: str
     """
     The id of the object the view applies to
     """
-    view_type: ViewType2
+    view_type: Literal[
+        "projects", "logs", "experiments", "datasets", "prompts", "playgrounds", "experiment", "dataset"
+    ]
     """
     Type of table that the view corresponds to.
     """
@@ -3202,57 +2727,43 @@ class CreateView(SerializableDataClass):
     """
     Name of the view
     """
-    view_data: Optional[ViewData] = None
-    options: Optional[ViewOptions] = None
-    user_id: Optional[str] = None
+    view_data: NotRequired[ViewData]
+    options: NotRequired[ViewOptions]
+    user_id: NotRequired[str]
     """
     Identifies the user who created the view
     """
-    deleted_at: Optional[str] = None
+    deleted_at: NotRequired[str]
     """
     Date of role deletion, or null if the role is still active
     """
 
 
-class ViewType3Enum(Enum):
-    PROJECTS = "projects"
-    LOGS = "logs"
-    EXPERIMENTS = "experiments"
-    DATASETS = "datasets"
-    PROMPTS = "prompts"
-    PLAYGROUNDS = "playgrounds"
-    EXPERIMENT = "experiment"
-    DATASET = "dataset"
-
-
-ViewType3 = Optional[ViewType3Enum]
-
-
-@dataclass
-class PatchView(SerializableDataClass):
+class PatchView(TypedDict):
     object_type: AclObjectType
     object_id: str
     """
     The id of the object the view applies to
     """
-    view_type: Optional[ViewType3] = None
+    view_type: NotRequired[
+        Literal["projects", "logs", "experiments", "datasets", "prompts", "playgrounds", "experiment", "dataset"]
+    ]
     """
     Type of table that the view corresponds to.
     """
-    name: Optional[str] = None
+    name: NotRequired[str]
     """
     Name of the view
     """
-    view_data: Optional[ViewData] = None
-    options: Optional[ViewOptions] = None
-    user_id: Optional[str] = None
+    view_data: NotRequired[ViewData]
+    options: NotRequired[ViewOptions]
+    user_id: NotRequired[str]
     """
     Identifies the user who created the view
     """
 
 
-@dataclass
-class DeleteView(SerializableDataClass):
+class DeleteView(TypedDict):
     object_type: AclObjectType
     object_id: str
     """
@@ -3260,8 +2771,7 @@ class DeleteView(SerializableDataClass):
     """
 
 
-@dataclass
-class Organization(SerializableDataClass):
+class Organization(TypedDict):
     id: str
     """
     Unique identifier for the organization
@@ -3270,160 +2780,156 @@ class Organization(SerializableDataClass):
     """
     Name of the organization
     """
-    api_url: Optional[str] = None
-    is_universal_api: Optional[bool] = None
-    proxy_url: Optional[str] = None
-    realtime_url: Optional[str] = None
-    created: Optional[str] = None
+    api_url: NotRequired[str]
+    is_universal_api: NotRequired[bool]
+    proxy_url: NotRequired[str]
+    realtime_url: NotRequired[str]
+    created: NotRequired[str]
     """
     Date of organization creation
     """
 
 
-@dataclass
-class PatchOrganization(SerializableDataClass):
-    name: Optional[str] = None
+class PatchOrganization(TypedDict):
+    name: NotRequired[str]
     """
     Name of the organization
     """
-    api_url: Optional[str] = None
-    is_universal_api: Optional[bool] = None
-    proxy_url: Optional[str] = None
-    realtime_url: Optional[str] = None
+    api_url: NotRequired[str]
+    is_universal_api: NotRequired[bool]
+    proxy_url: NotRequired[str]
+    realtime_url: NotRequired[str]
 
 
-@dataclass
-class PatchOrganizationMembersOutput(SerializableDataClass):
+class PatchOrganizationMembersOutput(TypedDict):
     status: Literal["success"]
-    send_email_error: Optional[str] = None
+    send_email_error: NotRequired[str]
     """
     If invite emails failed to send for some reason, the patch operation will still complete, but we will return an error message here
     """
 
 
-@dataclass
-class InviteUsers(SerializableDataClass):
-    ids: Optional[List[str]] = None
+class InviteUsers(TypedDict):
+    ids: NotRequired[Sequence[str]]
     """
     Ids of existing users to invite
     """
-    emails: Optional[List[str]] = None
+    emails: NotRequired[Sequence[str]]
     """
     Emails of users to invite
     """
-    send_invite_emails: Optional[bool] = None
+    send_invite_emails: NotRequired[bool]
     """
     If true, send invite emails to the users who wore actually added
     """
-    group_ids: Optional[List[str]] = None
+    group_ids: NotRequired[Sequence[str]]
     """
     Optional list of group ids to add newly-invited users to.
     """
-    group_names: Optional[List[str]] = None
+    group_names: NotRequired[Sequence[str]]
     """
     Optional list of group names to add newly-invited users to.
     """
-    group_id: Optional[str] = None
+    group_id: NotRequired[str]
     """
     Singular form of group_ids
     """
-    group_name: Optional[str] = None
+    group_name: NotRequired[str]
     """
     Singular form of group_names
     """
 
 
-@dataclass
-class RemoveUsers(SerializableDataClass):
-    ids: Optional[List[str]] = None
+class RemoveUsers(TypedDict):
+    ids: NotRequired[Sequence[str]]
     """
     Ids of users to remove
     """
-    emails: Optional[List[str]] = None
+    emails: NotRequired[Sequence[str]]
     """
     Emails of users to remove
     """
 
 
-@dataclass
-class PatchOrganizationMembers(SerializableDataClass):
-    invite_users: Optional[InviteUsers] = None
+class PatchOrganizationMembers(TypedDict):
+    invite_users: NotRequired[InviteUsers]
     """
     Users to invite to the organization
     """
-    remove_users: Optional[RemoveUsers] = None
+    remove_users: NotRequired[RemoveUsers]
     """
     Users to remove from the organization
     """
-    org_name: Optional[str] = None
+    org_name: NotRequired[str]
     """
     For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, or in case you want to explicitly assert the organization you are modifying, you may specify the name of the organization.
     """
-    org_id: Optional[str] = None
+    org_id: NotRequired[str]
     """
     For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, or in case you want to explicitly assert the organization you are modifying, you may specify the id of the organization.
     """
 
 
-@dataclass
-class CreateApiKeyOutput(SerializableDataClass):
+class CreateApiKeyOutput(TypedDict):
     id: str
     """
     Unique identifier for the api key
+    """
+    created: NotRequired[str]
+    """
+    Date of api key creation
     """
     name: str
     """
     Name of the api key
     """
     preview_name: str
+    user_id: NotRequired[str]
+    """
+    Unique identifier for the user
+    """
+    org_id: NotRequired[str]
+    """
+    Unique identifier for the organization
+    """
     key: str
     """
     The raw API key. It will only be exposed this one time
     """
-    created: Optional[str] = None
-    """
-    Date of api key creation
-    """
-    user_id: Optional[str] = None
-    """
-    Unique identifier for the user
-    """
-    org_id: Optional[str] = None
-    """
-    Unique identifier for the organization
-    """
 
 
-@dataclass
-class ApiKey(SerializableDataClass):
+class ApiKey(TypedDict):
     id: str
     """
     Unique identifier for the api key
+    """
+    created: NotRequired[str]
+    """
+    Date of api key creation
     """
     name: str
     """
     Name of the api key
     """
     preview_name: str
-    created: Optional[str] = None
-    """
-    Date of api key creation
-    """
-    user_id: Optional[str] = None
+    user_id: NotRequired[str]
     """
     Unique identifier for the user
     """
-    org_id: Optional[str] = None
+    org_id: NotRequired[str]
     """
     Unique identifier for the organization
     """
 
 
-@dataclass
-class AISecret(SerializableDataClass):
+class AISecret(TypedDict):
     id: str
     """
     Unique identifier for the AI secret
+    """
+    created: NotRequired[str]
+    """
+    Date of AI secret creation
     """
     org_id: str
     """
@@ -3433,69 +2939,55 @@ class AISecret(SerializableDataClass):
     """
     Name of the AI secret
     """
-    created: Optional[str] = None
-    """
-    Date of AI secret creation
-    """
-    type: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    preview_secret: Optional[str] = None
+    type: NotRequired[str]
+    metadata: NotRequired[Mapping[str, Any]]
+    preview_secret: NotRequired[str]
 
 
-@dataclass
-class CreateAISecret(SerializableDataClass):
+class CreateAISecret(TypedDict):
     name: str
     """
     Name of the AI secret
     """
-    type: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    secret: Optional[str] = None
+    type: NotRequired[str]
+    metadata: NotRequired[Mapping[str, Any]]
+    secret: NotRequired[str]
     """
     Secret value. If omitted in a PUT request, the existing secret value will be left intact, not replaced with null.
     """
-    org_name: Optional[str] = None
+    org_name: NotRequired[str]
     """
     For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, you may specify the name of the organization the AI Secret belongs in.
     """
 
 
-@dataclass
-class DeleteAISecret(SerializableDataClass):
+class DeleteAISecret(TypedDict):
     name: str
     """
     Name of the AI secret
     """
-    org_name: Optional[str] = None
+    org_name: NotRequired[str]
     """
     For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, you may specify the name of the organization the AI Secret belongs in.
     """
 
 
-@dataclass
-class PatchAISecret(SerializableDataClass):
-    name: Optional[str] = None
+class PatchAISecret(TypedDict):
+    name: NotRequired[str]
     """
     Name of the AI secret
     """
-    type: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    secret: Optional[str] = None
+    type: NotRequired[str]
+    metadata: NotRequired[Mapping[str, Any]]
+    secret: NotRequired[str]
 
 
-class ObjectType4(Enum):
-    ORGANIZATION = "organization"
-    PROJECT = "project"
-    FUNCTION = "function"
-
-
-@dataclass
-class EnvVar(SerializableDataClass):
+class EnvVar(TypedDict):
     id: str
     """
     Unique identifier for the environment variable
     """
-    object_type: ObjectType4
+    object_type: Literal["organization", "project", "function"]
     """
     The type of the object the environment variable is scoped for
     """
@@ -3507,98 +2999,91 @@ class EnvVar(SerializableDataClass):
     """
     The name of the environment variable
     """
-    created: Optional[str] = None
+    created: NotRequired[str]
     """
     Date of environment variable creation
     """
-    used: Optional[str] = None
+    used: NotRequired[str]
     """
     Date the environment variable was last used
     """
 
 
-@dataclass
-class CrossObjectInsertResponse(SerializableDataClass):
-    experiment: Optional[Dict[str, InsertEventsResponse]] = None
+class CrossObjectInsertResponse(TypedDict):
+    experiment: NotRequired[Mapping[str, InsertEventsResponse]]
     """
     A mapping from experiment id to row ids for inserted `events`
     """
-    dataset: Optional[Dict[str, InsertEventsResponse]] = None
+    dataset: NotRequired[Mapping[str, InsertEventsResponse]]
     """
     A mapping from dataset id to row ids for inserted `events`
     """
-    project_logs: Optional[Dict[str, InsertEventsResponse]] = None
+    project_logs: NotRequired[Mapping[str, InsertEventsResponse]]
     """
     A mapping from project id to row ids for inserted `events`
     """
 
 
-@dataclass
-class Experiment1(SerializableDataClass):
-    events: Optional[List[InsertExperimentEvent]] = None
+class Experiment1(TypedDict):
+    events: NotRequired[Sequence[InsertExperimentEvent]]
     """
     A list of experiment events to insert
     """
-    feedback: Optional[List[FeedbackExperimentItem]] = None
+    feedback: NotRequired[Sequence[FeedbackExperimentItem]]
     """
     A list of experiment feedback items
     """
 
 
-@dataclass
-class Dataset1(SerializableDataClass):
-    events: Optional[List[InsertDatasetEvent]] = None
+class Dataset1(TypedDict):
+    events: NotRequired[Sequence[InsertDatasetEvent]]
     """
     A list of dataset events to insert
     """
-    feedback: Optional[List[FeedbackDatasetItem]] = None
+    feedback: NotRequired[Sequence[FeedbackDatasetItem]]
     """
     A list of dataset feedback items
     """
 
 
-@dataclass
-class ProjectLogs(SerializableDataClass):
-    events: Optional[List[InsertProjectLogsEvent]] = None
+class ProjectLogs(TypedDict):
+    events: NotRequired[Sequence[InsertProjectLogsEvent]]
     """
     A list of project logs events to insert
     """
-    feedback: Optional[List[FeedbackProjectLogsItem]] = None
+    feedback: NotRequired[Sequence[FeedbackProjectLogsItem]]
     """
     A list of project logs feedback items
     """
 
 
-@dataclass
-class CrossObjectInsertRequest(SerializableDataClass):
-    experiment: Optional[Dict[str, Experiment1]] = None
+class CrossObjectInsertRequest(TypedDict):
+    experiment: NotRequired[Mapping[str, Experiment1]]
     """
     A mapping from experiment id to a set of log events and feedback items to insert
     """
-    dataset: Optional[Dict[str, Dataset1]] = None
+    dataset: NotRequired[Mapping[str, Dataset1]]
     """
     A mapping from dataset id to a set of log events and feedback items to insert
     """
-    project_logs: Optional[Dict[str, ProjectLogs]] = None
+    project_logs: NotRequired[Mapping[str, ProjectLogs]]
     """
     A mapping from project id to a set of log events and feedback items to insert
     """
 
 
-@dataclass
-class FunctionId1(SerializableDataClass):
+class FunctionId1(TypedDict):
     function_id: str
     """
     The ID of the function
     """
-    version: Optional[str] = None
+    version: NotRequired[str]
     """
     The version of the function
     """
 
 
-@dataclass
-class FunctionId2(SerializableDataClass):
+class FunctionId2(TypedDict):
     project_name: str
     """
     The name of the project containing the function
@@ -3607,22 +3092,20 @@ class FunctionId2(SerializableDataClass):
     """
     The slug of the function
     """
-    version: Optional[str] = None
+    version: NotRequired[str]
     """
     The version of the function
     """
 
 
-@dataclass
-class FunctionId3(SerializableDataClass):
+class FunctionId3(TypedDict):
     global_function: str
     """
     The name of the global function. Currently, the global namespace includes the functions in autoevals
     """
 
 
-@dataclass
-class FunctionId4(SerializableDataClass):
+class FunctionId4(TypedDict):
     prompt_session_id: str
     """
     The ID of the prompt session
@@ -3631,35 +3114,32 @@ class FunctionId4(SerializableDataClass):
     """
     The ID of the function in the prompt session
     """
-    version: Optional[str] = None
+    version: NotRequired[str]
     """
     The version of the function
     """
 
 
-@dataclass
-class InlineContext(SerializableDataClass):
-    runtime: Runtime
+class InlineContext(TypedDict):
+    runtime: Literal["node", "python"]
     version: str
 
 
-@dataclass
-class FunctionId5(SerializableDataClass):
+class FunctionId5(TypedDict):
     inline_context: InlineContext
     code: str
     """
     The inline code to execute
     """
-    name: Optional[str] = None
+    name: NotRequired[str]
     """
     The name of the inline code function
     """
 
 
-@dataclass
-class FunctionId6(SerializableDataClass):
+class FunctionId6(TypedDict):
     inline_prompt: PromptData
-    name: Optional[str] = None
+    name: NotRequired[str]
     """
     The name of the inline prompt
     """
@@ -3668,43 +3148,35 @@ class FunctionId6(SerializableDataClass):
 FunctionId = Union[FunctionId1, FunctionId2, FunctionId3, FunctionId4, FunctionId5, FunctionId6]
 
 
-@dataclass
-class Data4(SerializableDataClass):
+class Data4(TypedDict):
     dataset_id: str
 
 
-@dataclass
-class Data5(SerializableDataClass):
+class Data5(TypedDict):
     project_name: str
     dataset_name: str
 
 
-class Collect(Enum):
-    ALL = "all"
-    NONE = "none"
-    SOME = "some"
+class GitMetadataSettings(TypedDict):
+    collect: Literal["all", "none", "some"]
+    fields: NotRequired[
+        Sequence[
+            Literal[
+                "commit",
+                "branch",
+                "tag",
+                "dirty",
+                "author_name",
+                "author_email",
+                "commit_message",
+                "commit_time",
+                "git_diff",
+            ]
+        ]
+    ]
 
 
-class Field(Enum):
-    COMMIT = "commit"
-    BRANCH = "branch"
-    TAG = "tag"
-    DIRTY = "dirty"
-    AUTHOR_NAME = "author_name"
-    AUTHOR_EMAIL = "author_email"
-    COMMIT_MESSAGE = "commit_message"
-    COMMIT_TIME = "commit_time"
-    GIT_DIFF = "git_diff"
-
-
-@dataclass
-class GitMetadataSettings(SerializableDataClass):
-    collect: Collect
-    fields: Optional[List[Field]] = None
-
-
-@dataclass
-class RunEval(SerializableDataClass):
+class RunEval(TypedDict):
     project_id: str
     """
     Unique identifier for the project to run the eval in
@@ -3714,48 +3186,48 @@ class RunEval(SerializableDataClass):
     The dataset to use
     """
     task: FunctionId
-    scores: List[FunctionId]
+    scores: Sequence[FunctionId]
     """
     The functions to score the eval on
     """
-    experiment_name: Optional[str] = None
+    experiment_name: NotRequired[str]
     """
     An optional name for the experiment created by this eval. If it conflicts with an existing experiment, it will be suffixed with a unique identifier.
     """
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: NotRequired[Mapping[str, Any]]
     """
     Optional experiment-level metadata to store about the evaluation. You can later use this to slice & dice across experiments.
     """
-    stream: Optional[bool] = None
+    stream: NotRequired[bool]
     """
     Whether to stream the results of the eval. If true, the request will return two events: one to indicate the experiment has started, and another upon completion. If false, the request will return the evaluation's summary upon completion.
     """
-    trial_count: Optional[float] = None
+    trial_count: NotRequired[float]
     """
     The number of times to run the evaluator per input. This is useful for evaluating applications that have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the variance in the results.
     """
-    is_public: Optional[bool] = None
+    is_public: NotRequired[bool]
     """
     Whether the experiment should be public. Defaults to false.
     """
-    timeout: Optional[float] = None
+    timeout: NotRequired[float]
     """
     The maximum duration, in milliseconds, to run the evaluation. Defaults to undefined, in which case there is no timeout.
     """
-    max_concurrency: Optional[float] = None
+    max_concurrency: NotRequired[float]
     """
     The maximum number of tasks/scorers that will be run concurrently. Defaults to undefined, in which case there is no max concurrency.
     """
-    base_experiment_name: Optional[str] = None
+    base_experiment_name: NotRequired[str]
     """
     An optional experiment name to use as a base. If specified, the new experiment will be summarized and compared to this experiment.
     """
-    base_experiment_id: Optional[str] = None
+    base_experiment_id: NotRequired[str]
     """
     An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this experiment.
     """
-    git_metadata_settings: Optional[GitMetadataSettings] = None
+    git_metadata_settings: NotRequired[GitMetadataSettings]
     """
     Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     """
-    repo_info: Optional[RepoInfo] = None
+    repo_info: NotRequired[RepoInfo]

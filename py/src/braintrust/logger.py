@@ -25,8 +25,10 @@ from typing import (
     Generic,
     Iterator,
     List,
+    Mapping,
     Optional,
-    Type,
+    Sequence,
+    TypedDict,
     TypeVar,
     Union,
     cast,
@@ -37,9 +39,10 @@ from urllib.parse import urlencode
 import chevron
 import exceptiongroup
 import requests
+from braintrust_core import DatasetEvent, ExperimentEvent
 from braintrust_core.serializable_data_class import SerializableDataClass
-from braintrust_core.types import DatasetEvent, ExperimentEvent
 from requests.adapters import HTTPAdapter
+from typing_extensions import NotRequired
 from urllib3.util.retry import Retry
 
 from braintrust.functions.stream import BraintrustStream
@@ -1555,7 +1558,7 @@ def _validate_and_sanitize_experiment_log_full_args(event, has_dataset):
 
 
 class ObjectIterator(Generic[T]):
-    def __init__(self, refetch_fn: Callable[[], List[T]]):
+    def __init__(self, refetch_fn: Callable[[], Sequence[T]]):
         self.refetch_fn = refetch_fn
         self.idx = 0
 
@@ -1572,19 +1575,17 @@ class ObjectIterator(Generic[T]):
         return value
 
 
-_TSerializable = TypeVar("_TSerializable", bound=SerializableDataClass)
+_T = TypeVar("_T")
 
 
-class ObjectFetcher(ABC, Generic[_TSerializable]):
+class ObjectFetcher(ABC, Generic[_T]):
     def __init__(
         self,
         object_type: str,
-        object_cls: Type[_TSerializable],
         pinned_version: Union[None, int, str] = None,
-        mutate_record: Optional[Callable[[_TSerializable], _TSerializable]] = None,
+        mutate_record: Optional[Callable[[_T], _T]] = None,
     ):
         self.object_type = object_type
-        self.object_cls = object_cls
 
         if pinned_version is not None:
             try:
@@ -1596,7 +1597,7 @@ class ObjectFetcher(ABC, Generic[_TSerializable]):
         self._pinned_version = str(pinned_version) if pinned_version is not None else None
         self._mutate_record = mutate_record
 
-        self._fetched_data: Optional[List[_TSerializable]] = None
+        self._fetched_data: Optional[Sequence[_T]] = None
 
     def fetch(self):
         """
@@ -1633,7 +1634,7 @@ class ObjectFetcher(ABC, Generic[_TSerializable]):
     def id(self) -> str:
         ...
 
-    def _refetch(self) -> List[_TSerializable]:
+    def _refetch(self) -> Sequence[_T]:
         state = self._get_state()
         if self._fetched_data is None:
             resp = state.api_conn().get(
@@ -1646,11 +1647,9 @@ class ObjectFetcher(ABC, Generic[_TSerializable]):
                 },
             )
             response_raise_for_status(resp)
-            data = resp.json()["events"]
+            data: List[_T] = resp.json()["events"]
             if not isinstance(data, list):
                 raise ValueError(f"Expected a list in the response, got {type(data)}")
-            parsed_data = [self.object_cls.from_dict_deep(x) for x in data]
-            print(parsed_data[0])
 
             if self._mutate_record is not None:
                 self._fetched_data = [self._mutate_record(r) for r in data]
@@ -1903,6 +1902,33 @@ class ExperimentIdentifier:
     name: str
 
 
+class ExperimentDatasetEvent(TypedDict):
+    id: str
+    """
+    A unique identifier for the dataset event. If you don't provide one, BrainTrust will generate one for you
+    """
+    _xact_id: str
+    """
+    The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the dataset (see the `version` parameter)
+    """
+    input: NotRequired[Any]
+    """
+    The argument that uniquely define an input case (an arbitrary, JSON serializable object)
+    """
+    expected: NotRequired[Any]
+    """
+    The output of your application, including post-processing (an arbitrary, JSON serializable object)
+    """
+    metadata: NotRequired[Mapping[str, Any]]
+    """
+    A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
+    """
+    tags: NotRequired[Sequence[str]]
+    """
+    A list of tags to log
+    """
+
+
 class ExperimentDatasetIterator:
     def __init__(self, iterator: Iterator[ExperimentEvent]):
         self.iterator = iterator
@@ -1917,13 +1943,16 @@ class ExperimentDatasetIterator:
                 continue
 
             output, expected = value.get("output"), value.get("expected")
-            return ExperimentEvent(
-                input=value["input"],
-                expected=expected if expected is not None else output,
-                tags=value.tags,
+            ret: ExperimentDatasetEvent = {
+                "input": value.get("input"),
+                "expected": expected if expected is not None else output,
+                "tags": value.get("tags", []),
+                "id": value["id"],
+                "_xact_id": value["_xact_id"],
                 # NOTE: We'll eventually want to track origin information here (and generalize
                 # the `dataset_record_id` field)
-            )
+            }
+            return ret
 
 
 class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
@@ -1951,7 +1980,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         self._lazy_id = LazyValue(lambda: self.id, use_mutex=False)
         self._called_start_span = False
 
-        ObjectFetcher.__init__(self, object_type="experiment", object_cls=ExperimentEvent, pinned_version=None)
+        ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
 
     @property
     def id(self):
@@ -2255,7 +2284,7 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
     ):
         self._lazy_metadata = lazy_metadata
 
-        ObjectFetcher.__init__(self, object_type="experiment", object_cls=ExperimentEvent, pinned_version=None)
+        ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
 
     @property
     def id(self):
@@ -2264,6 +2293,7 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
     def _get_state(self):
         # Ensure the login state is populated by fetching the lazy_metadata.
         self._lazy_metadata.get()
+        assert _state
         return _state
 
     def as_dataset(self):
@@ -2576,9 +2606,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         self._lazy_metadata = lazy_metadata
         self.new_records = 0
 
-        ObjectFetcher.__init__(
-            self, object_type="dataset", object_cls=DatasetEvent, pinned_version=version, mutate_record=mutate_record
-        )
+        ObjectFetcher.__init__(self, object_type="dataset", pinned_version=version, mutate_record=mutate_record)
 
     @property
     def id(self) -> str:

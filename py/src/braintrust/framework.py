@@ -17,7 +17,6 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterable, Iter
 import exceptiongroup
 from braintrust_core.score import Score, Scorer
 from braintrust_core.serializable_data_class import SerializableDataClass
-from braintrust_core.types import DatasetEvent
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 
