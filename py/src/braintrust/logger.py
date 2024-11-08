@@ -2601,7 +2601,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
             eprint(
                 f"""Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use `braintrust.init_dataset()` with `use_output=False`, which will become the default in a future version of Braintrust."""
             )
-        mutate_record = lambda r: ensure_dataset_record(r, legacy)
+        mutate_record: Callable[[DatasetEvent], DatasetEvent] = lambda r: ensure_dataset_record(r, legacy)
 
         self._lazy_metadata = lazy_metadata
         self.new_records = 0

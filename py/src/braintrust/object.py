@@ -1,32 +1,36 @@
+from typing import Any, Mapping
+
+from braintrust_core import DatasetEvent
+
 from .db_fields import MERGE_PATHS_FIELD
 
 DEFAULT_IS_LEGACY_DATASET = False
 
 
-def ensure_dataset_record(r: dict, legacy: bool):
+def ensure_dataset_record(r: DatasetEvent, legacy: bool) -> DatasetEvent:
     if legacy:
         return ensure_legacy_dataset_record(r)
     else:
         return ensure_new_dataset_record(r)
 
 
-def ensure_legacy_dataset_record(r: dict):
-    if "output" in r:
+def ensure_legacy_dataset_record(r: DatasetEvent):
+    if "output" in r or "expected" not in r:
         return r
-    row = {**r}
-    row["output"] = row.pop("expected")
+    row: DatasetEvent = {**r}
+    row["output"] = row["expected"]  # type: ignore
     return row
 
 
-def ensure_new_dataset_record(r: dict):
-    if "expected" in r:
+def ensure_new_dataset_record(r: DatasetEvent):
+    if "expected" in r or "output" not in r:
         return r
-    row = {**r}
-    row["expected"] = row.pop("output")
+    row: DatasetEvent = {**r}
+    row["expected"] = row["output"]
     return row
 
 
-def make_legacy_event(e: dict):
+def make_legacy_event(e: Mapping[str, Any]) -> Mapping[str, Any]:
     if "dataset_id" not in e or "expected" not in e:
         return e
 
