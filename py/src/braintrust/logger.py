@@ -1536,7 +1536,7 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
 # Note that this only checks properties that are expected of a complete event.
 # _validate_and_sanitize_experiment_log_partial_args should still be invoked
 # (after handling special fields like 'id').
-def _validate_and_sanitize_experiment_log_full_args(event, has_dataset):
+def _validate_and_sanitize_experiment_log_full_args(event: Mapping[str, Any], has_dataset: bool):
     input = event.get("input")
     inputs = event.get("inputs")
     if (input is not None and inputs is not None) or (input is None and inputs is None):
@@ -1575,15 +1575,15 @@ class ObjectIterator(Generic[T]):
         return value
 
 
-_T = TypeVar("_T")
+TDict = TypeVar("TDict", bound=Mapping[str, Any])
 
 
-class ObjectFetcher(ABC, Generic[_T]):
+class ObjectFetcher(ABC, Generic[TDict]):
     def __init__(
         self,
         object_type: str,
         pinned_version: Union[None, int, str] = None,
-        mutate_record: Optional[Callable[[_T], _T]] = None,
+        mutate_record: Optional[Callable[[TDict], TDict]] = None,
     ):
         self.object_type = object_type
 
@@ -1597,9 +1597,9 @@ class ObjectFetcher(ABC, Generic[_T]):
         self._pinned_version = str(pinned_version) if pinned_version is not None else None
         self._mutate_record = mutate_record
 
-        self._fetched_data: Optional[Sequence[_T]] = None
+        self._fetched_data: Optional[List[TDict]] = None
 
-    def fetch(self):
+    def fetch(self) -> Iterator[TDict]:
         """
         Fetch all records.
 
@@ -1615,7 +1615,7 @@ class ObjectFetcher(ABC, Generic[_T]):
         """
         return ObjectIterator(self._refetch)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[TDict]:
         return self.fetch()
 
     @property
@@ -1634,7 +1634,7 @@ class ObjectFetcher(ABC, Generic[_T]):
     def id(self) -> str:
         ...
 
-    def _refetch(self) -> Sequence[_T]:
+    def _refetch(self) -> Sequence[TDict]:
         state = self._get_state()
         if self._fetched_data is None:
             resp = state.api_conn().get(
@@ -1647,7 +1647,7 @@ class ObjectFetcher(ABC, Generic[_T]):
                 },
             )
             response_raise_for_status(resp)
-            data: List[_T] = resp.json()["events"]
+            data: List[TDict] = resp.json()["events"]
             if not isinstance(data, list):
                 raise ValueError(f"Expected a list in the response, got {type(data)}")
 
@@ -1662,7 +1662,7 @@ class ObjectFetcher(ABC, Generic[_T]):
         self._fetched_data = None
 
     @property
-    def version(self):
+    def version(self) -> str:
         if self._pinned_version is not None:
             return self._pinned_version
         else:
@@ -1772,7 +1772,7 @@ def _update_span_impl(
     _state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
 
 
-def update_span(exported, **event) -> Span:
+def update_span(exported, **event) -> None:
     """
     Update a span using the output of `span.export()`. It is important that you only resume updating
     to a span once the original span has been fully written and flushed, since otherwise updates to
@@ -1803,14 +1803,16 @@ class ParentSpanIds:
     root_span_id: str
 
 
-def _span_components_to_object_id_lambda(components: SpanComponentsV3):
+def _span_components_to_object_id_lambda(components: SpanComponentsV3) -> Callable[[], str]:
     if components.object_id:
-        return lambda: components.object_id
+        captured_object_id = components.object_id
+        return lambda: captured_object_id
     assert components.compute_object_metadata_args
     if components.object_type == SpanObjectTypeV3.EXPERIMENT:
         raise Exception("Impossible: compute_object_metadata_args not supported for experiments")
     elif components.object_type == SpanObjectTypeV3.PROJECT_LOGS:
-        return lambda: _compute_logger_metadata(**components.compute_object_metadata_args).project.id
+        captured_compute_object_metadata_args = components.compute_object_metadata_args
+        return lambda: _compute_logger_metadata(**captured_compute_object_metadata_args).project.id
     else:
         raise Exception(f"Unknown object type: {components.object_type}")
 
@@ -1972,7 +1974,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
     def __init__(
         self,
         lazy_metadata: LazyValue[ProjectExperimentMetadata],
-        dataset: "Dataset" = None,
+        dataset: Optional["Dataset"] = None,
     ):
         self._lazy_metadata = lazy_metadata
         self.dataset = dataset
