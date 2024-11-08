@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from braintrust_core.serializable_data_class import SerializableDataClass
 
@@ -440,13 +440,9 @@ class SpanAttributes1(SerializableDataClass):
     """
 
 
-class _IsMerge(Enum):
-    BOOLEAN_TRUE = True
-
-
 @dataclass
 class InsertProjectLogsEventMerge(SerializableDataClass):
-    _is_merge: _IsMerge
+    _is_merge: Literal[True]
     """
     The `_is_merge` field controls how the row is merged with any existing row with the same id in the DB. By default (or when set to `false`), the existing row is completely replaced by the new row. When set to `true`, the new row is deep-merged into the existing row
 
@@ -523,10 +519,6 @@ class InsertProjectLogsEventRequest(SerializableDataClass):
     """
 
 
-class LogId(Enum):
-    G = "g"
-
-
 class Type2Enum(Enum):
     LLM = "llm"
     SCORE = "score"
@@ -559,13 +551,9 @@ class ObjectType(Enum):
     PROMPT_SESSION = "prompt_session"
 
 
-class ObjectType1(Enum):
-    PROJECT_LOGS = "project_logs"
-
-
 @dataclass
 class Origin(SerializableDataClass):
-    object_type: Union[ObjectType, ObjectType1]
+    object_type: Union[ObjectType, Literal["project_logs"]]
     """
     Type of the object the event is originating from.
     """
@@ -605,7 +593,7 @@ class ProjectLogsEvent(SerializableDataClass):
     """
     Unique identifier for the project
     """
-    log_id: LogId
+    log_id: Literal["g"]
     """
     A literal 'g' which identifies the log as a project log
     """
@@ -691,13 +679,9 @@ FetchLimit = Optional[int]
 FetchPaginationCursor = Optional[str]
 
 
-class Type3(Enum):
-    PATH_LOOKUP = "path_lookup"
-
-
 @dataclass
 class PathLookupFilter(SerializableDataClass):
-    type: Type3
+    type: Literal["path_lookup"]
     """
     Denotes the type of filter as a path-lookup filter
     """
@@ -724,13 +708,9 @@ class FetchEventsRequest(SerializableDataClass):
     version: Optional[Version] = None
 
 
-class Status(Enum):
-    SUCCESS = "success"
-
-
 @dataclass
 class FeedbackResponseSchema(SerializableDataClass):
-    status: Status
+    status: Literal["success"]
 
 
 class SourceEnum(Enum):
@@ -989,7 +969,7 @@ class Context3(SerializableDataClass):
     """
 
 
-class Type4Enum(Enum):
+class Type3Enum(Enum):
     LLM = "llm"
     SCORE = "score"
     FUNCTION = "function"
@@ -998,7 +978,7 @@ class Type4Enum(Enum):
     TOOL = "tool"
 
 
-Type4 = Optional[Type4Enum]
+Type3 = Optional[Type3Enum]
 
 
 @dataclass
@@ -1007,15 +987,10 @@ class SpanAttributes3(SerializableDataClass):
     """
     Name of the span, for display purposes only
     """
-    type: Optional[Type4] = None
+    type: Optional[Type3] = None
     """
     Type of the span, for display purposes only
     """
-
-
-class FieldIsMerge2(Enum):
-    BOOLEAN_FALSE = False
-    BOOLEAN_NONE = None
 
 
 @dataclass
@@ -1076,7 +1051,7 @@ class InsertExperimentEventReplace(SerializableDataClass):
     """
     Pass `_object_delete=true` to mark the experiment event deleted. Deleted events will not show up in subsequent fetches for this experiment
     """
-    _is_merge: Optional[FieldIsMerge2] = None
+    _is_merge: Optional[FieldIsMerge] = None
     """
     The `_is_merge` field controls how the row is merged with any existing row with the same id in the DB. By default (or when set to `false`), the existing row is completely replaced by the new row. When set to `true`, the new row is deep-merged into the existing row
 
@@ -1090,7 +1065,7 @@ class InsertExperimentEventReplace(SerializableDataClass):
     """
 
 
-class Type5Enum(Enum):
+class Type4Enum(Enum):
     LLM = "llm"
     SCORE = "score"
     FUNCTION = "function"
@@ -1099,7 +1074,7 @@ class Type5Enum(Enum):
     TOOL = "tool"
 
 
-Type5 = Optional[Type5Enum]
+Type4 = Optional[Type4Enum]
 
 
 @dataclass
@@ -1108,19 +1083,15 @@ class SpanAttributes4(SerializableDataClass):
     """
     Name of the span, for display purposes only
     """
-    type: Optional[Type5] = None
+    type: Optional[Type4] = None
     """
     Type of the span, for display purposes only
     """
 
 
-class FieldIsMerge3(Enum):
-    BOOLEAN_TRUE = True
-
-
 @dataclass
 class InsertExperimentEventMerge(SerializableDataClass):
-    _is_merge: FieldIsMerge3
+    _is_merge: Literal[True]
     """
     The `_is_merge` field controls how the row is merged with any existing row with the same id in the DB. By default (or when set to `false`), the existing row is completely replaced by the new row. When set to `true`, the new row is deep-merged into the existing row
 
@@ -1201,7 +1172,7 @@ class InsertExperimentEventRequest(SerializableDataClass):
     """
 
 
-class Type6Enum(Enum):
+class Type5Enum(Enum):
     LLM = "llm"
     SCORE = "score"
     FUNCTION = "function"
@@ -1210,7 +1181,7 @@ class Type6Enum(Enum):
     TOOL = "tool"
 
 
-Type6 = Optional[Type6Enum]
+Type5 = Optional[Type5Enum]
 
 
 @dataclass
@@ -1219,27 +1190,15 @@ class SpanAttributes5(SerializableDataClass):
     """
     Name of the span, for display purposes only
     """
-    type: Optional[Type6] = None
+    type: Optional[Type5] = None
     """
     Type of the span, for display purposes only
     """
 
 
-class ObjectType2(Enum):
-    EXPERIMENT = "experiment"
-    DATASET = "dataset"
-    PROMPT = "prompt"
-    FUNCTION = "function"
-    PROMPT_SESSION = "prompt_session"
-
-
-class ObjectType3(Enum):
-    PROJECT_LOGS = "project_logs"
-
-
 @dataclass
 class Origin1(SerializableDataClass):
-    object_type: Union[ObjectType2, ObjectType3]
+    object_type: Union[ObjectType, Literal["project_logs"]]
     """
     Type of the object the event is originating from.
     """
@@ -1560,11 +1519,6 @@ class PatchDataset(SerializableDataClass):
     """
 
 
-class FieldIsMerge4(Enum):
-    BOOLEAN_FALSE = False
-    BOOLEAN_NONE = None
-
-
 @dataclass
 class InsertDatasetEventReplace(SerializableDataClass):
     input: Optional[Any] = None
@@ -1595,7 +1549,7 @@ class InsertDatasetEventReplace(SerializableDataClass):
     """
     Pass `_object_delete=true` to mark the dataset event deleted. Deleted events will not show up in subsequent fetches for this dataset
     """
-    _is_merge: Optional[FieldIsMerge4] = None
+    _is_merge: Optional[FieldIsMerge] = None
     """
     The `_is_merge` field controls how the row is merged with any existing row with the same id in the DB. By default (or when set to `false`), the existing row is completely replaced by the new row. When set to `true`, the new row is deep-merged into the existing row
 
@@ -1609,13 +1563,9 @@ class InsertDatasetEventReplace(SerializableDataClass):
     """
 
 
-class FieldIsMerge5(Enum):
-    BOOLEAN_TRUE = True
-
-
 @dataclass
 class InsertDatasetEventMerge(SerializableDataClass):
-    _is_merge: FieldIsMerge5
+    _is_merge: Literal[True]
     """
     The `_is_merge` field controls how the row is merged with any existing row with the same id in the DB. By default (or when set to `false`), the existing row is completely replaced by the new row. When set to `true`, the new row is deep-merged into the existing row
 
@@ -1668,21 +1618,9 @@ class InsertDatasetEventRequest(SerializableDataClass):
     """
 
 
-class ObjectType4(Enum):
-    EXPERIMENT = "experiment"
-    DATASET = "dataset"
-    PROMPT = "prompt"
-    FUNCTION = "function"
-    PROMPT_SESSION = "prompt_session"
-
-
-class ObjectType5(Enum):
-    PROJECT_LOGS = "project_logs"
-
-
 @dataclass
 class Origin2(SerializableDataClass):
-    object_type: Union[ObjectType4, ObjectType5]
+    object_type: Union[ObjectType, Literal["project_logs"]]
     """
     Type of the object the event is originating from.
     """
@@ -1836,42 +1774,22 @@ class SummarizeDatasetResponse(SerializableDataClass):
     data_summary: Optional[DataSummary] = None
 
 
-class Type7(Enum):
-    TEXT = "text"
-
-
 @dataclass
 class ChatCompletionContentPartText(SerializableDataClass):
-    type: Type7
+    type: Literal["text"]
     text: Optional[str] = ""
-
-
-class Detail(Enum):
-    AUTO = "auto"
-
-
-class Detail1(Enum):
-    LOW = "low"
-
-
-class Detail2(Enum):
-    HIGH = "high"
 
 
 @dataclass
 class ImageUrl(SerializableDataClass):
     url: str
-    detail: Optional[Union[Detail, Detail1, Detail2]] = None
-
-
-class Type8(Enum):
-    IMAGE_URL = "image_url"
+    detail: Optional[Union[Literal["auto"], Literal["low"], Literal["high"]]] = None
 
 
 @dataclass
 class ChatCompletionContentPartImage(SerializableDataClass):
     image_url: ImageUrl
-    type: Type8
+    type: Literal["image_url"]
 
 
 ChatCompletionContentPart = Union[ChatCompletionContentPartText, ChatCompletionContentPartImage]
@@ -1886,41 +1804,25 @@ class Function(SerializableDataClass):
     name: str
 
 
-class Type9(Enum):
-    FUNCTION = "function"
-
-
 @dataclass
 class ChatCompletionMessageToolCall(SerializableDataClass):
     id: str
     function: Function
-    type: Type9
-
-
-class Role(Enum):
-    SYSTEM = "system"
+    type: Literal["function"]
 
 
 @dataclass
 class ChatCompletionMessageParam1(SerializableDataClass):
-    role: Role
+    role: Literal["system"]
     content: Optional[str] = ""
     name: Optional[str] = None
 
 
-class Role1(Enum):
-    USER = "user"
-
-
 @dataclass
 class ChatCompletionMessageParam2(SerializableDataClass):
-    role: Role1
+    role: Literal["user"]
     content: Optional[ChatCompletionContent] = None
     name: Optional[str] = None
-
-
-class Role2(Enum):
-    ASSISTANT = "assistant"
 
 
 @dataclass
@@ -1931,42 +1833,30 @@ class FunctionCall(SerializableDataClass):
 
 @dataclass
 class ChatCompletionMessageParam3(SerializableDataClass):
-    role: Role2
+    role: Literal["assistant"]
     content: Optional[str] = None
     function_call: Optional[FunctionCall] = None
     name: Optional[str] = None
     tool_calls: Optional[List[ChatCompletionMessageToolCall]] = None
 
 
-class Role3(Enum):
-    TOOL = "tool"
-
-
 @dataclass
 class ChatCompletionMessageParam4(SerializableDataClass):
-    role: Role3
+    role: Literal["tool"]
     content: Optional[str] = ""
     tool_call_id: Optional[str] = ""
-
-
-class Role4(Enum):
-    FUNCTION = "function"
 
 
 @dataclass
 class ChatCompletionMessageParam5(SerializableDataClass):
     name: str
-    role: Role4
+    role: Literal["function"]
     content: Optional[str] = ""
-
-
-class Role5(Enum):
-    MODEL = "model"
 
 
 @dataclass
 class ChatCompletionMessageParam6(SerializableDataClass):
-    role: Role5
+    role: Literal["model"]
     content: Optional[str] = None
 
 
@@ -1980,17 +1870,9 @@ ChatCompletionMessageParam = Union[
 ]
 
 
-class Type10(Enum):
-    JSON_OBJECT = "json_object"
-
-
 @dataclass
 class ResponseFormat(SerializableDataClass):
-    type: Type10
-
-
-class Type11(Enum):
-    JSON_SCHEMA = "json_schema"
+    type: Literal["json_object"]
 
 
 @dataclass
@@ -2003,33 +1885,13 @@ class JsonSchema(SerializableDataClass):
 
 @dataclass
 class ResponseFormat1(SerializableDataClass):
-    type: Type11
+    type: Literal["json_schema"]
     json_schema: JsonSchema
-
-
-class Type12(Enum):
-    TEXT = "text"
 
 
 @dataclass
 class ResponseFormat2(SerializableDataClass):
-    type: Type12
-
-
-class ToolChoice(Enum):
-    AUTO = "auto"
-
-
-class ToolChoice1(Enum):
-    NONE = "none"
-
-
-class ToolChoice2(Enum):
-    REQUIRED = "required"
-
-
-class Type13(Enum):
-    FUNCTION = "function"
+    type: Literal["text"]
 
 
 @dataclass
@@ -2038,21 +1900,13 @@ class Function1(SerializableDataClass):
 
 
 @dataclass
-class ToolChoice3(SerializableDataClass):
-    type: Type13
+class ToolChoice(SerializableDataClass):
+    type: Literal["function"]
     function: Function1
 
 
-class FunctionCall1(Enum):
-    AUTO = "auto"
-
-
-class FunctionCall2(Enum):
-    NONE = "none"
-
-
 @dataclass
-class FunctionCall3(SerializableDataClass):
+class FunctionCall1(SerializableDataClass):
     name: str
 
 
@@ -2065,8 +1919,8 @@ class ModelParams1(SerializableDataClass):
     frequency_penalty: Optional[float] = None
     presence_penalty: Optional[float] = None
     response_format: Optional[Union[ResponseFormat, ResponseFormat1, ResponseFormat2, Dict[str, Any]]] = None
-    tool_choice: Optional[Union[ToolChoice, ToolChoice1, ToolChoice2, ToolChoice3]] = None
-    function_call: Optional[Union[FunctionCall1, FunctionCall2, FunctionCall3]] = None
+    tool_choice: Optional[Union[Literal["auto"], Literal["none"], Literal["required"], ToolChoice]] = None
+    function_call: Optional[Union[Literal["auto"], Literal["none"], FunctionCall1]] = None
     n: Optional[float] = None
     stop: Optional[List[str]] = None
 
@@ -2111,40 +1965,28 @@ ModelParams = Union[ModelParams1, ModelParams2, ModelParams3, ModelParams4, Mode
 
 @dataclass
 class SavedFunctionId1(SerializableDataClass):
-    type: Type13
+    type: Literal["function"]
     id: str
-
-
-class Type15(Enum):
-    GLOBAL_ = "global"
 
 
 @dataclass
 class SavedFunctionId2(SerializableDataClass):
-    type: Type15
+    type: Literal["global"]
     name: str
 
 
 SavedFunctionId = Union[SavedFunctionId1, SavedFunctionId2]
 
 
-class Type16(Enum):
-    COMPLETION = "completion"
-
-
 @dataclass
 class Prompt(SerializableDataClass):
-    type: Type16
+    type: Literal["completion"]
     content: str
-
-
-class Type17(Enum):
-    CHAT = "chat"
 
 
 @dataclass
 class Prompt1(SerializableDataClass):
-    type: Type17
+    type: Literal["chat"]
     messages: List[ChatCompletionMessageParam]
     tools: Optional[str] = None
 
@@ -2156,13 +1998,9 @@ class Options(SerializableDataClass):
     position: Optional[str] = None
 
 
-class Type18(Enum):
-    LLM_CLASSIFIER = "llm_classifier"
-
-
 @dataclass
 class Parser(SerializableDataClass):
-    type: Type18
+    type: Literal["llm_classifier"]
     use_cot: bool
     choice_scores: Dict[str, float]
 
@@ -2181,10 +2019,6 @@ class PromptData(SerializableDataClass):
     parser: Optional[Parser] = None
     tool_functions: Optional[List[SavedFunctionId]] = None
     origin: Optional[Origin3] = None
-
-
-class LogId1(Enum):
-    P = "p"
 
 
 class FunctionTypeEnum(Enum):
@@ -2211,7 +2045,7 @@ class Prompt2(SerializableDataClass):
     """
     Unique identifier for the project that the prompt belongs under
     """
-    log_id: LogId1
+    log_id: Literal["p"]
     """
     A literal 'p' which identifies the object as a project prompt
     """
@@ -2322,7 +2156,7 @@ class MemberPermission(SerializableDataClass):
 
 
 @dataclass
-class Role6(SerializableDataClass):
+class Role(SerializableDataClass):
     id: str
     """
     Unique identifier for the role
@@ -2555,7 +2389,13 @@ class Acl(SerializableDataClass):
     Id of the group the ACL applies to. Exactly one of `user_id` and `group_id` will be provided
     """
     permission: Optional[Permission] = None
+    """
+    Permission the ACL grants. Exactly one of `permission` and `role_id` will be provided
+    """
     restrict_object_type: Optional[AclObjectType] = None
+    """
+    When setting a permission directly, optionally restricts the permission grant to just the specified object type. Cannot be set alongside a `role_id`.
+    """
     role_id: Optional[str] = None
     """
     Id of the role the ACL grants. Exactly one of `permission` and `role_id` will be provided
@@ -2582,7 +2422,13 @@ class AclItem(SerializableDataClass):
     Id of the group the ACL applies to. Exactly one of `user_id` and `group_id` will be provided
     """
     permission: Optional[Permission] = None
+    """
+    Permission the ACL grants. Exactly one of `permission` and `role_id` will be provided
+    """
     restrict_object_type: Optional[AclObjectType] = None
+    """
+    When setting a permission directly, optionally restricts the permission grant to just the specified object type. Cannot be set alongside a `role_id`.
+    """
     role_id: Optional[str] = None
     """
     Id of the role the ACL grants. Exactly one of `permission` and `role_id` will be provided
@@ -2928,43 +2774,27 @@ class RuntimeContext(SerializableDataClass):
     version: str
 
 
-class Type19(Enum):
-    EXPERIMENT = "experiment"
-
-
-class Type20(Enum):
-    TASK = "task"
-
-
 @dataclass
 class Position(SerializableDataClass):
-    type: Type20
-
-
-class Type21(Enum):
-    SCORER = "scorer"
+    type: Literal["task"]
 
 
 @dataclass
 class Position1(SerializableDataClass):
-    type: Type21
+    type: Literal["scorer"]
     index: int
 
 
 @dataclass
 class Location(SerializableDataClass):
-    type: Type19
+    type: Literal["experiment"]
     eval_name: str
     position: Union[Position, Position1]
 
 
-class Type22(Enum):
-    FUNCTION = "function"
-
-
 @dataclass
 class Location1(SerializableDataClass):
-    type: Type22
+    type: Literal["function"]
     index: int
 
 
@@ -2979,30 +2809,14 @@ class CodeBundle(SerializableDataClass):
     """
 
 
-class Type23(Enum):
-    PROMPT = "prompt"
-
-
 @dataclass
 class FunctionData1(SerializableDataClass):
-    type: Type23
-
-
-class Type24(Enum):
-    CODE = "code"
-
-
-class Type25(Enum):
-    BUNDLE = "bundle"
+    type: Literal["prompt"]
 
 
 @dataclass
 class Data(CodeBundle):
-    type: Type25
-
-
-class Type26(Enum):
-    INLINE = "inline"
+    type: Literal["bundle"]
 
 
 @dataclass
@@ -3013,24 +2827,20 @@ class RuntimeContext1(SerializableDataClass):
 
 @dataclass
 class Data1(SerializableDataClass):
-    type: Type26
+    type: Literal["inline"]
     runtime_context: RuntimeContext1
     code: str
 
 
 @dataclass
 class FunctionData2(SerializableDataClass):
-    type: Type24
+    type: Literal["code"]
     data: Union[Data, Data1]
-
-
-class Type27(Enum):
-    GLOBAL_ = "global"
 
 
 @dataclass
 class FunctionData3(SerializableDataClass):
-    type: Type27
+    type: Literal["global"]
     name: str
 
 
@@ -3080,7 +2890,7 @@ class Function2(SerializableDataClass):
     """
     Unique identifier for the project that the prompt belongs under
     """
-    log_id: LogId1
+    log_id: Literal["p"]
     """
     A literal 'p' which identifies the object as a project prompt
     """
@@ -3164,30 +2974,14 @@ class CreateFunction(SerializableDataClass):
     """
 
 
-class Type28(Enum):
-    PROMPT = "prompt"
-
-
 @dataclass
 class FunctionDataNullish1(SerializableDataClass):
-    type: Type28
-
-
-class Type29(Enum):
-    CODE = "code"
-
-
-class Type30(Enum):
-    BUNDLE = "bundle"
+    type: Literal["prompt"]
 
 
 @dataclass
 class Data2(CodeBundle):
-    type: Type30
-
-
-class Type31(Enum):
-    INLINE = "inline"
+    type: Literal["bundle"]
 
 
 @dataclass
@@ -3198,24 +2992,20 @@ class RuntimeContext2(SerializableDataClass):
 
 @dataclass
 class Data3(SerializableDataClass):
-    type: Type31
+    type: Literal["inline"]
     runtime_context: RuntimeContext2
     code: str
 
 
 @dataclass
 class FunctionDataNullish2(SerializableDataClass):
-    type: Type29
+    type: Literal["code"]
     data: Union[Data2, Data3]
-
-
-class Type32(Enum):
-    GLOBAL_ = "global"
 
 
 @dataclass
 class FunctionDataNullish3(SerializableDataClass):
-    type: Type32
+    type: Literal["global"]
     name: str
 
 
@@ -3240,7 +3030,7 @@ class PatchFunction(SerializableDataClass):
     """
 
 
-class ObjectType6(Enum):
+class ObjectType3(Enum):
     PROJECT_LOGS = "project_logs"
     EXPERIMENT = "experiment"
 
@@ -3263,7 +3053,7 @@ class RowIds(SerializableDataClass):
 
 @dataclass
 class Parent(SerializableDataClass):
-    object_type: ObjectType6
+    object_type: ObjectType3
     object_id: str
     """
     The id of the container object you are logging to
@@ -3504,7 +3294,7 @@ class PatchOrganization(SerializableDataClass):
 
 @dataclass
 class PatchOrganizationMembersOutput(SerializableDataClass):
-    status: Status
+    status: Literal["success"]
     send_email_error: Optional[str] = None
     """
     If invite emails failed to send for some reason, the patch operation will still complete, but we will return an error message here
@@ -3693,7 +3483,7 @@ class PatchAISecret(SerializableDataClass):
     secret: Optional[str] = None
 
 
-class ObjectType7(Enum):
+class ObjectType4(Enum):
     ORGANIZATION = "organization"
     PROJECT = "project"
     FUNCTION = "function"
@@ -3705,7 +3495,7 @@ class EnvVar(SerializableDataClass):
     """
     Unique identifier for the environment variable
     """
-    object_type: ObjectType7
+    object_type: ObjectType4
     """
     The type of the object the environment variable is scoped for
     """
