@@ -25,6 +25,7 @@ from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
 from .span_types import SpanTypeAttribute
 from .util import (
+    RunThread,
     bt_iscoroutinefunction,
     eprint,
 )
@@ -466,7 +467,7 @@ def Eval(
     base_experiment_id: Optional[str] = None,
     git_metadata_settings: Optional[GitMetadataSettings] = None,
     repo_info: Optional[RepoInfo] = None,
-) -> Awaitable[EvalResultWithSummary]:
+) -> EvalResultWithSummary:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
 
@@ -484,9 +485,6 @@ def Eval(
         ],
     )
     ```
-
-    If you're running in an async context, e.g. in a Jupyter notebook, then `Eval` returns a `Future` object that you
-    can `await`.
 
     :param name: The name of the evaluator. This corresponds to a project name in Braintrust.
     :param data: Returns an iterator over the evaluation dataset. Each element of the iterator should be a `EvalCase`.
@@ -542,9 +540,7 @@ def Eval(
     if _lazy_load:
         _evals.evaluators[eval_name] = EvaluatorInstance(evaluator=evaluator, reporter=reporter)
         # Needed to have consistent return type.
-        future = asyncio.Future()
-        future.set_result(EvalResultWithSummary(summary=build_local_summary(evaluator, []), results=[]))
-        return future
+        return EvalResultWithSummary(summary=build_local_summary(evaluator, []), results=[])
     else:
         if isinstance(reporter, str):
             raise ValueError(
@@ -552,12 +548,6 @@ def Eval(
             )
 
         reporter = reporter or default_reporter
-
-        # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:  # 'RuntimeError: There is no current event loop...'
-            loop = None
 
         if base_experiment_name is None and isinstance(evaluator.data, BaseExperiment):
             base_experiment_name = evaluator.data.name
@@ -587,12 +577,19 @@ def Eval(
             finally:
                 experiment.flush()
 
+        # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  # 'RuntimeError: There is no current event loop...'
+            loop = None
         if loop:
-            return loop.create_task(run_to_completion())
+            # Notebook or existing async context.
+            thread = RunThread(run_to_completion)
+            thread.start()
+            thread.join()
+            return thread.get_result()
         else:
-            future = asyncio.Future()
-            future.set_result(asyncio.run(run_to_completion()))
-            return future
+            return asyncio.run(run_to_completion())
 
 
 def Reporter(

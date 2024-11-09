@@ -1,9 +1,10 @@
+import asyncio
 import inspect
 import os.path
 import sys
 import threading
 import urllib.parse
-from typing import Any, Callable, Dict, Generic, Set, Tuple, TypeVar
+from typing import Any, Callable, Coroutine, Dict, Generic, Optional, Set, Tuple, TypeVar
 
 from requests import HTTPError
 
@@ -160,3 +161,19 @@ class MarkAsyncWrapper:
 
 def bt_iscoroutinefunction(f):
     return inspect.iscoroutinefunction(f) or getattr(f, BT_IS_ASYNC_ATTRIBUTE, False)
+
+
+class RunThread(Generic[T], threading.Thread):
+    """Helper class to run a coroutine as a blocking function."""
+
+    def __init__(self, func: Callable[[], Coroutine[Any, Any, T]]):
+        self._func = func
+        self._result: Optional[T] = None
+        super().__init__()
+
+    def run(self):
+        self._result = asyncio.run(self._func())
+
+    def get_result(self) -> T:
+        assert self._result is not None
+        return self._result
