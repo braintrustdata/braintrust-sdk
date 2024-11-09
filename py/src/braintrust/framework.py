@@ -11,7 +11,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from multiprocessing import cpu_count
-from typing import Any, AsyncIterator, Awaitable, Callable, Dict, Iterable, Iterator, List, Optional, TypeVar, Union
+from typing import Any, Awaitable, Callable, Dict, Iterable, Iterator, List, Optional, TypeVar, Union
 
 import exceptiongroup
 from braintrust_core.score import Score, Scorer
@@ -449,7 +449,7 @@ def _make_eval_name(name: str, experiment_name: Optional[str]):
     return out
 
 
-def Eval(
+async def EvalAsync(
     name: str,
     data: EvalData,
     task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
@@ -473,7 +473,7 @@ def Eval(
 
     Example:
     ```python
-    Eval(
+    await EvalAsync(
         name="my-evaluator",
         data=lambda: [
             EvalCase(input=1, expected=2),
@@ -556,40 +556,124 @@ def Eval(
         if isinstance(evaluator.data, Dataset):
             dataset = evaluator.data
 
-        async def run_to_completion():
-            experiment = init_experiment(
-                project_name=evaluator.project_name if evaluator.project_id is None else None,
-                project_id=evaluator.project_id,
-                experiment_name=evaluator.experiment_name,
-                metadata=evaluator.metadata,
-                is_public=evaluator.is_public,
-                update=evaluator.update,
-                base_experiment=base_experiment_name,
-                base_experiment_id=base_experiment_id,
-                git_metadata_settings=evaluator.git_metadata_settings,
-                repo_info=evaluator.repo_info,
-                dataset=dataset,
-            )
-            try:
-                ret = await run_evaluator(experiment, evaluator, 0, [])
-                reporter.report_eval(evaluator, ret, verbose=True, jsonl=False)
-                return ret
-            finally:
-                experiment.flush()
-
-        # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
+        experiment = init_experiment(
+            project_name=evaluator.project_name if evaluator.project_id is None else None,
+            project_id=evaluator.project_id,
+            experiment_name=evaluator.experiment_name,
+            metadata=evaluator.metadata,
+            is_public=evaluator.is_public,
+            update=evaluator.update,
+            base_experiment=base_experiment_name,
+            base_experiment_id=base_experiment_id,
+            git_metadata_settings=evaluator.git_metadata_settings,
+            repo_info=evaluator.repo_info,
+            dataset=dataset,
+        )
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:  # 'RuntimeError: There is no current event loop...'
-            loop = None
-        if loop:
-            # Notebook or existing async context.
-            thread = RunThread(run_to_completion)
-            thread.start()
-            thread.join()
-            return thread.get_result()
-        else:
-            return asyncio.run(run_to_completion())
+            ret = await run_evaluator(experiment, evaluator, 0, [])
+            reporter.report_eval(evaluator, ret, verbose=True, jsonl=False)
+            return ret
+        finally:
+            experiment.flush()
+
+
+def Eval(
+    name: str,
+    data: EvalData,
+    task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
+    scores: List[EvalScorer],
+    experiment_name: Optional[str] = None,
+    trial_count: int = 1,
+    metadata: Optional[Metadata] = None,
+    is_public: bool = False,
+    update: bool = False,
+    reporter: Optional[ReporterDef] = None,
+    timeout: Optional[float] = None,
+    max_concurrency: Optional[int] = None,
+    project_id: Optional[str] = None,
+    base_experiment_name: Optional[str] = None,
+    base_experiment_id: Optional[str] = None,
+    git_metadata_settings: Optional[GitMetadataSettings] = None,
+    repo_info: Optional[RepoInfo] = None,
+) -> EvalResultWithSummary:
+    """
+    A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
+
+    Example:
+    ```python
+    Eval(
+        name="my-evaluator",
+        data=lambda: [
+            EvalCase(input=1, expected=2),
+            EvalCase(input=2, expected=4),
+        ],
+        task=lambda input, hooks: input * 2,
+        scores=[
+            NumericDiff,
+        ],
+    )
+    ```
+
+    :param name: The name of the evaluator. This corresponds to a project name in Braintrust.
+    :param data: Returns an iterator over the evaluation dataset. Each element of the iterator should be a `EvalCase`.
+    :param task: Runs the evaluation task on a single input. The `hooks` object can be used to add metadata to the evaluation.
+    :param scores: A list of scorers to evaluate the results of the task. Each scorer can be a Scorer object or a function
+    that takes an `EvalScorerArgs` object and returns a `Score` object.
+    :param experiment_name: (Optional) Experiment name. If not specified, a name will be generated automatically.
+    :param trial_count: The number of times to run the evaluator per input. This is useful for evaluating applications that
+    have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the variance in the results.
+    :param metadata: (Optional) A dictionary with additional data about the test example, model outputs, or just about
+    anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log
+    the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata`
+    can be any JSON-serializable type, but its keys must be strings.
+    :param is_public: (Optional) Whether the experiment should be public. Defaults to false.
+    :param reporter: (Optional) A reporter that takes an evaluator and its result and returns a report.
+    :param timeout: (Optional) The duration, in seconds, after which to time out the evaluation.
+    Defaults to None, in which case there is no timeout.
+    :param project_id: (Optional) If specified, uses the given project ID instead of the evaluator's name to identify the project.
+    :param base_experiment_name: An optional experiment name to use as a base. If specified, the new experiment will be
+    summarized and compared to this experiment.
+    :param base_experiment_id: An optional experiment id to use as a base. If specified, the new experiment will be
+    summarized and compared to this experiment. This takes precedence over `base_experiment_name` if specified.
+    :param git_metadata_settings: Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
+    :param repo_info: Optionally explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
+    :return: An `EvalResultWithSummary` object, which contains all results and a summary.
+    """
+
+    async def f():
+        return await EvalAsync(
+            name=name,
+            data=data,
+            task=task,
+            scores=scores,
+            experiment_name=experiment_name,
+            trial_count=trial_count,
+            metadata=metadata,
+            is_public=is_public,
+            update=update,
+            reporter=reporter,
+            timeout=timeout,
+            max_concurrency=max_concurrency,
+            project_id=project_id,
+            base_experiment_name=base_experiment_name,
+            base_experiment_id=base_experiment_id,
+            git_metadata_settings=git_metadata_settings,
+            repo_info=repo_info,
+        )
+
+    # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:  # 'RuntimeError: There is no current event loop...'
+        loop = None
+    if loop:
+        # Notebook or existing async context.
+        thread = RunThread(f)
+        thread.start()
+        thread.join()
+        return thread.get_result()
+    else:
+        return asyncio.run(f())
 
 
 def Reporter(
@@ -1007,4 +1091,4 @@ def build_local_summary(evaluator, results):
     )
 
 
-__all__ = ["Evaluator", "Eval", "Score", "EvalCase", "EvalHooks", "BaseExperiment", "Reporter"]
+__all__ = ["Evaluator", "Eval", "EvalAsync", "Score", "EvalCase", "EvalHooks", "BaseExperiment", "Reporter"]
