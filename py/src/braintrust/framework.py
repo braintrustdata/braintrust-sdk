@@ -459,7 +459,7 @@ def Eval(
     metadata: Optional[Metadata] = None,
     is_public: bool = False,
     update: bool = False,
-    reporter: Optional[Union[ReporterDef, str]] = None,
+    reporter: Optional[ReporterDef] = None,
     timeout: Optional[float] = None,
     max_concurrency: Optional[int] = None,
     project_id: Optional[str] = None,
@@ -509,7 +509,7 @@ def Eval(
     summarized and compared to this experiment. This takes precedence over `base_experiment_name` if specified.
     :param git_metadata_settings: Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param repo_info: Optionally explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
-    :return: An `Awaitable` that resolves to an `EvalResultWithSummary` object, which contains all results and a summary.
+    :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
     eval_name = _make_eval_name(name, experiment_name)
 
@@ -539,7 +539,7 @@ def Eval(
 
     if _lazy_load:
         _evals.evaluators[eval_name] = EvaluatorInstance(evaluator=evaluator, reporter=reporter)
-        # Needed to have consistent return type.
+        # Better to return this empty object than have an annoying-to-use signature.
         return EvalResultWithSummary(summary=build_local_summary(evaluator, []), results=[])
     else:
         if isinstance(reporter, str):
