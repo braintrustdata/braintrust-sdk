@@ -131,6 +131,14 @@ class LazyValue(Generic[T]):
         self.mutex = threading.Lock() if use_mutex else None
         self._state: _LazyValueState[T] = _LazyValuePendingState(has_computed=False)
 
+    @property
+    def has_computed(self) -> bool:
+        return self._state["has_computed"]
+
+    @property
+    def value(self) -> Optional[T]:
+        return self._state["value"] if self._state["has_computed"] == True else None
+
     def get(self) -> T:
         # Short-circuit check `has_computed`. This should be fine because
         # setting `has_computed` is atomic and python should have sequentially
