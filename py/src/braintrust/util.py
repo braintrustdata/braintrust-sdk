@@ -3,7 +3,8 @@ import os.path
 import sys
 import threading
 import urllib.parse
-from typing import Any, Callable, Dict, Generic, Literal, Optional, Set, Tuple, TypedDict, TypeVar, Union
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, Generic, Literal, Optional, Set, Tuple, TypeVar, Union
 
 from requests import HTTPError, Response
 
@@ -109,13 +110,15 @@ def get_caller_location() -> Optional[CallerLocation]:
 T = TypeVar("T")
 
 
-class _LazyValueResolvedState(TypedDict, Generic[T]):
-    has_computed: Literal[True]
+@dataclass
+class _LazyValueResolvedState(Generic[T]):
     value: T
+    has_computed: Literal[True] = True
 
 
-class _LazyValuePendingState(TypedDict):
-    has_computed: Literal[False]
+@dataclass
+class _LazyValuePendingState:
+    has_computed: Literal[False] = False
 
 
 _LazyValueState = Union[_LazyValueResolvedState[T], _LazyValuePendingState]
@@ -129,30 +132,31 @@ class LazyValue(Generic[T]):
     def __init__(self, callable: Callable[[], T], use_mutex: bool):
         self.callable = callable
         self.mutex = threading.Lock() if use_mutex else None
-        self._state: _LazyValueState[T] = _LazyValuePendingState(has_computed=False)
+        self._state: _LazyValueState[T] = _LazyValuePendingState()
 
     @property
     def has_computed(self) -> bool:
-        return self._state["has_computed"]
+        return self._state.has_computed
 
     @property
     def value(self) -> Optional[T]:
-        return self._state["value"] if self._state["has_computed"] == True else None
+        return self._state.value if self._state.has_computed == True else None
 
     def get(self) -> T:
         # Short-circuit check `has_computed`. This should be fine because
-        # setting `has_computed` is atomic and python should have sequentially
-        # consistent semantics, so we'll observe the write to `self.value` as
-        # well.
-        if self._state["has_computed"] == True:
-            return self._state["value"]
+        # setting `_state` is atomic and python should have sequentially
+        # consistent semantics, so we'll observe the write to
+        # `self._state.value` as well.
+        # https://docs.python.org/3/faq/library.html#what-kinds-of-global-value-mutation-are-thread-safe
+        if self._state.has_computed == True:
+            return self._state.value
         if self.mutex:
             self.mutex.acquire()
         try:
-            if self._state["has_computed"] == False:
+            if self._state.has_computed == False:
                 res = self.callable()
-                self._state = _LazyValueResolvedState(has_computed=True, value=res)
-            return self._state["value"]
+                self._state = _LazyValueResolvedState(value=res)
+            return self._state.value
         finally:
             if self.mutex:
                 self.mutex.release()
