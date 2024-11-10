@@ -83,6 +83,10 @@ class DatasetEvent(TypedDict):
     """
     Indicates the event was copied from another object.
     """
+    output: NotRequired[Any]
+    """
+    Deprecated.
+    """
 
 
 class SpanAttributes(TypedDict):

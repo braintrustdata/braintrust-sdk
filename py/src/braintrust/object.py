@@ -15,18 +15,18 @@ def ensure_dataset_record(r: DatasetEvent, legacy: bool) -> DatasetEvent:
 
 
 def ensure_legacy_dataset_record(r: DatasetEvent):
-    if "output" in r or "expected" not in r:
+    if "output" in r:
         return r
-    row: DatasetEvent = {**r}
-    row["output"] = row["expected"]  # type: ignore
+    row = r.copy()
+    row["output"] = row.pop("expected")
     return row
 
 
 def ensure_new_dataset_record(r: DatasetEvent):
-    if "expected" in r or "output" not in r:
+    if "expected" in r:
         return r
-    row: DatasetEvent = {**r}
-    row["expected"] = row["output"]
+    row = r.copy()
+    row["expected"] = row.pop("output")
     return row
 
 
