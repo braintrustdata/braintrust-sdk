@@ -4,7 +4,7 @@ import sys
 import threading
 import urllib.parse
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Generic, Literal, Optional, Set, Tuple, TypeVar, Union
+from typing import Any, Callable, Dict, Generic, Literal, Optional, Set, Tuple, TypedDict, TypeVar, Union
 
 from requests import HTTPError, Response
 
