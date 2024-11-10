@@ -471,6 +471,8 @@ async def EvalAsync(
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
 
+    Use this function over `Eval()` when you are running in an async context, including in a Jupyter notebook.
+
     Example:
     ```python
     await EvalAsync(
@@ -598,6 +600,8 @@ def Eval(
 ) -> EvalResultWithSummary:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
+
+    It's recommended to use this function over `EvalAsync()` by default, unless you are calling from an async context.
 
     Example:
     ```python
