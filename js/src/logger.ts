@@ -162,6 +162,30 @@ export interface Span extends Exportable {
   end(args?: EndSpanArgs): number;
 
   /**
+   * Serialize the identifiers of this span. The return value can be used to
+   * identify this span when starting a subspan elsewhere, such as another
+   * process or service, without needing to access this `Span` object. See the
+   * parameters of {@link Span.startSpan} for usage details.
+   *
+   * Callers should treat the return value as opaque. The serialization format
+   * may change from time to time. If parsing is needed, use
+   * `SpanComponentsV3.fromStr`.
+   *
+   * @returns Serialized representation of this span's identifiers.
+   */
+  export(): Promise<string>;
+
+  /**
+   * Format a permalink to the Braintrust application for viewing this span.
+   *
+   * Links can be generated at any time, but they will only become viewable
+   * after the span and its root have been flushed to the server and ingested.
+   *
+   * @returns A permalink to the span.
+   */
+  permalink(): Promise<string>;
+
+  /**
    * Flush any pending rows to the server.
    */
   flush(): Promise<void>;
@@ -211,6 +235,10 @@ export class NoopSpan implements Span {
   }
 
   public async export(): Promise<string> {
+    return "";
+  }
+
+  public async permalink(): Promise<string> {
     return "";
   }
 
@@ -1099,8 +1127,22 @@ export async function spanComponentsToObjectId({
   )();
 }
 
-// Convenience function for constructing a permalink from an exported span. The
-// link will open up the Braintrust UI, pointing to the exported span.
+/**
+ * Format a permalink to the Braintrust application for viewing the span
+ * represented by the provided `slug`.
+ *
+ * Links can be generated at any time, but they will only become viewable after
+ * the span and its root have been flushed to the server and ingested.
+ *
+ * If you have a `Span` object, use {@link Span.permalink} instead.
+ *
+ * @param slug The identifier generated from {@link Span.export}.
+ * @param opts Optional arguments.
+ * @param opts.state The login state to use. If not provided, the global state will be used.
+ * @param opts.orgName The org name to use. If not provided, the org name will be inferred from the state.
+ * @param opts.appUrl The app URL to use. If not provided, the app URL will be inferred from the state.
+ * @returns A permalink to the exported span.
+ */
 export async function permalink(
   slug: string,
   opts?: {
@@ -3991,6 +4033,12 @@ export class SpanImpl implements Span {
       root_span_id: this.rootSpanId,
       propagated_event: this.propagatedEvent,
     }).toStr();
+  }
+
+  public async permalink(): Promise<string> {
+    return await permalink(await this.export(), {
+      state: this.state,
+    });
   }
 
   async flush(): Promise<void> {
