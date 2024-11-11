@@ -20,6 +20,7 @@ install_requires = [
     "exceptiongroup==1.2.0",
     "python-dotenv",
     "sseclient-py",
+    "typing_extensions>=4.1.0",
 ]
 
 extras_require = {
@@ -49,9 +50,10 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://www.braintrust.dev",
-    # project_urls={
-    #    "Bug Tracker": "https://github.com/TODO/issues",
-    # },
+    project_urls={
+        "Source Code": "https://github.com/braintrustdata/braintrust-sdk",
+        "Bug Tracker": "https://github.com/braintrustdata/braintrust-sdk/issues",
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
