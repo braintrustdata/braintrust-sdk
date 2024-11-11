@@ -132,7 +132,7 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
     @abstractmethod
     def permalink(self) -> str:
         """
-        Generate a permalink to `https://www.braintrust.dev/...` for viewing this span.
+        Format a permalink to the Braintrust application for viewing this span.
 
         Links can be generated at any time, but they will only become viewable after the span and its root have been flushed to the server and ingested.
         """
