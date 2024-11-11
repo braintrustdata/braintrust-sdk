@@ -162,10 +162,16 @@ export interface Span extends Exportable {
   end(args?: EndSpanArgs): number;
 
   /**
-   * Export an identifier for this span which can be used to start a subspan in
-   * another place, such as another process or service.
+   * Serialize the identifiers of this span. The return value can be used to
+   * identify this span when starting a subspan elsewhere, such as another
+   * process or service, without needing to access this `Span` object. See the
+   * parameters of {@link Span.startSpan} for usage details.
    *
-   * See {@link Span.startSpan} for details.
+   * Callers should treat the return value as opaque. The serialization format
+   * may change from time to time. If parsing is needed, use
+   * `SpanComponentsV3.fromStr`.
+   *
+   * @returns Serialized representation of this span's identifiers.
    */
   export(): Promise<string>;
 
@@ -174,6 +180,8 @@ export interface Span extends Exportable {
    *
    * Links can be generated at any time, but they will only become viewable
    * after the span and its root have been flushed to the server and ingested.
+   *
+   * @returns A permalink to the span.
    */
   permalink(): Promise<string>;
 
@@ -1120,8 +1128,13 @@ export async function spanComponentsToObjectId({
 }
 
 /**
- * Convenience function for constructing a permalink from an exported span. The
- * link will open up the Braintrust UI, pointing to the exported span.
+ * Format a permalink to the Braintrust application for viewing the span
+ * represented by the provided `slug`.
+ *
+ * Links can be generated at any time, but they will only become viewable after
+ * the span and its root have been flushed to the server and ingested.
+ *
+ * If you have a `Span` object, use {@link Span.permalink} instead.
  *
  * @param slug The identifier generated from {@link Span.export}.
  * @param opts Optional arguments.
