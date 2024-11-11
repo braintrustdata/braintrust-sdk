@@ -126,6 +126,18 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
         """
 
     @abstractmethod
+    def export(self) -> str:
+        """Export an identifier for this span which can be used to start a subspan in another place, such as another process or service. See `Span.start_span` for more details."""
+
+    @abstractmethod
+    def permalink(self) -> str:
+        """
+        Generate a permalink to `https://www.braintrust.dev/...` for viewing this span.
+
+        Links can be generated at any time, but they will only become viewable after the span and its root have been flushed to the server and ingested.
+        """
+
+    @abstractmethod
     def end(self, end_time=None) -> float:
         """Log an end time to the span (defaults to the current time). Returns the logged time.
 
@@ -188,6 +200,9 @@ class _NoopSpan(Span):
         return end_time or time.time()
 
     def export(self):
+        return ""
+
+    def permalink(self) -> str:
         return ""
 
     def flush(self):
@@ -2163,7 +2178,6 @@ class Experiment(ObjectFetcher, Exportable):
         )
 
     def export(self) -> str:
-        """Return a serialized representation of the experiment that can be used to start subspans in other places. See `Span.start_span` for more details."""
         return SpanComponentsV3(object_type=self._parent_object_type(), object_id=self.id).to_str()
 
     def close(self):
@@ -2460,6 +2474,9 @@ class SpanImpl(Span):
             root_span_id=self.root_span_id,
             propagated_event=self.propagated_event,
         ).to_str()
+
+    def permalink(self) -> str:
+        return permalink(self.export())
 
     def close(self, end_time=None):
         return self.end(end_time)
