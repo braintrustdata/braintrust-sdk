@@ -100,13 +100,26 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
           .describe(
             `The total number of tokens in the input and output of the ${eventDescription} event.`,
           ),
+        // Legacy non-numerical metrics.
+        caller_functionname: z
+          .unknown()
+          .nullish()
+          .describe("This metric is deprecated"),
+        caller_filename: z
+          .unknown()
+          .nullish()
+          .describe("This metric is deprecated"),
+        caller_lineno: z
+          .unknown()
+          .nullish()
+          .describe("This metric is deprecated"),
       })
-      // We are permissive of non-numerical metrics here because not all
-      // versions of the SDK have validated that metrics are entirely numerical.
-      // There are also old logged metrics which contain the `caller_*`
-      // information. We could potentially stricten this by adding some
-      // backfills to the chalice backend.
-      .catchall(customTypes.unknown)
+      // At some point in the past, we did not validate that all metrics were
+      // numerical, so it's possible but highly unlikely that users have very
+      // old non-numerical metrics here. But we need this schema to be
+      // catchall-numerical so that the BTQL engine can infer the types of
+      // metrics correctly.
+      .catchall(z.number())
       .nullish()
       .describe(
         `Metrics are numerical measurements tracking the execution of the code that produced the ${eventDescription} event. Use "start" and "end" to track the time span over which the ${eventDescription} event was produced`,
