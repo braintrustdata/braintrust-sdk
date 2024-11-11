@@ -155,6 +155,7 @@ export async function uploadHandleBundles({
 
           // This is a hack because these will be resolved on the server side.
           prompt_data.tool_functions =
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
             resolvableToolFunctions as SavedFunctionId[];
         }
 
@@ -385,6 +386,7 @@ async function uploadBundles({
   // Insert the spec as prompt data
   const functionEntries: FunctionEvent[] = [
     ...prompts,
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     ...((await Promise.all(
       bundleSpecs.map(async (spec) => ({
         project_id: spec.project_id,

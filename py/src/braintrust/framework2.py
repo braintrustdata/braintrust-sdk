@@ -68,6 +68,7 @@ class ToolBuilder:
                 name = handler.__name__
             else:
                 name = f"Tool {self._task_counter}"
+        assert name is not None
         if not slug:
             slug = slugify.slugify(name)
         f = CodeFunction(
