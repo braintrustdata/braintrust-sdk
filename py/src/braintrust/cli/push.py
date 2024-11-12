@@ -1,4 +1,5 @@
 """Implements the braintrust push subcommand."""
+
 import importlib.metadata
 import importlib.util
 import inspect
@@ -8,6 +9,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import textwrap
 import zipfile
 
 import requests
@@ -51,6 +53,25 @@ def _pydantic_to_json_schema(m):
     return m.schema()
 
 
+def check_uv():
+    try:
+        import uv as _
+    except ImportError:
+        print(
+            textwrap.dedent(
+                f"""\
+                The `uv` package is required to push to Braintrust. You can install it by including the
+                extra "cli" dependencies. Run:
+
+                  pip install 'braintrust[cli]'
+
+                to install braintrust with the CLI dependencies (make sure to quote 'braintrust[cli]')."""
+            ),
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
 def run(args):
     """Runs the braintrust push subcommand."""
     login(
@@ -86,6 +107,9 @@ def run(args):
             install_args = ["--requirement", args.requirements]
         else:
             install_args = [_braintrust_pkg(), _pydantic_pkg()]
+
+        check_uv()
+
         # Install the bundled dependencies for server platform into packages_dir.
         subprocess.run(
             [
