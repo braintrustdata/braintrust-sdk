@@ -379,8 +379,6 @@ export const experimentEventSchema = z
     [TRANSACTION_ID_FIELD]:
       experimentEventBaseSchema.shape[TRANSACTION_ID_FIELD],
     created: experimentEventBaseSchema.shape.created,
-    project_id: experimentSchema.shape.project_id,
-    experiment_id: experimentSchema.shape.id,
     input: experimentEventBaseSchema.shape.input.describe(
       "The arguments that uniquely define a test case (an arbitrary, JSON serializable object). Later on, Braintrust will use the `input` to know whether two test cases are the same between experiments, so they should not contain experiment-specific state. A simple rule of thumb is that if you run the same experiment twice, the `input` should be identical",
     ),
@@ -414,8 +412,6 @@ export const datasetEventSchema = z
     id: datasetEventBaseSchema.shape.id,
     [TRANSACTION_ID_FIELD]: datasetEventBaseSchema.shape[TRANSACTION_ID_FIELD],
     created: datasetEventBaseSchema.shape.created,
-    project_id: datasetSchema.shape.project_id,
-    dataset_id: datasetSchema.shape.id,
     input: datasetEventBaseSchema.shape.input.describe(
       "The argument that uniquely define an input case (an arbitrary, JSON serializable object)",
     ),
@@ -440,8 +436,6 @@ export const promptSessionEventSchema = z
     [TRANSACTION_ID_FIELD]:
       promptSessionEventBaseSchema.shape[TRANSACTION_ID_FIELD],
     created: promptSessionEventBaseSchema.shape.created,
-    project_id: promptSchema.shape.project_id,
-    prompt_session_id: promptSchema.shape.id,
     prompt_session_data: customTypes.unknown.describe(
       "Data about the prompt session",
     ),
@@ -463,9 +457,6 @@ export const projectLogsEventSchema = z
     [TRANSACTION_ID_FIELD]:
       projectLogsEventBaseSchema.shape[TRANSACTION_ID_FIELD],
     created: projectLogsEventBaseSchema.shape.created,
-    org_id: projectSchema.shape.org_id,
-    project_id: projectSchema.shape.id,
-    log_id: projectLogsLogIdLiteralSchema,
     input: projectLogsEventBaseSchema.shape.input.describe(
       "The arguments that uniquely define a user input (an arbitrary, JSON serializable object).",
     ),
