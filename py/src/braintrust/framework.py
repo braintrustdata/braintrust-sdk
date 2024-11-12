@@ -11,7 +11,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from multiprocessing import cpu_count
-from typing import Any, Awaitable, Callable, Dict, Iterable, Iterator, List, Optional, TypeVar, Union
+from typing import Any, Awaitable, Callable, Coroutine, Dict, Iterable, Iterator, List, Optional, TypeVar, Union
 
 import exceptiongroup
 from braintrust_core.score import Score, Scorer
@@ -445,6 +445,107 @@ def _make_eval_name(name: str, experiment_name: Optional[str]):
     return out
 
 
+def _EvalCommon(
+    name: str,
+    data: EvalData,
+    task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
+    scores: List[EvalScorer],
+    experiment_name: Optional[str] = None,
+    trial_count: int = 1,
+    metadata: Optional[Metadata] = None,
+    is_public: bool = False,
+    update: bool = False,
+    reporter: Optional[ReporterDef] = None,
+    timeout: Optional[float] = None,
+    max_concurrency: Optional[int] = None,
+    project_id: Optional[str] = None,
+    base_experiment_name: Optional[str] = None,
+    base_experiment_id: Optional[str] = None,
+    git_metadata_settings: Optional[GitMetadataSettings] = None,
+    repo_info: Optional[RepoInfo] = None,
+) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary]]:
+    """
+    This helper is needed because in case of `_lazy_load`, we need to update
+    the `_evals` global immediately instead of whenever the coroutine is
+    awaited.
+
+    :internal:
+    """
+    eval_name = _make_eval_name(name, experiment_name)
+
+    global _evals
+    if eval_name in _evals.evaluators:
+        eval_name = f"{eval_name}_{len(_evals.evaluators)}"
+
+    evaluator = Evaluator(
+        eval_name=eval_name,
+        project_name=name,
+        data=data,
+        task=task,
+        scores=scores,
+        experiment_name=experiment_name,
+        trial_count=trial_count,
+        metadata=metadata,
+        is_public=is_public,
+        update=update,
+        timeout=timeout,
+        max_concurrency=max_concurrency,
+        project_id=project_id,
+        base_experiment_name=base_experiment_name,
+        base_experiment_id=base_experiment_id,
+        git_metadata_settings=git_metadata_settings,
+        repo_info=repo_info,
+    )
+
+    if _lazy_load:
+        print("SAVING EVALUATOR")
+        _evals.evaluators[eval_name] = EvaluatorInstance(evaluator=evaluator, reporter=reporter)
+
+        # Better to return this empty object than have an annoying-to-use signature.
+        async def make_empty_summary():
+            return EvalResultWithSummary(summary=build_local_summary(evaluator, []), results=[])
+
+        return make_empty_summary
+    else:
+        if isinstance(reporter, str):
+            raise ValueError(
+                "Must specify a reporter object, not a name. Can only specify reporter names when running 'braintrust eval'"
+            )
+
+        reporter = reporter or default_reporter
+
+        if base_experiment_name is None and isinstance(evaluator.data, BaseExperiment):
+            base_experiment_name = evaluator.data.name
+
+        dataset = None
+        if isinstance(evaluator.data, Dataset):
+            dataset = evaluator.data
+
+        experiment = init_experiment(
+            project_name=evaluator.project_name if evaluator.project_id is None else None,
+            project_id=evaluator.project_id,
+            experiment_name=evaluator.experiment_name,
+            metadata=evaluator.metadata,
+            is_public=evaluator.is_public,
+            update=evaluator.update,
+            base_experiment=base_experiment_name,
+            base_experiment_id=base_experiment_id,
+            git_metadata_settings=evaluator.git_metadata_settings,
+            repo_info=evaluator.repo_info,
+            dataset=dataset,
+        )
+
+        async def run_to_completion():
+            try:
+                ret = await run_evaluator(experiment, evaluator, 0, [])
+                reporter.report_eval(evaluator, ret, verbose=True, jsonl=False)
+                return ret
+            finally:
+                experiment.flush()
+
+        return run_to_completion
+
+
 async def EvalAsync(
     name: str,
     data: EvalData,
@@ -509,15 +610,8 @@ async def EvalAsync(
     :param repo_info: Optionally explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
-    eval_name = _make_eval_name(name, experiment_name)
-
-    global _evals
-    if eval_name in _evals.evaluators:
-        eval_name = f"{eval_name}_{len(_evals.evaluators)}"
-
-    evaluator = Evaluator(
-        eval_name=eval_name,
-        project_name=name,
+    f = _EvalCommon(
+        name=name,
         data=data,
         task=task,
         scores=scores,
@@ -526,6 +620,7 @@ async def EvalAsync(
         metadata=metadata,
         is_public=is_public,
         update=update,
+        reporter=reporter,
         timeout=timeout,
         max_concurrency=max_concurrency,
         project_id=project_id,
@@ -535,44 +630,10 @@ async def EvalAsync(
         repo_info=repo_info,
     )
 
-    if _lazy_load:
-        _evals.evaluators[eval_name] = EvaluatorInstance(evaluator=evaluator, reporter=reporter)
-        # Better to return this empty object than have an annoying-to-use signature.
-        return EvalResultWithSummary(summary=build_local_summary(evaluator, []), results=[])
-    else:
-        if isinstance(reporter, str):
-            raise ValueError(
-                "Must specify a reporter object, not a name. Can only specify reporter names when running 'braintrust eval'"
-            )
+    return await f()
 
-        reporter = reporter or default_reporter
 
-        if base_experiment_name is None and isinstance(evaluator.data, BaseExperiment):
-            base_experiment_name = evaluator.data.name
-
-        dataset = None
-        if isinstance(evaluator.data, Dataset):
-            dataset = evaluator.data
-
-        experiment = init_experiment(
-            project_name=evaluator.project_name if evaluator.project_id is None else None,
-            project_id=evaluator.project_id,
-            experiment_name=evaluator.experiment_name,
-            metadata=evaluator.metadata,
-            is_public=evaluator.is_public,
-            update=evaluator.update,
-            base_experiment=base_experiment_name,
-            base_experiment_id=base_experiment_id,
-            git_metadata_settings=evaluator.git_metadata_settings,
-            repo_info=evaluator.repo_info,
-            dataset=dataset,
-        )
-        try:
-            ret = await run_evaluator(experiment, evaluator, 0, [])
-            reporter.report_eval(evaluator, ret, verbose=True, jsonl=False)
-            return ret
-        finally:
-            experiment.flush()
+_has_printed_eval_async_warning = False
 
 
 def Eval(
@@ -640,26 +701,25 @@ def Eval(
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
 
-    async def f():
-        return await EvalAsync(
-            name=name,
-            data=data,
-            task=task,
-            scores=scores,
-            experiment_name=experiment_name,
-            trial_count=trial_count,
-            metadata=metadata,
-            is_public=is_public,
-            update=update,
-            reporter=reporter,
-            timeout=timeout,
-            max_concurrency=max_concurrency,
-            project_id=project_id,
-            base_experiment_name=base_experiment_name,
-            base_experiment_id=base_experiment_id,
-            git_metadata_settings=git_metadata_settings,
-            repo_info=repo_info,
-        )
+    f = _EvalCommon(
+        name=name,
+        data=data,
+        task=task,
+        scores=scores,
+        experiment_name=experiment_name,
+        trial_count=trial_count,
+        metadata=metadata,
+        is_public=is_public,
+        update=update,
+        reporter=reporter,
+        timeout=timeout,
+        max_concurrency=max_concurrency,
+        project_id=project_id,
+        base_experiment_name=base_experiment_name,
+        base_experiment_id=base_experiment_id,
+        git_metadata_settings=git_metadata_settings,
+        repo_info=repo_info,
+    )
 
     # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
     try:
@@ -668,9 +728,12 @@ def Eval(
         loop = None
     if loop:
         # Notebook or existing async context.
-        eprint("WARNING: `Eval()` was called from an async context. Please use `await EvalAsync()` instead.")
-        eprint("Call stack:")
-        eprint("\n".join(traceback.format_stack()))
+        global _has_printed_eval_async_warning
+        if not _has_printed_eval_async_warning:
+            _has_printed_eval_async_warning = True
+            eprint("WARNING: `Eval()` was called from an async context. Please use `await EvalAsync()` instead.")
+            eprint("Call stack:")
+            eprint("\n".join(traceback.format_stack()))
         # Return a `Task` to be compatible with a previous signature where the
         # return type included `Awaitable`.
         return loop.create_task(f())  # type: ignore
