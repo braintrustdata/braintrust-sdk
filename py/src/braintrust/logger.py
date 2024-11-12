@@ -126,6 +126,26 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
         """
 
     @abstractmethod
+    def export(self) -> str:
+        """
+        Serialize the identifiers of this span. The return value can be used to identify this span when starting a subspan elsewhere, such as another process or service, without needing to access this `Span` object. See the parameters of `Span.start_span` for usage details.
+
+        Callers should treat the return value as opaque. The serialization format may change from time to time. If parsing is needed, use `SpanComponentsV3.from_str`.
+
+        :returns: Serialized representation of this span's identifiers.
+        """
+
+    @abstractmethod
+    def permalink(self) -> str:
+        """
+        Format a permalink to the Braintrust application for viewing this span.
+
+        Links can be generated at any time, but they will only become viewable after the span and its root have been flushed to the server and ingested.
+
+        :returns: A permalink to the span.
+        """
+
+    @abstractmethod
     def end(self, end_time=None) -> float:
         """Log an end time to the span (defaults to the current time). Returns the logged time.
 
@@ -188,6 +208,9 @@ class _NoopSpan(Span):
         return end_time or time.time()
 
     def export(self):
+        return ""
+
+    def permalink(self) -> str:
         return ""
 
     def flush(self):
@@ -1794,9 +1817,20 @@ def span_components_to_object_id(components: SpanComponentsV3) -> str:
     return _span_components_to_object_id_lambda(components)()
 
 
-# Convenience function for constructing a permalink from an exported span. The
-# link will open up the Braintrust UI, pointing to the exported span.
 def permalink(slug: str, org_name=None, app_url=None) -> str:
+    """
+    Format a permalink to the Braintrust application for viewing the span represented by the provided `slug`.
+
+    Links can be generated at any time, but they will only become viewable after the span and its root have been flushed to the server and ingested.
+
+    If you have a `Span` object, use `Span.permalink` instead.
+
+    :param slug: The identifier generated from `Span.export`.
+    :param org_name: The org name to use. If not provided, the org name will be inferred from the global login state.
+    :param app_url: The app URL to use. If not provided, the app URL will be inferred from the global login state.
+    :returns: A permalink to the exported span.
+    """
+
     if not org_name:
         login()
         if not _state.org_name:
@@ -2163,7 +2197,6 @@ class Experiment(ObjectFetcher, Exportable):
         )
 
     def export(self) -> str:
-        """Return a serialized representation of the experiment that can be used to start subspans in other places. See `Span.start_span` for more details."""
         return SpanComponentsV3(object_type=self._parent_object_type(), object_id=self.id).to_str()
 
     def close(self):
@@ -2460,6 +2493,9 @@ class SpanImpl(Span):
             root_span_id=self.root_span_id,
             propagated_event=self.propagated_event,
         ).to_str()
+
+    def permalink(self) -> str:
+        return permalink(self.export())
 
     def close(self, end_time=None):
         return self.end(end_time)
