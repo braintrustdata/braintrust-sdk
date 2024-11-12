@@ -436,6 +436,7 @@ export const promptSessionEventSchema = z
     [TRANSACTION_ID_FIELD]:
       promptSessionEventBaseSchema.shape[TRANSACTION_ID_FIELD],
     created: promptSessionEventBaseSchema.shape.created,
+    project_id: promptSchema.shape.project_id,
     prompt_session_data: customTypes.unknown.describe(
       "Data about the prompt session",
     ),
