@@ -24,11 +24,7 @@ from .logger import NOOP_SPAN, Dataset, ExperimentSummary, Metadata, ScoreSummar
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
 from .span_types import SpanTypeAttribute
-from .util import (
-    RunThread,
-    bt_iscoroutinefunction,
-    eprint,
-)
+from .util import bt_iscoroutinefunction, eprint
 
 Input = TypeVar("Input")
 Output = TypeVar("Output")
@@ -601,7 +597,7 @@ def Eval(
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
 
-    It's recommended to use this function over `EvalAsync()` by default, unless you are calling from an async context.
+    For callers running in an async context, use `EvalAsync()` instead.
 
     Example:
     ```python
@@ -672,10 +668,12 @@ def Eval(
         loop = None
     if loop:
         # Notebook or existing async context.
-        thread = RunThread(f)
-        thread.start()
-        thread.join()
-        return thread.get_result()
+        eprint("WARNING: `Eval()` was called from an async context. Please use `await EvalAsync()` instead.")
+        eprint("Call stack:")
+        eprint("\n".join(traceback.format_stack()))
+        # Return a `Task` to be compatible with a previous signature where the
+        # return type included `Awaitable`.
+        return loop.create_task(f())  # type: ignore
     else:
         return asyncio.run(f())
 

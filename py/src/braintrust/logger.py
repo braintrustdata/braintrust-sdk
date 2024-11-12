@@ -1810,10 +1810,12 @@ def _span_components_to_object_id_lambda(components: SpanComponentsV3):
         raise Exception(f"Unknown object type: {components.object_type}")
 
 
-# Utility function to resolve the object ID of a SpanComponentsV3 object. This
-# function may trigger a login to braintrust if the object ID is encoded
-# "lazily".
 def span_components_to_object_id(components: SpanComponentsV3) -> str:
+    """
+    Utility function to resolve the object ID of a SpanComponentsV3 object. This
+    function may trigger a login to braintrust if the object ID is encoded
+    lazily.
+    """
     return _span_components_to_object_id_lambda(components)()
 
 
