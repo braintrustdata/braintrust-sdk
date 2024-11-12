@@ -87,10 +87,7 @@ class ToolBuilder:
 
 
 class PromptBuilder:
-    """Builder to create a prompt in Braintrust.
-
-    NOTE: This class is not yet stable.
-    """
+    """Builder to create a prompt in Braintrust."""
 
     def __init__(self, project: "Project"):
         self.project = project
