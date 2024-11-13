@@ -800,6 +800,69 @@ class OrgProjectMetadata:
     project: ObjectMetadata
 
 
+@overload
+def myfunction(param1: Literal[True], other: str) -> int:
+    ...
+
+
+@overload
+def myfunction(param1: Literal[False], other: str) -> str:
+    ...
+
+
+def myfunction(param1: bool = True, other: str = "hi") -> Union[int, str]:
+    if param1:
+        return 1
+    else:
+        return other
+
+
+@overload
+def init(
+    project: str,
+    experiment: Optional[str],
+    description: Optional[str],
+    dataset: Optional["Dataset"],
+    open: Literal[False],
+    base_experiment: Optional[str],
+    is_public: bool,
+    app_url: Optional[str],
+    api_key: Optional[str],
+    org_name: Optional[str],
+    metadata: Optional[Metadata],
+    git_metadata_settings: Optional[GitMetadataSettings],
+    set_current: bool,
+    update: Optional[bool],
+    project_id: Optional[str],
+    base_experiment_id: Optional[str],
+    repo_info: Optional[RepoInfo],
+) -> "Experiment":
+    ...
+
+
+@overload
+def init(
+    project: str,
+    experiment: Optional[str],
+    description: Optional[str],
+    dataset: Optional["Dataset"],
+    open: Literal[True],
+    base_experiment: Optional[str],
+    is_public: bool,
+    app_url: Optional[str],
+    api_key: Optional[str],
+    org_name: Optional[str],
+    metadata: Optional[Metadata],
+    git_metadata_settings: Optional[GitMetadataSettings],
+    set_current: bool,
+    update: Optional[bool],
+    project_id: Optional[str],
+    base_experiment_id: Optional[str],
+    repo_info: Optional[RepoInfo],
+) -> "ReadonlyExperiment":
+    ...
+
+
 def init(
     project: Optional[str] = None,
     experiment: Optional[str] = None,
