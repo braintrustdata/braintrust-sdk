@@ -41,7 +41,6 @@ from urllib.parse import urlencode
 import chevron
 import exceptiongroup
 import requests
-from braintrust_core import DatasetEvent, ExperimentEvent, PromptOptions, SpanAttributes
 from braintrust_core.serializable_data_class import SerializableDataClass
 from requests.adapters import HTTPAdapter
 from typing_extensions import NotRequired
@@ -49,6 +48,7 @@ from urllib3.util.retry import Retry
 
 from braintrust.functions.stream import BraintrustStream
 
+from ._types import DatasetEvent, ExperimentEvent, PromptOptions, SpanAttributes
 from .bt_json import bt_dumps
 from .db_fields import (
     ASYNC_SCORING_CONTROL_FIELD,

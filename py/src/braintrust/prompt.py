@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 from typing import List, Literal, Optional, Union
 
-from braintrust_core import PromptOptions
 from braintrust_core.serializable_data_class import SerializableDataClass
+
+from ._types import PromptOptions
 
 # Keep these definitions in sync with sdk/core/js/typespecs/prompt.ts.
 
