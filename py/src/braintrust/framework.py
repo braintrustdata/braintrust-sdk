@@ -13,7 +13,6 @@ from contextlib import contextmanager
 from multiprocessing import cpu_count
 from typing import (
     Any,
-    AsyncIterator,
     Awaitable,
     Callable,
     Coroutine,
@@ -23,6 +22,7 @@ from typing import (
     Iterator,
     List,
     Optional,
+    Type,
     TypeVar,
     Union,
 )
@@ -139,7 +139,7 @@ OneOrMoreScores = Union[float, int, bool, None, Score, List[Score]]
 
 EvalScorer = Union[
     Scorer,
-    type[Scorer],
+    Type[Scorer],
     Callable[[Input, Output, Output], OneOrMoreScores],
     Callable[[Input, Output, Output], Awaitable[OneOrMoreScores]],
 ]
