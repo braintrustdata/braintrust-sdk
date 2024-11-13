@@ -32,6 +32,7 @@ from braintrust_core.score import Score, Scorer
 from braintrust_core.serializable_data_class import SerializableDataClass
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
+from typing_extensions import NotRequired, TypedDict
 
 from .git_fields import GitMetadataSettings, RepoInfo
 from .logger import NOOP_SPAN, Dataset, ExperimentSummary, Metadata, ScoreSummary, Span, stringify_exception
@@ -72,6 +73,18 @@ class EvalCase(SerializableDataClass, Generic[Input, Output]):
     # Id is only set if the EvalCase is part of a Dataset.
     id: Optional[str] = None
     _xact_id: Optional[str] = None
+
+
+class EvalCaseDict(Generic[Input, Output], TypedDict):
+    """Mirrors EvalCase above."""
+
+    input: Input
+    expected: NotRequired[Optional[Output]]
+    metadata: NotRequired[Optional[Metadata]]
+    tags: NotRequired[Optional[List[str]]]
+
+    id: NotRequired[Optional[str]]
+    _xact_id: NotRequired[Optional[str]]
 
 
 # Inheritance doesn't quite work for dataclasses, so we redefine the fields
@@ -126,6 +139,7 @@ OneOrMoreScores = Union[float, int, bool, None, Score, List[Score]]
 
 EvalScorer = Union[
     Scorer,
+    type[Scorer],
     Callable[[Input, Output, Output], OneOrMoreScores],
     Callable[[Input, Output, Output], Awaitable[OneOrMoreScores]],
 ]
@@ -146,10 +160,13 @@ class BaseExperiment:
     """
 
 
+AnyEvalCase = Union[EvalCase, EvalCaseDict]
+
 EvalData = Union[
-    Iterator[EvalCase],
-    Awaitable[Iterator[EvalCase]],
-    Callable[[], Union[Iterator[EvalCase], Awaitable[Iterator[EvalCase]]]],
+    Iterable[AnyEvalCase],
+    Iterator[AnyEvalCase],
+    Awaitable[Iterator[AnyEvalCase]],
+    Callable[[], Union[Iterator[AnyEvalCase], Awaitable[Iterator[AnyEvalCase]]]],
     BaseExperiment,
     Dataset,
     type,
@@ -1170,4 +1187,14 @@ def build_local_summary(evaluator, results):
     )
 
 
-__all__ = ["Evaluator", "Eval", "EvalAsync", "Score", "EvalCase", "EvalHooks", "BaseExperiment", "Reporter"]
+__all__ = [
+    "Evaluator",
+    "Eval",
+    "EvalAsync",
+    "Score",
+    "EvalCase",
+    "EvalCaseDict",
+    "EvalHooks",
+    "BaseExperiment",
+    "Reporter",
+]
