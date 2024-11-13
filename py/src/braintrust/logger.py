@@ -818,7 +818,7 @@ def init(
     project_id: Optional[str] = None,
     base_experiment_id: Optional[str] = None,
     repo_info: Optional[RepoInfo] = None,
-):
+) -> Union["Experiment", "ReadonlyExperiment"]:
     """
     Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
 
@@ -949,7 +949,7 @@ def init(
     return ret
 
 
-def init_experiment(*args, **kwargs):
+def init_experiment(*args, **kwargs) -> Union["Experiment", "ReadonlyExperiment"]:
     """Alias for `init`"""
 
     return init(*args, **kwargs)
@@ -1039,7 +1039,7 @@ def init_logger(
     org_name: Optional[str] = None,
     force_login: bool = False,
     set_current: bool = True,
-):
+) -> "Logger":
     """
     Create a new logger in a specified project. If the project does not exist, it will be created.
 
@@ -1081,7 +1081,7 @@ def load_prompt(
     app_url: Optional[str] = None,
     api_key: Optional[str] = None,
     org_name: Optional[str] = None,
-):
+) -> "Prompt":
     """
     Loads a prompt from the specified project.
 
@@ -1223,7 +1223,7 @@ def login(
         _state.login_replace_api_conn(conn)
 
 
-def log(**event):
+def log(**event) -> str:
     """
     Log a single event to the current experiment. The event will be batched and uploaded behind the scenes.
 
@@ -1239,7 +1239,7 @@ def log(**event):
     return e.log(**event)
 
 
-def summarize(summarize_scores=True, comparison_experiment_id=None):
+def summarize(summarize_scores=True, comparison_experiment_id=None) -> "ExperimentSummary":
     """
     Summarize the current experiment, including the scores (compared to the closest reference experiment) and metadata.
 
@@ -1250,10 +1250,8 @@ def summarize(summarize_scores=True, comparison_experiment_id=None):
     eprint(
         "braintrust.summarize is deprecated and will be removed in a future version of braintrust. Use `experiment.summarize` instead."
     )
-    if _state.current_experiment is None:
-        raise Exception("Not initialized. Please call init() first")
-    e = _state.current_experiment.get()
-    if not e:
+    e = current_experiment()
+    if e is None:
         raise Exception("Not initialized. Please call init() first")
     return e.summarize(
         summarize_scores=summarize_scores,
