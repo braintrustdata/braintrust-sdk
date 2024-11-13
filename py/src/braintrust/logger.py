@@ -41,7 +41,7 @@ from urllib.parse import urlencode
 import chevron
 import exceptiongroup
 import requests
-from braintrust_core import DatasetEvent, ExperimentEvent, SpanAttributes
+from braintrust_core import DatasetEvent, ExperimentEvent, PromptOptions, SpanAttributes
 from braintrust_core.serializable_data_class import SerializableDataClass
 from requests.adapters import HTTPAdapter
 from typing_extensions import NotRequired
@@ -64,7 +64,7 @@ from .git_fields import GitMetadataSettings, RepoInfo
 from .gitutil import get_past_n_ancestors, get_repo_info
 from .merge_row_batch import batch_items, merge_row_batch
 from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
-from .prompt import BRAINTRUST_PARAMS, PromptSchema
+from .prompt import BRAINTRUST_PARAMS, PromptBlockData, PromptSchema
 from .span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from .span_types import SpanTypeAttribute
 from .util import (
@@ -1076,7 +1076,7 @@ def load_prompt(
     slug: Optional[str] = None,
     version: Optional[Union[str, int]] = None,
     project_id: Optional[str] = None,
-    defaults: Optional[Dict[str, Any]] = None,
+    defaults: Optional[Mapping[str, Any]] = None,
     no_trace: bool = False,
     app_url: Optional[str] = None,
     api_key: Optional[str] = None,
@@ -2939,7 +2939,7 @@ class Prompt:
     def __init__(
         self,
         lazy_metadata: LazyValue[PromptSchema],
-        defaults: Dict[str, Any],
+        defaults: Mapping[str, Any],
         no_trace: bool,
     ):
         self._lazy_metadata = lazy_metadata
@@ -2947,34 +2947,34 @@ class Prompt:
         self.no_trace = no_trace
 
     @property
-    def id(self):
+    def id(self) -> str:
         return self._lazy_metadata.get().id
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self._lazy_metadata.get().name
 
     @property
-    def slug(self):
+    def slug(self) -> str:
         return self._lazy_metadata.get().slug
 
     @property
-    def prompt(self):
+    def prompt(self) -> Optional[PromptBlockData]:
         return self._lazy_metadata.get().prompt_data.prompt
 
     @property
-    def version(self):
+    def version(self) -> str:
         return self._lazy_metadata.get()._xact_id
 
     @property
-    def options(self):
+    def options(self) -> PromptOptions:
         return self._lazy_metadata.get().prompt_data.options or {}
 
     # Capture all metadata attributes which aren't covered by existing methods.
     def __getattr__(self, name: str) -> Any:
         return getattr(self._lazy_metadata.get(), name)
 
-    def build(self, **build_args):
+    def build(self, **build_args) -> Mapping[str, Any]:
         """
         Build the prompt with the given formatting options. The args you pass in will
         be forwarded to the mustache template that defines the prompt and rendered with
@@ -3023,7 +3023,7 @@ class Prompt:
 
         return ret
 
-    def _make_iter_list(self):
+    def _make_iter_list(self) -> Sequence[str]:
         meta_keys = list(self.options.keys())
         if self.prompt.type == "completion":
             meta_keys.append("prompt")
@@ -3033,10 +3033,10 @@ class Prompt:
 
         return meta_keys
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[str]:
         return iter(self._make_iter_list())
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._make_iter_list())
 
     def __getitem__(self, x):

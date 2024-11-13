@@ -1,6 +1,8 @@
-"""Do not import this file directly. See __init__.py for the classes that are considered stable.
+"""
+Do not import this file directly. See __init__.py for the classes that have a stable API.
 
-Auto-generated file -- do not modify."""
+Auto-generated file -- do not modify.
+"""
 
 from __future__ import annotations
 
@@ -121,6 +123,18 @@ class Metrics(TypedDict):
     """
     The total number of tokens in the input and output of the experiment event.
     """
+    caller_functionname: NotRequired[Any]
+    """
+    This metric is deprecated
+    """
+    caller_filename: NotRequired[Any]
+    """
+    This metric is deprecated
+    """
+    caller_lineno: NotRequired[Any]
+    """
+    This metric is deprecated
+    """
 
 
 class Context(TypedDict):
@@ -220,6 +234,93 @@ class ExperimentEvent(TypedDict):
     """
     Indicates the event was copied from another object.
     """
+
+
+class ResponseFormat(TypedDict):
+    type: Literal["json_object"]
+
+
+class JsonSchema(TypedDict):
+    name: str
+    description: NotRequired[str]
+    schema_: NotRequired[Mapping[str, Any]]
+    strict: NotRequired[bool]
+
+
+class ResponseFormat1(TypedDict):
+    type: Literal["json_schema"]
+    json_schema: JsonSchema
+
+
+class ResponseFormat2(TypedDict):
+    type: Literal["text"]
+
+
+class Function(TypedDict):
+    name: str
+
+
+class ToolChoice(TypedDict):
+    type: Literal["function"]
+    function: Function
+
+
+class FunctionCall(TypedDict):
+    name: str
+
+
+class ModelParams1(TypedDict):
+    use_cache: NotRequired[bool]
+    temperature: NotRequired[float]
+    top_p: NotRequired[float]
+    max_tokens: NotRequired[float]
+    frequency_penalty: NotRequired[float]
+    presence_penalty: NotRequired[float]
+    response_format: NotRequired[Union[ResponseFormat, ResponseFormat1, ResponseFormat2, Mapping[str, Any]]]
+    tool_choice: NotRequired[Union[Literal["auto"], Literal["none"], Literal["required"], ToolChoice]]
+    function_call: NotRequired[Union[Literal["auto"], Literal["none"], FunctionCall]]
+    n: NotRequired[float]
+    stop: NotRequired[Sequence[str]]
+
+
+class ModelParams2(TypedDict):
+    use_cache: NotRequired[bool]
+    max_tokens: float
+    temperature: float
+    top_p: NotRequired[float]
+    top_k: NotRequired[float]
+    stop_sequences: NotRequired[Sequence[str]]
+    max_tokens_to_sample: NotRequired[float]
+    """
+    This is a legacy parameter that should not be used.
+    """
+
+
+class ModelParams3(TypedDict):
+    use_cache: NotRequired[bool]
+    temperature: NotRequired[float]
+    maxOutputTokens: NotRequired[float]
+    topP: NotRequired[float]
+    topK: NotRequired[float]
+
+
+class ModelParams4(TypedDict):
+    use_cache: NotRequired[bool]
+    temperature: NotRequired[float]
+    topK: NotRequired[float]
+
+
+class ModelParams5(TypedDict):
+    use_cache: NotRequired[bool]
+
+
+ModelParams = Union[ModelParams1, ModelParams2, ModelParams3, ModelParams4, ModelParams5]
+
+
+class PromptOptions(TypedDict):
+    model: NotRequired[str]
+    params: NotRequired[ModelParams]
+    position: NotRequired[str]
 
 
 __all__ = []
