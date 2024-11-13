@@ -1,4 +1,4 @@
-// Mirror of the functions in core/py/src/braintrust_core/merge_row_batch.py.
+// Mirror of the functions in py/src/braintrust/merge_row_batch.py.
 
 import { IS_MERGE_FIELD, PARENT_ID_FIELD } from "./db_fields";
 import { mapAt, mergeDicts } from "./object_util";
@@ -25,6 +25,19 @@ function generateMergedRowKey(
   );
 }
 
+// These fields will be retained as-is when merging rows.
+const MERGE_ROW_SKIP_FIELDS = ["created", "span_id", "root_span_id"];
+
+function collectMergeRowSkipFields(
+  row: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const field of MERGE_ROW_SKIP_FIELDS) {
+    out[field] = row[field];
+  }
+  return out;
+}
+
 export function mergeRowBatch<
   T extends {
     id: string;
@@ -45,8 +58,10 @@ export function mergeRowBatch<
     const key = generateMergedRowKey(row);
     const existingRow = rowGroups.get(key);
     if (existingRow !== undefined && row[IS_MERGE_FIELD]) {
+      const skipFields = collectMergeRowSkipFields(existingRow);
       const preserveNoMerge = !existingRow[IS_MERGE_FIELD];
       mergeDicts(existingRow, row);
+      Object.assign(existingRow, skipFields);
       if (preserveNoMerge) {
         delete existingRow[IS_MERGE_FIELD];
       }

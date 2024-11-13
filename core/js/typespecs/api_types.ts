@@ -573,6 +573,18 @@ export const insertEventsResponseSchema = z
   })
   .openapi("InsertEventsResponse");
 
+export const insertEventsWithSpanSlugsResponseSchema =
+  insertEventsResponseSchema
+    .extend({
+      serialized_span_slugs: z
+        .string()
+        .array()
+        .describe(
+          "String slugs which line up 1-1 with the row_ids. These slugs can be used as the 'parent' specifier to attach spans underneath the row",
+        ),
+    })
+    .openapi("InsertEventsWithSpanSlugsResponse");
+
 export const feedbackResponseSchema = z
   .object({
     status: z.literal("success"),

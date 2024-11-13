@@ -20,6 +20,21 @@ def _generate_merged_row_key(row, use_parent_id_for_id=False):
     )
 
 
+# These fields will be retained as-is when merging rows.
+MERGE_ROW_SKIP_FIELDS = [
+    "created",
+    "span_id",
+    "root_span_id",
+]
+
+
+def _collect_merge_row_skip_fields(row: Dict) -> Dict:
+    out = {}
+    for field in MERGE_ROW_SKIP_FIELDS:
+        out[field] = row.get(field)
+    return out
+
+
 def merge_row_batch(rows: List[Dict]) -> List[List[Dict]]:
     """Given a batch of rows, merges conflicting rows together to end up with a
     set of rows to insert. Returns a set of de-conflicted rows, as a list of
@@ -78,10 +93,12 @@ def merge_row_batch(rows: List[Dict]) -> List[List[Dict]]:
         # True property, we merge it with the existing row. Otherwise we can
         # replace it.
         if existing_row is not None and row.get(IS_MERGE_FIELD):
+            skip_fields = _collect_merge_row_skip_fields(existing_row)
             # Preserve IS_MERGE_FIELD == False if the existing_row had it set to
             # false.
             preserve_nomerge = not existing_row.get(IS_MERGE_FIELD)
             merge_dicts(existing_row, row)
+            existing_row.update(skip_fields)
             if preserve_nomerge:
                 del existing_row[IS_MERGE_FIELD]
         else:
