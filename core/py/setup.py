@@ -1,4 +1,3 @@
-import json
 import os
 
 import setuptools
@@ -12,7 +11,9 @@ with open(os.path.join(dir_name, "src", "braintrust_core", "version.py"), encodi
 with open(os.path.join(dir_name, "README.md"), "r", encoding="utf-8") as f:
     long_description = f.read()
 
-install_requires = []
+install_requires = [
+    "typing_extensions>=4.1.0",
+]
 
 extras_require = {}
 
@@ -31,6 +32,7 @@ setuptools.setup(
     ],
     package_dir={"": "src"},
     packages=setuptools.find_packages(where="src"),
+    # package_data={"braintrust_core": ["py.typed"]},
     python_requires=">=3.8.0",
     install_requires=install_requires,
     extras_require=extras_require,

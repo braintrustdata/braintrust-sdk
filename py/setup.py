@@ -61,6 +61,7 @@ setuptools.setup(
     ],
     package_dir={"": "src"},
     packages=setuptools.find_packages(where="src"),
+    package_data={"braintrust": ["py.typed"]},
     python_requires=">=3.8.0",
     entry_points={"console_scripts": ["braintrust = braintrust.cli.__main__:main"]},
     install_requires=install_requires,
