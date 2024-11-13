@@ -801,23 +801,6 @@ class OrgProjectMetadata:
 
 
 @overload
-def myfunction(param1: Literal[True], other: str) -> int:
-    ...
-
-
-@overload
-def myfunction(param1: Literal[False], other: str) -> str:
-    ...
-
-
-def myfunction(param1: bool = True, other: str = "hi") -> Union[int, str]:
-    if param1:
-        return 1
-    else:
-        return other
-
-
-@overload
 def init(
     project: str,
     experiment: Optional[str],

@@ -75,8 +75,11 @@ class EvalCase(SerializableDataClass, Generic[Input, Output]):
     _xact_id: Optional[str] = None
 
 
-class EvalCaseDict(Generic[Input, Output], TypedDict):
-    """Mirrors EvalCase above."""
+class _EvalCaseDict(Generic[Input, Output], TypedDict):
+    """
+    Mirrors EvalCase for callers who pass a dict instead of dataclass.
+    :internal:
+    """
 
     input: Input
     expected: NotRequired[Optional[Output]]
@@ -160,17 +163,17 @@ class BaseExperiment:
     """
 
 
-AnyEvalCase = Union[EvalCase, EvalCaseDict]
+_AnyEvalCase = Union[EvalCase, _EvalCaseDict]
 
-EvalData = Union[
-    Iterable[AnyEvalCase],
-    Iterator[AnyEvalCase],
-    Awaitable[Iterator[AnyEvalCase]],
-    Callable[[], Union[Iterator[AnyEvalCase], Awaitable[Iterator[AnyEvalCase]]]],
+_EvalDataObject = Union[
+    Iterable[_AnyEvalCase],
+    Iterator[_AnyEvalCase],
+    Awaitable[Iterator[_AnyEvalCase]],
+    Callable[[], Union[Iterator[_AnyEvalCase], Awaitable[Iterator[_AnyEvalCase]]]],
     BaseExperiment,
-    Dataset,
-    type,
 ]
+
+EvalData = Union[_EvalDataObject, Type[_EvalDataObject], Dataset]
 
 
 @dataclasses.dataclass
@@ -1187,14 +1190,4 @@ def build_local_summary(evaluator, results):
     )
 
 
-__all__ = [
-    "Evaluator",
-    "Eval",
-    "EvalAsync",
-    "Score",
-    "EvalCase",
-    "EvalCaseDict",
-    "EvalHooks",
-    "BaseExperiment",
-    "Reporter",
-]
+__all__ = ["Evaluator", "Eval", "EvalAsync", "Score", "EvalCase", "EvalHooks", "BaseExperiment", "Reporter"]
