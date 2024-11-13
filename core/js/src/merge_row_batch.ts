@@ -50,6 +50,18 @@ function popMergeRowSkipFields<T extends MergeRowSkipFieldObj>(
   return popped;
 }
 
+function restoreMergeRowSkipFields<T extends MergeRowSkipFieldObj>(
+  row: T,
+  skipFields: MergeRowSkipFieldObj,
+) {
+  for (const field of MERGE_ROW_SKIP_FIELDS) {
+    delete row[field];
+    if (field in skipFields) {
+      row[field] = skipFields[field];
+    }
+  }
+}
+
 export function mergeRowBatch<
   T extends {
     id: string;
@@ -73,7 +85,7 @@ export function mergeRowBatch<
       const skipFields = popMergeRowSkipFields(existingRow);
       const preserveNoMerge = !existingRow[IS_MERGE_FIELD];
       mergeDicts(existingRow, row);
-      Object.assign(existingRow, skipFields);
+      restoreMergeRowSkipFields(existingRow, skipFields);
       if (preserveNoMerge) {
         delete existingRow[IS_MERGE_FIELD];
       }
