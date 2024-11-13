@@ -630,7 +630,7 @@ class _BackgroundLogger:
             # Construct batches of records to flush in parallel and in sequence.
             all_items_str = [[bt_dumps(item) for item in bucket] for bucket in all_items]
             batch_sets = batch_items(
-                items=all_items_str, batch_max_num_items=batch_size, batch_max_num_bytes=self.max_request_size / 2
+                items=all_items_str, batch_max_num_items=batch_size, batch_max_num_bytes=self.max_request_size // 2
             )
             for batch_set in batch_sets:
                 post_promises = []
@@ -646,9 +646,9 @@ class _BackgroundLogger:
 
                 concurrent.futures.wait(post_promises)
                 # Raise any exceptions from the promises as one group.
-                post_promise_exceptions = [f.exception() for f in post_promises if f.exception() is not None]
+                post_promise_exceptions = [e for e in (f.exception() for f in post_promises) if e is not None]
                 if post_promise_exceptions:
-                    raise exceptiongroup.ExceptionGroup(
+                    raise exceptiongroup.BaseExceptionGroup(
                         f"Encountered the following errors while logging:", post_promise_exceptions
                     )
 
@@ -1250,6 +1250,8 @@ def summarize(summarize_scores=True, comparison_experiment_id=None):
     eprint(
         "braintrust.summarize is deprecated and will be removed in a future version of braintrust. Use `experiment.summarize` instead."
     )
+    if _state.current_experiment is None:
+        raise Exception("Not initialized. Please call init() first")
     e = _state.current_experiment.get()
     if not e:
         raise Exception("Not initialized. Please call init() first")
@@ -3026,7 +3028,8 @@ class Prompt:
         if self.prompt.type == "completion":
             meta_keys.append("prompt")
         else:
-            meta_keys.append("chat", "tools")
+            meta_keys.append("chat")
+            meta_keys.append("tools")
 
         return meta_keys
 
