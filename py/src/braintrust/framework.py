@@ -10,13 +10,13 @@ import traceback
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from enum import Enum
 from multiprocessing import cpu_count
 from typing import (
     Any,
     AsyncIterator,
     Awaitable,
     Callable,
+    Coroutine,
     Dict,
     Generic,
     Iterable,
@@ -38,10 +38,7 @@ from .logger import NOOP_SPAN, Dataset, ExperimentSummary, Metadata, ScoreSummar
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
 from .span_types import SpanTypeAttribute
-from .util import (
-    bt_iscoroutinefunction,
-    eprint,
-)
+from .util import bt_iscoroutinefunction, eprint
 
 Input = TypeVar("Input")
 Output = TypeVar("Output")
@@ -149,6 +146,16 @@ class BaseExperiment:
     """
 
 
+EvalData = Union[
+    Iterator[EvalCase],
+    Awaitable[Iterator[EvalCase]],
+    Callable[[], Union[Iterator[EvalCase], Awaitable[Iterator[EvalCase]]]],
+    BaseExperiment,
+    Dataset,
+    type,
+]
+
+
 @dataclasses.dataclass
 class Evaluator(Generic[Input, Output]):
     """
@@ -170,13 +177,7 @@ class Evaluator(Generic[Input, Output]):
     A name that describes the experiment. You do not need to change it each time the experiment runs.
     """
 
-    data: Union[
-        Iterator[EvalCase],
-        Awaitable[Iterator[EvalCase]],
-        Callable[[], Union[Iterator[EvalCase], Awaitable[Iterator[EvalCase]]]],
-        BaseExperiment,
-        type,
-    ]
+    data: EvalData
     """
     Returns an iterator over the evaluation dataset. Each element of the iterator should be an `EvalCase` or a dict
     with the same fields as an `EvalCase` (`input`, `expected`, `metadata`).
@@ -458,70 +459,31 @@ def _make_eval_name(name: str, experiment_name: Optional[str]):
     return out
 
 
-def Eval(
+def _EvalCommon(
     name: str,
-    data: Callable[[], Union[Iterator[EvalCase], AsyncIterator[EvalCase]]],
+    data: EvalData,
     task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
     scores: List[EvalScorer],
-    experiment_name: Optional[str] = None,
-    trial_count: int = 1,
-    metadata: Optional[Metadata] = None,
-    is_public: bool = False,
-    update: bool = False,
-    reporter: Optional[Union[ReporterDef, str]] = None,
-    timeout: Optional[float] = None,
-    max_concurrency: Optional[int] = None,
-    project_id: Optional[str] = None,
-    base_experiment_name: Optional[str] = None,
-    base_experiment_id: Optional[str] = None,
-    git_metadata_settings: Optional[GitMetadataSettings] = None,
-    repo_info: Optional[RepoInfo] = None,
-) -> Union[Awaitable[EvalResultWithSummary], EvalResultWithSummary]:
+    experiment_name: Optional[str],
+    trial_count: int,
+    metadata: Optional[Metadata],
+    is_public: bool,
+    update: bool,
+    reporter: Optional[ReporterDef],
+    timeout: Optional[float],
+    max_concurrency: Optional[int],
+    project_id: Optional[str],
+    base_experiment_name: Optional[str],
+    base_experiment_id: Optional[str],
+    git_metadata_settings: Optional[GitMetadataSettings],
+    repo_info: Optional[RepoInfo],
+) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary]]:
     """
-    A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
+    This helper is needed because in case of `_lazy_load`, we need to update
+    the `_evals` global immediately instead of whenever the coroutine is
+    awaited.
 
-    Example:
-    ```python
-    Eval(
-        name="my-evaluator",
-        data=lambda: [
-            EvalCase(input=1, expected=2),
-            EvalCase(input=2, expected=4),
-        ],
-        task=lambda input, hooks: input * 2,
-        scores=[
-            NumericDiff,
-        ],
-    )
-    ```
-
-    If you're running in an async context, e.g. in a Jupyter notebook, then `Eval` returns a `Future` object that you
-    can `await`.
-
-    :param name: The name of the evaluator. This corresponds to a project name in Braintrust.
-    :param data: Returns an iterator over the evaluation dataset. Each element of the iterator should be a `EvalCase`.
-    :param task: Runs the evaluation task on a single input. The `hooks` object can be used to add metadata to the evaluation.
-    :param scores: A list of scorers to evaluate the results of the task. Each scorer can be a Scorer object or a function
-    that takes an `EvalScorerArgs` object and returns a `Score` object.
-    :param experiment_name: (Optional) Experiment name. If not specified, a name will be generated automatically.
-    :param trial_count: The number of times to run the evaluator per input. This is useful for evaluating applications that
-    have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the variance in the results.
-    :param metadata: (Optional) A dictionary with additional data about the test example, model outputs, or just about
-    anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log
-    the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata`
-    can be any JSON-serializable type, but its keys must be strings.
-    :param is_public: (Optional) Whether the experiment should be public. Defaults to false.
-    :param reporter: (Optional) A reporter that takes an evaluator and its result and returns a report.
-    :param timeout: (Optional) The duration, in seconds, after which to time out the evaluation.
-    Defaults to None, in which case there is no timeout.
-    :param project_id: (Optional) If specified, uses the given project ID instead of the evaluator's name to identify the project.
-    :param base_experiment_name: An optional experiment name to use as a base. If specified, the new experiment will be
-    summarized and compared to this experiment.
-    :param base_experiment_id: An optional experiment id to use as a base. If specified, the new experiment will be
-    summarized and compared to this experiment. This takes precedence over `base_experiment_name` if specified.
-    :param git_metadata_settings: Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
-    :param repo_info: Optionally explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
-    :return: An `EvalResultWithSummary` object, which contains all results and a summary.
+    :internal:
     """
     eval_name = _make_eval_name(name, experiment_name)
 
@@ -550,7 +512,14 @@ def Eval(
     )
 
     if _lazy_load:
+        print("SAVING EVALUATOR")
         _evals.evaluators[eval_name] = EvaluatorInstance(evaluator=evaluator, reporter=reporter)
+
+        # Better to return this empty object than have an annoying-to-use signature.
+        async def make_empty_summary():
+            return EvalResultWithSummary(summary=build_local_summary(evaluator, []), results=[])
+
+        return make_empty_summary
     else:
         if isinstance(reporter, str):
             raise ValueError(
@@ -559,12 +528,6 @@ def Eval(
 
         reporter = reporter or default_reporter
 
-        # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:  # 'RuntimeError: There is no current event loop...'
-            loop = None
-
         if base_experiment_name is None and isinstance(evaluator.data, BaseExperiment):
             base_experiment_name = evaluator.data.name
 
@@ -572,20 +535,21 @@ def Eval(
         if isinstance(evaluator.data, Dataset):
             dataset = evaluator.data
 
+        experiment = init_experiment(
+            project_name=evaluator.project_name if evaluator.project_id is None else None,
+            project_id=evaluator.project_id,
+            experiment_name=evaluator.experiment_name,
+            metadata=evaluator.metadata,
+            is_public=evaluator.is_public,
+            update=evaluator.update,
+            base_experiment=base_experiment_name,
+            base_experiment_id=base_experiment_id,
+            git_metadata_settings=evaluator.git_metadata_settings,
+            repo_info=evaluator.repo_info,
+            dataset=dataset,
+        )
+
         async def run_to_completion():
-            experiment = init_experiment(
-                project_name=evaluator.project_name if evaluator.project_id is None else None,
-                project_id=evaluator.project_id,
-                experiment_name=evaluator.experiment_name,
-                metadata=evaluator.metadata,
-                is_public=evaluator.is_public,
-                update=evaluator.update,
-                base_experiment=base_experiment_name,
-                base_experiment_id=base_experiment_id,
-                git_metadata_settings=evaluator.git_metadata_settings,
-                repo_info=evaluator.repo_info,
-                dataset=dataset,
-            )
             try:
                 ret = await run_evaluator(experiment, evaluator, 0, [])
                 reporter.report_eval(evaluator, ret, verbose=True, jsonl=False)
@@ -593,10 +557,202 @@ def Eval(
             finally:
                 experiment.flush()
 
-        if loop:
-            return loop.create_task(run_to_completion())
-        else:
-            return asyncio.run(run_to_completion())
+        return run_to_completion
+
+
+async def EvalAsync(
+    name: str,
+    data: EvalData,
+    task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
+    scores: List[EvalScorer],
+    experiment_name: Optional[str] = None,
+    trial_count: int = 1,
+    metadata: Optional[Metadata] = None,
+    is_public: bool = False,
+    update: bool = False,
+    reporter: Optional[ReporterDef] = None,
+    timeout: Optional[float] = None,
+    max_concurrency: Optional[int] = None,
+    project_id: Optional[str] = None,
+    base_experiment_name: Optional[str] = None,
+    base_experiment_id: Optional[str] = None,
+    git_metadata_settings: Optional[GitMetadataSettings] = None,
+    repo_info: Optional[RepoInfo] = None,
+) -> EvalResultWithSummary:
+    """
+    A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
+
+    Use this function over `Eval()` when you are running in an async context, including in a Jupyter notebook.
+
+    Example:
+    ```python
+    await EvalAsync(
+        name="my-evaluator",
+        data=lambda: [
+            EvalCase(input=1, expected=2),
+            EvalCase(input=2, expected=4),
+        ],
+        task=lambda input, hooks: input * 2,
+        scores=[
+            NumericDiff,
+        ],
+    )
+    ```
+
+    :param name: The name of the evaluator. This corresponds to a project name in Braintrust.
+    :param data: Returns an iterator over the evaluation dataset. Each element of the iterator should be a `EvalCase`.
+    :param task: Runs the evaluation task on a single input. The `hooks` object can be used to add metadata to the evaluation.
+    :param scores: A list of scorers to evaluate the results of the task. Each scorer can be a Scorer object or a function
+    that takes an `EvalScorerArgs` object and returns a `Score` object.
+    :param experiment_name: (Optional) Experiment name. If not specified, a name will be generated automatically.
+    :param trial_count: The number of times to run the evaluator per input. This is useful for evaluating applications that
+    have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the variance in the results.
+    :param metadata: (Optional) A dictionary with additional data about the test example, model outputs, or just about
+    anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log
+    the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata`
+    can be any JSON-serializable type, but its keys must be strings.
+    :param is_public: (Optional) Whether the experiment should be public. Defaults to false.
+    :param reporter: (Optional) A reporter that takes an evaluator and its result and returns a report.
+    :param timeout: (Optional) The duration, in seconds, after which to time out the evaluation.
+    Defaults to None, in which case there is no timeout.
+    :param project_id: (Optional) If specified, uses the given project ID instead of the evaluator's name to identify the project.
+    :param base_experiment_name: An optional experiment name to use as a base. If specified, the new experiment will be
+    summarized and compared to this experiment.
+    :param base_experiment_id: An optional experiment id to use as a base. If specified, the new experiment will be
+    summarized and compared to this experiment. This takes precedence over `base_experiment_name` if specified.
+    :param git_metadata_settings: Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
+    :param repo_info: Optionally explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
+    :return: An `EvalResultWithSummary` object, which contains all results and a summary.
+    """
+    f = _EvalCommon(
+        name=name,
+        data=data,
+        task=task,
+        scores=scores,
+        experiment_name=experiment_name,
+        trial_count=trial_count,
+        metadata=metadata,
+        is_public=is_public,
+        update=update,
+        reporter=reporter,
+        timeout=timeout,
+        max_concurrency=max_concurrency,
+        project_id=project_id,
+        base_experiment_name=base_experiment_name,
+        base_experiment_id=base_experiment_id,
+        git_metadata_settings=git_metadata_settings,
+        repo_info=repo_info,
+    )
+
+    return await f()
+
+
+_has_printed_eval_async_warning = False
+
+
+def Eval(
+    name: str,
+    data: EvalData,
+    task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
+    scores: List[EvalScorer],
+    experiment_name: Optional[str] = None,
+    trial_count: int = 1,
+    metadata: Optional[Metadata] = None,
+    is_public: bool = False,
+    update: bool = False,
+    reporter: Optional[ReporterDef] = None,
+    timeout: Optional[float] = None,
+    max_concurrency: Optional[int] = None,
+    project_id: Optional[str] = None,
+    base_experiment_name: Optional[str] = None,
+    base_experiment_id: Optional[str] = None,
+    git_metadata_settings: Optional[GitMetadataSettings] = None,
+    repo_info: Optional[RepoInfo] = None,
+) -> EvalResultWithSummary:
+    """
+    A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
+
+    For callers running in an async context, use `EvalAsync()` instead.
+
+    Example:
+    ```python
+    Eval(
+        name="my-evaluator",
+        data=lambda: [
+            EvalCase(input=1, expected=2),
+            EvalCase(input=2, expected=4),
+        ],
+        task=lambda input, hooks: input * 2,
+        scores=[
+            NumericDiff,
+        ],
+    )
+    ```
+
+    :param name: The name of the evaluator. This corresponds to a project name in Braintrust.
+    :param data: Returns an iterator over the evaluation dataset. Each element of the iterator should be a `EvalCase`.
+    :param task: Runs the evaluation task on a single input. The `hooks` object can be used to add metadata to the evaluation.
+    :param scores: A list of scorers to evaluate the results of the task. Each scorer can be a Scorer object or a function
+    that takes an `EvalScorerArgs` object and returns a `Score` object.
+    :param experiment_name: (Optional) Experiment name. If not specified, a name will be generated automatically.
+    :param trial_count: The number of times to run the evaluator per input. This is useful for evaluating applications that
+    have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the variance in the results.
+    :param metadata: (Optional) A dictionary with additional data about the test example, model outputs, or just about
+    anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log
+    the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata`
+    can be any JSON-serializable type, but its keys must be strings.
+    :param is_public: (Optional) Whether the experiment should be public. Defaults to false.
+    :param reporter: (Optional) A reporter that takes an evaluator and its result and returns a report.
+    :param timeout: (Optional) The duration, in seconds, after which to time out the evaluation.
+    Defaults to None, in which case there is no timeout.
+    :param project_id: (Optional) If specified, uses the given project ID instead of the evaluator's name to identify the project.
+    :param base_experiment_name: An optional experiment name to use as a base. If specified, the new experiment will be
+    summarized and compared to this experiment.
+    :param base_experiment_id: An optional experiment id to use as a base. If specified, the new experiment will be
+    summarized and compared to this experiment. This takes precedence over `base_experiment_name` if specified.
+    :param git_metadata_settings: Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
+    :param repo_info: Optionally explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
+    :return: An `EvalResultWithSummary` object, which contains all results and a summary.
+    """
+
+    f = _EvalCommon(
+        name=name,
+        data=data,
+        task=task,
+        scores=scores,
+        experiment_name=experiment_name,
+        trial_count=trial_count,
+        metadata=metadata,
+        is_public=is_public,
+        update=update,
+        reporter=reporter,
+        timeout=timeout,
+        max_concurrency=max_concurrency,
+        project_id=project_id,
+        base_experiment_name=base_experiment_name,
+        base_experiment_id=base_experiment_id,
+        git_metadata_settings=git_metadata_settings,
+        repo_info=repo_info,
+    )
+
+    # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:  # 'RuntimeError: There is no current event loop...'
+        loop = None
+    if loop:
+        # Notebook or existing async context.
+        global _has_printed_eval_async_warning
+        if not _has_printed_eval_async_warning:
+            _has_printed_eval_async_warning = True
+            eprint("WARNING: `Eval()` was called from an async context. Please use `await EvalAsync()` instead.")
+            eprint("Call stack:")
+            eprint("\n".join(traceback.format_stack()))
+        # Return a `Task` to be compatible with a previous signature where the
+        # return type included `Awaitable`.
+        return loop.create_task(f())  # type: ignore
+    else:
+        return asyncio.run(f())
 
 
 def Reporter(
@@ -1014,4 +1170,4 @@ def build_local_summary(evaluator, results):
     )
 
 
-__all__ = ["Evaluator", "Eval", "Score", "EvalCase", "EvalHooks", "BaseExperiment", "Reporter"]
+__all__ = ["Evaluator", "Eval", "EvalAsync", "Score", "EvalCase", "EvalHooks", "BaseExperiment", "Reporter"]

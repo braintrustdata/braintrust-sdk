@@ -20,11 +20,12 @@ install_requires = [
     "exceptiongroup==1.2.0",
     "python-dotenv",
     "sseclient-py",
+    "python-slugify",
     "typing_extensions>=4.1.0",
 ]
 
 extras_require = {
-    "cli": ["boto3", "psycopg2-binary"],
+    "cli": ["boto3", "psycopg2-binary", "uv"],
     "dev": [
         "black",
         "build",

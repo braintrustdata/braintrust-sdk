@@ -49,6 +49,7 @@ BRAINTRUST_API_KEY=<YOUR_BRAINTRUST_API_KEY> braintrust eval eval_hello.py
 """
 
 from .framework import *
+from .framework2 import *
 from .functions.invoke import *
 from .functions.stream import *
 from .logger import *
