@@ -1,7 +1,6 @@
 from typing import Any, Mapping
 
-from braintrust_core import DatasetEvent
-
+from ._types import DatasetEvent
 from .db_fields import MERGE_PATHS_FIELD
 
 DEFAULT_IS_LEGACY_DATASET = False
