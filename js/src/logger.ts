@@ -4633,7 +4633,7 @@ export class Prompt<
       } as CompiledPrompt<Flavor>;
     } else if (flavor === "completion") {
       if (prompt.type !== "completion") {
-        throw new Error("Prompt is a chat prompt. Use buildChat() instead");
+        throw new Error(`Prompt is a chat prompt. Use flavor: 'chat' instead`);
       }
       if (options.messages) {
         throw new Error(
