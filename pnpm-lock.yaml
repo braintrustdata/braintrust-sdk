@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      pyright:
+        specifier: ^1.1.388
+        version: 1.1.389
       turbo:
         specifier: ^1.11.2
         version: 1.11.2
@@ -4644,6 +4647,14 @@ packages:
 
   /pure-rand@6.1.0:
     resolution: {integrity: sha512-bVWawvoZoBYpp6yIoQtQXHZjmz35RSVHnUOTefl8Vcjr8snTPY1wnpSPMWekcFwbxI6gtmT7rSYPFvz71ldiOA==}
+    dev: true
+
+  /pyright@1.1.389:
+    resolution: {integrity: sha512-EYt7yRtG6R6I3C3Wfa6O4tOPnbnN7e3ZG4BF9ZiyY6xs1hJGq2ymINyuWC+da0hPNebuMGkY7vvCnD+R7wwbdg==}
+    engines: {node: '>=14.0.0'}
+    hasBin: true
+    optionalDependencies:
+      fsevents: 2.3.3
     dev: true
 
   /queue-microtask@1.2.3:
