@@ -1732,7 +1732,7 @@ class ObjectFetcher(ABC, Generic[TDict]):
                 },
             )
             response_raise_for_status(resp)
-            data: List[TDict] = resp.json()["events"]
+            data = cast(List[TDict], resp.json()["events"])
             if not isinstance(data, list):
                 raise ValueError(f"Expected a list in the response, got {type(data)}")
 
@@ -2003,30 +2003,19 @@ class ExperimentIdentifier:
 
 
 class ExperimentDatasetEvent(TypedDict):
+    """
+    TODO: This could be unified with `framework._EvalCaseDict` like we do in the
+    TypeScript SDK, or generated from OpenAPI spec. For now, marking as internal
+    to exclude it from the docs.
+
+    :internal:
+    """
+
     id: str
-    """
-    A unique identifier for the dataset event. If you don't provide one, BrainTrust will generate one for you
-    """
     _xact_id: str
-    """
-    The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the dataset (see the `version` parameter)
-    """
-    input: NotRequired[Any]
-    """
-    The argument that uniquely define an input case (an arbitrary, JSON serializable object)
-    """
-    expected: NotRequired[Any]
-    """
-    The output of your application, including post-processing (an arbitrary, JSON serializable object)
-    """
-    metadata: NotRequired[Mapping[str, Any]]
-    """
-    A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
-    """
-    tags: NotRequired[Sequence[str]]
-    """
-    A list of tags to log
-    """
+    input: NotRequired[Optional[Any]]
+    expected: NotRequired[Optional[Any]]
+    tags: NotRequired[Optional[Sequence[str]]]
 
 
 class ExperimentDatasetIterator:
@@ -2046,7 +2035,7 @@ class ExperimentDatasetIterator:
             ret: ExperimentDatasetEvent = {
                 "input": value.get("input"),
                 "expected": expected if expected is not None else output,
-                "tags": value.get("tags", []),
+                "tags": value.get("tags"),
                 "id": value["id"],
                 "_xact_id": value["_xact_id"],
                 # NOTE: We'll eventually want to track origin information here (and generalize
