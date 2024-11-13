@@ -26,16 +26,21 @@ function generateMergedRowKey(
 }
 
 // These fields will be retained as-is when merging rows.
-const MERGE_ROW_SKIP_FIELDS = ["created", "span_id", "root_span_id"];
+const MERGE_ROW_SKIP_FIELDS = ["created", "span_id", "root_span_id"] as const;
+type MergeRowSkipField = (typeof MERGE_ROW_SKIP_FIELDS)[number];
+type MergeRowSkipFieldObj = { [K in MergeRowSkipField]?: unknown };
 
-function collectMergeRowSkipFields(
-  row: Record<string, unknown>,
-): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
+function popMergeRowSkipFields<T extends MergeRowSkipFieldObj>(
+  row: T,
+): MergeRowSkipFieldObj {
+  const popped: MergeRowSkipFieldObj = {};
   for (const field of MERGE_ROW_SKIP_FIELDS) {
-    out[field] = row[field];
+    if (field in row) {
+      popped[field] = row[field];
+      delete row[field];
+    }
   }
-  return out;
+  return popped;
 }
 
 export function mergeRowBatch<
@@ -43,7 +48,7 @@ export function mergeRowBatch<
     id: string;
     [IS_MERGE_FIELD]?: boolean | null;
     [PARENT_ID_FIELD]?: string | null;
-  },
+  } & MergeRowSkipFieldObj,
 >(rows: T[]): T[][] {
   for (const row of rows) {
     if (row.id === undefined) {
@@ -58,7 +63,7 @@ export function mergeRowBatch<
     const key = generateMergedRowKey(row);
     const existingRow = rowGroups.get(key);
     if (existingRow !== undefined && row[IS_MERGE_FIELD]) {
-      const skipFields = collectMergeRowSkipFields(existingRow);
+      const skipFields = popMergeRowSkipFields(existingRow);
       const preserveNoMerge = !existingRow[IS_MERGE_FIELD];
       mergeDicts(existingRow, row);
       Object.assign(existingRow, skipFields);

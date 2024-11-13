@@ -28,11 +28,12 @@ MERGE_ROW_SKIP_FIELDS = [
 ]
 
 
-def _collect_merge_row_skip_fields(row: Dict) -> Dict:
-    out = {}
+def _pop_merge_row_skip_fields(row: Dict) -> Dict:
+    popped = {}
     for field in MERGE_ROW_SKIP_FIELDS:
-        out[field] = row.get(field)
-    return out
+        if field in row:
+            popped[field] = row.pop(field)
+    return popped
 
 
 def merge_row_batch(rows: List[Dict]) -> List[List[Dict]]:
@@ -93,7 +94,7 @@ def merge_row_batch(rows: List[Dict]) -> List[List[Dict]]:
         # True property, we merge it with the existing row. Otherwise we can
         # replace it.
         if existing_row is not None and row.get(IS_MERGE_FIELD):
-            skip_fields = _collect_merge_row_skip_fields(existing_row)
+            skip_fields = _pop_merge_row_skip_fields(existing_row)
             # Preserve IS_MERGE_FIELD == False if the existing_row had it set to
             # false.
             preserve_nomerge = not existing_row.get(IS_MERGE_FIELD)
