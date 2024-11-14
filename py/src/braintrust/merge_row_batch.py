@@ -1,11 +1,13 @@
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .db_fields import IS_MERGE_FIELD, PARENT_ID_FIELD
 from .graph_util import UndirectedGraph, topological_sort, undirected_connected_components
 from .util import merge_dicts
 
+_MergedRowKey = Tuple[Optional[Any], ...]
 
-def _generate_merged_row_key(row, use_parent_id_for_id=False):
+
+def _generate_merged_row_key(row: Mapping[str, Any], use_parent_id_for_id: bool = False) -> _MergedRowKey:
     return tuple(
         row.get(k)
         for k in [
@@ -31,7 +33,7 @@ MERGE_ROW_SKIP_FIELDS = [
 ]
 
 
-def _pop_merge_row_skip_fields(row: Dict) -> Dict:
+def _pop_merge_row_skip_fields(row: Dict[str, Any]) -> Dict[str, Any]:
     popped = {}
     for field in MERGE_ROW_SKIP_FIELDS:
         if field in row:
@@ -39,14 +41,14 @@ def _pop_merge_row_skip_fields(row: Dict) -> Dict:
     return popped
 
 
-def _restore_merge_row_skip_fields(row: Dict, skip_fields: Dict):
+def _restore_merge_row_skip_fields(row: Dict[str, Any], skip_fields: Dict[str, Any]):
     for field in MERGE_ROW_SKIP_FIELDS:
         row.pop(field, None)
         if field in skip_fields:
             row[field] = skip_fields[field]
 
 
-def merge_row_batch(rows: List[Dict]) -> List[List[Dict]]:
+def merge_row_batch(rows: Sequence[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
     """Given a batch of rows, merges conflicting rows together to end up with a
     set of rows to insert. Returns a set of de-conflicted rows, as a list of
     lists, where separate lists contain "independent" rows which can be
@@ -96,7 +98,7 @@ def merge_row_batch(rows: List[Dict]) -> List[List[Dict]]:
                 "Logged row is missing an id. This is an internal braintrust error. Please contact us at info@braintrust.dev for help"
             )
 
-    row_groups = {}
+    row_groups: Dict[_MergedRowKey, Dict[str, Any]] = {}
     for row in rows:
         key = _generate_merged_row_key(row)
         existing_row = row_groups.get(key)
@@ -176,12 +178,10 @@ def batch_items(
       its own batch. If not provided, there is no limit on the number of bytes.
     """
 
-    if batch_max_num_items is None:
-        batch_max_num_items = float("inf")
-    if batch_max_num_bytes is None:
-        batch_max_num_bytes = float("inf")
-
-    assert batch_max_num_items > 0
+    if batch_max_num_items is not None and batch_max_num_items <= 0:
+        raise ValueError(f"batch_max_num_items must be positive; got {batch_max_num_items}")
+    if batch_max_num_bytes is not None and batch_max_num_bytes < 0:
+        raise ValueError(f"batch_max_num_bytes must be nonnegative; got {batch_max_num_bytes}")
 
     output = []
     next_items = []
@@ -205,7 +205,8 @@ def batch_items(
             i = 0
             for item in bucket:
                 if len(batch) == 0 or (
-                    len(item) + batch_len < batch_max_num_bytes and len(batch) < batch_max_num_items
+                    (batch_max_num_bytes is not None and len(item) + batch_len < batch_max_num_bytes)
+                    and (batch_max_num_items is not None and len(batch) < batch_max_num_items)
                 ):
                     add_to_batch(item)
                 elif i == 0:
@@ -222,7 +223,9 @@ def batch_items(
             if i < len(bucket):
                 next_items.append(bucket[i:])
             # If we have filled the batch, flush it.
-            if batch_len >= batch_max_num_bytes or len(batch) >= batch_max_num_items:
+            if (batch_max_num_bytes is not None and batch_len >= batch_max_num_bytes) or (
+                batch_max_num_items is not None and len(batch) >= batch_max_num_items
+            ):
                 flush_batch()
 
         # We've finished an iteration through all the buckets. Anything

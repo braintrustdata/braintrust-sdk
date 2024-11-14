@@ -2,6 +2,7 @@ import atexit
 import concurrent.futures
 import contextlib
 import contextvars
+import copy
 import dataclasses
 import datetime
 import inspect
@@ -29,6 +30,7 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
+    Set,
     Tuple,
     TypedDict,
     TypeVar,
@@ -48,7 +50,14 @@ from urllib3.util.retry import Retry
 
 from braintrust.functions.stream import BraintrustStream
 
-from ._types import DatasetEvent, ExperimentEvent, PromptOptions, SpanAttributes
+from ._types import (
+    AttachmentReference,
+    AttachmentStatus,
+    DatasetEvent,
+    ExperimentEvent,
+    PromptOptions,
+    SpanAttributes,
+)
 from .bt_json import bt_dumps
 from .db_fields import (
     ASYNC_SCORING_CONTROL_FIELD,
@@ -343,7 +352,7 @@ class BraintrustState:
 _state: BraintrustState = None  # type: ignore
 
 
-_http_adapter = None
+_http_adapter: Optional[HTTPAdapter] = None
 
 
 def set_http_adapter(adapter: HTTPAdapter) -> None:
@@ -421,6 +430,9 @@ class HTTPConnection:
     def post(self, path, *args, **kwargs) -> requests.Response:
         return self.session.post(_urljoin(self.base_url, path), *args, **kwargs)
 
+    def put(self, path, *args, **kwargs) -> requests.Response:
+        return self.session.put(_urljoin(self.base_url, path), *args, **kwargs)
+
     def delete(self, path, *args, **kwargs) -> requests.Response:
         return self.session.delete(_urljoin(self.base_url, path), *args, **kwargs)
 
@@ -469,11 +481,11 @@ def org_id():
     return _state.org_id
 
 
-def construct_json_array(items):
+def construct_json_array(items: Sequence[str]):
     return "[" + ",".join(items) + "]"
 
 
-def construct_logs3_data(items):
+def construct_logs3_data(items: Sequence[str]):
     rowsS = construct_json_array(items)
     return '{"rows": ' + rowsS + ', "api_version": ' + str(DATA_API_VERSION) + "}"
 
@@ -553,14 +565,14 @@ class _BackgroundLogger:
         self.started = False
 
         self.logger = logging.getLogger("braintrust")
-        self.queue = queue.Queue(maxsize=self.queue_maxsize)
+        self.queue = queue.Queue[LazyValue[Dict[str, Any]]](maxsize=self.queue_maxsize)
         # Each time we put items in the queue, we increment a semaphore to
         # indicate to any consumer thread that it should attempt a flush.
         self.queue_filled_semaphore = threading.Semaphore(value=0)
 
         atexit.register(self._finalize)
 
-    def log(self, *args):
+    def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
         self._start()
         dropped_items = []
         for event in args:
@@ -623,7 +635,7 @@ class _BackgroundLogger:
             except queue.Empty:
                 pass
 
-            all_items = self._unwrap_lazy_values(wrapped_items)
+            all_items, attachments = self._unwrap_lazy_values(wrapped_items)
             if len(all_items) == 0:
                 return
 
@@ -652,11 +664,34 @@ class _BackgroundLogger:
                         f"Encountered the following errors while logging:", post_promise_exceptions
                     )
 
-    def _unwrap_lazy_values(self, wrapped_items):
+            attachment_errors: List[Exception] = []
+            for attachment in attachments:
+                try:
+                    result = attachment.upload()
+                    if result["upload_status"] == "error":
+                        raise RuntimeError(result.get("error_message"))
+                except Exception as e:
+                    attachment_errors.append(e)
+
+            if len(attachment_errors) == 1:
+                raise attachment_errors[0]
+            elif len(attachment_errors) > 1:
+                raise ExceptionGroup("Encountered errors while uploading attachments", attachment_errors)
+
+    def _unwrap_lazy_values(
+        self, wrapped_items: Sequence[LazyValue[Dict[str, Any]]]
+    ) -> Tuple[List[List[Dict[str, Any]]], List["Attachment"]]:
         for i in range(self.num_tries):
             try:
                 unwrapped_items = [item.get() for item in wrapped_items]
-                return merge_row_batch(unwrapped_items)
+                batched_items = merge_row_batch(unwrapped_items)
+
+                attachments: List["Attachment"] = []
+                for batch in batched_items:
+                    for item in batch:
+                        _extract_attachments(item, attachments)
+
+                return batched_items, attachments
             except Exception as e:
                 errmsg = "Encountered error when constructing records to flush"
                 is_retrying = i + 1 < self.num_tries
@@ -675,9 +710,9 @@ class _BackgroundLogger:
             f"Failed to construct log records to flush after {self.num_tries} attempts. Dropping batch",
             file=self.outfile,
         )
-        return []
+        return [], []
 
-    def _submit_logs_request(self, items):
+    def _submit_logs_request(self, items: Sequence[str]):
         conn = self.api_conn.get()
         dataStr = construct_logs3_data(items)
         if self.all_publish_payloads_dir:
@@ -713,12 +748,14 @@ class _BackgroundLogger:
         if not (wrapped_items and publish_payloads_dir):
             return
         try:
-            all_items = self._unwrap_lazy_values(wrapped_items)
+            all_items, attachments = self._unwrap_lazy_values(wrapped_items)
             dataStr = construct_logs3_data([bt_dumps(item) for item in all_items])
+            attachment_str = bt_dumps([a.debug_info() for a in attachments])
+            payload = "{" + f""""data": {dataStr}, "attachments": {attachment_str}""" + "}"
             for output_dir in publish_payloads_dir:
                 if not output_dir:
                     continue
-                _BackgroundLogger._write_payload_to_dir(payload_dir=output_dir, payload=dataStr)
+                _BackgroundLogger._write_payload_to_dir(payload_dir=output_dir, payload=payload)
         except Exception as e:
             traceback.print_exc(file=self.outfile)
 
@@ -1552,7 +1589,40 @@ def validate_tags(tags: Sequence[str]) -> None:
         seen.add(tag)
 
 
-def _validate_and_sanitize_experiment_log_partial_args(event):
+def _extract_attachments(event: Dict[str, Any], attachments: List["Attachment"]) -> None:
+    """
+    Helper function for uploading attachments. Recursively extracts `Attachment` values and replaces them with their associated `AttachmentReference` objects.
+
+    :param event: The event to filter. Will be modified in-place.
+    :param attachments: Flat array of extracted attachments (output parameter).
+    """
+
+    def _helper(v: Any) -> Any:
+        # Base case: Attachment.
+        if isinstance(v, Attachment):
+            attachments.append(v)
+            return v.reference  # Attachment cannot be nested.
+
+        # Recursive case: object.
+        if isinstance(v, Dict):
+            for k, v2 in v.items():
+                v[k] = _helper(v2)
+            return v
+
+        # Recursive case: array.
+        if isinstance(v, List):
+            for i in range(len(v)):
+                v[i] = _helper(v[i])
+            return v
+
+        # Base case: non object.
+        return v  # Nothing to explore recursively.
+
+    for k, v in event.items():
+        event[k] = _helper(v)
+
+
+def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any]) -> Dict[str, Any]:
     # Make sure only certain keys are specified.
     forbidden_keys = set(event.keys()) - {
         "input",
@@ -1628,7 +1698,7 @@ def _validate_and_sanitize_experiment_log_partial_args(event):
 # Note that this only checks properties that are expected of a complete event.
 # _validate_and_sanitize_experiment_log_partial_args should still be invoked
 # (after handling special fields like 'id').
-def _validate_and_sanitize_experiment_log_full_args(event: Mapping[str, Any], has_dataset: bool):
+def _validate_and_sanitize_experiment_log_full_args(event: Mapping[str, Any], has_dataset: bool) -> Mapping[str, Any]:
     input = event.get("input")
     inputs = event.get("inputs")
     if (input is not None and inputs is not None) or (input is None and inputs is None):
@@ -1649,6 +1719,46 @@ def _validate_and_sanitize_experiment_log_full_args(event: Mapping[str, Any], ha
     return event
 
 
+def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
+    """
+    Creates a deep copy of the given event. Replaces references to user objects
+    with placeholder strings to ensure serializability, except for `Attachment`
+    objects, which are preserved and not deep-copied.
+    """
+
+    def _deep_copy_object(v: Any) -> Any:
+        if isinstance(v, Span):
+            return "<span>"
+        elif isinstance(v, Experiment):
+            return "<experiment>"
+        elif isinstance(v, Dataset):
+            return "<dataset>"
+        elif isinstance(v, Logger):
+            return "<logger>"
+        elif isinstance(v, Attachment):
+            return v
+        else:
+            # No need to handle primitives explicitly because deepcopy will do
+            # it for us.
+            return copy.deepcopy(v)
+
+    ret: Dict[str, Any] = {}
+
+    for k, v in event.items():
+        k = str(k)
+
+        if isinstance(v, Mapping):
+            v = _deep_copy_event(v)
+        elif isinstance(v, (List, Tuple, Set)):
+            v = [_deep_copy_object(x) for x in v]
+        else:
+            v = _deep_copy_object(v)
+
+        ret[k] = v
+
+    return ret
+
+
 class ObjectIterator(Generic[T]):
     def __init__(self, refetch_fn: Callable[[], Sequence[T]]):
         self.refetch_fn = refetch_fn
@@ -1657,7 +1767,7 @@ class ObjectIterator(Generic[T]):
     def __iter__(self):
         return self
 
-    def __next__(self):
+    def __next__(self) -> T:
         data = self.refetch_fn()
         if self.idx >= len(data):
             raise StopIteration
@@ -1761,6 +1871,160 @@ class ObjectFetcher(ABC, Generic[TDict]):
             return max([str(record.get(TRANSACTION_ID_FIELD, "0")) for record in self._refetch()] or ["0"])
 
 
+class Attachment:
+    """
+    Represents an attachment to be uploaded and the associated metadata.
+
+    Attachment objects can be inserted anywhere in an event, allowing you to
+    log arbitrary file data. The SDK will asynchronously upload the file to
+    object storage and replace the Attachment object with an AttachmentReference.
+    """
+
+    def __init__(
+        self,
+        *,
+        data: Union[str, bytes, bytearray],
+        filename: str,
+        content_type: str,
+        state: Optional[BraintrustState] = None,
+    ):
+        """
+        Construct an attachment.
+
+        :param data: A string representing the path of the file on disk, or a bytes/bytearray with the file's contents. The caller is responsible for ensuring the file on disk is not modified until upload is complete.
+
+        :param filename: The desired name of the file in Braintrust after uploading. This parameter is for visualization purposes only and has no effect on attachment storage.
+
+        :param content_type: The MIME type of the file.
+
+        :param state: (Optional) For internal use.
+        """
+        self._reference: AttachmentReference = {
+            "type": "braintrust_attachment",
+            "filename": filename,
+            "content_type": content_type,
+            "key": str(uuid.uuid4()),
+        }
+        self._state = state
+        self._data_debug_string = data if isinstance(data, str) else "<in-memory data>"
+
+        self._data = self._init_data(data)
+        self._uploader = self._init_uploader()
+
+    @property
+    def reference(self) -> AttachmentReference:
+        """The object that replaces this `Attachment` at upload time."""
+        return self._reference
+
+    def upload(self) -> AttachmentStatus:
+        """
+        On first access, (1) reads the attachment from disk if needed, (2) authenticates with the data plane to request a signed URL, (3) uploads to object store, and (4) updates the attachment.
+
+        :returns: The attachment status.
+        """
+        return self._uploader.get()
+
+    def debug_info(self) -> Mapping[str, Any]:
+        """
+        A human-readable description for logging and debugging.
+
+        :returns: The debug object. The return type is not stable and may change in a future release.
+        """
+        return {"input_data": self._data_debug_string, "reference": self._reference, "state": self._state}
+
+    def _init_uploader(self) -> LazyValue[AttachmentStatus]:
+        def do_upload(api_conn: HTTPConnection, org_id: str) -> Mapping[str, Any]:
+            request_params = {
+                "key": self._reference["key"],
+                "filename": self._reference["filename"],
+                "content_type": self._reference["content_type"],
+                "org_id": org_id,
+            }
+
+            try:
+                metadata_response = api_conn.post("/attachment", json=request_params)
+                metadata_response.raise_for_status()
+                metadata = metadata_response.json()
+            except Exception as e:
+                raise RuntimeError("Failed to request signed URL from API server") from e
+
+            try:
+                data = self._data.get()
+            except Exception as e:
+                raise IOError("Failed to read file") from e
+
+            signed_url = metadata["signedUrl"]
+            headers = metadata["headers"]
+            if not isinstance(signed_url, str) or not isinstance(headers, str):
+                raise RuntimeError(f"Invalid response from API server: {metadata}")
+
+            # TODO multipart upload.
+            try:
+                obj_conn = HTTPConnection(signed_url, adapter=_http_adapter)
+                obj_response = obj_conn.put(signed_url, headers=headers, content=data)
+                obj_response.raise_for_status()
+            except Exception as e:
+                raise RuntimeError("Failed to upload attachment to object store") from e
+
+            return {
+                "signed_url": signed_url,
+                "metadata_response": metadata_response,
+                "object_store_response": obj_response,
+            }
+
+        def error_wrapper() -> AttachmentStatus:
+            """Catches error messages and updates the attachment status."""
+            status = AttachmentStatus(upload_status="uploading")
+
+            state = self._state
+            if state is None:
+                logger = current_logger()
+                if logger is None:
+                    raise RuntimeError("Initialize Braintrust by calling init_logger() before uploading attachments.")
+                # Ensure the login state is populated.
+                # TODO: We need a better way to log in.
+                state = logger._get_state()
+
+            if not state.logged_in:
+                raise RuntimeError("Initialize Braintrust by calling init_logger() before uploading attachments.")
+
+            api_conn = state.api_conn()
+            org_id = state.org_id or ""
+
+            try:
+                do_upload(api_conn, org_id)
+                status["upload_status"] = "done"
+            except Exception as e:
+                status["upload_status"] = "error"
+                status["error_message"] = str(e)
+
+            request_params = {
+                "key": self._reference["key"],
+                "org_id": org_id,
+                "status": status,
+            }
+            try:
+                status_response = api_conn.post("/attachment/status", json=request_params)
+                status_response.raise_for_status()
+            except Exception as e:
+                raise RuntimeError("Couldn't log attachment status") from e
+
+            return status
+
+        return LazyValue(error_wrapper, use_mutex=True)
+
+    def _init_data(self, data: Union[str, bytes, bytearray]) -> LazyValue[bytes]:
+        if isinstance(data, str):
+
+            def read_file() -> bytes:
+                with open(data, "rb") as f:
+                    return f.read()
+
+            return LazyValue(read_file, use_mutex=True)
+        else:
+            return LazyValue(lambda: data, use_mutex=False)
+
+
 def _log_feedback_impl(
     parent_object_type: SpanObjectTypeV3,
     parent_object_id: LazyValue[str],
@@ -1793,6 +2057,8 @@ def _log_feedback_impl(
     # not ordinary metadata
     metadata = update_event.pop("metadata")
     update_event = {k: v for k, v in update_event.items() if v is not None}
+
+    update_event = _deep_copy_event(update_event)
 
     parent_ids = lambda: SpanComponentsV3(
         object_type=parent_object_type,
@@ -1845,6 +2111,8 @@ def _update_span_impl(
     update_event = _validate_and_sanitize_experiment_log_partial_args(
         event=event,
     )
+
+    update_event = _deep_copy_event(update_event)
 
     parent_ids = lambda: SpanComponentsV3(
         object_type=parent_object_type,
@@ -2522,7 +2790,7 @@ class SpanImpl(Span):
         # cutting out any reference to user objects when the object is logged
         # asynchronously, so that in case the objects are modified, the logging
         # is unaffected.
-        partial_record = dict(
+        partial_record: Dict[str, Any] = dict(
             id=self.id,
             span_id=self.span_id,
             root_span_id=self.root_span_id,
@@ -2531,15 +2799,15 @@ class SpanImpl(Span):
             **{IS_MERGE_FIELD: self._is_merge},
         )
 
-        serialized_partial_record = _check_json_serializable(partial_record)
-        serializable_partial_record = json.loads(serialized_partial_record)
-        if "metrics" in serializable_partial_record and "end" in serializable_partial_record["metrics"]:
+        _check_json_serializable(partial_record)
+        serializable_partial_record = _deep_copy_event(partial_record)
+        if serializable_partial_record.get("metrics", {}).get("end") is not None:
             self._logged_end_time = serializable_partial_record["metrics"]["end"]
 
         if len(serializable_partial_record.get("tags", [])) > 0 and self.span_parents:
             raise Exception("Tags can only be logged to the root span")
 
-        def compute_record():
+        def compute_record() -> Dict[str, Any]:
             return dict(
                 **serializable_partial_record,
                 **{k: v.get() for k, v in lazy_partial_record.items()},
@@ -2778,6 +3046,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
             args = _filter_none_args(args)  # If merging, then remove None values to prevent null value writes
 
         _check_json_serializable(args)
+        args = _deep_copy_event(args)
 
         def compute_args() -> Dict[str, Any]:
             return dict(
@@ -2882,6 +3151,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
             },
         )
         _check_json_serializable(partial_args)
+        partial_args = _deep_copy_event(partial_args)
 
         def compute_args():
             return dict(

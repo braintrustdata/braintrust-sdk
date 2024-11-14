@@ -4,7 +4,7 @@ import sys
 import threading
 import urllib.parse
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Generic, Literal, Optional, Set, Tuple, TypedDict, TypeVar, Union
+from typing import Any, Callable, Dict, Generic, Literal, Mapping, Optional, Set, Tuple, TypedDict, TypeVar, Union
 
 from requests import HTTPError, Response
 
@@ -30,7 +30,7 @@ def coalesce(*args):
 
 
 def merge_dicts_with_paths(
-    merge_into: Dict[str, Any], merge_from: Dict[str, Any], path: Tuple[str, ...], merge_paths: Set[Tuple[str]]
+    merge_into: Dict[str, Any], merge_from: Mapping[str, Any], path: Tuple[str, ...], merge_paths: Set[Tuple[str]]
 ) -> Dict[str, Any]:
     """Merges merge_from into merge_into, destructively updating merge_into. Does not merge any further than
     merge_paths."""
@@ -51,7 +51,7 @@ def merge_dicts_with_paths(
     return merge_into
 
 
-def merge_dicts(merge_into: Dict[str, Any], merge_from: Dict[str, Any]) -> Dict[str, Any]:
+def merge_dicts(merge_into: Dict[str, Any], merge_from: Mapping[str, Any]) -> Dict[str, Any]:
     """Merges merge_from into merge_into, destructively updating merge_into."""
 
     return merge_dicts_with_paths(merge_into, merge_from, (), set())

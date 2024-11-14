@@ -1691,8 +1691,8 @@ class BackgroundLogger {
     for (const attachment of attachments) {
       try {
         const result = await attachment.upload();
-        if (result.upload_status === "error" && result.error_message) {
-          attachmentErrors.push(new Error(result.error_message));
+        if (result.upload_status === "error") {
+          throw new Error(result.error_message);
         }
       } catch (error) {
         attachmentErrors.push(error);

@@ -325,4 +325,34 @@ class PromptOptions(TypedDict):
     position: NotRequired[Optional[str]]
 
 
+class AttachmentReference(TypedDict):
+    type: Literal["braintrust_attachment"]
+    """
+    An identifier to help disambiguate parsing.
+    """
+    filename: str
+    """
+    Human-readable filename for user interfaces. Not related to attachment storage.
+    """
+    content_type: str
+    """
+    MIME type of this file.
+    """
+    key: str
+    """
+    Key in the object store bucket for this attachment.
+    """
+
+
+UploadStatus = Literal["uploading", "done", "error"]
+
+
+class AttachmentStatus(TypedDict):
+    upload_status: UploadStatus
+    error_message: NotRequired[Optional[str]]
+    """
+    Describes the error encountered while uploading.
+    """
+
+
 __all__ = []
