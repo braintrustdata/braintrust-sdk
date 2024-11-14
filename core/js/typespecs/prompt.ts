@@ -188,23 +188,16 @@ export const promptOptionsSchema = z
 
 export type PromptOptions = z.infer<typeof promptOptionsSchema>;
 
-export const promptParserSchema = z.object({
-  type: z.literal("llm_classifier"),
-  use_cot: z.boolean(),
-  choice_scores: z.record(z.number().min(0).max(1)),
-});
-
 export const promptDataSchema = z
   .object({
     prompt: promptBlockDataSchema.nullish(),
     options: promptOptionsSchema.nullish(),
     // This should be a union once we support multiple parser types
-    parser: promptParserSchema
-      .extend({
-        choice_scores: promptParserSchema.shape.choice_scores.refine(
-          (r) => Object.keys(r).length > 0,
-          "choice_scores must be nonempty",
-        ),
+    parser: z
+      .object({
+        type: z.literal("llm_classifier"),
+        use_cot: z.boolean(),
+        choice_scores: z.record(z.number().min(0).max(1)),
       })
       .nullish(),
     tool_functions: z.array(savedFunctionIdSchema).nullish(),
