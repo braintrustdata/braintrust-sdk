@@ -11,13 +11,28 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from multiprocessing import cpu_count
-from typing import Any, Awaitable, Callable, Coroutine, Dict, Iterable, Iterator, List, Optional, TypeVar, Union
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Coroutine,
+    Dict,
+    Generic,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import exceptiongroup
 from braintrust_core.score import Score, Scorer
 from braintrust_core.serializable_data_class import SerializableDataClass
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
+from typing_extensions import NotRequired, TypedDict
 
 from .git_fields import GitMetadataSettings, RepoInfo
 from .logger import NOOP_SPAN, Dataset, ExperimentSummary, Metadata, ScoreSummary, Span, stringify_exception
@@ -44,7 +59,7 @@ class bcolors:
 
 
 @dataclasses.dataclass
-class EvalCase(SerializableDataClass):
+class EvalCase(SerializableDataClass, Generic[Input, Output]):
     """
     An evaluation case. This is a single input to the evaluation task, along with an optional expected
     output, metadata, and tags.
@@ -60,10 +75,24 @@ class EvalCase(SerializableDataClass):
     _xact_id: Optional[str] = None
 
 
+class _EvalCaseDict(Generic[Input, Output], TypedDict):
+    """
+    Mirrors EvalCase for callers who pass a dict instead of dataclass.
+    """
+
+    input: Input
+    expected: NotRequired[Optional[Output]]
+    metadata: NotRequired[Optional[Metadata]]
+    tags: NotRequired[Optional[List[str]]]
+
+    id: NotRequired[Optional[str]]
+    _xact_id: NotRequired[Optional[str]]
+
+
 # Inheritance doesn't quite work for dataclasses, so we redefine the fields
 # from EvalCase here.
 @dataclasses.dataclass
-class EvalResult(SerializableDataClass):
+class EvalResult(SerializableDataClass, Generic[Input, Output]):
     """The result of an evaluation. This includes the input, expected output, actual output, and metadata."""
 
     input: Input
@@ -97,7 +126,7 @@ class EvalHooks(abc.ABC):
         ...
 
 
-class EvalScorerArgs(SerializableDataClass):
+class EvalScorerArgs(SerializableDataClass, Generic[Input, Output]):
     """
     Arguments passed to an evaluator scorer. This includes the input, expected output, actual output, and metadata.
     """
@@ -112,6 +141,7 @@ OneOrMoreScores = Union[float, int, bool, None, Score, List[Score]]
 
 EvalScorer = Union[
     Scorer,
+    Type[Scorer],
     Callable[[Input, Output, Output], OneOrMoreScores],
     Callable[[Input, Output, Output], Awaitable[OneOrMoreScores]],
 ]
@@ -132,18 +162,21 @@ class BaseExperiment:
     """
 
 
-EvalData = Union[
-    Iterator[EvalCase],
-    Awaitable[Iterator[EvalCase]],
-    Callable[[], Union[Iterator[EvalCase], Awaitable[Iterator[EvalCase]]]],
+_AnyEvalCase = Union[EvalCase, _EvalCaseDict]
+
+_EvalDataObject = Union[
+    Iterable[_AnyEvalCase],
+    Iterator[_AnyEvalCase],
+    Awaitable[Iterator[_AnyEvalCase]],
+    Callable[[], Union[Iterator[_AnyEvalCase], Awaitable[Iterator[_AnyEvalCase]]]],
     BaseExperiment,
-    Dataset,
-    type,
 ]
+
+EvalData = Union[_EvalDataObject, Type[_EvalDataObject], Dataset]
 
 
 @dataclasses.dataclass
-class Evaluator:
+class Evaluator(Generic[Input, Output]):
     """
     An evaluator is an abstraction that defines an evaluation dataset, a task to run on the dataset, and a set of
     scorers to evaluate the results of the task. Each method attribute can be synchronous or asynchronous (for
@@ -177,7 +210,7 @@ class Evaluator:
     Runs the evaluation task on a single input. The `hooks` object can be used to add metadata to the evaluation.
     """
 
-    scores: List[EvalScorer]
+    scores: List[EvalScorer[Input, Output]]
     """
     A list of scorers to evaluate the results of the task. Each scorer can be a Scorer object or a function
     that takes `input`, `output`, and `expected` arguments and returns a `Score` object. The function can be async.
@@ -256,9 +289,9 @@ class Evaluator:
 
 
 @dataclasses.dataclass
-class EvalResultWithSummary(SerializableDataClass):
+class EvalResultWithSummary(SerializableDataClass, Generic[Input, Output]):
     summary: ExperimentSummary
-    results: List[EvalResult]
+    results: List[EvalResult[Input, Output]]
 
     def _repr_pretty_(self, p, cycle):
         p.text(f'EvalResultWithSummary(summary="...", results=[...])')
@@ -319,7 +352,7 @@ async def call_user_fn(event_loop, fn, **kwargs):
 
 
 @dataclasses.dataclass
-class ReporterDef(SerializableDataClass):
+class ReporterDef(SerializableDataClass, Generic[EvalReport]):
     """
     A reporter takes an evaluator and its result and returns a report.
     """
@@ -468,8 +501,6 @@ def _EvalCommon(
     This helper is needed because in case of `_lazy_load`, we need to update
     the `_evals` global immediately instead of whenever the coroutine is
     awaited.
-
-    :internal:
     """
     eval_name = _make_eval_name(name, experiment_name)
 

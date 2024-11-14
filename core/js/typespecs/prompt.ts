@@ -178,11 +178,13 @@ const anyModelParamsSchema = openAIModelParamsSchema
 
 export type AnyModelParam = z.infer<typeof anyModelParamsSchema>;
 
-export const promptOptionsSchema = z.object({
-  model: z.string().optional(),
-  params: modelParamsSchema.optional(),
-  position: z.string().optional(),
-});
+export const promptOptionsSchema = z
+  .object({
+    model: z.string().optional(),
+    params: modelParamsSchema.optional(),
+    position: z.string().optional(),
+  })
+  .openapi("PromptOptions");
 
 export type PromptOptions = z.infer<typeof promptOptionsSchema>;
 

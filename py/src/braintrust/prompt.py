@@ -1,7 +1,11 @@
 from dataclasses import dataclass
-from typing import Dict, List, Literal, Optional, Union
+from typing import List, Literal, Optional, Union
 
 from braintrust_core.serializable_data_class import SerializableDataClass
+
+from ._types import PromptOptions
+
+# Keep these definitions in sync with sdk/core/js/typespecs/prompt.ts.
 
 
 @dataclass
@@ -45,8 +49,8 @@ class ImagePart(SerializableDataClass):
 class PromptMessage(SerializableDataClass):
     content: Union[str, List[Union[TextPart, ImagePart]]]
     role: Literal["system", "user", "assistant", "function", "tool", "model"]
-    name: str = None
-    function_call: Union[str, FunctionCall] = None
+    name: Optional[str] = None
+    function_call: Union[str, FunctionCall, None] = None
     tool_calls: Optional[List[ToolCall]] = None
 
 
@@ -63,7 +67,7 @@ PromptBlockData = Union[PromptCompletionBlock, PromptChatBlock]
 @dataclass
 class PromptData(SerializableDataClass):
     prompt: Optional[PromptBlockData] = None
-    options: Optional[Dict] = None
+    options: Optional[PromptOptions] = None
 
 
 @dataclass

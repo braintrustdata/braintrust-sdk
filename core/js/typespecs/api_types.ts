@@ -37,6 +37,23 @@ import { objectNullish } from "../src/zod_util";
 
 const auditSourcesSchema = z.enum(VALID_SOURCES);
 
+export const spanAttributesSchema = z
+  .object({
+    name: z
+      .string()
+      .nullish()
+      .describe("Name of the span, for display purposes only"),
+    type: z
+      .enum(spanTypeAttributeValues)
+      .nullish()
+      .describe("Type of the span, for display purposes only"),
+  })
+  .catchall(customTypes.unknown)
+  .describe(
+    "Human-identifying attributes of the span, such as name, type, etc.",
+  )
+  .openapi("SpanAttributes");
+
 function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
   const eventDescription = getEventObjectDescription(objectType);
   return z.object({
@@ -168,22 +185,7 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
       .describe(
         `The \`span_id\` of the root of the trace this ${eventDescription} event belongs to`,
       ),
-    span_attributes: z
-      .object({
-        name: z
-          .string()
-          .nullish()
-          .describe("Name of the span, for display purposes only"),
-        type: z
-          .enum(spanTypeAttributeValues)
-          .nullish()
-          .describe("Type of the span, for display purposes only"),
-      })
-      .catchall(customTypes.unknown)
-      .nullish()
-      .describe(
-        "Human-identifying attributes of the span, such as name, type, etc.",
-      ),
+    span_attributes: spanAttributesSchema.nullish(),
     origin: objectReferenceSchema
       .nullish()
       .describe("Indicates the event was copied from another object."),

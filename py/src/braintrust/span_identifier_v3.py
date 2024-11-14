@@ -178,6 +178,8 @@ class SpanComponentsV3:
             return dict(experiment_id=self.object_id)
         elif self.object_type == SpanObjectTypeV3.PROJECT_LOGS:
             return dict(project_id=self.object_id, log_id="g")
+        else:
+            raise Exception(f"Invalid object_type {self.object_type}")
 
     @staticmethod
     def _from_json_obj(json_obj: Dict) -> "SpanComponentsV3":
