@@ -197,14 +197,7 @@ export const promptDataSchema = z
     prompt: promptBlockDataSchema.nullish(),
     options: promptOptionsSchema.nullish(),
     // This should be a union once we support multiple parser types
-    parser: promptParserSchema
-      .extend({
-        choice_scores: promptParserSchema.shape.choice_scores.refine(
-          (r) => Object.keys(r).length > 0,
-          "choice_scores must be nonempty",
-        ),
-      })
-      .nullish(),
+    parser: promptParserSchema.nullish(),
     tool_functions: z.array(savedFunctionIdSchema).nullish(),
     origin: z
       .object({
