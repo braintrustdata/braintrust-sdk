@@ -78,7 +78,6 @@ class EvalCase(SerializableDataClass, Generic[Input, Output]):
 class _EvalCaseDict(Generic[Input, Output], TypedDict):
     """
     Mirrors EvalCase for callers who pass a dict instead of dataclass.
-    :internal:
     """
 
     input: Input
@@ -502,8 +501,6 @@ def _EvalCommon(
     This helper is needed because in case of `_lazy_load`, we need to update
     the `_evals` global immediately instead of whenever the coroutine is
     awaited.
-
-    :internal:
     """
     eval_name = _make_eval_name(name, experiment_name)
 

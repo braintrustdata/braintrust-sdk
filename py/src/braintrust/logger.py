@@ -2009,13 +2009,11 @@ class ExperimentIdentifier:
     name: str
 
 
-class ExperimentDatasetEvent(TypedDict):
+class _ExperimentDatasetEvent(TypedDict):
     """
     TODO: This could be unified with `framework._EvalCaseDict` like we do in the
     TypeScript SDK, or generated from OpenAPI spec. For now, marking as internal
     to exclude it from the docs.
-
-    :internal:
     """
 
     id: str
@@ -2032,14 +2030,14 @@ class ExperimentDatasetIterator:
     def __iter__(self):
         return self
 
-    def __next__(self):
+    def __next__(self) -> _ExperimentDatasetEvent:
         while True:
             value = next(self.iterator)
             if value["root_span_id"] != value["span_id"]:
                 continue
 
             output, expected = value.get("output"), value.get("expected")
-            ret: ExperimentDatasetEvent = {
+            ret: _ExperimentDatasetEvent = {
                 "input": value.get("input"),
                 "expected": expected if expected is not None else output,
                 "tags": value.get("tags"),
