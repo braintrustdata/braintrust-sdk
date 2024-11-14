@@ -2,6 +2,11 @@ from enum import Enum
 
 
 class SpanTypeAttribute(str, Enum):
+    """
+    Use `SpanType` instead.
+    :deprecated:
+    """
+
     LLM = "llm"
     SCORE = "score"
     FUNCTION = "function"

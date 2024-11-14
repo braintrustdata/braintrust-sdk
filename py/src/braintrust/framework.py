@@ -162,17 +162,17 @@ class BaseExperiment:
     """
 
 
-_AnyEvalCase = Union[EvalCase, _EvalCaseDict]
+_AnyEvalCase = Union[EvalCase[Input, Output], _EvalCaseDict[Input, Output]]
 
 _EvalDataObject = Union[
-    Iterable[_AnyEvalCase],
-    Iterator[_AnyEvalCase],
-    Awaitable[Iterator[_AnyEvalCase]],
-    Callable[[], Union[Iterator[_AnyEvalCase], Awaitable[Iterator[_AnyEvalCase]]]],
+    Iterable[_AnyEvalCase[Input, Output]],
+    Iterator[_AnyEvalCase[Input, Output]],
+    Awaitable[Iterator[_AnyEvalCase[Input, Output]]],
+    Callable[[], Union[Iterator[_AnyEvalCase[Input, Output]], Awaitable[Iterator[_AnyEvalCase[Input, Output]]]]],
     BaseExperiment,
 ]
 
-EvalData = Union[_EvalDataObject, Type[_EvalDataObject], Dataset]
+EvalData = Union[_EvalDataObject[Input, Output], Type[_EvalDataObject[Input, Output]], Dataset]
 
 
 @dataclasses.dataclass
@@ -480,9 +480,9 @@ def _make_eval_name(name: str, experiment_name: Optional[str]):
 
 def _EvalCommon(
     name: str,
-    data: EvalData,
+    data: EvalData[Input, Output],
     task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
-    scores: List[EvalScorer],
+    scores: List[EvalScorer[Input, Output]],
     experiment_name: Optional[str],
     trial_count: int,
     metadata: Optional[Metadata],
@@ -579,9 +579,9 @@ def _EvalCommon(
 
 async def EvalAsync(
     name: str,
-    data: EvalData,
+    data: EvalData[Input, Output],
     task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
-    scores: List[EvalScorer],
+    scores: List[EvalScorer[Input, Output]],
     experiment_name: Optional[str] = None,
     trial_count: int = 1,
     metadata: Optional[Metadata] = None,
@@ -669,9 +669,9 @@ _has_printed_eval_async_warning = False
 
 def Eval(
     name: str,
-    data: EvalData,
+    data: EvalData[Input, Output],
     task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
-    scores: List[EvalScorer],
+    scores: List[EvalScorer[Input, Output]],
     experiment_name: Optional[str] = None,
     trial_count: int = 1,
     metadata: Optional[Metadata] = None,
