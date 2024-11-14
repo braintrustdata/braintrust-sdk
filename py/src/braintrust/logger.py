@@ -2386,7 +2386,7 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
         self._lazy_metadata.get()
         return _state
 
-    def as_dataset(self) -> Iterator[ExperimentDatasetEvent]:
+    def as_dataset(self) -> Iterator[_ExperimentDatasetEvent]:
         return ExperimentDatasetIterator(self.fetch())
 
 
