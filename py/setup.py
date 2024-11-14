@@ -21,6 +21,7 @@ install_requires = [
     "python-dotenv",
     "sseclient-py",
     "python-slugify",
+    "typing_extensions>=4.1.0",
 ]
 
 extras_require = {
@@ -50,15 +51,17 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://www.braintrust.dev",
-    # project_urls={
-    #    "Bug Tracker": "https://github.com/TODO/issues",
-    # },
+    project_urls={
+        "Source Code": "https://github.com/braintrustdata/braintrust-sdk",
+        "Bug Tracker": "https://github.com/braintrustdata/braintrust-sdk/issues",
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
     ],
     package_dir={"": "src"},
     packages=setuptools.find_packages(where="src"),
+    package_data={"braintrust": ["py.typed"]},
     python_requires=">=3.8.0",
     entry_points={"console_scripts": ["braintrust = braintrust.cli.__main__:main"]},
     install_requires=install_requires,
