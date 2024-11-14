@@ -186,7 +186,7 @@ export const promptOptionsSchema = z.object({
 
 export type PromptOptions = z.infer<typeof promptOptionsSchema>;
 
-export const promptParserSchema = z.object({
+const promptParserSchema = z.object({
   type: z.literal("llm_classifier"),
   use_cot: z.boolean(),
   choice_scores: z.record(z.number().min(0).max(1)),
@@ -210,3 +210,16 @@ export const promptDataSchema = z
   .openapi("PromptData");
 
 export type PromptData = z.infer<typeof promptDataSchema>;
+
+// strictPromptDataSchema is extended from promptDataSchema to have stricter validation.
+// It currently is only used when writing new prompts to preclude the creation of certain invalid or useless prompts.
+export const strictPromptDataSchema = promptDataSchema.extend({
+  parser: promptParserSchema
+    .extend({
+      choice_scores: promptParserSchema.shape.choice_scores.refine(
+        (r) => Object.keys(r).length > 0,
+        "choice_scores must be nonempty",
+      ),
+    })
+    .nullish(),
+});
