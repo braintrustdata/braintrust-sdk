@@ -48,7 +48,7 @@ BRAINTRUST_API_KEY=<YOUR_BRAINTRUST_API_KEY> braintrust eval eval_hello.py
 ### API Reference
 """
 
-from ._types import DatasetEvent, ExperimentEvent, PromptOptions, SpanAttributes
+from ._types import DatasetEvent, ExperimentEvent, PromptOptions, SpanAttributes, SpanType
 from .framework import *
 from .framework2 import *
 from .functions.invoke import *

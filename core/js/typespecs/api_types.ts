@@ -37,14 +37,17 @@ import { objectNullish } from "../src/zod_util";
 
 const auditSourcesSchema = z.enum(VALID_SOURCES);
 
+export const spanTypeSchema = z
+  .enum(spanTypeAttributeValues)
+  .openapi("SpanType");
+
 export const spanAttributesSchema = z
   .object({
     name: z
       .string()
       .nullish()
       .describe("Name of the span, for display purposes only"),
-    type: z
-      .enum(spanTypeAttributeValues)
+    type: spanTypeSchema
       .nullish()
       .describe("Type of the span, for display purposes only"),
   })
