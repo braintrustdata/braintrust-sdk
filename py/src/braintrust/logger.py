@@ -188,7 +188,7 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
         self,
         name: Optional[str] = None,
         type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[SpanAttributes] = None,
+        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
     ) -> None:
         """Set the span's name, type, or other attributes. These attributes will be attached to all log events within the span.
         The attributes are equivalent to the arguments to start_span.
@@ -254,7 +254,7 @@ class _NoopSpan(Span):
         return super().__exit__(exc_type, exc_value, traceback)
 
 
-NOOP_SPAN = _NoopSpan()
+NOOP_SPAN: Span = _NoopSpan()
 
 
 class BraintrustState:
@@ -800,48 +800,54 @@ class OrgProjectMetadata:
     project: ObjectMetadata
 
 
+# Pyright produces an error for overlapping overloads
+# (reportOverlappingOverload) because of the default argument to `open`. It
+# thinks a call like `init()` with no arguments could match both overloads.
+# However, Pyright is also able to use both overloads properly when type
+# checking the caller. We can eventually add `type: ignore` if we cannot resolve
+# this.
 @overload
 def init(
-    project: str,
-    experiment: Optional[str],
-    description: Optional[str],
-    dataset: Optional["Dataset"],
-    open: Literal[False],
-    base_experiment: Optional[str],
-    is_public: bool,
-    app_url: Optional[str],
-    api_key: Optional[str],
-    org_name: Optional[str],
-    metadata: Optional[Metadata],
-    git_metadata_settings: Optional[GitMetadataSettings],
-    set_current: bool,
-    update: Optional[bool],
-    project_id: Optional[str],
-    base_experiment_id: Optional[str],
-    repo_info: Optional[RepoInfo],
+    project: Optional[str] = ...,
+    experiment: Optional[str] = ...,
+    description: Optional[str] = ...,
+    dataset: Optional["Dataset"] = ...,
+    open: Literal[False] = ...,
+    base_experiment: Optional[str] = ...,
+    is_public: bool = ...,
+    app_url: Optional[str] = ...,
+    api_key: Optional[str] = ...,
+    org_name: Optional[str] = ...,
+    metadata: Optional[Metadata] = ...,
+    git_metadata_settings: Optional[GitMetadataSettings] = ...,
+    set_current: bool = ...,
+    update: Optional[bool] = ...,
+    project_id: Optional[str] = ...,
+    base_experiment_id: Optional[str] = ...,
+    repo_info: Optional[RepoInfo] = ...,
 ) -> "Experiment":
     ...
 
 
 @overload
 def init(
-    project: str,
-    experiment: Optional[str],
-    description: Optional[str],
-    dataset: Optional["Dataset"],
-    open: Literal[True],
-    base_experiment: Optional[str],
-    is_public: bool,
-    app_url: Optional[str],
-    api_key: Optional[str],
-    org_name: Optional[str],
-    metadata: Optional[Metadata],
-    git_metadata_settings: Optional[GitMetadataSettings],
-    set_current: bool,
-    update: Optional[bool],
-    project_id: Optional[str],
-    base_experiment_id: Optional[str],
-    repo_info: Optional[RepoInfo],
+    project: Optional[str] = ...,
+    experiment: Optional[str] = ...,
+    description: Optional[str] = ...,
+    dataset: Optional["Dataset"] = ...,
+    open: Literal[True] = ...,
+    base_experiment: Optional[str] = ...,
+    is_public: bool = ...,
+    app_url: Optional[str] = ...,
+    api_key: Optional[str] = ...,
+    org_name: Optional[str] = ...,
+    metadata: Optional[Metadata] = ...,
+    git_metadata_settings: Optional[GitMetadataSettings] = ...,
+    set_current: bool = ...,
+    update: Optional[bool] = ...,
+    project_id: Optional[str] = ...,
+    base_experiment_id: Optional[str] = ...,
+    repo_info: Optional[RepoInfo] = ...,
 ) -> "ReadonlyExperiment":
     ...
 
@@ -1378,6 +1384,7 @@ def traced(*span_args, **span_kwargs) -> Callable[[F], F]:
     """Decorator to trace the wrapped function. Can either be applied bare (`@traced`) or by providing arguments (`@traced(*span_args, **span_kwargs)`), which will be forwarded to the created span. See `Span.start_span` for full details on the span arguments.
 
     It checks the following (in precedence order):
+
         * Currently-active span
         * Currently-active experiment
         * Currently-active logger
@@ -1442,7 +1449,7 @@ def traced(*span_args, **span_kwargs) -> Callable[[F], F]:
 def start_span(
     name: Optional[str] = None,
     type: Optional[SpanTypeAttribute] = None,
-    span_attributes: Optional[SpanAttributes] = None,
+    span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
     start_time: Optional[float] = None,
     set_current: Optional[bool] = None,
     parent: Optional[str] = None,
@@ -2191,7 +2198,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         self,
         name: Optional[str] = None,
         type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[SpanAttributes] = None,
+        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
         start_time: Optional[float] = None,
         set_current: Optional[bool] = None,
         parent: Optional[str] = None,
@@ -2327,7 +2334,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         self,
         name: Optional[str] = None,
         type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[SpanAttributes] = None,
+        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
         start_time: Optional[float] = None,
         set_current: Optional[bool] = None,
         parent: Optional[str] = None,
@@ -2404,7 +2411,7 @@ class SpanImpl(Span):
         name: Optional[str] = None,
         type: Optional[SpanTypeAttribute] = None,
         default_root_type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[SpanAttributes] = None,
+        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
         start_time: Optional[float] = None,
         set_current: Optional[bool] = None,
         event: Optional[Dict[str, Any]] = None,
@@ -2489,18 +2496,16 @@ class SpanImpl(Span):
         self,
         name: Optional[str] = None,
         type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[SpanAttributes] = None,
+        span_attributes: Optional[Mapping[str, Any]] = None,
     ) -> None:
         self.log_internal(
             internal_data={
                 "span_attributes": _strip_nones(
-                    SpanAttributes(
-                        **{
-                            "name": name,
-                            "type": type,
-                            **(span_attributes or {}),
-                        }
-                    ),
+                    {
+                        "name": name,
+                        "type": type,
+                        **(span_attributes or {}),
+                    },
                     deep=False,
                 ),
             }
@@ -2560,7 +2565,7 @@ class SpanImpl(Span):
         self,
         name: Optional[str] = None,
         type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[SpanAttributes] = None,
+        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
         start_time: Optional[float] = None,
         set_current: Optional[bool] = None,
         parent: Optional[str] = None,
@@ -3242,7 +3247,7 @@ class Logger(Exportable):
         self,
         name: Optional[str] = None,
         type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[SpanAttributes] = None,
+        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
         start_time: Optional[float] = None,
         set_current: Optional[bool] = None,
         parent: Optional[str] = None,
@@ -3284,7 +3289,7 @@ class Logger(Exportable):
         self,
         name: Optional[str] = None,
         type: Optional[SpanTypeAttribute] = None,
-        span_attributes: Optional[SpanAttributes] = None,
+        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
         start_time: Optional[float] = None,
         set_current: Optional[bool] = None,
         parent: Optional[str] = None,
