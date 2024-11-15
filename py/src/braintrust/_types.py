@@ -77,7 +77,7 @@ class DatasetEvent(TypedDict):
     """
     root_span_id: str
     """
-    The `span_id` of the root of the trace this dataset event belongs to
+    A unique identifier for the trace this dataset event belongs to
     """
     is_root: NotRequired[Optional[bool]]
     """
@@ -225,7 +225,7 @@ class ExperimentEvent(TypedDict):
     """
     root_span_id: str
     """
-    The `span_id` of the root of the trace this experiment event belongs to
+    A unique identifier for the trace this experiment event belongs to
     """
     span_attributes: NotRequired[Optional[SpanAttributes]]
     is_root: NotRequired[Optional[bool]]

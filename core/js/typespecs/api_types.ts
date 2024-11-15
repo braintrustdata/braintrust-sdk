@@ -186,7 +186,7 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
     root_span_id: z
       .string()
       .describe(
-        `The \`span_id\` of the root of the trace this ${eventDescription} event belongs to`,
+        `A unique identifier for the trace this ${eventDescription} event belongs to`,
       ),
     span_attributes: spanAttributesSchema.nullish(),
     origin: objectReferenceSchema
@@ -502,13 +502,22 @@ export type ProjectLogsEvent = z.infer<typeof projectLogsEventSchema>;
 
 // Merge system control fields.
 
-const isMergeDescription = [
-  "The `_is_merge` field controls how the row is merged with any existing row with the same id in the DB. By default (or when set to `false`), the existing row is completely replaced by the new row. When set to `true`, the new row is deep-merged into the existing row",
-  'For example, say there is an existing row in the DB `{"id": "foo", "input": {"a": 5, "b": 10}}`. If we merge a new row as `{"_is_merge": true, "id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"a": 5, "b": 11, "c": 20}}`. If we replace the new row as `{"id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"b": 11, "c": 20}}`',
+const spanIdsDescription = [
+  "Use span_id, root_span_id, and span_parents as a more explicit alternative to _parent_id. The span_id is a unique identifier describing the row's place in the a trace, and the root_span_id is a unique identifier for the whole trace. See the [guide](https://www.braintrust.dev/docs/guides/tracing) for full details.",
+  'For example, say we have logged a row `{"id": "abc", "span_id": "span0", "root_span_id": "root_span0", "input": "foo", "output": "bar", "expected": "boo", "scores": {"correctness": 0.33}}`. We can create a sub-span of the parent row by logging `{"id": "llm_call", "span_id": "span1", "root_span_id": "root_span0", "span_parents": ["span0"], "input": {"prompt": "What comes after foo?"}, "output": "bar", "metrics": {"tokens": 1}}`. In the webapp, only the root span row `"abc"` will show up in the summary view. You can view the full trace hierarchy (in this case, the `"llm_call"` row) by clicking on the "abc" row.',
+  "If the row is being merged into an existing row, this field will be ignored.",
 ].join("\n\n");
 
-const mergeEventSchema = z.object({
-  [IS_MERGE_FIELD]: customTypes.literalTrue.describe(isMergeDescription),
+const insertSystemControlFieldsSchema = z.object({
+  [IS_MERGE_FIELD]: z
+    .boolean()
+    .nullish()
+    .describe(
+      [
+        "The `_is_merge` field controls how the row is merged with any existing row with the same id in the DB. By default (or when set to `false`), the existing row is completely replaced by the new row. When set to `true`, the new row is deep-merged into the existing row, if one is found. If no existing row is found, the new row is inserted as is.",
+        'For example, say there is an existing row in the DB `{"id": "foo", "input": {"a": 5, "b": 10}}`. If we merge a new row as `{"_is_merge": true, "id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"a": 5, "b": 11, "c": 20}}`. If we replace the new row as `{"id": "foo", "input": {"b": 11, "c": 20}}`, the new row will be `{"id": "foo", "input": {"b": 11, "c": 20}}`',
+      ].join("\n\n"),
+    ),
   [MERGE_PATHS_FIELD]: z
     .string()
     .array()
@@ -516,25 +525,23 @@ const mergeEventSchema = z.object({
     .nullish()
     .describe(
       [
-        "The `_merge_paths` field allows controlling the depth of the merge. It can only be specified alongside `_is_merge=true`. `_merge_paths` is a list of paths, where each path is a list of field names. The deep merge will not descend below any of the specified merge paths.",
+        "The `_merge_paths` field allows controlling the depth of the merge, when `_is_merge=true`. `_merge_paths` is a list of paths, where each path is a list of field names. The deep merge will not descend below any of the specified merge paths.",
         'For example, say there is an existing row in the DB `{"id": "foo", "input": {"a": {"b": 10}, "c": {"d": 20}}, "output": {"a": 20}}`. If we merge a new row as `{"_is_merge": true, "_merge_paths": [["input", "a"], ["output"]], "input": {"a": {"q": 30}, "c": {"e": 30}, "bar": "baz"}, "output": {"d": 40}}`, the new row will be `{"id": "foo": "input": {"a": {"q": 30}, "c": {"d": 20, "e": 30}, "bar": "baz"}, "output": {"d": 40}}`. In this case, due to the merge paths, we have replaced `input.a` and `output`, but have still deep-merged `input` and `input.c`.',
       ].join("\n\n"),
     ),
-});
-
-const replacementEventSchema = z.object({
-  [IS_MERGE_FIELD]: customTypes.literalFalse
-    .nullish()
-    .describe(isMergeDescription),
   [PARENT_ID_FIELD]: z
     .string()
     .nullish()
     .describe(
       [
-        "Use the `_parent_id` field to create this row as a subspan of an existing row. It cannot be specified alongside `_is_merge=true`. Tracking hierarchical relationships are important for tracing (see the [guide](https://www.braintrust.dev/docs/guides/tracing) for full details).",
+        "Use the `_parent_id` field to create this row as a subspan of an existing row. Tracking hierarchical relationships are important for tracing (see the [guide](https://www.braintrust.dev/docs/guides/tracing) for full details).",
         'For example, say we have logged a row `{"id": "abc", "input": "foo", "output": "bar", "expected": "boo", "scores": {"correctness": 0.33}}`. We can create a sub-span of the parent row by logging `{"_parent_id": "abc", "id": "llm_call", "input": {"prompt": "What comes after foo?"}, "output": "bar", "metrics": {"tokens": 1}}`. In the webapp, only the root span row `"abc"` will show up in the summary view. You can view the full trace hierarchy (in this case, the `"llm_call"` row) by clicking on the "abc" row.',
+        "If the row is being merged into an existing row, this field will be ignored.",
       ].join("\n\n"),
     ),
+  span_id: z.string().nullish().describe(spanIdsDescription),
+  root_span_id: z.string().nullish().describe(spanIdsDescription),
+  span_parents: z.string().array().nullish().describe(spanIdsDescription),
 });
 
 function makeInsertEventSchemas<T extends z.AnyZodObject>(
@@ -547,14 +554,8 @@ function makeInsertEventSchemas<T extends z.AnyZodObject>(
     getEventObjectType(objectType),
     "_",
   ).replace("_", "");
-  const replaceVariantSchema = insertSchema
-    .merge(replacementEventSchema)
-    .openapi(`Insert${eventSchemaName}EventReplace`);
-  const mergeVariantSchema = insertSchema
-    .merge(mergeEventSchema)
-    .openapi(`Insert${eventSchemaName}EventMerge`);
-  const eventSchema = z
-    .union([replaceVariantSchema, mergeVariantSchema])
+  const eventSchema = insertSchema
+    .merge(insertSystemControlFieldsSchema)
     .describe(`${capitalize(article)} ${eventDescription} event`)
     .openapi(`Insert${eventSchemaName}Event`);
   const requestSchema = z
