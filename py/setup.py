@@ -17,7 +17,7 @@ install_requires = [
     "chevron",
     "braintrust_core",
     "tqdm",
-    "exceptiongroup==1.2.0",
+    "exceptiongroup>=1.2.0",
     "python-dotenv",
     "sseclient-py",
     "python-slugify",
