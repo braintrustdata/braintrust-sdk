@@ -50,14 +50,6 @@ from urllib3.util.retry import Retry
 
 from braintrust.functions.stream import BraintrustStream
 
-from ._types import (
-    AttachmentReference,
-    AttachmentStatus,
-    DatasetEvent,
-    ExperimentEvent,
-    PromptOptions,
-    SpanAttributes,
-)
 from .bt_json import bt_dumps
 from .db_fields import (
     ASYNC_SCORING_CONTROL_FIELD,
@@ -76,6 +68,14 @@ from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legac
 from .prompt import BRAINTRUST_PARAMS, PromptBlockData, PromptSchema
 from .span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from .span_types import SpanTypeAttribute
+from .types import (
+    AttachmentReference,
+    AttachmentStatus,
+    DatasetEvent,
+    ExperimentEvent,
+    PromptOptions,
+    SpanAttributes,
+)
 from .util import (
     GLOBAL_PROJECT,
     AugmentedHTTPError,
@@ -1815,6 +1815,7 @@ class ObjectFetcher(ABC, Generic[TDict]):
         # You can also iterate over the object directly.
         for record in object:
             print(record)
+        ```
 
         :returns: An iterator over the records.
         """
@@ -1878,9 +1879,10 @@ class Attachment:
     """
     Represents an attachment to be uploaded and the associated metadata.
 
-    Attachment objects can be inserted anywhere in an event, allowing you to
+    `Attachment` objects can be inserted anywhere in an event, allowing you to
     log arbitrary file data. The SDK will asynchronously upload the file to
-    object storage and replace the Attachment object with an AttachmentReference.
+    object storage and replace the `Attachment` object with an
+    `AttachmentReference`.
     """
 
     def __init__(
@@ -1894,7 +1896,7 @@ class Attachment:
         """
         Construct an attachment.
 
-        :param data: A string representing the path of the file on disk, or a bytes/bytearray with the file's contents. The caller is responsible for ensuring the file on disk is not modified until upload is complete.
+        :param data: A string representing the path of the file on disk, or a `bytes`/`bytearray` with the file's contents. The caller is responsible for ensuring the file on disk or mutable `bytearray` is not modified until upload is complete.
 
         :param filename: The desired name of the file in Braintrust after uploading. This parameter is for visualization purposes only and has no effect on attachment storage.
 

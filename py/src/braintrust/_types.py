@@ -1,5 +1,5 @@
 """
-Do not import this file directly. See __init__.py for the classes that have a stable API.
+Do not import this file directly. See `types.py` for the classes that have a stable API.
 
 Auto-generated file -- do not modify.
 """
