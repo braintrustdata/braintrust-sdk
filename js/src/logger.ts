@@ -1698,7 +1698,9 @@ class BackgroundLogger {
         attachmentErrors.push(error);
       }
     }
-    if (attachmentErrors.length > 0) {
+    if (attachmentErrors.length === 1) {
+      throw attachmentErrors[0];
+    } else if (attachmentErrors.length > 1) {
       throw new AggregateError(
         attachmentErrors,
         `Encountered the following errors while uploading attachments:`,

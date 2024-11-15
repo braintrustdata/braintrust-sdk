@@ -1594,7 +1594,9 @@ def validate_tags(tags: Sequence[str]) -> None:
 
 def _extract_attachments(event: Dict[str, Any], attachments: List["Attachment"]) -> None:
     """
-    Helper function for uploading attachments. Recursively extracts `Attachment` values and replaces them with their associated `AttachmentReference` objects.
+    Helper function for uploading attachments. Recursively extracts `Attachment`
+    values and replaces them with their associated `AttachmentReference`
+    objects.
 
     :param event: The event to filter. Will be modified in-place.
     :param attachments: Flat array of extracted attachments (output parameter).
@@ -1748,8 +1750,14 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
     ret: Dict[str, Any] = {}
 
     for k, v in event.items():
+        # Prevent dict keys from holding references to user data. Note that
+        # `bt_json` already coerces keys to string, a behavior that comes from
+        # `json.dumps`. However, that runs at log upload time, while we want to
+        # cut out all the references to user objects synchronously in this
+        # function.
         k = str(k)
 
+        # Process dict value.
         if isinstance(v, Mapping):
             v = _deep_copy_event(v)
         elif isinstance(v, (List, Tuple, Set)):
@@ -1891,7 +1899,6 @@ class Attachment:
         data: Union[str, bytes, bytearray],
         filename: str,
         content_type: str,
-        state: Optional[BraintrustState] = None,
     ):
         """
         Construct an attachment.
@@ -1901,8 +1908,6 @@ class Attachment:
         :param filename: The desired name of the file in Braintrust after uploading. This parameter is for visualization purposes only and has no effect on attachment storage.
 
         :param content_type: The MIME type of the file.
-
-        :param state: (Optional) For internal use.
         """
         self._reference: AttachmentReference = {
             "type": "braintrust_attachment",
@@ -1910,7 +1915,6 @@ class Attachment:
             "content_type": content_type,
             "key": str(uuid.uuid4()),
         }
-        self._state = state
         self._data_debug_string = data if isinstance(data, str) else "<in-memory data>"
 
         self._data = self._init_data(data)
@@ -1923,7 +1927,9 @@ class Attachment:
 
     def upload(self) -> AttachmentStatus:
         """
-        On first access, (1) reads the attachment from disk if needed, (2) authenticates with the data plane to request a signed URL, (3) uploads to object store, and (4) updates the attachment.
+        On first access, (1) reads the attachment from disk if needed, (2)
+        authenticates with the data plane to request a signed URL, (3) uploads
+        to object store, and (4) updates the attachment.
 
         :returns: The attachment status.
         """
@@ -1935,7 +1941,7 @@ class Attachment:
 
         :returns: The debug object. The return type is not stable and may change in a future release.
         """
-        return {"input_data": self._data_debug_string, "reference": self._reference, "state": self._state}
+        return {"input_data": self._data_debug_string, "reference": self._reference}
 
     def _init_uploader(self) -> LazyValue[AttachmentStatus]:
         def do_upload(api_conn: HTTPConnection, org_id: str) -> Mapping[str, Any]:
@@ -1981,20 +1987,9 @@ class Attachment:
             """Catches error messages and updates the attachment status."""
             status = AttachmentStatus(upload_status="uploading")
 
-            state = self._state
-            if state is None:
-                logger = current_logger()
-                if logger is None:
-                    raise RuntimeError("Initialize Braintrust by calling init_logger() before uploading attachments.")
-                # Ensure the login state is populated.
-                # TODO: We need a better way to log in.
-                state = logger._get_state()
-
-            if not state.logged_in:
-                raise RuntimeError("Initialize Braintrust by calling init_logger() before uploading attachments.")
-
-            api_conn = state.api_conn()
-            org_id = state.org_id or ""
+            login()
+            api_conn = _state.api_conn()
+            org_id = _state.org_id or ""
 
             try:
                 do_upload(api_conn, org_id)
