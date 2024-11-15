@@ -565,7 +565,7 @@ class _BackgroundLogger:
         self.started = False
 
         self.logger = logging.getLogger("braintrust")
-        self.queue: queue.Queue[LazyValue[Dict[str, Any]]] = queue.Queue(maxsize=self.queue_maxsize)
+        self.queue: "queue.Queue[LazyValue[Dict[str, Any]]]" = queue.Queue(maxsize=self.queue_maxsize)
         # Each time we put items in the queue, we increment a semaphore to
         # indicate to any consumer thread that it should attempt a flush.
         self.queue_filled_semaphore = threading.Semaphore(value=0)
