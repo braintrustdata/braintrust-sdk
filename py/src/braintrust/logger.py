@@ -676,7 +676,10 @@ class _BackgroundLogger:
             if len(attachment_errors) == 1:
                 raise attachment_errors[0]
             elif len(attachment_errors) > 1:
-                raise ExceptionGroup("Encountered errors while uploading attachments", attachment_errors)
+                raise exceptiongroup.ExceptionGroup(
+                    "Encountered errors while uploading attachments",
+                    attachment_errors,
+                )
 
     def _unwrap_lazy_values(
         self, wrapped_items: Sequence[LazyValue[Dict[str, Any]]]
