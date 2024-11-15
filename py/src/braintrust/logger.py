@@ -2025,7 +2025,7 @@ class Attachment:
 
             return LazyValue(read_file, use_mutex=True)
         else:
-            return LazyValue(lambda: data, use_mutex=False)
+            return LazyValue(lambda: bytes(data), use_mutex=False)
 
 
 def _log_feedback_impl(
