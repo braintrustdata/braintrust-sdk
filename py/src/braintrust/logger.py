@@ -1949,25 +1949,25 @@ class Attachment:
                 metadata_response.raise_for_status()
                 metadata = metadata_response.json()
             except Exception as e:
-                raise RuntimeError("Failed to request signed URL from API server") from e
+                raise RuntimeError(f"Failed to request signed URL from API server: {e}") from e
 
             try:
                 data = self._data.get()
             except Exception as e:
-                raise IOError("Failed to read file") from e
+                raise IOError(f"Failed to read file: {e}") from e
 
-            signed_url = metadata["signedUrl"]
-            headers = metadata["headers"]
-            if not isinstance(signed_url, str) or not isinstance(headers, str):
+            signed_url = metadata.get("signedUrl")
+            headers = metadata.get("headers")
+            if not isinstance(signed_url, str) or not isinstance(headers, dict):
                 raise RuntimeError(f"Invalid response from API server: {metadata}")
 
             # TODO multipart upload.
             try:
-                obj_conn = HTTPConnection(signed_url, adapter=_http_adapter)
-                obj_response = obj_conn.put(signed_url, headers=headers, content=data)
+                obj_conn = HTTPConnection(base_url="", adapter=_http_adapter)
+                obj_response = obj_conn.put(signed_url, headers=headers, data=data)
                 obj_response.raise_for_status()
             except Exception as e:
-                raise RuntimeError("Failed to upload attachment to object store") from e
+                raise RuntimeError(f"Failed to upload attachment to object store: {e}") from e
 
             return {
                 "signed_url": signed_url,
@@ -2010,7 +2010,7 @@ class Attachment:
                 status_response = api_conn.post("/attachment/status", json=request_params)
                 status_response.raise_for_status()
             except Exception as e:
-                raise RuntimeError("Couldn't log attachment status") from e
+                raise RuntimeError(f"Couldn't log attachment status: {e}") from e
 
             return status
 
