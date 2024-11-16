@@ -1745,7 +1745,10 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
         else:
             # No need to handle primitives explicitly because deepcopy will do
             # it for us.
-            return copy.deepcopy(v)
+            try:
+                return copy.deepcopy(v)
+            except:
+                json.loads(bt_dumps(v))
 
     ret: Dict[str, Any] = {}
 
