@@ -1,7 +1,7 @@
 from typing import Any, Mapping
 
-from ._types import DatasetEvent
 from .db_fields import MERGE_PATHS_FIELD
+from .types import DatasetEvent
 
 DEFAULT_IS_LEGACY_DATASET = False
 
@@ -13,7 +13,7 @@ def ensure_dataset_record(r: DatasetEvent, legacy: bool) -> DatasetEvent:
         return ensure_new_dataset_record(r)
 
 
-def ensure_legacy_dataset_record(r: DatasetEvent):
+def ensure_legacy_dataset_record(r: DatasetEvent) -> DatasetEvent:
     if "output" in r:
         return r
     row = r.copy()
@@ -21,7 +21,7 @@ def ensure_legacy_dataset_record(r: DatasetEvent):
     return row
 
 
-def ensure_new_dataset_record(r: DatasetEvent):
+def ensure_new_dataset_record(r: DatasetEvent) -> DatasetEvent:
     if "expected" in r:
         return r
     row = r.copy()

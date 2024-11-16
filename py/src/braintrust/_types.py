@@ -1,5 +1,5 @@
 """
-Do not import this file directly. See __init__.py for the classes that have a stable API.
+Do not import this file directly. See `types.py` for the classes that have a stable API.
 
 Auto-generated file -- do not modify.
 """
@@ -77,7 +77,7 @@ class DatasetEvent(TypedDict):
     """
     root_span_id: str
     """
-    The `span_id` of the root of the trace this dataset event belongs to
+    A unique identifier for the trace this dataset event belongs to
     """
     is_root: NotRequired[Optional[bool]]
     """
@@ -225,7 +225,7 @@ class ExperimentEvent(TypedDict):
     """
     root_span_id: str
     """
-    The `span_id` of the root of the trace this experiment event belongs to
+    A unique identifier for the trace this experiment event belongs to
     """
     span_attributes: NotRequired[Optional[SpanAttributes]]
     is_root: NotRequired[Optional[bool]]
@@ -323,6 +323,36 @@ class PromptOptions(TypedDict):
     model: NotRequired[Optional[str]]
     params: NotRequired[Optional[ModelParams]]
     position: NotRequired[Optional[str]]
+
+
+class AttachmentReference(TypedDict):
+    type: Literal["braintrust_attachment"]
+    """
+    An identifier to help disambiguate parsing.
+    """
+    filename: str
+    """
+    Human-readable filename for user interfaces. Not related to attachment storage.
+    """
+    content_type: str
+    """
+    MIME type of this file.
+    """
+    key: str
+    """
+    Key in the object store bucket for this attachment.
+    """
+
+
+UploadStatus = Literal["uploading", "done", "error"]
+
+
+class AttachmentStatus(TypedDict):
+    upload_status: UploadStatus
+    error_message: NotRequired[Optional[str]]
+    """
+    Describes the error encountered while uploading.
+    """
 
 
 __all__ = []

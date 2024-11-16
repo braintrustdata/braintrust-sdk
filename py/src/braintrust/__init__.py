@@ -48,7 +48,6 @@ BRAINTRUST_API_KEY=<YOUR_BRAINTRUST_API_KEY> braintrust eval eval_hello.py
 ### API Reference
 """
 
-from ._types import DatasetEvent, ExperimentEvent, PromptOptions, SpanAttributes, SpanType
 from .framework import *
 from .framework2 import *
 from .functions.invoke import *
@@ -56,4 +55,5 @@ from .functions.stream import *
 from .logger import *
 from .logger import _internal_reset_global_state, _internal_with_custom_background_logger
 from .oai import wrap_openai
+from .types import *
 from .util import BT_IS_ASYNC_ATTRIBUTE, MarkAsyncWrapper
