@@ -205,8 +205,8 @@ def batch_items(
             i = 0
             for item in bucket:
                 if len(batch) == 0 or (
-                    (batch_max_num_bytes is not None and len(item) + batch_len < batch_max_num_bytes)
-                    and (batch_max_num_items is not None and len(batch) < batch_max_num_items)
+                    (batch_max_num_bytes is None or len(item) + batch_len < batch_max_num_bytes)
+                    and (batch_max_num_items is None or len(batch) < batch_max_num_items)
                 ):
                     add_to_batch(item)
                 elif i == 0:

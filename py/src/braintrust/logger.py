@@ -1927,9 +1927,7 @@ class Attachment:
 
     def upload(self) -> AttachmentStatus:
         """
-        On first access, (1) reads the attachment from disk if needed, (2)
-        authenticates with the data plane to request a signed URL, (3) uploads
-        to object store, and (4) updates the attachment.
+        On first access, (1) reads the attachment from disk if needed, (2) authenticates with the data plane to request a signed URL, (3) uploads to object store, and (4) updates the attachment.
 
         :returns: The attachment status.
         """
