@@ -1240,6 +1240,7 @@ export const patchOrganizationMembersSchema = z
 export const patchOrganizationMembersOutputSchema = z
   .object({
     status: z.literal("success"),
+    org_id: z.string().describe("The id of the org that was modified."),
     send_email_error: z
       .string()
       .nullish()
