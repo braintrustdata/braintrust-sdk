@@ -760,11 +760,14 @@ def Eval(
     if loop:
         # Notebook or existing async context.
         global _has_printed_eval_async_warning
-        if not _has_printed_eval_async_warning:
+        global _lazy_load
+        if not _has_printed_eval_async_warning and not _lazy_load:
             _has_printed_eval_async_warning = True
-            eprint("WARNING: `Eval()` was called from an async context. Please use `await EvalAsync()` instead.")
-            eprint("Call stack:")
-            eprint("\n".join(traceback.format_stack()))
+            eprint(
+                "`Eval()` was called from an async context. For better "
+                "performance, it is recommended to use `await EvalAsync()` "
+                "instead."
+            )
         # Return a `Task` to be compatible with a previous signature where the
         # return type included `Awaitable`.
         return loop.create_task(f())  # type: ignore
