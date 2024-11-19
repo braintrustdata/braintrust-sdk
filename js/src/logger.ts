@@ -743,7 +743,7 @@ export class Attachment {
   readonly reference: AttachmentReference;
 
   private readonly uploader: LazyValue<AttachmentStatus>;
-  private readonly data: LazyValue<Blob>;
+  private readonly _data: LazyValue<Blob>;
   private readonly state?: BraintrustState;
   // For debug logging only.
   private readonly dataDebugString: string;
@@ -773,7 +773,7 @@ export class Attachment {
     this.state = state;
     this.dataDebugString = typeof data === "string" ? data : "<in-memory data>";
 
-    this.data = this.initData(data);
+    this._data = this.initData(data);
     this.uploader = this.initUploader();
   }
 
@@ -786,6 +786,13 @@ export class Attachment {
    */
   async upload() {
     return await this.uploader.get();
+  }
+
+  /**
+   * The attachment contents. This is a lazy value that will read the attachment contents from disk or memory on first access.
+   */
+  async data() {
+    return this._data.get();
   }
 
   /**
@@ -813,7 +820,7 @@ export class Attachment {
       const [metadataPromiseResult, dataPromiseResult] =
         await Promise.allSettled([
           conn.post("/attachment", requestParams),
-          this.data.get(),
+          this._data.get(),
         ]);
       if (metadataPromiseResult.status === "rejected") {
         const errorStr = JSON.stringify(metadataPromiseResult.reason);
