@@ -1928,6 +1928,11 @@ class Attachment:
         """The object that replaces this `Attachment` at upload time."""
         return self._reference
 
+    @property
+    def data(self) -> bytes:
+        """The attachment contents. This is a lazy value that will read the attachment contents from disk or memory on first access."""
+        return self._data.get()
+
     def upload(self) -> AttachmentStatus:
         """
         On first access, (1) reads the attachment from disk if needed, (2) authenticates with the data plane to request a signed URL, (3) uploads to object store, and (4) updates the attachment.
