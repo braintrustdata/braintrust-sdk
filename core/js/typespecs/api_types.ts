@@ -231,7 +231,7 @@ function generateBaseEventFeedbackSchema(objectType: ObjectTypeWithEvent) {
       .record(customTypes.unknown)
       .nullish()
       .describe(
-        "A dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.",
+        "A dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI. Note, this metadata does not correspond to the main event itself, but rather the audit log attached to the event.",
       ),
     source: auditSourcesSchema
       .nullish()
@@ -294,43 +294,12 @@ export const versionSchema = z
   )
   .openapi("Version");
 
-const pathTypeFilterSchema = z
-  .object({
-    type: z
-      .literal("path_lookup")
-      .describe("Denotes the type of filter as a path-lookup filter"),
-    path: z
-      .string()
-      .array()
-      .describe(
-        'List of fields describing the path to the value to be checked against. For instance, if you wish to filter on the value of `c` in `{"input": {"a": {"b": {"c": "hello"}}}}`, pass `path=["input", "a", "b", "c"]`',
-      ),
-    value: customTypes.unknown.describe(
-      'The value to compare equality-wise against the event value at the specified `path`. The value must be a "primitive", that is, any JSON-serializable object except for objects and arrays. For instance, if you wish to filter on the value of "input.a.b.c" in the object `{"input": {"a": {"b": {"c": "hello"}}}}`, pass `value="hello"`',
-    ),
-  })
-  .describe(
-    'A path-lookup filter describes an equality comparison against a specific sub-field in the event row. For instance, if you wish to filter on the value of `c` in `{"input": {"a": {"b": {"c": "hello"}}}}`, pass `path=["input", "a", "b", "c"]` and `value="hello"`',
-  )
-  .openapi("PathLookupFilter");
-
-export const fetchEventsFiltersSchema = pathTypeFilterSchema
-  .array()
-  .describe(
-    [
-      "NOTE: This parameter is deprecated and will be removed in a future revision. Consider using the `/btql` endpoint (https://www.braintrust.dev/docs/reference/btql) for more advanced filtering.",
-      "A list of filters on the events to fetch. Currently, only path-lookup type filters are supported.",
-    ].join("\n\n"),
-  )
-  .openapi("FetchEventsFilters");
-
 export const fetchEventsRequestSchema = z
   .object({
     limit: fetchLimitParamSchema.nullish(),
     cursor: fetchPaginationCursorSchema.nullish(),
     max_xact_id: maxXactIdSchema.nullish(),
     max_root_span_id: maxRootSpanIdSchema.nullish(),
-    filters: fetchEventsFiltersSchema.nullish(),
     version: versionSchema.nullish(),
   })
   .openapi("FetchEventsRequest");
@@ -699,6 +668,7 @@ const feedbackExperimentItemSchema = feedbackExperimentRequestBaseSchema
     comment: true,
     metadata: true,
     source: true,
+    tags: true,
   })
   .openapi("FeedbackExperimentItem");
 const feedbackExperimentRequestSchema = makeFeedbackRequestSchema(
@@ -714,6 +684,7 @@ const feedbackDatasetItemSchema = feedbackDatasetRequestBaseSchema
     comment: true,
     metadata: true,
     source: true,
+    tags: true,
   })
   .openapi("FeedbackDatasetItem");
 const feedbackDatasetRequestSchema = makeFeedbackRequestSchema(
@@ -731,6 +702,7 @@ const feedbackProjectLogsItemSchema = feedbackProjectLogsRequestBaseSchema
     comment: true,
     metadata: true,
     source: true,
+    tags: true,
   })
   .openapi("FeedbackProjectLogsItem");
 const feedbackProjectLogsRequestSchema = makeFeedbackRequestSchema(
