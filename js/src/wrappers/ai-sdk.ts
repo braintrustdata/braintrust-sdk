@@ -72,6 +72,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
       span.log({
         input: prompt,
         metadata: {
+          model: this.modelId,
           ...rest,
           ...("tools" in mode && mode.tools
             ? { tools: convertTools(mode.tools) }
@@ -113,6 +114,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
     span.log({
       input: prompt,
       metadata: {
+        model: this.modelId,
         ...rest,
         ...("tools" in mode && mode.tools
           ? { tools: convertTools(mode.tools) }
@@ -141,7 +143,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
           }
         | undefined = undefined;
       let fullText: string | undefined = undefined;
-      let toolCalls: Record<string, LanguageModelV1FunctionToolCall> = {};
+      const toolCalls: Record<string, LanguageModelV1FunctionToolCall> = {};
       let finishReason: LanguageModelV1FinishReason | undefined = undefined;
       return {
         ...ret,
