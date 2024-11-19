@@ -1098,6 +1098,10 @@ function spanComponentsToObjectIdLambda(
       throw new Error(
         "Impossible: computeObjectMetadataArgs not supported for experiments",
       );
+    case SpanObjectTypeV3.PROMPT_SESSION:
+      throw new Error(
+        "Impossible: computeObjectMetadataArgs not supported for prompt sessions",
+      );
     case SpanObjectTypeV3.PROJECT_LOGS:
       return async () =>
         (
