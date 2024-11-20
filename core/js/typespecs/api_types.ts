@@ -121,18 +121,15 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
             `The total number of tokens in the input and output of the ${eventDescription} event.`,
           ),
         // Legacy non-numerical metrics.
-        caller_functionname: z
-          .unknown()
-          .nullish()
-          .describe("This metric is deprecated"),
-        caller_filename: z
-          .unknown()
-          .nullish()
-          .describe("This metric is deprecated"),
-        caller_lineno: z
-          .unknown()
-          .nullish()
-          .describe("This metric is deprecated"),
+        caller_functionname: customTypes.unknown.describe(
+          "This metric is deprecated",
+        ),
+        caller_filename: customTypes.unknown.describe(
+          "This metric is deprecated",
+        ),
+        caller_lineno: customTypes.unknown.describe(
+          "This metric is deprecated",
+        ),
       })
       // At some point in the past, we did not validate that all metrics were
       // numerical, so it's possible but highly unlikely that users have very
