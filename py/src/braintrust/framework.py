@@ -183,7 +183,10 @@ class BaseExperiment:
 
 
 _AnyEvalCase = Union[
-    EvalCase[Input, Output], _EvalCaseDict[Input, Output], _EvalCaseDictNoOutput[Input], _ExperimentDatasetEvent
+    EvalCase[Input, Output],
+    _EvalCaseDict[Input, Output],
+    _EvalCaseDictNoOutput[Input],
+    _ExperimentDatasetEvent,
 ]
 
 _EvalDataObject = Union[
