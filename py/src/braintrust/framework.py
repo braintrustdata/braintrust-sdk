@@ -22,6 +22,7 @@ from typing import (
     Iterator,
     List,
     Optional,
+    Sequence,
     Type,
     TypeVar,
     Union,
@@ -35,7 +36,16 @@ from tqdm.auto import tqdm as std_tqdm
 from typing_extensions import NotRequired, TypedDict
 
 from .git_fields import GitMetadataSettings, RepoInfo
-from .logger import NOOP_SPAN, Dataset, ExperimentSummary, Metadata, ScoreSummary, Span, stringify_exception
+from .logger import (
+    NOOP_SPAN,
+    Dataset,
+    ExperimentSummary,
+    Metadata,
+    ScoreSummary,
+    Span,
+    _ExperimentDatasetEvent,
+    stringify_exception,
+)
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
 from .span_types import SpanTypeAttribute
@@ -68,25 +78,35 @@ class EvalCase(SerializableDataClass, Generic[Input, Output]):
     input: Input
     expected: Optional[Output] = None
     metadata: Optional[Metadata] = None
-    tags: Optional[List[str]] = None
+    tags: Optional[Sequence[str]] = None
 
     # Id is only set if the EvalCase is part of a Dataset.
     id: Optional[str] = None
     _xact_id: Optional[str] = None
 
 
-class _EvalCaseDict(Generic[Input, Output], TypedDict):
+class _EvalCaseDictNoOutput(Generic[Input], TypedDict):
+    """
+    Workaround for the Pyright type checker handling of generics. Specifically,
+    the type checker doesn't know that a dict which is missing the key
+    "expected" can be used to satisfy `_EvalCaseDict[Input, Output]` for any
+    `Output` type.
+    """
+
+    input: Input
+    metadata: NotRequired[Optional[Metadata]]
+    tags: NotRequired[Optional[Sequence[str]]]
+
+    id: NotRequired[Optional[str]]
+    _xact_id: NotRequired[Optional[str]]
+
+
+class _EvalCaseDict(Generic[Input, Output], _EvalCaseDictNoOutput[Input]):
     """
     Mirrors EvalCase for callers who pass a dict instead of dataclass.
     """
 
-    input: Input
     expected: NotRequired[Optional[Output]]
-    metadata: NotRequired[Optional[Metadata]]
-    tags: NotRequired[Optional[List[str]]]
-
-    id: NotRequired[Optional[str]]
-    _xact_id: NotRequired[Optional[str]]
 
 
 # Inheritance doesn't quite work for dataclasses, so we redefine the fields
@@ -162,7 +182,9 @@ class BaseExperiment:
     """
 
 
-_AnyEvalCase = Union[EvalCase[Input, Output], _EvalCaseDict[Input, Output]]
+_AnyEvalCase = Union[
+    EvalCase[Input, Output], _EvalCaseDict[Input, Output], _EvalCaseDictNoOutput[Input], _ExperimentDatasetEvent
+]
 
 _EvalDataObject = Union[
     Iterable[_AnyEvalCase[Input, Output]],
@@ -1082,7 +1104,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             input=datum.input,
             expected=datum.expected,
             metadata=metadata,
-            tags=datum.tags,
+            tags=list(datum.tags) if datum.tags else None,
             output=output,
             scores=scores,
             error=error,

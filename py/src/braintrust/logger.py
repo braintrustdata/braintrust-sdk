@@ -2292,9 +2292,9 @@ class _ExperimentDatasetEvent(TypedDict):
 
     id: str
     _xact_id: str
-    input: NotRequired[Optional[Any]]
-    expected: NotRequired[Optional[Any]]
-    tags: NotRequired[Optional[Sequence[str]]]
+    input: Optional[Any]
+    expected: Optional[Any]
+    tags: Optional[Sequence[str]]
 
 
 class ExperimentDatasetIterator:
