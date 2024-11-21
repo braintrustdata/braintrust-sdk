@@ -199,6 +199,11 @@ _EvalDataObject = Union[
 
 EvalData = Union[_EvalDataObject[Input, Output], Type[_EvalDataObject[Input, Output]], Dataset]
 
+EvalTask = Union[
+    Callable[[Input], Union[Output, Awaitable[Output]]],
+    Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
+]
+
 
 @dataclasses.dataclass
 class Evaluator(Generic[Input, Output]):
@@ -221,16 +226,13 @@ class Evaluator(Generic[Input, Output]):
     A name that describes the experiment. You do not need to change it each time the experiment runs.
     """
 
-    data: EvalData
+    data: EvalData[Input, Output]
     """
     Returns an iterator over the evaluation dataset. Each element of the iterator should be an `EvalCase` or a dict
     with the same fields as an `EvalCase` (`input`, `expected`, `metadata`).
     """
 
-    task: Union[
-        Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
-        Callable[[Input], Union[Output, Awaitable[Output]]],
-    ]
+    task: EvalTask[Input, Output]
     """
     Runs the evaluation task on a single input. The `hooks` object can be used to add metadata to the evaluation.
     """
@@ -506,7 +508,7 @@ def _make_eval_name(name: str, experiment_name: Optional[str]):
 def _EvalCommon(
     name: str,
     data: EvalData[Input, Output],
-    task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
+    task: EvalTask[Input, Output],
     scores: List[EvalScorer[Input, Output]],
     experiment_name: Optional[str],
     trial_count: int,
@@ -605,7 +607,7 @@ def _EvalCommon(
 async def EvalAsync(
     name: str,
     data: EvalData[Input, Output],
-    task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
+    task: EvalTask[Input, Output],
     scores: List[EvalScorer[Input, Output]],
     experiment_name: Optional[str] = None,
     trial_count: int = 1,
@@ -695,7 +697,7 @@ _has_printed_eval_async_warning = False
 def Eval(
     name: str,
     data: EvalData[Input, Output],
-    task: Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
+    task: EvalTask[Input, Output],
     scores: List[EvalScorer[Input, Output]],
     experiment_name: Optional[str] = None,
     trial_count: int = 1,
