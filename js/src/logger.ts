@@ -765,11 +765,10 @@ export class Attachment {
    *
    * @param contentType The MIME type of the file.
    *
-   * @param (Optional) For internal use. Non-empty key to the attachment in blob
-   * storage, if this object represents an existing attachment. It is
+   * @param key (Optional) For internal use. Non-empty key to the attachment in
+   * blob storage, if this object represents an existing attachment. It is
    * recommended to use the convenience method {@link Attachment.fromReference}
    * instead of setting this parameter directly.
-
    *
    * @param state (Optional) For internal use.
    */
@@ -3401,7 +3400,7 @@ function extractAttachments(
  * Recursively hydrates any `AttachmentReference` into `Attachment` by modifying
  * the input in-place.
  *
- * @returns The same event as the input.
+ * @returns The same event instance as the input.
  */
 function enrichAttachments<T extends Record<string, any>>(event: T): T {
   for (const [key, value] of Object.entries(event)) {

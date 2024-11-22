@@ -1634,11 +1634,10 @@ def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
     """
     Recursively hydrates any `AttachmentReference` into `Attachment` by modifying the input in-place.
 
-    :returns: The same event as the input.
+    :returns: The same event instance as the input.
     """
 
     def _helper(v: Any) -> Any:
-
         if isinstance(v, Dict):
             # Base case: AttachmentReference.
             if v.get("type") == "braintrust_attachment":
@@ -2127,7 +2126,6 @@ class Attachment:
         return LazyValue(download, use_mutex=True)
 
     def _init_data(self, data: Union[str, bytes, bytearray]) -> LazyValue[bytes]:
-
         if isinstance(data, str):
 
             def read_file() -> bytes:
