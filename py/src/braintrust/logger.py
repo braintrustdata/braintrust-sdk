@@ -1996,17 +1996,7 @@ class Attachment:
 
         :returns: The attachment status.
         """
-        if self._is_upload:
-            return self._uploader.get()
-        else:
-            metadata = self._get_metadata()
-            try:
-                status = cast(AttachmentStatus, metadata["status"])
-                if not isinstance(status, dict):
-                    raise RuntimeError()
-                return status
-            except Exception as e:
-                raise RuntimeError(f"Invalid response from API server: {metadata}") from e
+        return self._uploader.get()
 
     def debug_info(self) -> Mapping[str, Any]:
         """
