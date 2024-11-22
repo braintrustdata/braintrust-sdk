@@ -2004,7 +2004,7 @@ class Attachment:
             try:
                 status = cast(AttachmentStatus, metadata["status"])
                 if not isinstance(status, dict):
-                    raise
+                    raise RuntimeError()
                 return status
             except Exception as e:
                 raise RuntimeError(f"Invalid response from API server: {metadata}") from e
@@ -2094,7 +2094,7 @@ class Attachment:
                 signed_url = metadata["downloadUrl"]
                 status = cast(AttachmentStatus, metadata["status"])
                 if not isinstance(signed_url, str) or not isinstance(status, dict):
-                    raise
+                    raise RuntimeError()
             except Exception as e:
                 raise RuntimeError(f"Invalid response from API server: {metadata}")
 
@@ -2119,7 +2119,7 @@ class Attachment:
             try:
                 status = cast(AttachmentStatus, metadata["status"])
                 if not isinstance(status, dict):
-                    raise
+                    raise RuntimeError()
                 return status
             except Exception as e:
                 raise RuntimeError(f"Invalid response from API server: {e} {metadata}") from e
@@ -2154,7 +2154,7 @@ class Attachment:
             resp.raise_for_status()
             metadata = resp.json()
             if not isinstance(metadata, dict):
-                raise
+                raise RuntimeError()
         except Exception as e:
             raise RuntimeError(f"Invalid response from API server: {e}") from e
 
