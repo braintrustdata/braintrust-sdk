@@ -45,7 +45,6 @@ import exceptiongroup
 import requests
 from braintrust_core.serializable_data_class import SerializableDataClass
 from requests.adapters import HTTPAdapter
-from typing_extensions import NotRequired
 from urllib3.util.retry import Retry
 
 from braintrust.functions.stream import BraintrustStream
