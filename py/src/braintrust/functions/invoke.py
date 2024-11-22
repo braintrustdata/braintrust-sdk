@@ -151,15 +151,13 @@ def invoke(
 
     headers = {"Accept": "text/event-stream" if stream else "application/json"}
 
-    resp = proxy_conn().post("function/invoke", json=request, headers=headers)
+    resp = proxy_conn().post("function/invoke", json=request, headers=headers, stream=stream)
     if resp.status_code == 500:
         raise BraintrustInvokeError(resp.text)
 
     response_raise_for_status(resp)
 
     if stream:
-        if not resp.content:
-            raise ValueError("Received empty stream body")
         return BraintrustStream(SSEClient(resp))
     else:
         return resp.json()
