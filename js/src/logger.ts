@@ -51,6 +51,8 @@ import {
   AttachmentReference,
   AttachmentStatus,
   BRAINTRUST_ATTACHMENT,
+  attachmentStatusSchema,
+  attachmentReferenceSchema,
 } from "@braintrust/core/typespecs";
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
 import {
@@ -726,6 +728,7 @@ export interface AttachmentParams {
   data: string | Blob | ArrayBuffer;
   filename: string;
   contentType: string;
+  key?: string;
   state?: BraintrustState;
 }
 
@@ -745,6 +748,7 @@ export class Attachment {
   private readonly uploader: LazyValue<AttachmentStatus>;
   private readonly _data: LazyValue<Blob>;
   private readonly state?: BraintrustState;
+  private readonly isUpload: boolean;
   // For debug logging only.
   private readonly dataDebugString: string;
 
@@ -761,26 +765,62 @@ export class Attachment {
    *
    * @param contentType The MIME type of the file.
    *
+   * @param (Optional) For internal use. Non-empty key to the attachment in blob
+   * storage, if this object represents an existing attachment. It is
+   * recommended to use the convenience method {@link Attachment.fromReference}
+   * instead of setting this parameter directly.
+
+   *
    * @param state (Optional) For internal use.
    */
-  constructor({ data, filename, contentType, state }: AttachmentParams) {
+  constructor({ data, filename, contentType, key, state }: AttachmentParams) {
     this.reference = {
       type: BRAINTRUST_ATTACHMENT,
       filename,
       content_type: contentType,
-      key: newId(),
+      key: key || newId(),
     };
     this.state = state;
     this.dataDebugString = typeof data === "string" ? data : "<in-memory data>";
 
-    this._data = this.initData(data);
-    this.uploader = this.initUploader();
+    this.isUpload = !key;
+    if (this.isUpload) {
+      this._data = this.initData(data);
+      this.uploader = this.initUploader();
+    } else {
+      this._data = this.initDownloader();
+      this.uploader = this.initStatusGetter();
+    }
+  }
+
+  /**
+   * Create an `Attachment` object from the given reference. Used for reading
+   * the contents of a previously uploaded attachment.
+   *
+   * @param reference The `AttachmentReference` that should be read by the
+   * `Attachment` object.
+   * @param state (Optional) For internal use.
+   * @returns The new `Attachment` object.
+   */
+  static fromReference(
+    reference: AttachmentReference,
+    state?: BraintrustState,
+  ): Attachment {
+    return new Attachment({
+      data: new Blob(), // Placeholder value will be ignored by the callee.
+      filename: reference.filename,
+      contentType: reference.content_type,
+      key: reference.key,
+      state,
+    });
   }
 
   /**
    * On first access, (1) reads the attachment from disk if needed, (2)
    * authenticates with the data plane to request a signed URL, (3) uploads to
-   * object store, and (4) updates the attachment.
+   * object store, and (4) updates the attachment. If this object represents an
+   * existing attachment, retrieves the attachment status from the server
+   * without performing any additional uploads.
    *
    * @returns The attachment status.
    */
@@ -789,7 +829,8 @@ export class Attachment {
   }
 
   /**
-   * The attachment contents. This is a lazy value that will read the attachment contents from disk or memory on first access.
+   * The attachment contents. This is a lazy value that will read the attachment
+   * contents from disk, memory, or the object store on first access.
    */
   async data() {
     return this._data.get();
@@ -912,6 +953,32 @@ export class Attachment {
     return new LazyValue(errorWrapper);
   }
 
+  private initDownloader(): LazyValue<Blob> {
+    const download = async () => {
+      const { downloadUrl, status } = await this.getMetadata();
+
+      if (status.upload_status !== "done") {
+        throw new Error(
+          `Expected attachment status "done", got "${status.upload_status}"`,
+        );
+      }
+
+      const objResponse = await fetch(downloadUrl);
+      if (objResponse.status !== 200) {
+        const error = await objResponse.text();
+        throw new Error(`Couldn't download attachment: ${error}`);
+      }
+
+      return await objResponse.blob();
+    };
+
+    return new LazyValue(download);
+  }
+
+  private initStatusGetter(): LazyValue<AttachmentStatus> {
+    return new LazyValue(async () => (await this.getMetadata()).status);
+  }
+
   private initData(data: string | Blob | ArrayBuffer): LazyValue<Blob> {
     if (typeof data === "string") {
       const readFile = iso.readFile;
@@ -926,6 +993,29 @@ with a Blob/ArrayBuffer, or run the program on Node.js.`,
     } else {
       return new LazyValue(async () => new Blob([data]));
     }
+  }
+
+  private async getMetadata() {
+    const state = this.state ?? _globalState;
+    await state.login({});
+
+    const resp = await state.apiConn().get("/attachment", {
+      key: this.reference.key,
+      filename: this.reference.filename,
+      content_type: this.reference.content_type,
+      org_id: state.orgId || "",
+    });
+    if (!resp.ok) {
+      const errorStr = JSON.stringify(resp);
+      throw new Error(`Invalid response from API server: ${errorStr}`);
+    }
+
+    return z
+      .object({
+        downloadUrl: z.string(),
+        status: attachmentStatusSchema,
+      })
+      .parse(await resp.json());
   }
 }
 
@@ -3307,6 +3397,33 @@ function extractAttachments(
   }
 }
 
+/**
+ * Recursively hydrates any `AttachmentReference` into `Attachment` by modifying
+ * the input in-place.
+ *
+ * @returns The same event as the input.
+ */
+function enrichAttachments<T extends Record<string, any>>(event: T): T {
+  for (const [key, value] of Object.entries(event)) {
+    // Base case: AttachmentReference.
+    const parsedValue = attachmentReferenceSchema.safeParse(value);
+    if (parsedValue.success) {
+      (event as any)[key] = Attachment.fromReference(parsedValue.data);
+      continue;
+    }
+
+    // Base case: non-object.
+    if (!(value instanceof Object)) {
+      continue;
+    }
+
+    // Recursive case: object or array:
+    enrichAttachments(value);
+  }
+
+  return event;
+}
+
 // Note that this only checks properties that are expected of a complete event.
 // validateAndSanitizeExperimentLogPartialArgs should still be invoked (after
 // handling special fields like 'id').
@@ -3459,7 +3576,7 @@ export class Experiment
     lazyMetadata: LazyValue<ProjectExperimentMetadata>,
     dataset?: AnyDataset,
   ) {
-    super("experiment", undefined);
+    super("experiment", undefined, enrichAttachments);
     this.lazyMetadata = lazyMetadata;
     this.dataset = dataset;
     this.lastStartTime = getCurrentUnixTimestamp();
@@ -3752,7 +3869,7 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     private state: BraintrustState,
     private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>,
   ) {
-    super("experiment", undefined);
+    super("experiment", undefined, enrichAttachments);
   }
 
   public get id(): Promise<string> {
@@ -4137,7 +4254,7 @@ export class Dataset<
       );
     }
     super("dataset", pinnedVersion, (r: AnyDatasetRecord) =>
-      ensureDatasetRecord(r, isLegacyDataset),
+      ensureDatasetRecord(enrichAttachments(r), isLegacyDataset),
     );
     this.lazyMetadata = lazyMetadata;
   }

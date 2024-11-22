@@ -28,6 +28,7 @@ from typing import (
     List,
     Literal,
     Mapping,
+    MutableMapping,
     Optional,
     Sequence,
     Set,
@@ -94,6 +95,8 @@ Metadata = Dict[str, Any]
 DATA_API_VERSION = 2
 
 T = TypeVar("T")
+TMapping = TypeVar("TMapping", bound=Mapping[str, Any])
+TMutableMapping = TypeVar("TMutableMapping", bound=MutableMapping[str, Any])
 
 
 class Exportable(ABC):
@@ -1627,6 +1630,40 @@ def _extract_attachments(event: Dict[str, Any], attachments: List["Attachment"])
         event[k] = _helper(v)
 
 
+def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
+    """
+    Recursively hydrates any `AttachmentReference` into `Attachment` by modifying the input in-place.
+
+    :returns: The same event as the input.
+    """
+
+    def _helper(v: Any) -> Any:
+
+        if isinstance(v, Dict):
+            # Base case: AttachmentReference.
+            if v.get("type") == "braintrust_attachment":
+                return Attachment.from_reference(cast(AttachmentReference, v))
+            else:
+                # Recursive case: object.
+                for k, v2 in v.items():
+                    v[k] = _helper(v2)
+                return v
+
+        # Recursive case: array.
+        if isinstance(v, List):
+            for i in range(len(v)):
+                v[i] = _helper(v[i])
+            return v
+
+        # Base case: non object.
+        return v  # Nothing to explore recursively.
+
+    for k, v in event.items():
+        event[k] = _helper(v)
+
+    return event
+
+
 def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any]) -> Dict[str, Any]:
     # Make sure only certain keys are specified.
     forbidden_keys = set(event.keys()) - {
@@ -1791,15 +1828,12 @@ class ObjectIterator(Generic[T]):
         return value
 
 
-TDict = TypeVar("TDict", bound=Mapping[str, Any])
-
-
-class ObjectFetcher(ABC, Generic[TDict]):
+class ObjectFetcher(ABC, Generic[TMapping]):
     def __init__(
         self,
         object_type: str,
         pinned_version: Union[None, int, str] = None,
-        mutate_record: Optional[Callable[[TDict], TDict]] = None,
+        mutate_record: Optional[Callable[[TMapping], TMapping]] = None,
     ):
         self.object_type = object_type
 
@@ -1813,9 +1847,9 @@ class ObjectFetcher(ABC, Generic[TDict]):
         self._pinned_version = str(pinned_version) if pinned_version is not None else None
         self._mutate_record = mutate_record
 
-        self._fetched_data: Optional[List[TDict]] = None
+        self._fetched_data: Optional[List[TMapping]] = None
 
-    def fetch(self) -> Iterator[TDict]:
+    def fetch(self) -> Iterator[TMapping]:
         """
         Fetch all records.
 
@@ -1832,7 +1866,7 @@ class ObjectFetcher(ABC, Generic[TDict]):
         """
         return ObjectIterator(self._refetch)
 
-    def __iter__(self) -> Iterator[TDict]:
+    def __iter__(self) -> Iterator[TMapping]:
         return self.fetch()
 
     @property
@@ -1851,7 +1885,7 @@ class ObjectFetcher(ABC, Generic[TDict]):
     def id(self) -> str:
         ...
 
-    def _refetch(self) -> Sequence[TDict]:
+    def _refetch(self) -> List[TMapping]:
         state = self._get_state()
         if self._fetched_data is None:
             resp = state.api_conn().get(
@@ -1864,7 +1898,7 @@ class ObjectFetcher(ABC, Generic[TDict]):
                 },
             )
             response_raise_for_status(resp)
-            data = cast(List[TDict], resp.json()["events"])
+            data = cast(List[TMapping], resp.json()["events"])
             if not isinstance(data, list):
                 raise ValueError(f"Expected a list in the response, got {type(data)}")
 
@@ -1902,6 +1936,7 @@ class Attachment:
         data: Union[str, bytes, bytearray],
         filename: str,
         content_type: str,
+        key: Optional[str] = None,
     ):
         """
         Construct an attachment.
@@ -1911,17 +1946,40 @@ class Attachment:
         :param filename: The desired name of the file in Braintrust after uploading. This parameter is for visualization purposes only and has no effect on attachment storage.
 
         :param content_type: The MIME type of the file.
+
+        :param key: (Optional) For internal use. Non-empty key to the attachment in blob storage, if this object represents an existing attachment. It is recommended to use the convenience method `Attachment.from_reference` instead of setting this parameter directly.
         """
         self._reference: AttachmentReference = {
             "type": "braintrust_attachment",
             "filename": filename,
             "content_type": content_type,
-            "key": str(uuid.uuid4()),
+            "key": key or str(uuid.uuid4()),
         }
         self._data_debug_string = data if isinstance(data, str) else "<in-memory data>"
 
-        self._data = self._init_data(data)
-        self._uploader = self._init_uploader()
+        self._is_upload = not key
+        if self._is_upload:
+            self._data = self._init_data(data)
+            self._uploader = self._init_uploader()
+        else:
+            self._data = self._init_downloader()
+            self._uploader = self._init_status_getter()
+
+    @classmethod
+    def from_reference(cls, reference: AttachmentReference) -> "Attachment":
+        """
+        Create an `Attachment` object from the given reference. Used for reading the contents of a previously uploaded attachment.
+
+        :param reference: The `AttachmentReference` that should be read by the `Attachment` object.
+
+        :returns: The new `Attachment` object.
+        """
+        return Attachment(
+            data=b"",  # Placeholder value will be ignored by the callee.
+            filename=reference["filename"],
+            content_type=reference["content_type"],
+            key=reference["key"],
+        )
 
     @property
     def reference(self) -> AttachmentReference:
@@ -1930,16 +1988,26 @@ class Attachment:
 
     @property
     def data(self) -> bytes:
-        """The attachment contents. This is a lazy value that will read the attachment contents from disk or memory on first access."""
+        """The attachment contents. This is a lazy value that will read the attachment contents from disk, memory, or the object store on first access."""
         return self._data.get()
 
     def upload(self) -> AttachmentStatus:
         """
-        On first access, (1) reads the attachment from disk if needed, (2) authenticates with the data plane to request a signed URL, (3) uploads to object store, and (4) updates the attachment.
+        On first access, (1) reads the attachment from disk if needed, (2) authenticates with the data plane to request a signed URL, (3) uploads to object store, and (4) updates the attachment. If this object represents an existing attachment, retrieves the attachment status from the server without performing any additional uploads.
 
         :returns: The attachment status.
         """
-        return self._uploader.get()
+        if self._is_upload:
+            return self._uploader.get()
+        else:
+            metadata = self._get_metadata()
+            try:
+                status = cast(AttachmentStatus, metadata["status"])
+                if not isinstance(status, dict):
+                    raise
+                return status
+            except Exception as e:
+                raise RuntimeError(f"Invalid response from API server: {metadata}") from e
 
     def debug_info(self) -> Mapping[str, Any]:
         """
@@ -2019,7 +2087,47 @@ class Attachment:
 
         return LazyValue(error_wrapper, use_mutex=True)
 
+    def _init_downloader(self) -> LazyValue[bytes]:
+        def download() -> bytes:
+            metadata = self._get_metadata()
+            try:
+                signed_url = metadata["downloadUrl"]
+                status = cast(AttachmentStatus, metadata["status"])
+                if not isinstance(signed_url, str) or not isinstance(status, dict):
+                    raise
+            except Exception as e:
+                raise RuntimeError(f"Invalid response from API server: {metadata}")
+
+            try:
+                if status["upload_status"] != "done":
+                    raise RuntimeError(f"""Expected attachment status "done", got \"{status["upload_status"]}\"""")
+
+                obj_conn = HTTPConnection(base_url="", adapter=_http_adapter)
+                obj_response = obj_conn.get(signed_url)
+                obj_response.raise_for_status()
+            except Exception as e:
+                raise RuntimeError(f"Couldn't download attachment: {e}") from e
+
+            return obj_response.content
+
+        return LazyValue(download, use_mutex=True)
+
+    def _init_status_getter(self) -> LazyValue[AttachmentStatus]:
+        def download() -> AttachmentStatus:
+            metadata = self._get_metadata()
+
+            try:
+                status = cast(AttachmentStatus, metadata["status"])
+                if not isinstance(status, dict):
+                    raise
+                return status
+            except Exception as e:
+                raise RuntimeError(f"Invalid response from API server: {e} {metadata}") from e
+
+        return LazyValue(download, use_mutex=True)
+
     def _init_data(self, data: Union[str, bytes, bytearray]) -> LazyValue[bytes]:
+
         if isinstance(data, str):
 
             def read_file() -> bytes:
@@ -2029,6 +2137,28 @@ class Attachment:
             return LazyValue(read_file, use_mutex=True)
         else:
             return LazyValue(lambda: bytes(data), use_mutex=False)
+
+    def _get_metadata(self) -> Dict[str, Any]:
+        login()
+
+        try:
+            resp = _state.api_conn().get(
+                "/attachment",
+                params={
+                    "key": self.reference["key"],
+                    "filename": self.reference["filename"],
+                    "content_type": self.reference["content_type"],
+                    "org_id": _state.org_id or "",
+                },
+            )
+            resp.raise_for_status()
+            metadata = resp.json()
+            if not isinstance(metadata, dict):
+                raise
+        except Exception as e:
+            raise RuntimeError(f"Invalid response from API server: {e}") from e
+
+        return metadata
 
 
 def _log_feedback_impl(
@@ -2348,7 +2478,12 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         self._lazy_id = LazyValue(lambda: self.id, use_mutex=False)
         self._called_start_span = False
 
-        ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
+        ObjectFetcher.__init__(
+            self,
+            object_type="experiment",
+            pinned_version=None,
+            mutate_record=_enrich_attachments,
+        )
 
     @property
     def id(self) -> str:
@@ -2649,7 +2784,12 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
     ):
         self._lazy_metadata = lazy_metadata
 
-        ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
+        ObjectFetcher.__init__(
+            self,
+            object_type="experiment",
+            pinned_version=None,
+            mutate_record=_enrich_attachments,
+        )
 
     @property
     def id(self) -> str:
@@ -2979,7 +3119,10 @@ class Dataset(ObjectFetcher[DatasetEvent]):
             eprint(
                 f"""Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use `braintrust.init_dataset()` with `use_output=False`, which will become the default in a future version of Braintrust."""
             )
-        mutate_record: Callable[[DatasetEvent], DatasetEvent] = lambda r: ensure_dataset_record(r, legacy)
+
+        def mutate_record(r: DatasetEvent) -> DatasetEvent:
+            _enrich_attachments(cast(Dict[str, Any], r))
+            return ensure_dataset_record(r, legacy)
 
         self._lazy_metadata = lazy_metadata
         self.new_records = 0
