@@ -755,22 +755,24 @@ export class Attachment {
   /**
    * Construct an attachment.
    *
-   * @param data A string representing the path of the file on disk, or a
+   * @param param A parameter object with:
+   *
+   * `data`: A string representing the path of the file on disk, or a
    * `Blob`/`ArrayBuffer` with the file's contents. The caller is responsible
    * for ensuring the file/blob/buffer is not modified until upload is complete.
    *
-   * @param filename The desired name of the file in Braintrust after uploading.
+   * `filename`: The desired name of the file in Braintrust after uploading.
    * This parameter is for visualization purposes only and has no effect on
    * attachment storage.
    *
-   * @param contentType The MIME type of the file.
+   * `contentType`: The MIME type of the file.
    *
-   * @param key (Optional) For internal use. Non-empty key to the attachment in
+   * `key`: (Optional) For internal use. Non-empty key to the attachment in
    * blob storage, if this object represents an existing attachment. It is
    * recommended to use the convenience method {@link Attachment.fromReference}
    * instead of setting this parameter directly.
    *
-   * @param state (Optional) For internal use.
+   * `state`: (Optional) For internal use.
    */
   constructor({ data, filename, contentType, key, state }: AttachmentParams) {
     this.reference = {
