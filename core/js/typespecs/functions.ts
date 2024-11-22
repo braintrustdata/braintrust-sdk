@@ -140,6 +140,12 @@ export const invokeFunctionNonIdArgsSchema = z.object({
   mode: streamingModeEnum
     .nullish()
     .describe("The mode format of the returned value (defaults to 'auto')"),
+  tool_choice: z
+    .enum(["auto", "required"])
+    .nullish()
+    .describe(
+      "If the function is an LLM, the tool_choice to use (defaults to 'auto')",
+    ),
 });
 
 export const invokeFunctionSchema = functionIdSchema
