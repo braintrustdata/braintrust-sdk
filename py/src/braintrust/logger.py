@@ -46,7 +46,6 @@ import exceptiongroup
 import requests
 from braintrust_core.serializable_data_class import SerializableDataClass
 from requests.adapters import HTTPAdapter
-from typing_extensions import NotRequired
 from urllib3.util.retry import Retry
 
 from braintrust.functions.stream import BraintrustStream
@@ -2410,9 +2409,9 @@ class _ExperimentDatasetEvent(TypedDict):
 
     id: str
     _xact_id: str
-    input: NotRequired[Optional[Any]]
-    expected: NotRequired[Optional[Any]]
-    tags: NotRequired[Optional[Sequence[str]]]
+    input: Optional[Any]
+    expected: Optional[Any]
+    tags: Optional[Sequence[str]]
 
 
 class ExperimentDatasetIterator:
