@@ -728,7 +728,6 @@ export interface AttachmentParams {
   data: string | Blob | ArrayBuffer;
   filename: string;
   contentType: string;
-  key?: string;
   state?: BraintrustState;
 }
 
@@ -748,7 +747,6 @@ export class Attachment {
   private readonly uploader: LazyValue<AttachmentStatus>;
   private readonly _data: LazyValue<Blob>;
   private readonly state?: BraintrustState;
-  private readonly isUpload: boolean;
   // For debug logging only.
   private readonly dataDebugString: string;
 
@@ -767,61 +765,26 @@ export class Attachment {
    *
    * `contentType`: The MIME type of the file.
    *
-   * `key`: (Optional) For internal use. Non-empty key to the attachment in
-   * blob storage, if this object represents an existing attachment. It is
-   * recommended to use the convenience method {@link Attachment.fromReference}
-   * instead of setting this parameter directly.
-   *
    * `state`: (Optional) For internal use.
    */
-  constructor({ data, filename, contentType, key, state }: AttachmentParams) {
+  constructor({ data, filename, contentType, state }: AttachmentParams) {
     this.reference = {
       type: BRAINTRUST_ATTACHMENT,
       filename,
       content_type: contentType,
-      key: key || newId(),
+      key: newId(),
     };
     this.state = state;
     this.dataDebugString = typeof data === "string" ? data : "<in-memory data>";
 
-    this.isUpload = !key;
-    if (this.isUpload) {
-      this._data = this.initData(data);
-      this.uploader = this.initUploader();
-    } else {
-      this._data = this.initDownloader();
-      this.uploader = this.initStatusGetter();
-    }
-  }
-
-  /**
-   * Create an `Attachment` object from the given reference. Used for reading
-   * the contents of a previously uploaded attachment.
-   *
-   * @param reference The `AttachmentReference` that should be read by the
-   * `Attachment` object.
-   * @param state (Optional) For internal use.
-   * @returns The new `Attachment` object.
-   */
-  static fromReference(
-    reference: AttachmentReference,
-    state?: BraintrustState,
-  ): Attachment {
-    return new Attachment({
-      data: new Blob(), // Placeholder value will be ignored by the callee.
-      filename: reference.filename,
-      contentType: reference.content_type,
-      key: reference.key,
-      state,
-    });
+    this._data = this.initData(data);
+    this.uploader = this.initUploader();
   }
 
   /**
    * On first access, (1) reads the attachment from disk if needed, (2)
    * authenticates with the data plane to request a signed URL, (3) uploads to
-   * object store, and (4) updates the attachment. If this object represents an
-   * existing attachment, retrieves the attachment status from the server
-   * without performing any additional uploads.
+   * object store, and (4) updates the attachment.
    *
    * @returns The attachment status.
    */
@@ -830,8 +793,7 @@ export class Attachment {
   }
 
   /**
-   * The attachment contents. This is a lazy value that will read the attachment
-   * contents from disk, memory, or the object store on first access.
+   * The attachment contents. This is a lazy value that will read the attachment contents from disk or memory on first access.
    */
   async data() {
     return this._data.get();
@@ -954,9 +916,76 @@ export class Attachment {
     return new LazyValue(errorWrapper);
   }
 
+  private initData(data: string | Blob | ArrayBuffer): LazyValue<Blob> {
+    if (typeof data === "string") {
+      const readFile = iso.readFile;
+      if (!readFile) {
+        throw new Error(
+          `This platform does not support reading the filesystem. Construct the Attachment
+with a Blob/ArrayBuffer, or run the program on Node.js.`,
+        );
+      }
+      // This could stream the file in the future.
+      return new LazyValue(async () => new Blob([await readFile(data)]));
+    } else {
+      return new LazyValue(async () => new Blob([data]));
+    }
+  }
+}
+
+const attachmentMetadataSchema = z.object({
+  downloadUrl: z.string(),
+  status: attachmentStatusSchema,
+});
+
+type AttachmentMetadata = z.infer<typeof attachmentMetadataSchema>;
+
+/**
+ * A readonly alternative to `Attachment`, which can be used for fetching
+ * already-uploaded Attachments.
+ */
+export class ReadonlyAttachment {
+  /**
+   * Attachment metadata.
+   */
+  readonly reference: AttachmentReference;
+
+  private readonly _data: LazyValue<Blob>;
+  private readonly state?: BraintrustState;
+
+  /**
+   * Construct a ReadonlyAttachment.
+   *
+   * @param reference The `AttachmentReference` that should be read by the
+   * `ReadonlyAttachment` object.
+   * @param state (Optional) For internal use.
+   * @returns The new `ReadonlyAttachment` object.
+   */
+  constructor(reference: AttachmentReference, state?: BraintrustState) {
+    this.reference = reference;
+    this.state = state;
+    this._data = this.initDownloader();
+  }
+
+  /**
+   * The attachment contents. This is a lazy value that will read the attachment
+   * contents from the object store on first access.
+   */
+  async data() {
+    return this._data.get();
+  }
+
+  /**
+   * Fetch the attachment upload status. This will re-fetch the status each time
+   * in case it changes over time.
+   */
+  async status(): Promise<AttachmentStatus> {
+    return (await this.fetchMetadata()).status;
+  }
+
   private initDownloader(): LazyValue<Blob> {
     const download = async () => {
-      const { downloadUrl, status } = await this.getMetadata();
+      const { downloadUrl, status } = await this.fetchMetadata();
 
       if (status.upload_status !== "done") {
         throw new Error(
@@ -976,27 +1005,7 @@ export class Attachment {
     return new LazyValue(download);
   }
 
-  private initStatusGetter(): LazyValue<AttachmentStatus> {
-    return new LazyValue(async () => (await this.getMetadata()).status);
-  }
-
-  private initData(data: string | Blob | ArrayBuffer): LazyValue<Blob> {
-    if (typeof data === "string") {
-      const readFile = iso.readFile;
-      if (!readFile) {
-        throw new Error(
-          `This platform does not support reading the filesystem. Construct the Attachment
-with a Blob/ArrayBuffer, or run the program on Node.js.`,
-        );
-      }
-      // This could stream the file in the future.
-      return new LazyValue(async () => new Blob([await readFile(data)]));
-    } else {
-      return new LazyValue(async () => new Blob([data]));
-    }
-  }
-
-  private async getMetadata() {
+  private async fetchMetadata(): Promise<AttachmentMetadata> {
     const state = this.state ?? _globalState;
     await state.login({});
 
@@ -1011,12 +1020,7 @@ with a Blob/ArrayBuffer, or run the program on Node.js.`,
       throw new Error(`Invalid response from API server: ${errorStr}`);
     }
 
-    return z
-      .object({
-        downloadUrl: z.string(),
-        status: attachmentStatusSchema,
-      })
-      .parse(await resp.json());
+    return attachmentMetadataSchema.parse(await resp.json());
   }
 }
 
@@ -3409,7 +3413,7 @@ function enrichAttachments<T extends Record<string, any>>(event: T): T {
     // Base case: AttachmentReference.
     const parsedValue = attachmentReferenceSchema.safeParse(value);
     if (parsedValue.success) {
-      (event as any)[key] = Attachment.fromReference(parsedValue.data);
+      (event as any)[key] = new ReadonlyAttachment(parsedValue.data);
       continue;
     }
 
