@@ -24,6 +24,7 @@ from ..framework import (
     run_evaluator,
     set_thread_pool_max_workers,
 )
+from ..logger import Dataset
 from ..util import eprint
 
 INCLUDE = [
@@ -127,13 +128,25 @@ async def run_evaluator_task(evaluator, position, opts: EvaluatorOpts):
         base_experiment_name = None
         if isinstance(evaluator.data, BaseExperiment):
             base_experiment_name = evaluator.data.name
+
+        dataset = None
+        if isinstance(evaluator.data, Dataset):
+            dataset = evaluator.data
+
+        # NOTE: This code is duplicated with _EvalCommon in py/src/braintrust/framework.py.
+        # Make sure to update those arguments if you change this.
         experiment = init_experiment(
-            evaluator.project_name,
-            evaluator.experiment_name,
+            project_name=evaluator.project_name,
+            project_id=evaluator.project_id,
+            experiment_name=evaluator.experiment_name,
             metadata=evaluator.metadata,
             is_public=evaluator.is_public,
             update=evaluator.update,
             base_experiment=base_experiment_name,
+            base_experiment_id=evaluator.base_experiment_id,
+            git_metadata_settings=evaluator.git_metadata_settings,
+            repo_info=evaluator.repo_info,
+            dataset=dataset,
         )
 
     try:

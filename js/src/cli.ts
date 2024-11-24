@@ -13,9 +13,10 @@ import { v4 as uuidv4 } from "uuid";
 import pluralize from "pluralize";
 import {
   login,
-  init as initExperiment,
+  init as _initExperiment,
   Experiment,
   BaseMetadata,
+  Dataset,
 } from "./logger";
 import {
   BarProgressReporter,
@@ -98,16 +99,29 @@ function evaluateBuildResults(
   return loadModule({ inFile, moduleText });
 }
 
-async function initLogger(
-  projectName: string,
-  experimentName?: string,
-  metadata?: Record<string, unknown>,
-  baseExperiment?: string,
+async function initExperiment(
+  evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>,
 ) {
-  const logger = initExperiment(projectName, {
-    experiment: experimentName,
-    metadata,
-    baseExperiment,
+  const { data, baseExperiment: defaultBaseExperiment } = callEvaluatorData(
+    evaluator.data,
+  );
+  // NOTE: This code is duplicated with initExperiment in js/src/framework.ts.
+  // Make sure to update that if you change this.
+  const logger = _initExperiment({
+    state: evaluator.state,
+    ...(evaluator.projectId
+      ? { projectId: evaluator.projectId }
+      : { project: evaluator.projectName }),
+    experiment: evaluator.experimentName,
+    metadata: evaluator.metadata,
+    isPublic: evaluator.isPublic,
+    update: evaluator.update,
+    baseExperiment: evaluator.baseExperimentName ?? defaultBaseExperiment,
+    baseExperimentId: evaluator.baseExperimentId,
+    gitMetadataSettings: evaluator.gitMetadataSettings,
+    repoInfo: evaluator.repoInfo,
+    dataset: data instanceof Dataset ? data : undefined,
+    setCurrent: false,
   });
   const info = await logger.summarize({ summarizeScores: false });
   console.error(
@@ -198,6 +212,7 @@ function buildWatchPluginForEvaluator(
         for (const evaluator of Object.values(evalResult.evaluators)) {
           evaluators.evaluators.push({
             sourceFile: inFile,
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
             evaluator: evaluator.evaluator as EvaluatorDef<
               unknown,
               unknown,
@@ -224,7 +239,7 @@ function buildWatchPluginForEvaluator(
           const { evaluator, reporter } = evaluatorDef;
           const logger = opts.noSendLogs
             ? null
-            : await initLogger(
+            : await initExperiment(
                 evaluator.projectName,
                 evaluator.experimentName,
                 evaluator.metadata,
@@ -504,7 +519,7 @@ async function runOnce(
     // can name the experiment/evaluation within the run the evaluator's name.
     const logger = opts.noSendLogs
       ? null
-      : await initLogger(
+      : await initExperiment(
           evaluator.evaluator.projectName,
           evaluator.evaluator.experimentName,
           evaluator.evaluator.metadata,
