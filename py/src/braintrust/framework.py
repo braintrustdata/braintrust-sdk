@@ -556,7 +556,6 @@ def _EvalCommon(
     )
 
     if _lazy_load:
-        print("SAVING EVALUATOR")
         _evals.evaluators[eval_name] = EvaluatorInstance(evaluator=evaluator, reporter=reporter)
 
         # Better to return this empty object than have an annoying-to-use signature.
@@ -579,6 +578,8 @@ def _EvalCommon(
         if isinstance(evaluator.data, Dataset):
             dataset = evaluator.data
 
+        # NOTE: This code is duplicated with run_evaluator_task in py/src/braintrust/cli/eval.py.
+        # Make sure to update those arguments if you change this.
         experiment = init_experiment(
             project_name=evaluator.project_name if evaluator.project_id is None else None,
             project_id=evaluator.project_id,
