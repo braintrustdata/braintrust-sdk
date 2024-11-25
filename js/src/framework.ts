@@ -439,6 +439,8 @@ export async function Eval<
     const { data, baseExperiment: defaultBaseExperiment } = callEvaluatorData(
       evaluator.data,
     );
+    // NOTE: This code is duplicated with initExperiment in js/src/cli.ts. Make sure
+    // to update that if you change this.
     const experiment = initExperiment(evaluator.state, {
       ...(evaluator.projectId
         ? { projectId: evaluator.projectId }

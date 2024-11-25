@@ -13,9 +13,10 @@ import { v4 as uuidv4 } from "uuid";
 import pluralize from "pluralize";
 import {
   login,
-  init as initExperiment,
+  init as _initExperiment,
   Experiment,
   BaseMetadata,
+  Dataset,
 } from "./logger";
 import {
   BarProgressReporter,
@@ -25,6 +26,7 @@ import {
 
 // Re-use the module resolution logic from Jest
 import {
+  EvalData,
   EvaluatorDef,
   EvaluatorFile,
   Filter,
@@ -98,16 +100,31 @@ function evaluateBuildResults(
   return loadModule({ inFile, moduleText });
 }
 
-async function initLogger(
-  projectName: string,
-  experimentName?: string,
-  metadata?: Record<string, unknown>,
-  baseExperiment?: string,
+async function initExperiment(
+  evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>,
+  evaluatorData: {
+    data: EvalData<unknown, unknown, BaseMetadata>;
+    baseExperiment: string | undefined;
+  },
 ) {
-  const logger = initExperiment(projectName, {
-    experiment: experimentName,
-    metadata,
-    baseExperiment,
+  const { data, baseExperiment: defaultBaseExperiment } = evaluatorData;
+  // NOTE: This code is duplicated with initExperiment in js/src/framework.ts.
+  // Make sure to update that if you change this.
+  const logger = _initExperiment({
+    state: evaluator.state,
+    ...(evaluator.projectId
+      ? { projectId: evaluator.projectId }
+      : { project: evaluator.projectName }),
+    experiment: evaluator.experimentName,
+    metadata: evaluator.metadata,
+    isPublic: evaluator.isPublic,
+    update: evaluator.update,
+    baseExperiment: evaluator.baseExperimentName ?? defaultBaseExperiment,
+    baseExperimentId: evaluator.baseExperimentId,
+    gitMetadataSettings: evaluator.gitMetadataSettings,
+    repoInfo: evaluator.repoInfo,
+    dataset: data instanceof Dataset ? data : undefined,
+    setCurrent: false,
   });
   const info = await logger.summarize({ summarizeScores: false });
   console.error(
@@ -198,6 +215,7 @@ function buildWatchPluginForEvaluator(
         for (const evaluator of Object.values(evalResult.evaluators)) {
           evaluators.evaluators.push({
             sourceFile: inFile,
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
             evaluator: evaluator.evaluator as EvaluatorDef<
               unknown,
               unknown,
@@ -222,16 +240,16 @@ function buildWatchPluginForEvaluator(
         > = {};
         for (const evaluatorDef of Object.values(evalResult.evaluators)) {
           const { evaluator, reporter } = evaluatorDef;
+          const evalData = callEvaluatorData(evaluator.data);
           const logger = opts.noSendLogs
             ? null
-            : await initLogger(
-                evaluator.projectName,
-                evaluator.experimentName,
-                evaluator.metadata,
-              );
+            : await initExperiment(evaluator, evalData);
           const evaluatorResult = await runEvaluator(
             logger,
-            evaluator,
+            {
+              ...evaluator,
+              data: evalData.data,
+            },
             opts.progressReporter,
             opts.filters,
           );
@@ -310,6 +328,7 @@ async function initFile({
         };
         return { type: "success", result, evaluator, sourceFile: inFile };
       } catch (e) {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         return { type: "failure", error: e as Error, sourceFile: inFile };
       }
     },
@@ -404,6 +423,7 @@ function updateEvaluators(
     for (const evaluator of Object.values(result.evaluator.evaluators)) {
       evaluators.evaluators.push({
         sourceFile: result.sourceFile,
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         evaluator: evaluator.evaluator as EvaluatorDef<
           unknown,
           unknown,
@@ -496,26 +516,19 @@ async function runOnce(
   const evalToExperiment: Record<string, Record<string, Experiment>> = {};
 
   const resultPromises = evaluators.evaluators.map(async (evaluator) => {
-    const { data, baseExperiment } = callEvaluatorData(
-      evaluator.evaluator.data,
-    );
+    const evalData = callEvaluatorData(evaluator.evaluator.data);
     // TODO: For now, use the eval name as the project. However, we need to evolve
     // the definition of a project and create a new concept called run, so that we
     // can name the experiment/evaluation within the run the evaluator's name.
     const logger = opts.noSendLogs
       ? null
-      : await initLogger(
-          evaluator.evaluator.projectName,
-          evaluator.evaluator.experimentName,
-          evaluator.evaluator.metadata,
-          baseExperiment,
-        );
+      : await initExperiment(evaluator.evaluator, evalData);
     try {
       return await runEvaluator(
         logger,
         {
           ...evaluator.evaluator,
-          data,
+          data: evalData.data,
         },
         opts.progressReporter,
         opts.filters,
@@ -554,6 +567,7 @@ async function runOnce(
 
     const report = resolvedReporter.reportEval(
       evaluator.evaluator,
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       allEvalsResults[idx as number],
       {
         verbose: opts.verbose,
