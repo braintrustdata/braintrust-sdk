@@ -28,6 +28,7 @@ from typing import (
     List,
     Literal,
     Mapping,
+    MutableMapping,
     Optional,
     Sequence,
     Set,
@@ -93,6 +94,8 @@ Metadata = Dict[str, Any]
 DATA_API_VERSION = 2
 
 T = TypeVar("T")
+TMapping = TypeVar("TMapping", bound=Mapping[str, Any])
+TMutableMapping = TypeVar("TMutableMapping", bound=MutableMapping[str, Any])
 
 
 class Exportable(ABC):
@@ -1626,6 +1629,39 @@ def _extract_attachments(event: Dict[str, Any], attachments: List["Attachment"])
         event[k] = _helper(v)
 
 
+def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
+    """
+    Recursively hydrates any `AttachmentReference` into `Attachment` by modifying the input in-place.
+
+    :returns: The same event instance as the input.
+    """
+
+    def _helper(v: Any) -> Any:
+        if isinstance(v, Dict):
+            # Base case: AttachmentReference.
+            if v.get("type") == "braintrust_attachment":
+                return ReadonlyAttachment(cast(AttachmentReference, v))
+            else:
+                # Recursive case: object.
+                for k, v2 in v.items():
+                    v[k] = _helper(v2)
+                return v
+
+        # Recursive case: array.
+        if isinstance(v, List):
+            for i in range(len(v)):
+                v[i] = _helper(v[i])
+            return v
+
+        # Base case: non object.
+        return v  # Nothing to explore recursively.
+
+    for k, v in event.items():
+        event[k] = _helper(v)
+
+    return event
+
+
 def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any]) -> Dict[str, Any]:
     # Make sure only certain keys are specified.
     forbidden_keys = set(event.keys()) - {
@@ -1790,15 +1826,12 @@ class ObjectIterator(Generic[T]):
         return value
 
 
-TDict = TypeVar("TDict", bound=Mapping[str, Any])
-
-
-class ObjectFetcher(ABC, Generic[TDict]):
+class ObjectFetcher(ABC, Generic[TMapping]):
     def __init__(
         self,
         object_type: str,
         pinned_version: Union[None, int, str] = None,
-        mutate_record: Optional[Callable[[TDict], TDict]] = None,
+        mutate_record: Optional[Callable[[TMapping], TMapping]] = None,
     ):
         self.object_type = object_type
 
@@ -1812,9 +1845,9 @@ class ObjectFetcher(ABC, Generic[TDict]):
         self._pinned_version = str(pinned_version) if pinned_version is not None else None
         self._mutate_record = mutate_record
 
-        self._fetched_data: Optional[List[TDict]] = None
+        self._fetched_data: Optional[List[TMapping]] = None
 
-    def fetch(self) -> Iterator[TDict]:
+    def fetch(self) -> Iterator[TMapping]:
         """
         Fetch all records.
 
@@ -1831,7 +1864,7 @@ class ObjectFetcher(ABC, Generic[TDict]):
         """
         return ObjectIterator(self._refetch)
 
-    def __iter__(self) -> Iterator[TDict]:
+    def __iter__(self) -> Iterator[TMapping]:
         return self.fetch()
 
     @property
@@ -1850,7 +1883,7 @@ class ObjectFetcher(ABC, Generic[TDict]):
     def id(self) -> str:
         ...
 
-    def _refetch(self) -> Sequence[TDict]:
+    def _refetch(self) -> List[TMapping]:
         state = self._get_state()
         if self._fetched_data is None:
             resp = state.api_conn().get(
@@ -1863,7 +1896,7 @@ class ObjectFetcher(ABC, Generic[TDict]):
                 },
             )
             response_raise_for_status(resp)
-            data = cast(List[TDict], resp.json()["events"])
+            data = cast(List[TMapping], resp.json()["events"])
             if not isinstance(data, list):
                 raise ValueError(f"Expected a list in the response, got {type(data)}")
 
@@ -2028,6 +2061,72 @@ class Attachment:
             return LazyValue(read_file, use_mutex=True)
         else:
             return LazyValue(lambda: bytes(data), use_mutex=False)
+
+
+class AttachmentMetadata(TypedDict):
+    downloadUrl: str
+    status: AttachmentStatus
+
+
+class ReadonlyAttachment:
+    """
+    A readonly alternative to `Attachment`, which can be used for fetching
+    already-uploaded Attachments.
+    """
+
+    def __init__(self, reference: AttachmentReference):
+        self.reference = reference
+        self._data = self._init_downloader()
+
+    @property
+    def data(self) -> bytes:
+        """The attachment contents. This is a lazy value that will read the attachment contents from the object store on first access."""
+        return self._data.get()
+
+    def status(self) -> AttachmentStatus:
+        """Fetch the attachment upload status. This will re-fetch the status each time in case it changes over time."""
+        return self._fetch_metadata()["status"]
+
+    def _init_downloader(self) -> LazyValue[bytes]:
+        def download() -> bytes:
+            metadata = self._fetch_metadata()
+            download_url = metadata["downloadUrl"]
+            status = metadata["status"]
+            try:
+                if status["upload_status"] != "done":
+                    raise RuntimeError(f"""Expected attachment status "done", got \"{status["upload_status"]}\"""")
+
+                obj_conn = HTTPConnection(base_url="", adapter=_http_adapter)
+                obj_response = obj_conn.get(download_url)
+                obj_response.raise_for_status()
+            except Exception as e:
+                raise RuntimeError(f"Couldn't download attachment: {e}") from e
+
+            return obj_response.content
+
+        return LazyValue(download, use_mutex=True)
+
+    def _fetch_metadata(self) -> AttachmentMetadata:
+        login()
+        api_conn = _state.api_conn()
+        org_id = _state.org_id or ""
+
+        params = {
+            "key": self.reference["key"],
+            "filename": self.reference["filename"],
+            "content_type": self.reference["content_type"],
+            "org_id": org_id,
+        }
+
+        response = api_conn.get("/attachment", params=params)
+        response.raise_for_status()
+        metadata = response.json()
+        try:
+            if not isinstance(metadata["downloadUrl"], str) or not isinstance(metadata["status"], dict):
+                raise RuntimeError()
+        except Exception:
+            raise RuntimeError(f"Invalid response from API server: {metadata}")
+        return metadata
 
 
 def _log_feedback_impl(
@@ -2347,7 +2446,12 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         self._lazy_id = LazyValue(lambda: self.id, use_mutex=False)
         self._called_start_span = False
 
-        ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
+        ObjectFetcher.__init__(
+            self,
+            object_type="experiment",
+            pinned_version=None,
+            mutate_record=_enrich_attachments,
+        )
 
     @property
     def id(self) -> str:
@@ -2648,7 +2752,12 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
     ):
         self._lazy_metadata = lazy_metadata
 
-        ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
+        ObjectFetcher.__init__(
+            self,
+            object_type="experiment",
+            pinned_version=None,
+            mutate_record=_enrich_attachments,
+        )
 
     @property
     def id(self) -> str:
@@ -2978,7 +3087,10 @@ class Dataset(ObjectFetcher[DatasetEvent]):
             eprint(
                 f"""Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use `braintrust.init_dataset()` with `use_output=False`, which will become the default in a future version of Braintrust."""
             )
-        mutate_record: Callable[[DatasetEvent], DatasetEvent] = lambda r: ensure_dataset_record(r, legacy)
+
+        def mutate_record(r: DatasetEvent) -> DatasetEvent:
+            _enrich_attachments(cast(Dict[str, Any], r))
+            return ensure_dataset_record(r, legacy)
 
         self._lazy_metadata = lazy_metadata
         self.new_records = 0
