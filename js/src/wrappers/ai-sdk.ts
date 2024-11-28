@@ -258,45 +258,72 @@ function convertTools(
 }
 
 function postProcessPrompt(prompt: LanguageModelV1Prompt): Message[] {
-  return prompt.map((message): Message => {
+  return prompt.flatMap((message): Message[] => {
     switch (message.role) {
       case "system":
-        return {
-          role: "system",
-          content: message.content,
-        };
+        return [
+          {
+            role: "system",
+            content: message.content,
+          },
+        ];
+      case "assistant":
+        const textPart = message.content.find((part) => part.type === "text");
+        const toolCallParts = message.content.filter(
+          (part) => part.type === "tool-call",
+        );
+        return [
+          {
+            role: "assistant",
+            content: textPart?.text,
+            tool_calls: toolCallParts.map((part) => ({
+              id: part.toolCallId,
+              function: {
+                name: part.toolName,
+                arguments: JSON.stringify(part.args),
+              },
+              type: "function" as const,
+            })),
+          },
+        ];
       case "user":
-        return {
-          role: "user",
-          content: message.content.map((part): ContentPart => {
-            switch (part.type) {
-              case "text":
-                return {
-                  type: "text",
-                  text: part.text,
-                  ...(part.providerMetadata
-                    ? { providerMetadata: part.providerMetadata }
-                    : {}),
-                };
-              case "image":
-                return {
-                  type: "image_url",
-                  image_url: {
-                    url: part.image.toString(),
+        return [
+          {
+            role: "user",
+            content: message.content.map((part): ContentPart => {
+              switch (part.type) {
+                case "text":
+                  return {
+                    type: "text",
+                    text: part.text,
                     ...(part.providerMetadata
                       ? { providerMetadata: part.providerMetadata }
                       : {}),
-                  },
-                };
-              default:
-                // We don't support files directly but also don't want to block them from being logged
-                // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-                return part as any;
-            }
-          }),
-        };
-      default:
-        throw new Error(`Unsupported message role: ${message.role}`);
+                  };
+                case "image":
+                  return {
+                    type: "image_url",
+                    image_url: {
+                      url: part.image.toString(),
+                      ...(part.providerMetadata
+                        ? { providerMetadata: part.providerMetadata }
+                        : {}),
+                    },
+                  };
+                default:
+                  // We don't support files directly but also don't want to block them from being logged
+                  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+                  return part as any;
+              }
+            }),
+          },
+        ];
+      case "tool":
+        return message.content.map((part) => ({
+          role: "tool",
+          tool_call_id: part.toolCallId,
+          content: JSON.stringify(part.result),
+        }));
     }
   });
 }
