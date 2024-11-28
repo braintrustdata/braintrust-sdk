@@ -1,4 +1,4 @@
-import { Tools } from "@braintrust/core/typespecs";
+import { ContentPart, Message, Tools } from "@braintrust/core/typespecs";
 import { startSpan } from "../logger";
 import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import {
@@ -7,6 +7,9 @@ import {
   LanguageModelV1FinishReason,
   LanguageModelV1FunctionTool,
   LanguageModelV1FunctionToolCall,
+  LanguageModelV1ObjectGenerationMode,
+  LanguageModelV1Prompt,
+  LanguageModelV1ProviderDefinedTool,
   LanguageModelV1StreamPart,
 } from "@ai-sdk/provider";
 import {
@@ -23,12 +26,14 @@ import {
  * @returns The wrapped object.
  */
 export function wrapAISDKModel<T extends object>(model: T): T {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
   const m = model as any;
   if (
     m?.specificationVersion === "v1" &&
     typeof m?.provider === "string" &&
     typeof m?.modelId === "string"
   ) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
     return new BraintrustLanguageModelWrapper(m as LanguageModelV1) as any as T;
   } else {
     console.warn("Unsupported AI SDK model. Not wrapping.");
@@ -51,8 +56,20 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
     return this.model.modelId;
   }
 
-  get defaultObjectGenerationMode(): "json" | "tool" | "grammar" | undefined {
+  get defaultObjectGenerationMode(): LanguageModelV1ObjectGenerationMode {
     return this.model.defaultObjectGenerationMode;
+  }
+
+  get supportsImageUrls(): boolean | undefined {
+    return this.model.supportsImageUrls;
+  }
+
+  get supportsStructuredOutputs(): boolean | undefined {
+    return this.model.supportsStructuredOutputs;
+  }
+
+  get supportsUrl(): ((url: URL) => boolean) | undefined {
+    return this.model.supportsUrl;
   }
 
   // For the first cut, do not support custom span_info arguments. We can
@@ -70,7 +87,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
     try {
       const ret = await this.model.doGenerate(options);
       span.log({
-        input: prompt,
+        input: postProcessPrompt(prompt),
         metadata: {
           model: this.modelId,
           ...rest,
@@ -112,7 +129,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
     });
 
     span.log({
-      input: prompt,
+      input: postProcessPrompt(prompt),
       metadata: {
         model: this.modelId,
         ...rest,
@@ -225,14 +242,63 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
   }
 }
 
-function convertTools(tools: LanguageModelV1FunctionTool[]): Tools {
+function convertTools(
+  tools: Array<
+    LanguageModelV1FunctionTool | LanguageModelV1ProviderDefinedTool
+  >,
+): Tools {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   return tools.map((tool) => {
-    const { type, ...rest } = tool;
+    const { type: _, ...rest } = tool;
     return {
       type: tool.type,
       function: rest,
     };
   }) as Tools;
+}
+
+function postProcessPrompt(prompt: LanguageModelV1Prompt): Message[] {
+  return prompt.map((message): Message => {
+    switch (message.role) {
+      case "system":
+        return {
+          role: "system",
+          content: message.content,
+        };
+      case "user":
+        return {
+          role: "user",
+          content: message.content.map((part): ContentPart => {
+            switch (part.type) {
+              case "text":
+                return {
+                  type: "text",
+                  text: part.text,
+                  ...(part.providerMetadata
+                    ? { providerMetadata: part.providerMetadata }
+                    : {}),
+                };
+              case "image":
+                return {
+                  type: "image_url",
+                  image_url: {
+                    url: part.image.toString(),
+                    ...(part.providerMetadata
+                      ? { providerMetadata: part.providerMetadata }
+                      : {}),
+                  },
+                };
+              default:
+                // We don't support files directly but also don't want to block them from being logged
+                // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+                return part as any;
+            }
+          }),
+        };
+      default:
+        throw new Error(`Unsupported message role: ${message.role}`);
+    }
+  });
 }
 
 function postProcessOutput(
