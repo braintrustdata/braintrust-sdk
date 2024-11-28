@@ -11,6 +11,8 @@ import {
   LanguageModelV1Prompt,
   LanguageModelV1ProviderDefinedTool,
   LanguageModelV1StreamPart,
+  LanguageModelV1TextPart,
+  LanguageModelV1ToolCallPart,
 } from "@ai-sdk/provider";
 import {
   LEGACY_CACHED_HEADER,
@@ -268,10 +270,15 @@ function postProcessPrompt(prompt: LanguageModelV1Prompt): Message[] {
           },
         ];
       case "assistant":
-        const textPart = message.content.find((part) => part.type === "text");
-        const toolCallParts = message.content.filter(
-          (part) => part.type === "tool-call",
-        );
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const textPart = message.content.find(
+          (part) => part.type === "text",
+        ) as LanguageModelV1TextPart | undefined;
+        const toolCallParts =
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          message.content.filter(
+            (part) => part.type === "tool-call",
+          ) as LanguageModelV1ToolCallPart[];
         return [
           {
             role: "assistant",
