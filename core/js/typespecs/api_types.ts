@@ -341,12 +341,6 @@ const experimentEventBaseSchema = generateBaseEventOpSchema("experiment");
 export const experimentEventSchema = z
   .object({
     id: experimentEventBaseSchema.shape.id,
-    dataset_record_id: z
-      .string()
-      .nullish()
-      .describe(
-        "If the experiment is associated to a dataset, this is the event-level dataset id this experiment event is tied to",
-      ),
     [TRANSACTION_ID_FIELD]:
       experimentEventBaseSchema.shape[TRANSACTION_ID_FIELD],
     created: experimentEventBaseSchema.shape.created,
@@ -565,7 +559,6 @@ const insertExperimentEventBaseSchema = objectNullish(
       context: true,
       span_attributes: true,
       id: true,
-      dataset_record_id: true,
       created: true,
     })
     .extend({
