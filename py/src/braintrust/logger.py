@@ -1751,11 +1751,6 @@ def _validate_and_sanitize_experiment_log_full_args(event: Mapping[str, Any], ha
     elif not isinstance(event["scores"], dict):
         raise ValueError("scores must be a dictionary of names with scores")
 
-    if has_dataset and event.get("dataset_record_id") is None:
-        raise ValueError("dataset_record_id must be specified when using a dataset")
-    elif not has_dataset and event.get("dataset_record_id") is not None:
-        raise ValueError("dataset_record_id cannot be specified when not using a dataset")
-
     return event
 
 
@@ -2415,8 +2410,6 @@ class ExperimentDatasetIterator:
                 "tags": value.get("tags"),
                 "id": value["id"],
                 "_xact_id": value["_xact_id"],
-                # NOTE: We'll eventually want to track origin information here (and generalize
-                # the `dataset_record_id` field)
             }
             return ret
 
@@ -2508,8 +2501,8 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         :param tags: (Optional) a list of strings that you can use to filter and group records later.
         :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
-        :param dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
         :param allow_concurrent_with_spans: (Optional) in rare cases where you need to log at the top level separately from using spans on the experiment elsewhere, set this to True.
+        :param dataset_record_id: (Deprecated) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset. This field is unused and will be removed in a future version.
         :returns: The `id` of the logged event.
         """
         if self._called_start_span and not allow_concurrent_with_spans:
@@ -2528,7 +2521,6 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
                 metadata=metadata,
                 metrics=metrics,
                 id=id,
-                dataset_record_id=dataset_record_id,
             ),
             self.dataset is not None,
         )
