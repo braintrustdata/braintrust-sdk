@@ -47,7 +47,7 @@ export class ToolBuilder {
   constructor(private readonly project: Project) {}
 
   public create<Input, Output, Fn extends GenericFunction<Input, Output>>(
-    opts: FnOpts<Input, Output, Fn>,
+    opts: CodeOpts<Input, Output, Fn>,
   ): CodeFunction<Input, Output, Fn> {
     this.taskCounter++;
     opts = opts ?? {};
@@ -84,45 +84,82 @@ export class ToolBuilder {
   }
 }
 
-/**
- * NOTE: This class is not yet stable.
- */
 export class ScorerBuilder {
   private taskCounter = 0;
   constructor(private readonly project: Project) {}
 
   public create<Input, Output, Fn extends GenericFunction<Input, Output>>(
-    opts: FnOpts<Input, Output, Fn>,
+    opts: ScorerOpts<Input, Output, Fn>,
   ) {
     this.taskCounter++;
-    opts = opts ?? {};
 
-    const { handler, name, slug, ...rest } = opts;
-    let resolvedName = name ?? handler.name;
-
-    if (resolvedName.trim().length === 0) {
+    let resolvedName = opts.name;
+    if (!resolvedName && "handler" in opts) {
+      resolvedName = opts.handler.name;
+    }
+    if (!resolvedName || resolvedName.trim().length === 0) {
       resolvedName = `Scorer ${path.basename(__filename)} ${this.taskCounter}`;
     }
 
-    const scorer: CodeFunction<Input, Output, Fn> = new CodeFunction(
-      this.project,
-      {
-        handler,
-        name: resolvedName,
-        slug: slug ?? slugifyLib(resolvedName, { lower: true, strict: true }),
-        type: "scorer",
-        ...rest,
-      },
-    );
-
-    if (globalThis._lazy_load) {
-      globalThis._evals.functions.push(
-        scorer as CodeFunction<
-          unknown,
-          unknown,
-          GenericFunction<unknown, unknown>
-        >,
+    if ("handler" in opts) {
+      const scorer: CodeFunction<Input, Output, Fn> = new CodeFunction(
+        this.project,
+        {
+          ...opts,
+          name: resolvedName,
+          slug:
+            opts.slug ??
+            slugifyLib(resolvedName, { lower: true, strict: true }),
+          type: "scorer",
+        },
       );
+      if (globalThis._lazy_load) {
+        globalThis._evals.functions.push(
+          scorer as CodeFunction<
+            unknown,
+            unknown,
+            GenericFunction<unknown, unknown>
+          >,
+        );
+      }
+    } else {
+      const promptBlock: PromptBlockData =
+        "messages" in opts
+          ? {
+              type: "chat",
+              messages: opts.messages,
+            }
+          : {
+              type: "completion",
+              content: opts.prompt,
+            };
+      const promptData: PromptData = {
+        prompt: promptBlock,
+        options: {
+          model: opts.model,
+          params: opts.params,
+        },
+        parser: {
+          type: "llm_classifier",
+          use_cot: opts.useCot,
+          choice_scores: opts.choiceScores,
+        },
+      };
+      // TODO(sachin): Support tools for LLM scorers.
+      const codePrompt = new CodePrompt(
+        this.project,
+        promptData,
+        [],
+        {
+          ...opts,
+          slug:
+            opts.slug ?? slugifyLib(opts.name, { lower: true, strict: true }),
+        },
+        "scorer",
+      );
+      if (globalThis._lazy_load) {
+        globalThis._evals.prompts.push(codePrompt);
+      }
     }
   }
 }
@@ -139,13 +176,25 @@ interface BaseFnOpts {
   ifExists: IfExists;
 }
 
-export type FnOpts<
+export type CodeOpts<
   Params,
   Returns,
   Fn extends GenericFunction<Params, Returns>,
 > = Partial<BaseFnOpts> & {
   handler: Fn;
 } & Schema<Params, Returns>;
+
+type ScorerPromptOpts = Partial<BaseFnOpts> &
+  PromptOpts<false, false> & {
+    useCot: boolean;
+    choiceScores: Record<string, number>;
+  };
+
+export type ScorerOpts<
+  Params,
+  Returns,
+  Fn extends GenericFunction<Params, Returns>,
+> = CodeOpts<Params, Returns, Fn> | ScorerPromptOpts;
 
 export class CodeFunction<
   Input,
@@ -163,7 +212,7 @@ export class CodeFunction<
 
   constructor(
     public readonly project: Project,
-    opts: Omit<FnOpts<Input, Output, Fn>, "name" | "slug"> & {
+    opts: Omit<CodeOpts<Input, Output, Fn>, "name" | "slug"> & {
       name: string;
       slug: string;
       type: FunctionType;
@@ -214,7 +263,7 @@ export class CodePrompt {
   public readonly ifExists?: IfExists;
   public readonly description?: string;
   public readonly id?: string;
-
+  public readonly functionType?: FunctionType;
   public readonly toolFunctions: (SavedFunctionId | GenericCodeFunction)[];
 
   constructor(
@@ -225,6 +274,7 @@ export class CodePrompt {
       name: string;
       slug: string;
     },
+    functionType?: FunctionType,
   ) {
     this.project = project;
     this.name = opts.name;
@@ -234,6 +284,7 @@ export class CodePrompt {
     this.ifExists = opts.ifExists;
     this.description = opts.description;
     this.id = opts.id;
+    this.functionType = functionType;
   }
 }
 
