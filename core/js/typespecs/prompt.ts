@@ -9,6 +9,7 @@ import {
   chatCompletionOpenAIMessageParamSchema,
 } from "./openai/messages";
 import { savedFunctionIdSchema } from "./function_id";
+import { customTypes } from "./custom_types";
 
 export {
   chatCompletionMessageParamSchema,
@@ -74,24 +75,28 @@ const openAIModelParamsSchema = z.object({
   presence_penalty: z.number().optional(),
   response_format: z
     .union([
-      z.object({ type: z.literal("json_object") }),
-      z.object({
-        type: z.literal("json_schema"),
-        json_schema: z.object({
-          name: z.string(),
-          description: z.string().optional(),
-          schema: z.record(z.unknown()).optional(),
-          strict: z.boolean().nullish(),
-        }),
-      }),
-      z.object({ type: z.literal("text") }),
+      z
+        .object({ type: z.literal("json_object") })
+        .openapi({ title: "json_object" }),
+      z
+        .object({
+          type: z.literal("json_schema"),
+          json_schema: z.object({
+            name: z.string(),
+            description: z.string().optional(),
+            schema: z.record(customTypes.unknown).optional(),
+            strict: z.boolean().nullish(),
+          }),
+        })
+        .openapi({ title: "json_schema" }),
+      z.object({ type: z.literal("text") }).openapi({ title: "text" }),
     ])
     .nullish(),
   tool_choice: z
     .union([
       z.literal("auto").openapi({ title: "auto" }),
       z.literal("none").openapi({ title: "none" }),
-      z.literal("required").openapi({ title: "none" }),
+      z.literal("required").openapi({ title: "required" }),
       z
         .object({
           type: z.literal("function"),

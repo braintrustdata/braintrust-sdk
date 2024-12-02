@@ -51,6 +51,8 @@ import {
   AttachmentReference,
   AttachmentStatus,
   BRAINTRUST_ATTACHMENT,
+  attachmentStatusSchema,
+  attachmentReferenceSchema,
 } from "@braintrust/core/typespecs";
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
 import {
@@ -743,7 +745,7 @@ export class Attachment {
   readonly reference: AttachmentReference;
 
   private readonly uploader: LazyValue<AttachmentStatus>;
-  private readonly data: LazyValue<Blob>;
+  private readonly _data: LazyValue<Blob>;
   private readonly state?: BraintrustState;
   // For debug logging only.
   private readonly dataDebugString: string;
@@ -751,17 +753,19 @@ export class Attachment {
   /**
    * Construct an attachment.
    *
-   * @param data A string representing the path of the file on disk, or a
+   * @param param A parameter object with:
+   *
+   * `data`: A string representing the path of the file on disk, or a
    * `Blob`/`ArrayBuffer` with the file's contents. The caller is responsible
    * for ensuring the file/blob/buffer is not modified until upload is complete.
    *
-   * @param filename The desired name of the file in Braintrust after uploading.
+   * `filename`: The desired name of the file in Braintrust after uploading.
    * This parameter is for visualization purposes only and has no effect on
    * attachment storage.
    *
-   * @param contentType The MIME type of the file.
+   * `contentType`: The MIME type of the file.
    *
-   * @param state (Optional) For internal use.
+   * `state`: (Optional) For internal use.
    */
   constructor({ data, filename, contentType, state }: AttachmentParams) {
     this.reference = {
@@ -773,7 +777,7 @@ export class Attachment {
     this.state = state;
     this.dataDebugString = typeof data === "string" ? data : "<in-memory data>";
 
-    this.data = this.initData(data);
+    this._data = this.initData(data);
     this.uploader = this.initUploader();
   }
 
@@ -786,6 +790,13 @@ export class Attachment {
    */
   async upload() {
     return await this.uploader.get();
+  }
+
+  /**
+   * The attachment contents. This is a lazy value that will read the attachment contents from disk or memory on first access.
+   */
+  async data() {
+    return this._data.get();
   }
 
   /**
@@ -813,7 +824,7 @@ export class Attachment {
       const [metadataPromiseResult, dataPromiseResult] =
         await Promise.allSettled([
           conn.post("/attachment", requestParams),
-          this.data.get(),
+          this._data.get(),
         ]);
       if (metadataPromiseResult.status === "rejected") {
         const errorStr = JSON.stringify(metadataPromiseResult.reason);
@@ -919,6 +930,97 @@ with a Blob/ArrayBuffer, or run the program on Node.js.`,
     } else {
       return new LazyValue(async () => new Blob([data]));
     }
+  }
+}
+
+const attachmentMetadataSchema = z.object({
+  downloadUrl: z.string(),
+  status: attachmentStatusSchema,
+});
+
+type AttachmentMetadata = z.infer<typeof attachmentMetadataSchema>;
+
+/**
+ * A readonly alternative to `Attachment`, which can be used for fetching
+ * already-uploaded Attachments.
+ */
+export class ReadonlyAttachment {
+  /**
+   * Attachment metadata.
+   */
+  readonly reference: AttachmentReference;
+
+  private readonly _data: LazyValue<Blob>;
+  private readonly state?: BraintrustState;
+
+  /**
+   * Construct a ReadonlyAttachment.
+   *
+   * @param reference The `AttachmentReference` that should be read by the
+   * `ReadonlyAttachment` object.
+   * @param state (Optional) For internal use.
+   * @returns The new `ReadonlyAttachment` object.
+   */
+  constructor(reference: AttachmentReference, state?: BraintrustState) {
+    this.reference = reference;
+    this.state = state;
+    this._data = this.initDownloader();
+  }
+
+  /**
+   * The attachment contents. This is a lazy value that will read the attachment
+   * contents from the object store on first access.
+   */
+  async data() {
+    return this._data.get();
+  }
+
+  /**
+   * Fetch the attachment upload status. This will re-fetch the status each time
+   * in case it changes over time.
+   */
+  async status(): Promise<AttachmentStatus> {
+    return (await this.fetchMetadata()).status;
+  }
+
+  private initDownloader(): LazyValue<Blob> {
+    const download = async () => {
+      const { downloadUrl, status } = await this.fetchMetadata();
+
+      if (status.upload_status !== "done") {
+        throw new Error(
+          `Expected attachment status "done", got "${status.upload_status}"`,
+        );
+      }
+
+      const objResponse = await fetch(downloadUrl);
+      if (objResponse.status !== 200) {
+        const error = await objResponse.text();
+        throw new Error(`Couldn't download attachment: ${error}`);
+      }
+
+      return await objResponse.blob();
+    };
+
+    return new LazyValue(download);
+  }
+
+  private async fetchMetadata(): Promise<AttachmentMetadata> {
+    const state = this.state ?? _globalState;
+    await state.login({});
+
+    const resp = await state.apiConn().get("/attachment", {
+      key: this.reference.key,
+      filename: this.reference.filename,
+      content_type: this.reference.content_type,
+      org_id: state.orgId || "",
+    });
+    if (!resp.ok) {
+      const errorStr = JSON.stringify(resp);
+      throw new Error(`Invalid response from API server: ${errorStr}`);
+    }
+
+    return attachmentMetadataSchema.parse(await resp.json());
   }
 }
 
@@ -1429,7 +1531,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
    * @param event.scores (Optional) a dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the event.
    * @param event.expected (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not.
    * @param event.comment (Optional) an optional comment string to log about the event.
-   * @param event.metadata (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
+   * @param event.metadata (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI. Note, this metadata does not correspond to the main event itself, but rather the audit log attached to the event.
    * @param event.source (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
    */
   public logFeedback(event: LogFeedbackFullArgs): void {
@@ -3262,6 +3364,8 @@ function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
     } else if (v instanceof Attachment) {
       const idx = attachments.push(v);
       return { [IDENTIFIER]: idx - 1 };
+    } else if (v instanceof ReadonlyAttachment) {
+      return v.reference;
     }
     return v;
   });
@@ -3302,6 +3406,33 @@ function extractAttachments(
     // Recursive case: object or array.
     extractAttachments(value, attachments);
   }
+}
+
+/**
+ * Recursively hydrates any `AttachmentReference` into `Attachment` by modifying
+ * the input in-place.
+ *
+ * @returns The same event instance as the input.
+ */
+function enrichAttachments<T extends Record<string, any>>(event: T): T {
+  for (const [key, value] of Object.entries(event)) {
+    // Base case: AttachmentReference.
+    const parsedValue = attachmentReferenceSchema.safeParse(value);
+    if (parsedValue.success) {
+      (event as any)[key] = new ReadonlyAttachment(parsedValue.data);
+      continue;
+    }
+
+    // Base case: non-object.
+    if (!(value instanceof Object)) {
+      continue;
+    }
+
+    // Recursive case: object or array:
+    enrichAttachments(value);
+  }
+
+  return event;
 }
 
 // Note that this only checks properties that are expected of a complete event.
@@ -3456,7 +3587,7 @@ export class Experiment
     lazyMetadata: LazyValue<ProjectExperimentMetadata>,
     dataset?: AnyDataset,
   ) {
-    super("experiment", undefined);
+    super("experiment", undefined, enrichAttachments);
     this.lazyMetadata = lazyMetadata;
     this.dataset = dataset;
     this.lastStartTime = getCurrentUnixTimestamp();
@@ -3505,7 +3636,7 @@ export class Experiment
    * @param event.metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
    * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
    * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
-   * @param event.dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
+   * @param event.dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset. This field is unused and will be removed in a future version.
    * @param options Additional logging options
    * @param options.allowConcurrentWithSpans in rare cases where you need to log at the top level separately from spans on the experiment elsewhere, set this to true.
    * @returns The `id` of the logged event.
@@ -3681,7 +3812,7 @@ export class Experiment
    * @param event.scores (Optional) a dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the event.
    * @param event.expected (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not.
    * @param event.comment (Optional) an optional comment string to log about the event.
-   * @param event.metadata (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
+   * @param event.metadata (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI. Note, this metadata does not correspond to the main event itself, but rather the audit log attached to the event.
    * @param event.source (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
    */
   public logFeedback(event: LogFeedbackFullArgs): void {
@@ -3749,7 +3880,7 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     private state: BraintrustState,
     private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>,
   ) {
-    super("experiment", undefined);
+    super("experiment", undefined, enrichAttachments);
   }
 
   public get id(): Promise<string> {
@@ -4134,7 +4265,7 @@ export class Dataset<
       );
     }
     super("dataset", pinnedVersion, (r: AnyDatasetRecord) =>
-      ensureDatasetRecord(r, isLegacyDataset),
+      ensureDatasetRecord(enrichAttachments(r), isLegacyDataset),
     );
     this.lazyMetadata = lazyMetadata;
   }

@@ -28,6 +28,7 @@ from typing import (
     List,
     Literal,
     Mapping,
+    MutableMapping,
     Optional,
     Sequence,
     Set,
@@ -45,7 +46,6 @@ import exceptiongroup
 import requests
 from braintrust_core.serializable_data_class import SerializableDataClass
 from requests.adapters import HTTPAdapter
-from typing_extensions import NotRequired
 from urllib3.util.retry import Retry
 
 from braintrust.functions.stream import BraintrustStream
@@ -94,6 +94,8 @@ Metadata = Dict[str, Any]
 DATA_API_VERSION = 2
 
 T = TypeVar("T")
+TMapping = TypeVar("TMapping", bound=Mapping[str, Any])
+TMutableMapping = TypeVar("TMutableMapping", bound=MutableMapping[str, Any])
 
 
 class Exportable(ABC):
@@ -1627,6 +1629,39 @@ def _extract_attachments(event: Dict[str, Any], attachments: List["Attachment"])
         event[k] = _helper(v)
 
 
+def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
+    """
+    Recursively hydrates any `AttachmentReference` into `Attachment` by modifying the input in-place.
+
+    :returns: The same event instance as the input.
+    """
+
+    def _helper(v: Any) -> Any:
+        if isinstance(v, Dict):
+            # Base case: AttachmentReference.
+            if v.get("type") == "braintrust_attachment":
+                return ReadonlyAttachment(cast(AttachmentReference, v))
+            else:
+                # Recursive case: object.
+                for k, v2 in v.items():
+                    v[k] = _helper(v2)
+                return v
+
+        # Recursive case: array.
+        if isinstance(v, List):
+            for i in range(len(v)):
+                v[i] = _helper(v[i])
+            return v
+
+        # Base case: non object.
+        return v  # Nothing to explore recursively.
+
+    for k, v in event.items():
+        event[k] = _helper(v)
+
+    return event
+
+
 def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any]) -> Dict[str, Any]:
     # Make sure only certain keys are specified.
     forbidden_keys = set(event.keys()) - {
@@ -1716,11 +1751,6 @@ def _validate_and_sanitize_experiment_log_full_args(event: Mapping[str, Any], ha
     elif not isinstance(event["scores"], dict):
         raise ValueError("scores must be a dictionary of names with scores")
 
-    if has_dataset and event.get("dataset_record_id") is None:
-        raise ValueError("dataset_record_id must be specified when using a dataset")
-    elif not has_dataset and event.get("dataset_record_id") is not None:
-        raise ValueError("dataset_record_id cannot be specified when not using a dataset")
-
     return event
 
 
@@ -1742,6 +1772,8 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
             return "<logger>"
         elif isinstance(v, Attachment):
             return v
+        elif isinstance(v, ReadonlyAttachment):
+            return v.reference
         else:
             # No need to handle primitives explicitly because deepcopy will do
             # it for us.
@@ -1791,15 +1823,12 @@ class ObjectIterator(Generic[T]):
         return value
 
 
-TDict = TypeVar("TDict", bound=Mapping[str, Any])
-
-
-class ObjectFetcher(ABC, Generic[TDict]):
+class ObjectFetcher(ABC, Generic[TMapping]):
     def __init__(
         self,
         object_type: str,
         pinned_version: Union[None, int, str] = None,
-        mutate_record: Optional[Callable[[TDict], TDict]] = None,
+        mutate_record: Optional[Callable[[TMapping], TMapping]] = None,
     ):
         self.object_type = object_type
 
@@ -1813,9 +1842,9 @@ class ObjectFetcher(ABC, Generic[TDict]):
         self._pinned_version = str(pinned_version) if pinned_version is not None else None
         self._mutate_record = mutate_record
 
-        self._fetched_data: Optional[List[TDict]] = None
+        self._fetched_data: Optional[List[TMapping]] = None
 
-    def fetch(self) -> Iterator[TDict]:
+    def fetch(self) -> Iterator[TMapping]:
         """
         Fetch all records.
 
@@ -1832,7 +1861,7 @@ class ObjectFetcher(ABC, Generic[TDict]):
         """
         return ObjectIterator(self._refetch)
 
-    def __iter__(self) -> Iterator[TDict]:
+    def __iter__(self) -> Iterator[TMapping]:
         return self.fetch()
 
     @property
@@ -1851,7 +1880,7 @@ class ObjectFetcher(ABC, Generic[TDict]):
     def id(self) -> str:
         ...
 
-    def _refetch(self) -> Sequence[TDict]:
+    def _refetch(self) -> List[TMapping]:
         state = self._get_state()
         if self._fetched_data is None:
             resp = state.api_conn().get(
@@ -1864,7 +1893,7 @@ class ObjectFetcher(ABC, Generic[TDict]):
                 },
             )
             response_raise_for_status(resp)
-            data = cast(List[TDict], resp.json()["events"])
+            data = cast(List[TMapping], resp.json()["events"])
             if not isinstance(data, list):
                 raise ValueError(f"Expected a list in the response, got {type(data)}")
 
@@ -1927,6 +1956,11 @@ class Attachment:
     def reference(self) -> AttachmentReference:
         """The object that replaces this `Attachment` at upload time."""
         return self._reference
+
+    @property
+    def data(self) -> bytes:
+        """The attachment contents. This is a lazy value that will read the attachment contents from disk or memory on first access."""
+        return self._data.get()
 
     def upload(self) -> AttachmentStatus:
         """
@@ -2024,6 +2058,72 @@ class Attachment:
             return LazyValue(read_file, use_mutex=True)
         else:
             return LazyValue(lambda: bytes(data), use_mutex=False)
+
+
+class AttachmentMetadata(TypedDict):
+    downloadUrl: str
+    status: AttachmentStatus
+
+
+class ReadonlyAttachment:
+    """
+    A readonly alternative to `Attachment`, which can be used for fetching
+    already-uploaded Attachments.
+    """
+
+    def __init__(self, reference: AttachmentReference):
+        self.reference = reference
+        self._data = self._init_downloader()
+
+    @property
+    def data(self) -> bytes:
+        """The attachment contents. This is a lazy value that will read the attachment contents from the object store on first access."""
+        return self._data.get()
+
+    def status(self) -> AttachmentStatus:
+        """Fetch the attachment upload status. This will re-fetch the status each time in case it changes over time."""
+        return self._fetch_metadata()["status"]
+
+    def _init_downloader(self) -> LazyValue[bytes]:
+        def download() -> bytes:
+            metadata = self._fetch_metadata()
+            download_url = metadata["downloadUrl"]
+            status = metadata["status"]
+            try:
+                if status["upload_status"] != "done":
+                    raise RuntimeError(f"""Expected attachment status "done", got \"{status["upload_status"]}\"""")
+
+                obj_conn = HTTPConnection(base_url="", adapter=_http_adapter)
+                obj_response = obj_conn.get(download_url)
+                obj_response.raise_for_status()
+            except Exception as e:
+                raise RuntimeError(f"Couldn't download attachment: {e}") from e
+
+            return obj_response.content
+
+        return LazyValue(download, use_mutex=True)
+
+    def _fetch_metadata(self) -> AttachmentMetadata:
+        login()
+        api_conn = _state.api_conn()
+        org_id = _state.org_id or ""
+
+        params = {
+            "key": self.reference["key"],
+            "filename": self.reference["filename"],
+            "content_type": self.reference["content_type"],
+            "org_id": org_id,
+        }
+
+        response = api_conn.get("/attachment", params=params)
+        response.raise_for_status()
+        metadata = response.json()
+        try:
+            if not isinstance(metadata["downloadUrl"], str) or not isinstance(metadata["status"], dict):
+                raise RuntimeError()
+        except Exception:
+            raise RuntimeError(f"Invalid response from API server: {metadata}")
+        return metadata
 
 
 def _log_feedback_impl(
@@ -2287,9 +2387,9 @@ class _ExperimentDatasetEvent(TypedDict):
 
     id: str
     _xact_id: str
-    input: NotRequired[Optional[Any]]
-    expected: NotRequired[Optional[Any]]
-    tags: NotRequired[Optional[Sequence[str]]]
+    input: Optional[Any]
+    expected: Optional[Any]
+    tags: Optional[Sequence[str]]
 
 
 class ExperimentDatasetIterator:
@@ -2312,8 +2412,6 @@ class ExperimentDatasetIterator:
                 "tags": value.get("tags"),
                 "id": value["id"],
                 "_xact_id": value["_xact_id"],
-                # NOTE: We'll eventually want to track origin information here (and generalize
-                # the `dataset_record_id` field)
             }
             return ret
 
@@ -2343,7 +2441,12 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         self._lazy_id = LazyValue(lambda: self.id, use_mutex=False)
         self._called_start_span = False
 
-        ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
+        ObjectFetcher.__init__(
+            self,
+            object_type="experiment",
+            pinned_version=None,
+            mutate_record=_enrich_attachments,
+        )
 
     @property
     def id(self) -> str:
@@ -2400,8 +2503,8 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         :param tags: (Optional) a list of strings that you can use to filter and group records later.
         :param metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
         :param id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
-        :param dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
         :param allow_concurrent_with_spans: (Optional) in rare cases where you need to log at the top level separately from using spans on the experiment elsewhere, set this to True.
+        :param dataset_record_id: (Deprecated) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset. This field is unused and will be removed in a future version.
         :returns: The `id` of the logged event.
         """
         if self._called_start_span and not allow_concurrent_with_spans:
@@ -2420,7 +2523,6 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
                 metadata=metadata,
                 metrics=metrics,
                 id=id,
-                dataset_record_id=dataset_record_id,
             ),
             self.dataset is not None,
         )
@@ -2446,7 +2548,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         :param expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not.
         :param tags: (Optional) a list of strings that you can use to filter and group records later.
         :param comment: (Optional) an optional comment string to log about the event.
-        :param metadata: (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
+        :param metadata: (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI. Note, this metadata does not correspond to the main event itself, but rather the audit log attached to the event.
         :param source: (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
         """
         return _log_feedback_impl(
@@ -2644,7 +2746,12 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
     ):
         self._lazy_metadata = lazy_metadata
 
-        ObjectFetcher.__init__(self, object_type="experiment", pinned_version=None)
+        ObjectFetcher.__init__(
+            self,
+            object_type="experiment",
+            pinned_version=None,
+            mutate_record=_enrich_attachments,
+        )
 
     @property
     def id(self) -> str:
@@ -2974,7 +3081,10 @@ class Dataset(ObjectFetcher[DatasetEvent]):
             eprint(
                 f"""Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use `braintrust.init_dataset()` with `use_output=False`, which will become the default in a future version of Braintrust."""
             )
-        mutate_record: Callable[[DatasetEvent], DatasetEvent] = lambda r: ensure_dataset_record(r, legacy)
+
+        def mutate_record(r: DatasetEvent) -> DatasetEvent:
+            _enrich_attachments(cast(Dict[str, Any], r))
+            return ensure_dataset_record(r, legacy)
 
         self._lazy_metadata = lazy_metadata
         self.new_records = 0
@@ -3497,7 +3607,7 @@ class Logger(Exportable):
         :param expected: (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not.
         :param tags: (Optional) a list of strings that you can use to filter and group records later.
         :param comment: (Optional) an optional comment string to log about the event.
-        :param metadata: (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
+        :param metadata: (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI. Note, this metadata does not correspond to the main event itself, but rather the audit log attached to the event.
         :param source: (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
         """
         return _log_feedback_impl(
