@@ -30,6 +30,7 @@ export class Project {
   public readonly id?: string;
   public tools: ToolBuilder;
   public prompts: PromptBuilder;
+  public scorers: ScorerBuilder;
 
   constructor(args: CreateProjectOpts) {
     _initializeSpanContext();
@@ -37,6 +38,7 @@ export class Project {
     this.id = "id" in args ? args.id : undefined;
     this.tools = new ToolBuilder(this);
     this.prompts = new PromptBuilder(this);
+    this.scorers = new ScorerBuilder(this);
   }
 }
 
@@ -45,7 +47,7 @@ export class ToolBuilder {
   constructor(private readonly project: Project) {}
 
   public create<Input, Output, Fn extends GenericFunction<Input, Output>>(
-    opts: ToolOpts<Input, Output, Fn>,
+    opts: FnOpts<Input, Output, Fn>,
   ): CodeFunction<Input, Output, Fn> {
     this.taskCounter++;
     opts = opts ?? {};
@@ -82,6 +84,49 @@ export class ToolBuilder {
   }
 }
 
+/**
+ * NOTE: This class is not yet stable.
+ */
+export class ScorerBuilder {
+  private taskCounter = 0;
+  constructor(private readonly project: Project) {}
+
+  public create<Input, Output, Fn extends GenericFunction<Input, Output>>(
+    opts: FnOpts<Input, Output, Fn>,
+  ) {
+    this.taskCounter++;
+    opts = opts ?? {};
+
+    const { handler, name, slug, ...rest } = opts;
+    let resolvedName = name ?? handler.name;
+
+    if (resolvedName.trim().length === 0) {
+      resolvedName = `Scorer ${path.basename(__filename)} ${this.taskCounter}`;
+    }
+
+    const scorer: CodeFunction<Input, Output, Fn> = new CodeFunction(
+      this.project,
+      {
+        handler,
+        name: resolvedName,
+        slug: slug ?? slugifyLib(resolvedName, { lower: true, strict: true }),
+        type: "scorer",
+        ...rest,
+      },
+    );
+
+    if (globalThis._lazy_load) {
+      globalThis._evals.functions.push(
+        scorer as CodeFunction<
+          unknown,
+          unknown,
+          GenericFunction<unknown, unknown>
+        >,
+      );
+    }
+  }
+}
+
 type Schema<Input, Output> = Partial<{
   parameters: z.ZodSchema<Input>;
   returns: z.ZodSchema<Output>;
@@ -94,7 +139,7 @@ interface BaseFnOpts {
   ifExists: IfExists;
 }
 
-export type ToolOpts<
+export type FnOpts<
   Params,
   Returns,
   Fn extends GenericFunction<Params, Returns>,
@@ -118,7 +163,7 @@ export class CodeFunction<
 
   constructor(
     public readonly project: Project,
-    opts: Omit<ToolOpts<Input, Output, Fn>, "name" | "slug"> & {
+    opts: Omit<FnOpts<Input, Output, Fn>, "name" | "slug"> & {
       name: string;
       slug: string;
       type: FunctionType;
