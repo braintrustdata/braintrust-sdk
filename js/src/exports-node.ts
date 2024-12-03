@@ -21,6 +21,7 @@ export * from "./framework2";
 export { LazyValue } from "./util";
 export * from "./wrappers/oai";
 export * from "./wrappers/ai-sdk";
+export * from "./wrappers/langchain";
 export type {
   ParentExperimentIds,
   ParentProjectLogIds,
