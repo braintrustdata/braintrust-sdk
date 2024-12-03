@@ -18,7 +18,7 @@ import {
   NOOP_SPAN,
   Span,
   StartSpanArgs,
-} from "../logger";
+} from "../../../js/src/logger";
 
 /**
  * A Braintrust tracer for LangChain.js that logs LLM calls, chains, and tools

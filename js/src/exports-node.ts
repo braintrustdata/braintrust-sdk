@@ -1,37 +1,37 @@
-export * from "./logger";
-export * from "./functions/stream";
-export * from "./functions/invoke";
+export type {
+  CommentEvent,
+  DatasetRecord,
+  ExperimentLogFullArgs,
+  ExperimentLogPartialArgs,
+  IdField,
+  InputField,
+  LogCommentFullArgs,
+  LogFeedbackFullArgs,
+  OtherExperimentLogFields,
+  ParentExperimentIds,
+  ParentProjectLogIds,
+} from "@braintrust/core";
+export * from "../../integrations/langchain-js/src/BraintrustTracer";
 export {
   BaseExperiment,
-  Evaluator,
-  EvalTask,
   Eval,
   EvalResult,
-  EvalScorerArgs,
   EvalScorer,
+  EvalScorerArgs,
+  EvalTask,
+  Evaluator,
   EvaluatorDef,
   EvaluatorFile,
-  ReporterBody,
   Reporter,
+  ReporterBody,
   SpanContext,
   buildLocalSummary,
   reportFailures,
 } from "./framework";
 export * from "./framework2";
+export * from "./functions/invoke";
+export * from "./functions/stream";
+export * from "./logger";
 export { LazyValue } from "./util";
-export * from "./wrappers/oai";
 export * from "./wrappers/ai-sdk";
-export * from "./wrappers/langchain";
-export type {
-  ParentExperimentIds,
-  ParentProjectLogIds,
-  IdField,
-  InputField,
-  OtherExperimentLogFields,
-  ExperimentLogPartialArgs,
-  ExperimentLogFullArgs,
-  LogFeedbackFullArgs,
-  LogCommentFullArgs,
-  CommentEvent,
-  DatasetRecord,
-} from "@braintrust/core";
+export * from "./wrappers/oai";

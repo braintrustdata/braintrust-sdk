@@ -1,0 +1,38 @@
+{
+  "name": "@braintrust/langchain-js",
+  "version": "0.0.1",
+  "description": "SDK for integrating Braintrust with LangChain.js",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "module": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "watch": "tsup --watch",
+    "clean": "rm -r dist/*",
+    "test": "vitest run"
+  },
+  "author": "Braintrust Data Inc.",
+  "license": "MIT",
+  "devDependencies": {
+    "@langchain/core": "^0.3.20",
+    "@types/node": "^20.10.5",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.6.0"
+  },
+  "dependencies": {
+    "braintrust": "workspace:>=0.0.141"
+  },
+  "peerDependencies": {
+    "@langchain/core": "^0.3.20"
+  }
+}
