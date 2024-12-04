@@ -30,14 +30,18 @@ class _ProjectIdCache:
 
 
 def _pkg_install_arg(pkg):
-    d = importlib.metadata.distribution(pkg)
-    direct_url = d._path / "direct_url.json"
-    if direct_url.exists():
-        with open(direct_url) as f:
-            j = json.loads(f.read())
-            if "url" in j:
-                return j["url"]
-    return f"{pkg}=={d.version}"
+    try:
+        dist = importlib.metadata.distribution(pkg)
+        direct_url = dist._path / "direct_url.json"  # type: ignore
+        if direct_url.exists():
+            with open(direct_url) as f:
+                j = json.loads(f.read())
+                if "url" in j:
+                    return j["url"]
+        return f"{pkg}=={dist.version}"
+    except importlib.metadata.PackageNotFoundError as e:
+        print(f"Failed to find package {pkg}: {e}", file=sys.stderr)
+    return None
 
 
 def _pydantic_to_json_schema(m):
@@ -103,15 +107,18 @@ def run(args):
         else:
             # Though not strictly necessary, these packages should be in //api-ts/requirements.txt,
             # with the exception of pydantic, which is necessary to allow the user to express function input schemas.
-            install_args = map(
-                _pkg_install_arg,
-                [
-                    "pydantic",
-                    "braintrust",
-                    "autoevals",
-                    "requests",
-                    "openai",
-                ],
+            install_args = filter(
+                lambda a: a is not None,
+                map(
+                    _pkg_install_arg,
+                    [
+                        "pydantic",
+                        "braintrust",
+                        "autoevals",
+                        "requests",
+                        "openai",
+                    ],
+                ),
             )
 
         check_uv()
