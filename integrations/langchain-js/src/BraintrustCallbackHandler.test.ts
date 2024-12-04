@@ -1,6 +1,6 @@
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { ChatOpenAI } from "@langchain/openai";
-import { initLogger } from "braintrust";
+import { flush, initLogger } from "braintrust";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 import { BraintrustCallbackHandler } from "./BraintrustCallbackHandler";
@@ -75,6 +75,8 @@ describe("BraintrustCallbackHandler", () => {
       { callbacks: [handler] },
     );
 
+    await flush();
+
     const { spans, root_span_id } = logsToSpans(logs);
 
     expect(spans).toMatchObject([
@@ -108,6 +110,9 @@ describe("BraintrustCallbackHandler", () => {
         input: [
           { content: "What is 1 + 2?", role: "user", additional_kwargs: {} },
         ],
+        output: {
+          parsed: "1 + 2 equals 3.",
+        },
         metadata: {
           tags: ["seq:step:2"],
           params: {

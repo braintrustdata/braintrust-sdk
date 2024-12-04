@@ -70,6 +70,15 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
       );
     }
 
+    args.event = {
+      ...args.event,
+      metadata: {
+        ...args.event?.metadata,
+        runId,
+        parentRunId,
+      },
+    };
+
     const currentParent = currentSpan();
     let parentSpan: Span;
     if (parentRunId && this.spans.has(parentRunId)) {
@@ -563,7 +572,7 @@ const outputFromChainValues = (output: unknown) => {
 };
 
 /**
- * Serialized output from Langchain may be multiple different types.
+ * Serialized output frsom Langchain may be multiple different types.
  * This attempts to normalize them. We'll likely miss some cases!
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
