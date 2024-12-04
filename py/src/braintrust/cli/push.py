@@ -105,7 +105,7 @@ def run(args):
         if args.requirements:
             install_args = ["--requirement", args.requirements]
         else:
-            # Though not strictly necessary, these packages should be in //api-ts/requirements.txt,
+            # Though not strictly necessary, these packages should be those supported in the Python code editor
             # with the exception of pydantic, which is necessary to allow the user to express function input schemas.
             install_args = [
                 arg
