@@ -3,40 +3,21 @@ import { ChatOpenAI } from "@langchain/openai";
 import { initLogger } from "braintrust";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
-import { BraintrustCallbackHandler as BaseBraintrustCallbackHandler } from "./BraintrustCallbackHandler";
+import { BraintrustCallbackHandler } from "./BraintrustCallbackHandler";
 import { server } from "./test/setup";
+import { LogsRequest } from "./test/types";
+import { logsToSpans } from "./test/utils";
 
 initLogger({
   projectName: "langchain",
 });
 
-class BraintrustCallbackHandler extends BaseBraintrustCallbackHandler {
-  public stack: string[] = [];
-  public position: number = 0;
-
-  protected startSpan(
-    ...args: Parameters<BaseBraintrustCallbackHandler["startSpan"]>
-  ) {
-    super.startSpan(...args);
-
-    this.stack.push(args[0].runId);
-    this.position++;
-  }
-
-  protected endSpan(
-    ...args: Parameters<BaseBraintrustCallbackHandler["endSpan"]>
-  ): void {
-    super.endSpan(...args);
-
-    this.stack.pop();
-    this.position--;
-  }
-}
-
 const handler = new BraintrustCallbackHandler();
 
 describe("BraintrustCallbackHandler", () => {
   it("should handle LLM calls", async () => {
+    const logs: LogsRequest[] = [];
+
     server.use(
       http.post("https://api.openai.com/v1/chat/completions", () => {
         return HttpResponse.json({
@@ -75,7 +56,9 @@ describe("BraintrustCallbackHandler", () => {
         });
       }),
 
-      http.post("*/logs", async () => {
+      http.post(/.+logs/, async ({ request }) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        logs.push((await request.json()) as LogsRequest);
         return HttpResponse.json(["4bc6305f-2175-4481-bc84-7c55a456b7ea"]);
       }),
     );
@@ -92,7 +75,54 @@ describe("BraintrustCallbackHandler", () => {
       { callbacks: [handler] },
     );
 
-    expect(handler.stack.length).toBe(0);
+    const { spans, root_span_id } = logsToSpans(logs);
+
+    expect(spans).toMatchObject([
+      {
+        span_attributes: {
+          name: "RunnableSequence",
+          type: "task",
+        },
+        input: {
+          number: "2",
+        },
+        metadata: {
+          tags: [],
+          params: {},
+        },
+        span_id: root_span_id,
+        root_span_id,
+      },
+      {
+        span_attributes: { name: "ChatPromptTemplate" },
+        input: { number: "2" },
+        output: {
+          parsed: "What is 1 + 2?",
+        },
+        metadata: { tags: ["seq:step:1"], params: {} },
+        root_span_id,
+        span_parents: [root_span_id],
+      },
+      {
+        span_attributes: { name: "ChatOpenAI" },
+        input: [
+          { content: "What is 1 + 2?", role: "user", additional_kwargs: {} },
+        ],
+        metadata: {
+          tags: ["seq:step:2"],
+          params: {
+            model: "gpt-4o-mini",
+            temperature: 1,
+            top_p: 1,
+            frequency_penalty: 0,
+            presence_penalty: 0,
+            n: 1,
+          },
+        },
+        root_span_id,
+        span_parents: [root_span_id],
+      },
+    ]);
 
     expect(message.content).toBe("1 + 2 equals 3.");
   });
