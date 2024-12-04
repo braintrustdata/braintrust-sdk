@@ -11,7 +11,6 @@ export type {
   ParentExperimentIds,
   ParentProjectLogIds,
 } from "@braintrust/core";
-export * from "../../integrations/langchain-js/src/BraintrustTracer";
 export {
   BaseExperiment,
   Eval,
