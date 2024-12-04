@@ -43,9 +43,6 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
   private spans: Map<string, Span>;
   private logger: Logger<IsAsyncFlush>;
 
-  private stack: [string, string][] = [];
-  private position: number = 0;
-
   constructor(logger?: Logger<IsAsyncFlush>) {
     super();
 
@@ -59,15 +56,13 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
     this.logger = logger;
   }
 
-  private startSpan({
+  protected startSpan({
     runId,
     parentRunId,
-    from,
     ...args
   }: StartSpanArgs & {
     runId: string;
     parentRunId?: string;
-    from: string;
   }) {
     if (this.spans.has(runId)) {
       throw new Error(
@@ -90,12 +85,9 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
     const span = parentSpan.startSpan(args);
 
     this.spans.set(runId, span);
-
-    this.stack.push([from, runId]);
-    this.position++;
   }
 
-  private endSpan({
+  protected endSpan({
     runId,
     ...args
   }: ExperimentLogPartialArgs & { runId: string }): void {
@@ -110,9 +102,6 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
 
     span.log(args);
     span.end();
-
-    this.stack.pop();
-    this.position--;
   }
 
   async handleLLMStart(
@@ -131,7 +120,6 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
     runName?: string,
   ): Promise<void> {
     this.startSpan({
-      from: "handleLLMStart",
       runId,
       parentRunId,
       name: runName ?? llm.id.at(-1)?.toString() ?? "LLM",
@@ -146,7 +134,6 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
             extraParams?.invocation_params || {},
             metadata,
           ),
-          from: "handleLLMStart",
         },
       },
     });
@@ -173,7 +160,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
       this.endSpan({
         runId,
         error: err.message,
-        metadata: { tags, from: "handleLLMError" },
+        metadata: { tags },
       });
     }
   }
@@ -198,7 +185,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
           prompt_tokens: tokenUsage.promptTokens,
           completion_tokens: tokenUsage.completionTokens,
         },
-        metadata: { ...cleanMetadata(metadata), tags, from: "handleLLMEnd" },
+        metadata: { ...cleanMetadata(metadata), tags },
       });
     }
   }
@@ -219,7 +206,6 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
     runName?: string,
   ): Promise<void> {
     this.startSpan({
-      from: "handleChatModelStart",
       runId,
       parentRunId,
       name: runName ?? llm.id.at(-1)?.toString() ?? "Chat Model",
@@ -233,7 +219,6 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
             extraParams?.invocation_params || {},
             metadata,
           ),
-          from: "handleChatModelStart",
         },
       },
     });
@@ -250,7 +235,6 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
     runName?: string,
   ): Promise<void> {
     this.startSpan({
-      from: "handleChainStart",
       runId,
       parentRunId,
       name: runName ?? chain.id.at(-1)?.toString() ?? "Chain",
@@ -260,7 +244,6 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
           tags,
           ...cleanMetadata(metadata),
           params: extractCallArgs(chain, {}, metadata),
-          from: "handleChainStart",
         },
       },
     });
@@ -279,7 +262,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
       this.endSpan({
         runId,
         error: err.toString(),
-        metadata: { tags, from: "handleChainError" },
+        metadata: { tags },
       });
     }
   }
@@ -294,7 +277,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
     if (this.spans.has(runId)) {
       this.endSpan({
         runId,
-        metadata: { tags, from: "handleChainEnd" },
+        metadata: { tags },
         output: outputFromChainValues(outputs),
       });
     }
@@ -310,7 +293,6 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
     runName?: string,
   ): Promise<void> {
     this.startSpan({
-      from: "handleToolStart",
       runId,
       parentRunId,
       name: runName ?? tool.id.at(-1)?.toString() ?? "Tool",
@@ -320,7 +302,6 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
           tags,
           ...cleanMetadata(metadata),
           params: extractCallArgs(tool, {}, metadata),
-          from: "handleToolStart",
         },
       },
     });
@@ -336,7 +317,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
       this.endSpan({
         runId,
         error: err.message,
-        metadata: { tags, from: "handleToolError" },
+        metadata: { tags },
       });
     }
   }
@@ -351,7 +332,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
       this.endSpan({
         runId,
         output: outputFromToolOutput(output),
-        metadata: { tags, from: "handleToolEnd" },
+        metadata: { tags },
       });
     }
   }
@@ -363,13 +344,12 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
     tags?: string[],
   ): Promise<void> {
     this.startSpan({
-      from: "handleAgentAction",
       runId,
       parentRunId,
       name: action.tool,
       event: {
         input: action,
-        metadata: { tags, from: "handleAgentAction" },
+        metadata: { tags },
       },
     });
   }
@@ -384,7 +364,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
       this.endSpan({
         runId,
         output: action,
-        metadata: { tags, from: "handleAgentEnd" },
+        metadata: { tags },
       });
     }
   }
@@ -399,7 +379,6 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
     name?: string,
   ): Promise<void> {
     this.startSpan({
-      from: "handleRetrieverStart",
       runId,
       parentRunId,
       name: name ?? retriever.id.at(-1)?.toString() ?? "Retriever",
@@ -410,7 +389,6 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
           tags,
           ...cleanMetadata(metadata),
           params: extractCallArgs(retriever, {}, metadata),
-          from: "handleRetrieverStart",
         },
       },
     });
@@ -426,7 +404,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
       this.endSpan({
         runId,
         output: documents,
-        metadata: { tags, from: "handleRetrieverEnd" },
+        metadata: { tags },
       });
     }
   }
@@ -441,7 +419,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
       this.endSpan({
         runId,
         error: err.message,
-        metadata: { tags, from: "handleRetrieverError" },
+        metadata: { tags },
       });
     }
   }
