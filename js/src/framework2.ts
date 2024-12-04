@@ -104,6 +104,8 @@ export class ScorerBuilder {
     if (!resolvedName || resolvedName.trim().length === 0) {
       resolvedName = `Scorer ${path.basename(__filename)} ${this.taskCounter}`;
     }
+    const slug =
+      opts.slug ?? slugifyLib(resolvedName, { lower: true, strict: true });
 
     if ("handler" in opts) {
       const scorer: CodeFunction<Params, Returns, Fn> = new CodeFunction(
@@ -111,9 +113,7 @@ export class ScorerBuilder {
         {
           ...opts,
           name: resolvedName,
-          slug:
-            opts.slug ??
-            slugifyLib(resolvedName, { lower: true, strict: true }),
+          slug,
           type: "scorer",
         },
       );
@@ -156,8 +156,8 @@ export class ScorerBuilder {
         [],
         {
           ...opts,
-          slug:
-            opts.slug ?? slugifyLib(opts.name, { lower: true, strict: true }),
+          name: resolvedName,
+          slug,
         },
         "scorer",
       );
