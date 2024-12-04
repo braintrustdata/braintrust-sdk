@@ -29,7 +29,7 @@ class _ProjectIdCache:
         return self._cache[project]
 
 
-def _pkg_install_arg(pkg):
+def _pkg_install_arg(pkg) -> str | None:
     try:
         dist = importlib.metadata.distribution(pkg)
         direct_url = dist._path / "direct_url.json"  # type: ignore
@@ -107,19 +107,20 @@ def run(args):
         else:
             # Though not strictly necessary, these packages should be in //api-ts/requirements.txt,
             # with the exception of pydantic, which is necessary to allow the user to express function input schemas.
-            install_args = filter(
-                lambda a: a is not None,
-                map(
-                    _pkg_install_arg,
-                    [
+            install_args = [
+                arg
+                for arg in [
+                    _pkg_install_arg(pkg)
+                    for pkg in [
                         "pydantic",
                         "braintrust",
                         "autoevals",
                         "requests",
                         "openai",
-                    ],
-                ),
-            )
+                    ]
+                ]
+                if arg is not None
+            ]
 
         check_uv()
 
