@@ -29,20 +29,15 @@ class _ProjectIdCache:
         return self._cache[project]
 
 
-def _braintrust_pkg():
-    d = importlib.metadata.distribution("braintrust")
+def _pkg_install_arg(pkg):
+    d = importlib.metadata.distribution(pkg)
     direct_url = d._path / "direct_url.json"
     if direct_url.exists():
         with open(direct_url) as f:
             j = json.loads(f.read())
             if "url" in j:
                 return j["url"]
-    return f"braintrust=={d.version}"
-
-
-def _pydantic_pkg():
-    d = importlib.metadata.distribution("pydantic")
-    return f"pydantic=={d.version}"
+    return f"{pkg}=={d.version}"
 
 
 def _pydantic_to_json_schema(m):
@@ -106,7 +101,18 @@ def run(args):
         if args.requirements:
             install_args = ["--requirement", args.requirements]
         else:
-            install_args = [_braintrust_pkg(), _pydantic_pkg()]
+            # Though not strictly necessary, this is kept up-to-date with //api-ts/requirements.txt,
+            # with the addition of pydantic, which is necessary to allow the user to express function input schemas.
+            install_args = map(
+                _pkg_install_arg,
+                [
+                    "pydantic",
+                    "braintrust",
+                    "autoevals",
+                    "requests",
+                    "openai",
+                ],
+            )
 
         check_uv()
 
