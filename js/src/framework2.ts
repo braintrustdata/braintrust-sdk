@@ -11,7 +11,7 @@ import {
   PromptBlockData,
   PromptData,
 } from "@braintrust/core/typespecs";
-import { TransactionId } from "@braintrust/core";
+import { ScorerArgs, TransactionId } from "@braintrust/core";
 import { Prompt, PromptRowWithId } from "./logger";
 import { GenericFunction } from "./framework-types";
 
@@ -88,9 +88,13 @@ export class ScorerBuilder {
   private taskCounter = 0;
   constructor(private readonly project: Project) {}
 
-  public create<Input, Output, Fn extends GenericFunction<Input, Output>>(
-    opts: ScorerOpts<Input, Output, Fn>,
-  ) {
+  public create<
+    Output,
+    Extra,
+    Params extends ScorerArgs<Output, Extra>,
+    Returns,
+    Fn extends GenericFunction<Params, Returns>,
+  >(opts: ScorerOpts<Output, Extra, Params, Returns, Fn>) {
     this.taskCounter++;
 
     let resolvedName = opts.name;
@@ -102,7 +106,7 @@ export class ScorerBuilder {
     }
 
     if ("handler" in opts) {
-      const scorer: CodeFunction<Input, Output, Fn> = new CodeFunction(
+      const scorer: CodeFunction<Params, Returns, Fn> = new CodeFunction(
         this.project,
         {
           ...opts,
@@ -191,7 +195,9 @@ type ScorerPromptOpts = Partial<BaseFnOpts> &
   };
 
 export type ScorerOpts<
-  Params,
+  Output,
+  Extra,
+  Params extends ScorerArgs<Output, Extra>,
   Returns,
   Fn extends GenericFunction<Params, Returns>,
 > = CodeOpts<Params, Returns, Fn> | ScorerPromptOpts;
