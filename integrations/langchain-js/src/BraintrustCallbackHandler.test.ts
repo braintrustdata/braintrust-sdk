@@ -1,6 +1,7 @@
 import { ChatPromptTemplate, PromptTemplate } from "@langchain/core/prompts";
 import { RunnableMap } from "@langchain/core/runnables";
 import { tool } from "@langchain/core/tools";
+import { END, START, StateGraph, StateGraphArgs } from "@langchain/langgraph";
 import { ChatOpenAI } from "@langchain/openai";
 import { flush, initLogger } from "braintrust";
 import { http, HttpResponse } from "msw";
@@ -9,15 +10,25 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { BraintrustCallbackHandler } from "./BraintrustCallbackHandler";
+import {
+  CHAT_BEAR_JOKE,
+  CHAT_BEAR_POEM,
+  CHAT_CHAIN_MEMORY,
+  CHAT_MATH,
+  CHAT_SAY_HELLO,
+  CHAT_STREAM_PARROT,
+  CHAT_TOOL_CALCULATOR,
+} from "./BraintrustCallbackHandler.fixtures";
 import { server } from "./test/setup";
 import { LogsRequest } from "./test/types";
-import { logsToSpans } from "./test/utils";
+import { logsToSpans, withLogging } from "./test/utils";
 
 initLogger({
   projectName: "langchain",
 });
 
-const handler = new BraintrustCallbackHandler();
+const handler = withLogging(new BraintrustCallbackHandler());
+
 const encoder = new TextEncoder();
 
 describe("BraintrustCallbackHandler", () => {
@@ -26,40 +37,7 @@ describe("BraintrustCallbackHandler", () => {
 
     server.use(
       http.post("https://api.openai.com/v1/chat/completions", () => {
-        return HttpResponse.json({
-          id: "chatcmpl-Aao716hWOt9HBihjWh9iAPGWRpkFd",
-          object: "chat.completion",
-          created: 1733335803,
-          model: "gpt-4o-mini-2024-07-18",
-          choices: [
-            {
-              index: 0,
-              message: {
-                role: "assistant",
-                content: "1 + 2 equals 3.",
-                refusal: null,
-              },
-              logprobs: null,
-              finish_reason: "stop",
-            },
-          ],
-          usage: {
-            prompt_tokens: 15,
-            completion_tokens: 8,
-            total_tokens: 23,
-            prompt_tokens_details: {
-              cached_tokens: 0,
-              audio_tokens: 0,
-            },
-            completion_tokens_details: {
-              reasoning_tokens: 0,
-              audio_tokens: 0,
-              accepted_prediction_tokens: 0,
-              rejected_prediction_tokens: 0,
-            },
-          },
-          system_fingerprint: "fp_0705bf87c0",
-        });
+        return HttpResponse.json(CHAT_MATH);
       }),
 
       http.post(/.+logs/, async ({ request }) => {
@@ -146,18 +124,7 @@ describe("BraintrustCallbackHandler", () => {
       http.post("https://api.openai.com/v1/chat/completions", async () => {
         const stream = new ReadableStream({
           start(controller) {
-            const chunks = [
-              `data: {"id":"chatcmpl-Ab9p7esnOlnH4ywBeHQOp4ScoCcde","object":"chat.completion.chunk","created":1733419261,"model":"gpt-4o-mini-2024-07-18","system_fingerprint":"fp_0705bf87c0","choices":[{"index":0,"delta":{"role":"assistant","content":"","refusal":null},"logprobs":null,"finish_reason":null}],"usage":null}`,
-              `data: {"id":"chatcmpl-Ab9p7esnOlnH4ywBeHQOp4ScoCcde","object":"chat.completion.chunk","created":1733419261,"model":"gpt-4o-mini-2024-07-18","system_fingerprint":"fp_0705bf87c0","choices":[{"index":0,"delta":{"content":"Pol"},"logprobs":null,"finish_reason":null}],"usage":null}`,
-              `data: {"id":"chatcmpl-Ab9p7esnOlnH4ywBeHQOp4ScoCcde","object":"chat.completion.chunk","created":1733419261,"model":"gpt-4o-mini-2024-07-18","system_fingerprint":"fp_0705bf87c0","choices":[{"index":0,"delta":{"content":"ly"},"logprobs":null,"finish_reason":null}],"usage":null}`,
-              `data: {"id":"chatcmpl-Ab9p7esnOlnH4ywBeHQOp4ScoCcde","object":"chat.completion.chunk","created":1733419261,"model":"gpt-4o-mini-2024-07-18","system_fingerprint":"fp_0705bf87c0","choices":[{"index":0,"delta":{"content":" wants"},"logprobs":null,"finish_reason":null}],"usage":null}`,
-              `data: {"id":"chatcmpl-Ab9p7esnOlnH4ywBeHQOp4ScoCcde","object":"chat.completion.chunk","created":1733419261,"model":"gpt-4o-mini-2024-07-18","system_fingerprint":"fp_0705bf87c0","choices":[{"index":0,"delta":{"content":" more"},"logprobs":null,"finish_reason":null}],"usage":null}`,
-              `data: {"id":"chatcmpl-Ab9p7esnOlnH4ywBeHQOp4ScoCcde","object":"chat.completion.chunk","created":1733419261,"model":"gpt-4o-mini-2024-07-18","system_fingerprint":"fp_0705bf87c0","choices":[{"index":0,"delta":{"content":" crackers"},"logprobs":null,"finish_reason":null}],"usage":null}`,
-              `data: {"id":"chatcmpl-Ab9p7esnOlnH4ywBeHQOp4ScoCcde","object":"chat.completion.chunk","created":1733419261,"model":"gpt-4o-mini-2024-07-18","system_fingerprint":"fp_0705bf87c0","choices":[{"index":0,"delta":{"content":"!"},"logprobs":null,"finish_reason":null}],"usage":null}`,
-              `data: {"id":"chatcmpl-Ab9p7esnOlnH4ywBeHQOp4ScoCcde","object":"chat.completion.chunk","created":1733419261,"model":"gpt-4o-mini-2024-07-18","system_fingerprint":"fp_0705bf87c0","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":"stop"}],"usage":null}`,
-              `data: {"id":"chatcmpl-Ab9p7esnOlnH4ywBeHQOp4ScoCcde","object":"chat.completion.chunk","created":1733419261,"model":"gpt-4o-mini-2024-07-18","system_fingerprint":"fp_0705bf87c0","choices":[],"usage":{"prompt_tokens":16,"completion_tokens":6,"total_tokens":22,"prompt_tokens_details":{"cached_tokens":0,"audio_tokens":0},"completion_tokens_details":{"reasoning_tokens":0,"audio_tokens":0,"accepted_prediction_tokens":0,"rejected_prediction_tokens":0}}}`,
-              `data: [DONE]`,
-            ];
+            const chunks = CHAT_STREAM_PARROT;
 
             for (const chunk of chunks) {
               controller.enqueue(encoder.encode(chunk + "\n\n"));
@@ -259,41 +226,7 @@ describe("BraintrustCallbackHandler", () => {
 
     server.use(
       http.post("https://api.openai.com/v1/chat/completions", () => {
-        return HttpResponse.json({
-          id: "chatcmpl-AbAHIqtiUXMz849pZPWxB7RKF9wPh",
-          object: "chat.completion",
-          created: 1733421008,
-          model: "gpt-4o-mini-2024-07-18",
-          choices: [
-            {
-              index: 0,
-              message: {
-                role: "assistant",
-                content:
-                  "Assistant: I'm called Assistant! How can I help you today?",
-                refusal: null,
-              },
-              logprobs: null,
-              finish_reason: "stop",
-            },
-          ],
-          usage: {
-            prompt_tokens: 24,
-            completion_tokens: 13,
-            total_tokens: 37,
-            prompt_tokens_details: {
-              cached_tokens: 0,
-              audio_tokens: 0,
-            },
-            completion_tokens_details: {
-              reasoning_tokens: 0,
-              audio_tokens: 0,
-              accepted_prediction_tokens: 0,
-              rejected_prediction_tokens: 0,
-            },
-          },
-          system_fingerprint: "fp_0705bf87c0",
-        });
+        return HttpResponse.json(CHAT_CHAIN_MEMORY);
       }),
 
       http.post(/.+logs/, async ({ request }) => {
@@ -379,51 +312,7 @@ describe("BraintrustCallbackHandler", () => {
 
     server.use(
       http.post("https://api.openai.com/v1/chat/completions", async () => {
-        return HttpResponse.json({
-          id: "chatcmpl-AbAVR1TojvbDgXRLlDyhz9NYZVitz",
-          object: "chat.completion",
-          created: 1733421885,
-          model: "gpt-4o-mini-2024-07-18",
-          choices: [
-            {
-              index: 0,
-              message: {
-                role: "assistant",
-                content: null,
-                tool_calls: [
-                  {
-                    id: "call_G2Qd8HzTMyFUiMafz5H4fBIi",
-                    type: "function",
-                    function: {
-                      name: "calculator",
-                      arguments:
-                        '{"operation":"multiply","number1":3,"number2":12}',
-                    },
-                  },
-                ],
-                refusal: null,
-              },
-              logprobs: null,
-              finish_reason: "tool_calls",
-            },
-          ],
-          usage: {
-            prompt_tokens: 93,
-            completion_tokens: 24,
-            total_tokens: 117,
-            prompt_tokens_details: {
-              cached_tokens: 0,
-              audio_tokens: 0,
-            },
-            completion_tokens_details: {
-              reasoning_tokens: 0,
-              audio_tokens: 0,
-              accepted_prediction_tokens: 0,
-              rejected_prediction_tokens: 0,
-            },
-          },
-          system_fingerprint: "fp_0705bf87c0",
-        });
+        return HttpResponse.json(CHAT_TOOL_CALCULATOR);
       }),
 
       http.post(/.+logs/, async ({ request }) => {
@@ -446,6 +335,7 @@ describe("BraintrustCallbackHandler", () => {
     });
 
     const calculatorTool = tool(
+      // @ts-expect-error
       ({ operation, number1, number2 }) => {
         // Functions must return strings
         if (operation === "add") {
@@ -536,76 +426,8 @@ describe("BraintrustCallbackHandler", () => {
     const logs: LogsRequest[] = [];
 
     const calls = [
-      HttpResponse.json({
-        id: "chatcmpl-AbCj2kznx4QsGpaocNir4GWdLYYqj",
-        object: "chat.completion",
-        created: 1733430416,
-        model: "gpt-4o-mini-2024-07-18",
-        choices: [
-          {
-            index: 0,
-            message: {
-              role: "assistant",
-              content:
-                'Why did the bear sit on the log?\n\nBecause it wanted to be a "bear-ly" seated customer! 🐻',
-              refusal: null,
-            },
-            logprobs: null,
-            finish_reason: "stop",
-          },
-        ],
-        usage: {
-          prompt_tokens: 13,
-          completion_tokens: 26,
-          total_tokens: 39,
-          prompt_tokens_details: {
-            cached_tokens: 0,
-            audio_tokens: 0,
-          },
-          completion_tokens_details: {
-            reasoning_tokens: 0,
-            audio_tokens: 0,
-            accepted_prediction_tokens: 0,
-            rejected_prediction_tokens: 0,
-          },
-        },
-        system_fingerprint: "fp_bba3c8e70b",
-      }),
-      HttpResponse.json({
-        id: "chatcmpl-AbClwtnbeqLRiWwoe21On10TRqqsW",
-        object: "chat.completion",
-        created: 1733430596,
-        model: "gpt-4o-mini-2024-07-18",
-        choices: [
-          {
-            index: 0,
-            message: {
-              role: "assistant",
-              content:
-                "In the forest's hush, a shadow moves near,  \nA gentle giant roams, the wise old bear.",
-              refusal: null,
-            },
-            logprobs: null,
-            finish_reason: "stop",
-          },
-        ],
-        usage: {
-          prompt_tokens: 15,
-          completion_tokens: 23,
-          total_tokens: 38,
-          prompt_tokens_details: {
-            cached_tokens: 0,
-            audio_tokens: 0,
-          },
-          completion_tokens_details: {
-            reasoning_tokens: 0,
-            audio_tokens: 0,
-            accepted_prediction_tokens: 0,
-            rejected_prediction_tokens: 0,
-          },
-        },
-        system_fingerprint: "fp_bba3c8e70b",
-      }),
+      HttpResponse.json(CHAT_BEAR_JOKE),
+      HttpResponse.json(CHAT_BEAR_POEM),
     ];
 
     server.use(
@@ -835,6 +657,156 @@ describe("BraintrustCallbackHandler", () => {
             role: "assistant",
           },
         ],
+      },
+    ]);
+  });
+
+  it.only("should handle LangGraph state management", async () => {
+    const logs: LogsRequest[] = [];
+
+    server.use(
+      http.post("https://api.openai.com/v1/chat/completions", async () => {
+        return HttpResponse.json(CHAT_SAY_HELLO);
+      }),
+
+      http.post(/.+logs/, async ({ request }) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        logs.push((await request.json()) as LogsRequest);
+        return HttpResponse.json(["graph-span-id"]);
+      }),
+    );
+
+    // derived from: https://techcommunity.microsoft.com/blog/educatordeveloperblog/an-absolute-beginners-guide-to-langgraph-js/4212496
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    type HelloWorldGraphState = Record<string, any>;
+
+    const graphStateChannels: StateGraphArgs<HelloWorldGraphState>["channels"] =
+      {};
+
+    const model = new ChatOpenAI({
+      model: "gpt-4o-mini",
+      callbacks: [handler],
+    });
+
+    async function sayHello(state: HelloWorldGraphState) {
+      const res = await model.invoke("Say hello");
+      return res.content;
+    }
+
+    function sayBye(state: HelloWorldGraphState) {
+      console.log(`From the 'sayBye' node: Bye world!`);
+      return {};
+    }
+
+    const graphBuilder = new StateGraph({ channels: graphStateChannels }) // Add our nodes to the Graph
+      .addNode("sayHello", sayHello)
+      .addNode("sayBye", sayBye) // Add the edges between nodes
+      .addEdge(START, "sayHello")
+      .addEdge("sayHello", "sayBye")
+      .addEdge("sayBye", END);
+
+    const helloWorldGraph = graphBuilder.compile();
+
+    await helloWorldGraph.invoke({}, { callbacks: [handler] });
+
+    await flush();
+
+    const { spans } = logsToSpans(logs);
+
+    expect(spans).toMatchObject([
+      {
+        span_attributes: {
+          name: "LangGraph",
+          type: "task",
+        },
+        input: {},
+        metadata: {
+          tags: [],
+        },
+        output: {},
+      },
+      {
+        span_attributes: {
+          name: "__start__",
+        },
+        input: {},
+        metadata: {
+          tags: ["graph:step:0", "langsmith:hidden"],
+        },
+        output: {},
+      },
+      {
+        span_attributes: {
+          name: "sayHello",
+        },
+        input: {},
+        metadata: {
+          tags: ["graph:step:1"],
+        },
+        output: {
+          output: "Hello! How can I assist you today?",
+        },
+      },
+      {
+        span_attributes: {
+          name: "ChatOpenAI",
+          type: "llm",
+        },
+        input: [
+          {
+            content: "Say hello",
+            role: "user",
+          },
+        ],
+        metadata: {
+          model: "gpt-4o-mini",
+          temperature: 1,
+          top_p: 1,
+          frequency_penalty: 0,
+          presence_penalty: 0,
+          n: 1,
+          tags: [],
+        },
+        output: [
+          {
+            content: "Hello! How can I assist you today?",
+            role: "assistant",
+          },
+        ],
+      },
+      {
+        span_attributes: {
+          name: "ChannelWrite<sayHello>",
+        },
+        input: {
+          input: "Hello! How can I assist you today?",
+        },
+        metadata: {
+          tags: ["langsmith:hidden"],
+        },
+        output: {
+          output: "Hello! How can I assist you today?",
+        },
+      },
+      {
+        span_attributes: {
+          name: "sayBye",
+        },
+        input: {},
+        metadata: {
+          tags: ["graph:step:2"],
+        },
+        output: {},
+      },
+      {
+        span_attributes: {
+          name: "ChannelWrite<sayBye>",
+        },
+        input: {},
+        metadata: {
+          tags: ["langsmith:hidden"],
+        },
+        output: {},
       },
     ]);
   });

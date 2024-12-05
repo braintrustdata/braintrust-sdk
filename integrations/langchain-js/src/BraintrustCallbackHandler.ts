@@ -27,6 +27,8 @@ import {
   StartSpanArgs,
 } from "braintrust";
 
+const EXCLUDE_METADATA_PROPS = /^(l[sc]_|langgraph_|__pregel_|checkpoint_ns)/;
+
 /**
  * A Braintrust tracer for LangChain.js that logs LLM calls, chains, and tools
  */
@@ -60,9 +62,11 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
     parentRunId?: string;
   }) {
     if (this.spans.has(runId)) {
-      throw new Error(
+      // XXX: see graph test case of an example where this _may_ be intended
+      console.warn(
         `Span already exists for runId ${runId} (this is likely a bug)`,
       );
+      return;
     }
 
     args.event = {
@@ -446,7 +450,9 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
 const cleanMetadata = (metadata?: Record<string, unknown>) =>
   metadata &&
   Object.fromEntries(
-    Object.entries(metadata).filter(([key, _]) => !/^l[sc]_/.test(key)),
+    Object.entries(metadata).filter(
+      ([key, _]) => !EXCLUDE_METADATA_PROPS.test(key),
+    ),
   );
 
 const extractCallArgs = (

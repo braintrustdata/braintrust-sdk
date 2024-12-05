@@ -58,6 +58,9 @@ importers:
       '@langchain/core':
         specifier: ^0.3.20
         version: 0.3.20
+      '@langchain/langgraph':
+        specifier: ^0.2.25
+        version: 0.2.25(@langchain/core@0.3.20)
       '@langchain/openai':
         specifier: ^0.3.14
         version: 0.3.14(@langchain/core@0.3.20)
@@ -66,7 +69,7 @@ importers:
         version: 20.10.5
       msw:
         specifier: ^2.6.6
-        version: 2.6.6(@types/node@20.10.5)
+        version: 2.6.6(@types/node@20.10.5)(typescript@5.3.3)
       tsup:
         specifier: ^8.0.1
         version: 8.0.1(typescript@5.3.3)
@@ -1786,10 +1789,42 @@ packages:
       p-queue: 6.6.2
       p-retry: 4.6.2
       uuid: 10.0.0
-      zod: 3.22.4
-      zod-to-json-schema: 3.22.5(zod@3.22.4)
+      zod: 3.23.8
+      zod-to-json-schema: 3.22.5(zod@3.23.8)
     transitivePeerDependencies:
       - openai
+    dev: true
+
+  /@langchain/langgraph-checkpoint@0.0.13(@langchain/core@0.3.20):
+    resolution: {integrity: sha512-amdmBcNT8a9xP2VwcEWxqArng4gtRDcnVyVI4DsQIo1Aaz8e8+hH17zSwrUF3pt1pIYztngIfYnBOim31mtKMg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@langchain/core': '>=0.2.31 <0.4.0'
+    dependencies:
+      '@langchain/core': 0.3.20
+      uuid: 10.0.0
+    dev: true
+
+  /@langchain/langgraph-sdk@0.0.31:
+    resolution: {integrity: sha512-oYZWoC3x7vH9bAL1Y30XjtuWnic1j3knXD4BbldsY0chFLxwIT5i6/GMThNy3Oiwb4SB+c6gvaSuxBNDkp7dkw==}
+    dependencies:
+      '@types/json-schema': 7.0.15
+      p-queue: 6.6.2
+      p-retry: 4.6.2
+      uuid: 9.0.1
+    dev: true
+
+  /@langchain/langgraph@0.2.25(@langchain/core@0.3.20):
+    resolution: {integrity: sha512-i+WnwmSxHiyB8gDzFaRBMUO1qomGHSz93bEg5SkS4Y/AjcyoJNZBgYSKNUcSKPQ2tqGAXI5XNPN5jrTUVnWOFw==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@langchain/core': '>=0.2.36 <0.3.0 || >=0.3.9 < 0.4.0'
+    dependencies:
+      '@langchain/core': 0.3.20
+      '@langchain/langgraph-checkpoint': 0.0.13(@langchain/core@0.3.20)
+      '@langchain/langgraph-sdk': 0.0.31
+      uuid: 10.0.0
+      zod: 3.23.8
     dev: true
 
   /@langchain/openai@0.3.14(@langchain/core@0.3.20):
@@ -1800,9 +1835,9 @@ packages:
     dependencies:
       '@langchain/core': 0.3.20
       js-tiktoken: 1.0.15
-      openai: 4.75.0(zod@3.22.4)
-      zod: 3.22.4
-      zod-to-json-schema: 3.22.5(zod@3.22.4)
+      openai: 4.75.0(zod@3.23.8)
+      zod: 3.23.8
+      zod-to-json-schema: 3.22.5(zod@3.23.8)
     transitivePeerDependencies:
       - encoding
     dev: true
@@ -2082,6 +2117,10 @@ packages:
     resolution: {integrity: sha512-pk2B1NWalF9toCRu6gjBzR69syFjP4Od8WRAX+0mmf9lAjCRicLOWc+ZrxZHx/0XRjotgkF9t6iaMJ+aXcOdZQ==}
     dependencies:
       '@types/istanbul-lib-report': 3.0.3
+    dev: true
+
+  /@types/json-schema@7.0.15:
+    resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
     dev: true
 
   /@types/mustache@4.2.5:
@@ -4600,7 +4639,7 @@ packages:
   /ms@2.1.2:
     resolution: {integrity: sha512-sGkPx+VjMtmA6MX27oA4FBFELFCZZ4S4XqeGOXCv68tT+jb3vk/RyaKWP0PTKyWtmLSM0b+adUTEvbs1PEaH2w==}
 
-  /msw@2.6.6(@types/node@20.10.5):
+  /msw@2.6.6(@types/node@20.10.5)(typescript@5.3.3):
     resolution: {integrity: sha512-npfIIVRHKQX3Lw4aLWX4wBh+lQwpqdZNyJYB5K/+ktK8NhtkdsTxGK7WDrgknozcVyRI7TOqY6yBS9j2FTR+YQ==}
     engines: {node: '>=18'}
     hasBin: true
@@ -4628,6 +4667,7 @@ packages:
       path-to-regexp: 6.3.0
       strict-event-emitter: 0.5.1
       type-fest: 4.30.0
+      typescript: 5.3.3
       yargs: 17.7.2
     transitivePeerDependencies:
       - '@types/node'
@@ -4809,7 +4849,7 @@ packages:
       - encoding
     dev: true
 
-  /openai@4.75.0(zod@3.22.4):
+  /openai@4.75.0(zod@3.23.8):
     resolution: {integrity: sha512-8cWaK3td0qLspaflKWD6AvpQnl0gynWFbHg7sMAgiu//F20I4GJlCCpllDrECO6WFSuY8HXJj8gji3urw2BGGg==}
     hasBin: true
     peerDependencies:
@@ -4825,7 +4865,7 @@ packages:
       form-data-encoder: 1.7.2
       formdata-node: 4.4.1
       node-fetch: 2.7.0
-      zod: 3.22.4
+      zod: 3.23.8
     transitivePeerDependencies:
       - encoding
     dev: true
