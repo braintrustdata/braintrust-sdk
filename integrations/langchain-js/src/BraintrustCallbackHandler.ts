@@ -216,7 +216,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
       type: "llm",
       event: {
         input: inputFromMessages(messages),
-        metadata: {
+        metadata: cleanObject({
           tags,
           ...cleanMetadata(metadata),
           ...extractCallArgs(
@@ -224,7 +224,8 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
             extraParams?.invocation_params || {},
             metadata,
           ),
-        },
+          tools: extraParams?.invocation_params?.tools,
+        }),
       },
     });
   }
@@ -522,7 +523,6 @@ const getMessageContent = (message: BaseMessage) => {
   return cleanObject({
     content: message.content,
     role,
-    additional_kwargs: cleanObject(message.additional_kwargs || {}),
     // @ts-expect-error Message may be any BaseMessage concrete implementation
     tool_calls: message.tool_calls,
     // @ts-expect-error Message may be any ToolMessage
@@ -567,7 +567,7 @@ const outputFromChainValues = (output: unknown) => {
  * This attempts to normalize them. We'll likely miss some cases!
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const parseChainValue = (output: any) => {
+const parseChainValue = (output: any): any => {
   if (typeof output === "string") {
     return output;
   }
