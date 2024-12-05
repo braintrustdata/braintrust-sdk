@@ -24,6 +24,7 @@
   "license": "MIT",
   "devDependencies": {
     "@langchain/core": "^0.3.20",
+    "@langchain/langgraph": "^0.2.25",
     "@langchain/openai": "^0.3.14",
     "@types/node": "^20.10.5",
     "msw": "^2.6.6",

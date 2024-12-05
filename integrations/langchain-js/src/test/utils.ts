@@ -1,4 +1,5 @@
 import { mergeDicts } from "@braintrust/core";
+import { BaseCallbackHandler } from "@langchain/core/callbacks/base";
 import { bypass, HttpResponse, JsonBodyType } from "msw";
 import { TransformStream } from "stream/web";
 import { LogsRequest } from "./types";
@@ -65,4 +66,36 @@ export const logsToSpans = (logs: LogsRequest[]) => {
     root_span_id: spans[0].span_id,
     root_run_id: spans[0].metadata?.runId,
   };
+};
+
+export const withLogging = (handler: BaseCallbackHandler) => {
+  if (process.env.VERBOSE === "false") {
+    return handler;
+  }
+
+  let depth = 0;
+  return new Proxy(handler, {
+    get(target, prop) {
+      // @ts-expect-error
+      const originalMethod = target[prop];
+      if (typeof originalMethod === "function") {
+        // @ts-expect-error
+        return function (...args) {
+          const propString = String(prop);
+          if (!["startSpan", "endSpan"].includes(propString)) {
+            console.log(new Array(depth * 2).join(" ") + propString);
+
+            if (propString.endsWith("Start")) {
+              depth++;
+            } else if (propString.endsWith("End")) {
+              depth--;
+            }
+          }
+          // @ts-expect-error
+          return originalMethod.apply(this, args);
+        };
+      }
+      return originalMethod;
+    },
+  });
 };
