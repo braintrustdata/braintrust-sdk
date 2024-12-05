@@ -647,13 +647,11 @@ describe("BraintrustCallbackHandler", () => {
       {
         span_attributes: {
           name: "RunnableMap",
-          exec_counter: 0,
         },
       },
       {
         span_attributes: {
           name: "RunnableSequence",
-          exec_counter: 1,
         },
         metadata: {
           tags: ["map:key:joke"],
@@ -662,7 +660,6 @@ describe("BraintrustCallbackHandler", () => {
       {
         span_attributes: {
           name: "RunnableSequence",
-          exec_counter: 2,
         },
         metadata: {
           tags: ["map:key:poem"],
@@ -671,7 +668,6 @@ describe("BraintrustCallbackHandler", () => {
       {
         span_attributes: {
           name: "PromptTemplate",
-          exec_counter: 3,
         },
         metadata: {
           tags: ["seq:step:1"],
@@ -680,7 +676,6 @@ describe("BraintrustCallbackHandler", () => {
       {
         span_attributes: {
           name: "PromptTemplate",
-          exec_counter: 4,
         },
         metadata: {
           tags: ["seq:step:1"],
@@ -690,7 +685,6 @@ describe("BraintrustCallbackHandler", () => {
         span_attributes: {
           name: "ChatOpenAI",
           type: "llm",
-          exec_counter: 5,
         },
         input: [
           {
@@ -706,7 +700,6 @@ describe("BraintrustCallbackHandler", () => {
         span_attributes: {
           name: "ChatOpenAI",
           type: "llm",
-          exec_counter: 6,
         },
         input: [
           {
@@ -736,7 +729,10 @@ describe("BraintrustCallbackHandler", () => {
         span_id: root_span_id,
         root_span_id,
         input: {
-          topic: "bear",
+          // TODO: do we want to be opinionated here?
+          input: {
+            topic: "bear",
+          },
         },
         metadata: {
           runId: root_run_id,

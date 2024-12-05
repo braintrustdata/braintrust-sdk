@@ -245,8 +245,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
       parentRunId,
       name: runName ?? chain.id.at(-1)?.toString() ?? "Chain",
       event: {
-        // XXX: handle case where RunnableMap provides an input input object
-        input: inputFromChainValues("input" in inputs ? inputs.input : inputs),
+        input: inputFromChainValues(inputs),
         metadata: {
           tags,
           ...cleanMetadata(metadata),
