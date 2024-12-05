@@ -6,6 +6,7 @@ import { http, HttpResponse } from "msw";
 import { ReadableStream } from "stream/web";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { BraintrustCallbackHandler } from "./BraintrustCallbackHandler";
 import { server } from "./test/setup";
 import { LogsRequest } from "./test/types";
@@ -444,7 +445,6 @@ describe("BraintrustCallbackHandler", () => {
     });
 
     const calculatorTool = tool(
-      // @ts-expect-error ??
       ({ operation, number1, number2 }) => {
         // Functions must return strings
         if (operation === "add") {
@@ -478,45 +478,55 @@ describe("BraintrustCallbackHandler", () => {
 
     expect(spans).toMatchObject([
       {
-        span_attributes: {
-          name: "RunnableSequence",
-          type: "task",
-        },
-        input: {},
-        metadata: {
-          tags: [],
-        },
         span_id: root_span_id,
         root_span_id,
-      },
-      {
-        span_attributes: { name: "ChatPromptTemplate" },
-        input: {},
-        output: "Calculate 2 + 2.",
-        metadata: { tags: ["seq:step:1"] },
-        root_span_id,
-        span_parents: [root_span_id],
-      },
-      {
-        span_attributes: { name: "ChatOpenAI", type: "llm" },
+        span_attributes: {
+          name: "ChatOpenAI",
+          type: "llm",
+        },
         input: [
           {
-            content: "Calculate 2 + 2.",
+            content: "What is 3 * 12",
             role: "user",
           },
         ],
+        metadata: {
+          tags: [],
+          model: "gpt-4o-mini",
+          temperature: 1,
+          top_p: 1,
+          frequency_penalty: 0,
+          presence_penalty: 0,
+          n: 1,
+          tools: [
+            {
+              type: "function",
+              function: {
+                description: "Can perform mathematical operations.",
+                name: "calculator",
+                parameters: zodToJsonSchema(calculatorSchema),
+              },
+            },
+          ],
+        },
         output: [
           {
-            content: "The result is 4.",
+            content: "",
             role: "assistant",
+            tool_calls: [
+              {
+                name: "calculator",
+                args: {
+                  operation: "multiply",
+                  number1: 3,
+                  number2: 12,
+                },
+                type: "tool_call",
+                id: "call_G2Qd8HzTMyFUiMafz5H4fBIi",
+              },
+            ],
           },
         ],
-        metadata: {
-          tags: ["seq:step:2"],
-          model: "gpt-4o-mini",
-        },
-        root_span_id,
-        span_parents: [root_span_id],
       },
     ]);
   });

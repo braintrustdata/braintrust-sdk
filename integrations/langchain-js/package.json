@@ -30,7 +30,8 @@
     "tsup": "^8.0.1",
     "typescript": "^5.3.3",
     "vitest": "^1.6.0",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "3.22.5"
   },
   "dependencies": {
     "braintrust": "workspace:>=0.0.141"
