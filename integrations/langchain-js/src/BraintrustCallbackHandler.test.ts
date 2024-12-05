@@ -1,4 +1,5 @@
-import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { ChatPromptTemplate, PromptTemplate } from "@langchain/core/prompts";
+import { RunnableMap } from "@langchain/core/runnables";
 import { tool } from "@langchain/core/tools";
 import { ChatOpenAI } from "@langchain/openai";
 import { flush, initLogger } from "braintrust";
@@ -525,6 +526,317 @@ describe("BraintrustCallbackHandler", () => {
                 id: "call_G2Qd8HzTMyFUiMafz5H4fBIi",
               },
             ],
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("should handle parallel runnable execution", async () => {
+    const logs: LogsRequest[] = [];
+
+    const calls = [
+      HttpResponse.json({
+        id: "chatcmpl-AbCj2kznx4QsGpaocNir4GWdLYYqj",
+        object: "chat.completion",
+        created: 1733430416,
+        model: "gpt-4o-mini-2024-07-18",
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              content:
+                'Why did the bear sit on the log?\n\nBecause it wanted to be a "bear-ly" seated customer! 🐻',
+              refusal: null,
+            },
+            logprobs: null,
+            finish_reason: "stop",
+          },
+        ],
+        usage: {
+          prompt_tokens: 13,
+          completion_tokens: 26,
+          total_tokens: 39,
+          prompt_tokens_details: {
+            cached_tokens: 0,
+            audio_tokens: 0,
+          },
+          completion_tokens_details: {
+            reasoning_tokens: 0,
+            audio_tokens: 0,
+            accepted_prediction_tokens: 0,
+            rejected_prediction_tokens: 0,
+          },
+        },
+        system_fingerprint: "fp_bba3c8e70b",
+      }),
+      HttpResponse.json({
+        id: "chatcmpl-AbClwtnbeqLRiWwoe21On10TRqqsW",
+        object: "chat.completion",
+        created: 1733430596,
+        model: "gpt-4o-mini-2024-07-18",
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              content:
+                "In the forest's hush, a shadow moves near,  \nA gentle giant roams, the wise old bear.",
+              refusal: null,
+            },
+            logprobs: null,
+            finish_reason: "stop",
+          },
+        ],
+        usage: {
+          prompt_tokens: 15,
+          completion_tokens: 23,
+          total_tokens: 38,
+          prompt_tokens_details: {
+            cached_tokens: 0,
+            audio_tokens: 0,
+          },
+          completion_tokens_details: {
+            reasoning_tokens: 0,
+            audio_tokens: 0,
+            accepted_prediction_tokens: 0,
+            rejected_prediction_tokens: 0,
+          },
+        },
+        system_fingerprint: "fp_bba3c8e70b",
+      }),
+    ];
+
+    server.use(
+      http.post("https://api.openai.com/v1/chat/completions", () => {
+        return (
+          calls.shift() || HttpResponse.json({ ok: false }, { status: 500 })
+        );
+      }),
+
+      http.post(/.+logs/, async ({ request }) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        logs.push((await request.json()) as LogsRequest);
+        return HttpResponse.json(["parallel-span-id"]);
+      }),
+    );
+
+    const model = new ChatOpenAI({ model: "gpt-4o-mini" });
+
+    const jokeChain = PromptTemplate.fromTemplate(
+      "Tell me a joke about {topic}",
+    ).pipe(model);
+    const poemChain = PromptTemplate.fromTemplate(
+      "write a 2-line poem about {topic}",
+    ).pipe(model);
+
+    const mapChain = RunnableMap.from({
+      joke: jokeChain,
+      poem: poemChain,
+    });
+
+    await mapChain.invoke({ topic: "bear" }, { callbacks: [handler] });
+
+    await flush();
+
+    const { spans, root_span_id, root_run_id } = logsToSpans(logs);
+
+    // verify that spans are in the correct order
+    expect(spans).toMatchObject([
+      {
+        span_attributes: {
+          name: "RunnableMap",
+          exec_counter: 0,
+        },
+      },
+      {
+        span_attributes: {
+          name: "RunnableSequence",
+          exec_counter: 1,
+        },
+        metadata: {
+          tags: ["map:key:joke"],
+        },
+      },
+      {
+        span_attributes: {
+          name: "RunnableSequence",
+          exec_counter: 2,
+        },
+        metadata: {
+          tags: ["map:key:poem"],
+        },
+      },
+      {
+        span_attributes: {
+          name: "PromptTemplate",
+          exec_counter: 3,
+        },
+        metadata: {
+          tags: ["seq:step:1"],
+        },
+      },
+      {
+        span_attributes: {
+          name: "PromptTemplate",
+          exec_counter: 4,
+        },
+        metadata: {
+          tags: ["seq:step:1"],
+        },
+      },
+      {
+        span_attributes: {
+          name: "ChatOpenAI",
+          type: "llm",
+          exec_counter: 5,
+        },
+        input: [
+          {
+            content: "Tell me a joke about bear",
+            role: "user",
+          },
+        ],
+        metadata: {
+          tags: ["seq:step:2"],
+        },
+      },
+      {
+        span_attributes: {
+          name: "ChatOpenAI",
+          type: "llm",
+          exec_counter: 6,
+        },
+        input: [
+          {
+            content: "write a 2-line poem about bear",
+            role: "user",
+          },
+        ],
+        metadata: {
+          tags: ["seq:step:2"],
+        },
+      },
+    ]);
+
+    const joke = {
+      span_id: spans[1].span_id,
+      run_id: spans[1].metadata?.runId,
+    };
+
+    const poem = {
+      span_id: spans[2].span_id,
+      run_id: spans[2].metadata?.runId,
+    };
+
+    // actual check for input/output, parent/child relationship, and metadata formatting
+    expect(spans).toMatchObject([
+      {
+        span_id: root_span_id,
+        root_span_id,
+        input: {
+          topic: "bear",
+        },
+        metadata: {
+          runId: root_run_id,
+        },
+        output: {
+          joke: 'Why did the bear sit on the log?\n\nBecause it wanted to be a "bear-ly" seated customer! 🐻',
+          poem: "In the forest's hush, a shadow moves near,  \nA gentle giant roams, the wise old bear.",
+        },
+      },
+      {
+        span_parents: [root_span_id],
+        input: {
+          topic: "bear",
+        },
+        output:
+          'Why did the bear sit on the log?\n\nBecause it wanted to be a "bear-ly" seated customer! 🐻',
+        metadata: {
+          parentRunId: root_run_id,
+        },
+      },
+      {
+        span_parents: [root_span_id],
+        input: {
+          topic: "bear",
+        },
+        output:
+          "In the forest's hush, a shadow moves near,  \nA gentle giant roams, the wise old bear.",
+        metadata: {
+          parentRunId: root_run_id,
+        },
+      },
+      {
+        input: {
+          topic: "bear",
+        },
+        output: "Tell me a joke about bear",
+        metadata: {
+          parentRunId: joke.run_id,
+        },
+        span_parents: [joke.span_id],
+      },
+      {
+        input: {
+          topic: "bear",
+        },
+        metadata: {
+          parentRunId: poem.run_id,
+        },
+        output: "write a 2-line poem about bear",
+        span_parents: [poem.span_id],
+      },
+      {
+        span_parents: [joke.span_id],
+        input: [
+          {
+            content: "Tell me a joke about bear",
+            role: "user",
+          },
+        ],
+        metadata: {
+          tags: ["seq:step:2"],
+          model: "gpt-4o-mini",
+          temperature: 1,
+          top_p: 1,
+          frequency_penalty: 0,
+          presence_penalty: 0,
+          n: 1,
+          parentRunId: joke.run_id,
+        },
+        output: [
+          {
+            content:
+              'Why did the bear sit on the log?\n\nBecause it wanted to be a "bear-ly" seated customer! 🐻',
+            role: "assistant",
+          },
+        ],
+      },
+      {
+        span_parents: [poem.span_id],
+        input: [
+          {
+            content: "write a 2-line poem about bear",
+            role: "user",
+          },
+        ],
+        metadata: {
+          tags: ["seq:step:2"],
+          model: "gpt-4o-mini",
+          temperature: 1,
+          top_p: 1,
+          frequency_penalty: 0,
+          presence_penalty: 0,
+          n: 1,
+          parentRunId: poem.run_id,
+        },
+        output: [
+          {
+            content:
+              "In the forest's hush, a shadow moves near,  \nA gentle giant roams, the wise old bear.",
+            role: "assistant",
           },
         ],
       },

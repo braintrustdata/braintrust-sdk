@@ -32,6 +32,10 @@ export const bypassAndLog = async (request: Request): Promise<Response> => {
 };
 
 export const logsToSpans = (logs: LogsRequest[]) => {
+  if (logs.length === 0) {
+    throw new Error("No logs to convert to spans");
+  }
+
   // Logs include partial updates (merges) for previous rows.
   // We need to dedupe these and merge them. So we can see the final state like
   // we do in the UI.
