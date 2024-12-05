@@ -1,4 +1,4 @@
-import { ExperimentLogPartialArgs } from "@braintrust/core";
+import { ExperimentLogPartialArgs, isObject } from "@braintrust/core";
 import {
   BaseCallbackHandler,
   BaseCallbackHandlerInput,
@@ -17,12 +17,7 @@ import {
 } from "@langchain/core/dist/outputs";
 import { RunnableConfig } from "@langchain/core/dist/runnables/config";
 import { ChainValues } from "@langchain/core/dist/utils/types";
-import {
-  AIMessage,
-  HumanMessage,
-  SystemMessage,
-  ToolMessage,
-} from "@langchain/core/messages";
+import { ToolMessage } from "@langchain/core/messages";
 import {
   currentLogger,
   currentSpan,
@@ -138,7 +133,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
         metadata: {
           tags,
           ...cleanMetadata(metadata),
-          params: extractCallArgs(
+          ...extractCallArgs(
             llm,
             extraParams?.invocation_params || {},
             metadata,
@@ -218,12 +213,13 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
       runId,
       parentRunId,
       name: runName ?? llm.id.at(-1)?.toString() ?? "Chat Model",
+      type: "llm",
       event: {
         input: inputFromMessages(messages),
         metadata: {
           tags,
           ...cleanMetadata(metadata),
-          params: extractCallArgs(
+          ...extractCallArgs(
             llm,
             extraParams?.invocation_params || {},
             metadata,
@@ -248,11 +244,11 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
       parentRunId,
       name: runName ?? chain.id.at(-1)?.toString() ?? "Chain",
       event: {
-        input: inputs,
+        input: inputFromChainValues(inputs),
         metadata: {
           tags,
           ...cleanMetadata(metadata),
-          params: extractCallArgs(chain, {}, metadata),
+          ...extractCallArgs(chain, {}, metadata),
         },
       },
     });
@@ -310,7 +306,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
         metadata: {
           tags,
           ...cleanMetadata(metadata),
-          params: extractCallArgs(tool, {}, metadata),
+          ...extractCallArgs(tool, {}, metadata),
         },
       },
     });
@@ -397,7 +393,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
         metadata: {
           tags,
           ...cleanMetadata(metadata),
-          params: extractCallArgs(retriever, {}, metadata),
+          ...extractCallArgs(retriever, {}, metadata),
         },
       },
     });
@@ -492,19 +488,12 @@ const outputFromGenerations = (
       : parseGeneration(batch);
   });
 
-  return {
-    parsed: parsed.length === 1 ? parsed[0] : parsed,
-    raw: generations,
-  };
+  return parsed;
 };
 
 const parseGeneration = (generation: Generation | ChatGeneration) => {
   if ("message" in generation) {
-    if (typeof generation.message.content === "string") {
-      return generation.message.content;
-    }
-
-    return generation.message.content.join("\n");
+    return getMessageContent(generation.message);
   }
 
   if (generation.text) {
@@ -514,24 +503,26 @@ const parseGeneration = (generation: Generation | ChatGeneration) => {
   // give up!
 };
 
-const inputFromMessages = (messages: BaseMessage[][]) =>
-  messages.flatMap((batch) => batch.map(getMessageContent));
+const inputFromMessages = (messages: BaseMessage[][]) => {
+  const parsed = messages.flatMap((batch) => batch.map(getMessageContent));
+  return parsed;
+};
 
 const getMessageContent = (message: BaseMessage) => {
-  let role = message.name;
+  let role = message.name ?? message.getType();
 
-  if (message instanceof HumanMessage) {
+  if (message.getType() === "human") {
     role = "user";
-  } else if (message instanceof AIMessage) {
+  } else if (message.getType() === "ai") {
     role = "assistant";
-  } else if (message instanceof SystemMessage) {
+  } else if (message.getType() === "system") {
     role = "system";
   }
 
   return cleanObject({
     content: message.content,
     role,
-    additional_kwargs: message.additional_kwargs,
+    additional_kwargs: cleanObject(message.additional_kwargs || {}),
     // @ts-expect-error Message may be any BaseMessage concrete implementation
     tool_calls: message.tool_calls,
     // @ts-expect-error Message may be any ToolMessage
@@ -543,9 +534,14 @@ const getMessageContent = (message: BaseMessage) => {
 
 const cleanObject = (obj: Record<string, unknown>) =>
   Object.fromEntries(
-    Object.entries(obj).filter(
-      ([, value]) => value !== undefined && value !== null,
-    ),
+    Object.entries(obj).filter(([key, value]) => {
+      if (value === undefined || value === null) return false;
+      if (Array.isArray(value) && value.length === 0) return false;
+      if (isObject(value) && Object.keys(value).length === 0) {
+        return false;
+      }
+      return true;
+    }),
   );
 
 const safeParseSerializedJson = (input: string) => {
@@ -556,19 +552,14 @@ const safeParseSerializedJson = (input: string) => {
   }
 };
 
-const outputFromToolOutput = (output: unknown | ToolMessage) => ({
-  parsed: output instanceof ToolMessage ? getMessageContent(output) : undefined,
-  raw: output,
-});
+const outputFromToolOutput = (output: unknown | ToolMessage) =>
+  output instanceof ToolMessage ? getMessageContent(output) : undefined;
 
 const outputFromChainValues = (output: unknown) => {
   const parsed = (Array.isArray(output) ? output : [output]).flatMap(
     parseChainValue,
   );
-  return {
-    parsed: parsed.length === 1 ? parsed[0] : parsed,
-    raw: output,
-  };
+  return parsed.length === 1 ? parsed[0] : parsed;
 };
 
 /**
@@ -594,4 +585,13 @@ const parseChainValue = (output: any) => {
   }
 
   // give up! let's assume the user will use the raw output
+  return output;
+};
+
+const inputFromChainValues = (inputs: ChainValues) => {
+  const parsed = (Array.isArray(inputs) ? inputs : [inputs]).flatMap(
+    parseChainValue,
+  );
+
+  return parsed.length === 1 ? parsed[0] : parsed;
 };
