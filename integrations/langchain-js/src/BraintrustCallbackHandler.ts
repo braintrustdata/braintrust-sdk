@@ -245,7 +245,8 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
       parentRunId,
       name: runName ?? chain.id.at(-1)?.toString() ?? "Chain",
       event: {
-        input: inputFromChainValues(inputs),
+        // XXX: handle case where RunnableMap provides an input input object
+        input: inputFromChainValues("input" in inputs ? inputs.input : inputs),
         metadata: {
           tags,
           ...cleanMetadata(metadata),
@@ -580,8 +581,22 @@ const parseChainValue = (output: any): any => {
     return output.messages.map(parseChainValue);
   }
 
+  if (output.value) {
+    return output.value;
+  }
+
   if (output.kwargs) {
     return parseChainValue(output.kwargs);
+  }
+
+  // XXX: RunnableMap returns an object with keys for each sequence
+  if (typeof output === "object" && output) {
+    return Object.fromEntries(
+      Object.entries(output).map(([key, value]) => [
+        key,
+        parseChainValue(value),
+      ]),
+    );
   }
 
   // give up! let's assume the user will use the raw output
