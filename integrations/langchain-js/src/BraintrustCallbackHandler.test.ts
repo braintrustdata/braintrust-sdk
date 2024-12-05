@@ -90,7 +90,6 @@ describe("BraintrustCallbackHandler", () => {
         },
         metadata: {
           tags: [],
-          params: {},
         },
         span_id: root_span_id,
         root_span_id,
@@ -98,31 +97,33 @@ describe("BraintrustCallbackHandler", () => {
       {
         span_attributes: { name: "ChatPromptTemplate" },
         input: { number: "2" },
-        output: {
-          parsed: "What is 1 + 2?",
-        },
-        metadata: { tags: ["seq:step:1"], params: {} },
+        output: "What is 1 + 2?",
+        metadata: { tags: ["seq:step:1"] },
         root_span_id,
         span_parents: [root_span_id],
       },
       {
-        span_attributes: { name: "ChatOpenAI" },
+        span_attributes: { name: "ChatOpenAI", type: "llm" },
         input: [
-          { content: "What is 1 + 2?", role: "user", additional_kwargs: {} },
+          {
+            content: "What is 1 + 2?",
+            role: "user",
+          },
         ],
-        output: {
-          parsed: "1 + 2 equals 3.",
-        },
+        output: [
+          {
+            content: "1 + 2 equals 3.",
+            role: "assistant",
+          },
+        ],
         metadata: {
           tags: ["seq:step:2"],
-          params: {
-            model: "gpt-4o-mini",
-            temperature: 1,
-            top_p: 1,
-            frequency_penalty: 0,
-            presence_penalty: 0,
-            n: 1,
-          },
+          model: "gpt-4o-mini",
+          temperature: 1,
+          top_p: 1,
+          frequency_penalty: 0,
+          presence_penalty: 0,
+          n: 1,
         },
         root_span_id,
         span_parents: [root_span_id],
