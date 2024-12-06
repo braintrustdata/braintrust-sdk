@@ -11,7 +11,7 @@ import {
   PromptBlockData,
   PromptData,
 } from "@braintrust/core/typespecs";
-import { ScorerArgs, TransactionId } from "@braintrust/core";
+import { TransactionId } from "@braintrust/core";
 import { Prompt, PromptRowWithId } from "./logger";
 import { GenericFunction } from "./framework-types";
 
@@ -90,11 +90,14 @@ export class ScorerBuilder {
 
   public create<
     Output,
-    Extra,
-    Params extends ScorerArgs<Output, Extra>,
+    Input,
+    Params,
     Returns,
-    Fn extends GenericFunction<Params, Returns>,
-  >(opts: ScorerOpts<Output, Extra, Params, Returns, Fn>) {
+    Fn extends GenericFunction<
+      Exact<Params, ScorerArgs<Output, Input>>,
+      Returns
+    >,
+  >(opts: ScorerOpts<Output, Input, Params, Returns, Fn>) {
     this.taskCounter++;
 
     let resolvedName = opts.name;
@@ -108,15 +111,16 @@ export class ScorerBuilder {
       opts.slug ?? slugifyLib(resolvedName, { lower: true, strict: true });
 
     if ("handler" in opts) {
-      const scorer: CodeFunction<Params, Returns, Fn> = new CodeFunction(
-        this.project,
-        {
-          ...opts,
-          name: resolvedName,
-          slug,
-          type: "scorer",
-        },
-      );
+      const scorer: CodeFunction<
+        Exact<Params, ScorerArgs<Output, Input>>,
+        Returns,
+        Fn
+      > = new CodeFunction(this.project, {
+        ...opts,
+        name: resolvedName,
+        slug,
+        type: "scorer",
+      });
       if (globalThis._lazy_load) {
         globalThis._evals.functions.push(
           scorer as CodeFunction<
@@ -149,7 +153,6 @@ export class ScorerBuilder {
           choice_scores: opts.choiceScores,
         },
       };
-      // TODO(sachin): Support tools for LLM scorers.
       const codePrompt = new CodePrompt(
         this.project,
         promptData,
@@ -189,18 +192,34 @@ export type CodeOpts<
 } & Schema<Params, Returns>;
 
 type ScorerPromptOpts = Partial<BaseFnOpts> &
-  PromptOpts<false, false> & {
+  PromptOpts<false, false, false, false> & {
     useCot: boolean;
     choiceScores: Record<string, number>;
   };
 
+// A more correct ScorerArgs than that in //sdk/core/js/src/score.ts.
+type ScorerArgs<Output, Input> = {
+  output: Output;
+  expected?: Output;
+  input?: Input;
+  metadata?: Record<string, unknown>;
+};
+
+type Exact<T, Shape> = T extends Shape
+  ? Exclude<keyof T, keyof Shape> extends never
+    ? T
+    : never
+  : never;
+
 export type ScorerOpts<
   Output,
-  Extra,
-  Params extends ScorerArgs<Output, Extra>,
+  Input,
+  Params,
   Returns,
-  Fn extends GenericFunction<Params, Returns>,
-> = CodeOpts<Params, Returns, Fn> | ScorerPromptOpts;
+  Fn extends GenericFunction<Exact<Params, ScorerArgs<Output, Input>>, Returns>,
+> =
+  | CodeOpts<Exact<Params, ScorerArgs<Output, Input>>, Returns, Fn>
+  | ScorerPromptOpts;
 
 export class CodeFunction<
   Input,
@@ -276,7 +295,7 @@ export class CodePrompt {
     project: Project,
     prompt: PromptData,
     toolFunctions: (SavedFunctionId | GenericCodeFunction)[],
-    opts: Omit<PromptOpts<false, false>, "name" | "slug"> & {
+    opts: Omit<PromptOpts<false, false, false, false>, "name" | "slug"> & {
       name: string;
       slug: string;
     },
@@ -315,6 +334,14 @@ interface PromptVersion {
   version: TransactionId;
 }
 
+interface PromptTools {
+  tools: (GenericCodeFunction | SavedFunctionId | ToolFunctionDefinition)[];
+}
+
+interface PromptNoTrace {
+  noTrace: boolean;
+}
+
 // This roughly maps to promptBlockDataSchema, but is more ergonomic for the user.
 type PromptContents =
   | {
@@ -327,16 +354,17 @@ type PromptContents =
 export type PromptOpts<
   HasId extends boolean,
   HasVersion extends boolean,
+  HasTools extends boolean = true,
+  HasNoTrace extends boolean = true,
 > = (Partial<Omit<BaseFnOpts, "name">> & { name: string }) &
   (HasId extends true ? PromptId : Partial<PromptId>) &
   (HasVersion extends true ? PromptVersion : Partial<PromptVersion>) &
+  (HasTools extends true ? Partial<PromptTools> : {}) &
+  (HasNoTrace extends true ? Partial<PromptNoTrace> : {}) &
   PromptContents & {
     model: string;
     params?: ModelParams;
-    tools?: (GenericCodeFunction | SavedFunctionId | ToolFunctionDefinition)[];
-    noTrace?: boolean;
   };
-
 export class PromptBuilder {
   constructor(private readonly project: Project) {}
 
