@@ -40,3 +40,74 @@ test("runEvaluator works with no timeout", async () => {
     [],
   );
 });
+
+test("meta (write) is passed to task", async () => {
+  const metadata = {
+    bar: "baz",
+    foo: "bar",
+  };
+
+  const out = await runEvaluator(
+    null,
+    {
+      projectName: "proj",
+      evalName: "eval",
+      data: [{ input: 1, metadata }],
+      task: async (input: number, { meta }) => {
+        meta({
+          foo: "barbar",
+        });
+        return input * 2;
+      },
+      scores: [],
+    },
+    new BarProgressReporter(),
+    [],
+  );
+
+  // @ts-expect-error metadata is not typed if the experiment is missing
+  expect(out.results[0].metadata).toEqual({
+    bar: "baz",
+    foo: "barbar",
+  });
+});
+
+test("metadata (read/write) is passed to task", async () => {
+  const metadata = {
+    bar: "baz",
+    foo: "bar",
+  };
+
+  let passedIn: Record<string, unknown> | null = null;
+
+  const out = await runEvaluator(
+    null,
+    {
+      projectName: "proj",
+      evalName: "eval",
+      data: [{ input: 1, metadata }],
+      task: async (input: number, { metadata }) => {
+        metadata((m) => {
+          passedIn = m;
+          return {
+            ...m,
+            foo: "barbar",
+          };
+        });
+
+        return input * 2;
+      },
+      scores: [],
+    },
+    new BarProgressReporter(),
+    [],
+  );
+
+  expect(passedIn).toEqual(metadata);
+
+  // @ts-expect-error metadata is not typed if the experiment is missing
+  expect(out.results[0].metadata).toEqual({
+    bar: "baz",
+    foo: "barbar",
+  });
+});
