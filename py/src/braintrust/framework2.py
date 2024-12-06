@@ -1,14 +1,16 @@
+# TODO(sachinpad): better static type checking
+
 import dataclasses
 import json
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import slugify
 
 
 class _GlobalState:
     def __init__(self):
-        self.functions = []
-        self.prompts = []
+        self.functions: List[CodeFunction] = []
+        self.prompts: List[CodePrompt] = []
 
 
 global_ = _GlobalState()
@@ -39,6 +41,7 @@ class CodePrompt:
     prompt: Any
     tool_functions: List[Union[CodeFunction, Any]]
     description: Optional[str]
+    function_type: Optional[str]
     id: Optional[str]
     if_exists: Optional[str]
 
@@ -148,11 +151,98 @@ class PromptBuilder:
             prompt=prompt_data,
             tool_functions=tool_functions,
             description=description,
+            function_type=None,
             id=id,
             if_exists=if_exists,
         )
         global_.prompts.append(p)
         return p
+
+
+class ScorerBuilder:
+    """Builder to create a scorer in Braintrust."""
+
+    def __init__(self, project: "Project"):
+        self.project = project
+        self._task_counter = 0
+
+    def create(
+        self,
+        *,
+        name: Optional[str] = None,
+        slug: Optional[str] = None,
+        description: Optional[str] = None,
+        if_exists: Optional[str] = None,
+        # Code scorer params.
+        handler: Optional[Any] = None,
+        parameters: Optional[Any] = None,
+        returns: Optional[Any] = None,
+        # LLM scorer params.
+        prompt: Optional[str] = None,
+        messages: Optional[List[Any]] = None,
+        model: Optional[str] = None,
+        params: Optional[Any] = None,
+        use_cot: Optional[bool] = None,
+        choice_scores: Optional[Dict[str, float]] = None,
+    ):
+        """Creates a scorer from handler.
+
+        For code scorers, handler is required.
+        For LLM scorers, either prompt or message is required, and so is model, use_cot, and choice_scores.
+        """
+        self._task_counter += 1
+        if not name:
+            if handler and handler.__name__ and handler.__name__ != "<lambda>":
+                name = handler.__name__
+            else:
+                name = f"Scorer {self._task_counter}"
+        assert name is not None
+        if not slug:
+            slug = slugify.slugify(name)
+        if handler:
+            f = CodeFunction(
+                project=self.project,
+                handler=handler,
+                name=name,
+                slug=slug,
+                type_="scorer",
+                description=description,
+                parameters=parameters,
+                returns=returns,
+                if_exists=if_exists,
+            )
+            global_.functions.append(f)
+        else:
+            if messages is not None:
+                prompt_block = {"type": "chat", "messages": messages}
+            else:
+                prompt_block = {"type": "completion", "content": prompt}
+            options = {"model": model}
+            if params is not None:
+                options["params"] = params
+            parser: Dict[str, Any] = {"type": "llm_classifier"}
+            if use_cot is not None:
+                parser["use_cot"] = use_cot
+            if choice_scores is not None:
+                parser["choice_scores"] = choice_scores
+            prompt_data = {
+                "prompt": prompt_block,
+                "options": options,
+                "parser": parser,
+            }
+            p = CodePrompt(
+                project=self.project,
+                name=name,
+                slug=slug,
+                prompt=prompt_data,
+                # TODO(sachinpad): support tools in scorers.
+                tool_functions=[],
+                description=description,
+                function_type="scorer",
+                id=None,
+                if_exists=if_exists,
+            )
+            global_.prompts.append(p)
 
 
 class Project:
@@ -162,6 +252,7 @@ class Project:
         self.name = name
         self.tools = ToolBuilder(self)
         self.prompts = PromptBuilder(self)
+        self.scorers = ScorerBuilder(self)
 
 
 class ProjectBuilder:
