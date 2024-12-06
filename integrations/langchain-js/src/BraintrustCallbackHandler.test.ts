@@ -246,7 +246,7 @@ describe("BraintrustCallbackHandler", () => {
     const memory = { history: "Assistant: Hello! How can I assist you today?" };
     await chain.invoke(
       { input: "What's your name?", ...memory },
-      { callbacks: [handler] },
+      { callbacks: [handler], tags: ["test"] },
     );
 
     await flush();
@@ -264,7 +264,7 @@ describe("BraintrustCallbackHandler", () => {
           history: "Assistant: Hello! How can I assist you today?",
         },
         metadata: {
-          tags: [],
+          tags: ["test"],
         },
         span_id: root_span_id,
         root_span_id,
@@ -277,7 +277,7 @@ describe("BraintrustCallbackHandler", () => {
         },
         output:
           "Assistant: Hello! How can I assist you today? User: What's your name?",
-        metadata: { tags: ["seq:step:1"] },
+        metadata: { tags: ["seq:step:1", "test"] },
         root_span_id,
         span_parents: [root_span_id],
       },
@@ -298,7 +298,7 @@ describe("BraintrustCallbackHandler", () => {
           },
         ],
         metadata: {
-          tags: ["seq:step:2"],
+          tags: ["seq:step:2", "test"],
           model: "gpt-4o-mini",
         },
         root_span_id,

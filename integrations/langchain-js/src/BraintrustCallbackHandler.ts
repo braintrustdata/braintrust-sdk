@@ -1,4 +1,4 @@
-import { ExperimentLogPartialArgs, isObject } from "@braintrust/core";
+import { isObject } from "@braintrust/core";
 import {
   BaseCallbackHandler,
   BaseCallbackHandlerInput,
@@ -15,12 +15,13 @@ import {
   Generation,
   LLMResult,
 } from "@langchain/core/dist/outputs";
-import { RunnableConfig } from "@langchain/core/dist/runnables/config";
 import { ChainValues } from "@langchain/core/dist/utils/types";
 import { ToolMessage } from "@langchain/core/messages";
+import { RunnableConfig } from "@langchain/core/runnables";
 import {
   currentLogger,
   currentSpan,
+  ExperimentLogPartialArgs,
   initLogger,
   Logger,
   NOOP_SPAN,
@@ -43,6 +44,7 @@ export class BraintrustCallbackHandler
 {
   name = "BraintrustCallbackHandler";
   private spans: Map<string, Span>;
+  private rootRunId?: string;
   private options: BraintrustCallbackHandlerOptions;
 
   constructor(options?: Partial<BraintrustCallbackHandlerOptions>) {
@@ -75,9 +77,20 @@ export class BraintrustCallbackHandler
       return;
     }
 
+    if (!parentRunId) {
+      this.rootRunId = runId;
+    }
+
+    const tags = args.event?.tags;
+    const isRoot = runId === this.rootRunId;
+
     args.event = {
       ...args.event,
+      // tags are only allowed at the root
+      ...(isRoot ? { tags } : { tags: undefined }),
       metadata: {
+        // let's save them in metadata if not root
+        ...(!isRoot && { tags }),
         ...args.event?.metadata,
         ...(this.options.debug ? { runId, parentRunId } : {}),
       },
@@ -94,7 +107,6 @@ export class BraintrustCallbackHandler
       parentSpan = this.options.logger as unknown as Span;
     }
 
-    // TODO: add tags to root span
     const span = parentSpan.startSpan(args);
 
     this.spans.set(runId, span);
@@ -102,8 +114,11 @@ export class BraintrustCallbackHandler
 
   protected endSpan({
     runId,
+    parentRunId,
+    tags,
+    metadata,
     ...args
-  }: ExperimentLogPartialArgs & { runId: string }): void {
+  }: ExperimentLogPartialArgs & { runId: string; parentRunId?: string }): void {
     if (!this.spans.has(runId)) {
       throw new Error(
         `No span exists for runId ${runId} (this is likely a bug)`,
@@ -111,9 +126,17 @@ export class BraintrustCallbackHandler
     }
 
     const span = this.spans.get(runId)!;
-    this.spans.delete(runId);
 
-    span.log(args);
+    // try to propagate tags to the root
+    const root = this.spans.get(this.rootRunId || "");
+    root?.log({ tags });
+
+    this.spans.delete(runId);
+    if (runId === this.rootRunId) {
+      this.rootRunId = undefined;
+    }
+
+    span.log({ ...args, metadata: { tags, ...metadata } });
     span.end();
   }
 
@@ -139,8 +162,8 @@ export class BraintrustCallbackHandler
       type: "llm",
       event: {
         input: prompts,
+        tags,
         metadata: {
-          tags,
           ...this.cleanMetadata(metadata),
           ...extractCallArgs(
             llm,
@@ -171,7 +194,15 @@ export class BraintrustCallbackHandler
     tags?: string[],
     fields?: HandleLLMNewTokenCallbackFields,
   ): Promise<void> {
-    // TODO: implement
+    console.warn(
+      "handleLLMNewToken not implemented",
+      token,
+      idx,
+      runId,
+      parentRunId,
+      tags,
+      fields,
+    );
   }
 
   async handleLLMError(
@@ -183,8 +214,9 @@ export class BraintrustCallbackHandler
     if (this.spans.has(runId)) {
       this.endSpan({
         runId,
+        parentRunId,
         error: err.message,
-        metadata: { tags },
+        tags,
       });
     }
   }
@@ -209,7 +241,8 @@ export class BraintrustCallbackHandler
           prompt_tokens: tokenUsage.promptTokens,
           completion_tokens: tokenUsage.completionTokens,
         },
-        metadata: { ...this.cleanMetadata(metadata), tags },
+        tags,
+        metadata: { ...this.cleanMetadata(metadata) },
       });
     }
   }
@@ -236,8 +269,8 @@ export class BraintrustCallbackHandler
       type: "llm",
       event: {
         input: inputFromMessages(messages),
+        tags,
         metadata: cleanObject({
-          tags,
           ...this.cleanMetadata(metadata),
           ...extractCallArgs(
             llm,
@@ -266,8 +299,8 @@ export class BraintrustCallbackHandler
       name: runName ?? chain.id.at(-1)?.toString() ?? "Chain",
       event: {
         input: inputFromChainValues(inputs),
+        tags,
         metadata: {
-          tags,
           ...this.cleanMetadata(metadata),
           ...extractCallArgs(chain, {}, metadata),
         },
@@ -288,7 +321,7 @@ export class BraintrustCallbackHandler
       this.endSpan({
         runId,
         error: err.toString(),
-        metadata: { tags },
+        tags,
       });
     }
   }
@@ -303,7 +336,7 @@ export class BraintrustCallbackHandler
     if (this.spans.has(runId)) {
       this.endSpan({
         runId,
-        metadata: { tags },
+        tags,
         output: outputFromChainValues(outputs),
       });
     }
@@ -324,8 +357,8 @@ export class BraintrustCallbackHandler
       name: runName ?? tool.id.at(-1)?.toString() ?? "Tool",
       event: {
         input: safeParseSerializedJson(input),
+        tags,
         metadata: {
-          tags,
           ...this.cleanMetadata(metadata),
           ...extractCallArgs(tool, {}, metadata),
         },
@@ -343,7 +376,7 @@ export class BraintrustCallbackHandler
       this.endSpan({
         runId,
         error: err.message,
-        metadata: { tags },
+        tags,
       });
     }
   }
@@ -358,7 +391,7 @@ export class BraintrustCallbackHandler
       this.endSpan({
         runId,
         output: outputFromToolOutput(output),
-        metadata: { tags },
+        tags,
       });
     }
   }
@@ -375,7 +408,7 @@ export class BraintrustCallbackHandler
       name: action.tool,
       event: {
         input: action,
-        metadata: { tags },
+        tags,
       },
     });
   }
@@ -390,7 +423,7 @@ export class BraintrustCallbackHandler
       this.endSpan({
         runId,
         output: action,
-        metadata: { tags },
+        tags,
       });
     }
   }
@@ -411,8 +444,8 @@ export class BraintrustCallbackHandler
       type: "function",
       event: {
         input: query,
+        tags,
         metadata: {
-          tags,
           ...this.cleanMetadata(metadata),
           ...extractCallArgs(retriever, {}, metadata),
         },
@@ -430,7 +463,7 @@ export class BraintrustCallbackHandler
       this.endSpan({
         runId,
         output: documents,
-        metadata: { tags },
+        tags,
       });
     }
   }
@@ -445,7 +478,7 @@ export class BraintrustCallbackHandler
       this.endSpan({
         runId,
         error: err.message,
-        metadata: { tags },
+        tags,
       });
     }
   }
@@ -459,7 +492,14 @@ export class BraintrustCallbackHandler
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     metadata?: Record<string, any>,
   ): Promise<void> {
-    // TODO: implement
+    console.warn(
+      "handleCustomEvent not implemented",
+      eventName,
+      data,
+      runId,
+      tags,
+      metadata,
+    );
   }
 }
 
