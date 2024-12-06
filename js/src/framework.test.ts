@@ -10,12 +10,12 @@ test("runEvaluator rejects on timeout", async () => {
         projectName: "proj",
         evalName: "eval",
         data: [{ input: 1, expected: 2 }],
-        task: async (input) => {
+        task: async (input: number) => {
           await new Promise((r) => setTimeout(r, 100000));
-          return (input as number) * 2;
+          return input * 2;
         },
         scores: [],
-        timeout: 1000,
+        timeout: 100,
       },
       new BarProgressReporter(),
       [],
@@ -30,9 +30,9 @@ test("runEvaluator works with no timeout", async () => {
       projectName: "proj",
       evalName: "eval",
       data: [{ input: 1, expected: 2 }],
-      task: async (input) => {
+      task: async (input: number) => {
         await new Promise((r) => setTimeout(r, 100));
-        return (input as number) * 2;
+        return input * 2;
       },
       scores: [],
     },
