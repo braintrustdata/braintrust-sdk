@@ -23,11 +23,13 @@ import { server } from "./test/setup";
 import { LogsRequest } from "./test/types";
 import { logsToSpans, withLogging } from "./test/utils";
 
-initLogger({
+const logger = initLogger({
   projectName: "langchain",
 });
 
-const handler = withLogging(new BraintrustCallbackHandler());
+const handler = withLogging(
+  new BraintrustCallbackHandler(logger, { debug: true }),
+);
 
 const encoder = new TextEncoder();
 
@@ -661,7 +663,7 @@ describe("BraintrustCallbackHandler", () => {
     ]);
   });
 
-  it.only("should handle LangGraph state management", async () => {
+  it("should handle LangGraph state management", async () => {
     const logs: LogsRequest[] = [];
 
     server.use(
