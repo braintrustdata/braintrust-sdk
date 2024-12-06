@@ -11,6 +11,7 @@ import sys
 import tempfile
 import textwrap
 import zipfile
+from typing import Optional
 
 import requests
 
@@ -29,7 +30,7 @@ class _ProjectIdCache:
         return self._cache[project]
 
 
-def _pkg_install_arg(pkg) -> str | None:
+def _pkg_install_arg(pkg) -> Optional[str]:
     try:
         dist = importlib.metadata.distribution(pkg)
         direct_url = dist._path / "direct_url.json"  # type: ignore
