@@ -23,13 +23,11 @@ import { server } from "./test/setup";
 import { LogsRequest } from "./test/types";
 import { logsToSpans, withLogging } from "./test/utils";
 
-const logger = initLogger({
+initLogger({
   projectName: "langchain",
 });
 
-const handler = withLogging(
-  new BraintrustCallbackHandler(logger, { debug: true }),
-);
+const handler = withLogging(new BraintrustCallbackHandler({ debug: true }));
 
 const encoder = new TextEncoder();
 

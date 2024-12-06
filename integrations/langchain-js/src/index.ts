@@ -1,1 +1,1 @@
-export * from "./BraintrustCallbackHandler";
+export { BraintrustCallbackHandler } from "./BraintrustCallbackHandler";

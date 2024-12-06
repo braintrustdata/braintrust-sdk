@@ -21,6 +21,7 @@ import { ToolMessage } from "@langchain/core/messages";
 import {
   currentLogger,
   currentSpan,
+  initLogger,
   Logger,
   NOOP_SPAN,
   Span,
@@ -30,33 +31,32 @@ import {
 /**
  * A Braintrust tracer for LangChain.js that logs LLM calls, chains, and tools
  */
-export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
+export interface BraintrustCallbackHandlerOptions {
+  logger?: Logger<boolean>;
+  debug: boolean;
+  excludeMetadataProps: RegExp;
+}
+
+export class BraintrustCallbackHandler
   extends BaseCallbackHandler
   implements BaseCallbackHandlerInput
 {
   name = "BraintrustCallbackHandler";
   private spans: Map<string, Span>;
-  private logger: Logger<IsAsyncFlush>;
-  private options = {
-    debug: false,
-    excludeMetadataProps: /^(l[sc]_|langgraph_|__pregel_|checkpoint_ns)/,
-  };
+  private options: BraintrustCallbackHandlerOptions;
 
-  constructor(
-    logger?: Logger<IsAsyncFlush>,
-    options?: Partial<BraintrustCallbackHandler["options"]>,
-  ) {
+  constructor(options?: Partial<BraintrustCallbackHandlerOptions>) {
     super();
 
     this.spans = new Map();
 
-    logger = logger ?? currentLogger();
-    if (!logger) {
-      throw new Error("No logger provided or available.");
-    }
-
-    this.logger = logger;
-    this.options = { ...this.options, ...options };
+    this.options = {
+      debug: options?.debug ?? false,
+      excludeMetadataProps:
+        options?.excludeMetadataProps ??
+        /^(l[sc]_|langgraph_|__pregel_|checkpoint_ns)/,
+      logger: options?.logger ?? currentLogger() ?? initLogger(),
+    };
   }
 
   protected startSpan({
@@ -91,7 +91,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
       parentSpan = currentParent;
     } else {
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      parentSpan = this.logger as unknown as Span;
+      parentSpan = this.options.logger as unknown as Span;
     }
 
     // TODO: add tags to root span
