@@ -86,14 +86,11 @@ test("metadata (read/write) is passed to task", async () => {
       projectName: "proj",
       evalName: "eval",
       data: [{ input: 1, metadata }],
-      task: async (input: number, { metadata }) => {
-        metadata((m) => {
-          passedIn = m;
-          return {
-            ...m,
-            foo: "barbar",
-          };
-        });
+      task: async (input: number, { metadata: m }) => {
+        passedIn = { ...m };
+
+        // modify the metadata object
+        m.foo = "barbar";
 
         return input * 2;
       },

@@ -83,11 +83,9 @@ export interface EvalHooks {
    */
   meta: (info: Record<string, unknown>) => void;
   /**
-   * A function that takes the current metadata and returns the new metadata.
+   * The metadata object for the current evaluation. Mutate this to add/remote metadata.
    */
-  metadata: (
-    fn: (metadata: Record<string, unknown>) => Record<string, unknown>,
-  ) => void;
+  metadata: Record<string, unknown>;
   span: Span;
 }
 
@@ -693,18 +691,14 @@ async function runEvaluatorInternal(
         let error: unknown | undefined = undefined;
         const scores: Record<string, number | null> = {};
         try {
-          const readWrite = (
-            fn: (o: Record<string, unknown>) => Record<string, unknown>,
-          ) => (metadata = fn(metadata));
-
-          const write = (o: Record<string, unknown>) =>
-            readWrite((m) => ({ ...m, ...o }));
+          const meta = (o: Record<string, unknown>) =>
+            (metadata = { ...metadata, ...o });
 
           await rootSpan.traced(
             async (span: Span) => {
               const outputResult = evaluator.task(datum.input, {
-                meta: write,
-                metadata: readWrite,
+                meta,
+                metadata,
                 span,
               });
               if (outputResult instanceof Promise) {
