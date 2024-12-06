@@ -197,7 +197,7 @@ type ScorerPromptOpts = Partial<BaseFnOpts> &
     choiceScores: Record<string, number>;
   };
 
-// A more correct ScorerArgs than that in //sdk/core/js/src/score.ts.
+// A more correct ScorerArgs than that in core/js/src/score.ts.
 type ScorerArgs<Output, Input> = {
   output: Output;
   expected?: Output;
