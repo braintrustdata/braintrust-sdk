@@ -159,10 +159,6 @@ class ExperimentEvent(TypedDict):
     """
     A unique identifier for the experiment event. If you don't provide one, BrainTrust will generate one for you
     """
-    dataset_record_id: NotRequired[Optional[str]]
-    """
-    If the experiment is associated to a dataset, this is the event-level dataset id this experiment event is tied to
-    """
     _xact_id: str
     """
     The transaction id of an event is unique to the network operation that processed the event insertion. Transaction ids are monotonically increasing over time and can be used to retrieve a versioned snapshot of the experiment (see the `version` parameter)
