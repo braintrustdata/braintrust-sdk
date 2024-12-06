@@ -30,6 +30,7 @@ export class Project {
   public readonly id?: string;
   public tools: ToolBuilder;
   public prompts: PromptBuilder;
+  public scorers: ScorerBuilder;
 
   constructor(args: CreateProjectOpts) {
     _initializeSpanContext();
@@ -37,6 +38,7 @@ export class Project {
     this.id = "id" in args ? args.id : undefined;
     this.tools = new ToolBuilder(this);
     this.prompts = new PromptBuilder(this);
+    this.scorers = new ScorerBuilder(this);
   }
 }
 
@@ -45,7 +47,7 @@ export class ToolBuilder {
   constructor(private readonly project: Project) {}
 
   public create<Input, Output, Fn extends GenericFunction<Input, Output>>(
-    opts: ToolOpts<Input, Output, Fn>,
+    opts: CodeOpts<Input, Output, Fn>,
   ): CodeFunction<Input, Output, Fn> {
     this.taskCounter++;
     opts = opts ?? {};
@@ -82,6 +84,93 @@ export class ToolBuilder {
   }
 }
 
+export class ScorerBuilder {
+  private taskCounter = 0;
+  constructor(private readonly project: Project) {}
+
+  public create<
+    Output,
+    Input,
+    Params,
+    Returns,
+    Fn extends GenericFunction<
+      Exact<Params, ScorerArgs<Output, Input>>,
+      Returns
+    >,
+  >(opts: ScorerOpts<Output, Input, Params, Returns, Fn>) {
+    this.taskCounter++;
+
+    let resolvedName = opts.name;
+    if (!resolvedName && "handler" in opts) {
+      resolvedName = opts.handler.name;
+    }
+    if (!resolvedName || resolvedName.trim().length === 0) {
+      resolvedName = `Scorer ${path.basename(__filename)} ${this.taskCounter}`;
+    }
+    const slug =
+      opts.slug ?? slugifyLib(resolvedName, { lower: true, strict: true });
+
+    if ("handler" in opts) {
+      const scorer: CodeFunction<
+        Exact<Params, ScorerArgs<Output, Input>>,
+        Returns,
+        Fn
+      > = new CodeFunction(this.project, {
+        ...opts,
+        name: resolvedName,
+        slug,
+        type: "scorer",
+      });
+      if (globalThis._lazy_load) {
+        globalThis._evals.functions.push(
+          scorer as CodeFunction<
+            unknown,
+            unknown,
+            GenericFunction<unknown, unknown>
+          >,
+        );
+      }
+    } else {
+      const promptBlock: PromptBlockData =
+        "messages" in opts
+          ? {
+              type: "chat",
+              messages: opts.messages,
+            }
+          : {
+              type: "completion",
+              content: opts.prompt,
+            };
+      const promptData: PromptData = {
+        prompt: promptBlock,
+        options: {
+          model: opts.model,
+          params: opts.params,
+        },
+        parser: {
+          type: "llm_classifier",
+          use_cot: opts.useCot,
+          choice_scores: opts.choiceScores,
+        },
+      };
+      const codePrompt = new CodePrompt(
+        this.project,
+        promptData,
+        [],
+        {
+          ...opts,
+          name: resolvedName,
+          slug,
+        },
+        "scorer",
+      );
+      if (globalThis._lazy_load) {
+        globalThis._evals.prompts.push(codePrompt);
+      }
+    }
+  }
+}
+
 type Schema<Input, Output> = Partial<{
   parameters: z.ZodSchema<Input>;
   returns: z.ZodSchema<Output>;
@@ -94,13 +183,43 @@ interface BaseFnOpts {
   ifExists: IfExists;
 }
 
-export type ToolOpts<
+export type CodeOpts<
   Params,
   Returns,
   Fn extends GenericFunction<Params, Returns>,
 > = Partial<BaseFnOpts> & {
   handler: Fn;
 } & Schema<Params, Returns>;
+
+type ScorerPromptOpts = Partial<BaseFnOpts> &
+  PromptOpts<false, false, false, false> & {
+    useCot: boolean;
+    choiceScores: Record<string, number>;
+  };
+
+// A more correct ScorerArgs than that in core/js/src/score.ts.
+type ScorerArgs<Output, Input> = {
+  output: Output;
+  expected?: Output;
+  input?: Input;
+  metadata?: Record<string, unknown>;
+};
+
+type Exact<T, Shape> = T extends Shape
+  ? Exclude<keyof T, keyof Shape> extends never
+    ? T
+    : never
+  : never;
+
+export type ScorerOpts<
+  Output,
+  Input,
+  Params,
+  Returns,
+  Fn extends GenericFunction<Exact<Params, ScorerArgs<Output, Input>>, Returns>,
+> =
+  | CodeOpts<Exact<Params, ScorerArgs<Output, Input>>, Returns, Fn>
+  | ScorerPromptOpts;
 
 export class CodeFunction<
   Input,
@@ -118,7 +237,7 @@ export class CodeFunction<
 
   constructor(
     public readonly project: Project,
-    opts: Omit<ToolOpts<Input, Output, Fn>, "name" | "slug"> & {
+    opts: Omit<CodeOpts<Input, Output, Fn>, "name" | "slug"> & {
       name: string;
       slug: string;
       type: FunctionType;
@@ -169,17 +288,18 @@ export class CodePrompt {
   public readonly ifExists?: IfExists;
   public readonly description?: string;
   public readonly id?: string;
-
+  public readonly functionType?: FunctionType;
   public readonly toolFunctions: (SavedFunctionId | GenericCodeFunction)[];
 
   constructor(
     project: Project,
     prompt: PromptData,
     toolFunctions: (SavedFunctionId | GenericCodeFunction)[],
-    opts: Omit<PromptOpts<false, false>, "name" | "slug"> & {
+    opts: Omit<PromptOpts<false, false, false, false>, "name" | "slug"> & {
       name: string;
       slug: string;
     },
+    functionType?: FunctionType,
   ) {
     this.project = project;
     this.name = opts.name;
@@ -189,6 +309,7 @@ export class CodePrompt {
     this.ifExists = opts.ifExists;
     this.description = opts.description;
     this.id = opts.id;
+    this.functionType = functionType;
   }
 }
 
@@ -213,6 +334,14 @@ interface PromptVersion {
   version: TransactionId;
 }
 
+interface PromptTools {
+  tools: (GenericCodeFunction | SavedFunctionId | ToolFunctionDefinition)[];
+}
+
+interface PromptNoTrace {
+  noTrace: boolean;
+}
+
 // This roughly maps to promptBlockDataSchema, but is more ergonomic for the user.
 type PromptContents =
   | {
@@ -225,16 +354,17 @@ type PromptContents =
 export type PromptOpts<
   HasId extends boolean,
   HasVersion extends boolean,
+  HasTools extends boolean = true,
+  HasNoTrace extends boolean = true,
 > = (Partial<Omit<BaseFnOpts, "name">> & { name: string }) &
   (HasId extends true ? PromptId : Partial<PromptId>) &
   (HasVersion extends true ? PromptVersion : Partial<PromptVersion>) &
+  (HasTools extends true ? Partial<PromptTools> : {}) &
+  (HasNoTrace extends true ? Partial<PromptNoTrace> : {}) &
   PromptContents & {
     model: string;
     params?: ModelParams;
-    tools?: (GenericCodeFunction | SavedFunctionId | ToolFunctionDefinition)[];
-    noTrace?: boolean;
   };
-
 export class PromptBuilder {
   constructor(private readonly project: Project) {}
 
