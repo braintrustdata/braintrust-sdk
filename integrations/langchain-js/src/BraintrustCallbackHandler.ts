@@ -27,8 +27,6 @@ import {
   StartSpanArgs,
 } from "braintrust";
 
-const EXCLUDE_METADATA_PROPS = /^(l[sc]_|langgraph_|__pregel_|checkpoint_ns)/;
-
 /**
  * A Braintrust tracer for LangChain.js that logs LLM calls, chains, and tools
  */
@@ -39,11 +37,14 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
   name = "BraintrustCallbackHandler";
   private spans: Map<string, Span>;
   private logger: Logger<IsAsyncFlush>;
-  private debug: boolean = false;
+  private options = {
+    debug: false,
+    excludeMetadataProps: /^(l[sc]_|langgraph_|__pregel_|checkpoint_ns)/,
+  };
 
   constructor(
     logger?: Logger<IsAsyncFlush>,
-    { debug = false }: { debug?: boolean } = {},
+    options?: Partial<BraintrustCallbackHandler["options"]>,
   ) {
     super();
 
@@ -55,7 +56,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
     }
 
     this.logger = logger;
-    this.debug = debug;
+    this.options = { ...this.options, ...options };
   }
 
   protected startSpan({
@@ -78,7 +79,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
       ...args.event,
       metadata: {
         ...args.event?.metadata,
-        ...(this.debug ? { runId, parentRunId } : {}),
+        ...(this.options.debug ? { runId, parentRunId } : {}),
       },
     };
 
@@ -140,7 +141,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
         input: prompts,
         metadata: {
           tags,
-          ...cleanMetadata(metadata),
+          ...this.cleanMetadata(metadata),
           ...extractCallArgs(
             llm,
             extraParams?.invocation_params || {},
@@ -149,6 +150,17 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
         },
       },
     });
+  }
+
+  cleanMetadata(metadata?: Record<string, unknown>) {
+    return (
+      metadata &&
+      Object.fromEntries(
+        Object.entries(metadata).filter(
+          ([key, _]) => !this.options.excludeMetadataProps.test(key),
+        ),
+      )
+    );
   }
 
   async handleLLMNewToken(
@@ -197,7 +209,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
           prompt_tokens: tokenUsage.promptTokens,
           completion_tokens: tokenUsage.completionTokens,
         },
-        metadata: { ...cleanMetadata(metadata), tags },
+        metadata: { ...this.cleanMetadata(metadata), tags },
       });
     }
   }
@@ -226,7 +238,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
         input: inputFromMessages(messages),
         metadata: cleanObject({
           tags,
-          ...cleanMetadata(metadata),
+          ...this.cleanMetadata(metadata),
           ...extractCallArgs(
             llm,
             extraParams?.invocation_params || {},
@@ -256,7 +268,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
         input: inputFromChainValues(inputs),
         metadata: {
           tags,
-          ...cleanMetadata(metadata),
+          ...this.cleanMetadata(metadata),
           ...extractCallArgs(chain, {}, metadata),
         },
       },
@@ -314,7 +326,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
         input: safeParseSerializedJson(input),
         metadata: {
           tags,
-          ...cleanMetadata(metadata),
+          ...this.cleanMetadata(metadata),
           ...extractCallArgs(tool, {}, metadata),
         },
       },
@@ -401,7 +413,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
         input: query,
         metadata: {
           tags,
-          ...cleanMetadata(metadata),
+          ...this.cleanMetadata(metadata),
           ...extractCallArgs(retriever, {}, metadata),
         },
       },
@@ -450,14 +462,6 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
     // TODO: implement
   }
 }
-
-const cleanMetadata = (metadata?: Record<string, unknown>) =>
-  metadata &&
-  Object.fromEntries(
-    Object.entries(metadata).filter(
-      ([key, _]) => !EXCLUDE_METADATA_PROPS.test(key),
-    ),
-  );
 
 const extractCallArgs = (
   llm: Serialized,
