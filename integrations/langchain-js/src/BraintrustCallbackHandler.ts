@@ -39,8 +39,12 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
   name = "BraintrustCallbackHandler";
   private spans: Map<string, Span>;
   private logger: Logger<IsAsyncFlush>;
+  private debug: boolean = false;
 
-  constructor(logger?: Logger<IsAsyncFlush>) {
+  constructor(
+    logger?: Logger<IsAsyncFlush>,
+    { debug = false }: { debug?: boolean } = {},
+  ) {
     super();
 
     this.spans = new Map();
@@ -51,6 +55,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
     }
 
     this.logger = logger;
+    this.debug = debug;
   }
 
   protected startSpan({
@@ -73,8 +78,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean = false>
       ...args.event,
       metadata: {
         ...args.event?.metadata,
-        runId,
-        parentRunId,
+        ...(this.debug ? { runId, parentRunId } : {}),
       },
     };
 
