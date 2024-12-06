@@ -337,7 +337,6 @@ describe("BraintrustCallbackHandler", () => {
     });
 
     const calculatorTool = tool(
-      // @ts-expect-error
       ({ operation, number1, number2 }) => {
         // Functions must return strings
         if (operation === "add") {
