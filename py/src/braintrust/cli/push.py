@@ -11,6 +11,7 @@ import sys
 import tempfile
 import textwrap
 import zipfile
+from typing import Optional
 
 import requests
 
@@ -29,20 +30,19 @@ class _ProjectIdCache:
         return self._cache[project]
 
 
-def _braintrust_pkg():
-    d = importlib.metadata.distribution("braintrust")
-    direct_url = d._path / "direct_url.json"
-    if direct_url.exists():
-        with open(direct_url) as f:
-            j = json.loads(f.read())
-            if "url" in j:
-                return j["url"]
-    return f"braintrust=={d.version}"
-
-
-def _pydantic_pkg():
-    d = importlib.metadata.distribution("pydantic")
-    return f"pydantic=={d.version}"
+def _pkg_install_arg(pkg) -> Optional[str]:
+    try:
+        dist = importlib.metadata.distribution(pkg)
+        direct_url = dist._path / "direct_url.json"  # type: ignore
+        if direct_url.exists():
+            with open(direct_url) as f:
+                j = json.loads(f.read())
+                if "url" in j:
+                    return j["url"]
+        return f"{pkg}=={dist.version}"
+    except importlib.metadata.PackageNotFoundError as e:
+        print(f"Failed to find package {pkg}: {e}", file=sys.stderr)
+    return None
 
 
 def _pydantic_to_json_schema(m):
@@ -106,7 +106,22 @@ def run(args):
         if args.requirements:
             install_args = ["--requirement", args.requirements]
         else:
-            install_args = [_braintrust_pkg(), _pydantic_pkg()]
+            # Though not strictly necessary, these packages should be those supported in the Python code editor
+            # with the exception of pydantic, which is necessary to allow the user to express function input schemas.
+            install_args = [
+                arg
+                for arg in [
+                    _pkg_install_arg(pkg)
+                    for pkg in [
+                        "pydantic",
+                        "braintrust",
+                        "autoevals",
+                        "requests",
+                        "openai",
+                    ]
+                ]
+                if arg is not None
+            ]
 
         check_uv()
 
