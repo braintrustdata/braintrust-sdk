@@ -83,7 +83,7 @@ export interface EvalHooks {
    */
   meta: (info: Record<string, unknown>) => void;
   /**
-   * The metadata object for the current evaluation. Mutate this to add/remote metadata.
+   * The metadata object for the current evaluation. You can mutate this object to add or remove metadata.
    */
   metadata: Record<string, unknown>;
   span: Span;
