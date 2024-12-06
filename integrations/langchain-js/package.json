@@ -35,7 +35,8 @@
     "zod-to-json-schema": "3.22.5"
   },
   "dependencies": {
-    "braintrust": "workspace:>=0.0.141"
+    "@braintrust/core": "^0.0.69",
+    "braintrust": "^0.0.175"
   },
   "peerDependencies": {
     "@langchain/core": "^0.3.20"
