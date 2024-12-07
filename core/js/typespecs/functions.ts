@@ -92,6 +92,10 @@ export const invokeFunctionNonIdArgsSchema = z.object({
     .describe(
       "Argument to the function, which can be any JSON serializable value",
     ),
+  metadata: z
+    .record(z.string(), z.unknown())
+    .nullish()
+    .describe("Any relevant metadata"),
   messages: z
     .array(chatCompletionMessageParamSchema)
     .optional()
