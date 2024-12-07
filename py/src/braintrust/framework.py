@@ -134,7 +134,7 @@ class EvalHooks(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def metadata(self) -> dict[str, Any]:
+    def metadata(self) -> Dict[str, Any]:
         """
         The metadata object for the current evaluation. You can mutate this object to add or remove metadata.
         """
