@@ -132,10 +132,12 @@ class EvalHooks(abc.ABC):
     An object that can be used to add metadata to an evaluation. This is passed to the `task` function.
     """
 
-    """
-    The metadata object for the current evaluation. You can mutate this object to add or remove metadata.
-    """
-    metadata: dict[str, Any]
+    @property
+    @abc.abstractmethod
+    def metadata(self) -> dict[str, Any]:
+        """
+        The metadata object for the current evaluation. You can mutate this object to add or remove metadata.
+        """
 
     @property
     @abc.abstractmethod
@@ -902,8 +904,12 @@ def evaluate_filter(object, filter: Filter):
 
 class DictEvalHooks(EvalHooks):
     def __init__(self, metadata):
-        self.metadata = metadata
+        self._metadata = metadata
         self._span = None
+
+    @property
+    def metadata(self):
+        return self._metadata
 
     @property
     def span(self):
