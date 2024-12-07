@@ -7,9 +7,11 @@ import json
 import re
 import sys
 import traceback
+import warnings
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from importlib import metadata
 from multiprocessing import cpu_count
 from typing import (
     Any,
@@ -130,6 +132,11 @@ class EvalHooks(abc.ABC):
     An object that can be used to add metadata to an evaluation. This is passed to the `task` function.
     """
 
+    """
+    The metadata object for the current evaluation. You can mutate this object to add or remove metadata.
+    """
+    metadata: dict[str, Any]
+
     @property
     @abc.abstractmethod
     def span(self) -> Span:
@@ -140,6 +147,8 @@ class EvalHooks(abc.ABC):
     @abc.abstractmethod
     def meta(self, **info) -> None:
         """
+        DEPRECATED: Use the metadata field on the hook directly.
+
         Adds metadata to the evaluation. This metadata will be logged to the Braintrust. You can pass in metadaa
         as keyword arguments, e.g. `hooks.meta(foo="bar")`.
         """
@@ -904,6 +913,10 @@ class DictEvalHooks(EvalHooks):
         self._span = span
 
     def meta(self, **info):
+        warnings.warn(
+            "meta() is deprecated. Use the metadata field directly instead.", DeprecationWarning, stacklevel=2
+        )
+
         self.metadata.update(info)
 
 
