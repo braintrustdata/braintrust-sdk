@@ -3360,6 +3360,8 @@ function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
     } else if (v instanceof Attachment) {
       const idx = attachments.push(v);
       return { [IDENTIFIER]: idx - 1 };
+    } else if (v instanceof ReadonlyAttachment) {
+      return v.reference;
     }
     return v;
   });

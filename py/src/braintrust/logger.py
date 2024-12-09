@@ -1772,6 +1772,8 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
             return "<logger>"
         elif isinstance(v, Attachment):
             return v
+        elif isinstance(v, ReadonlyAttachment):
+            return v.reference
         else:
             # No need to handle primitives explicitly because deepcopy will do
             # it for us.

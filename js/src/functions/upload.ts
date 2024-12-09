@@ -7,6 +7,7 @@ import {
   PromptData,
   ExtendedSavedFunctionId,
   SavedFunctionId,
+  FunctionType,
 } from "@braintrust/core/typespecs";
 import { BuildSuccess, EvaluatorState, FileHandle } from "../cli";
 import { scorerName, warning } from "../framework";
@@ -43,6 +44,7 @@ interface FunctionEvent {
   description: string;
   prompt_data?: PromptData;
   function_data: z.infer<typeof functionDataSchema>;
+  function_type?: FunctionType;
   if_exists?: IfExists;
 }
 
@@ -167,6 +169,7 @@ export async function uploadHandleBundles({
           function_data: {
             type: "prompt",
           },
+          function_type: prompt.functionType,
           prompt_data,
           if_exists: prompt.ifExists,
         });

@@ -67,6 +67,16 @@ const braintrustModelParamsSchema = z.object({
 });
 export const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
+export const responseFormatJsonSchemaSchema = z.object({
+  name: z.string(),
+  description: z.string().optional(),
+  schema: z.record(customTypes.unknown).optional(),
+  strict: z.boolean().nullish(),
+});
+export type ResponseFormatJsonSchema = z.infer<
+  typeof responseFormatJsonSchemaSchema
+>;
+
 const openAIModelParamsSchema = z.object({
   temperature: z.number().optional(),
   top_p: z.number().optional(),
@@ -81,12 +91,7 @@ const openAIModelParamsSchema = z.object({
       z
         .object({
           type: z.literal("json_schema"),
-          json_schema: z.object({
-            name: z.string(),
-            description: z.string().optional(),
-            schema: z.record(customTypes.unknown).optional(),
-            strict: z.boolean().nullish(),
-          }),
+          json_schema: responseFormatJsonSchemaSchema,
         })
         .openapi({ title: "json_schema" }),
       z.object({ type: z.literal("text") }).openapi({ title: "text" }),
@@ -176,12 +181,12 @@ export const modelParamsSchema = z
 
 export type ModelParams = z.infer<typeof modelParamsSchema>;
 
-const anyModelParamsSchema = openAIModelParamsSchema
+const _anyModelParamsSchema = openAIModelParamsSchema
   .merge(anthropicModelParamsSchema)
   .merge(googleModelParamsSchema)
   .merge(braintrustModelParamsSchema);
 
-export type AnyModelParam = z.infer<typeof anyModelParamsSchema>;
+export type AnyModelParam = z.infer<typeof _anyModelParamsSchema>;
 
 export const promptOptionsSchema = z
   .object({
