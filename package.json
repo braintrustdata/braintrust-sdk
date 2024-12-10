@@ -18,5 +18,8 @@
   "devDependencies": {
     "turbo": "^1.11.2",
     "pyright": "^1.1.388"
+  },
+  "overrides": {
+    "zod": "^3.24.0"
   }
 }
