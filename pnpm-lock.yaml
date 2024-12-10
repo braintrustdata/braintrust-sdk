@@ -52,7 +52,7 @@ importers:
   integrations/langchain-js:
     dependencies:
       '@braintrust/core':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../../core/js
       braintrust:
         specifier: workspace:^
