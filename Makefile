@@ -34,7 +34,7 @@ develop: ${VENV_PRE_COMMIT}
 fixup:
 	source env.sh && pre-commit run --all-files
 
-py-test:
+py-tests:
 	@if [ -z "$(tests)" ]; then \
 		source env.sh && python -m pytest py/tests/ -v; \
 	else \
