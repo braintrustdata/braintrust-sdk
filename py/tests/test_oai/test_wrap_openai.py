@@ -87,7 +87,7 @@ def test_wrap_openai_sync_response_types(openai_client, mock_completion, setup_r
                     "Authorization": f"Bearer sk-test",
                     "Content-Type": "application/json",
                     "OpenAI-Version": "2020-10-01",
-                    "User-Agent": matchers.ANY,
+                    "User-Agent": matchers.Any,
                 }
             )
         ],
@@ -133,7 +133,7 @@ async def test_wrap_openai_async_response_types(mock_completion, setup_responses
                     "Authorization": f"Bearer sk-test",
                     "Content-Type": "application/json",
                     "OpenAI-Version": "2020-10-01",
-                    "User-Agent": matchers.ANY,
+                    "User-Agent": matchers.Any,
                 }
             )
         ],
