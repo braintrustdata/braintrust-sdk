@@ -92,6 +92,9 @@ export const invokeFunctionNonIdArgsSchema = z.object({
     .describe(
       "Argument to the function, which can be any JSON serializable value",
     ),
+  expected: customTypes.unknown
+    .optional()
+    .describe("The expected output of the function"),
   metadata: z
     .record(z.string(), z.unknown())
     .nullish()
