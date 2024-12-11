@@ -33,6 +33,14 @@ def mock_completion():
     }
 
 
+@pytest.fixture(autouse=True)
+def setup_responses():
+    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        rsps.add_passthru("http://127.0.0.1:8000")
+        rsps.add_passthru("http://localhost:8000")
+        yield rsps
+
+
 def test_wrap_openai_sync_types(openai_client):
     wrapped = wrap_openai(openai_client)
     assert hasattr(wrapped.chat.completions, "create")
@@ -44,22 +52,25 @@ async def test_wrap_openai_async_types():
     async_client = openai.AsyncOpenAI(api_key="test-key", base_url="http://localhost:8000/v1")
     wrapped = wrap_openai(async_client)
     assert hasattr(wrapped.chat.completions, "create")
-    # Verify async client is properly wrapped
     assert iscoroutinefunction(wrapped.chat.completions.create)
 
 
 @responses.activate
 def test_wrap_openai_sync_response_types(openai_client, mock_completion):
-    responses.add(responses.POST, "http://localhost:8000/v1/chat/completions", json=mock_completion, status=200)
+    responses.add(
+        responses.POST,
+        "http://localhost:8000/v1/chat/completions",
+        json=mock_completion,
+        status=200,
+        match_querystring=False,
+    )
 
     wrapped = wrap_openai(openai_client)
     response = wrapped.chat.completions.create(model="gpt-3.5-turbo", messages=[{"role": "user", "content": "Hello"}])
-    # Verify Pydantic types are correctly handled
     assert isinstance(response, ChatCompletion)
     assert isinstance(response.choices[0], Choice)
     assert isinstance(response.choices[0].message, ChatCompletionMessage)
     assert isinstance(response.usage, CompletionUsage)
-    # Verify specific field types
     assert isinstance(response.id, str)
     assert isinstance(response.choices[0].message.content, str)
     assert isinstance(response.usage.total_tokens, int)
@@ -69,18 +80,22 @@ def test_wrap_openai_sync_response_types(openai_client, mock_completion):
 @pytest.mark.asyncio
 async def test_wrap_openai_async_response_types(mock_completion):
     async_client = openai.AsyncOpenAI(api_key="test-key", base_url="http://localhost:8000/v1")
-    responses.add(responses.POST, "http://localhost:8000/v1/chat/completions", json=mock_completion, status=200)
+    responses.add(
+        responses.POST,
+        "http://localhost:8000/v1/chat/completions",
+        json=mock_completion,
+        status=200,
+        match_querystring=False,
+    )
 
     wrapped = wrap_openai(async_client)
     response = await wrapped.chat.completions.create(
         model="gpt-3.5-turbo", messages=[{"role": "user", "content": "Hello"}]
     )
-    # Verify async response has same Pydantic types as sync
     assert isinstance(response, ChatCompletion)
     assert isinstance(response.choices[0], Choice)
     assert isinstance(response.choices[0].message, ChatCompletionMessage)
     assert isinstance(response.usage, CompletionUsage)
-    # Verify specific field types
     assert isinstance(response.id, str)
     assert isinstance(response.choices[0].message.content, str)
     assert isinstance(response.usage.total_tokens, int)
