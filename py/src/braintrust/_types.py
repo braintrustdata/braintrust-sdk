@@ -274,7 +274,7 @@ class ModelParams1(TypedDict):
     max_tokens: NotRequired[Optional[float]]
     frequency_penalty: NotRequired[Optional[float]]
     presence_penalty: NotRequired[Optional[float]]
-    response_format: NotRequired[Optional[Union[ResponseFormat, ResponseFormat1, ResponseFormat2, Mapping[str, Any]]]]
+    response_format: NotRequired[Optional[Union[ResponseFormat, ResponseFormat1, ResponseFormat2]]]
     tool_choice: NotRequired[Optional[Union[Literal["auto"], Literal["none"], Literal["required"], ToolChoice]]]
     function_call: NotRequired[Optional[Union[Literal["auto"], Literal["none"], FunctionCall]]]
     n: NotRequired[Optional[float]]
@@ -349,6 +349,149 @@ class AttachmentStatus(TypedDict):
     """
     Describes the error encountered while uploading.
     """
+
+
+IfExists = Literal["error", "ignore", "replace"]
+
+
+class SavedFunctionId1(TypedDict):
+    type: Literal["function"]
+    id: str
+
+
+class SavedFunctionId2(TypedDict):
+    type: Literal["global"]
+    name: str
+
+
+SavedFunctionId = Union[SavedFunctionId1, SavedFunctionId2]
+
+
+class Function1(TypedDict):
+    name: str
+    description: NotRequired[Optional[str]]
+    parameters: NotRequired[Optional[Mapping[str, Any]]]
+    strict: NotRequired[Optional[bool]]
+
+
+class ToolFunctionDefinition(TypedDict):
+    type: Literal["function"]
+    function: Function1
+
+
+class ChatCompletionContentPartText(TypedDict):
+    text: NotRequired[Optional[str]]
+    type: Literal["text"]
+
+
+class ImageUrl(TypedDict):
+    url: str
+    detail: NotRequired[Optional[Union[Literal["auto"], Literal["low"], Literal["high"]]]]
+
+
+class ChatCompletionContentPartImage(TypedDict):
+    image_url: ImageUrl
+    type: Literal["image_url"]
+
+
+ChatCompletionContentPart = Union[ChatCompletionContentPartText, ChatCompletionContentPartImage]
+
+
+ChatCompletionContent = Union[str, Sequence[ChatCompletionContentPart]]
+
+
+class Function2(TypedDict):
+    arguments: str
+    name: str
+
+
+class ChatCompletionMessageToolCall(TypedDict):
+    id: str
+    function: Function2
+    type: Literal["function"]
+
+
+class ChatCompletionMessageParam1(TypedDict):
+    content: NotRequired[Optional[str]]
+    role: Literal["system"]
+    name: NotRequired[Optional[str]]
+
+
+class ChatCompletionMessageParam2(TypedDict):
+    content: NotRequired[Optional[ChatCompletionContent]]
+    role: Literal["user"]
+    name: NotRequired[Optional[str]]
+
+
+class FunctionCall1(TypedDict):
+    arguments: str
+    name: str
+
+
+class ChatCompletionMessageParam3(TypedDict):
+    role: Literal["assistant"]
+    content: NotRequired[Optional[str]]
+    function_call: NotRequired[Optional[FunctionCall1]]
+    name: NotRequired[Optional[str]]
+    tool_calls: NotRequired[Optional[Sequence[ChatCompletionMessageToolCall]]]
+
+
+class ChatCompletionMessageParam4(TypedDict):
+    content: NotRequired[Optional[str]]
+    role: Literal["tool"]
+    tool_call_id: NotRequired[Optional[str]]
+
+
+class ChatCompletionMessageParam5(TypedDict):
+    content: NotRequired[Optional[str]]
+    name: str
+    role: Literal["function"]
+
+
+class ChatCompletionMessageParam6(TypedDict):
+    role: Literal["model"]
+    content: NotRequired[Optional[str]]
+
+
+ChatCompletionMessageParam = Union[
+    ChatCompletionMessageParam1,
+    ChatCompletionMessageParam2,
+    ChatCompletionMessageParam3,
+    ChatCompletionMessageParam4,
+    ChatCompletionMessageParam5,
+    ChatCompletionMessageParam6,
+]
+
+
+class Prompt(TypedDict):
+    type: Literal["completion"]
+    content: str
+
+
+class Prompt1(TypedDict):
+    type: Literal["chat"]
+    messages: Sequence[ChatCompletionMessageParam]
+    tools: NotRequired[Optional[str]]
+
+
+class Parser(TypedDict):
+    type: Literal["llm_classifier"]
+    use_cot: bool
+    choice_scores: Mapping[str, float]
+
+
+class Origin2(TypedDict):
+    prompt_id: NotRequired[Optional[str]]
+    project_id: NotRequired[Optional[str]]
+    prompt_version: NotRequired[Optional[str]]
+
+
+class PromptData(TypedDict):
+    prompt: NotRequired[Optional[Union[Prompt, Prompt1]]]
+    options: NotRequired[Optional[PromptOptions]]
+    parser: NotRequired[Optional[Parser]]
+    tool_functions: NotRequired[Optional[Sequence[SavedFunctionId]]]
+    origin: NotRequired[Optional[Origin2]]
 
 
 __all__ = []

@@ -370,6 +370,23 @@ export const scoreSchema = z
   ])
   .openapi("ScorerScore");
 
-export const ifExistsEnum = z.enum(["error", "ignore", "replace"]);
+export const ifExistsEnum = z
+  .enum(["error", "ignore", "replace"])
+  .openapi("IfExists");
 export type IfExists = z.infer<typeof ifExistsEnum>;
 export const DEFAULT_IF_EXISTS: IfExists = "error";
+
+export const toolFunctionDefinitionSchema = z
+  .object({
+    type: z.literal("function"),
+    function: z.object({
+      name: z.string(),
+      description: z.string().optional(),
+      parameters: z.record(z.unknown()).optional(),
+      strict: z.boolean().optional(),
+    }),
+  })
+  .openapi("ToolFunctionDefinition");
+export type ToolFunctionDefinition = z.infer<
+  typeof toolFunctionDefinitionSchema
+>;

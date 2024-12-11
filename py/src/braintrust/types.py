@@ -5,7 +5,11 @@ from ._types import (
     AttachmentStatus,
     DatasetEvent,
     ExperimentEvent,
+    IfExists,
+    PromptData,
     PromptOptions,
+    SavedFunctionId,
     SpanAttributes,
     SpanType,
+    ToolFunctionDefinition,
 )
