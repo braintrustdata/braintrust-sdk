@@ -67,9 +67,9 @@ async def test_wrap_openai_async_types():
 def test_wrap_openai_sync_response_types(openai_client, mock_completion, setup_responses):
     wrapped = wrap_openai(openai_client)
     response = wrapped.chat.completions.create(model="gpt-3.5-turbo", messages=[{"role": "user", "content": "Hello"}])
-    assert isinstance(response, openai.types.chat.chat_completion.ChatCompletion)
-    assert isinstance(response.choices[0], openai.types.chat.chat_completion.Choice)
-    assert isinstance(response.usage, openai.types.completion_usage.CompletionUsage)
+    assert isinstance(response, ChatCompletion)
+    assert isinstance(response.choices[0], Choice)
+    assert isinstance(response.usage, CompletionUsage)
 
 
 @pytest.mark.asyncio
@@ -79,6 +79,6 @@ async def test_wrap_openai_async_response_types(mock_completion, setup_responses
     response = await wrapped.chat.completions.create(
         model="gpt-3.5-turbo", messages=[{"role": "user", "content": "Hello"}]
     )
-    assert isinstance(response, openai.types.chat.chat_completion.ChatCompletion)
-    assert isinstance(response.choices[0], openai.types.chat.chat_completion.Choice)
-    assert isinstance(response.usage, openai.types.completion_usage.CompletionUsage)
+    assert isinstance(response, ChatCompletion)
+    assert isinstance(response.choices[0], Choice)
+    assert isinstance(response.usage, CompletionUsage)

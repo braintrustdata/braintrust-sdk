@@ -41,6 +41,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip setuptools build twine openai pylint
+          python -m pip install -r py/tests/requirements.txt
       - name: Test whether the Python SDK can be installed
         run: |
           python -m pip install -e ./core/py[all]
@@ -55,3 +56,6 @@ jobs:
       - name: Lint the Python SDK
         run: |
           pylint --errors-only $(git ls-files '*.py')
+      - name: Run Python tests
+        run: |
+          source env.sh && python -m pytest py/tests/ -v
