@@ -121,7 +121,7 @@ class ChatCompletionWrapper:
                                     }
                                 )
                                 first = False
-                            all_results.append(item if isinstance(item, dict) else item.dict())
+                            all_results.append(item if isinstance(item, dict) else item.model_dump())
                             yield item
 
                         span.log(**postprocess_streaming_results(all_results))
@@ -131,7 +131,7 @@ class ChatCompletionWrapper:
                 should_end = False
                 return gen()
             else:
-                log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+                log_response = raw_response if isinstance(raw_response, dict) else raw_response.model_dump()
                 span.log(
                     metrics={
                         "time_to_first_token": time.time() - start,
@@ -179,7 +179,7 @@ class ChatCompletionWrapper:
                                     }
                                 )
                                 first = False
-                            all_results.append(item if isinstance(item, dict) else item.dict())
+                            all_results.append(item if isinstance(item, dict) else item.model_dump())
                             yield item
 
                         span.log(**postprocess_streaming_results(all_results))
@@ -189,7 +189,7 @@ class ChatCompletionWrapper:
                 should_end = False
                 return gen()
             else:
-                log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+                log_response = raw_response if isinstance(raw_response, dict) else raw_response.model_dump()
                 span.log(
                     metrics={
                         "tokens": log_response["usage"]["total_tokens"],
@@ -239,7 +239,7 @@ class EmbeddingWrapper:
             else:
                 raw_response = create_response
 
-            log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+            log_response = raw_response if isinstance(raw_response, dict) else raw_response.model_dump()
             span.log(
                 metrics={
                     "tokens": log_response["usage"]["total_tokens"],
@@ -263,7 +263,7 @@ class EmbeddingWrapper:
                 log_headers(create_response, span)
             else:
                 raw_response = create_response
-            log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+            log_response = raw_response if isinstance(raw_response, dict) else raw_response.model_dump()
             span.log(
                 metrics={
                     "tokens": log_response["usage"]["total_tokens"],
