@@ -35,6 +35,8 @@ extras_require = {
         "isort==5.10.1",
         "pre-commit",
         "pytest",
+        "pytest-asyncio",
+        "responses",
         "twine",
     ],
     "doc": ["pydoc-markdown"],
