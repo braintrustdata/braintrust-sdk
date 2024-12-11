@@ -48,6 +48,9 @@ jobs:
       - name: Test whether the Python SDK can be imported
         run: |
           python -c 'import braintrust'
+      - name: Run Python tests
+        run: |
+          make py-tests
       - name: Type check the Python SDK with Pyright
         # TODO: Make Pyright errors fail the build.
         run: |
