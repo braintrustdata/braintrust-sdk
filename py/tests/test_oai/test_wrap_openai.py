@@ -11,7 +11,7 @@ from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 
 @pytest.fixture
 def openai_client():
-    client = openai.OpenAI(api_key="test-key", base_url="https://api.openai.com/v1")
+    client = openai.OpenAI(api_key="sk-test", base_url="http://testserver/v1")
     return client
 
 
@@ -33,12 +33,6 @@ def mock_completion():
     }
 
 
-@pytest.fixture(autouse=True)
-def setup_responses():
-    with responses.RequestsMock() as rsps:
-        yield rsps
-
-
 def test_wrap_openai_sync_types(openai_client):
     wrapped = wrap_openai(openai_client)
     assert hasattr(wrapped.chat.completions, "create")
@@ -47,7 +41,7 @@ def test_wrap_openai_sync_types(openai_client):
 
 @pytest.mark.asyncio
 async def test_wrap_openai_async_types():
-    async_client = openai.AsyncOpenAI(api_key="test-key", base_url="https://api.openai.com/v1")
+    async_client = openai.AsyncOpenAI(api_key="sk-test", base_url="http://testserver/v1")
     wrapped = wrap_openai(async_client)
     assert hasattr(wrapped.chat.completions, "create")
     assert iscoroutinefunction(wrapped.chat.completions.create)
@@ -56,10 +50,18 @@ async def test_wrap_openai_async_types():
 @responses.activate
 def test_wrap_openai_sync_response_types(openai_client, mock_completion):
     responses.add(
-        responses.POST,
-        "https://api.openai.com/v1/chat/completions",
+        method=responses.POST,
+        url="http://testserver/v1/chat/completions",
         json=mock_completion,
         status=200,
+        target="httpx",
+        match=[
+            responses.matchers.header_matcher({"Authorization": "Bearer sk-test", "Content-Type": "application/json"}),
+            responses.matchers.json_params_matcher(
+                {"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "Hello"}]}
+            ),
+        ],
+        headers={"Content-Type": "application/json"},
     )
 
     wrapped = wrap_openai(openai_client)
@@ -76,14 +78,22 @@ def test_wrap_openai_sync_response_types(openai_client, mock_completion):
 @responses.activate
 @pytest.mark.asyncio
 async def test_wrap_openai_async_response_types(mock_completion):
-    async_client = openai.AsyncOpenAI(api_key="test-key", base_url="https://api.openai.com/v1")
     responses.add(
-        responses.POST,
-        "https://api.openai.com/v1/chat/completions",
+        method=responses.POST,
+        url="http://testserver/v1/chat/completions",
         json=mock_completion,
         status=200,
+        target="httpx",
+        match=[
+            responses.matchers.header_matcher({"Authorization": "Bearer sk-test", "Content-Type": "application/json"}),
+            responses.matchers.json_params_matcher(
+                {"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "Hello"}]}
+            ),
+        ],
+        headers={"Content-Type": "application/json"},
     )
 
+    async_client = openai.AsyncOpenAI(api_key="sk-test", base_url="http://testserver/v1")
     wrapped = wrap_openai(async_client)
     response = await wrapped.chat.completions.create(
         model="gpt-3.5-turbo", messages=[{"role": "user", "content": "Hello"}]
