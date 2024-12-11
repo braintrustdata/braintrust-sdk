@@ -11,7 +11,7 @@ from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
 
 @pytest.fixture
 def openai_client():
-    client = openai.OpenAI(api_key="test-key", base_url="http://localhost:8000/v1")
+    client = openai.OpenAI(api_key="test-key", base_url="https://api.openai.com/v1")
     return client
 
 
@@ -35,9 +35,7 @@ def mock_completion():
 
 @pytest.fixture(autouse=True)
 def setup_responses():
-    with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
-        rsps.add_passthru("http://127.0.0.1:8000")
-        rsps.add_passthru("http://localhost:8000")
+    with responses.RequestsMock() as rsps:
         yield rsps
 
 
@@ -49,7 +47,7 @@ def test_wrap_openai_sync_types(openai_client):
 
 @pytest.mark.asyncio
 async def test_wrap_openai_async_types():
-    async_client = openai.AsyncOpenAI(api_key="test-key", base_url="http://localhost:8000/v1")
+    async_client = openai.AsyncOpenAI(api_key="test-key", base_url="https://api.openai.com/v1")
     wrapped = wrap_openai(async_client)
     assert hasattr(wrapped.chat.completions, "create")
     assert iscoroutinefunction(wrapped.chat.completions.create)
@@ -59,10 +57,9 @@ async def test_wrap_openai_async_types():
 def test_wrap_openai_sync_response_types(openai_client, mock_completion):
     responses.add(
         responses.POST,
-        "http://localhost:8000/v1/chat/completions",
+        "https://api.openai.com/v1/chat/completions",
         json=mock_completion,
         status=200,
-        match_querystring=False,
     )
 
     wrapped = wrap_openai(openai_client)
@@ -79,13 +76,12 @@ def test_wrap_openai_sync_response_types(openai_client, mock_completion):
 @responses.activate
 @pytest.mark.asyncio
 async def test_wrap_openai_async_response_types(mock_completion):
-    async_client = openai.AsyncOpenAI(api_key="test-key", base_url="http://localhost:8000/v1")
+    async_client = openai.AsyncOpenAI(api_key="test-key", base_url="https://api.openai.com/v1")
     responses.add(
         responses.POST,
-        "http://localhost:8000/v1/chat/completions",
+        "https://api.openai.com/v1/chat/completions",
         json=mock_completion,
         status=200,
-        match_querystring=False,
     )
 
     wrapped = wrap_openai(async_client)
