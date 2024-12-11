@@ -31,5 +31,13 @@ ${VENV_PRE_COMMIT}: ${VENV_PYTHON_PACKAGES}
 develop: ${VENV_PRE_COMMIT}
 	@echo "--\nRun "source env.sh" to enter development mode!"
 
+.PHONY: py-tests
+py-tests: ${VENV_PYTHON_PACKAGES}
+	@if [ -z "$(TESTS)" ]; then \
+		bash -c 'source venv/bin/activate && python -m pytest py/tests/'; \
+	else \
+		bash -c 'source venv/bin/activate && python -m pytest $(TESTS)'; \
+	fi
+
 fixup:
 	source env.sh && pre-commit run --all-files
