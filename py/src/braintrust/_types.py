@@ -274,7 +274,7 @@ class ModelParams1(TypedDict):
     max_tokens: NotRequired[Optional[float]]
     frequency_penalty: NotRequired[Optional[float]]
     presence_penalty: NotRequired[Optional[float]]
-    response_format: NotRequired[Optional[Union[ResponseFormat, ResponseFormat1, ResponseFormat2, Mapping[str, Any]]]]
+    response_format: NotRequired[Optional[Union[ResponseFormat, ResponseFormat1, ResponseFormat2]]]
     tool_choice: NotRequired[Optional[Union[Literal["auto"], Literal["none"], Literal["required"], ToolChoice]]]
     function_call: NotRequired[Optional[Union[Literal["auto"], Literal["none"], FunctionCall]]]
     n: NotRequired[Optional[float]]
