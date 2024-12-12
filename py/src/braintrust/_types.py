@@ -15,7 +15,8 @@ SpanType = Literal["llm", "score", "function", "eval", "task", "tool"]
 
 class Origin(TypedDict):
     object_type: Union[
-        Literal["experiment", "dataset", "prompt", "function", "prompt_session"], Literal["project_logs"]
+        Literal["experiment", "dataset", "prompt", "function", "prompt_session"],
+        Literal["project_logs"],
     ]
     """
     Type of the object the event is originating from.
