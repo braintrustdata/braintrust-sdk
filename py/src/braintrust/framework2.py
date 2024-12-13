@@ -1,14 +1,24 @@
 import dataclasses
 import json
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Callable, List, Optional, Union, overload
 
 import slugify
+
+from .types import (
+    ChatCompletionMessageParam,
+    IfExists,
+    ModelParams,
+    PromptData,
+    PromptOptions,
+    SavedFunctionId,
+    ToolFunctionDefinition,
+)
 
 
 class _GlobalState:
     def __init__(self):
-        self.functions = []
-        self.prompts = []
+        self.functions: List[CodeFunction] = []
+        self.prompts: List[CodePrompt] = []
 
 
 global_ = _GlobalState()
@@ -24,9 +34,9 @@ class CodeFunction:
     slug: str
     type_: str
     description: Optional[str]
-    parameters: Optional[Any]
-    returns: Optional[Any]
-    if_exists: Optional[str]
+    parameters: Any
+    returns: Any
+    if_exists: Optional[IfExists]
 
 
 @dataclasses.dataclass
@@ -36,11 +46,11 @@ class CodePrompt:
     project: "Project"
     name: str
     slug: str
-    prompt: Any
-    tool_functions: List[Union[CodeFunction, Any]]
+    prompt: PromptData
+    tool_functions: List[Union[CodeFunction, SavedFunctionId]]
     description: Optional[str]
     id: Optional[str]
-    if_exists: Optional[str]
+    if_exists: Optional[IfExists]
 
 
 class ToolBuilder:
@@ -53,13 +63,13 @@ class ToolBuilder:
     def create(
         self,
         *,
-        handler: Any,
+        handler: Callable[..., Any],
         name: Optional[str] = None,
         slug: Optional[str] = None,
         description: Optional[str] = None,
-        parameters: Optional[Any] = None,
-        returns: Optional[Any] = None,
-        if_exists: Optional[str] = None,
+        parameters: Any = None,
+        returns: Any = None,
+        if_exists: Optional[IfExists] = None,
     ) -> CodeFunction:
         """Creates a tool from handler."""
         self._task_counter += 1
@@ -93,19 +103,51 @@ class PromptBuilder:
         self.project = project
         self._task_counter = 0
 
+    @overload  # prompt only, no messages
     def create(
         self,
         *,
+        name: Optional[str] = None,
+        slug: Optional[str] = None,
+        description: Optional[str] = None,
+        id: Optional[str] = None,
+        prompt: str,
         model: str,
+        params: Optional[ModelParams] = None,
+        tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
+        if_exists: Optional[IfExists] = None,
+    ):
+        ...
+
+    @overload  # messages only, no prompt
+    def create(
+        self,
+        *,
+        name: Optional[str] = None,
+        slug: Optional[str] = None,
+        description: Optional[str] = None,
+        id: Optional[str] = None,
+        messages: List[ChatCompletionMessageParam],
+        model: str,
+        params: Optional[ModelParams] = None,
+        tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
+        if_exists: Optional[IfExists] = None,
+    ):
+        ...
+
+    def create(
+        self,
+        *,
         name: Optional[str] = None,
         slug: Optional[str] = None,
         description: Optional[str] = None,
         id: Optional[str] = None,
         prompt: Optional[str] = None,
-        messages: Optional[List[Any]] = None,
-        params: Optional[Any] = None,
-        tools: Optional[List[Union[CodeFunction, Any]]] = None,
-        if_exists: Optional[str] = None,
+        messages: Optional[List[ChatCompletionMessageParam]] = None,
+        model: str,
+        params: Optional[ModelParams] = None,
+        tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
+        if_exists: Optional[IfExists] = None,
     ):
         """Creates a prompt."""
         self._task_counter += 1
@@ -114,32 +156,36 @@ class PromptBuilder:
         if not slug:
             slug = slugify.slugify(name)
 
-        tool_functions = []
-        raw_tools = []
+        tool_functions: List[Union[CodeFunction, SavedFunctionId]] = []
+        raw_tools: List[ToolFunctionDefinition] = []
         for tool in tools or []:
             if isinstance(tool, CodeFunction):
                 tool_functions.append(tool)
             elif "type" in tool and "function" not in tool:
+                # SavedFunctionId
                 tool_functions.append(tool)
             else:
+                # ToolFunctionDefinition
                 raw_tools.append(tool)
 
+        prompt_data: PromptData = {}
         if messages is not None:
-            prompt_block = {
+            prompt_data["prompt"] = {
                 "type": "chat",
                 "messages": messages,
             }
             if len(raw_tools) > 0:
-                prompt_block["tools"] = json.dumps(raw_tools)
+                prompt_data["prompt"]["tools"] = json.dumps(raw_tools)
         else:
-            prompt_block = {
+            assert prompt is not None
+            prompt_data["prompt"] = {
                 "type": "completion",
                 "content": prompt,
             }
-        options = {"model": model}
+        options: PromptOptions = {"model": model}
         if params is not None:
             options["params"] = params
-        prompt_data = {"prompt": prompt_block, "options": options}
+        prompt_data["options"] = options
 
         p = CodePrompt(
             project=self.project,

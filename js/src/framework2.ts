@@ -10,10 +10,14 @@ import {
   SavedFunctionId,
   PromptBlockData,
   PromptData,
+  toolFunctionDefinitionSchema,
+  type ToolFunctionDefinition,
 } from "@braintrust/core/typespecs";
 import { TransactionId } from "@braintrust/core";
 import { Prompt, PromptRowWithId } from "./logger";
 import { GenericFunction } from "./framework-types";
+
+export { toolFunctionDefinitionSchema, ToolFunctionDefinition };
 
 type NameOrId = { name: string } | { id: string };
 
@@ -312,19 +316,6 @@ export class CodePrompt {
     this.functionType = functionType;
   }
 }
-
-export const toolFunctionDefinitionSchema = z.object({
-  type: z.literal("function"),
-  function: z.object({
-    name: z.string(),
-    description: z.string().optional(),
-    parameters: z.record(z.unknown()).optional(),
-    strict: z.boolean().optional(),
-  }),
-});
-export type ToolFunctionDefinition = z.infer<
-  typeof toolFunctionDefinitionSchema
->;
 
 interface PromptId {
   id: string;
