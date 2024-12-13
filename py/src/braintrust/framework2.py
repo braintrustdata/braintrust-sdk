@@ -71,7 +71,20 @@ class ToolBuilder:
         returns: Any = None,
         if_exists: Optional[IfExists] = None,
     ) -> CodeFunction:
-        """Creates a tool from handler."""
+        """Creates a tool.
+
+        Args:
+            handler: The function that is called when the tool is used.
+            name: The name of the tool.
+            slug: A unique identifier for the tool.
+            description: The description of the tool.
+            parameters: The tool's input schema, as a Pydantic model.
+            returns: The tool's output schema, as a Pydantic model.
+            if_exists: What to do if the tool already exists.
+
+        Returns:
+            A handle to the created tool, that can be used in a prompt.
+        """
         self._task_counter += 1
         if not name:
             if handler.__name__ and handler.__name__ != "<lambda>":
@@ -149,7 +162,20 @@ class PromptBuilder:
         tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
         if_exists: Optional[IfExists] = None,
     ):
-        """Creates a prompt."""
+        """Creates a prompt.
+
+        Args:
+            name: The name of the prompt.
+            slug: A unique identifier for the prompt.
+            description: The description of the prompt.
+            id: The ID of the prompt.
+            prompt: The prompt text. Exactly one of prompt or messages must be provided.
+            messages: The messages to send to the model. Exactly one of prompt or messages must be provided.
+            model: The model to use for the prompt.
+            params: The model parameters to use for the prompt.
+            tools: The tools to use for the prompt.
+            if_exists: What to do if the prompt already exists.
+        """
         self._task_counter += 1
         if not name:
             name = f"Prompt {self._task_counter}"
