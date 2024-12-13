@@ -230,6 +230,8 @@ class PromptBuilder:
 
 
 class ScorerBuilder:
+    """Builder to create a scorer in Braintrust."""
+
     def __init__(self, project: "Project"):
         self.project = project
         self._task_counter = 0
@@ -302,6 +304,30 @@ class ScorerBuilder:
         use_cot: Optional[bool] = None,
         choice_scores: Optional[Dict[str, float]] = None,
     ):
+        """Creates a scorer.
+
+        Args:
+            name: The name of the scorer.
+            slug: A unique identifier for the scorer.
+            description: The description of the scorer.
+            if_exists: What to do if the scorer already exists.
+
+            The remaining args are mutually exclusive; that is,
+            the function will only accept args from one of the following overloads.
+
+            Code scorer:
+            handler: The function that is called when the scorer is used. Required.
+            parameters: The scorer's input schema, as a Pydantic model. Required.
+            returns: The scorer's output schema, as a Pydantic model.
+
+            LLM scorer:
+            prompt: The prompt to use for the scorer. Either prompt or messages is required.
+            messages: The messages to use for the scorer. Either prompt or messages is required.
+            model: The model to use for the scorer. Required.
+            params: The model parameters to use for the scorer.
+            use_cot: Whether to use chain-of-thought for the scorer. Required.
+            choice_scores: The scores for each choice. Required.
+        """
         self._task_counter += 1
         if name is None or len(name) == 0:
             if handler and handler.__name__ and handler.__name__ != "<lambda>":
