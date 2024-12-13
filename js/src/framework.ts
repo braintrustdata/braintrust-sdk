@@ -1,31 +1,31 @@
-import chalk from "chalk";
-import {
-  NOOP_SPAN,
-  Experiment,
-  ExperimentSummary,
-  Span,
-  init as _initExperiment,
-  EvalCase,
-  BaseMetadata,
-  DefaultMetadataType,
-  ScoreSummary,
-  MetricSummary,
-  currentSpan,
-  FullInitOptions,
-  BraintrustState,
-  logError as logSpanError,
-  withCurrent,
-  startSpan,
-  Dataset,
-} from "./logger";
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import { GitMetadataSettings, RepoInfo } from "@braintrust/core/typespecs";
-import { BarProgressReporter, ProgressReporter } from "./progress";
-import pluralize from "pluralize";
-import { isEmpty } from "./util";
 import { queue } from "async";
-import { CodeFunction, CodePrompt } from "./framework2";
+import chalk from "chalk";
+import pluralize from "pluralize";
 import { GenericFunction } from "./framework-types";
+import { CodeFunction, CodePrompt } from "./framework2";
+import {
+  BaseMetadata,
+  BraintrustState,
+  Dataset,
+  DefaultMetadataType,
+  EvalCase,
+  Experiment,
+  ExperimentSummary,
+  FullInitOptions,
+  MetricSummary,
+  NOOP_SPAN,
+  ScoreSummary,
+  Span,
+  init as _initExperiment,
+  currentSpan,
+  logError as logSpanError,
+  startSpan,
+  withCurrent,
+} from "./logger";
+import { BarProgressReporter, ProgressReporter } from "./progress";
+import { isEmpty } from "./util";
 
 export type BaseExperiment<
   Input,
@@ -78,7 +78,14 @@ export type EvalTask<Input, Output> =
   | ((input: Input, hooks: EvalHooks) => Output);
 
 export interface EvalHooks {
+  /**
+   * @deprecated Use `metadata` instead.
+   */
   meta: (info: Record<string, unknown>) => void;
+  /**
+   * The metadata object for the current evaluation. You can mutate this object to add or remove metadata.
+   */
+  metadata: Record<string, unknown>;
   span: Span;
 }
 
@@ -689,7 +696,11 @@ async function runEvaluatorInternal(
 
           await rootSpan.traced(
             async (span: Span) => {
-              const outputResult = evaluator.task(datum.input, { meta, span });
+              const outputResult = evaluator.task(datum.input, {
+                meta,
+                metadata,
+                span,
+              });
               if (outputResult instanceof Promise) {
                 output = await outputResult;
               } else {

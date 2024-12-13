@@ -82,6 +82,8 @@ def run(args):
 
     # Execute the user's file as a module.
     spec = importlib.util.spec_from_file_location("unused", args.file)
+    if spec is None or spec.loader is None:
+        raise ValueError(f"Failed to load module from {args.file}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
@@ -166,7 +168,9 @@ def run(args):
     for i, f in enumerate(global_.functions):
         source = inspect.getsource(f.handler)
         if f.handler.__name__ == "<lambda>":
-            m = re.search("handler\s*=\s*(.+)\s*[,)]", source)
+            m = re.search(r"handler\s*=\s*(.+)\s*[,)]", source)
+            if m is None:
+                raise ValueError(f"Failed to find handler for {f.name}")
             source = m.group(1)
         j = {
             "project_id": project_ids.get(f.project),
@@ -257,6 +261,7 @@ def build_parser(subparsers, parent_parser):
     parser.add_argument(
         "--if-exists",
         default="error",
+        choices=["error", "replace", "ignore"],
         help="What to do if a function with the same slug already exists. 'error' will cause an error and abort. 'replace' will overwrite the existing function. 'ignore' will ignore the push for this function and continue.",
     )
 
