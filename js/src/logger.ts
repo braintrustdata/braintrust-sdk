@@ -4607,6 +4607,11 @@ export function renderMessage<T extends Message>(
               }),
         }
       : {}),
+    ...("tool_call_id" in message
+      ? {
+          tool_call_id: render(message.tool_call_id),
+        }
+      : {}),
   };
 }
 
