@@ -223,19 +223,21 @@ def run(args):
                 else:
                     resolvable_tool_functions.append(f)
             prompt_data["tool_functions"] = resolvable_tool_functions
-        functions.append(
-            {
-                "project_id": project_ids.get(p.project),
-                "name": p.name,
-                "slug": p.slug,
-                "description": p.description,
-                "function_data": {
-                    "type": "prompt",
-                },
-                "prompt_data": prompt_data,
-                "if_exists": p.if_exists if p.if_exists else args.if_exists,
-            }
-        )
+        j = {
+            "project_id": project_ids.get(p.project),
+            "name": p.name,
+            "slug": p.slug,
+            "function_data": {
+                "type": "prompt",
+            },
+            "prompt_data": prompt_data,
+            "if_exists": p.if_exists if p.if_exists is not None else args.if_exists,
+        }
+        if p.description is not None:
+            j["description"] = p.description
+        if p.function_type is not None:
+            j["function_type"] = p.function_type
+        functions.append(j)
     api_conn().post_json("insert-functions", {"functions": functions})
 
 
