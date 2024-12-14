@@ -1,6 +1,7 @@
 import json
 import logging
 from inspect import iscoroutinefunction
+from typing import TYPE_CHECKING
 
 import httpx
 import openai
@@ -9,6 +10,14 @@ from braintrust.oai import wrap_openai
 from openai.types import CompletionUsage
 from openai.types.chat import ChatCompletion
 from openai.types.chat.chat_completion import ChatCompletionMessage, Choice
+
+if TYPE_CHECKING:
+    reveal_type = print  # For type checking only
+else:
+
+    def reveal_type(obj):
+        pass  # No-op at runtime
+
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -50,6 +59,8 @@ def setup_responses(mock_completion, httpx_mock):
 
 def test_wrap_openai_sync_types(openai_client):
     wrapped = wrap_openai(openai_client)
+    reveal_type(wrapped)  # type: openai.OpenAI # type: ignore
+    reveal_type(wrapped.chat.completions)  # type: openai.resources.chat.completions.Completions # type: ignore
     assert hasattr(wrapped.chat.completions, "create")
     assert not hasattr(wrapped.chat.completions, "acreate")
 
@@ -60,6 +71,8 @@ async def test_wrap_openai_async_types():
         api_key="sk-test", base_url="https://api.openai.com/v1/", default_headers={"OpenAI-Version": "2020-10-01"}
     )
     wrapped = wrap_openai(async_client)
+    reveal_type(wrapped)  # type: openai.AsyncOpenAI # type: ignore
+    reveal_type(wrapped.chat.completions)  # type: openai.resources.chat.completions.AsyncCompletions # type: ignore
     assert hasattr(wrapped.chat.completions, "create")
     assert iscoroutinefunction(wrapped.chat.completions.create)
 
@@ -67,6 +80,9 @@ async def test_wrap_openai_async_types():
 def test_wrap_openai_sync_response_types(openai_client, mock_completion, setup_responses):
     wrapped = wrap_openai(openai_client)
     response = wrapped.chat.completions.create(model="gpt-3.5-turbo", messages=[{"role": "user", "content": "Hello"}])
+    reveal_type(response)  # type: openai.types.chat.ChatCompletion # type: ignore
+    reveal_type(response.choices[0])  # type: openai.types.chat.chat_completion.Choice # type: ignore
+    reveal_type(response.usage)  # type: openai.types.completion_usage.CompletionUsage # type: ignore
     assert isinstance(response, ChatCompletion)
     assert isinstance(response.choices[0], Choice)
     assert isinstance(response.usage, CompletionUsage)
@@ -79,6 +95,9 @@ async def test_wrap_openai_async_response_types(mock_completion, setup_responses
     response = await wrapped.chat.completions.create(
         model="gpt-3.5-turbo", messages=[{"role": "user", "content": "Hello"}]
     )
+    reveal_type(response)  # type: openai.types.chat.ChatCompletion # type: ignore
+    reveal_type(response.choices[0])  # type: openai.types.chat.chat_completion.Choice # type: ignore
+    reveal_type(response.usage)  # type: openai.types.completion_usage.CompletionUsage # type: ignore
     assert isinstance(response, ChatCompletion)
     assert isinstance(response.choices[0], Choice)
     assert isinstance(response.usage, CompletionUsage)
