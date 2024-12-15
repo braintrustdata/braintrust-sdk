@@ -4591,6 +4591,27 @@ export function renderMessage<T extends Message>(
                 }),
         }
       : {}),
+    ...("tool_calls" in message
+      ? {
+          tool_calls: isEmpty(message.tool_calls)
+            ? undefined
+            : message.tool_calls.map((t) => {
+                return {
+                  type: t.type,
+                  id: render(t.id),
+                  function: {
+                    name: render(t.function.name),
+                    arguments: render(t.function.arguments),
+                  },
+                };
+              }),
+        }
+      : {}),
+    ...("tool_call_id" in message
+      ? {
+          tool_call_id: render(message.tool_call_id),
+        }
+      : {}),
   };
 }
 
