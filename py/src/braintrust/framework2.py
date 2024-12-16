@@ -1,6 +1,6 @@
 import dataclasses
 import json
-from typing import Any, Callable, List, Optional, Union, overload
+from typing import Any, Callable, Dict, List, Optional, Union, overload
 
 import slugify
 
@@ -49,6 +49,7 @@ class CodePrompt:
     prompt: PromptData
     tool_functions: List[Union[CodeFunction, SavedFunctionId]]
     description: Optional[str]
+    function_type: Optional[str]
     id: Optional[str]
     if_exists: Optional[IfExists]
 
@@ -220,11 +221,172 @@ class PromptBuilder:
             prompt=prompt_data,
             tool_functions=tool_functions,
             description=description,
+            function_type=None,
             id=id,
             if_exists=if_exists,
         )
         global_.prompts.append(p)
         return p
+
+
+class ScorerBuilder:
+    """Builder to create a scorer in Braintrust."""
+
+    def __init__(self, project: "Project"):
+        self.project = project
+        self._task_counter = 0
+
+    # Code scorer.
+    @overload
+    def create(
+        self,
+        *,
+        name: Optional[str] = None,
+        slug: Optional[str] = None,
+        description: Optional[str] = None,
+        if_exists: Optional[IfExists] = None,
+        handler: Callable[..., Any],
+        parameters: Any,
+        returns: Any = None,
+    ):
+        ...
+
+    # LLM scorer with prompt.
+    @overload
+    def create(
+        self,
+        *,
+        name: Optional[str] = None,
+        slug: Optional[str] = None,
+        description: Optional[str] = None,
+        if_exists: Optional[IfExists] = None,
+        prompt: str,
+        model: str,
+        params: Optional[ModelParams] = None,
+        use_cot: bool,
+        choice_scores: Dict[str, float],
+    ):
+        ...
+
+    # LLM scorer with messages.
+    @overload
+    def create(
+        self,
+        *,
+        name: Optional[str] = None,
+        slug: Optional[str] = None,
+        description: Optional[str] = None,
+        if_exists: Optional[IfExists] = None,
+        messages: List[ChatCompletionMessageParam],
+        model: str,
+        params: Optional[ModelParams] = None,
+        use_cot: bool,
+        choice_scores: Dict[str, float],
+    ):
+        ...
+
+    def create(
+        self,
+        *,
+        name: Optional[str] = None,
+        slug: Optional[str] = None,
+        description: Optional[str] = None,
+        if_exists: Optional[IfExists] = None,
+        # Code scorer params.
+        handler: Optional[Callable[..., Any]] = None,
+        parameters: Any = None,
+        returns: Any = None,
+        # LLM scorer params.
+        prompt: Optional[str] = None,
+        messages: Optional[List[ChatCompletionMessageParam]] = None,
+        model: Optional[str] = None,
+        params: Optional[ModelParams] = None,
+        use_cot: Optional[bool] = None,
+        choice_scores: Optional[Dict[str, float]] = None,
+    ):
+        """Creates a scorer.
+
+        Args:
+            name: The name of the scorer.
+            slug: A unique identifier for the scorer.
+            description: The description of the scorer.
+            if_exists: What to do if the scorer already exists.
+
+            The remaining args are mutually exclusive; that is,
+            the function will only accept args from one of the following overloads.
+
+            Code scorer:
+            handler: The function that is called when the scorer is used. Required.
+            parameters: The scorer's input schema, as a Pydantic model. Required.
+            returns: The scorer's output schema, as a Pydantic model.
+
+            LLM scorer:
+            prompt: The prompt to use for the scorer. Either prompt or messages is required.
+            messages: The messages to use for the scorer. Either prompt or messages is required.
+            model: The model to use for the scorer. Required.
+            params: The model parameters to use for the scorer.
+            use_cot: Whether to use chain-of-thought for the scorer. Required.
+            choice_scores: The scores for each choice. Required.
+        """
+        self._task_counter += 1
+        if name is None or len(name) == 0:
+            if handler and handler.__name__ and handler.__name__ != "<lambda>":
+                name = handler.__name__
+            else:
+                name = f"Scorer {self._task_counter}"
+        if slug is None or len(slug) == 0:
+            slug = slugify.slugify(name)
+        if handler is not None:  # code scorer
+            assert parameters is not None
+            f = CodeFunction(
+                project=self.project,
+                handler=handler,
+                name=name,
+                slug=slug,
+                type_="scorer",
+                description=description,
+                parameters=parameters,
+                returns=returns,
+                if_exists=if_exists,
+            )
+            global_.functions.append(f)
+        else:  # LLM scorer
+            assert model is not None
+            assert use_cot is not None
+            assert choice_scores is not None
+            prompt_data: PromptData = {}
+            if messages is not None:
+                assert prompt is None
+                prompt_data["prompt"] = {
+                    "type": "chat",
+                    "messages": messages,
+                }
+            else:
+                assert prompt is not None
+                prompt_data["prompt"] = {
+                    "type": "completion",
+                    "content": prompt,
+                }
+            prompt_data["options"] = {"model": model}
+            if params is not None:
+                prompt_data["options"]["params"] = params
+            prompt_data["parser"] = {
+                "type": "llm_classifier",
+                "use_cot": use_cot,
+                "choice_scores": choice_scores,
+            }
+            p = CodePrompt(
+                project=self.project,
+                name=name,
+                slug=slug,
+                prompt=prompt_data,
+                tool_functions=[],
+                description=description,
+                function_type="scorer",
+                id=None,
+                if_exists=if_exists,
+            )
+            global_.prompts.append(p)
 
 
 class Project:
@@ -234,6 +396,7 @@ class Project:
         self.name = name
         self.tools = ToolBuilder(self)
         self.prompts = PromptBuilder(self)
+        self.scorers = ScorerBuilder(self)
 
 
 class ProjectBuilder:

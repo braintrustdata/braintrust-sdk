@@ -11,12 +11,13 @@ import sys
 import tempfile
 import textwrap
 import zipfile
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 import requests
 
 from .. import api_conn, app_conn, login, org_id, proxy_conn
 from ..framework2 import CodeFunction, global_
+from ..types import IfExists
 
 
 class _ProjectIdCache:
@@ -53,11 +54,11 @@ def _pydantic_to_json_schema(m):
     return m.schema()
 
 
-def check_uv():
+def _check_uv():
     try:
         import uv as _
     except ImportError:
-        print(
+        raise ValueError(
             textwrap.dedent(
                 f"""\
                 The `uv` package is required to push to Braintrust. You can install it by including the
@@ -67,36 +68,31 @@ def check_uv():
 
                 to install braintrust with the CLI dependencies (make sure to quote 'braintrust[cli]')."""
             ),
-            file=sys.stderr,
         )
-        sys.exit(1)
 
 
-def run(args):
-    """Runs the braintrust push subcommand."""
-    login(
-        api_key=args.api_key,
-        org_name=args.org_name,
-        app_url=args.app_url,
-    )
-
-    # Execute the user's file as a module.
-    spec = importlib.util.spec_from_file_location("unused", args.file)
+def _execute_module(file: str):
+    spec = importlib.util.spec_from_file_location("unused", file)
     if spec is None or spec.loader is None:
-        raise ValueError(f"Failed to load module from {args.file}")
+        raise ValueError(f"Failed to load module from {file}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    py_version = f"{sys.version_info.major}.{sys.version_info.minor}"
 
-    # Fetch a bundle ID to which to upload.
+def _py_version() -> str:
+    return f"{sys.version_info.major}.{sys.version_info.minor}"
+
+
+def _upload_bundle(file: str, requirements: Optional[str]) -> str:
+    _check_uv()
+
     resp = proxy_conn().post_json(
         "function/code",
         {
             "org_id": org_id(),
             "runtime_context": {
                 "runtime": "python",
-                "version": py_version,
+                "version": _py_version(),
             },
         },
     )
@@ -105,8 +101,8 @@ def run(args):
 
     with tempfile.TemporaryDirectory() as td:
         packages_dir = os.path.join(td, "pkg")
-        if args.requirements:
-            install_args = ["--requirement", args.requirements]
+        if requirements:
+            install_args = ["--requirement", requirements]
         else:
             # Though not strictly necessary, these packages should be those supported in the Python code editor
             # with the exception of pydantic, which is necessary to allow the user to express function input schemas.
@@ -125,8 +121,6 @@ def run(args):
                 if arg is not None
             ]
 
-        check_uv()
-
         # Install the bundled dependencies for server platform into packages_dir.
         subprocess.run(
             [
@@ -139,7 +133,7 @@ def run(args):
                 "--python-platform",
                 "linux",
                 "--python-version",
-                py_version,
+                _py_version(),
             ],
             check=True,
         )
@@ -159,12 +153,16 @@ def run(args):
                     if os.path.isfile(path):
                         arcname = os.path.join(arcdirpath, name)
                         zf.write(path, arcname)
-            zf.write(args.file, "register.py")
+            zf.write(file, "register.py")
         with open(os.path.join(td, "pkg.zip"), "rb") as zf:
             requests.put(bundle_upload_url, data=zf.read()).raise_for_status()
 
-    project_ids = _ProjectIdCache()
-    functions = []
+    return bundle_id
+
+
+def _collect_function_function_defs(
+    project_ids: _ProjectIdCache, functions: List[Dict[str, Any]], bundle_id: str, if_exists: IfExists
+) -> None:
     for i, f in enumerate(global_.functions):
         source = inspect.getsource(f.handler)
         if f.handler.__name__ == "<lambda>":
@@ -183,7 +181,7 @@ def run(args):
                     "type": "bundle",
                     "runtime_context": {
                         "runtime": "python",
-                        "version": py_version,
+                        "version": _py_version(),
                     },
                     "location": {
                         "type": "function",
@@ -198,7 +196,7 @@ def run(args):
                 "parameters": f.parameters,
                 "returns": f.returns,
             },
-            "if_exists": f.if_exists if f.if_exists else args.if_exists,
+            "if_exists": f.if_exists if f.if_exists else if_exists,
         }
         if f.parameters is not None or f.returns is not None:
             j["function_schema"] = {}
@@ -207,7 +205,12 @@ def run(args):
             if f.returns is not None:
                 j["function_schema"]["returns"] = _pydantic_to_json_schema(f.returns)
         functions.append(j)
-    for i, p in enumerate(global_.prompts):
+
+
+def _collect_prompt_function_defs(
+    project_ids: _ProjectIdCache, functions: List[Dict[str, Any]], if_exists: IfExists
+) -> None:
+    for p in global_.prompts:
         prompt_data = p.prompt
         if len(p.tool_functions) > 0:
             resolvable_tool_functions = []
@@ -223,20 +226,45 @@ def run(args):
                 else:
                     resolvable_tool_functions.append(f)
             prompt_data["tool_functions"] = resolvable_tool_functions
-        functions.append(
-            {
-                "project_id": project_ids.get(p.project),
-                "name": p.name,
-                "slug": p.slug,
-                "description": p.description,
-                "function_data": {
-                    "type": "prompt",
-                },
-                "prompt_data": prompt_data,
-                "if_exists": p.if_exists if p.if_exists else args.if_exists,
-            }
-        )
-    api_conn().post_json("insert-functions", {"functions": functions})
+        j = {
+            "project_id": project_ids.get(p.project),
+            "name": p.name,
+            "slug": p.slug,
+            "function_data": {
+                "type": "prompt",
+            },
+            "prompt_data": prompt_data,
+            "if_exists": p.if_exists if p.if_exists is not None else if_exists,
+        }
+        if p.description is not None:
+            j["description"] = p.description
+        if p.function_type is not None:
+            j["function_type"] = p.function_type
+        functions.append(j)
+
+
+def run(args):
+    """Runs the braintrust push subcommand."""
+    login(
+        api_key=args.api_key,
+        org_name=args.org_name,
+        app_url=args.app_url,
+    )
+
+    _execute_module(args.file)
+
+    project_ids = _ProjectIdCache()
+    functions: List[Dict[str, Any]] = []
+    if len(global_.functions) > 0:
+        bundle_id = _upload_bundle(args.file, args.requirements)
+        _collect_function_function_defs(project_ids, functions, bundle_id, args.if_exists)
+    if len(global_.prompts) > 0:
+        _collect_prompt_function_defs(project_ids, functions, args.if_exists)
+
+    if len(functions) > 0:
+        api_conn().post_json("insert-functions", {"functions": functions})
+    else:
+        print("No functions found in the module. Nothing was pushed.", file=sys.stderr)
 
 
 def build_parser(subparsers, parent_parser):
