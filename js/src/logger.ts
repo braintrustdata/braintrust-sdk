@@ -3,73 +3,73 @@
 import { v4 as uuidv4 } from "uuid";
 
 import {
-  IS_MERGE_FIELD,
-  TRANSACTION_ID_FIELD,
-  mergeDicts,
-  mergeRowBatch,
-  VALID_SOURCES,
-  AUDIT_SOURCE_FIELD,
   AUDIT_METADATA_FIELD,
-  mergeGitMetadataSettings,
-  TransactionId,
-  IdField,
-  ExperimentLogPartialArgs,
-  ExperimentLogFullArgs,
-  LogFeedbackFullArgs,
-  SanitizedExperimentLogPartialArgs,
-  ExperimentEvent,
-  BackgroundLogEvent,
+  AUDIT_SOURCE_FIELD,
   AnyDatasetRecord,
+  BackgroundLogEvent,
   DEFAULT_IS_LEGACY_DATASET,
   DatasetRecord,
-  ensureDatasetRecord,
-  makeLegacyEvent,
-  constructJsonArray,
-  SpanTypeAttribute,
-  SpanType,
-  batchItems,
+  ExperimentEvent,
+  ExperimentLogFullArgs,
+  ExperimentLogPartialArgs,
+  IS_MERGE_FIELD,
+  IdField,
+  LogFeedbackFullArgs,
+  SanitizedExperimentLogPartialArgs,
   SpanComponentsV3,
   SpanObjectTypeV3,
-  spanObjectTypeV3ToString,
+  SpanType,
+  SpanTypeAttribute,
+  TRANSACTION_ID_FIELD,
+  TransactionId,
+  VALID_SOURCES,
   _urljoin,
+  batchItems,
+  constructJsonArray,
+  ensureDatasetRecord,
+  makeLegacyEvent,
+  mergeDicts,
+  mergeGitMetadataSettings,
+  mergeRowBatch,
+  spanObjectTypeV3ToString,
 } from "@braintrust/core";
 import {
   AnyModelParam,
-  BRAINTRUST_PARAMS,
-  PromptData,
-  Tools,
-  promptDataSchema,
-  promptSchema,
-  Prompt as PromptRow,
-  toolsSchema,
-  PromptSessionEvent,
-  OpenAIMessage,
-  Message,
-  GitMetadataSettings,
-  RepoInfo,
-  gitMetadataSettingsSchema,
   AttachmentReference,
   AttachmentStatus,
   BRAINTRUST_ATTACHMENT,
-  attachmentStatusSchema,
+  BRAINTRUST_PARAMS,
+  GitMetadataSettings,
+  Message,
+  OpenAIMessage,
+  PromptData,
+  Prompt as PromptRow,
+  PromptSessionEvent,
+  RepoInfo,
+  Tools,
   attachmentReferenceSchema,
+  attachmentStatusSchema,
+  gitMetadataSettingsSchema,
+  promptDataSchema,
+  promptSchema,
+  toolsSchema,
 } from "@braintrust/core/typespecs";
-import iso, { IsoAsyncLocalStorage } from "./isomorph";
-import {
-  runCatchFinally,
-  GLOBAL_PROJECT,
-  getCurrentUnixTimestamp,
-  isEmpty,
-  LazyValue,
-} from "./util";
+import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
-import { z, ZodError } from "zod";
+import { ZodError, z } from "zod";
 import {
   BraintrustStream,
   createFinalValuePassThroughStream,
   devNullWritableStream,
 } from "./functions/stream";
-import { waitUntil } from "@vercel/functions";
+import iso, { IsoAsyncLocalStorage } from "./isomorph";
+import {
+  GLOBAL_PROJECT,
+  LazyValue,
+  getCurrentUnixTimestamp,
+  isEmpty,
+  runCatchFinally,
+} from "./util";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -211,7 +211,7 @@ export interface Span extends Exportable {
  */
 export class NoopSpan implements Span {
   public id: string;
-  public kind: "span" = "span";
+  public kind = "span" as const;
 
   constructor() {
     this.id = "";
@@ -259,6 +259,7 @@ export const NOOP_SPAN = new NoopSpan();
 // use the same state as the toplevel module. This global variable serves as a
 // mechanism to propagate the initial state from some toplevel creator.
 declare global {
+  // eslint-disable-next-line no-var
   var __inherited_braintrust_state: BraintrustState;
 }
 
@@ -404,6 +405,7 @@ export class BraintrustState {
     }
     const state = new BraintrustState({ ...opts });
     for (const key of Object.keys(loginSchema.shape)) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
       (state as any)[key] = (serializedParsed.data as any)[key];
     }
 
@@ -515,8 +517,10 @@ export const _internalGetGlobalState = () => _globalState;
 export class FailedHTTPResponse extends Error {
   public status: number;
   public text: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public data: any;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(status: number, text: string, data: any = null) {
     super(`${status}: ${text}`);
     this.status = status;
@@ -559,7 +563,7 @@ class HTTPConnection {
     try {
       const resp = await this.get("ping");
       return resp.status === 200;
-    } catch (e) {
+    } catch {
       return false;
     }
   }
@@ -675,7 +679,9 @@ class HTTPConnection {
         if (i < tries - 1) {
           console.log(
             `Retrying API request ${object_type} ${JSON.stringify(args)} ${
+              // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
               (e as any).status
+              // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
             } ${(e as any).text}`,
           );
           continue;
@@ -719,6 +725,7 @@ interface OrgProjectMetadata {
 
 export interface LogOptions<IsAsyncFlush> {
   asyncFlush?: IsAsyncFlush;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   computeMetadataArgs?: Record<string, any>;
 }
 
@@ -1062,6 +1069,7 @@ function logFeedbackImpl(
     tags,
   });
 
+  // eslint-disable-next-line prefer-const
   let { metadata, ...updateEvent } = deepCopyEvent(validatedEvent);
   updateEvent = Object.fromEntries(
     Object.entries(updateEvent).filter(([_, v]) => !isEmpty(v)),
@@ -1123,6 +1131,7 @@ function updateSpanImpl({
   event: Omit<Partial<ExperimentEvent>, "id">;
 }): void {
   const updateEvent = deepCopyEvent(
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     validateAndSanitizeExperimentLogPartialArgs({
       id,
       ...event,
@@ -1301,12 +1310,14 @@ function startSpanParentArgs(args: {
   parent: string | undefined;
   parentObjectType: SpanObjectTypeV3;
   parentObjectId: LazyValue<string>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   parentComputeObjectMetadataArgs: Record<string, any> | undefined;
   parentSpanIds: ParentSpanIds | undefined;
   propagatedEvent: StartSpanEventArgs | undefined;
 }): {
   parentObjectType: SpanObjectTypeV3;
   parentObjectId: LazyValue<string>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   parentComputeObjectMetadataArgs: Record<string, any> | undefined;
   parentSpanIds: ParentSpanIds | undefined;
   propagatedEvent: StartSpanEventArgs | undefined;
@@ -1347,6 +1358,7 @@ function startSpanParentArgs(args: {
     }
     argPropagatedEvent =
       args.propagatedEvent ??
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       ((parentComponents.data.propagated_event ?? undefined) as
         | StartSpanEventArgs
         | undefined);
@@ -1369,13 +1381,14 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   private state: BraintrustState;
   private lazyMetadata: LazyValue<OrgProjectMetadata>;
   private _asyncFlush: IsAsyncFlush | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private computeMetadataArgs: Record<string, any> | undefined;
   private lastStartTime: number;
   private lazyId: LazyValue<string>;
   private calledStartSpan: boolean;
 
   // For type identification.
-  public kind: "logger" = "logger";
+  public kind = "logger" as const;
 
   constructor(
     state: BraintrustState,
@@ -1442,8 +1455,10 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     const ret = span.id;
     type Ret = PromiseUnless<IsAsyncFlush, string>;
     if (this.asyncFlush === true) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return ret as Ret;
     } else {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return (async () => {
         await this.flush();
         return ret;
@@ -1480,8 +1495,10 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     type Ret = PromiseUnless<IsAsyncFlush, R>;
 
     if (this.asyncFlush) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return ret as Ret;
     } else {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return (async () => {
         const awaitedRet = await ret;
         await this.flush();
@@ -1597,6 +1614,7 @@ function castLogger<ToB extends boolean, FromB extends boolean>(
       `Asserted asyncFlush setting ${asyncFlush} does not match stored logger's setting ${logger.asyncFlush}`,
     );
   }
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   return logger as unknown as Logger<ToB>;
 }
 
@@ -2191,6 +2209,7 @@ export function init<IsOpen extends boolean = false>(
       },
     );
 
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return new ReadonlyExperiment(
       stateArg ?? _globalState,
       lazyMetadata,
@@ -2265,6 +2284,7 @@ export function init<IsOpen extends boolean = false>(
             .appConn()
             .post_json("api/experiment/register", args);
           break;
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
         } catch (e: any) {
           if (
             args["base_experiment"] &&
@@ -2299,6 +2319,7 @@ export function init<IsOpen extends boolean = false>(
   if (options.setCurrent ?? true) {
     state.currentExperiment = ret;
   }
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   return ret as InitializedExperiment<IsOpen>;
 }
 
@@ -2633,6 +2654,7 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
     computeMetadataArgs,
   });
   if (options.setCurrent ?? true) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     state.currentLogger = ret as Logger<false>;
   }
   return ret;
@@ -3024,8 +3046,10 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
   type Ret = PromiseUnless<IsAsyncFlush, R>;
 
   if (args?.asyncFlush) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return ret as Ret;
   } else {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return (async () => {
       const awaitedRet = await ret;
       if (isSyncFlushLogger) {
@@ -3059,6 +3083,7 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
  * @returns The wrapped function.
  */
 export function wrapTraced<
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   F extends (...args: any[]) => any,
   IsAsyncFlush extends boolean = false,
 >(
@@ -3081,6 +3106,7 @@ export function wrapTraced<
     args && args.event && args.event.output !== undefined;
 
   if (args?.asyncFlush) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return ((...fnArgs: Parameters<F>) =>
       traced((span) => {
         if (!hasExplicitInput) {
@@ -3104,6 +3130,7 @@ export function wrapTraced<
         return output;
       }, spanArgs)) as IsAsyncFlush extends false ? never : F;
   } else {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return ((...fnArgs: Parameters<F>) =>
       traced(async (span) => {
         if (!hasExplicitInput) {
@@ -3186,6 +3213,7 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
       parentSpanIds,
       propagatedEvent:
         args?.propagatedEvent ??
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         ((components.data.propagated_event ?? undefined) as
           | StartSpanEventArgs
           | undefined),
@@ -3224,6 +3252,7 @@ export function withCurrent<R>(
 
 function _check_org_info(
   state: BraintrustState,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   org_info: any,
   org_name: string | undefined,
 ) {
@@ -3245,6 +3274,7 @@ function _check_org_info(
   if (state.orgId === undefined) {
     throw new Error(
       `Organization ${org_name} not found. Must be one of ${org_info
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((x: any) => x.name)
         .join(", ")}`,
     );
@@ -3271,6 +3301,7 @@ function validateAndSanitizeExperimentLogPartialArgs(
     if (Array.isArray(event.scores)) {
       throw new Error("scores must be an object, not an array");
     }
+    // eslint-disable-next-line prefer-const
     for (let [name, score] of Object.entries(event.scores)) {
       if (typeof name !== "string") {
         throw new Error("score names must be strings");
@@ -3383,6 +3414,7 @@ function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
  * @param attachments Flat array of extracted attachments (output parameter).
  */
 function extractAttachments(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   event: Record<string, any>,
   attachments: Attachment[],
 ): void {
@@ -3410,11 +3442,13 @@ function extractAttachments(
  *
  * @returns The same event instance as the input.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function enrichAttachments<T extends Record<string, any>>(event: T): T {
   for (const [key, value] of Object.entries(event)) {
     // Base case: AttachmentReference.
     const parsedValue = attachmentReferenceSchema.safeParse(value);
     if (parsedValue.success) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
       (event as any)[key] = new ReadonlyAttachment(parsedValue.data);
       continue;
     }
@@ -3480,6 +3514,7 @@ class ObjectFetcher<RecordType>
   constructor(
     private objectType: "dataset" | "experiment",
     private pinnedVersion: string | undefined,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private mutateRecord?: (r: any) => RecordType,
   ) {}
 
@@ -3679,7 +3714,7 @@ export class Experiment
       },
       () => span.end(),
     );
-
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return ret as R;
   }
 
@@ -3750,6 +3785,7 @@ export class Experiment
       readonly comparisonExperimentId?: string;
     } = {},
   ): Promise<ExperimentSummary> {
+    // eslint-disable-next-line prefer-const
     let { summarizeScores = true, comparisonExperimentId = undefined } =
       options || {};
 
@@ -3907,15 +3943,20 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
       }
 
       const { output, expected: expectedRecord } = record;
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       const expected = (expectedRecord ?? output) as Expected;
 
       if (isEmpty(expected)) {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         yield {
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           input: record.input as Input,
           tags: record.tags,
         } as EvalCase<Input, Expected, void>;
       } else {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         yield {
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           input: record.input as Input,
           expected: expected,
           tags: record.tags,
@@ -3946,19 +3987,21 @@ export class SpanImpl implements Span {
   // For internal use only.
   private parentObjectType: SpanObjectTypeV3;
   private parentObjectId: LazyValue<string>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private parentComputeObjectMetadataArgs: Record<string, any> | undefined;
   private _id: string;
   private spanId: string;
   private rootSpanId: string;
   private spanParents: string[] | undefined;
 
-  public kind: "span" = "span";
+  public kind = "span" as const;
 
   constructor(
     args: {
       state: BraintrustState;
       parentObjectType: SpanObjectTypeV3;
       parentObjectId: LazyValue<string>;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       parentComputeObjectMetadataArgs: Record<string, any> | undefined;
       parentSpanIds: ParentSpanIds | undefined;
       defaultRootType?: SpanType;
@@ -4068,6 +4111,7 @@ export class SpanImpl implements Span {
     });
 
     if (partialRecord.metrics?.end) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       this.loggedEndTime = partialRecord.metrics?.end as number;
     }
 
@@ -4205,8 +4249,10 @@ function splitLoggingData({
   const serializableInternalData: typeof sanitizedAndInternalData = {};
   const lazyInternalData: Record<string, LazyValue<unknown>> = {};
 
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   for (const [key, value] of Object.entries(sanitizedAndInternalData) as [
     keyof typeof sanitizedAndInternalData,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     any,
   ][]) {
     if (value instanceof BraintrustStream) {
@@ -4253,6 +4299,7 @@ export class Dataset<
     pinnedVersion?: string,
     legacy?: IsLegacyDataset,
   ) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const isLegacyDataset = (legacy ??
       DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
     if (isLegacyDataset) {
@@ -4540,6 +4587,7 @@ export type CompiledPrompt<Flavor extends "chat" | "completion"> =
   CompiledPromptParams & {
     span_info?: {
       name?: string;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       spanAttributes?: Record<any, any>;
       metadata: {
         prompt: {
@@ -4554,7 +4602,7 @@ export type CompiledPrompt<Flavor extends "chat" | "completion"> =
       ? ChatPrompt
       : Flavor extends "completion"
         ? CompletionPrompt
-        : {});
+        : object);
 
 export type DefaultPromptArgs = Partial<
   CompiledPromptParams & AnyModelParam & ChatPrompt & CompletionPrompt
@@ -4641,6 +4689,7 @@ export class Prompt<
   ) {}
 
   public get id(): HasId extends true ? string : string | undefined {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return this.metadata.id as HasId extends true ? string : string | undefined;
   }
 
@@ -4665,6 +4714,7 @@ export class Prompt<
   public get version(): HasId extends true
     ? TransactionId
     : TransactionId | undefined {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return this.metadata[TRANSACTION_ID_FIELD] as HasId extends true
       ? TransactionId
       : TransactionId | undefined;
@@ -4688,6 +4738,7 @@ export class Prompt<
       messages?: Message[];
     } = {},
   ): CompiledPrompt<Flavor> {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return this.runBuild(buildArgs, {
       flavor: options.flavor ?? "chat",
       messages: options.messages,
@@ -4773,6 +4824,7 @@ export class Prompt<
         ...(options.messages ?? []),
       ];
 
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
         ...params,
         ...spanInfo,
@@ -4795,6 +4847,7 @@ export class Prompt<
         );
       }
 
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
         ...params,
         ...spanInfo,
