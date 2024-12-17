@@ -15,7 +15,7 @@ class AuditResource(TypedDict):
 
 def parse_audit_resources(hdr: str) -> List[AuditResource]:
     j = json.loads(hdr)
-    if j["metadata"]["version"] == 1:
-        return json.loads(gzip.decompress(base64.b64decode(j["payload"])))
+    if j["v"] == 1:
+        return json.loads(gzip.decompress(base64.b64decode(j["p"])))
     else:
-        raise ValueError(f'Unsupported audit resources protocol version: {j["metadata"]["version"]}')
+        raise ValueError(f'Unsupported audit resources protocol version: {j["v"]}')
