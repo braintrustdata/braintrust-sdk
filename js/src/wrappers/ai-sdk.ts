@@ -337,12 +337,21 @@ function postProcessPrompt(prompt: LanguageModelV1Prompt): Message[] {
 
 function postProcessOutput(
   text: string | undefined,
-  tool_calls: LanguageModelV1FunctionToolCall[] | undefined,
-  finish_reason: LanguageModelV1FinishReason,
+  toolCalls: LanguageModelV1FunctionToolCall[] | undefined,
+  finishReason: LanguageModelV1FinishReason,
 ) {
   return {
-    text,
-    tool_calls,
-    finish_reason,
+    index: 0,
+    message: {
+      role: "assistant",
+      content:
+        text ??
+        (toolCalls
+          ? toolCalls.length === 1 && toolCalls[0].toolName === "json"
+            ? toolCalls[0].args
+            : JSON.stringify(toolCalls)
+          : ""),
+    },
+    finish_reason: finishReason,
   };
 }

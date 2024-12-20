@@ -3882,3 +3882,15 @@ class DatasetSummary(SerializableDataClass):
              See results for all datasets in {self.project_name} at {self.project_url}
              See results for {self.dataset_name} at {self.dataset_url}"""
         )
+
+
+class TracedThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
+    def submit(self, fn, *args, **kwargs):
+        # Capture all current context variables
+        context = contextvars.copy_context()
+
+        def wrapped_fn(*args, **kwargs):
+            # Run the function inside the captured context
+            return context.run(fn, *args, **kwargs)
+
+        return super().submit(wrapped_fn, *args, **kwargs)
