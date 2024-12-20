@@ -80,6 +80,7 @@ class PromptSchema(SerializableDataClass):
     description: Optional[str]
     prompt_data: PromptData
     tags: Optional[List[str]]
+    metadata: Optional[dict]
 
 
 BRAINTRUST_PARAMS = ["use_cache"]
