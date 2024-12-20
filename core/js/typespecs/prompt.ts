@@ -81,6 +81,10 @@ const openAIModelParamsSchema = z.object({
   temperature: z.number().optional(),
   top_p: z.number().optional(),
   max_tokens: z.number().optional(),
+  max_completion_tokens: z
+    .number()
+    .optional()
+    .describe("The successor to max_tokens"),
   frequency_penalty: z.number().optional(),
   presence_penalty: z.number().optional(),
   response_format: z
@@ -123,6 +127,7 @@ const openAIModelParamsSchema = z.object({
     .optional(),
   n: z.number().optional(),
   stop: z.array(z.string()).optional(),
+  reasoning_effort: z.enum(["low", "medium", "high"]).optional(),
 });
 export type OpenAIModelParams = z.infer<typeof openAIModelParamsSchema>;
 
