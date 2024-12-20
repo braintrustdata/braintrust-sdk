@@ -138,6 +138,7 @@ export const aiSecretSchema = z
   .object({
     id: aiSecretBaseSchema.shape.id,
     created: aiSecretBaseSchema.shape.created,
+    updated_at: datetimeStringSchema.nullish(),
     org_id: organizationSchema.shape.id,
     name: aiSecretBaseSchema.shape.name,
     type: z.string().nullish(),
