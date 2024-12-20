@@ -42,15 +42,18 @@ import {
   GitMetadataSettings,
   Message,
   OpenAIMessage,
+  PromptBlockData,
   PromptData,
   Prompt as PromptRow,
   PromptSessionEvent,
+  RawPromptInputArgs,
   RepoInfo,
   Tools,
   attachmentReferenceSchema,
   attachmentStatusSchema,
   gitMetadataSettingsSchema,
   promptDataSchema,
+  promptInputArgsSchema,
   promptSchema,
   toolsSchema,
 } from "@braintrust/core/typespecs";
@@ -4781,6 +4784,7 @@ export class Prompt<
             metadata: {
               prompt: this.id
                 ? {
+                    // shouldn't this be the sanitized buildArgs?
                     variables: buildArgs,
                     id: this.id,
                     project_id: this.projectId,
@@ -4800,62 +4804,51 @@ export class Prompt<
       throw new Error("Empty prompt");
     }
 
-    const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
-    const variables: Record<string, unknown> = {
-      input: buildArgs,
-      ...(dictArgParsed.success ? dictArgParsed.data : {}),
-    };
-
     if (flavor === "chat") {
       if (prompt.type !== "chat") {
         throw new Error(
           "Prompt is a completion prompt. Use buildCompletion() instead",
         );
       }
-
-      const render = (template: string) =>
-        Mustache.render(template, variables, undefined, {
-          escape: (v: unknown) =>
-            typeof v === "string" ? v : JSON.stringify(v),
-        });
-
-      const messages = [
-        ...(prompt.messages || []).map((m) => renderMessage(render, m)),
-        ...(options.messages ?? []),
-      ];
-
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      return {
-        ...params,
-        ...spanInfo,
-        messages: messages,
-        ...(prompt.tools?.trim()
-          ? {
-              tools: toolsSchema.parse(
-                JSON.parse(Mustache.render(prompt.tools, variables)),
-              ),
-            }
-          : undefined),
-      } as CompiledPrompt<Flavor>;
     } else if (flavor === "completion") {
       if (prompt.type !== "completion") {
         throw new Error(`Prompt is a chat prompt. Use flavor: 'chat' instead`);
       }
-      if (options.messages) {
-        throw new Error(
-          "extra messages are not supported for completion prompts",
-        );
-      }
-
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      return {
-        ...params,
-        ...spanInfo,
-        prompt: Mustache.render(prompt.content, variables),
-      } as CompiledPrompt<Flavor>;
     } else {
       throw new Error("never!");
     }
+
+    const { type: _type, ...renderedPromptData } = renderPromptData(
+      {
+        ...prompt,
+        ...(prompt.type === "chat"
+          ? {
+              messages: [
+                ...(prompt.messages || []),
+                ...(options.messages ?? []),
+              ],
+            }
+          : {}),
+      },
+      { variables: buildArgs },
+    );
+
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return {
+      ...params,
+      ...spanInfo,
+      ...{
+        ...renderedPromptData,
+
+        ...("tools" in renderedPromptData && renderedPromptData.tools?.trim()
+          ? { tools: toolsSchema.parse(JSON.parse(renderedPromptData.tools)) }
+          : {}),
+
+        ...("content" in renderedPromptData
+          ? { prompt: renderedPromptData.content, content: undefined }
+          : {}),
+      },
+    } as CompiledPrompt<Flavor>;
   }
 
   private getParsedPromptData(): PromptData | undefined {
@@ -4864,6 +4857,78 @@ export class Prompt<
       this.hasParsedPromptData = true;
     }
     return this.parsedPromptData!;
+  }
+}
+
+const RESERVED_NAMES = new Set(["input", "expected", "metadata"]);
+
+const cleanObject = (
+  obj: Record<string, unknown>,
+  filter: ([key, value]: [string, unknown]) => boolean,
+) => Object.fromEntries(Object.entries(obj).filter(filter));
+
+export function extractInputVariables(
+  rawRecord?: RawPromptInputArgs,
+  enableInputGlobalMerge = true,
+) {
+  if (!rawRecord) {
+    return {};
+  }
+  const { input, ...rest } = promptInputArgsSchema.parse(rawRecord);
+  return cleanObject(
+    {
+      ...rest,
+      input,
+      // Let the inner variables override the global ones (this allows the user to define
+      // a variable named, e.g. "foo", and it will override the global input variable)
+      ...(enableInputGlobalMerge &&
+        input &&
+        cleanObject(input, ([key]) => !RESERVED_NAMES.has(key))),
+    },
+    ([_, value]) => value !== undefined,
+  );
+}
+
+export function renderPromptData(
+  data: PromptBlockData,
+  {
+    variables: rawVariables = {},
+    escape = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v)),
+  }: Partial<{
+    variables: unknown | Record<string, unknown>;
+    escape: (v: unknown) => string;
+  }> = {},
+): PromptBlockData {
+  // sanitize rawVariables provide the raw variables as `input`
+  const dictArgParsed = z.record(z.unknown()).safeParse(rawVariables);
+  const variables: Record<string, unknown> = {
+    input: rawVariables,
+    ...(dictArgParsed.success ? dictArgParsed.data : {}),
+  };
+
+  const render = (template: string) => {
+    return Mustache.render(template, variables, undefined, {
+      escape,
+    });
+  };
+
+  if (data.type === "chat") {
+    return {
+      type: data.type,
+      messages: data.messages.map((d) => renderMessage(render, d)),
+      tools: data.tools?.trim() ? render(data.tools) : undefined,
+    };
+  } else {
+    if ("messages" in data && data.messages) {
+      throw new Error(
+        "extra messages are not supported for completion prompts",
+      );
+    }
+
+    return {
+      type: data.type,
+      content: render(data.content),
+    };
   }
 }
 

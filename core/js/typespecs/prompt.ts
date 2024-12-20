@@ -1,28 +1,29 @@
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
-extendZodWithOpenApi(z);
+extendZodWithOpenApi(z); // prettier-ignore
+
+import { customTypes } from "./custom_types";
+import { savedFunctionIdSchema } from "./function_id";
 import {
-  chatCompletionContentPartSchema,
   chatCompletionContentPartImageSchema,
+  chatCompletionContentPartSchema,
   chatCompletionContentPartTextSchema,
   chatCompletionMessageParamSchema,
   chatCompletionOpenAIMessageParamSchema,
 } from "./openai/messages";
-import { savedFunctionIdSchema } from "./function_id";
-import { customTypes } from "./custom_types";
 
 export {
-  chatCompletionMessageParamSchema,
-  chatCompletionContentPartSchema,
-  chatCompletionContentPartImageSchema,
-  chatCompletionContentPartTextSchema,
-};
-export {
-  ToolCall,
-  messageRoleSchema,
   chatCompletionMessageToolCallSchema,
   MessageRole,
+  messageRoleSchema,
+  ToolCall,
 } from "./openai/messages";
+export {
+  chatCompletionContentPartImageSchema,
+  chatCompletionContentPartSchema,
+  chatCompletionContentPartTextSchema,
+  chatCompletionMessageParamSchema,
+};
 
 export { toolsSchema } from "./openai/tools";
 export type { Tools } from "./openai/tools";
@@ -235,3 +236,35 @@ export const strictPromptDataSchema = promptDataSchema.extend({
     })
     .nullish(),
 });
+
+const jsonOrObjectSchema = z.unknown().transform((val) => {
+  if (typeof val === "string") {
+    try {
+      return JSON.parse((val || "").trim());
+    } catch {
+      return null;
+    }
+  }
+  return val;
+});
+
+type JsonOrObject = z.infer<typeof jsonOrObjectSchema>;
+
+export const promptInputArgsSchema = z
+  .object({
+    id: z.string(),
+    input: jsonOrObjectSchema,
+    expected: jsonOrObjectSchema,
+    metadata: jsonOrObjectSchema,
+  })
+  .partial()
+  .catchall(z.unknown());
+
+// zod transform() wouldn't provide as detailed type inference
+export type RawPromptInputArgs = Partial<{
+  id: string;
+  input: JsonOrObject;
+  expected: JsonOrObject;
+  metadata: JsonOrObject;
+  [k: string]: unknown;
+}>;

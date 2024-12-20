@@ -699,6 +699,8 @@ async function runEvaluatorInternal(
               const outputResult = evaluator.task(datum.input, {
                 meta,
                 metadata,
+                // TODO: expected: datum.expected,
+                // TODO: a read-only copy? my opinion: they should assume onus
                 span,
               });
               if (outputResult instanceof Promise) {
