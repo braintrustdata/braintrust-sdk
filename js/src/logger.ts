@@ -2590,7 +2590,7 @@ type InitLoggerOptions<IsAsyncFlush> = FullLoginOptions & {
  * @param options Additional options for configuring init().
  * @param options.projectName The name of the project to log into. If unspecified, will default to the Global project.
  * @param options.projectId The id of the project to log into. This takes precedence over projectName if specified.
- * @param options.asyncFlush If true, will log asynchronously in the background. Otherwise, will log synchronously. (false by default, to support serverless environments)
+ * @param options.asyncFlush If true, will log asynchronously in the background. Otherwise, will log synchronously. (true by default)
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
@@ -2599,7 +2599,7 @@ type InitLoggerOptions<IsAsyncFlush> = FullLoginOptions & {
  * @param setCurrent If true (the default), set the global current-experiment to the newly-created one.
  * @returns The newly created Logger.
  */
-export function initLogger<IsAsyncFlush extends boolean = false>(
+export function initLogger<IsAsyncFlush extends boolean = true>(
   options: Readonly<InitLoggerOptions<IsAsyncFlush>> = {},
 ) {
   const {
@@ -3001,7 +3001,7 @@ export function logError(span: Span, error: unknown) {
  *
  * See {@link Span.traced} for full details.
  */
-export function traced<IsAsyncFlush extends boolean = false, R = void>(
+export function traced<IsAsyncFlush extends boolean = true, R = void>(
   callback: (span: Span) => R,
   args?: StartSpanArgs &
     SetCurrentArg &
@@ -3064,7 +3064,7 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
  */
 export function wrapTraced<
   F extends (...args: any[]) => any,
-  IsAsyncFlush extends boolean = false,
+  IsAsyncFlush extends boolean = true,
 >(
   fn: F,
   args?: StartSpanArgs & SetCurrentArg & AsyncFlushArg<IsAsyncFlush>,

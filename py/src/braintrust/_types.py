@@ -273,6 +273,10 @@ class ModelParams1(TypedDict):
     temperature: NotRequired[Optional[float]]
     top_p: NotRequired[Optional[float]]
     max_tokens: NotRequired[Optional[float]]
+    max_completion_tokens: NotRequired[Optional[float]]
+    """
+    The successor to max_tokens
+    """
     frequency_penalty: NotRequired[Optional[float]]
     presence_penalty: NotRequired[Optional[float]]
     response_format: NotRequired[Optional[Union[ResponseFormat, ResponseFormat1, ResponseFormat2]]]
@@ -280,6 +284,7 @@ class ModelParams1(TypedDict):
     function_call: NotRequired[Optional[Union[Literal["auto"], Literal["none"], FunctionCall]]]
     n: NotRequired[Optional[float]]
     stop: NotRequired[Optional[Sequence[str]]]
+    reasoning_effort: NotRequired[Optional[Literal["low", "medium", "high"]]]
 
 
 class ModelParams2(TypedDict):
