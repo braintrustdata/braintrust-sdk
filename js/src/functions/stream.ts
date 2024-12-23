@@ -1,4 +1,5 @@
 import {
+  CallEventSchema,
   callEventSchema,
   sseConsoleEventDataSchema,
   sseProgressEventDataSchema,
@@ -145,6 +146,50 @@ export class BraintrustStream {
     });
     return this.memoizedFinalValue;
   }
+
+  static parseRawEvent(event: CallEventSchema): BraintrustStreamChunk {
+    switch (event.event) {
+      case "text_delta":
+        return {
+          type: "text_delta",
+          data: JSON.parse(event.data),
+        };
+      case "json_delta":
+        return {
+          type: "json_delta",
+          data: event.data,
+        };
+      case "error":
+        return {
+          type: "error",
+          data: JSON.parse(event.data),
+        };
+      case "progress":
+        return {
+          type: "progress",
+          data: sseProgressEventDataSchema.parse(JSON.parse(event.data)),
+        };
+      case "console":
+        return {
+          type: "console",
+          data: sseConsoleEventDataSchema.parse(JSON.parse(event.data)),
+        };
+      case "start":
+        return {
+          type: "start",
+          data: "",
+        };
+      case "done":
+        return {
+          type: "done",
+          data: "",
+        };
+      default: {
+        const _event: never = event;
+        throw new Error(`Unknown event type ${JSON.stringify(_event)}`);
+      }
+    }
+  }
 }
 
 function btStreamParser() {
@@ -163,54 +208,7 @@ function btStreamParser() {
         if (!parsed.success) {
           throw new Error(`Failed to parse event: ${parsed.error}`);
         }
-        switch (parsed.data.event) {
-          case "text_delta":
-            controller.enqueue({
-              type: "text_delta",
-              data: JSON.parse(event.data),
-            });
-            break;
-          case "json_delta":
-            controller.enqueue({
-              type: "json_delta",
-              data: event.data,
-            });
-            break;
-          case "error":
-            controller.enqueue({
-              type: "error",
-              data: JSON.parse(event.data),
-            });
-            break;
-          case "progress":
-            controller.enqueue({
-              type: "progress",
-              data: sseProgressEventDataSchema.parse(JSON.parse(event.data)),
-            });
-            break;
-          case "console":
-            controller.enqueue({
-              type: "console",
-              data: sseConsoleEventDataSchema.parse(JSON.parse(event.data)),
-            });
-            break;
-          case "start":
-            controller.enqueue({
-              type: "start",
-              data: "",
-            });
-            break;
-          case "done":
-            controller.enqueue({
-              type: "done",
-              data: "",
-            });
-            break;
-          default: {
-            const _event: never = parsed.data;
-            throw new Error(`Unknown event type ${JSON.stringify(_event)}`);
-          }
-        }
+        controller.enqueue(BraintrustStream.parseRawEvent(parsed.data));
       });
     },
     async transform(chunk, controller) {
