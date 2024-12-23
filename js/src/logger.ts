@@ -3230,7 +3230,7 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
 export function withCurrent<R>(
   span: Span,
   callback: (span: Span) => R,
-  state: BraintrustState | undefined,
+  state: BraintrustState | undefined = undefined,
 ): R {
   return (state ?? _globalState).currentSpan.run(span, () => callback(span));
 }
@@ -3238,7 +3238,7 @@ export function withCurrent<R>(
 export function withParent<R>(
   parent: string,
   callback: () => R,
-  state: BraintrustState | undefined,
+  state: BraintrustState | undefined = undefined,
 ): R {
   return (state ?? _globalState).currentParent.run(parent, () => callback());
 }
