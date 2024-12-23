@@ -18,6 +18,7 @@ import {
   NOOP_SPAN,
   ScoreSummary,
   Span,
+  StartSpanArgs,
   init as _initExperiment,
   currentSpan,
   logError as logSpanError,
@@ -870,31 +871,39 @@ async function runEvaluatorInternal(
         });
       };
 
+      const eventDataset: Dataset | undefined = experiment
+        ? experiment.dataset
+        : evaluator.data instanceof Dataset
+          ? evaluator.data
+          : undefined;
+
+      const event: StartSpanArgs = {
+        name: "eval",
+        spanAttributes: {
+          type: SpanTypeAttribute.EVAL,
+        },
+        event: {
+          input: datum.input,
+          expected: "expected" in datum ? datum.expected : undefined,
+          tags: datum.tags,
+          origin:
+            eventDataset && datum.id && datum._xact_id
+              ? {
+                  object_type: "dataset",
+                  object_id: await eventDataset.id,
+                  id: datum.id,
+                  _xact_id: datum._xact_id,
+                }
+              : undefined,
+        },
+      };
+
       if (!experiment) {
         // This will almost always be a no-op span, but it means that if the Eval
         // is run in the context of a different type of span, it will be logged.
-        return await traced(callback);
+        return await traced(callback, event);
       } else {
-        return await experiment.traced(callback, {
-          name: "eval",
-          spanAttributes: {
-            type: SpanTypeAttribute.EVAL,
-          },
-          event: {
-            input: datum.input,
-            expected: "expected" in datum ? datum.expected : undefined,
-            tags: datum.tags,
-            origin:
-              experiment.dataset && datum.id && datum._xact_id
-                ? {
-                    object_type: "dataset",
-                    object_id: await experiment.dataset.id,
-                    id: datum.id,
-                    _xact_id: datum._xact_id,
-                  }
-                : undefined,
-          },
-        });
+        return await experiment.traced(callback, event);
       }
     },
     Math.max(evaluator.maxConcurrency ?? data.length, 1),
