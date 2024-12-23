@@ -21,10 +21,12 @@ import {
   StartSpanArgs,
   init as _initExperiment,
   currentSpan,
+  flush,
   logError as logSpanError,
   startSpan,
   traced,
   withCurrent,
+  withParent,
 } from "./logger";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import { isEmpty } from "./util";
@@ -378,6 +380,7 @@ globalThis._evals = {
 export interface EvalOptions<EvalReport> {
   reporter?: ReporterDef<EvalReport> | string;
   onStart?: (metadata: Omit<ExperimentSummary, "scores" | "metrics">) => void;
+  parent?: string;
 }
 
 export function _initializeSpanContext() {
@@ -450,22 +453,24 @@ export async function Eval<
     );
     // NOTE: This code is duplicated with initExperiment in js/src/cli.ts. Make sure
     // to update that if you change this.
-    const experiment = initExperiment(evaluator.state, {
-      ...(evaluator.projectId
-        ? { projectId: evaluator.projectId }
-        : { project: name }),
-      experiment: evaluator.experimentName,
-      metadata: evaluator.metadata,
-      isPublic: evaluator.isPublic,
-      update: evaluator.update,
-      baseExperiment: evaluator.baseExperimentName ?? defaultBaseExperiment,
-      baseExperimentId: evaluator.baseExperimentId,
-      gitMetadataSettings: evaluator.gitMetadataSettings,
-      repoInfo: evaluator.repoInfo,
-      dataset: data instanceof Dataset ? data : undefined,
-    });
+    const experiment = options.parent
+      ? null
+      : initExperiment(evaluator.state, {
+          ...(evaluator.projectId
+            ? { projectId: evaluator.projectId }
+            : { project: name }),
+          experiment: evaluator.experimentName,
+          metadata: evaluator.metadata,
+          isPublic: evaluator.isPublic,
+          update: evaluator.update,
+          baseExperiment: evaluator.baseExperimentName ?? defaultBaseExperiment,
+          baseExperimentId: evaluator.baseExperimentId,
+          gitMetadataSettings: evaluator.gitMetadataSettings,
+          repoInfo: evaluator.repoInfo,
+          dataset: data instanceof Dataset ? data : undefined,
+        });
 
-    if (options.onStart) {
+    if (experiment && options.onStart) {
       experiment.summarize({ summarizeScores: false }).then(options.onStart);
     }
 
@@ -476,7 +481,16 @@ export async function Eval<
         ...evaluator,
         data,
       };
-      const ret = await runEvaluator(experiment, evalDef, progressReporter, []);
+      let ret;
+      if (options.parent) {
+        ret = await withParent(
+          options.parent,
+          () => runEvaluator(null, evalDef, progressReporter, []),
+          evaluator.state,
+        );
+      } else {
+        ret = await runEvaluator(experiment, evalDef, progressReporter, []);
+      }
       progressReporter.stop();
       resolvedReporter.reportEval(evalDef, ret, {
         verbose: true,
@@ -484,7 +498,11 @@ export async function Eval<
       });
       return ret;
     } finally {
-      experiment.flush();
+      if (experiment) {
+        experiment.flush().catch(console.error);
+      } else if (options.parent) {
+        flush().catch(console.error);
+      }
     }
   } finally {
     progressReporter.stop();
@@ -901,7 +919,10 @@ async function runEvaluatorInternal(
       if (!experiment) {
         // This will almost always be a no-op span, but it means that if the Eval
         // is run in the context of a different type of span, it will be logged.
-        return await traced(callback, event);
+        return await traced(callback, {
+          ...event,
+          state: evaluator.state,
+        });
       } else {
         return await experiment.traced(callback, event);
       }

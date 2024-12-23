@@ -283,7 +283,7 @@ export class BraintrustState {
   // Note: the value of IsAsyncFlush doesn't really matter here, since we
   // (safely) dynamically cast it whenever retrieving the logger.
   public currentLogger: Logger<false> | undefined;
-  public currentParent: IsoAsyncLocalStorage<SpanComponentsV3>;
+  public currentParent: IsoAsyncLocalStorage<string>;
   public currentSpan: IsoAsyncLocalStorage<Span>;
   // Any time we re-log in, we directly update the apiConn inside the logger.
   // This is preferable to replacing the whole logger, which would create the
@@ -3173,9 +3173,11 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
 ): { span: Span; isSyncFlushLogger: boolean } {
   const state = args?.state ?? _globalState;
 
-  const components: SpanComponentsV3 | undefined = args?.parent
-    ? SpanComponentsV3.fromStr(args.parent)
-    : _globalState.currentParent.getStore();
+  const parentStr = args?.parent ?? state.currentParent.getStore();
+
+  const components: SpanComponentsV3 | undefined = parentStr
+    ? SpanComponentsV3.fromStr(parentStr)
+    : undefined;
 
   if (components) {
     const parentSpanIds: ParentSpanIds | undefined = components.data.row_id
@@ -3196,6 +3198,7 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
       parentSpanIds,
       propagatedEvent:
         args?.propagatedEvent ??
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         ((components.data.propagated_event ?? undefined) as
           | StartSpanEventArgs
           | undefined),
@@ -3227,17 +3230,17 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
 export function withCurrent<R>(
   span: Span,
   callback: (span: Span) => R,
-  state: BraintrustState = _globalState,
+  state: BraintrustState | undefined,
 ): R {
-  return state.currentSpan.run(span, () => callback(span));
+  return (state ?? _globalState).currentSpan.run(span, () => callback(span));
 }
 
 export function withParent<R>(
-  parent: SpanComponentsV3, // TODO: Change to a string (and deseriaalize?)
+  parent: string,
   callback: () => R,
-  state: BraintrustState = _globalState,
+  state: BraintrustState | undefined,
 ): R {
-  return state.currentParent.run(parent, () => callback());
+  return (state ?? _globalState).currentParent.run(parent, () => callback());
 }
 
 function _check_org_info(

@@ -86,6 +86,38 @@ export const useFunctionSchema = functionIdSchema;
 export const streamingModeEnum = z.enum(["auto", "parallel"]);
 export type StreamingMode = z.infer<typeof streamingModeEnum>;
 
+export const invokeParent = z.union([
+  z
+    .object({
+      object_type: z.enum(["project_logs", "experiment", "prompt_session"]),
+      object_id: z
+        .string()
+        .describe("The id of the container object you are logging to"),
+      row_ids: z
+        .object({
+          id: z.string().describe("The id of the row"),
+          span_id: z.string().describe("The span_id of the row"),
+          root_span_id: z.string().describe("The root_span_id of the row"),
+        })
+        .nullish()
+        .describe("Identifiers for the row to to log a subspan under"),
+      propagated_event: z
+        .record(customTypes.unknown)
+        .nullish()
+        .describe(
+          "Include these properties in every span created under this parent",
+        ),
+    })
+    .describe("Span parent properties")
+    .openapi({ title: "span_parent_struct" }),
+  z
+    .string()
+    .optional()
+    .describe(
+      "The parent's span identifier, created by calling `.export()` on a span",
+    ),
+]);
+
 export const invokeFunctionNonIdArgsSchema = z.object({
   input: customTypes.unknown
     .optional()
@@ -105,39 +137,7 @@ export const invokeFunctionNonIdArgsSchema = z.object({
     .describe(
       "If the function is an LLM, additional messages to pass along to it",
     ),
-  parent: z
-    .union([
-      z
-        .object({
-          object_type: z.enum(["project_logs", "experiment", "prompt_session"]),
-          object_id: z
-            .string()
-            .describe("The id of the container object you are logging to"),
-          row_ids: z
-            .object({
-              id: z.string().describe("The id of the row"),
-              span_id: z.string().describe("The span_id of the row"),
-              root_span_id: z.string().describe("The root_span_id of the row"),
-            })
-            .nullish()
-            .describe("Identifiers for the row to to log a subspan under"),
-          propagated_event: z
-            .record(customTypes.unknown)
-            .nullish()
-            .describe(
-              "Include these properties in every span created under this parent",
-            ),
-        })
-        .describe("Span parent properties")
-        .openapi({ title: "span_parent_struct" }),
-      z
-        .string()
-        .optional()
-        .describe(
-          "The parent's span identifier, created by calling `.export()` on a span",
-        ),
-    ])
-    .describe("Options for tracing the function call"),
+  parent: invokeParent.describe("Options for tracing the function call"),
   stream: z
     .boolean()
     .nullish()
@@ -201,6 +201,7 @@ export const runEvalSchema = z
       .describe(
         "Optional experiment-level metadata to store about the evaluation. You can later use this to slice & dice across experiments.",
       ),
+    parent: invokeParent.describe("Options for tracing the evaluation"),
     stream: z
       .boolean()
       .optional()
