@@ -283,6 +283,7 @@ export class BraintrustState {
   // Note: the value of IsAsyncFlush doesn't really matter here, since we
   // (safely) dynamically cast it whenever retrieving the logger.
   public currentLogger: Logger<false> | undefined;
+  public currentParent: IsoAsyncLocalStorage<SpanComponentsV3>;
   public currentSpan: IsoAsyncLocalStorage<Span>;
   // Any time we re-log in, we directly update the apiConn inside the logger.
   // This is preferable to replacing the whole logger, which would create the
@@ -309,6 +310,7 @@ export class BraintrustState {
     this.id = `${new Date().toLocaleString()}-${stateNonce++}`; // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
     this.currentExperiment = undefined;
     this.currentLogger = undefined;
+    this.currentParent = iso.newAsyncLocalStorage();
     this.currentSpan = iso.newAsyncLocalStorage();
 
     if (loginParams.fetch) {
@@ -3170,8 +3172,12 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
 ): { span: Span; isSyncFlushLogger: boolean } {
   const state = args?.state ?? _globalState;
-  if (args?.parent) {
-    const components = SpanComponentsV3.fromStr(args?.parent);
+
+  const components: SpanComponentsV3 | undefined = args?.parent
+    ? SpanComponentsV3.fromStr(args.parent)
+    : _globalState.currentParent.getStore();
+
+  if (components) {
     const parentSpanIds: ParentSpanIds | undefined = components.data.row_id
       ? {
           spanId: components.data.span_id,
@@ -3224,6 +3230,14 @@ export function withCurrent<R>(
   state: BraintrustState = _globalState,
 ): R {
   return state.currentSpan.run(span, () => callback(span));
+}
+
+export function withParent<R>(
+  parent: SpanComponentsV3, // TODO: Change to a string (and deseriaalize?)
+  callback: () => R,
+  state: BraintrustState = _globalState,
+): R {
+  return state.currentParent.run(parent, () => callback());
 }
 
 function _check_org_info(
