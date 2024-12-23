@@ -5,6 +5,7 @@ import { promptDataSchema } from "./prompt";
 import { chatCompletionMessageParamSchema } from "./openai/messages";
 import { customTypes } from "./custom_types";
 import { gitMetadataSettingsSchema, repoInfoSchema } from "./git_types";
+import { objectReferenceSchema } from "./common_types";
 
 export const validRuntimesEnum = z.enum(["node", "python"]);
 export type Runtime = z.infer<typeof validRuntimesEnum>;
@@ -326,6 +327,7 @@ export const sseProgressEventDataSchema = z
   .object({
     id: z.string().describe("The id of the span this event is for"),
     object_type: functionObjectTypeEnum,
+    origin: objectReferenceSchema.nullish().describe("The origin of the event"),
     format: functionFormatEnum,
     output_type: functionOutputTypeEnum,
     name: z.string(),

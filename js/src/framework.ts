@@ -1,5 +1,9 @@
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
-import { GitMetadataSettings, RepoInfo } from "@braintrust/core/typespecs";
+import {
+  GitMetadataSettings,
+  RepoInfo,
+  SSEProgressEventData,
+} from "@braintrust/core/typespecs";
 import { queue } from "async";
 import chalk from "chalk";
 import pluralize from "pluralize";
@@ -81,6 +85,11 @@ export type EvalTask<Input, Output> =
   | ((input: Input, hooks: EvalHooks) => Promise<Output>)
   | ((input: Input, hooks: EvalHooks) => Output);
 
+export type TaskProgressEvent = Omit<
+  SSEProgressEventData,
+  "id" | "origin" | "object_type" | "name"
+>;
+
 export interface EvalHooks {
   /**
    * @deprecated Use `metadata` instead.
@@ -90,7 +99,14 @@ export interface EvalHooks {
    * The metadata object for the current evaluation. You can mutate this object to add or remove metadata.
    */
   metadata: Record<string, unknown>;
+  /**
+   * The task's span.
+   */
   span: Span;
+  /**
+   * Report progress that will show up in the playground.
+   */
+  reportProgress: (progress: TaskProgressEvent) => void;
 }
 
 // This happens to be compatible with ScorerArgs defined in @braintrust/core.
@@ -381,6 +397,7 @@ export interface EvalOptions<EvalReport> {
   reporter?: ReporterDef<EvalReport> | string;
   onStart?: (metadata: Omit<ExperimentSummary, "scores" | "metrics">) => void;
   parent?: string;
+  progressReporter?: ProgressReporter;
 }
 
 export function _initializeSpanContext() {
@@ -438,7 +455,8 @@ export async function Eval<
     );
   }
 
-  const progressReporter = new BarProgressReporter();
+  const progressReporter =
+    options.progressReporter ?? new BarProgressReporter();
 
   if (typeof options.reporter === "string") {
     throw new Error(
@@ -703,6 +721,33 @@ async function runEvaluatorInternal(
   const q = queue(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (datum: EvalCase<any, any, any>) => {
+      const eventDataset: Dataset | undefined = experiment
+        ? experiment.dataset
+        : evaluator.data instanceof Dataset
+          ? evaluator.data
+          : undefined;
+
+      const baseEvent: StartSpanArgs = {
+        name: "eval",
+        spanAttributes: {
+          type: SpanTypeAttribute.EVAL,
+        },
+        event: {
+          input: datum.input,
+          expected: "expected" in datum ? datum.expected : undefined,
+          tags: datum.tags,
+          origin:
+            eventDataset && datum.id && datum._xact_id
+              ? {
+                  object_type: "dataset",
+                  object_id: await eventDataset.id,
+                  id: datum.id,
+                  _xact_id: datum._xact_id,
+                }
+              : undefined,
+        },
+      };
+
       const callback = async (rootSpan: Span) => {
         let metadata: Record<string, unknown> = {
           ...("metadata" in datum ? datum.metadata : {}),
@@ -720,6 +765,15 @@ async function runEvaluatorInternal(
                 meta,
                 metadata,
                 span,
+                reportProgress: (event: TaskProgressEvent) => {
+                  progressReporter.stream({
+                    ...event,
+                    id: rootSpan.id,
+                    origin: baseEvent.event?.origin,
+                    name: evaluator.evalName,
+                    object_type: "task",
+                  });
+                },
               });
               if (outputResult instanceof Promise) {
                 output = await outputResult;
@@ -889,42 +943,15 @@ async function runEvaluatorInternal(
         });
       };
 
-      const eventDataset: Dataset | undefined = experiment
-        ? experiment.dataset
-        : evaluator.data instanceof Dataset
-          ? evaluator.data
-          : undefined;
-
-      const event: StartSpanArgs = {
-        name: "eval",
-        spanAttributes: {
-          type: SpanTypeAttribute.EVAL,
-        },
-        event: {
-          input: datum.input,
-          expected: "expected" in datum ? datum.expected : undefined,
-          tags: datum.tags,
-          origin:
-            eventDataset && datum.id && datum._xact_id
-              ? {
-                  object_type: "dataset",
-                  object_id: await eventDataset.id,
-                  id: datum.id,
-                  _xact_id: datum._xact_id,
-                }
-              : undefined,
-        },
-      };
-
       if (!experiment) {
         // This will almost always be a no-op span, but it means that if the Eval
         // is run in the context of a different type of span, it will be logged.
         return await traced(callback, {
-          ...event,
+          ...baseEvent,
           state: evaluator.state,
         });
       } else {
-        return await experiment.traced(callback, event);
+        return await experiment.traced(callback, baseEvent);
       }
     },
     Math.max(evaluator.maxConcurrency ?? data.length, 1),

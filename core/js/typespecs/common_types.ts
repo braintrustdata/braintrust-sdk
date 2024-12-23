@@ -103,3 +103,15 @@ export function getObjectArticle(objectType: ObjectType) {
     ? "an"
     : "a";
 }
+
+export const objectReferenceSchema = z.object({
+  object_type: eventObjectType.describe(
+    "Type of the object the event is originating from.",
+  ),
+  object_id: z
+    .string()
+    .uuid()
+    .describe("ID of the object the event is originating from."),
+  id: z.string().describe("ID of the original event."),
+  _xact_id: z.string().describe("Transaction ID of the original event."),
+});
