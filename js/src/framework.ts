@@ -22,6 +22,7 @@ import {
   currentSpan,
   logError as logSpanError,
   startSpan,
+  traced,
   withCurrent,
 } from "./logger";
 import { BarProgressReporter, ProgressReporter } from "./progress";
@@ -870,7 +871,9 @@ async function runEvaluatorInternal(
       };
 
       if (!experiment) {
-        return await callback(NOOP_SPAN);
+        // This will almost always be a no-op span, but it means that if the Eval
+        // is run in the context of a different type of span, it will be logged.
+        return await traced(callback);
       } else {
         return await experiment.traced(callback, {
           name: "eval",
