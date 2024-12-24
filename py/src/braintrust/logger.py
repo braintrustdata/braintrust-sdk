@@ -66,6 +66,7 @@ from .gitutil import get_past_n_ancestors, get_repo_info
 from .merge_row_batch import batch_items, merge_row_batch
 from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
 from .prompt import BRAINTRUST_PARAMS, PromptBlockData, PromptSchema
+from .prompt_cache import PromptCache
 from .span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from .span_types import SpanTypeAttribute
 from .types import (
@@ -293,6 +294,12 @@ class BraintrustState:
         self._override_bg_logger = threading.local()
 
         self.reset_login_info()
+
+        self._prompt_cache = PromptCache(
+            cache_dir=os.environ.get("BRAINTRUST_PROMPT_CACHE_DIR", "/tmp/braintrust/prompt_cache"),
+            max_size=int(os.environ.get("BRAINTRUST_PROMPT_CACHE_MAX_SIZE", str(1 << 20))),
+            memory_cache_max_size=int(os.environ.get("BRAINTRUST_PROMPT_CACHE_MEMORY_MAX_SIZE", str(1 << 10))),
+        )
 
     def reset_login_info(self):
         self.app_url: Optional[str] = None
@@ -1199,6 +1206,16 @@ def load_prompt(
         raise ValueError("Must specify slug")
 
     def compute_metadata():
+        try:
+            return _state._prompt_cache.get(
+                slug,
+                version=str(version) if version else "latest",
+                project_id=project_id,
+                project_name=project,
+            )
+        except KeyError:
+            pass
+
         login(org_name=org_name, api_key=api_key, app_url=app_url)
         args = _populate_args(
             {
@@ -1216,7 +1233,15 @@ def load_prompt(
                 f"Multiple prompts found with slug {slug} in project {project or project_id}. This should never happen."
             )
         resp_prompt = response["objects"][0]
-        return PromptSchema.from_dict_deep(resp_prompt)
+        prompt = PromptSchema.from_dict_deep(resp_prompt)
+        _state._prompt_cache.set(
+            slug,
+            str(version) if version else "latest",
+            prompt,
+            project_id=project_id,
+            project_name=project,
+        )
+        return prompt
 
     return Prompt(
         lazy_metadata=LazyValue(compute_metadata, use_mutex=True), defaults=defaults or {}, no_trace=no_trace
