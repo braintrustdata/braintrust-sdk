@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  AsyncScoringControl,
-  objectReferenceSchema,
-} from "../typespecs/api_types";
+import { AsyncScoringControl } from "../typespecs/api_types";
 import {
   Source,
   ASYNC_SCORING_CONTROL_FIELD,
@@ -13,6 +10,7 @@ import {
   PARENT_ID_FIELD,
   SKIP_ASYNC_SCORING_FIELD,
 } from "./db_fields";
+import { objectReferenceSchema } from "typespecs";
 
 export type IdField = { id: string };
 export type InputField = { input: unknown };
