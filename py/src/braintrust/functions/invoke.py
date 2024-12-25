@@ -161,3 +161,46 @@ def invoke(
         return BraintrustStream(SSEClient(resp))
     else:
         return resp.json()
+
+
+def use_function(project_name: str, slug: str, version: Optional[str] = None):
+    """
+    Creates a function that can be used as either a task or scorer in the Eval framework.
+    When used as a task, it will invoke the specified Braintrust function with the input.
+    When used as a scorer, it will invoke the function with the scorer arguments.
+
+    Example:
+    ```python
+    # As a task
+    Eval(
+        name="my-evaluator",
+        data=data,
+        task=use_function("my-project", "my-function"),
+        scores=[...]
+    )
+
+    # As a scorer
+    Eval(
+        name="my-evaluator",
+        data=data,
+        task=task,
+        scores=[use_function("my-project", "my-scorer")]
+    )
+    ```
+
+    :param project_name: The name of the project containing the function.
+    :param slug: The slug of the function to invoke.
+    :param version: Optional version of the function to use. Defaults to latest.
+    :return: A function that can be used as a task or scorer.
+    """
+
+    def f(*args: Any, **kwargs: Any) -> Any:
+        if len(args) > 0:
+            # Task.
+            return invoke(project_name=project_name, slug=slug, version=version, input=args[0])
+        else:
+            # Scorer.
+            return invoke(project_name=project_name, slug=slug, version=version, input=kwargs)
+
+    f.__name__ = f"use_function-{project_name}-{slug}-{version or 'latest'}"
+    return f

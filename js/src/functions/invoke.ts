@@ -187,3 +187,57 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     return (schema ? schema.parse(data) : data) as InvokeReturn<Stream, Output>;
   }
 }
+
+/**
+ * Creates a function that can be used as a task or scorer in the Braintrust evaluation framework.
+ * The returned function wraps a Braintrust function and can be passed directly to Eval().
+ *
+ * When used as a task:
+ * ```ts
+ * const myFunction = useFunction({projectName: "myproject", slug: "myfunction"});
+ * await Eval("test", {
+ *   task: myFunction,
+ *   data: testData,
+ *   scores: [...]
+ * });
+ * ```
+ *
+ * When used as a scorer:
+ * ```ts
+ * const myScorer = useFunction({projectName: "myproject", slug: "myscorer"});
+ * await Eval("test", {
+ *   task: someTask,
+ *   data: testData,
+ *   scores: [myScorer]
+ * });
+ * ```
+ *
+ * @param options Options for the function.
+ * @param options.projectName The project name containing the function.
+ * @param options.slug The slug of the function to invoke.
+ * @param options.version Optional version of the function to use. Defaults to latest.
+ * @returns A function that can be used as a task or scorer in Eval().
+ */
+export function useFunction({
+  projectName,
+  slug,
+  version,
+}: {
+  projectName: string;
+  slug: string;
+  version?: string;
+}) {
+  const f = async (input: any): Promise<any> => {
+    return await invoke({
+      projectName,
+      slug,
+      version,
+      input,
+    });
+  };
+
+  Object.defineProperty(f, "name", {
+    value: `useFunction-${projectName}-${slug}-${version ?? "latest"}`,
+  });
+  return f;
+}
