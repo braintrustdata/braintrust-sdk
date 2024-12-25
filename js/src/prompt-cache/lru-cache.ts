@@ -18,8 +18,8 @@ interface LRUCacheOptions {
  *
  * If no maximum size is specified, the cache will grow unbounded.
  *
- * @template K - The type of keys stored in the cache
- * @template V - The type of values stored in the cache
+ * @template K - The type of keys stored in the cache.
+ * @template V - The type of values stored in the cache.
  */
 export class LRUCache<K, V> {
   private cache: Map<K, V>;
@@ -34,8 +34,8 @@ export class LRUCache<K, V> {
    * Retrieves a value from the cache.
    * If the key exists, the item is marked as most recently used.
    *
-   * @param key - The key to look up
-   * @returns The cached value if found, undefined otherwise
+   * @param key - The key to look up.
+   * @returns The cached value if found, undefined otherwise.
    */
   get(key: K): V | undefined {
     const value = this.cache.get(key);
@@ -53,8 +53,8 @@ export class LRUCache<K, V> {
    * If the key already exists, the value is updated and marked as most recently used.
    * If the cache is at its maximum size, the least recently used item is evicted.
    *
-   * @param key - The key to store
-   * @param value - The value to store
+   * @param key - The key to store.
+   * @param value - The value to store.
    */
   set(key: K, value: V): void {
     if (this.cache.has(key)) {

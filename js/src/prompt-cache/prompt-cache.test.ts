@@ -1,12 +1,16 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { PromptCache } from "./prompt-cache";
-import { Prompt } from "./logger";
+import { Prompt } from "../logger";
 import { tmpdir } from "os";
 import { beforeEach, describe, it, afterEach, expect } from "vitest";
 import type { PromptKey } from "./prompt-cache";
+import { DiskCache } from "./disk-cache";
+import { configureNode } from "../node";
 
 describe("PromptCache", () => {
+  configureNode();
+
   let cacheDir: string;
   let cache: PromptCache;
 
@@ -37,9 +41,12 @@ describe("PromptCache", () => {
   beforeEach(async () => {
     // Create a unique temporary directory for each test.
     cacheDir = path.join(tmpdir(), `prompt-cache-test-${Date.now()}`);
-    cache = new PromptCache({
+    const diskCache = new DiskCache<Prompt>({
       cacheDir,
       max: 5,
+    });
+    cache = new PromptCache({
+      diskCache,
       memoryCacheMax: 2,
     });
   });
@@ -189,13 +196,17 @@ describe("PromptCache", () => {
   });
 
   describe("error handling", () => {
-    it("should handle disk write errors gracefully", async () => {
+    it("should throw when disk write fails", async () => {
       // Make cache directory read-only.
       await fs.mkdir(cacheDir, { recursive: true });
       await fs.chmod(cacheDir, 0o444);
 
-      // Should not throw when disk write fails.
-      await expect(cache.set(testKey, testPrompt)).resolves.not.toThrow();
+      // Should throw when disk write fails.
+      await expect(cache.set(testKey, testPrompt)).rejects.toThrow();
+
+      // Memory cache should still be updated.
+      const result = await cache.get(testKey);
+      expect(result).toEqual(testPrompt);
     });
 
     it("should handle disk read errors", async () => {
@@ -203,8 +214,10 @@ describe("PromptCache", () => {
 
       // Create a new cache instance with empty memory cache.
       const newCache = new PromptCache({
-        cacheDir,
-        max: 5,
+        diskCache: new DiskCache<Prompt>({
+          cacheDir,
+          max: 5,
+        }),
         memoryCacheMax: 2,
       });
 
@@ -236,8 +249,10 @@ describe("PromptCache", () => {
 
       // Create a new cache instance (empty memory cache).
       const newCache = new PromptCache({
-        cacheDir,
-        max: 5,
+        diskCache: new DiskCache<Prompt>({
+          cacheDir,
+          max: 5,
+        }),
         memoryCacheMax: 2,
       });
 
@@ -250,6 +265,42 @@ describe("PromptCache", () => {
       // Second get should still work (from memory).
       const result = await newCache.get(testKey);
       expect(result).toEqual(testPrompt);
+    });
+  });
+
+  describe("memory-only cache", () => {
+    let memoryOnlyCache: PromptCache;
+
+    beforeEach(() => {
+      memoryOnlyCache = new PromptCache({
+        memoryCacheMax: 2,
+      });
+    });
+
+    it("should store and retrieve values from memory", async () => {
+      await memoryOnlyCache.set(testKey, testPrompt);
+      const result = await memoryOnlyCache.get(testKey);
+      expect(result).toEqual(testPrompt);
+    });
+
+    it("should respect memory cache size limits", async () => {
+      // Fill memory cache (max size is 2).
+      await memoryOnlyCache.set(testKey, testPrompt);
+      await memoryOnlyCache.set({ ...testKey, slug: "prompt2" }, testPrompt);
+
+      // This should evict the first prompt.
+      await memoryOnlyCache.set({ ...testKey, slug: "prompt3" }, testPrompt);
+
+      // First prompt should be gone since there's no disk backup.
+      const result = await memoryOnlyCache.get(testKey);
+      expect(result).toBeUndefined();
+
+      // Newer prompts should exist.
+      const newerResult = await memoryOnlyCache.get({
+        ...testKey,
+        slug: "prompt3",
+      });
+      expect(newerResult).toEqual(testPrompt);
     });
   });
 });

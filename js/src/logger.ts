@@ -70,7 +70,8 @@ import {
   devNullWritableStream,
 } from "./functions/stream";
 import { waitUntil } from "@vercel/functions";
-import { PromptCache } from "./prompt-cache";
+import { PromptCache } from "./prompt-cache/prompt-cache";
+import { canUseDiskCache, DiskCache } from "./prompt-cache/disk-cache";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -306,14 +307,7 @@ export class BraintrustState {
   private _apiConn: HTTPConnection | null = null;
   private _proxyConn: HTTPConnection | null = null;
 
-  public promptCache = new PromptCache({
-    cacheDir:
-      iso.getEnv("BRAINTRUST_PROMPT_CACHE_DIR") ??
-      "/tmp/braintrust/prompt_cache",
-    max: Number(iso.getEnv("BRAINTRUST_PROMPT_CACHE_DISK_MAX")) ?? 1 << 20,
-    memoryCacheMax:
-      Number(iso.getEnv("BRAINTRUST_PROMPT_CACHE_MEMORY_MAX")) ?? 1 << 10,
-  });
+  public promptCache: PromptCache;
 
   constructor(private loginParams: LoginOptions) {
     this.id = `${new Date().toLocaleString()}-${stateNonce++}`; // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
@@ -335,6 +329,22 @@ export class BraintrustState {
     );
 
     this.resetLoginInfo();
+
+    const diskCache = canUseDiskCache()
+      ? new DiskCache<Prompt>({
+          cacheDir:
+            iso.getEnv("BRAINTRUST_PROMPT_CACHE_DIR") ??
+            `${iso.getEnv("HOME") ?? iso.homedir!()}/.braintrust/prompt_cache`,
+          max:
+            Number(iso.getEnv("BRAINTRUST_PROMPT_CACHE_DISK_MAX")) ?? 1 << 20,
+        })
+      : undefined;
+
+    this.promptCache = new PromptCache({
+      diskCache,
+      memoryCacheMax:
+        Number(iso.getEnv("BRAINTRUST_PROMPT_CACHE_MEMORY_MAX")) ?? 1 << 10,
+    });
   }
 
   public resetLoginInfo() {
@@ -2724,7 +2734,7 @@ export async function loadPrompt({
     });
   } catch (e) {
     console.warn("Failed to load prompt, attempting to fall back to cache:", e);
-    const prompt = state.promptCache.get({
+    const prompt = await state.promptCache.get({
       slug,
       projectId,
       projectName,
@@ -2732,7 +2742,7 @@ export async function loadPrompt({
     });
     if (!prompt) {
       throw new Error(
-        `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[projectName ?? projectId]} (not found on server or in local cache)`,
+        `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[projectName ?? projectId]} (not found on server or in local cache): ${e}`,
       );
     }
     return prompt;
@@ -2752,10 +2762,14 @@ export async function loadPrompt({
 
   const metadata = promptSchema.parse(response["objects"][0]);
   const prompt = new Prompt(metadata, defaults || {}, noTrace);
-  state.promptCache.set(
-    { slug, projectId, projectName, version: version ?? "latest" },
-    prompt,
-  );
+  try {
+    await state.promptCache.set(
+      { slug, projectId, projectName, version: version ?? "latest" },
+      prompt,
+    );
+  } catch (e) {
+    console.warn("Failed to set prompt in cache:", e);
+  }
   return prompt;
 }
 
