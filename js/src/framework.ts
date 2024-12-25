@@ -394,10 +394,33 @@ globalThis._evals = {
 };
 
 export interface EvalOptions<EvalReport> {
+  /**
+   * A `Reporter` which you can use to summarize progress after an Eval() runs.
+   */
   reporter?: ReporterDef<EvalReport> | string;
+  /**
+   * A callback function that will be called when an experiment is started with
+   * information about its project, experiment id, name, and other useful information.
+   * @param metadata
+   */
   onStart?: (metadata: Omit<ExperimentSummary, "scores" | "metrics">) => void;
+  /**
+   * A function that will be called with progress events, which can be used to
+   * display intermediate progress.
+   *
+   * @param data
+   */
+  stream?: (data: SSEProgressEventData) => void;
+  /**
+   * If specified, instead of creating a new experiment object, the Eval() will populate
+   * the object or span specified by this parent.
+   */
   parent?: string;
-  progressReporter?: ProgressReporter;
+  /**
+   * Specify this to create a custom progress-bar style reporter. Note that this interface
+   * is somewhat outdated, and my be removed in th future.
+   */
+  progress?: ProgressReporter;
 }
 
 export function _initializeSpanContext() {
@@ -455,8 +478,7 @@ export async function Eval<
     );
   }
 
-  const progressReporter =
-    options.progressReporter ?? new BarProgressReporter();
+  const progressReporter = options.progress ?? new BarProgressReporter();
 
   if (typeof options.reporter === "string") {
     throw new Error(
@@ -503,11 +525,18 @@ export async function Eval<
       if (options.parent) {
         ret = await withParent(
           options.parent,
-          () => runEvaluator(null, evalDef, progressReporter, []),
+          () =>
+            runEvaluator(null, evalDef, progressReporter, [], options.stream),
           evaluator.state,
         );
       } else {
-        ret = await runEvaluator(experiment, evalDef, progressReporter, []);
+        ret = await runEvaluator(
+          experiment,
+          evalDef,
+          progressReporter,
+          [],
+          options.stream,
+        );
       }
       progressReporter.stop();
       resolvedReporter.reportEval(evalDef, ret, {
@@ -618,6 +647,7 @@ export async function runEvaluator(
   evaluator: EvaluatorDef<any, any, any, any>,
   progressReporter: ProgressReporter,
   filters: Filter[],
+  stream: ((data: SSEProgressEventData) => void) | undefined,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   const result = runEvaluatorInternal(
@@ -625,6 +655,7 @@ export async function runEvaluator(
     evaluator,
     progressReporter,
     filters,
+    stream,
   );
   const timer = async () => {
     await new Promise((_, reject) => {
@@ -649,6 +680,7 @@ async function runEvaluatorInternal(
   evaluator: EvaluatorDef<any, any, any, any>,
   progressReporter: ProgressReporter,
   filters: Filter[],
+  stream: ((data: SSEProgressEventData) => void) | undefined,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   if (typeof evaluator.data === "string") {
@@ -766,7 +798,7 @@ async function runEvaluatorInternal(
                 metadata,
                 span,
                 reportProgress: (event: TaskProgressEvent) => {
-                  progressReporter.stream({
+                  stream?.({
                     ...event,
                     id: rootSpan.id,
                     origin: baseEvent.event?.origin,

@@ -1,4 +1,3 @@
-import { SSEProgressEventData } from "@braintrust/core/typespecs/dist";
 import * as cliProgress from "cli-progress";
 
 const MAX_NAME_LENGTH = 40;
@@ -15,7 +14,6 @@ export interface ProgressReporter {
   start: (name: string, total: number) => void;
   stop: () => void;
   increment: (name: string) => void;
-  stream: (data: SSEProgressEventData) => void;
 }
 
 export class SimpleProgressReporter implements ProgressReporter {
@@ -24,7 +22,6 @@ export class SimpleProgressReporter implements ProgressReporter {
   }
   public stop() {}
   public increment(_name: string) {}
-  public stream(_data: SSEProgressEventData) {}
 }
 
 export class BarProgressReporter implements ProgressReporter {
@@ -57,5 +54,4 @@ export class BarProgressReporter implements ProgressReporter {
       evaluator: fitNameToSpaces(name, MAX_NAME_LENGTH),
     });
   }
-  public stream(_data: SSEProgressEventData) {}
 }
