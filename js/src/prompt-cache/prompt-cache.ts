@@ -36,7 +36,7 @@ export interface PromptKey {
  * @throws {Error} If neither projectId nor projectName is provided.
  */
 function createCacheKey(key: PromptKey): string {
-  const prefix = key.projectId || key.projectName;
+  const prefix = key.projectId ?? key.projectName;
   if (!prefix) {
     throw new Error("Either projectId or projectName must be provided");
   }
@@ -51,15 +51,15 @@ function createCacheKey(key: PromptKey): string {
  * 2. An optional persistent filesystem-based cache that serves as a backing store.
  */
 export class PromptCache {
-  private readonly diskCache?: DiskCache<Prompt>;
   private readonly memoryCache: LRUCache<string, Prompt>;
+  private readonly diskCache?: DiskCache<Prompt>;
 
   constructor(options: {
+    memoryCache: LRUCache<string, Prompt>;
     diskCache?: DiskCache<Prompt>;
-    memoryCacheMax?: number;
   }) {
+    this.memoryCache = options.memoryCache;
     this.diskCache = options.diskCache;
-    this.memoryCache = new LRUCache({ max: options.memoryCacheMax });
   }
 
   /**

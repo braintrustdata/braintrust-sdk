@@ -7,6 +7,7 @@ import { beforeEach, describe, it, afterEach, expect } from "vitest";
 import type { PromptKey } from "./prompt-cache";
 import { DiskCache } from "./disk-cache";
 import { configureNode } from "../node";
+import { LRUCache } from "./lru-cache";
 
 describe("PromptCache", () => {
   configureNode();
@@ -41,13 +42,12 @@ describe("PromptCache", () => {
   beforeEach(async () => {
     // Create a unique temporary directory for each test.
     cacheDir = path.join(tmpdir(), `prompt-cache-test-${Date.now()}`);
-    const diskCache = new DiskCache<Prompt>({
-      cacheDir,
-      max: 5,
-    });
     cache = new PromptCache({
-      diskCache,
-      memoryCacheMax: 2,
+      memoryCache: new LRUCache<string, Prompt>({ max: 2 }),
+      diskCache: new DiskCache<Prompt>({
+        cacheDir,
+        max: 5,
+      }),
     });
   });
 
@@ -214,11 +214,11 @@ describe("PromptCache", () => {
 
       // Create a new cache instance with empty memory cache.
       const newCache = new PromptCache({
+        memoryCache: new LRUCache({ max: 2 }),
         diskCache: new DiskCache<Prompt>({
           cacheDir,
           max: 5,
         }),
-        memoryCacheMax: 2,
       });
 
       // Corrupt the cache directory.
@@ -249,11 +249,11 @@ describe("PromptCache", () => {
 
       // Create a new cache instance (empty memory cache).
       const newCache = new PromptCache({
+        memoryCache: new LRUCache({ max: 2 }),
         diskCache: new DiskCache<Prompt>({
           cacheDir,
           max: 5,
         }),
-        memoryCacheMax: 2,
       });
 
       // First get should load from disk into memory.
@@ -273,7 +273,7 @@ describe("PromptCache", () => {
 
     beforeEach(() => {
       memoryOnlyCache = new PromptCache({
-        memoryCacheMax: 2,
+        memoryCache: new LRUCache({ max: 2 }),
       });
     });
 
