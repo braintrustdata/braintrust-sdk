@@ -1,6 +1,11 @@
-import { expect, test } from "vitest";
+import { beforeAll, expect, test } from "vitest";
 import { runEvaluator } from "./framework";
 import { BarProgressReporter } from "./progress";
+import { configureNode } from "./node";
+
+beforeAll(() => {
+  configureNode();
+});
 
 test("runEvaluator rejects on timeout", async () => {
   await expect(

@@ -978,13 +978,10 @@ async function runEvaluatorInternal(
       if (!experiment) {
         // This will almost always be a no-op span, but it means that if the Eval
         // is run in the context of a different type of span, it will be logged.
-        const res = traced(callback, {
+        return await traced(callback, {
           ...baseEvent,
           state: evaluator.state,
-          asyncFlush: true,
         });
-        console.error("RES", await res);
-        return await res;
       } else {
         return await experiment.traced(callback, baseEvent);
       }
