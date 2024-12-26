@@ -41,7 +41,10 @@ class SerializableDataClass:
                 filtered[k] = fields[k].type.from_dict_deep(v)
             elif get_origin(fields[k].type) == Union:
                 for t in fields[k].type.__args__:
-                    if isinstance(t, type) and issubclass(t, SerializableDataClass):
+                    if t == type(None) and v is None:
+                        filtered[k] = None
+                        break
+                    if isinstance(t, type) and issubclass(t, SerializableDataClass) and v is not None:
                         try:
                             filtered[k] = t.from_dict_deep(v)
                             break

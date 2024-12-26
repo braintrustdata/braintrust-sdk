@@ -70,6 +70,9 @@ import {
   devNullWritableStream,
 } from "./functions/stream";
 import { waitUntil } from "@vercel/functions";
+import { PromptCache } from "./prompt-cache/prompt-cache";
+import { canUseDiskCache, DiskCache } from "./prompt-cache/disk-cache";
+import { LRUCache } from "./prompt-cache/lru-cache";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -306,6 +309,8 @@ export class BraintrustState {
   private _apiConn: HTTPConnection | null = null;
   private _proxyConn: HTTPConnection | null = null;
 
+  public promptCache: PromptCache;
+
   constructor(private loginParams: LoginOptions) {
     this.id = `${new Date().toLocaleString()}-${stateNonce++}`; // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
     this.currentExperiment = undefined;
@@ -327,6 +332,20 @@ export class BraintrustState {
     );
 
     this.resetLoginInfo();
+
+    const memoryCache = new LRUCache<string, Prompt>({
+      max: Number(iso.getEnv("BRAINTRUST_PROMPT_CACHE_MEMORY_MAX")) ?? 1 << 10,
+    });
+    const diskCache = canUseDiskCache()
+      ? new DiskCache<Prompt>({
+          cacheDir:
+            iso.getEnv("BRAINTRUST_PROMPT_CACHE_DIR") ??
+            `${iso.getEnv("HOME") ?? iso.homedir!()}/.braintrust/prompt_cache`,
+          max:
+            Number(iso.getEnv("BRAINTRUST_PROMPT_CACHE_DISK_MAX")) ?? 1 << 20,
+        })
+      : undefined;
+    this.promptCache = new PromptCache({ memoryCache, diskCache });
   }
 
   public resetLoginInfo() {
@@ -2703,23 +2722,36 @@ export async function loadPrompt({
   }
 
   const state = stateArg ?? _globalState;
-
-  await state.login({
-    orgName,
-    apiKey,
-    appUrl,
-    fetch,
-    forceLogin,
-  });
-
-  const args: Record<string, string | undefined> = {
-    project_name: projectName,
-    project_id: projectId,
-    slug,
-    version,
-  };
-
-  const response = await state.apiConn().get_json("v1/prompt", args);
+  let response;
+  try {
+    await state.login({
+      orgName,
+      apiKey,
+      appUrl,
+      fetch,
+      forceLogin,
+    });
+    response = await state.apiConn().get_json("v1/prompt", {
+      project_name: projectName,
+      project_id: projectId,
+      slug,
+      version,
+    });
+  } catch (e) {
+    console.warn("Failed to load prompt, attempting to fall back to cache:", e);
+    const prompt = await state.promptCache.get({
+      slug,
+      projectId,
+      projectName,
+      version: version ?? "latest",
+    });
+    if (!prompt) {
+      throw new Error(
+        `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[projectName ?? projectId]} (not found on server or in local cache): ${e}`,
+      );
+    }
+    return prompt;
+  }
 
   if (!("objects" in response) || response.objects.length === 0) {
     throw new Error(
@@ -2734,8 +2766,16 @@ export async function loadPrompt({
   }
 
   const metadata = promptSchema.parse(response["objects"][0]);
-
-  return new Prompt(metadata, defaults || {}, noTrace);
+  const prompt = new Prompt(metadata, defaults || {}, noTrace);
+  try {
+    await state.promptCache.set(
+      { slug, projectId, projectName, version: version ?? "latest" },
+      prompt,
+    );
+  } catch (e) {
+    console.warn("Failed to set prompt in cache:", e);
+  }
+  return prompt;
 }
 
 /**
