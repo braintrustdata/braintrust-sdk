@@ -338,6 +338,7 @@ export const sseProgressEventDataSchema = z
       "console",
       "start",
       "done",
+      "progress",
     ]),
     data: z.string(), // This is the text_delta or json_delta
   })
