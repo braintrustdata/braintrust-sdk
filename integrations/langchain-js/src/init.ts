@@ -17,8 +17,6 @@ export const init = ({
   handler: BaseCallbackHandler;
   options: Partial<BraintrustCallbackHandlerOptions>;
 }>) => {
-  // XXX: blocked atm due to https://github.com/langchain-ai/langchainjs/pull/7366
-
   setContextVariable(
     BT_HANDLER,
     handler ?? new BraintrustCallbackHandler(options),
