@@ -4,6 +4,7 @@ import { DiskCache } from "./disk-cache";
 import { tmpdir } from "os";
 import { beforeEach, describe, it, afterEach, expect } from "vitest";
 import { configureNode } from "../node";
+import iso from "../isomorph";
 
 describe("DiskCache", () => {
   configureNode();
@@ -74,5 +75,47 @@ describe("DiskCache", () => {
 
     // Should throw on corrupted data.
     await expect(cache.get("test-key")).rejects.toThrow();
+  });
+
+  it("should throw when eviction stat fails", async () => {
+    // Fill cache.
+    for (let i = 0; i < 3; i++) {
+      await cache.set(`key${i}`, { value: i });
+    }
+
+    // Fake stat to fail for one file.
+    const origStat = iso.stat;
+    iso.stat = async (path: string) => {
+      if (path.endsWith("key0")) {
+        throw new Error("stat error");
+      }
+      return origStat!(path);
+    };
+
+    // Should throw when trying to get stats during eviction.
+    await expect(cache.set("key3", { value: 3 })).rejects.toThrow("stat error");
+
+    iso.stat = origStat;
+  });
+
+  it("should throw when eviction unlink fails", async () => {
+    // Fill cache.
+    for (let i = 0; i < 3; i++) {
+      await cache.set(`key${i}`, { value: i });
+      await new Promise((resolve) => setTimeout(resolve, 100)); // Ensure different mtimes
+    }
+
+    // Fake unlink to fail.
+    const origUnlink = iso.unlink;
+    iso.unlink = async () => {
+      throw new Error("unlink error");
+    };
+
+    // Should throw when trying to remove files during eviction.
+    await expect(cache.set("key3", { value: 3 })).rejects.toThrow(
+      "unlink error",
+    );
+
+    iso.unlink = origUnlink;
   });
 });
