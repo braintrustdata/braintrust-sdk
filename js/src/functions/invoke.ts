@@ -194,7 +194,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
  *
  * When used as a task:
  * ```ts
- * const myFunction = useFunction({projectName: "myproject", slug: "myfunction"});
+ * const myFunction = initFunction({projectName: "myproject", slug: "myfunction"});
  * await Eval("test", {
  *   task: myFunction,
  *   data: testData,
@@ -204,7 +204,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
  *
  * When used as a scorer:
  * ```ts
- * const myScorer = useFunction({projectName: "myproject", slug: "myscorer"});
+ * const myScorer = initFunction({projectName: "myproject", slug: "myscorer"});
  * await Eval("test", {
  *   task: someTask,
  *   data: testData,
@@ -218,7 +218,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
  * @param options.version Optional version of the function to use. Defaults to latest.
  * @returns A function that can be used as a task or scorer in Eval().
  */
-export function useFunction({
+export function initFunction({
   projectName,
   slug,
   version,
@@ -237,7 +237,7 @@ export function useFunction({
   };
 
   Object.defineProperty(f, "name", {
-    value: `useFunction-${projectName}-${slug}-${version ?? "latest"}`,
+    value: `initFunction-${projectName}-${slug}-${version ?? "latest"}`,
   });
   return f;
 }

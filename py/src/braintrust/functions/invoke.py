@@ -163,7 +163,7 @@ def invoke(
         return resp.json()
 
 
-def use_function(project_name: str, slug: str, version: Optional[str] = None):
+def init_function(project_name: str, slug: str, version: Optional[str] = None):
     """
     Creates a function that can be used as either a task or scorer in the Eval framework.
     When used as a task, it will invoke the specified Braintrust function with the input.
@@ -175,7 +175,7 @@ def use_function(project_name: str, slug: str, version: Optional[str] = None):
     Eval(
         name="my-evaluator",
         data=data,
-        task=use_function("my-project", "my-function"),
+        task=init_function("my-project", "my-function"),
         scores=[...]
     )
 
@@ -184,7 +184,7 @@ def use_function(project_name: str, slug: str, version: Optional[str] = None):
         name="my-evaluator",
         data=data,
         task=task,
-        scores=[use_function("my-project", "my-scorer")]
+        scores=[init_function("my-project", "my-scorer")]
     )
     ```
 
@@ -202,5 +202,5 @@ def use_function(project_name: str, slug: str, version: Optional[str] = None):
             # Scorer.
             return invoke(project_name=project_name, slug=slug, version=version, input=kwargs)
 
-    f.__name__ = f"use_function-{project_name}-{slug}-{version or 'latest'}"
+    f.__name__ = f"init_function-{project_name}-{slug}-{version or 'latest'}"
     return f
