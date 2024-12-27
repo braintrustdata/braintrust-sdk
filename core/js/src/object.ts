@@ -56,7 +56,7 @@ export interface ParentProjectLogIds {
   log_id: "g";
 }
 
-export interface ParentPromptSessionIds {
+export interface ParentPlaygroundLogIds {
   prompt_session_id: string;
   log_id: "x";
 }
@@ -107,7 +107,7 @@ export type LoggingEvent = Omit<ExperimentEvent, "experiment_id"> & {
   log_id: "g";
 };
 
-export type PromptSessionLogEvent = Omit<ExperimentEvent, "experiment_id"> & {
+export type PlaygroundLogEvent = Omit<ExperimentEvent, "experiment_id"> & {
   prompt_session_id: string;
   log_id: "x";
 };
@@ -122,13 +122,13 @@ export type CommentEvent = IdField & {
   };
   [AUDIT_SOURCE_FIELD]: Source;
   [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
-} & (ParentExperimentIds | ParentProjectLogIds | ParentPromptSessionIds);
+} & (ParentExperimentIds | ParentProjectLogIds | ParentPlaygroundLogIds);
 
 export type BackgroundLogEvent =
   | ExperimentEvent
   | DatasetEvent
   | LoggingEvent
-  | PromptSessionLogEvent
+  | PlaygroundLogEvent
   | CommentEvent;
 
 export const DEFAULT_IS_LEGACY_DATASET = false;

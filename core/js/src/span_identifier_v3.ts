@@ -4,7 +4,7 @@ import * as uuid from "uuid";
 import {
   ParentExperimentIds,
   ParentProjectLogIds,
-  ParentPromptSessionIds,
+  ParentPlaygroundLogIds,
 } from "./object";
 import { SpanComponentsV2 } from "./span_identifier_v2";
 import { z } from "zod";
@@ -30,7 +30,7 @@ const INVALID_ENCODING_ERRMSG = `SpanComponents string is not properly encoded. 
 export enum SpanObjectTypeV3 {
   EXPERIMENT = 1,
   PROJECT_LOGS = 2,
-  PROMPT_SESSION = 3,
+  PLAYGROUND_LOGS = 3,
 }
 
 export const spanObjectTypeV3EnumSchema = z.nativeEnum(SpanObjectTypeV3);
@@ -41,8 +41,8 @@ export function spanObjectTypeV3ToString(objectType: SpanObjectTypeV3): string {
       return "experiment";
     case SpanObjectTypeV3.PROJECT_LOGS:
       return "project_logs";
-    case SpanObjectTypeV3.PROMPT_SESSION:
-      return "prompt_session";
+    case SpanObjectTypeV3.PLAYGROUND_LOGS:
+      return "playground_logs";
     default:
       const x: never = objectType;
       throw new Error(`Unknown SpanObjectTypeV3: ${x}`);
@@ -210,7 +210,7 @@ export class SpanComponentsV3 {
   public objectIdFields():
     | ParentExperimentIds
     | ParentProjectLogIds
-    | ParentPromptSessionIds {
+    | ParentPlaygroundLogIds {
     if (!this.data.object_id) {
       throw new Error(
         "Impossible: cannot invoke `objectIdFields` unless SpanComponentsV3 is initialized with an `object_id`",
@@ -221,7 +221,7 @@ export class SpanComponentsV3 {
         return { experiment_id: this.data.object_id };
       case SpanObjectTypeV3.PROJECT_LOGS:
         return { project_id: this.data.object_id, log_id: "g" };
-      case SpanObjectTypeV3.PROMPT_SESSION:
+      case SpanObjectTypeV3.PLAYGROUND_LOGS:
         return { prompt_session_id: this.data.object_id, log_id: "x" };
       default:
         const _: never = this.data.object_type;
