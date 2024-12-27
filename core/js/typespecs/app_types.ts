@@ -44,6 +44,9 @@ function generateBaseTableSchema(
       .describe(
         `Date of ${objectName} deletion, or null if the ${objectName} is still active`,
       ),
+    updated_at: datetimeStringSchema
+      .nullish()
+      .describe(`Date of last ${objectName} update`),
     user_id: z
       .string()
       .uuid()
@@ -138,6 +141,7 @@ export const aiSecretSchema = z
   .object({
     id: aiSecretBaseSchema.shape.id,
     created: aiSecretBaseSchema.shape.created,
+    updated_at: aiSecretBaseSchema.shape.updated_at,
     org_id: organizationSchema.shape.id,
     name: aiSecretBaseSchema.shape.name,
     type: z.string().nullish(),

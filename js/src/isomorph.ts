@@ -43,6 +43,15 @@ export interface Common {
   ) => Promise<string | undefined>;
   writeFile?: (filename: string, data: string) => Promise<void>;
   readFile?: (filename: string) => Promise<Uint8Array>;
+  readdir?: (path: string) => Promise<string[]>;
+  utimes?: (path: string, atime: Date, mtime: Date) => Promise<void>;
+  unlink?: (path: string) => Promise<void>;
+  stat?: (path: string) => Promise<any>; // type-erased
+  homedir?: () => string;
+
+  // zlib (promisified and type-erased).
+  gunzip?: (data: any) => Promise<any>;
+  gzip?: (data: any) => Promise<any>;
 }
 
 const iso: Common = {

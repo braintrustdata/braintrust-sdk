@@ -70,6 +70,9 @@ import {
   devNullWritableStream,
 } from "./functions/stream";
 import { waitUntil } from "@vercel/functions";
+import { PromptCache } from "./prompt-cache/prompt-cache";
+import { canUseDiskCache, DiskCache } from "./prompt-cache/disk-cache";
+import { LRUCache } from "./prompt-cache/lru-cache";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -305,6 +308,8 @@ export class BraintrustState {
   private _apiConn: HTTPConnection | null = null;
   private _proxyConn: HTTPConnection | null = null;
 
+  public promptCache: PromptCache;
+
   constructor(private loginParams: LoginOptions) {
     this.id = `${new Date().toLocaleString()}-${stateNonce++}`; // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
     this.currentExperiment = undefined;
@@ -325,6 +330,20 @@ export class BraintrustState {
     );
 
     this.resetLoginInfo();
+
+    const memoryCache = new LRUCache<string, Prompt>({
+      max: Number(iso.getEnv("BRAINTRUST_PROMPT_CACHE_MEMORY_MAX")) ?? 1 << 10,
+    });
+    const diskCache = canUseDiskCache()
+      ? new DiskCache<Prompt>({
+          cacheDir:
+            iso.getEnv("BRAINTRUST_PROMPT_CACHE_DIR") ??
+            `${iso.getEnv("HOME") ?? iso.homedir!()}/.braintrust/prompt_cache`,
+          max:
+            Number(iso.getEnv("BRAINTRUST_PROMPT_CACHE_DISK_MAX")) ?? 1 << 20,
+        })
+      : undefined;
+    this.promptCache = new PromptCache({ memoryCache, diskCache });
   }
 
   public resetLoginInfo() {
@@ -2586,7 +2605,7 @@ type InitLoggerOptions<IsAsyncFlush> = FullLoginOptions & {
  * @param options Additional options for configuring init().
  * @param options.projectName The name of the project to log into. If unspecified, will default to the Global project.
  * @param options.projectId The id of the project to log into. This takes precedence over projectName if specified.
- * @param options.asyncFlush If true, will log asynchronously in the background. Otherwise, will log synchronously. (false by default, to support serverless environments)
+ * @param options.asyncFlush If true, will log asynchronously in the background. Otherwise, will log synchronously. (true by default)
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
@@ -2595,7 +2614,7 @@ type InitLoggerOptions<IsAsyncFlush> = FullLoginOptions & {
  * @param setCurrent If true (the default), set the global current-experiment to the newly-created one.
  * @returns The newly created Logger.
  */
-export function initLogger<IsAsyncFlush extends boolean = false>(
+export function initLogger<IsAsyncFlush extends boolean = true>(
   options: Readonly<InitLoggerOptions<IsAsyncFlush>> = {},
 ) {
   const {
@@ -2697,23 +2716,36 @@ export async function loadPrompt({
   }
 
   const state = stateArg ?? _globalState;
-
-  await state.login({
-    orgName,
-    apiKey,
-    appUrl,
-    fetch,
-    forceLogin,
-  });
-
-  const args: Record<string, string | undefined> = {
-    project_name: projectName,
-    project_id: projectId,
-    slug,
-    version,
-  };
-
-  const response = await state.apiConn().get_json("v1/prompt", args);
+  let response;
+  try {
+    await state.login({
+      orgName,
+      apiKey,
+      appUrl,
+      fetch,
+      forceLogin,
+    });
+    response = await state.apiConn().get_json("v1/prompt", {
+      project_name: projectName,
+      project_id: projectId,
+      slug,
+      version,
+    });
+  } catch (e) {
+    console.warn("Failed to load prompt, attempting to fall back to cache:", e);
+    const prompt = await state.promptCache.get({
+      slug,
+      projectId,
+      projectName,
+      version: version ?? "latest",
+    });
+    if (!prompt) {
+      throw new Error(
+        `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[projectName ?? projectId]} (not found on server or in local cache): ${e}`,
+      );
+    }
+    return prompt;
+  }
 
   if (!("objects" in response) || response.objects.length === 0) {
     throw new Error(
@@ -2728,8 +2760,16 @@ export async function loadPrompt({
   }
 
   const metadata = promptSchema.parse(response["objects"][0]);
-
-  return new Prompt(metadata, defaults || {}, noTrace);
+  const prompt = new Prompt(metadata, defaults || {}, noTrace);
+  try {
+    await state.promptCache.set(
+      { slug, projectId, projectName, version: version ?? "latest" },
+      prompt,
+    );
+  } catch (e) {
+    console.warn("Failed to set prompt in cache:", e);
+  }
+  return prompt;
 }
 
 /**
@@ -2997,7 +3037,7 @@ export function logError(span: Span, error: unknown) {
  *
  * See {@link Span.traced} for full details.
  */
-export function traced<IsAsyncFlush extends boolean = false, R = void>(
+export function traced<IsAsyncFlush extends boolean = true, R = void>(
   callback: (span: Span) => R,
   args?: StartSpanArgs &
     SetCurrentArg &
@@ -3060,7 +3100,7 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
  */
 export function wrapTraced<
   F extends (...args: any[]) => any,
-  IsAsyncFlush extends boolean = false,
+  IsAsyncFlush extends boolean = true,
 >(
   fn: F,
   args?: StartSpanArgs & SetCurrentArg & AsyncFlushArg<IsAsyncFlush>,
@@ -4589,6 +4629,27 @@ export function renderMessage<T extends Message>(
                       return _exhaustiveCheck;
                   }
                 }),
+        }
+      : {}),
+    ...("tool_calls" in message
+      ? {
+          tool_calls: isEmpty(message.tool_calls)
+            ? undefined
+            : message.tool_calls.map((t) => {
+                return {
+                  type: t.type,
+                  id: render(t.id),
+                  function: {
+                    name: render(t.function.name),
+                    arguments: render(t.function.arguments),
+                  },
+                };
+              }),
+        }
+      : {}),
+    ...("tool_call_id" in message
+      ? {
+          tool_call_id: render(message.tool_call_id),
         }
       : {}),
   };
