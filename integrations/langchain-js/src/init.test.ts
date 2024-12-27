@@ -14,10 +14,10 @@ import { logsToSpans, withLogging } from "./test/utils";
 const handler = withLogging(new BraintrustCallbackHandler({ debug: true }));
 
 describe("init", () => {
-  it.fails("should register the BraintrustCallbackHandler", async () => {
+  it("should register the BraintrustCallbackHandler", async () => {
     init({ handler });
 
-    const manager = CallbackManager.configure([]);
+    const manager = CallbackManager.configure();
     expect(
       manager?.handlers.filter(
         (handler) => handler instanceof BraintrustCallbackHandler,
