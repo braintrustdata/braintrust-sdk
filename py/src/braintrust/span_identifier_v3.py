@@ -30,9 +30,14 @@ INVALID_ENCODING_ERRMSG = f"SpanComponents string is not properly encoded. This 
 class SpanObjectTypeV3(Enum):
     EXPERIMENT = 1
     PROJECT_LOGS = 2
+    PLAYGROUND_LOGS = 3
 
     def __str__(self):
-        return {SpanObjectTypeV3.EXPERIMENT: "experiment", SpanObjectTypeV3.PROJECT_LOGS: "project_logs"}[self]
+        return {
+            SpanObjectTypeV3.EXPERIMENT: "experiment",
+            SpanObjectTypeV3.PROJECT_LOGS: "project_logs",
+            SpanObjectTypeV3.PLAYGROUND_LOGS: "playground_logs",
+        }[self]
 
 
 class InternalSpanComponentUUIDFields(Enum):
@@ -178,6 +183,8 @@ class SpanComponentsV3:
             return dict(experiment_id=self.object_id)
         elif self.object_type == SpanObjectTypeV3.PROJECT_LOGS:
             return dict(project_id=self.object_id, log_id="g")
+        elif self.object_type == SpanObjectTypeV3.PLAYGROUND_LOGS:
+            return dict(prompt_session_id=self.object_id, log_id="x")
         else:
             raise Exception(f"Invalid object_type {self.object_type}")
 
