@@ -207,6 +207,9 @@ describe("PromptCache", () => {
       // Memory cache should still be updated.
       const result = await cache.get(testKey);
       expect(result).toEqual(testPrompt);
+
+      // Restore permissions so cleanup can happen.
+      await fs.chmod(cacheDir, 0o777);
     });
 
     it("should handle disk read errors", async () => {
