@@ -257,6 +257,10 @@ export const promptLogIdLiteralSchema = z
   .literal("p")
   .describe("A literal 'p' which identifies the object as a project prompt");
 
+export const playgroundLogsLogIdLiteralSchema = z
+  .literal("x")
+  .describe("A literal 'x' which identifies the object as a playground log");
+
 export const promptBaseSchema = generateBaseTableSchema("prompt");
 const promptSchemaObject = z.object({
   id: promptBaseSchema.shape.id,

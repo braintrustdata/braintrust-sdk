@@ -90,7 +90,7 @@ export type StreamingMode = z.infer<typeof streamingModeEnum>;
 export const invokeParent = z.union([
   z
     .object({
-      object_type: z.enum(["project_logs", "experiment", "prompt_session"]),
+      object_type: z.enum(["project_logs", "experiment", "playground_logs"]),
       object_id: z
         .string()
         .describe("The id of the container object you are logging to"),

@@ -1221,7 +1221,7 @@ function spanComponentsToObjectIdLambda(
       throw new Error(
         "Impossible: computeObjectMetadataArgs not supported for experiments",
       );
-    case SpanObjectTypeV3.PROMPT_SESSION:
+    case SpanObjectTypeV3.PLAYGROUND_LOGS:
       throw new Error(
         "Impossible: computeObjectMetadataArgs not supported for prompt sessions",
       );
