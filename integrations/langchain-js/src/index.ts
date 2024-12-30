@@ -1,2 +1,2 @@
 export { BraintrustCallbackHandler } from "./BraintrustCallbackHandler";
-export { init } from "./init";
+export { setGlobalHandler as init } from "./setGlobalHandler";

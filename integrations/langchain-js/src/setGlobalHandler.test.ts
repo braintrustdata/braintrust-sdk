@@ -6,7 +6,7 @@ import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 import { BraintrustCallbackHandler } from "./BraintrustCallbackHandler";
 import { CHAT_MATH } from "./BraintrustCallbackHandler.fixtures";
-import { init } from "./init";
+import { setGlobalHandler } from "./setGlobalHandler";
 import { server } from "./test/setup";
 import { LogsRequest } from "./test/types";
 import { logsToSpans, withLogging } from "./test/utils";
@@ -15,7 +15,7 @@ const handler = withLogging(new BraintrustCallbackHandler({ debug: true }));
 
 describe("init", () => {
   it("should register the BraintrustCallbackHandler", async () => {
-    init({ handler });
+    setGlobalHandler({ handler });
 
     const manager = CallbackManager.configure();
     expect(

@@ -10,7 +10,7 @@ import {
 
 const BT_HANDLER = "BT_HANDLER";
 
-export const init = ({
+export const setGlobalHandler = ({
   handler,
   options,
 }: Partial<{

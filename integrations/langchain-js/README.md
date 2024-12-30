@@ -29,13 +29,16 @@ export BRAINTRUST_API_KEY="your-api-key"
 
 ```typescript
 import { ChatOpenAI } from "@langchain/openai";
-import { BraintrustCallbackHandler, init } from "@braintrust/langchain-js";
+import {
+  BraintrustCallbackHandler,
+  setGlobalHandler,
+} from "@braintrust/langchain-js";
 
 // Create the callback handler (optionally pass in a custom logger)
 const handler = new BraintrustCallbackHandler();
 
 // Set the handler for all LangChain components
-init({ handler });
+setGlobalHandler({ handler });
 
 // Use LangChain as normal - all calls will be logged to Braintrust
 const response = await model.invoke("Tell me a joke about bears");
