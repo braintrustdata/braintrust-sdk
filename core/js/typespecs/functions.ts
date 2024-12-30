@@ -184,6 +184,12 @@ export const runEvalSchema = z
           })
           .describe("Project and dataset name")
           .openapi({ title: "project_dataset_name" }),
+        z
+          .object({
+            data: z.array(z.unknown()), // TODO: More specific schema for these?
+          })
+          .describe("Dataset rows")
+          .openapi({ title: "dataset_rows" }),
       ])
       .describe("The dataset to use"),
     task: functionIdSchema.describe("The function to evaluate"),
