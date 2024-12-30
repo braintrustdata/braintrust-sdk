@@ -17,7 +17,7 @@ describe("init", () => {
   it("should register the BraintrustCallbackHandler", async () => {
     setGlobalHandler({ handler });
 
-    // make sure the handler is registered in the LangChain.js library
+    // Make sure the handler is registered in the LangChain.js library.
     const manager = CallbackManager.configure();
     expect(
       manager?.handlers.filter(
@@ -27,7 +27,7 @@ describe("init", () => {
 
     const logs: LogsRequest[] = [];
 
-    // intercept calls to confirm our tracing is working
+    // Intercept calls to confirm our tracing is working.
     server.use(
       http.post("https://api.openai.com/v1/chat/completions", () => {
         return HttpResponse.json(CHAT_MATH);
@@ -40,7 +40,7 @@ describe("init", () => {
       }),
     );
 
-    // here's what a typical user would do
+    // Here's what a typical user would do.
     const prompt = ChatPromptTemplate.fromTemplate(`What is 1 + {number}?`);
     const model = new ChatOpenAI({
       model: "gpt-4o-mini",
@@ -50,12 +50,12 @@ describe("init", () => {
 
     const message = await chain.invoke({ number: "2" });
 
-    // not normally needed by users, but we need it for our tests
+    // Not normally needed by users, but we need it for our tests.
     await flushBraintrustLogs();
 
     const { spans, root_span_id } = logsToSpans(logs);
 
-    // spans would be empty if the handler was not registered, let's make sure it logged what we expect
+    // Spans would be empty if the handler was not registered, let's make sure it logged what we expect.
     expect(spans).toMatchObject([
       {
         span_attributes: {
