@@ -13,7 +13,7 @@ import { logsToSpans, withLogging } from "./test/utils";
 
 const handler = withLogging(new BraintrustCallbackHandler({ debug: true }));
 
-describe("init", () => {
+describe("setGlobalHandler", () => {
   it("should register the BraintrustCallbackHandler", async () => {
     setGlobalHandler({ handler });
 
