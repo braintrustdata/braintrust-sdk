@@ -568,7 +568,15 @@ export const groupSchema = z
 export type Group = z.infer<typeof groupSchema>;
 
 export const projectScoreTypeEnum = z
-  .enum(["slider", "categorical", "weighted", "minimum", "maximum", "online"])
+  .enum([
+    "slider",
+    "categorical",
+    "weighted",
+    "minimum",
+    "maximum",
+    "online",
+    "free-form",
+  ])
   .describe("The type of the configured score")
   .openapi("ProjectScoreType");
 export type ProjectScoreType = z.infer<typeof projectScoreTypeEnum>;
@@ -652,6 +660,7 @@ export const projectScoreSchema = z
         multi_select: z.boolean().nullish(),
         destination: z.literal("expected").nullish(),
         online: onlineScoreConfigSchema.nullish(),
+        free_form_path: z.string().nullish(),
       })
       .nullish()
       .openapi("ProjectScoreConfig"),
