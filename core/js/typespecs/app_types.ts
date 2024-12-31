@@ -660,7 +660,7 @@ export const projectScoreSchema = z
         multi_select: z.boolean().nullish(),
         destination: z.literal("expected").nullish(),
         online: onlineScoreConfigSchema.nullish(),
-        free_form_path: z.string().nullish(),
+        metadata_path: z.string().nullish(),
       })
       .nullish()
       .openapi("ProjectScoreConfig"),
