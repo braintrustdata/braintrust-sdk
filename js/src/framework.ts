@@ -777,6 +777,7 @@ async function runEvaluatorInternal(
                   _xact_id: datum._xact_id,
                 }
               : undefined,
+          ...(datum.upsert_id ? { id: datum.upsert_id } : {}),
         },
       };
 
