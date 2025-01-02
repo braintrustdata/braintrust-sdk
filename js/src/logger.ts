@@ -3611,7 +3611,7 @@ export type EvalCase<Input, Expected, Metadata> = {
   id?: string;
   _xact_id?: TransactionId;
   // This field is used to help re-run a particular experiment row.
-  update_id?: string;
+  upsert_id?: string;
 } & (Expected extends void ? object : { expected: Expected }) &
   (Metadata extends void ? object : { metadata: Metadata });
 
