@@ -59,14 +59,14 @@ importers:
         version: link:../../js
     devDependencies:
       '@langchain/core':
-        specifier: ^0.3.20
-        version: 0.3.20
+        specifier: ^0.3.26
+        version: 0.3.26
       '@langchain/langgraph':
         specifier: ^0.2.25
-        version: 0.2.25(@langchain/core@0.3.20)
+        version: 0.2.25(@langchain/core@0.3.26)
       '@langchain/openai':
         specifier: ^0.3.14
-        version: 0.3.14(@langchain/core@0.3.20)
+        version: 0.3.14(@langchain/core@0.3.26)
       '@types/node':
         specifier: ^20.10.5
         version: 20.10.5
@@ -752,6 +752,10 @@ packages:
     dependencies:
       '@types/tough-cookie': 4.0.5
       tough-cookie: 4.1.4
+    dev: true
+
+  /@cfworker/json-schema@4.0.3:
+    resolution: {integrity: sha512-ZykIcDTVv5UNmKWSTLAs3VukO6NDJkkSKxrgUTDPBkAlORVT3H9n5DbRjRl8xIotklscHdbLIa0b9+y3mQq73g==}
     dev: true
 
   /@esbuild/aix-ppc64@0.19.10:
@@ -1683,10 +1687,11 @@ packages:
     resolution: {integrity: sha512-GaHYm+c0O9MjZRu0ongGBRbinu8gVAMd2UZjji6jVmqKtZluZnptXGWhz1E8j8D2HJ3f/yMxKAUC0b+57wncIw==}
     dev: false
 
-  /@langchain/core@0.3.20:
-    resolution: {integrity: sha512-29yg7dccRkJ1MdGFW4FSp6+yM8LoisBHWjXsoi+hTRTQBael3yhjnevrNtVjhF8FMAt/rDQan6bHsGCQkwcScA==}
+  /@langchain/core@0.3.26:
+    resolution: {integrity: sha512-6RUQHEp8wv+JwtYIIEBYBzbLlcAQZFc7EDOgAM0ukExjh9HiXoJzoWpgMRRCrr/koIbtwXPJUqBprZK1I1CXHQ==}
     engines: {node: '>=18'}
     dependencies:
+      '@cfworker/json-schema': 4.0.3
       ansi-styles: 5.2.0
       camelcase: 6.3.0
       decamelize: 1.2.0
@@ -1702,13 +1707,13 @@ packages:
       - openai
     dev: true
 
-  /@langchain/langgraph-checkpoint@0.0.13(@langchain/core@0.3.20):
+  /@langchain/langgraph-checkpoint@0.0.13(@langchain/core@0.3.26):
     resolution: {integrity: sha512-amdmBcNT8a9xP2VwcEWxqArng4gtRDcnVyVI4DsQIo1Aaz8e8+hH17zSwrUF3pt1pIYztngIfYnBOim31mtKMg==}
     engines: {node: '>=18'}
     peerDependencies:
       '@langchain/core': '>=0.2.31 <0.4.0'
     dependencies:
-      '@langchain/core': 0.3.20
+      '@langchain/core': 0.3.26
       uuid: 10.0.0
     dev: true
 
@@ -1721,26 +1726,26 @@ packages:
       uuid: 9.0.1
     dev: true
 
-  /@langchain/langgraph@0.2.25(@langchain/core@0.3.20):
+  /@langchain/langgraph@0.2.25(@langchain/core@0.3.26):
     resolution: {integrity: sha512-i+WnwmSxHiyB8gDzFaRBMUO1qomGHSz93bEg5SkS4Y/AjcyoJNZBgYSKNUcSKPQ2tqGAXI5XNPN5jrTUVnWOFw==}
     engines: {node: '>=18'}
     peerDependencies:
       '@langchain/core': '>=0.2.36 <0.3.0 || >=0.3.9 < 0.4.0'
     dependencies:
-      '@langchain/core': 0.3.20
-      '@langchain/langgraph-checkpoint': 0.0.13(@langchain/core@0.3.20)
+      '@langchain/core': 0.3.26
+      '@langchain/langgraph-checkpoint': 0.0.13(@langchain/core@0.3.26)
       '@langchain/langgraph-sdk': 0.0.31
       uuid: 10.0.0
       zod: 3.24.0
     dev: true
 
-  /@langchain/openai@0.3.14(@langchain/core@0.3.20):
+  /@langchain/openai@0.3.14(@langchain/core@0.3.26):
     resolution: {integrity: sha512-lNWjUo1tbvsss45IF7UQtMu1NJ6oUKvhgPYWXnX9f/d6OmuLu7D99HQ3Y88vLcUo9XjjOy417olYHignMduMjA==}
     engines: {node: '>=18'}
     peerDependencies:
       '@langchain/core': '>=0.2.26 <0.4.0'
     dependencies:
-      '@langchain/core': 0.3.20
+      '@langchain/core': 0.3.26
       js-tiktoken: 1.0.15
       openai: 4.75.0(zod@3.24.0)
       zod: 3.24.0
