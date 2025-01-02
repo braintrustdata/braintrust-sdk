@@ -72,6 +72,7 @@ import {
 import { waitUntil } from "@vercel/functions";
 import { PromptCache } from "./prompt-cache/prompt-cache";
 import { canUseDiskCache, DiskCache } from "./prompt-cache/disk-cache";
+import { LRUCache } from "./prompt-cache/lru-cache";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -330,6 +331,9 @@ export class BraintrustState {
 
     this.resetLoginInfo();
 
+    const memoryCache = new LRUCache<string, Prompt>({
+      max: Number(iso.getEnv("BRAINTRUST_PROMPT_CACHE_MEMORY_MAX")) ?? 1 << 10,
+    });
     const diskCache = canUseDiskCache()
       ? new DiskCache<Prompt>({
           cacheDir:
@@ -339,12 +343,7 @@ export class BraintrustState {
             Number(iso.getEnv("BRAINTRUST_PROMPT_CACHE_DISK_MAX")) ?? 1 << 20,
         })
       : undefined;
-
-    this.promptCache = new PromptCache({
-      diskCache,
-      memoryCacheMax:
-        Number(iso.getEnv("BRAINTRUST_PROMPT_CACHE_MEMORY_MAX")) ?? 1 << 10,
-    });
+    this.promptCache = new PromptCache({ memoryCache, diskCache });
   }
 
   public resetLoginInfo() {

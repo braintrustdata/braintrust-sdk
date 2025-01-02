@@ -55,3 +55,7 @@ jobs:
       - name: Lint the Python SDK
         run: |
           pylint --errors-only $(git ls-files '*.py')
+      - name: Run tests
+        run: |
+          python -m unittest discover ./core/py/src
+          python -m unittest discover ./py/src

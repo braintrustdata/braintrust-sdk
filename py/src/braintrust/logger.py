@@ -66,6 +66,9 @@ from .gitutil import get_past_n_ancestors, get_repo_info
 from .merge_row_batch import batch_items, merge_row_batch
 from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
 from .prompt import BRAINTRUST_PARAMS, PromptBlockData, PromptSchema
+from .prompt_cache.disk_cache import DiskCache
+from .prompt_cache.lru_cache import LRUCache
+from .prompt_cache.prompt_cache import PromptCache
 from .span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from .span_types import SpanTypeAttribute
 from .types import (
@@ -293,6 +296,20 @@ class BraintrustState:
         self._override_bg_logger = threading.local()
 
         self.reset_login_info()
+
+        self._prompt_cache = PromptCache(
+            memory_cache=LRUCache(
+                max_size=int(os.environ.get("BRAINTRUST_PROMPT_CACHE_MEMORY_MAX_SIZE", str(1 << 10)))
+            ),
+            disk_cache=DiskCache(
+                cache_dir=os.environ.get(
+                    "BRAINTRUST_PROMPT_CACHE_DIR", f"{os.environ.get('HOME')}/.braintrust/prompt_cache"
+                ),
+                max_size=int(os.environ.get("BRAINTRUST_PROMPT_CACHE_DISK_MAX_SIZE", str(1 << 20))),
+                serializer=lambda x: x.as_dict(),
+                deserializer=PromptSchema.from_dict_deep,
+            ),
+        )
 
     def reset_login_info(self):
         self.app_url: Optional[str] = None
@@ -1199,16 +1216,30 @@ def load_prompt(
         raise ValueError("Must specify slug")
 
     def compute_metadata():
-        login(org_name=org_name, api_key=api_key, app_url=app_url)
-        args = _populate_args(
-            {
-                "project_name": project,
-                "project_id": project_id,
-                "slug": slug,
-                "version": version,
-            },
-        )
-        response = _state.api_conn().get_json("/v1/prompt", args)
+        try:
+            login(org_name=org_name, api_key=api_key, app_url=app_url)
+            args = _populate_args(
+                {
+                    "project_name": project,
+                    "project_id": project_id,
+                    "slug": slug,
+                    "version": version,
+                },
+            )
+            response = _state.api_conn().get_json("/v1/prompt", args)
+        except Exception as server_error:
+            eprint(f"Failed to load prompt, attempting to fall back to cache: {server_error}")
+            try:
+                return _state._prompt_cache.get(
+                    slug,
+                    version=str(version) if version else "latest",
+                    project_id=project_id,
+                    project_name=project,
+                )
+            except Exception as cache_error:
+                raise ValueError(
+                    f"Prompt {slug} (version {version or 'latest'}) not found in {project or project_id} (not found on server or in local cache): {cache_error}"
+                ) from server_error
         if response is None or "objects" not in response or len(response["objects"]) == 0:
             raise ValueError(f"Prompt {slug} not found in project {project or project_id}.")
         elif len(response["objects"]) > 1:
@@ -1216,7 +1247,18 @@ def load_prompt(
                 f"Multiple prompts found with slug {slug} in project {project or project_id}. This should never happen."
             )
         resp_prompt = response["objects"][0]
-        return PromptSchema.from_dict_deep(resp_prompt)
+        prompt = PromptSchema.from_dict_deep(resp_prompt)
+        try:
+            _state._prompt_cache.set(
+                slug,
+                str(version) if version else "latest",
+                prompt,
+                project_id=project_id,
+                project_name=project,
+            )
+        except Exception as e:
+            eprint(f"Failed to store prompt in cache: {e}")
+        return prompt
 
     return Prompt(
         lazy_metadata=LazyValue(compute_metadata, use_mutex=True), defaults=defaults or {}, no_trace=no_trace
