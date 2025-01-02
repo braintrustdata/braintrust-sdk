@@ -15,7 +15,7 @@ const handler = withLogging(new BraintrustCallbackHandler({ debug: true }));
 
 describe("setGlobalHandler", () => {
   it("should register the BraintrustCallbackHandler", async () => {
-    setGlobalHandler({ handler });
+    setGlobalHandler(handler);
 
     // Make sure the handler is registered in the LangChain.js library.
     const manager = CallbackManager.configure();

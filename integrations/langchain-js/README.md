@@ -38,7 +38,7 @@ import {
 const handler = new BraintrustCallbackHandler();
 
 // Set the handler for all LangChain components
-setGlobalHandler({ handler });
+setGlobalHandler(handler);
 
 // Use LangChain as normal - all calls will be logged to Braintrust
 const response = await model.invoke("Tell me a joke about bears");
