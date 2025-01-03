@@ -16,6 +16,7 @@ export {
   SpanContext,
   buildLocalSummary,
   reportFailures,
+  runEvaluator,
 } from "./framework";
 export * from "./framework2";
 export { LazyValue } from "./util";

@@ -1,6 +1,11 @@
-import { expect, test } from "vitest";
+import { beforeAll, expect, test } from "vitest";
 import { runEvaluator } from "./framework";
 import { BarProgressReporter } from "./progress";
+import { configureNode } from "./node";
+
+beforeAll(() => {
+  configureNode();
+});
 
 test("runEvaluator rejects on timeout", async () => {
   await expect(
@@ -19,6 +24,7 @@ test("runEvaluator rejects on timeout", async () => {
       },
       new BarProgressReporter(),
       [],
+      undefined,
     ),
   ).rejects.toEqual("evaluator timed out");
 });
@@ -38,6 +44,7 @@ test("runEvaluator works with no timeout", async () => {
     },
     new BarProgressReporter(),
     [],
+    undefined,
   );
 });
 
@@ -63,6 +70,7 @@ test("meta (write) is passed to task", async () => {
     },
     new BarProgressReporter(),
     [],
+    undefined,
   );
 
   // @ts-expect-error metadata is not typed if the experiment is missing
@@ -98,6 +106,7 @@ test("metadata (read/write) is passed to task", async () => {
     },
     new BarProgressReporter(),
     [],
+    undefined,
   );
 
   expect(passedIn).toEqual(metadata);

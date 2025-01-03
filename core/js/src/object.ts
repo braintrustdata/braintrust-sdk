@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  AsyncScoringControl,
-  objectReferenceSchema,
-} from "../typespecs/api_types";
+import { AsyncScoringControl } from "../typespecs/api_types";
 import {
   Source,
   ASYNC_SCORING_CONTROL_FIELD,
@@ -13,6 +10,7 @@ import {
   PARENT_ID_FIELD,
   SKIP_ASYNC_SCORING_FIELD,
 } from "./db_fields";
+import { objectReferenceSchema } from "typespecs";
 
 export type IdField = { id: string };
 export type InputField = { input: unknown };
@@ -56,6 +54,11 @@ export interface ParentExperimentIds {
 export interface ParentProjectLogIds {
   project_id: string;
   log_id: "g";
+}
+
+export interface ParentPlaygroundLogIds {
+  prompt_session_id: string;
+  log_id: "x";
 }
 
 export type LogCommentFullArgs = IdField & {
@@ -104,6 +107,11 @@ export type LoggingEvent = Omit<ExperimentEvent, "experiment_id"> & {
   log_id: "g";
 };
 
+export type PlaygroundLogEvent = Omit<ExperimentEvent, "experiment_id"> & {
+  prompt_session_id: string;
+  log_id: "x";
+};
+
 export type CommentEvent = IdField & {
   created: string;
   origin: {
@@ -114,12 +122,13 @@ export type CommentEvent = IdField & {
   };
   [AUDIT_SOURCE_FIELD]: Source;
   [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
-} & (ParentExperimentIds | ParentProjectLogIds);
+} & (ParentExperimentIds | ParentProjectLogIds | ParentPlaygroundLogIds);
 
 export type BackgroundLogEvent =
   | ExperimentEvent
   | DatasetEvent
   | LoggingEvent
+  | PlaygroundLogEvent
   | CommentEvent;
 
 export const DEFAULT_IS_LEGACY_DATASET = false;

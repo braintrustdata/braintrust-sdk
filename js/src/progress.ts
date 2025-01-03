@@ -16,7 +16,7 @@ export interface ProgressReporter {
   increment: (name: string) => void;
 }
 
-export class SimpleProgressReporter {
+export class SimpleProgressReporter implements ProgressReporter {
   public start(name: string, _total: number) {
     console.log(`Running evaluator ${name}`);
   }
@@ -24,7 +24,7 @@ export class SimpleProgressReporter {
   public increment(_name: string) {}
 }
 
-export class BarProgressReporter {
+export class BarProgressReporter implements ProgressReporter {
   private multiBar: cliProgress.MultiBar;
   private bars: Record<string, cliProgress.SingleBar> = {};
 

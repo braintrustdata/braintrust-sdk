@@ -20,7 +20,7 @@ import {
   getObjectArticle,
   getEventObjectType,
   getEventObjectDescription,
-  eventObjectType,
+  objectReferenceSchema,
 } from "./common_types";
 import { customTypes } from "./custom_types";
 import { capitalize } from "../src/string_util";
@@ -324,18 +324,6 @@ function makeFetchEventsResponseSchema<T extends z.AnyZodObject>(
     })
     .openapi(`Fetch${eventName}EventsResponse`);
 }
-
-export const objectReferenceSchema = z.object({
-  object_type: eventObjectType.describe(
-    "Type of the object the event is originating from.",
-  ),
-  object_id: z
-    .string()
-    .uuid()
-    .describe("ID of the object the event is originating from."),
-  id: z.string().describe("ID of the original event."),
-  _xact_id: z.string().describe("Transaction ID of the original event."),
-});
 
 const experimentEventBaseSchema = generateBaseEventOpSchema("experiment");
 export const experimentEventSchema = z

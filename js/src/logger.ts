@@ -286,6 +286,7 @@ export class BraintrustState {
   // Note: the value of IsAsyncFlush doesn't really matter here, since we
   // (safely) dynamically cast it whenever retrieving the logger.
   public currentLogger: Logger<false> | undefined;
+  public currentParent: IsoAsyncLocalStorage<string>;
   public currentSpan: IsoAsyncLocalStorage<Span>;
   // Any time we re-log in, we directly update the apiConn inside the logger.
   // This is preferable to replacing the whole logger, which would create the
@@ -314,6 +315,7 @@ export class BraintrustState {
     this.id = `${new Date().toLocaleString()}-${stateNonce++}`; // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
     this.currentExperiment = undefined;
     this.currentLogger = undefined;
+    this.currentParent = iso.newAsyncLocalStorage();
     this.currentSpan = iso.newAsyncLocalStorage();
 
     if (loginParams.fetch) {
@@ -1218,6 +1220,10 @@ function spanComponentsToObjectIdLambda(
     case SpanObjectTypeV3.EXPERIMENT:
       throw new Error(
         "Impossible: computeObjectMetadataArgs not supported for experiments",
+      );
+    case SpanObjectTypeV3.PLAYGROUND_LOGS:
+      throw new Error(
+        "Impossible: computeObjectMetadataArgs not supported for prompt sessions",
       );
     case SpanObjectTypeV3.PROJECT_LOGS:
       return async () =>
@@ -3206,8 +3212,14 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
 ): { span: Span; isSyncFlushLogger: boolean } {
   const state = args?.state ?? _globalState;
-  if (args?.parent) {
-    const components = SpanComponentsV3.fromStr(args?.parent);
+
+  const parentStr = args?.parent ?? state.currentParent.getStore();
+
+  const components: SpanComponentsV3 | undefined = parentStr
+    ? SpanComponentsV3.fromStr(parentStr)
+    : undefined;
+
+  if (components) {
     const parentSpanIds: ParentSpanIds | undefined = components.data.row_id
       ? {
           spanId: components.data.span_id,
@@ -3226,6 +3238,7 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
       parentSpanIds,
       propagatedEvent:
         args?.propagatedEvent ??
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         ((components.data.propagated_event ?? undefined) as
           | StartSpanEventArgs
           | undefined),
@@ -3257,9 +3270,17 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
 export function withCurrent<R>(
   span: Span,
   callback: (span: Span) => R,
-  state: BraintrustState = _globalState,
+  state: BraintrustState | undefined = undefined,
 ): R {
-  return state.currentSpan.run(span, () => callback(span));
+  return (state ?? _globalState).currentSpan.run(span, () => callback(span));
+}
+
+export function withParent<R>(
+  parent: string,
+  callback: () => R,
+  state: BraintrustState | undefined = undefined,
+): R {
+  return (state ?? _globalState).currentParent.run(parent, () => callback());
 }
 
 function _check_org_info(
@@ -3589,6 +3610,8 @@ export type EvalCase<Input, Expected, Metadata> = {
   // These fields are only set if the EvalCase is part of a Dataset.
   id?: string;
   _xact_id?: TransactionId;
+  // This field is used to help re-run a particular experiment row.
+  upsert_id?: string;
 } & (Expected extends void ? object : { expected: Expected }) &
   (Metadata extends void ? object : { metadata: Metadata });
 

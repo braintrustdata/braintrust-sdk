@@ -1,5 +1,9 @@
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
-import { GitMetadataSettings, RepoInfo } from "@braintrust/core/typespecs";
+import {
+  GitMetadataSettings,
+  RepoInfo,
+  SSEProgressEventData,
+} from "@braintrust/core/typespecs";
 import { queue } from "async";
 import chalk from "chalk";
 import pluralize from "pluralize";
@@ -18,11 +22,15 @@ import {
   NOOP_SPAN,
   ScoreSummary,
   Span,
+  StartSpanArgs,
   init as _initExperiment,
   currentSpan,
+  flush,
   logError as logSpanError,
   startSpan,
+  traced,
   withCurrent,
+  withParent,
 } from "./logger";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import { isEmpty } from "./util";
@@ -77,6 +85,11 @@ export type EvalTask<Input, Output> =
   | ((input: Input, hooks: EvalHooks) => Promise<Output>)
   | ((input: Input, hooks: EvalHooks) => Output);
 
+export type TaskProgressEvent = Omit<
+  SSEProgressEventData,
+  "id" | "origin" | "object_type" | "name"
+>;
+
 export interface EvalHooks {
   /**
    * @deprecated Use `metadata` instead.
@@ -86,7 +99,14 @@ export interface EvalHooks {
    * The metadata object for the current evaluation. You can mutate this object to add or remove metadata.
    */
   metadata: Record<string, unknown>;
+  /**
+   * The task's span.
+   */
   span: Span;
+  /**
+   * Report progress that will show up in the playground.
+   */
+  reportProgress: (progress: TaskProgressEvent) => void;
 }
 
 // This happens to be compatible with ScorerArgs defined in @braintrust/core.
@@ -374,8 +394,33 @@ globalThis._evals = {
 };
 
 export interface EvalOptions<EvalReport> {
+  /**
+   * A `Reporter` which you can use to summarize progress after an Eval() runs.
+   */
   reporter?: ReporterDef<EvalReport> | string;
+  /**
+   * A callback function that will be called when an experiment is started with
+   * information about its project, experiment id, name, and other useful information.
+   * @param metadata
+   */
   onStart?: (metadata: Omit<ExperimentSummary, "scores" | "metrics">) => void;
+  /**
+   * A function that will be called with progress events, which can be used to
+   * display intermediate progress.
+   *
+   * @param data
+   */
+  stream?: (data: SSEProgressEventData) => void;
+  /**
+   * If specified, instead of creating a new experiment object, the Eval() will populate
+   * the object or span specified by this parent.
+   */
+  parent?: string;
+  /**
+   * Specify this to create a custom progress-bar style reporter. Note that this interface
+   * is somewhat outdated, and my be removed in th future.
+   */
+  progress?: ProgressReporter;
 }
 
 export function _initializeSpanContext() {
@@ -433,7 +478,7 @@ export async function Eval<
     );
   }
 
-  const progressReporter = new BarProgressReporter();
+  const progressReporter = options.progress ?? new BarProgressReporter();
 
   if (typeof options.reporter === "string") {
     throw new Error(
@@ -448,22 +493,24 @@ export async function Eval<
     );
     // NOTE: This code is duplicated with initExperiment in js/src/cli.ts. Make sure
     // to update that if you change this.
-    const experiment = initExperiment(evaluator.state, {
-      ...(evaluator.projectId
-        ? { projectId: evaluator.projectId }
-        : { project: name }),
-      experiment: evaluator.experimentName,
-      metadata: evaluator.metadata,
-      isPublic: evaluator.isPublic,
-      update: evaluator.update,
-      baseExperiment: evaluator.baseExperimentName ?? defaultBaseExperiment,
-      baseExperimentId: evaluator.baseExperimentId,
-      gitMetadataSettings: evaluator.gitMetadataSettings,
-      repoInfo: evaluator.repoInfo,
-      dataset: data instanceof Dataset ? data : undefined,
-    });
+    const experiment = options.parent
+      ? null
+      : initExperiment(evaluator.state, {
+          ...(evaluator.projectId
+            ? { projectId: evaluator.projectId }
+            : { project: name }),
+          experiment: evaluator.experimentName,
+          metadata: evaluator.metadata,
+          isPublic: evaluator.isPublic,
+          update: evaluator.update,
+          baseExperiment: evaluator.baseExperimentName ?? defaultBaseExperiment,
+          baseExperimentId: evaluator.baseExperimentId,
+          gitMetadataSettings: evaluator.gitMetadataSettings,
+          repoInfo: evaluator.repoInfo,
+          dataset: data instanceof Dataset ? data : undefined,
+        });
 
-    if (options.onStart) {
+    if (experiment && options.onStart) {
       experiment.summarize({ summarizeScores: false }).then(options.onStart);
     }
 
@@ -474,7 +521,23 @@ export async function Eval<
         ...evaluator,
         data,
       };
-      const ret = await runEvaluator(experiment, evalDef, progressReporter, []);
+      let ret;
+      if (options.parent) {
+        ret = await withParent(
+          options.parent,
+          () =>
+            runEvaluator(null, evalDef, progressReporter, [], options.stream),
+          evaluator.state,
+        );
+      } else {
+        ret = await runEvaluator(
+          experiment,
+          evalDef,
+          progressReporter,
+          [],
+          options.stream,
+        );
+      }
       progressReporter.stop();
       resolvedReporter.reportEval(evalDef, ret, {
         verbose: true,
@@ -482,7 +545,11 @@ export async function Eval<
       });
       return ret;
     } finally {
-      experiment.flush();
+      if (experiment) {
+        experiment.flush().catch(console.error);
+      } else if (options.parent) {
+        flush().catch(console.error);
+      }
     }
   } finally {
     progressReporter.stop();
@@ -580,6 +647,7 @@ export async function runEvaluator(
   evaluator: EvaluatorDef<any, any, any, any>,
   progressReporter: ProgressReporter,
   filters: Filter[],
+  stream: ((data: SSEProgressEventData) => void) | undefined,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   const result = runEvaluatorInternal(
@@ -587,6 +655,7 @@ export async function runEvaluator(
     evaluator,
     progressReporter,
     filters,
+    stream,
   );
   const timer = async () => {
     await new Promise((_, reject) => {
@@ -611,6 +680,7 @@ async function runEvaluatorInternal(
   evaluator: EvaluatorDef<any, any, any, any>,
   progressReporter: ProgressReporter,
   filters: Filter[],
+  stream: ((data: SSEProgressEventData) => void) | undefined,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   if (typeof evaluator.data === "string") {
@@ -683,6 +753,34 @@ async function runEvaluatorInternal(
   const q = queue(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (datum: EvalCase<any, any, any>) => {
+      const eventDataset: Dataset | undefined = experiment
+        ? experiment.dataset
+        : evaluator.data instanceof Dataset
+          ? evaluator.data
+          : undefined;
+
+      const baseEvent: StartSpanArgs = {
+        name: "eval",
+        spanAttributes: {
+          type: SpanTypeAttribute.EVAL,
+        },
+        event: {
+          input: datum.input,
+          expected: "expected" in datum ? datum.expected : undefined,
+          tags: datum.tags,
+          origin:
+            eventDataset && datum.id && datum._xact_id
+              ? {
+                  object_type: "dataset",
+                  object_id: await eventDataset.id,
+                  id: datum.id,
+                  _xact_id: datum._xact_id,
+                }
+              : undefined,
+          ...(datum.upsert_id ? { id: datum.upsert_id } : {}),
+        },
+      };
+
       const callback = async (rootSpan: Span) => {
         let metadata: Record<string, unknown> = {
           ...("metadata" in datum ? datum.metadata : {}),
@@ -700,6 +798,15 @@ async function runEvaluatorInternal(
                 meta,
                 metadata,
                 span,
+                reportProgress: (event: TaskProgressEvent) => {
+                  stream?.({
+                    ...event,
+                    id: rootSpan.id,
+                    origin: baseEvent.event?.origin,
+                    name: evaluator.evalName,
+                    object_type: "task",
+                  });
+                },
               });
               if (outputResult instanceof Promise) {
                 output = await outputResult;
@@ -870,28 +977,14 @@ async function runEvaluatorInternal(
       };
 
       if (!experiment) {
-        return await callback(NOOP_SPAN);
-      } else {
-        return await experiment.traced(callback, {
-          name: "eval",
-          spanAttributes: {
-            type: SpanTypeAttribute.EVAL,
-          },
-          event: {
-            input: datum.input,
-            expected: "expected" in datum ? datum.expected : undefined,
-            tags: datum.tags,
-            origin:
-              experiment.dataset && datum.id && datum._xact_id
-                ? {
-                    object_type: "dataset",
-                    object_id: await experiment.dataset.id,
-                    id: datum.id,
-                    _xact_id: datum._xact_id,
-                  }
-                : undefined,
-          },
+        // This will almost always be a no-op span, but it means that if the Eval
+        // is run in the context of a different type of span, it will be logged.
+        return await traced(callback, {
+          ...baseEvent,
+          state: evaluator.state,
         });
+      } else {
+        return await experiment.traced(callback, baseEvent);
       }
     },
     Math.max(evaluator.maxConcurrency ?? data.length, 1),

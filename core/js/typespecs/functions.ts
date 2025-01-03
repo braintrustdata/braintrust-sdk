@@ -5,6 +5,7 @@ import { promptDataSchema } from "./prompt";
 import { chatCompletionMessageParamSchema } from "./openai/messages";
 import { customTypes } from "./custom_types";
 import { gitMetadataSettingsSchema, repoInfoSchema } from "./git_types";
+import { objectReferenceSchema } from "./common_types";
 
 export const validRuntimesEnum = z.enum(["node", "python"]);
 export type Runtime = z.infer<typeof validRuntimesEnum>;
@@ -86,51 +87,58 @@ export const useFunctionSchema = functionIdSchema;
 export const streamingModeEnum = z.enum(["auto", "parallel"]);
 export type StreamingMode = z.infer<typeof streamingModeEnum>;
 
+export const invokeParent = z.union([
+  z
+    .object({
+      object_type: z.enum(["project_logs", "experiment", "playground_logs"]),
+      object_id: z
+        .string()
+        .describe("The id of the container object you are logging to"),
+      row_ids: z
+        .object({
+          id: z.string().describe("The id of the row"),
+          span_id: z.string().describe("The span_id of the row"),
+          root_span_id: z.string().describe("The root_span_id of the row"),
+        })
+        .nullish()
+        .describe("Identifiers for the row to to log a subspan under"),
+      propagated_event: z
+        .record(customTypes.unknown)
+        .nullish()
+        .describe(
+          "Include these properties in every span created under this parent",
+        ),
+    })
+    .describe("Span parent properties")
+    .openapi({ title: "span_parent_struct" }),
+  z
+    .string()
+    .optional()
+    .describe(
+      "The parent's span identifier, created by calling `.export()` on a span",
+    ),
+]);
+
 export const invokeFunctionNonIdArgsSchema = z.object({
   input: customTypes.unknown
     .optional()
     .describe(
       "Argument to the function, which can be any JSON serializable value",
     ),
+  expected: customTypes.unknown
+    .optional()
+    .describe("The expected output of the function"),
+  metadata: z
+    .record(z.string(), z.unknown())
+    .nullish()
+    .describe("Any relevant metadata"),
   messages: z
     .array(chatCompletionMessageParamSchema)
     .optional()
     .describe(
       "If the function is an LLM, additional messages to pass along to it",
     ),
-  parent: z
-    .union([
-      z
-        .object({
-          object_type: z.enum(["project_logs", "experiment"]),
-          object_id: z
-            .string()
-            .describe("The id of the container object you are logging to"),
-          row_ids: z
-            .object({
-              id: z.string().describe("The id of the row"),
-              span_id: z.string().describe("The span_id of the row"),
-              root_span_id: z.string().describe("The root_span_id of the row"),
-            })
-            .nullish()
-            .describe("Identifiers for the row to to log a subspan under"),
-          propagated_event: z
-            .record(customTypes.unknown)
-            .nullish()
-            .describe(
-              "Include these properties in every span created under this parent",
-            ),
-        })
-        .describe("Span parent properties")
-        .openapi({ title: "span_parent_struct" }),
-      z
-        .string()
-        .optional()
-        .describe(
-          "The parent's span identifier, created by calling `.export()` on a span",
-        ),
-    ])
-    .describe("Options for tracing the function call"),
+  parent: invokeParent.describe("Options for tracing the function call"),
   stream: z
     .boolean()
     .nullish()
@@ -176,6 +184,12 @@ export const runEvalSchema = z
           })
           .describe("Project and dataset name")
           .openapi({ title: "project_dataset_name" }),
+        z
+          .object({
+            data: z.array(z.unknown()), // TODO: More specific schema for these?
+          })
+          .describe("Dataset rows")
+          .openapi({ title: "dataset_rows" }),
       ])
       .describe("The dataset to use"),
     task: functionIdSchema.describe("The function to evaluate"),
@@ -194,6 +208,7 @@ export const runEvalSchema = z
       .describe(
         "Optional experiment-level metadata to store about the evaluation. You can later use this to slice & dice across experiments.",
       ),
+    parent: invokeParent.describe("Options for tracing the evaluation"),
     stream: z
       .boolean()
       .optional()
@@ -318,6 +333,7 @@ export const sseProgressEventDataSchema = z
   .object({
     id: z.string().describe("The id of the span this event is for"),
     object_type: functionObjectTypeEnum,
+    origin: objectReferenceSchema.nullish().describe("The origin of the event"),
     format: functionFormatEnum,
     output_type: functionOutputTypeEnum,
     name: z.string(),
@@ -328,6 +344,7 @@ export const sseProgressEventDataSchema = z
       "console",
       "start",
       "done",
+      "progress",
     ]),
     data: z.string(), // This is the text_delta or json_delta
   })
