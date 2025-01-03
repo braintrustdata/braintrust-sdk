@@ -100,6 +100,10 @@ export interface EvalHooks {
    */
   metadata: Record<string, unknown>;
   /**
+   * The expected output for the current evaluation.
+   */
+  expected: unknown;
+  /**
    * The task's span.
    */
   span: Span;
@@ -797,6 +801,7 @@ async function runEvaluatorInternal(
               const outputResult = evaluator.task(datum.input, {
                 meta,
                 metadata,
+                expected: "expected" in datum ? datum.expected : undefined,
                 span,
                 reportProgress: (event: TaskProgressEvent) => {
                   stream?.({
