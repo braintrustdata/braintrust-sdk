@@ -3,6 +3,7 @@ import express, { NextFunction, Request, Response } from "express";
 import {
   callEvaluatorData,
   Eval,
+  EvalHooks,
   EvaluatorDef,
   getSingleValueParameters,
 } from "../framework";
@@ -18,6 +19,7 @@ import {
 } from "../logger";
 import { LRUCache } from "../prompt-cache/lru-cache";
 import { parseParent } from "@braintrust/core";
+import { serializeSSEEvent } from "./stream";
 
 export interface DevServerOpts {
   host: string;
@@ -71,7 +73,6 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
     res.json(evaluatorSpec);
   });
 
-  // Eval endpoint - runs an evaluator and streams the results
   app.post(
     "/eval",
     checkAuthorized,
@@ -100,35 +101,88 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
 
       const evaluator = handle.evaluator;
       const evalData = callEvaluatorData(evaluator.data);
-      console.log("Starting eval", evaluator, evalData, parameters);
-      const summary = await Eval(
-        "worker-thread",
-        {
-          ...evaluator,
-          data: evalData.data,
-          state,
-          parameters,
-        },
-        {
-          // Avoid printing the bar to the console.
-          progress: {
-            start: (name, total) => {},
-            stop: () => {
-              console.log("Finished running experiment");
-            },
-            increment: (name) => {},
-          },
-          stream: (data: SSEProgressEventData) => {
-            console.log("Progress", data);
-          },
-          onStart: (metadata) => {
-            console.log("Starting eval", metadata);
-          },
-          parent: parseParent(parent),
-        },
-      );
+      console.log("Starting eval", evaluator.evalName);
 
-      res.json(summary);
+      // Set up SSE headers
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+
+      const task = async (
+        input: unknown,
+        hooks: EvalHooks<Record<string, unknown>>,
+      ) => {
+        const result = await evaluator.task(input, hooks);
+
+        hooks.reportProgress({
+          format: "code",
+          output_type: "completion",
+          event: "json_delta",
+          data: JSON.stringify(result),
+        });
+      };
+
+      try {
+        const summary = await Eval(
+          "worker-thread",
+          {
+            ...evaluator,
+            data: evalData.data,
+            task,
+            state,
+            parameters,
+          },
+          {
+            // Avoid printing the bar to the console.
+            progress: {
+              start: (name, total) => {},
+              stop: () => {
+                console.log("Finished running experiment");
+              },
+              increment: (name) => {},
+            },
+            stream: (data: SSEProgressEventData) => {
+              res.write(
+                serializeSSEEvent({
+                  event: "progress",
+                  data: JSON.stringify(data),
+                }),
+              );
+            },
+            onStart: (metadata) => {
+              res.write(
+                serializeSSEEvent({
+                  event: "start",
+                  data: JSON.stringify(metadata),
+                }),
+              );
+            },
+            parent: parseParent(parent),
+          },
+        );
+
+        res.write(
+          serializeSSEEvent({
+            event: "summary",
+            data: JSON.stringify(summary),
+          }),
+        );
+        res.write(
+          serializeSSEEvent({
+            event: "done",
+            data: "",
+          }),
+        );
+      } catch (e) {
+        console.error("Error running eval", e);
+        res.write(
+          serializeSSEEvent({
+            event: "error",
+            data: JSON.stringify(e),
+          }),
+        );
+      }
+      res.end();
     }),
   );
 
