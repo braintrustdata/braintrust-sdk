@@ -1,10 +1,17 @@
 import { EvaluatorState } from "../cli";
 import express, { NextFunction, Request, Response } from "express";
-import { getSingleValueParameters } from "../framework";
+import { EvaluatorDef, getSingleValueParameters } from "../framework";
 import { z } from "zod";
 import { errorHandler } from "./errorHandler";
 import { authorizeRequest, checkAuthorized } from "./authorize";
 import { invokeParent } from "@braintrust/core/typespecs";
+import {
+  BaseMetadata,
+  BraintrustState,
+  LoginOptions,
+  loginToState,
+} from "../logger";
+import { LRUCache } from "../prompt-cache/lru-cache";
 
 export interface DevServerOpts {
   host: string;
@@ -12,7 +19,7 @@ export interface DevServerOpts {
 }
 
 export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
-  const manifest: EvaluatorManifest = Object.fromEntries(
+  const allEvaluators: EvaluatorManifest = Object.fromEntries(
     Object.values(evaluators.evaluators).map((evaluator) => [
       evaluator.evaluator.evalName,
       {
@@ -21,6 +28,7 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
             getSingleValueParameters(evaluator.evaluator.parameters ?? {})[0],
           ).map(([name, value]) => [name, deriveParameterType(value)]),
         ),
+        evaluator: evaluator.evaluator,
       },
     ]),
   );
@@ -44,7 +52,15 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
 
   // List endpoint - returns all available evaluators and their metadata
   app.get("/list", (req, res) => {
-    res.json(manifest);
+    const evaluatorSpec = Object.fromEntries(
+      Object.entries(allEvaluators).map(([name, evaluator]) => [
+        name,
+        {
+          parameters: evaluator.parameters,
+        },
+      ]),
+    );
+    res.json(evaluatorSpec);
   });
 
   // Eval endpoint - runs an evaluator and streams the results
@@ -53,12 +69,16 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
     checkAuthorized,
     asyncHandler(async (req, res) => {
       const { name, parameters, parent } = evalBodySchema.parse(req.body);
-      res.json({ name, parameters, parent });
-      // const handle = handles[name];
 
-      // if (!handle) {
-      //   return res.status(404).json({ error: `Evaluator '${name}' not found` });
-      // }
+      // First, log in
+      const state = await cachedLogin({ apiKey: req.ctx?.token });
+
+      const handle = allEvaluators[name];
+
+      if (!handle) {
+        res.status(404).json({ error: `Evaluator '${name}' not found` });
+        return;
+      }
 
       // try {
       //   const stream = await handle.evaluate(parameters, parent);
@@ -78,6 +98,8 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
       // } catch (error) {
       //   res.status(500).json({ error: String(error) });
       // }
+
+      res.json({ name, parameters, parent });
     }),
   );
 
@@ -104,6 +126,7 @@ type EvaluatorManifest = Record<string, EvaluatorSpec>;
 
 interface EvaluatorSpec {
   parameters: Record<string, ParameterType>;
+  evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>;
 }
 
 const _parameterTypeSchema = z.union([
@@ -125,4 +148,20 @@ function deriveParameterType(value: unknown): ParameterType {
   }
   // TODO: Prompt type
   return "unknown";
+}
+
+const loginCache = new LRUCache<string, BraintrustState>({
+  max: 32, // TODO: Make this configurable
+});
+
+async function cachedLogin(options: LoginOptions): Promise<BraintrustState> {
+  const key = JSON.stringify(options);
+  const cached = loginCache.get(key);
+  if (cached) {
+    return cached;
+  }
+
+  const state = await loginToState(options);
+  loginCache.set(key, state);
+  return state;
 }
