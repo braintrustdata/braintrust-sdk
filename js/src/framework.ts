@@ -159,20 +159,55 @@ type SingleValueParameters<T> = {
 };
 
 /**
- * Converts a parameters object with potential array values into one with single values
- * by taking the first element of any array parameters.
+ * Converts a parameters object with potential array values into an array of parameter objects
+ * representing all possible permutations of the array values.
  */
-function getSingleValueParameters<T extends Record<string, unknown>>(
+export function getSingleValueParameters<T extends Record<string, unknown>>(
   params: T,
-): SingleValueParameters<T> {
-  const result: Record<string, unknown> = {};
+): SingleValueParameters<T>[] {
+  // Get all keys that have array values
+  const arrayKeys = Object.entries(params)
+    .filter(([_, value]) => Array.isArray(value))
+    .map(([key]) => key);
+
+  // If no array parameters, return the original object wrapped in an array
+  if (arrayKeys.length === 0) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return [params as SingleValueParameters<T>];
+  }
+
+  // Generate all possible combinations
+  const combinations: Record<string, unknown>[] = [{}];
 
   for (const [key, value] of Object.entries(params)) {
-    result[key] = Array.isArray(value) ? value[0] : value;
+    const newCombinations: Record<string, unknown>[] = [];
+
+    if (Array.isArray(value)) {
+      // For array values, create a new combination for each array element
+      for (const combination of combinations) {
+        for (const item of value) {
+          newCombinations.push({
+            ...combination,
+            [key]: item,
+          });
+        }
+      }
+    } else {
+      // For non-array values, add the single value to all existing combinations
+      for (const combination of combinations) {
+        newCombinations.push({
+          ...combination,
+          [key]: value,
+        });
+      }
+    }
+
+    combinations.length = 0;
+    combinations.push(...newCombinations);
   }
 
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return result as SingleValueParameters<T>;
+  return combinations as SingleValueParameters<T>[];
 }
 
 export interface Evaluator<
@@ -845,7 +880,7 @@ async function runEvaluatorInternal(
                 span,
                 parameters: getSingleValueParameters(
                   evaluator.parameters ?? {},
-                ),
+                )[0] /* XXX TODO */,
                 reportProgress: (event: TaskProgressEvent) => {
                   stream?.({
                     ...event,

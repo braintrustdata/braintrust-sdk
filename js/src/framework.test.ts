@@ -1,5 +1,5 @@
 import { beforeAll, expect, test } from "vitest";
-import { runEvaluator } from "./framework";
+import { getSingleValueParameters, runEvaluator } from "./framework";
 import { BarProgressReporter } from "./progress";
 import { configureNode } from "./node";
 
@@ -116,4 +116,101 @@ test("metadata (read/write) is passed to task", async () => {
     bar: "baz",
     foo: "barbar",
   });
+});
+
+test("getSingleValueParameters with no parameters returns a single object", () => {
+  const params = {};
+
+  const result = getSingleValueParameters(params);
+  expect(result).toEqual([params]);
+});
+
+test("getSingleValueParameters with no array values returns original object", () => {
+  const params = {
+    a: 1,
+    b: "test",
+    c: true,
+  };
+
+  const result = getSingleValueParameters(params);
+  expect(result).toEqual([params]);
+});
+
+test("getSingleValueParameters with single array value generates combinations", () => {
+  const params = {
+    a: [1, 2, 3],
+    b: "test",
+  };
+
+  const result = getSingleValueParameters(params);
+  expect(result).toEqual([
+    { a: 1, b: "test" },
+    { a: 2, b: "test" },
+    { a: 3, b: "test" },
+  ]);
+});
+
+test("getSingleValueParameters with multiple array values generates all combinations", () => {
+  const params = {
+    a: [1, 2],
+    b: ["x", "y"],
+    c: true,
+  };
+
+  const result = getSingleValueParameters(params);
+  expect(result).toEqual([
+    { a: 1, b: "x", c: true },
+    { a: 1, b: "y", c: true },
+    { a: 2, b: "x", c: true },
+    { a: 2, b: "y", c: true },
+  ]);
+});
+
+test("getSingleValueParameters with empty array values", () => {
+  const params = {
+    a: [],
+    b: "test",
+  };
+
+  const result = getSingleValueParameters(params);
+  expect(result).toEqual([]);
+});
+
+test("getSingleValueParameters with mixed types in arrays", () => {
+  const params = {
+    a: [1, "two", false],
+    b: 100,
+  };
+
+  const result = getSingleValueParameters(params);
+  expect(result).toEqual([
+    { a: 1, b: 100 },
+    { a: "two", b: 100 },
+    { a: false, b: 100 },
+  ]);
+});
+
+test("getSingleValueParameters with nested objects", () => {
+  const params = {
+    a: [1, 2],
+    b: { x: 1, y: 2 },
+  };
+
+  const result = getSingleValueParameters(params);
+  expect(result).toEqual([
+    { a: 1, b: { x: 1, y: 2 } },
+    { a: 2, b: { x: 1, y: 2 } },
+  ]);
+});
+
+test("getSingleValueParameters preserves object references for non-array values", () => {
+  const obj = { x: 1 };
+  const params = {
+    a: [1, 2],
+    b: obj,
+  };
+
+  const result = getSingleValueParameters(params);
+  expect(result[0].b).toBe(obj);
+  expect(result[1].b).toBe(obj);
 });
