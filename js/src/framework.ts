@@ -81,16 +81,20 @@ export type EvalData<
   | BaseExperiment<Input, Expected, Metadata>
   | (() => BaseExperiment<Input, Expected, Metadata>);
 
-export type EvalTask<Input, Output> =
-  | ((input: Input, hooks: EvalHooks) => Promise<Output>)
-  | ((input: Input, hooks: EvalHooks) => Output);
+export type EvalTask<
+  Input,
+  Output,
+  Parameters extends Record<string, unknown>,
+> =
+  | ((input: Input, hooks: EvalHooks<Parameters>) => Promise<Output>)
+  | ((input: Input, hooks: EvalHooks<Parameters>) => Output);
 
 export type TaskProgressEvent = Omit<
   SSEProgressEventData,
   "id" | "origin" | "object_type" | "name"
 >;
 
-export interface EvalHooks {
+export interface EvalHooks<Parameters extends Record<string, unknown>> {
   /**
    * @deprecated Use `metadata` instead.
    */
@@ -103,6 +107,11 @@ export interface EvalHooks {
    * The task's span.
    */
   span: Span;
+  /**
+   * The current parameters being used for this specific task execution.
+   * Array parameters are converted to single values.
+   */
+  parameters: SingleValueParameters<Parameters>;
   /**
    * Report progress that will show up in the playground.
    */
@@ -141,11 +150,37 @@ export type EvalResult<
   error: unknown;
 };
 
+// Helper type for converting array types to their element type
+type SingleValueOf<T> = T extends Array<infer U> ? U : T;
+
+// Convert a parameter object type to use single values instead of arrays
+type SingleValueParameters<T> = {
+  [K in keyof T]: SingleValueOf<T[K]>;
+};
+
+/**
+ * Converts a parameters object with potential array values into one with single values
+ * by taking the first element of any array parameters.
+ */
+function getSingleValueParameters<T extends Record<string, unknown>>(
+  params: T,
+): SingleValueParameters<T> {
+  const result: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(params)) {
+    result[key] = Array.isArray(value) ? value[0] : value;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return result as SingleValueParameters<T>;
+}
+
 export interface Evaluator<
   Input,
   Output,
   Expected,
   Metadata extends BaseMetadata = DefaultMetadataType,
+  Parameters extends Record<string, unknown> = Record<string, unknown>,
 > {
   /**
    * A function that returns a list of inputs, expected outputs, and metadata.
@@ -155,12 +190,19 @@ export interface Evaluator<
   /**
    * A function that takes an input and returns an output.
    */
-  task: EvalTask<Input, Output>;
+  task: EvalTask<Input, Output, Parameters>;
 
   /**
    * A set of functions that take an input, output, and expected value and return a score.
    */
   scores: EvalScorer<Input, Output, Expected, Metadata>[];
+
+  /**
+   * A set of parameters that will be passed to the evaluator.
+   * Can contain array values that will be converted to single values in the task.
+   */
+
+  parameters?: Parameters;
 
   /**
    * An optional name for the experiment.
@@ -282,7 +324,7 @@ export interface ReporterBody<EvalReport> {
     // These any's are required because these function specifications don't know
     // or need to know the types of the input/output/etc for the evaluator.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    evaluator: EvaluatorDef<any, any, any, any>,
+    evaluator: EvaluatorDef<any, any, any, any, any>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     result: EvalResultWithSummary<any, any, any, any>,
     opts: ReporterOpts,
@@ -315,10 +357,11 @@ export type EvaluatorDef<
   Output,
   Expected,
   Metadata extends BaseMetadata = DefaultMetadataType,
+  Parameters extends Record<string, unknown> = Record<string, unknown>,
 > = {
   projectName: string;
   evalName: string;
-} & Evaluator<Input, Output, Expected, Metadata>;
+} & Evaluator<Input, Output, Expected, Metadata, Parameters>;
 
 export type EvaluatorFile = {
   functions: CodeFunction<
@@ -436,9 +479,10 @@ export async function Eval<
   Expected = void,
   Metadata extends BaseMetadata = DefaultMetadataType,
   EvalReport = boolean,
+  Parameters extends Record<string, unknown> = Record<string, unknown>,
 >(
   name: string,
-  evaluator: Evaluator<Input, Output, Expected, Metadata>,
+  evaluator: Evaluator<Input, Output, Expected, Metadata, Parameters>,
   reporterOrOpts?: ReporterDef<EvalReport> | string | EvalOptions<EvalReport>,
 ): Promise<EvalResultWithSummary<Input, Output, Expected, Metadata>> {
   const options: EvalOptions<EvalReport> = isEmpty(reporterOrOpts)
@@ -645,7 +689,7 @@ export function scorerName(
 export async function runEvaluator(
   experiment: Experiment | null,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  evaluator: EvaluatorDef<any, any, any, any>,
+  evaluator: EvaluatorDef<any, any, any, any, any>,
   progressReporter: ProgressReporter,
   filters: Filter[],
   stream: ((data: SSEProgressEventData) => void) | undefined,
@@ -799,6 +843,9 @@ async function runEvaluatorInternal(
                 meta,
                 metadata,
                 span,
+                parameters: getSingleValueParameters(
+                  evaluator.parameters ?? {},
+                ),
                 reportProgress: (event: TaskProgressEvent) => {
                   stream?.({
                     ...event,
