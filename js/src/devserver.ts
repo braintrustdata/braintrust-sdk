@@ -16,6 +16,9 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
   // - Auth, can use the token from the incoming request (if specified) to override
   //   whatever is in the environment.
   //    - Maybe allow the user to explicitly opt into authenticating via local credentials.
+  // - Allow the task function to return a BraintrustStream, and therefore stream its results
+  //   to the client instead. If we do this, maybe we can simplify/remove the progress stuff
+  //   from the task function.
   app.use(express.json());
 
   app.get("/", (req, res) => {
