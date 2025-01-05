@@ -47,6 +47,7 @@ import { loadModule } from "./functions/load-module";
 import { bundleCommand } from "./cli-util/bundle";
 import { RunArgs } from "./cli-util/types";
 import { pullCommand } from "./cli-util/pull";
+import { runDevServer } from "./devserver";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript
@@ -252,6 +253,7 @@ function buildWatchPluginForEvaluator(
             },
             opts.progressReporter,
             opts.filters,
+            undefined,
           );
           const resolvedReporter = resolveReporter(
             reporter,
@@ -480,16 +482,28 @@ async function runAndWatch({
   await new Promise(() => {});
 }
 
-async function runOnce(
+export async function buildEvalautors(
   handles: Record<string, FileHandle>,
   opts: EvaluatorOpts,
-) {
+): Promise<{ evaluators: EvaluatorState; buildResults: BtBuildResult[] }> {
   const buildPromises = Object.values(handles).map((handle) =>
     handle.rebuild(),
   );
 
   const buildResults = await Promise.all(buildPromises);
 
+  const evaluators: EvaluatorState = {
+    evaluators: [],
+    reporters: {},
+  };
+  updateEvaluators(evaluators, buildResults, opts);
+  return { evaluators, buildResults };
+}
+
+async function runOnce(
+  handles: Record<string, FileHandle>,
+  opts: EvaluatorOpts,
+) {
   const bundlePromises = opts.bundle
     ? Object.fromEntries(
         Object.entries(handles).map(([inFile, handle]) => [
@@ -499,11 +513,7 @@ async function runOnce(
       )
     : null;
 
-  const evaluators: EvaluatorState = {
-    evaluators: [],
-    reporters: {},
-  };
-  updateEvaluators(evaluators, buildResults, opts);
+  const { evaluators, buildResults } = await buildEvalautors(handles, opts);
 
   if (opts.list) {
     for (const evaluator of evaluators.evaluators) {
@@ -532,6 +542,7 @@ async function runOnce(
         },
         opts.progressReporter,
         opts.filters,
+        undefined,
       );
     } finally {
       if (logger) {
@@ -748,7 +759,7 @@ export async function initializeHandles({
   mode: "eval" | "bundle";
   plugins?: PluginMaker[];
   tsconfig?: string;
-}) {
+}): Promise<Record<string, FileHandle>> {
   const files: Record<string, boolean> = {};
   const inputPaths = inputFiles.length > 0 ? inputFiles : ["."];
   for (const inputPath of inputPaths) {
@@ -852,6 +863,15 @@ async function run(args: RunArgs) {
     plugins,
   });
 
+  if (args.dev) {
+    const { evaluators } = await buildEvalautors(handles, evaluatorOpts);
+    runDevServer(evaluators, {
+      host: args.dev_host,
+      port: args.dev_port,
+    });
+    return;
+  }
+
   let success = true;
   try {
     if (!evaluatorOpts.noSendLogs) {
@@ -861,6 +881,7 @@ async function run(args: RunArgs) {
         appUrl: args.app_url,
       });
     }
+
     if (args.watch) {
       await runAndWatch({
         handles,
@@ -966,6 +987,20 @@ async function main() {
   parser_run.add_argument("files", {
     nargs: "*",
     help: "A list of files or directories to run. If no files are specified, the current directory is used.",
+  });
+  parser_run.add_argument("--dev", {
+    action: "store_true",
+    help: "Run the evaluators in dev mode. This will start a dev server which you can connect to via the playground.",
+  });
+  parser_run.add_argument("--dev-host", {
+    help: "The host to bind the dev server to. Defaults to localhost. Set to 0.0.0.0 to bind to all interfaces.",
+    type: String,
+    default: "localhost",
+  });
+  parser_run.add_argument("--dev-port", {
+    help: "The port to bind the dev server to. Defaults to 8300.",
+    type: Number,
+    default: 8300,
   });
   parser_run.set_defaults({ func: run });
 
