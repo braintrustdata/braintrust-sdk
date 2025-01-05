@@ -1,10 +1,15 @@
 import { EvaluatorState } from "../cli";
 import express, { NextFunction, Request, Response } from "express";
-import { EvaluatorDef, getSingleValueParameters } from "../framework";
+import {
+  callEvaluatorData,
+  Eval,
+  EvaluatorDef,
+  getSingleValueParameters,
+} from "../framework";
 import { z } from "zod";
 import { errorHandler } from "./errorHandler";
 import { authorizeRequest, checkAuthorized } from "./authorize";
-import { invokeParent } from "@braintrust/core/typespecs";
+import { invokeParent, SSEProgressEventData } from "@braintrust/core/typespecs";
 import {
   BaseMetadata,
   BraintrustState,
@@ -12,6 +17,7 @@ import {
   loginToState,
 } from "../logger";
 import { LRUCache } from "../prompt-cache/lru-cache";
+import { parseParent } from "@braintrust/core";
 
 export interface DevServerOpts {
   host: string;
@@ -32,6 +38,8 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
       },
     ]),
   );
+
+  globalThis._lazy_load = false;
 
   const app = express();
 
@@ -80,26 +88,47 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
         return;
       }
 
-      // try {
-      //   const stream = await handle.evaluate(parameters, parent);
-      //   const response = new StreamingTextResponse(stream);
+      try {
+        validateParameters(parameters, handle.parameters);
+      } catch (e) {
+        if (e instanceof MissingParameterError) {
+          res.status(400).json({ error: e.message });
+          return;
+        }
+        throw e;
+      }
 
-      //   // Forward the streaming response
-      //   response.body?.pipeTo(
-      //     new WritableStream({
-      //       write(chunk) {
-      //         res.write(chunk);
-      //       },
-      //       close() {
-      //         res.end();
-      //       },
-      //     }),
-      //   );
-      // } catch (error) {
-      //   res.status(500).json({ error: String(error) });
-      // }
+      const evaluator = handle.evaluator;
+      const evalData = callEvaluatorData(evaluator.data);
+      console.log("Starting eval", evaluator, evalData, parameters);
+      const summary = await Eval(
+        "worker-thread",
+        {
+          ...evaluator,
+          data: evalData.data,
+          state,
+          parameters,
+        },
+        {
+          // Avoid printing the bar to the console.
+          progress: {
+            start: (name, total) => {},
+            stop: () => {
+              console.log("Finished running experiment");
+            },
+            increment: (name) => {},
+          },
+          stream: (data: SSEProgressEventData) => {
+            console.log("Progress", data);
+          },
+          onStart: (metadata) => {
+            console.log("Starting eval", metadata);
+          },
+          parent: parseParent(parent),
+        },
+      );
 
-      res.json({ name, parameters, parent });
+      res.json(summary);
     }),
   );
 
@@ -148,6 +177,46 @@ function deriveParameterType(value: unknown): ParameterType {
   }
   // TODO: Prompt type
   return "unknown";
+}
+
+class MissingParameterError extends Error {
+  constructor(public missingParameters: string[]) {
+    super(`Missing parameters: ${missingParameters.join(", ")}`);
+  }
+}
+
+function validateParameters(
+  parameters: Record<string, unknown>,
+  parameterSchema: Record<string, ParameterType>,
+) {
+  const missingParameters: string[] = [];
+  for (const paramName of Object.keys(parameterSchema)) {
+    if (!(paramName in parameters)) {
+      missingParameters.push(paramName);
+    }
+  }
+  if (missingParameters.length > 0) {
+    throw new MissingParameterError(missingParameters);
+  }
+
+  for (const [name, value] of Object.entries(parameters)) {
+    const parameterType = parameterSchema[name];
+    switch (parameterType) {
+      case "prompt":
+        throw new Error("TODO");
+      case "string":
+        z.string().parse(value);
+        break;
+      case "number":
+        z.number().parse(value);
+        break;
+      case "boolean":
+        z.boolean().parse(value);
+        break;
+      case "unknown":
+        break;
+    }
+  }
 }
 
 const loginCache = new LRUCache<string, BraintrustState>({
