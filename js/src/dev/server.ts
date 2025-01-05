@@ -1,9 +1,10 @@
 import { EvaluatorState } from "../cli";
-import express from "express";
+import express, { NextFunction, Request, Response } from "express";
 import { getSingleValueParameters } from "../framework";
 import { z } from "zod";
 import { errorHandler } from "./errorHandler";
 import { authorizeRequest, checkAuthorized } from "./authorize";
+import { invokeParent } from "@braintrust/core/typespecs";
 
 export interface DevServerOpts {
   host: string;
@@ -11,6 +12,19 @@ export interface DevServerOpts {
 }
 
 export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
+  const manifest: EvaluatorManifest = Object.fromEntries(
+    Object.values(evaluators.evaluators).map((evaluator) => [
+      evaluator.evaluator.evalName,
+      {
+        parameters: Object.fromEntries(
+          Object.entries(
+            getSingleValueParameters(evaluator.evaluator.parameters ?? {})[0],
+          ).map(([name, value]) => [name, deriveParameterType(value)]),
+        ),
+      },
+    ]),
+  );
+
   const app = express();
 
   // TODO:
@@ -30,47 +44,42 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
 
   // List endpoint - returns all available evaluators and their metadata
   app.get("/list", (req, res) => {
-    const evaluatorInfo = Object.values(evaluators.evaluators).map(
-      (evaluator) => ({
-        name: evaluator.evaluator.evalName,
-        parameters: Object.entries(
-          getSingleValueParameters(evaluator.evaluator.parameters ?? {})[0],
-        ).map(([name, value]) => ({ name, type: deriveParameterType(value) })),
-      }),
-    );
-    res.json(evaluatorInfo);
+    res.json(manifest);
   });
 
   // Eval endpoint - runs an evaluator and streams the results
-  /*
-  app.post("/eval", async (req, res) => {
-    const { name, parameters, parent } = req.body;
-    const handle = handles[name];
+  app.post(
+    "/eval",
+    checkAuthorized,
+    asyncHandler(async (req, res) => {
+      const { name, parameters, parent } = evalBodySchema.parse(req.body);
+      res.json({ name, parameters, parent });
+      // const handle = handles[name];
 
-    if (!handle) {
-      return res.status(404).json({ error: `Evaluator '${name}' not found` });
-    }
+      // if (!handle) {
+      //   return res.status(404).json({ error: `Evaluator '${name}' not found` });
+      // }
 
-    try {
-      const stream = await handle.evaluate(parameters, parent);
-      const response = new StreamingTextResponse(stream);
+      // try {
+      //   const stream = await handle.evaluate(parameters, parent);
+      //   const response = new StreamingTextResponse(stream);
 
-      // Forward the streaming response
-      response.body?.pipeTo(
-        new WritableStream({
-          write(chunk) {
-            res.write(chunk);
-          },
-          close() {
-            res.end();
-          },
-        }),
-      );
-    } catch (error) {
-      res.status(500).json({ error: String(error) });
-    }
-  });
-  */
+      //   // Forward the streaming response
+      //   response.body?.pipeTo(
+      //     new WritableStream({
+      //       write(chunk) {
+      //         res.write(chunk);
+      //       },
+      //       close() {
+      //         res.end();
+      //       },
+      //     }),
+      //   );
+      // } catch (error) {
+      //   res.status(500).json({ error: String(error) });
+      // }
+    }),
+  );
 
   app.use(errorHandler);
 
@@ -78,6 +87,23 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
   app.listen(opts.port, opts.host, () => {
     console.log(`Dev server running at http://${opts.host}:${opts.port}`);
   });
+}
+const asyncHandler =
+  (fn: (req: Request, res: Response, next: NextFunction) => Promise<void>) =>
+  (req: Request, res: Response, next: NextFunction) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+
+const evalBodySchema = z.object({
+  name: z.string(),
+  parameters: z.record(z.string(), z.unknown()),
+  parent: invokeParent.optional(),
+});
+
+type EvaluatorManifest = Record<string, EvaluatorSpec>;
+
+interface EvaluatorSpec {
+  parameters: Record<string, ParameterType>;
 }
 
 const _parameterTypeSchema = z.union([

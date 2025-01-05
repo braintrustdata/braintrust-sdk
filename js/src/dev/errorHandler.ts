@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { Request, Response, ErrorRequestHandler, NextFunction } from "express";
 import { HttpError } from "http-errors";
 
@@ -12,6 +13,15 @@ export const errorHandler: ErrorRequestHandler = (
       error: {
         message: err.message,
         status: err.status,
+      },
+    });
+    return;
+  }
+  if (err instanceof z.ZodError) {
+    res.status(400).json({
+      error: {
+        message: "Invalid request",
+        errors: err.errors,
       },
     });
     return;
