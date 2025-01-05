@@ -47,7 +47,7 @@ import { loadModule } from "./functions/load-module";
 import { bundleCommand } from "./cli-util/bundle";
 import { RunArgs } from "./cli-util/types";
 import { pullCommand } from "./cli-util/pull";
-import { runDevServer } from "./devserver";
+import { runDevServer } from "./dev/server";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript

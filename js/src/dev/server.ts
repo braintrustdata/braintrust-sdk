@@ -1,7 +1,9 @@
-import { EvaluatorState } from "./cli";
+import { EvaluatorState } from "../cli";
 import express from "express";
-import { getSingleValueParameters } from "./framework";
+import { getSingleValueParameters } from "../framework";
 import { z } from "zod";
+import { errorHandler } from "./errorHandler";
+import { authorizeRequest, checkAuthorized } from "./authorize";
 
 export interface DevServerOpts {
   host: string;
@@ -19,7 +21,8 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
   // - Allow the task function to return a BraintrustStream, and therefore stream its results
   //   to the client instead. If we do this, maybe we can simplify/remove the progress stuff
   //   from the task function.
-  app.use(express.json());
+  app.use(express.json({ limit: "1gb" }));
+  app.use(authorizeRequest);
 
   app.get("/", (req, res) => {
     res.send("Hello, world!");
@@ -68,6 +71,8 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
     }
   });
   */
+
+  app.use(errorHandler);
 
   // Start the server
   app.listen(opts.port, opts.host, () => {
