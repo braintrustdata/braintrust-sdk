@@ -523,7 +523,8 @@ export async function Eval<
         });
 
     if (experiment && options.onStart) {
-      experiment.summarize({ summarizeScores: false }).then(options.onStart);
+      const summary = await experiment.summarize({ summarizeScores: false });
+      options.onStart(summary);
     }
 
     try {

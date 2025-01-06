@@ -3816,7 +3816,6 @@ export class Experiment
     let { summarizeScores = true, comparisonExperimentId = undefined } =
       options || {};
 
-    await this.flush();
     const state = await this.getState();
     const projectUrl = `${state.appPublicUrl}/app/${encodeURIComponent(
       state.orgName!,
@@ -3829,6 +3828,7 @@ export class Experiment
     let metrics: Record<string, MetricSummary> | undefined = undefined;
     let comparisonExperimentName = undefined;
     if (summarizeScores) {
+      await this.flush();
       if (comparisonExperimentId === undefined) {
         const baseExperiment = await this.fetchBaseExperiment();
         if (baseExperiment !== null) {
