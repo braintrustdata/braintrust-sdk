@@ -1067,7 +1067,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             root_span = NOOP_SPAN
         with root_span:
             try:
-                hooks = DictEvalHooks(metadata)
+                hooks = DictEvalHooks(metadata, expected=datum.expected)
 
                 # Check if the task takes a hooks argument
                 task_args = [datum.input]
