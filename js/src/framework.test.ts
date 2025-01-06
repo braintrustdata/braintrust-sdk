@@ -1,7 +1,7 @@
 import { beforeAll, expect, test } from "vitest";
 import { runEvaluator } from "./framework";
-import { BarProgressReporter } from "./progress";
 import { configureNode } from "./node";
+import { BarProgressReporter } from "./progress";
 
 beforeAll(() => {
   configureNode();
@@ -113,6 +113,47 @@ test("metadata (read/write) is passed to task", async () => {
 
   // @ts-expect-error metadata is not typed if the experiment is missing
   expect(out.results[0].metadata).toEqual({
+    bar: "baz",
+    foo: "barbar",
+  });
+});
+
+test("expected (read/write) is passed to task", async () => {
+  const expected = {
+    bar: "baz",
+    foo: "bar",
+  };
+
+  let passedIn: Record<string, unknown> | null = null;
+
+  const out = await runEvaluator(
+    null,
+    {
+      projectName: "proj",
+      evalName: "eval",
+      data: [{ input: 1, expected }],
+      task: async (input: number, { expected: e }) => {
+        passedIn = { ...e };
+
+        // modify the expected object
+        e.foo = "barbar";
+
+        return input * 2;
+      },
+      scores: [],
+    },
+    new BarProgressReporter(),
+    [],
+    undefined,
+  );
+
+  expect(passedIn).toEqual({
+    bar: "baz",
+    foo: "bar",
+  });
+
+  // @ts-expect-error metadata is not typed if the experiment is missing
+  expect(out.results[0].expected).toEqual({
     bar: "baz",
     foo: "barbar",
   });
