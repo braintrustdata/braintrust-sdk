@@ -141,6 +141,13 @@ class EvalHooks(abc.ABC):
 
     @property
     @abc.abstractmethod
+    def expected(self) -> Optional[Output]:
+        """
+        The expected output for the current evaluation.
+        """
+
+    @property
+    @abc.abstractmethod
     def span(self) -> Span:
         """
         Access the span under which the task is run. Also accessible via braintrust.current_span()
@@ -903,13 +910,18 @@ def evaluate_filter(object, filter: Filter):
 
 
 class DictEvalHooks(EvalHooks):
-    def __init__(self, metadata):
+    def __init__(self, metadata, expected):
         self._metadata = metadata
+        self._expected = expected
         self._span = None
 
     @property
     def metadata(self):
         return self._metadata
+
+    @property
+    def expected(self):
+        return self._expected
 
     @property
     def span(self):
