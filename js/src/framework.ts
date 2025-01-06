@@ -106,7 +106,7 @@ export interface EvalHooks<
   /**
    * The metadata object for the current evaluation. You can mutate this object to add or remove metadata.
    */
-  metadata: Metadata;
+  metadata: Metadata extends void ? Record<string, unknown> : Metadata;
   /**
    * The expected output for the current evaluation.
    */
