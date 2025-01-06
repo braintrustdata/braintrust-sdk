@@ -127,14 +127,14 @@ class EvalResult(SerializableDataClass, Generic[Input, Output]):
     exc_info: Optional[str] = None
 
 
-class EvalHooks(abc.ABC):
+class EvalHooks(abc.ABC, Generic[Output]):
     """
     An object that can be used to add metadata to an evaluation. This is passed to the `task` function.
     """
 
     @property
     @abc.abstractmethod
-    def metadata(self) -> Dict[str, Any]:
+    def metadata(self) -> Metadata:
         """
         The metadata object for the current evaluation. You can mutate this object to add or remove metadata.
         """
@@ -219,7 +219,7 @@ EvalData = Union[_EvalDataObject[Input, Output], Type[_EvalDataObject[Input, Out
 
 EvalTask = Union[
     Callable[[Input], Union[Output, Awaitable[Output]]],
-    Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
+    Callable[[Input, EvalHooks[Output]], Union[Output, Awaitable[Output]]],
 ]
 
 
