@@ -127,16 +127,23 @@ class EvalResult(SerializableDataClass, Generic[Input, Output]):
     exc_info: Optional[str] = None
 
 
-class EvalHooks(abc.ABC):
+class EvalHooks(abc.ABC, Generic[Output]):
     """
     An object that can be used to add metadata to an evaluation. This is passed to the `task` function.
     """
 
     @property
     @abc.abstractmethod
-    def metadata(self) -> Dict[str, Any]:
+    def metadata(self) -> Metadata:
         """
         The metadata object for the current evaluation. You can mutate this object to add or remove metadata.
+        """
+
+    @property
+    @abc.abstractmethod
+    def expected(self) -> Optional[Output]:
+        """
+        The expected output for the current evaluation.
         """
 
     @property
@@ -212,7 +219,7 @@ EvalData = Union[_EvalDataObject[Input, Output], Type[_EvalDataObject[Input, Out
 
 EvalTask = Union[
     Callable[[Input], Union[Output, Awaitable[Output]]],
-    Callable[[Input, EvalHooks], Union[Output, Awaitable[Output]]],
+    Callable[[Input, EvalHooks[Output]], Union[Output, Awaitable[Output]]],
 ]
 
 
@@ -903,13 +910,18 @@ def evaluate_filter(object, filter: Filter):
 
 
 class DictEvalHooks(EvalHooks):
-    def __init__(self, metadata):
+    def __init__(self, metadata, expected):
         self._metadata = metadata
+        self._expected = expected
         self._span = None
 
     @property
     def metadata(self):
         return self._metadata
+
+    @property
+    def expected(self):
+        return self._expected
 
     @property
     def span(self):
@@ -1055,7 +1067,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             root_span = NOOP_SPAN
         with root_span:
             try:
-                hooks = DictEvalHooks(metadata)
+                hooks = DictEvalHooks(metadata, expected=datum.expected)
 
                 # Check if the task takes a hooks argument
                 task_args = [datum.input]

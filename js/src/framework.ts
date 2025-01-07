@@ -81,24 +81,36 @@ export type EvalData<
   | BaseExperiment<Input, Expected, Metadata>
   | (() => BaseExperiment<Input, Expected, Metadata>);
 
-export type EvalTask<Input, Output> =
-  | ((input: Input, hooks: EvalHooks) => Promise<Output>)
-  | ((input: Input, hooks: EvalHooks) => Output);
+export type EvalTask<
+  Input,
+  Output,
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+> =
+  | ((input: Input, hooks: EvalHooks<Expected, Metadata>) => Promise<Output>)
+  | ((input: Input, hooks: EvalHooks<Expected, Metadata>) => Output);
 
 export type TaskProgressEvent = Omit<
   SSEProgressEventData,
   "id" | "origin" | "object_type" | "name"
 >;
 
-export interface EvalHooks {
+export interface EvalHooks<
+  Expected,
+  Metadata extends BaseMetadata = DefaultMetadataType,
+> {
   /**
    * @deprecated Use `metadata` instead.
    */
-  meta: (info: Record<string, unknown>) => void;
+  meta: (info: Metadata) => void;
   /**
    * The metadata object for the current evaluation. You can mutate this object to add or remove metadata.
    */
-  metadata: Record<string, unknown>;
+  metadata: Metadata extends void ? Record<string, unknown> : Metadata;
+  /**
+   * The expected output for the current evaluation.
+   */
+  expected: Expected;
   /**
    * The task's span.
    */
@@ -155,7 +167,7 @@ export interface Evaluator<
   /**
    * A function that takes an input and returns an output.
    */
-  task: EvalTask<Input, Output>;
+  task: EvalTask<Input, Output, Expected, Metadata>;
 
   /**
    * A set of functions that take an input, output, and expected value and return a score.
@@ -786,6 +798,7 @@ async function runEvaluatorInternal(
         let metadata: Record<string, unknown> = {
           ...("metadata" in datum ? datum.metadata : {}),
         };
+        const expected = "expected" in datum ? datum.expected : undefined;
         let output: unknown = undefined;
         let error: unknown | undefined = undefined;
         const scores: Record<string, number | null> = {};
@@ -798,6 +811,7 @@ async function runEvaluatorInternal(
               const outputResult = evaluator.task(datum.input, {
                 meta,
                 metadata,
+                expected,
                 span,
                 reportProgress: (event: TaskProgressEvent) => {
                   stream?.({
@@ -822,7 +836,7 @@ async function runEvaluatorInternal(
               event: { input: datum.input },
             },
           );
-          rootSpan.log({ output, metadata });
+          rootSpan.log({ output, metadata, expected });
 
           const scoringArgs = {
             input: datum.input,
