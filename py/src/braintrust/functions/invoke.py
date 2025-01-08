@@ -1,6 +1,5 @@
 from typing import Any, List, Literal, Optional, TypeVar, Union, overload
 
-from braintrust_core import Score
 from sseclient import SSEClient
 
 from ..logger import Exportable, get_span_parent_object, login, proxy_conn
