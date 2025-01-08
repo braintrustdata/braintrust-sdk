@@ -1006,6 +1006,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                     result = Score.from_dict(result)
                 except Exception as e:
                     raise ValueError(f"When returning a dict, it must be a valid Score object. Got: {result}") from e
+
             if isinstance(result, Iterable):
                 for s in result:
                     if not isinstance(s, Score):
