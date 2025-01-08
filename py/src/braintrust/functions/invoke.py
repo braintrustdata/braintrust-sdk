@@ -201,11 +201,7 @@ def init_function(project_name: str, slug: str, version: Optional[str] = None):
             return invoke(project_name=project_name, slug=slug, version=version, input=args[0])
         else:
             # Scorer.
-            out = invoke(project_name=project_name, slug=slug, version=version, input=kwargs)
-            try:
-                return Score.from_dict(out)
-            except:
-                return out
+            return invoke(project_name=project_name, slug=slug, version=version, input=kwargs)
 
     f.__name__ = f"init_function-{project_name}-{slug}-{version or 'latest'}"
     return f

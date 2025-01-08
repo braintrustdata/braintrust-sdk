@@ -1001,6 +1001,11 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             scorer_args = kwargs
 
             result = await call_user_fn(event_loop, score, **scorer_args)
+            if isinstance(result, dict):
+                try:
+                    result = Score.from_dict(result)
+                except:
+                    raise ValueError(f"When returning a dict, it must be a valid Score object. Got: {result}")
             if isinstance(result, Iterable):
                 for s in result:
                     if not isinstance(s, Score):
