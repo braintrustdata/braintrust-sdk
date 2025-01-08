@@ -1802,49 +1802,38 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
     with placeholder strings to ensure serializability, except for `Attachment`
     objects, which are preserved and not deep-copied.
     """
+    attachments = []
+    IDENTIFIER = "_bt_internal_saved_attachment"
 
-    def _deep_copy_object(v: Any) -> Any:
-        if isinstance(v, Span):
+    # We both check for serializability and round-trip `event` through JSON in
+    # order to create a "deep copy". This has the benefit of cutting out any
+    # reference to user objects when the object is logged asynchronously, so that
+    # in case the objects are modified, the logging is unaffected. In the future,
+    # this could be changed to a "real" deep copy so that immutable types (long
+    # strings) do not have to be copied.
+    def json_encode(obj: Any) -> Any:
+        if isinstance(obj, Span):
             return "<span>"
-        elif isinstance(v, Experiment):
+        elif isinstance(obj, Experiment):
             return "<experiment>"
-        elif isinstance(v, Dataset):
+        elif isinstance(obj, Dataset):
             return "<dataset>"
-        elif isinstance(v, Logger):
+        elif isinstance(obj, Logger):
             return "<logger>"
-        elif isinstance(v, Attachment):
-            return v
-        elif isinstance(v, ReadonlyAttachment):
-            return v.reference
-        else:
-            # No need to handle primitives explicitly because deepcopy will do
-            # it for us.
-            try:
-                return copy.deepcopy(v)
-            except:
-                json.loads(bt_dumps(v))
+        elif isinstance(obj, Attachment):
+            attachments.append(obj)
+            return {IDENTIFIER: len(attachments) - 1}
+        elif isinstance(obj, ReadonlyAttachment):
+            return obj.reference
+        return obj
 
-    ret: Dict[str, Any] = {}
+    def json_decode(obj: Any) -> Any:
+        if isinstance(obj, dict) and len(obj) == 1 and IDENTIFIER in obj:
+            return attachments[obj[IDENTIFIER]]
+        return obj
 
-    for k, v in event.items():
-        # Prevent dict keys from holding references to user data. Note that
-        # `bt_json` already coerces keys to string, a behavior that comes from
-        # `json.dumps`. However, that runs at log upload time, while we want to
-        # cut out all the references to user objects synchronously in this
-        # function.
-        k = str(k)
-
-        # Process dict value.
-        if isinstance(v, Mapping):
-            v = _deep_copy_event(v)
-        elif isinstance(v, (List, Tuple, Set)):
-            v = [_deep_copy_object(x) for x in v]
-        else:
-            v = _deep_copy_object(v)
-
-        ret[k] = v
-
-    return ret
+    serialized = json.dumps(event, default=json_encode)
+    return json.loads(serialized, object_hook=json_decode)
 
 
 class ObjectIterator(Generic[T]):
