@@ -1,5 +1,6 @@
 from typing import Any, List, Literal, Optional, TypeVar, Union, overload
 
+from braintrust_core import Score
 from sseclient import SSEClient
 
 from ..logger import Exportable, get_span_parent_object, login, proxy_conn
@@ -200,7 +201,11 @@ def init_function(project_name: str, slug: str, version: Optional[str] = None):
             return invoke(project_name=project_name, slug=slug, version=version, input=args[0])
         else:
             # Scorer.
-            return invoke(project_name=project_name, slug=slug, version=version, input=kwargs)
+            out = invoke(project_name=project_name, slug=slug, version=version, input=kwargs)
+            try:
+                return Score.from_dict(out)
+            except:
+                return out
 
     f.__name__ = f"init_function-{project_name}-{slug}-{version or 'latest'}"
     return f
