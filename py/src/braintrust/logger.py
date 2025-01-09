@@ -1805,7 +1805,14 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
 
     def _deep_copy_object(v: Any) -> Any:
         if isinstance(v, Mapping):
-            return _deep_copy_event(v)
+            # Prevent dict keys from holding references to user data. Note that
+            # `bt_json` already coerces keys to string, a behavior that comes from
+            # `json.dumps`. However, that runs at log upload time, while we want to
+            # cut out all the references to user objects synchronously in this
+            # function.
+            return {str(k): _deep_copy_object(v[k]) for k in v}
+        elif isinstance(v, (List, Tuple, Set)):
+            return [_deep_copy_object(x) for x in v]
         elif isinstance(v, Span):
             return "<span>"
         elif isinstance(v, Experiment):
@@ -1826,27 +1833,29 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
             except:
                 json.loads(bt_dumps(v))
 
-    ret: Dict[str, Any] = {}
+    return _deep_copy_object(event)
 
-    for k, v in event.items():
-        # Prevent dict keys from holding references to user data. Note that
-        # `bt_json` already coerces keys to string, a behavior that comes from
-        # `json.dumps`. However, that runs at log upload time, while we want to
-        # cut out all the references to user objects synchronously in this
-        # function.
-        k = str(k)
+    # ret: Dict[str, Any] = {}
 
-        # Process dict value.
-        if isinstance(v, Mapping):
-            v = _deep_copy_event(v)
-        elif isinstance(v, (List, Tuple, Set)):
-            v = [_deep_copy_object(x) for x in v]
-        else:
-            v = _deep_copy_object(v)
+    # for k, v in event.items():
+    #     # Prevent dict keys from holding references to user data. Note that
+    #     # `bt_json` already coerces keys to string, a behavior that comes from
+    #     # `json.dumps`. However, that runs at log upload time, while we want to
+    #     # cut out all the references to user objects synchronously in this
+    #     # function.
+    #     k = str(k)
 
-        ret[k] = v
+    #     # Process dict value.
+    #     if isinstance(v, Mapping):
+    #         v = _deep_copy_event(v)
+    #     elif isinstance(v, (List, Tuple, Set)):
+    #         v = [_deep_copy_object(x) for x in v]
+    #     else:
+    #         v = _deep_copy_object(v)
 
-    return ret
+    #     ret[k] = v
+
+    # return ret
 
 
 class ObjectIterator(Generic[T]):
