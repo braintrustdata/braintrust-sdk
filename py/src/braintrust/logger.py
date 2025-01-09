@@ -1804,7 +1804,9 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
     """
 
     def _deep_copy_object(v: Any) -> Any:
-        if isinstance(v, Span):
+        if isinstance(v, Mapping):
+            return _deep_copy_event(v)
+        elif isinstance(v, Span):
             return "<span>"
         elif isinstance(v, Experiment):
             return "<experiment>"
