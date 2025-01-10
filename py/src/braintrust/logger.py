@@ -1835,28 +1835,6 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
 
     return _deep_copy_object(event)
 
-    # ret: Dict[str, Any] = {}
-
-    # for k, v in event.items():
-    #     # Prevent dict keys from holding references to user data. Note that
-    #     # `bt_json` already coerces keys to string, a behavior that comes from
-    #     # `json.dumps`. However, that runs at log upload time, while we want to
-    #     # cut out all the references to user objects synchronously in this
-    #     # function.
-    #     k = str(k)
-
-    #     # Process dict value.
-    #     if isinstance(v, Mapping):
-    #         v = _deep_copy_event(v)
-    #     elif isinstance(v, (List, Tuple, Set)):
-    #         v = [_deep_copy_object(x) for x in v]
-    #     else:
-    #         v = _deep_copy_object(v)
-
-    #     ret[k] = v
-
-    # return ret
-
 
 class ObjectIterator(Generic[T]):
     def __init__(self, refetch_fn: Callable[[], Sequence[T]]):
