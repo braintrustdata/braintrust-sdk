@@ -2111,30 +2111,8 @@ class ReadonlyAttachment:
         """The attachment contents. This is a lazy value that will read the attachment contents from the object store on first access."""
         return self._data.get()
 
-    def status(self) -> AttachmentStatus:
-        """Fetch the attachment upload status. This will re-fetch the status each time in case it changes over time."""
-        return self._fetch_metadata()["status"]
-
-    def _init_downloader(self) -> LazyValue[bytes]:
-        def download() -> bytes:
-            metadata = self._fetch_metadata()
-            download_url = metadata["downloadUrl"]
-            status = metadata["status"]
-            try:
-                if status["upload_status"] != "done":
-                    raise RuntimeError(f"""Expected attachment status "done", got \"{status["upload_status"]}\"""")
-
-                obj_conn = HTTPConnection(base_url="", adapter=_http_adapter)
-                obj_response = obj_conn.get(download_url)
-                obj_response.raise_for_status()
-            except Exception as e:
-                raise RuntimeError(f"Couldn't download attachment: {e}") from e
-
-            return obj_response.content
-
-        return LazyValue(download, use_mutex=True)
-
-    def _fetch_metadata(self) -> AttachmentMetadata:
+    def metadata(self) -> AttachmentMetadata:
+        """Fetch the attachment metadata, which includes a downloadUrl and a status. This will re-fetch the status each time in case it changes over time."""
         login()
         api_conn = _state.api_conn()
         org_id = _state.org_id or ""
@@ -2155,6 +2133,29 @@ class ReadonlyAttachment:
         except Exception:
             raise RuntimeError(f"Invalid response from API server: {metadata}")
         return metadata
+
+    def status(self) -> AttachmentStatus:
+        """Fetch the attachment upload status. This will re-fetch the status each time in case it changes over time."""
+        return self.metadata()["status"]
+
+    def _init_downloader(self) -> LazyValue[bytes]:
+        def download() -> bytes:
+            metadata = self.metadata()
+            download_url = metadata["downloadUrl"]
+            status = metadata["status"]
+            try:
+                if status["upload_status"] != "done":
+                    raise RuntimeError(f"""Expected attachment status "done", got \"{status["upload_status"]}\"""")
+
+                obj_conn = HTTPConnection(base_url="", adapter=_http_adapter)
+                obj_response = obj_conn.get(download_url)
+                obj_response.raise_for_status()
+            except Exception as e:
+                raise RuntimeError(f"Couldn't download attachment: {e}") from e
+
+            return obj_response.content
+
+        return LazyValue(download, use_mutex=True)
 
 
 def _log_feedback_impl(
