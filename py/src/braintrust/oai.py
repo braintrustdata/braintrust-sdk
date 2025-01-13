@@ -292,6 +292,66 @@ class EmbeddingWrapper:
         )
 
 
+class ModerationWrapper:
+    def __init__(self, create_fn, acreate_fn):
+        self.create_fn = create_fn
+        self.acreate_fn = acreate_fn
+
+    def create(self, *args, **kwargs):
+        params = self._parse_params(kwargs)
+
+        with start_span(
+            **merge_dicts(dict(name="Moderation", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+        ) as span:
+            create_response = self.create_fn(*args, **kwargs)
+
+            if hasattr(create_response, "parse"):
+                raw_response = create_response.parse()
+                log_headers(create_response, span)
+            else:
+                raw_response = create_response
+
+            log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+            span.log(
+                output=log_response["results"],
+            )
+            return raw_response
+
+    async def acreate(self, *args, **kwargs):
+        params = self._parse_params(kwargs)
+
+        with start_span(
+            **merge_dicts(dict(name="Moderation", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+        ) as span:
+            create_response = await self.acreate_fn(*args, **kwargs)
+            if hasattr(create_response, "parse"):
+                raw_response = create_response.parse()
+                log_headers(create_response, span)
+            else:
+                raw_response = create_response
+            log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+            span.log(
+                output=log_response["results"],
+            )
+            return raw_response
+
+    @classmethod
+    def _parse_params(cls, params):
+        # First, destructively remove span_info
+        ret = params.pop("span_info", {})
+
+        params = {**params}
+        input = params.pop("input", None)
+
+        return merge_dicts(
+            ret,
+            {
+                "input": input,
+                "metadata": params,
+            },
+        )
+
+
 class ChatCompletionV0Wrapper(NamedWrapper):
     def __init__(self, chat):
         self.__chat = chat
@@ -316,12 +376,25 @@ class EmbeddingV0Wrapper(NamedWrapper):
         return await ChatCompletionWrapper(self.__embedding.create, self.__embedding.acreate).acreate(*args, **kwargs)
 
 
+class ModerationV0Wrapper(NamedWrapper):
+    def __init__(self, moderation):
+        self.__moderation = moderation
+        super().__init__(moderation)
+
+    def create(self, *args, **kwargs):
+        return ModerationWrapper(self.__moderation.create, self.__moderation.acreate).create(*args, **kwargs)
+
+    async def acreate(self, *args, **kwargs):
+        return await ModerationWrapper(self.__moderation.create, self.__moderation.acreate).acreate(*args, **kwargs)
+
+
 # This wraps 0.*.* versions of the openai module, eg https://github.com/openai/openai-python/tree/v0.28.1
 class OpenAIV0Wrapper(NamedWrapper):
     def __init__(self, openai):
         super().__init__(openai)
         self.ChatCompletion = ChatCompletionV0Wrapper(openai.ChatCompletion)
         self.Embedding = EmbeddingV0Wrapper(openai.Embedding)
+        self.Moderation = ModerationV0Wrapper(openai.Moderation)
 
 
 class CompletionsV1Wrapper(NamedWrapper):
@@ -342,6 +415,15 @@ class EmbeddingV1Wrapper(NamedWrapper):
         return EmbeddingWrapper(self.__embedding.with_raw_response.create, None).create(*args, **kwargs)
 
 
+class ModerationV1Wrapper(NamedWrapper):
+    def __init__(self, moderation):
+        self.__moderation = moderation
+        super().__init__(moderation)
+
+    def create(self, *args, **kwargs):
+        return ModerationWrapper(self.__moderation.with_raw_response.create, None).create(*args, **kwargs)
+
+
 class AsyncCompletionsV1Wrapper(NamedWrapper):
     def __init__(self, completions):
         self.__completions = completions
@@ -358,6 +440,15 @@ class AsyncEmbeddingV1Wrapper(NamedWrapper):
 
     async def create(self, *args, **kwargs):
         return await EmbeddingWrapper(None, self.__embedding.with_raw_response.create).acreate(*args, **kwargs)
+
+
+class AsyncModerationV1Wrapper(NamedWrapper):
+    def __init__(self, moderation):
+        self.__moderation = moderation
+        super().__init__(moderation)
+
+    async def create(self, *args, **kwargs):
+        return await ModerationWrapper(None, self.__moderation.with_raw_response.create).acreate(*args, **kwargs)
 
 
 class ChatV1Wrapper(NamedWrapper):
@@ -423,6 +514,11 @@ class OpenAIV1Wrapper(NamedWrapper):
             self.embeddings = AsyncEmbeddingV1Wrapper(openai.embeddings)
         else:
             self.embeddings = EmbeddingV1Wrapper(openai.embeddings)
+
+        if type(openai.moderations) == oai.resources.moderations.AsyncModerations:
+            self.moderations = AsyncModerationV1Wrapper(openai.moderations)
+        else:
+            self.moderations = ModerationV1Wrapper(openai.moderations)
 
 
 def wrap_openai(openai):
