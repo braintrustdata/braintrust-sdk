@@ -1,5 +1,5 @@
+import abc
 import time
-from contextlib import contextmanager
 
 from .logger import start_span
 from .span_types import SpanTypeAttribute
@@ -220,18 +220,24 @@ class ChatCompletionWrapper:
         )
 
 
-class EmbeddingWrapper:
-    def __init__(self, create_fn, acreate_fn):
-        self.create_fn = create_fn
-        self.acreate_fn = acreate_fn
+class BaseWrapper(abc.ABC):
+    def __init__(self, create_fn, acreate_fn, name):
+        self._create_fn = create_fn
+        self._acreate_fn = acreate_fn
+        self._name = name
+
+    @abc.abstractmethod
+    def process_output(self, response, span):
+        """Process the API response and log relevant information to the span."""
+        pass
 
     def create(self, *args, **kwargs):
         params = self._parse_params(kwargs)
 
         with start_span(
-            **merge_dicts(dict(name="Embedding", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+            **merge_dicts(dict(name=self._name, span_attributes={"type": SpanTypeAttribute.LLM}), params)
         ) as span:
-            create_response = self.create_fn(*args, **kwargs)
+            create_response = self._create_fn(*args, **kwargs)
 
             if hasattr(create_response, "parse"):
                 raw_response = create_response.parse()
@@ -240,39 +246,23 @@ class EmbeddingWrapper:
                 raw_response = create_response
 
             log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
-            span.log(
-                metrics={
-                    "tokens": log_response["usage"]["total_tokens"],
-                    "prompt_tokens": log_response["usage"]["prompt_tokens"],
-                },
-                # TODO: Add a flag to control whether to log the full embedding vector,
-                # possibly w/ JSON compression.
-                output={"embedding_length": len(log_response["data"][0]["embedding"])},
-            )
+            self.process_output(log_response, span)
             return raw_response
 
     async def acreate(self, *args, **kwargs):
         params = self._parse_params(kwargs)
 
         with start_span(
-            **merge_dicts(dict(name="Embedding", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+            **merge_dicts(dict(name=self._name, span_attributes={"type": SpanTypeAttribute.LLM}), params)
         ) as span:
-            create_response = await self.acreate_fn(*args, **kwargs)
+            create_response = await self._acreate_fn(*args, **kwargs)
             if hasattr(create_response, "parse"):
                 raw_response = create_response.parse()
                 log_headers(create_response, span)
             else:
                 raw_response = create_response
             log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
-            span.log(
-                metrics={
-                    "tokens": log_response["usage"]["total_tokens"],
-                    "prompt_tokens": log_response["usage"]["prompt_tokens"],
-                },
-                # TODO: Add a flag to control whether to log the full embedding vector,
-                # possibly w/ JSON compression.
-                output={"embedding_length": len(log_response["data"][0]["embedding"])},
-            )
+            self.process_output(log_response, span)
             return raw_response
 
     @classmethod
@@ -292,63 +282,29 @@ class EmbeddingWrapper:
         )
 
 
-class ModerationWrapper:
+class EmbeddingWrapper(BaseWrapper):
     def __init__(self, create_fn, acreate_fn):
-        self.create_fn = create_fn
-        self.acreate_fn = acreate_fn
+        super().__init__(create_fn, acreate_fn, "Embedding")
 
-    def create(self, *args, **kwargs):
-        params = self._parse_params(kwargs)
-
-        with start_span(
-            **merge_dicts(dict(name="Moderation", span_attributes={"type": SpanTypeAttribute.LLM}), params)
-        ) as span:
-            create_response = self.create_fn(*args, **kwargs)
-
-            if hasattr(create_response, "parse"):
-                raw_response = create_response.parse()
-                log_headers(create_response, span)
-            else:
-                raw_response = create_response
-
-            log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
-            span.log(
-                output=log_response["results"],
-            )
-            return raw_response
-
-    async def acreate(self, *args, **kwargs):
-        params = self._parse_params(kwargs)
-
-        with start_span(
-            **merge_dicts(dict(name="Moderation", span_attributes={"type": SpanTypeAttribute.LLM}), params)
-        ) as span:
-            create_response = await self.acreate_fn(*args, **kwargs)
-            if hasattr(create_response, "parse"):
-                raw_response = create_response.parse()
-                log_headers(create_response, span)
-            else:
-                raw_response = create_response
-            log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
-            span.log(
-                output=log_response["results"],
-            )
-            return raw_response
-
-    @classmethod
-    def _parse_params(cls, params):
-        # First, destructively remove span_info
-        ret = params.pop("span_info", {})
-
-        params = {**params}
-        input = params.pop("input", None)
-
-        return merge_dicts(
-            ret,
-            {
-                "input": input,
-                "metadata": params,
+    def process_output(self, response, span):
+        span.log(
+            metrics={
+                "tokens": response["usage"]["total_tokens"],
+                "prompt_tokens": response["usage"]["prompt_tokens"],
             },
+            # TODO: Add a flag to control whether to log the full embedding vector,
+            # possibly w/ JSON compression.
+            output={"embedding_length": len(response["data"][0]["embedding"])},
+        )
+
+
+class ModerationWrapper(BaseWrapper):
+    def __init__(self, create_fn, acreate_fn):
+        super().__init__(create_fn, acreate_fn, "Moderation")
+
+    def process_output(self, response, span):
+        span.log(
+            output=response["results"],
         )
 
 
