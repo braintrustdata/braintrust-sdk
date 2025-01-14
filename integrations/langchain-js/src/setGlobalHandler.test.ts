@@ -1,7 +1,7 @@
 import { CallbackManager } from "@langchain/core/callbacks/manager";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { ChatOpenAI } from "@langchain/openai";
-import { flush as flushBraintrustLogs, initLogger } from "braintrust";
+import { flush as flushBraintrustLogs } from "braintrust";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 import { BraintrustCallbackHandler } from "./BraintrustCallbackHandler";
@@ -11,9 +11,7 @@ import { server } from "./test/setup";
 import { LogsRequest } from "./test/types";
 import { logsToSpans, withLogging } from "./test/utils";
 
-const handler = withLogging(
-  new BraintrustCallbackHandler({ debug: true, logger: initLogger() }),
-);
+const handler = withLogging(new BraintrustCallbackHandler({ debug: true }));
 
 describe("setGlobalHandler", () => {
   it("should register the BraintrustCallbackHandler", async () => {

@@ -21,6 +21,7 @@ import { RunnableConfig } from "@langchain/core/runnables";
 import {
   currentSpan,
   ExperimentLogPartialArgs,
+  initLogger,
   Logger,
   NOOP_SPAN,
   Span,
@@ -113,12 +114,13 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
       parentSpan = { startSpan } as unknown as Span;
     }
 
-    const span = parentSpan.startSpan(args);
+    let span = parentSpan.startSpan(args);
 
     if (Object.is(span, NOOP_SPAN)) {
       console.warn(
-        "Braintrust logging not configured. Pass a `logger`, call `initLogger`, or run an experiment to configure Braintrust logging.",
+        "Braintrust logging not configured. Pass a `logger`, call `initLogger`, or run an experiment to configure Braintrust logging. Setting up a default.",
       );
+      span = initLogger().startSpan(args);
     }
 
     this.spans.set(runId, span);
