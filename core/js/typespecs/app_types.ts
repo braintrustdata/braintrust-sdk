@@ -213,6 +213,13 @@ export const projectSettingsSchema = z
       .string()
       .nullish()
       .describe("The key used to join two experiments (defaults to `input`)."),
+    baseline_experiment_id: z
+      .string()
+      .uuid()
+      .nullish()
+      .describe(
+        "The id of the experiment to use as the default baseline for comparisons",
+      ),
   })
   .openapi("ProjectSettings");
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
