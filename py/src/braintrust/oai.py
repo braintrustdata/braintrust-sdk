@@ -1,5 +1,5 @@
+import abc
 import time
-from contextlib import contextmanager
 
 from .logger import start_span
 from .span_types import SpanTypeAttribute
@@ -220,18 +220,24 @@ class ChatCompletionWrapper:
         )
 
 
-class EmbeddingWrapper:
-    def __init__(self, create_fn, acreate_fn):
-        self.create_fn = create_fn
-        self.acreate_fn = acreate_fn
+class BaseWrapper(abc.ABC):
+    def __init__(self, create_fn, acreate_fn, name):
+        self._create_fn = create_fn
+        self._acreate_fn = acreate_fn
+        self._name = name
+
+    @abc.abstractmethod
+    def process_output(self, response, span):
+        """Process the API response and log relevant information to the span."""
+        pass
 
     def create(self, *args, **kwargs):
         params = self._parse_params(kwargs)
 
         with start_span(
-            **merge_dicts(dict(name="Embedding", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+            **merge_dicts(dict(name=self._name, span_attributes={"type": SpanTypeAttribute.LLM}), params)
         ) as span:
-            create_response = self.create_fn(*args, **kwargs)
+            create_response = self._create_fn(*args, **kwargs)
 
             if hasattr(create_response, "parse"):
                 raw_response = create_response.parse()
@@ -240,39 +246,23 @@ class EmbeddingWrapper:
                 raw_response = create_response
 
             log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
-            span.log(
-                metrics={
-                    "tokens": log_response["usage"]["total_tokens"],
-                    "prompt_tokens": log_response["usage"]["prompt_tokens"],
-                },
-                # TODO: Add a flag to control whether to log the full embedding vector,
-                # possibly w/ JSON compression.
-                output={"embedding_length": len(log_response["data"][0]["embedding"])},
-            )
+            self.process_output(log_response, span)
             return raw_response
 
     async def acreate(self, *args, **kwargs):
         params = self._parse_params(kwargs)
 
         with start_span(
-            **merge_dicts(dict(name="Embedding", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+            **merge_dicts(dict(name=self._name, span_attributes={"type": SpanTypeAttribute.LLM}), params)
         ) as span:
-            create_response = await self.acreate_fn(*args, **kwargs)
+            create_response = await self._acreate_fn(*args, **kwargs)
             if hasattr(create_response, "parse"):
                 raw_response = create_response.parse()
                 log_headers(create_response, span)
             else:
                 raw_response = create_response
             log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
-            span.log(
-                metrics={
-                    "tokens": log_response["usage"]["total_tokens"],
-                    "prompt_tokens": log_response["usage"]["prompt_tokens"],
-                },
-                # TODO: Add a flag to control whether to log the full embedding vector,
-                # possibly w/ JSON compression.
-                output={"embedding_length": len(log_response["data"][0]["embedding"])},
-            )
+            self.process_output(log_response, span)
             return raw_response
 
     @classmethod
@@ -289,6 +279,32 @@ class EmbeddingWrapper:
                 "input": input,
                 "metadata": params,
             },
+        )
+
+
+class EmbeddingWrapper(BaseWrapper):
+    def __init__(self, create_fn, acreate_fn):
+        super().__init__(create_fn, acreate_fn, "Embedding")
+
+    def process_output(self, response, span):
+        span.log(
+            metrics={
+                "tokens": response["usage"]["total_tokens"],
+                "prompt_tokens": response["usage"]["prompt_tokens"],
+            },
+            # TODO: Add a flag to control whether to log the full embedding vector,
+            # possibly w/ JSON compression.
+            output={"embedding_length": len(response["data"][0]["embedding"])},
+        )
+
+
+class ModerationWrapper(BaseWrapper):
+    def __init__(self, create_fn, acreate_fn):
+        super().__init__(create_fn, acreate_fn, "Moderation")
+
+    def process_output(self, response, span):
+        span.log(
+            output=response["results"],
         )
 
 
@@ -316,12 +332,25 @@ class EmbeddingV0Wrapper(NamedWrapper):
         return await ChatCompletionWrapper(self.__embedding.create, self.__embedding.acreate).acreate(*args, **kwargs)
 
 
+class ModerationV0Wrapper(NamedWrapper):
+    def __init__(self, moderation):
+        self.__moderation = moderation
+        super().__init__(moderation)
+
+    def create(self, *args, **kwargs):
+        return ModerationWrapper(self.__moderation.create, self.__moderation.acreate).create(*args, **kwargs)
+
+    async def acreate(self, *args, **kwargs):
+        return await ModerationWrapper(self.__moderation.create, self.__moderation.acreate).acreate(*args, **kwargs)
+
+
 # This wraps 0.*.* versions of the openai module, eg https://github.com/openai/openai-python/tree/v0.28.1
 class OpenAIV0Wrapper(NamedWrapper):
     def __init__(self, openai):
         super().__init__(openai)
         self.ChatCompletion = ChatCompletionV0Wrapper(openai.ChatCompletion)
         self.Embedding = EmbeddingV0Wrapper(openai.Embedding)
+        self.Moderation = ModerationV0Wrapper(openai.Moderation)
 
 
 class CompletionsV1Wrapper(NamedWrapper):
@@ -342,6 +371,15 @@ class EmbeddingV1Wrapper(NamedWrapper):
         return EmbeddingWrapper(self.__embedding.with_raw_response.create, None).create(*args, **kwargs)
 
 
+class ModerationV1Wrapper(NamedWrapper):
+    def __init__(self, moderation):
+        self.__moderation = moderation
+        super().__init__(moderation)
+
+    def create(self, *args, **kwargs):
+        return ModerationWrapper(self.__moderation.with_raw_response.create, None).create(*args, **kwargs)
+
+
 class AsyncCompletionsV1Wrapper(NamedWrapper):
     def __init__(self, completions):
         self.__completions = completions
@@ -358,6 +396,15 @@ class AsyncEmbeddingV1Wrapper(NamedWrapper):
 
     async def create(self, *args, **kwargs):
         return await EmbeddingWrapper(None, self.__embedding.with_raw_response.create).acreate(*args, **kwargs)
+
+
+class AsyncModerationV1Wrapper(NamedWrapper):
+    def __init__(self, moderation):
+        self.__moderation = moderation
+        super().__init__(moderation)
+
+    async def create(self, *args, **kwargs):
+        return await ModerationWrapper(None, self.__moderation.with_raw_response.create).acreate(*args, **kwargs)
 
 
 class ChatV1Wrapper(NamedWrapper):
@@ -423,6 +470,11 @@ class OpenAIV1Wrapper(NamedWrapper):
             self.embeddings = AsyncEmbeddingV1Wrapper(openai.embeddings)
         else:
             self.embeddings = EmbeddingV1Wrapper(openai.embeddings)
+
+        if type(openai.moderations) == oai.resources.moderations.AsyncModerations:
+            self.moderations = AsyncModerationV1Wrapper(openai.moderations)
+        else:
+            self.moderations = ModerationV1Wrapper(openai.moderations)
 
 
 def wrap_openai(openai):
