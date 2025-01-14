@@ -30,7 +30,7 @@ import {
 } from "braintrust";
 
 /**
- * A Braintrust tracer for LangChain.js that logs LLM calls, chains, and tools
+ * A Braintrust tracer for LangChain.js that logs LLM calls, chains, and tools.
  */
 export interface BraintrustCallbackHandlerOptions<
   IsAsyncFlush extends boolean,
@@ -74,7 +74,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     parentRunId?: string;
   }) {
     if (this.spans.has(runId)) {
-      // XXX: see graph test case of an example where this _may_ be intended
+      // XXX: See graph test case of an example where this _may_ be intended.
       console.warn(
         `Span already exists for runId ${runId} (this is likely a bug)`,
       );
@@ -89,7 +89,7 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
 
     args.event = {
       ...args.event,
-      // tags are only allowed at the root
+      // Tags are only allowed at the root span.
       tags: undefined,
       metadata: {
         ...(tags ? { tags } : {}),
@@ -105,11 +105,11 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     } else if (!Object.is(currentParent, NOOP_SPAN)) {
       parentSpan = currentParent;
     } else if (this.options.logger) {
-      // if provided, use the logger as the parent span
+      // If provided, use the logger as the parent span.
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       parentSpan = this.options.logger as unknown as Span;
     } else {
-      // fallback to creating a new span
+      // Fallback to creating a new span.
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       parentSpan = { startSpan } as unknown as Span;
     }
@@ -518,7 +518,7 @@ const extractCallArgs = (
   invocationParams: Record<string, unknown>,
   metadata?: Record<string, unknown>,
 ): Record<string, unknown> => {
-  // NOTE: these vary by langchain model used. we try to normalize them here
+  // NOTE: These vary by langchain model used. We try to normalize them here.
   const args = cleanObject({
     model: pick(invocationParams?.model, metadata?.ls_model_name, llm.name),
     temperature: pick(invocationParams?.temperature, metadata?.ls_temperature),
@@ -565,7 +565,7 @@ const parseGeneration = (generation: Generation | ChatGeneration) => {
     return generation.text;
   }
 
-  // give up!
+  // Give up!
 };
 
 const inputFromMessages = (messages: BaseMessage[][]) => {
@@ -662,7 +662,7 @@ const parseChainValue = (output: any): any => {
     );
   }
 
-  // give up! let's assume the user will use the raw output
+  // Give up! Let's assume the user will use the raw output.
   return output;
 };
 
