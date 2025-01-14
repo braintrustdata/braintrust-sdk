@@ -356,7 +356,10 @@ function parseBaseParams<T extends Record<string, any>>(
 
 function createApiWrapper<T, R>(
   name: string,
-  create: (params: T, options?: unknown) => APIPromise<R>,
+  create: (
+    params: Omit<T & SpanInfo, "span_info">,
+    options?: unknown,
+  ) => APIPromise<R>,
   processResponse: (result: R, span: Span) => void,
   parseParams: (params: T & SpanInfo) => StartSpanArgs,
 ): (params: T & SpanInfo, options?: unknown) => Promise<any> {
@@ -365,7 +368,7 @@ function createApiWrapper<T, R>(
     return traced(
       async (span) => {
         const { data: result, response } = await create(
-          params as T,
+          params,
           options,
         ).withResponse();
         logHeaders(response, span);
