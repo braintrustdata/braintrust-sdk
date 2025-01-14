@@ -39,6 +39,6 @@
     "braintrust": "workspace:^"
   },
   "peerDependencies": {
-    "@langchain/core": "^0.3.20"
+    "@langchain/core": "^0.3.26"
   }
 }
