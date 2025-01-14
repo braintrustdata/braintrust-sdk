@@ -19,35 +19,38 @@ import { ChainValues } from "@langchain/core/dist/utils/types";
 import { ToolMessage } from "@langchain/core/messages";
 import { RunnableConfig } from "@langchain/core/runnables";
 import {
-  currentLogger,
   currentSpan,
   ExperimentLogPartialArgs,
-  initLogger,
   Logger,
   NOOP_SPAN,
   Span,
+  startSpan,
   StartSpanArgs,
 } from "braintrust";
 
 /**
  * A Braintrust tracer for LangChain.js that logs LLM calls, chains, and tools
  */
-export interface BraintrustCallbackHandlerOptions {
-  logger?: Logger<boolean>;
+export interface BraintrustCallbackHandlerOptions<
+  IsAsyncFlush extends boolean,
+> {
+  logger?: Logger<IsAsyncFlush> | Span;
   debug: boolean;
   excludeMetadataProps: RegExp;
 }
 
-export class BraintrustCallbackHandler
+export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
   extends BaseCallbackHandler
   implements BaseCallbackHandlerInput
 {
   name = "BraintrustCallbackHandler";
   private spans: Map<string, Span>;
   private rootRunId?: string;
-  private options: BraintrustCallbackHandlerOptions;
+  private options: BraintrustCallbackHandlerOptions<IsAsyncFlush>;
 
-  constructor(options?: Partial<BraintrustCallbackHandlerOptions>) {
+  constructor(
+    options?: Partial<BraintrustCallbackHandlerOptions<IsAsyncFlush>>,
+  ) {
     super();
 
     this.spans = new Map();
@@ -57,7 +60,7 @@ export class BraintrustCallbackHandler
       excludeMetadataProps:
         options?.excludeMetadataProps ??
         /^(l[sc]_|langgraph_|__pregel_|checkpoint_ns)/,
-      logger: options?.logger ?? currentLogger() ?? initLogger(),
+      logger: options?.logger,
     };
   }
 
@@ -82,15 +85,13 @@ export class BraintrustCallbackHandler
     }
 
     const tags = args.event?.tags;
-    const isRoot = runId === this.rootRunId;
 
     args.event = {
       ...args.event,
       // tags are only allowed at the root
-      ...(isRoot ? { tags } : { tags: undefined }),
+      tags: undefined,
       metadata: {
-        // let's save them in metadata if not root
-        ...(!isRoot && { tags }),
+        ...(tags ? { tags } : {}),
         ...args.event?.metadata,
         ...(this.options.debug ? { runId, parentRunId } : {}),
       },
@@ -102,12 +103,23 @@ export class BraintrustCallbackHandler
       parentSpan = this.spans.get(parentRunId)!;
     } else if (!Object.is(currentParent, NOOP_SPAN)) {
       parentSpan = currentParent;
-    } else {
+    } else if (this.options.logger) {
+      // if provided, use the logger as the parent span
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       parentSpan = this.options.logger as unknown as Span;
+    } else {
+      // fallback to creating a new span
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      parentSpan = { startSpan } as unknown as Span;
     }
 
     const span = parentSpan.startSpan(args);
+
+    if (Object.is(span, NOOP_SPAN)) {
+      console.warn(
+        "Braintrust logging not configured. Pass a `logger`, call `initLogger`, or run an experiment to configure Braintrust logging.",
+      );
+    }
 
     this.spans.set(runId, span);
   }
@@ -126,10 +138,6 @@ export class BraintrustCallbackHandler
     }
 
     const span = this.spans.get(runId)!;
-
-    // try to propagate tags to the root
-    const root = this.spans.get(this.rootRunId || "");
-    root?.log({ tags });
 
     this.spans.delete(runId);
     if (runId === this.rootRunId) {
