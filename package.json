@@ -21,5 +21,6 @@
   },
   "overrides": {
     "zod": "^3.22.4"
-  }
+  },
+  "packageManager": "pnpm@8.15.5"
 }
