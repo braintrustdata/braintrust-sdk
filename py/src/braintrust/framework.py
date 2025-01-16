@@ -12,7 +12,6 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from importlib import metadata
-from json import JSONEncoder
 from multiprocessing import cpu_count
 from typing import (
     Any,
