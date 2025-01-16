@@ -937,6 +937,12 @@ class DictEvalHooks(EvalHooks):
 
         self.metadata.update(info)
 
+    def __json__(self):
+        return {
+            **({"metadata": self._metadata} if self._metadata else {}),
+            **({"expected": self._expected} if self._expected else {}),
+        }
+
 
 def init_experiment(project_name=None, experiment_name: Optional[str] = None, set_current=False, **kwargs):
     ret = _init_experiment(project=project_name, experiment=experiment_name, set_current=set_current, **kwargs)
