@@ -909,19 +909,21 @@ def evaluate_filter(object, filter: Filter):
     return filter.pattern.match(serialize_json_with_plain_string(key)) is not None
 
 
-class DictEvalHooks(EvalHooks):
-    def __init__(self, metadata, expected):
-        self._metadata = metadata
-        self._expected = expected
+class DictEvalHooks(dict):
+    def __init__(self, metadata=None, expected=None):
+        if metadata is not None:
+            self.update({"metadata": metadata})
+        if expected is not None:
+            self.update({"expected": expected})
         self._span = None
 
     @property
     def metadata(self):
-        return self._metadata
+        return self.get("metadata")
 
     @property
     def expected(self):
-        return self._expected
+        return self.get("expected")
 
     @property
     def span(self):
@@ -935,7 +937,10 @@ class DictEvalHooks(EvalHooks):
             "meta() is deprecated. Use the metadata field directly instead.", DeprecationWarning, stacklevel=2
         )
 
-        self.metadata.update(info)
+        if self.get("metadata") is None:
+            self.update({"metadata": {}})
+
+        self.get("metadata").update(info)  # type: ignore
 
 
 def init_experiment(project_name=None, experiment_name: Optional[str] = None, set_current=False, **kwargs):
