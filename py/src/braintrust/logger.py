@@ -1804,7 +1804,16 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
     """
 
     def _deep_copy_object(v: Any) -> Any:
-        if isinstance(v, Span):
+        if isinstance(v, Mapping):
+            # Prevent dict keys from holding references to user data. Note that
+            # `bt_json` already coerces keys to string, a behavior that comes from
+            # `json.dumps`. However, that runs at log upload time, while we want to
+            # cut out all the references to user objects synchronously in this
+            # function.
+            return {str(k): _deep_copy_object(v[k]) for k in v}
+        elif isinstance(v, (List, Tuple, Set)):
+            return [_deep_copy_object(x) for x in v]
+        elif isinstance(v, Span):
             return "<span>"
         elif isinstance(v, Experiment):
             return "<experiment>"
@@ -1824,27 +1833,7 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
             except:
                 json.loads(bt_dumps(v))
 
-    ret: Dict[str, Any] = {}
-
-    for k, v in event.items():
-        # Prevent dict keys from holding references to user data. Note that
-        # `bt_json` already coerces keys to string, a behavior that comes from
-        # `json.dumps`. However, that runs at log upload time, while we want to
-        # cut out all the references to user objects synchronously in this
-        # function.
-        k = str(k)
-
-        # Process dict value.
-        if isinstance(v, Mapping):
-            v = _deep_copy_event(v)
-        elif isinstance(v, (List, Tuple, Set)):
-            v = [_deep_copy_object(x) for x in v]
-        else:
-            v = _deep_copy_object(v)
-
-        ret[k] = v
-
-    return ret
+    return _deep_copy_object(event)
 
 
 class ObjectIterator(Generic[T]):
@@ -2122,30 +2111,8 @@ class ReadonlyAttachment:
         """The attachment contents. This is a lazy value that will read the attachment contents from the object store on first access."""
         return self._data.get()
 
-    def status(self) -> AttachmentStatus:
-        """Fetch the attachment upload status. This will re-fetch the status each time in case it changes over time."""
-        return self._fetch_metadata()["status"]
-
-    def _init_downloader(self) -> LazyValue[bytes]:
-        def download() -> bytes:
-            metadata = self._fetch_metadata()
-            download_url = metadata["downloadUrl"]
-            status = metadata["status"]
-            try:
-                if status["upload_status"] != "done":
-                    raise RuntimeError(f"""Expected attachment status "done", got \"{status["upload_status"]}\"""")
-
-                obj_conn = HTTPConnection(base_url="", adapter=_http_adapter)
-                obj_response = obj_conn.get(download_url)
-                obj_response.raise_for_status()
-            except Exception as e:
-                raise RuntimeError(f"Couldn't download attachment: {e}") from e
-
-            return obj_response.content
-
-        return LazyValue(download, use_mutex=True)
-
-    def _fetch_metadata(self) -> AttachmentMetadata:
+    def metadata(self) -> AttachmentMetadata:
+        """Fetch the attachment metadata, which includes a downloadUrl and a status. This will re-fetch the status each time in case it changes over time."""
         login()
         api_conn = _state.api_conn()
         org_id = _state.org_id or ""
@@ -2166,6 +2133,29 @@ class ReadonlyAttachment:
         except Exception:
             raise RuntimeError(f"Invalid response from API server: {metadata}")
         return metadata
+
+    def status(self) -> AttachmentStatus:
+        """Fetch the attachment upload status. This will re-fetch the status each time in case it changes over time."""
+        return self.metadata()["status"]
+
+    def _init_downloader(self) -> LazyValue[bytes]:
+        def download() -> bytes:
+            metadata = self.metadata()
+            download_url = metadata["downloadUrl"]
+            status = metadata["status"]
+            try:
+                if status["upload_status"] != "done":
+                    raise RuntimeError(f"""Expected attachment status "done", got \"{status["upload_status"]}\"""")
+
+                obj_conn = HTTPConnection(base_url="", adapter=_http_adapter)
+                obj_response = obj_conn.get(download_url)
+                obj_response.raise_for_status()
+            except Exception as e:
+                raise RuntimeError(f"Couldn't download attachment: {e}") from e
+
+            return obj_response.content
+
+        return LazyValue(download, use_mutex=True)
 
 
 def _log_feedback_impl(

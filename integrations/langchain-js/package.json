@@ -1,6 +1,6 @@
 {
   "name": "@braintrust/langchain-js",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "description": "SDK for integrating Braintrust with LangChain.js",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -39,6 +39,6 @@
     "braintrust": "workspace:^"
   },
   "peerDependencies": {
-    "@langchain/core": "^0.3.20"
+    "@langchain/core": "^0.3.26"
   }
 }

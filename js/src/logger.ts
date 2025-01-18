@@ -997,16 +997,38 @@ export class ReadonlyAttachment {
   }
 
   /**
+   * Fetch the attachment metadata, which includes a downloadUrl and a status.
+   * This will re-fetch the status each time in case it changes over time.
+   */
+  async metadata(): Promise<AttachmentMetadata> {
+    const state = this.state ?? _globalState;
+    await state.login({});
+
+    const resp = await state.apiConn().get("/attachment", {
+      key: this.reference.key,
+      filename: this.reference.filename,
+      content_type: this.reference.content_type,
+      org_id: state.orgId || "",
+    });
+    if (!resp.ok) {
+      const errorStr = JSON.stringify(resp);
+      throw new Error(`Invalid response from API server: ${errorStr}`);
+    }
+
+    return attachmentMetadataSchema.parse(await resp.json());
+  }
+
+  /**
    * Fetch the attachment upload status. This will re-fetch the status each time
    * in case it changes over time.
    */
   async status(): Promise<AttachmentStatus> {
-    return (await this.fetchMetadata()).status;
+    return (await this.metadata()).status;
   }
 
   private initDownloader(): LazyValue<Blob> {
     const download = async () => {
-      const { downloadUrl, status } = await this.fetchMetadata();
+      const { downloadUrl, status } = await this.metadata();
 
       if (status.upload_status !== "done") {
         throw new Error(
@@ -1024,24 +1046,6 @@ export class ReadonlyAttachment {
     };
 
     return new LazyValue(download);
-  }
-
-  private async fetchMetadata(): Promise<AttachmentMetadata> {
-    const state = this.state ?? _globalState;
-    await state.login({});
-
-    const resp = await state.apiConn().get("/attachment", {
-      key: this.reference.key,
-      filename: this.reference.filename,
-      content_type: this.reference.content_type,
-      org_id: state.orgId || "",
-    });
-    if (!resp.ok) {
-      const errorStr = JSON.stringify(resp);
-      throw new Error(`Invalid response from API server: ${errorStr}`);
-    }
-
-    return attachmentMetadataSchema.parse(await resp.json());
   }
 }
 
