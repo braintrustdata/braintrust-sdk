@@ -100,6 +100,8 @@ T = TypeVar("T")
 TMapping = TypeVar("TMapping", bound=Mapping[str, Any])
 TMutableMapping = TypeVar("TMutableMapping", bound=MutableMapping[str, Any])
 
+row_stats = [0, 0]
+
 
 class Exportable(ABC):
     @abstractmethod
@@ -625,6 +627,7 @@ class _BackgroundLogger:
     def _finalize(self):
         self.logger.debug("Flushing final log events...")
         self.flush()
+        print("Final num rows flushed:", row_stats[0], "data size", row_stats[1], file=self.outfile)
 
     def _publisher(self):
         while True:
@@ -664,8 +667,12 @@ class _BackgroundLogger:
                 items=all_items_str, batch_max_num_items=batch_size, batch_max_num_bytes=self.max_request_size // 2
             )
             for batch_set in batch_sets:
+                start_time = time.time()
                 post_promises = []
                 try:
+                    print("Flushing batches of size", [len(b) for b in batch_set], file=self.outfile)
+                    row_stats[0] += sum(len(b) for b in batch_set)
+                    row_stats[1] += len(json.dumps(list(batch_set)))
                     post_promises = [
                         HTTP_REQUEST_THREAD_POOL.submit(self._submit_logs_request, batch) for batch in batch_set
                     ]
@@ -676,6 +683,7 @@ class _BackgroundLogger:
                         self._submit_logs_request(batch)
 
                 concurrent.futures.wait(post_promises)
+                print("Flushing took", time.time() - start_time, "seconds", file=self.outfile)
                 # Raise any exceptions from the promises as one group.
                 post_promise_exceptions = [e for e in (f.exception() for f in post_promises) if e is not None]
                 if post_promise_exceptions:
