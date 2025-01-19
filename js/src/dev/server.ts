@@ -22,6 +22,7 @@ import {
   BraintrustState,
   LoginOptions,
   loginToState,
+  Prompt,
 } from "../logger";
 import { LRUCache } from "../prompt-cache/lru-cache";
 import {
@@ -252,14 +253,15 @@ const _parameterTypeSchema = z.union([
 export type ParameterType = z.infer<typeof _parameterTypeSchema>;
 
 function deriveParameterType(value: unknown): ParameterType {
-  if (typeof value === "string") {
+  if (Prompt.isPrompt(value)) {
+    return "prompt";
+  } else if (typeof value === "string") {
     return "string";
   } else if (typeof value === "number") {
     return "number";
   } else if (typeof value === "boolean") {
     return "boolean";
   }
-  // TODO: Prompt type
   return "unknown";
 }
 

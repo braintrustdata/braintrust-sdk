@@ -76,6 +76,7 @@ export class ToolBuilder {
 
     if (globalThis._lazy_load) {
       globalThis._evals.functions.push(
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         tool as CodeFunction<
           unknown,
           unknown,
@@ -127,6 +128,7 @@ export class ScorerBuilder {
       });
       if (globalThis._lazy_load) {
         globalThis._evals.functions.push(
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
           scorer as CodeFunction<
             unknown,
             unknown,
@@ -350,8 +352,8 @@ export type PromptOpts<
 > = (Partial<Omit<BaseFnOpts, "name">> & { name: string }) &
   (HasId extends true ? PromptId : Partial<PromptId>) &
   (HasVersion extends true ? PromptVersion : Partial<PromptVersion>) &
-  (HasTools extends true ? Partial<PromptTools> : {}) &
-  (HasNoTrace extends true ? Partial<PromptNoTrace> : {}) &
+  (HasTools extends true ? Partial<PromptTools> : object) &
+  (HasNoTrace extends true ? Partial<PromptNoTrace> : object) &
   PromptContents & {
     model: string;
     params?: ModelParams;
@@ -402,6 +404,7 @@ export class PromptBuilder {
       },
     };
 
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const promptRow: PromptRowWithId<HasId, HasVersion> = {
       id: opts.id,
       _xact_id: opts.version,
