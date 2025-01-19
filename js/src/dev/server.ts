@@ -5,7 +5,6 @@ import {
   callEvaluatorData,
   Eval,
   EvalHooks,
-  EvaluatorDef,
   getSingleValueParameters,
 } from "../framework";
 import { z } from "zod";
@@ -16,7 +15,7 @@ import {
   checkAuthorized,
   checkOrigin,
 } from "./authorize";
-import { invokeParent, SSEProgressEventData } from "@braintrust/core/typespecs";
+import { SSEProgressEventData } from "@braintrust/core/typespecs";
 import {
   BaseMetadata,
   BraintrustState,
@@ -31,6 +30,13 @@ import {
   parseParent,
 } from "@braintrust/core";
 import { serializeSSEEvent } from "./stream";
+import {
+  evalBodySchema,
+  EvaluatorList,
+  EvaluatorManifest,
+  ParameterSpec,
+  ParameterType,
+} from "./types";
 
 export interface DevServerOpts {
   host: string;
@@ -101,7 +107,7 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
 
   // List endpoint - returns all available evaluators and their metadata
   app.get("/list", (req, res) => {
-    const evaluatorSpec = Object.fromEntries(
+    const evaluatorSpec: EvaluatorList = Object.fromEntries(
       Object.entries(allEvaluators).map(([name, evaluator]) => [
         name,
         {
@@ -238,35 +244,6 @@ const asyncHandler =
   (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
-
-const evalBodySchema = z.object({
-  name: z.string(),
-  parameters: z.record(z.string(), z.unknown()),
-  parent: invokeParent.optional(),
-});
-
-type EvaluatorManifest = Record<string, EvaluatorSpec>;
-
-interface EvaluatorSpec {
-  parameters: Record<string, ParameterSpec>;
-  evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>;
-}
-
-const parameterTypeSchema = z.union([
-  z.literal("string"),
-  z.literal("number"),
-  z.literal("boolean"),
-  z.literal("prompt"),
-  z.literal("unknown"),
-]);
-export type ParameterType = z.infer<typeof parameterTypeSchema>;
-
-const _parameterSpecSchema = z.object({
-  type: parameterTypeSchema,
-  default: z.unknown(),
-});
-
-type ParameterSpec = z.infer<typeof _parameterSpecSchema>;
 
 function deriveParameterType(value: unknown): ParameterType {
   if (Prompt.isPrompt(value)) {
