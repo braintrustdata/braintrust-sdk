@@ -32,9 +32,9 @@ const parameterSpecSchema = z.object({
 
 export type ParameterSpec = z.infer<typeof parameterSpecSchema>;
 
-export const evaluatorListSchema = z.record(
+export const evaluatorDefinitionsSchema = z.record(
   z.string(),
   z.object({ parameters: z.record(z.string(), parameterSpecSchema) }),
 );
 
-export type EvaluatorList = z.infer<typeof evaluatorListSchema>;
+export type EvaluatorDefinitions = z.infer<typeof evaluatorDefinitionsSchema>;

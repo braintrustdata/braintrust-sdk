@@ -32,7 +32,7 @@ import {
 import { serializeSSEEvent } from "./stream";
 import {
   evalBodySchema,
-  EvaluatorList,
+  EvaluatorDefinitions,
   EvaluatorManifest,
   ParameterSpec,
   ParameterType,
@@ -107,7 +107,7 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
 
   // List endpoint - returns all available evaluators and their metadata
   app.get("/list", (req, res) => {
-    const evaluatorSpec: EvaluatorList = Object.fromEntries(
+    const evalDefs: EvaluatorDefinitions = Object.fromEntries(
       Object.entries(allEvaluators).map(([name, evaluator]) => [
         name,
         {
@@ -115,7 +115,7 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
         },
       ]),
     );
-    res.json(evaluatorSpec);
+    res.json(evalDefs);
   });
 
   app.post(
