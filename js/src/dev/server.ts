@@ -1,5 +1,6 @@
 import { EvaluatorState } from "../cli";
 import express, { NextFunction, Request, Response } from "express";
+import cors from "cors";
 import {
   callEvaluatorData,
   Eval,
@@ -9,7 +10,12 @@ import {
 } from "../framework";
 import { z } from "zod";
 import { errorHandler } from "./errorHandler";
-import { authorizeRequest, checkAuthorized } from "./authorize";
+import {
+  authorizeRequest,
+  baseAllowedHeaders,
+  checkAuthorized,
+  checkOrigin,
+} from "./authorize";
 import { invokeParent, SSEProgressEventData } from "@braintrust/core/typespecs";
 import {
   BaseMetadata,
@@ -18,7 +24,11 @@ import {
   loginToState,
 } from "../logger";
 import { LRUCache } from "../prompt-cache/lru-cache";
-import { parseParent } from "@braintrust/core";
+import {
+  BT_CURSOR_HEADER,
+  BT_FOUND_EXISTING_HEADER,
+  parseParent,
+} from "@braintrust/core";
 import { serializeSSEEvent } from "./stream";
 
 export interface DevServerOpts {
@@ -54,6 +64,25 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
   //   to the client instead. If we do this, maybe we can simplify/remove the progress stuff
   //   from the task function.
   app.use(express.json({ limit: "1gb" }));
+
+  console.log("Starting server");
+  app.use(
+    // These should match the settings in api/app.py.
+    cors({
+      origin: checkOrigin,
+      methods: ["GET", "PATCH", "POST", "PUT", "DELETE", "OPTIONS"],
+      allowedHeaders: baseAllowedHeaders,
+      credentials: true,
+      exposedHeaders: [
+        BT_CURSOR_HEADER,
+        BT_FOUND_EXISTING_HEADER,
+        "x-bt-span-id",
+        "x-bt-span-export",
+      ],
+      maxAge: 86400,
+    }),
+  );
+
   app.use(authorizeRequest);
 
   app.get("/", (req, res) => {
@@ -110,7 +139,7 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
 
       const task = async (
         input: unknown,
-        hooks: EvalHooks<Record<string, unknown>>,
+        hooks: EvalHooks<unknown, BaseMetadata, Record<string, unknown>>,
       ) => {
         const result = await evaluator.task(input, hooks);
 
@@ -120,6 +149,7 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
           event: "json_delta",
           data: JSON.stringify(result),
         });
+        return result;
       };
 
       try {

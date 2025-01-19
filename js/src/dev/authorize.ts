@@ -121,9 +121,13 @@ const WHITELISTED_ORIGINS = [
   MAIN_ORIGIN,
   "https://www.braintrustdata.com",
   new RegExp("https://.*.preview.braintrust.dev"),
-].concat(
-  process.env.WHITELISTED_ORIGIN ? [process.env.WHITELISTED_ORIGIN] : [],
-);
+]
+  .concat(
+    process.env.WHITELISTED_ORIGIN ? [process.env.WHITELISTED_ORIGIN] : [],
+  )
+  .concat(
+    process.env.BRAINTRUST_APP_URL ? [process.env.BRAINTRUST_APP_URL] : [],
+  );
 
 function parseAuthHeader(
   headers: Record<string, string | string[] | undefined>,
@@ -146,3 +150,23 @@ function parseAuthHeader(
   }
   return parts[1];
 }
+
+export const baseAllowedHeaders = [
+  "Content-Type",
+  "X-Amz-Date",
+  "Authorization",
+  "X-Api-Key",
+  "X-Amz-Security-Token",
+  "x-bt-auth-token",
+  "x-bt-parent",
+  // These are eval-specific
+  "x-bt-org-name",
+  "x-bt-stream-fmt",
+  "x-bt-use-cache",
+  "x-stainless-os",
+  "x-stainless-lang",
+  "x-stainless-package-version",
+  "x-stainless-runtime",
+  "x-stainless-runtime-version",
+  "x-stainless-arch",
+];

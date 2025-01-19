@@ -864,6 +864,7 @@ async function run(args: RunArgs) {
   });
 
   if (args.dev) {
+    // XXX We should watch these files (or support a --watch flag).
     const { evaluators } = await buildEvalautors(handles, evaluatorOpts);
     runDevServer(evaluators, {
       host: args.dev_host,
