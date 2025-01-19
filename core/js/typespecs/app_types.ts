@@ -100,6 +100,8 @@ export const organizationSchema = z
     proxy_url: z.string().nullish(),
     realtime_url: z.string().nullish(),
     created: organizationBaseSchema.shape.created,
+    content_security_policy: z.string().nullish(),
+    content_security_policy_report_only: z.string().nullish(),
   })
   .openapi("Organization");
 export type Organization = z.infer<typeof organizationSchema>;
@@ -1157,6 +1159,10 @@ export const patchOrganizationSchema = z
     is_universal_api: organizationSchema.shape.is_universal_api.nullish(),
     proxy_url: organizationSchema.shape.proxy_url.nullish(),
     realtime_url: organizationSchema.shape.realtime_url.nullish(),
+    content_security_policy:
+      organizationSchema.shape.content_security_policy.nullish(),
+    content_security_policy_report_only:
+      organizationSchema.shape.content_security_policy_report_only.nullish(),
   })
   .openapi("PatchOrganization");
 
