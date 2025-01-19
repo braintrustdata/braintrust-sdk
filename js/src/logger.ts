@@ -4906,6 +4906,20 @@ export class Prompt<
       "__braintrust_prompt_marker" in data
     );
   }
+  public static fromPromptData(
+    name: string,
+    promptData: PromptData,
+  ): Prompt<false, false> {
+    return new Prompt(
+      {
+        name: name,
+        slug: name,
+        prompt_data: promptData,
+      },
+      {},
+      false,
+    );
+  }
 }
 
 export type AnyDataset = Dataset<boolean>;

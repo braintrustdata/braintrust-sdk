@@ -15,7 +15,10 @@ import {
   checkAuthorized,
   checkOrigin,
 } from "./authorize";
-import { SSEProgressEventData } from "@braintrust/core/typespecs";
+import {
+  promptDataSchema,
+  SSEProgressEventData,
+} from "@braintrust/core/typespecs";
 import {
   BaseMetadata,
   BraintrustState,
@@ -134,8 +137,9 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
         return;
       }
 
+      let parsedParameters: Record<string, unknown>;
       try {
-        validateParameters(parameters, handle.parameters);
+        parsedParameters = validateParameters(parameters, handle.parameters);
       } catch (e) {
         if (e instanceof MissingParameterError) {
           res.status(400).json({ error: e.message });
@@ -176,7 +180,7 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
             data: evalData.data,
             task,
             state,
-            parameters,
+            parameters: parsedParameters,
           },
           {
             // Avoid printing the bar to the console.
@@ -267,7 +271,7 @@ class MissingParameterError extends Error {
 function validateParameters(
   parameters: Record<string, unknown>,
   parameterSchema: Record<string, ParameterSpec>,
-) {
+): Record<string, unknown> {
   const missingParameters: string[] = [];
   for (const paramName of Object.keys(parameterSchema)) {
     if (!(paramName in parameters)) {
@@ -278,24 +282,25 @@ function validateParameters(
     throw new MissingParameterError(missingParameters);
   }
 
-  for (const [name, value] of Object.entries(parameters)) {
-    const spec = parameterSchema[name];
-    switch (spec.type) {
-      case "prompt":
-        throw new Error("TODO");
-      case "string":
-        z.string().parse(value);
-        break;
-      case "number":
-        z.number().parse(value);
-        break;
-      case "boolean":
-        z.boolean().parse(value);
-        break;
-      case "unknown":
-        break;
-    }
-  }
+  return Object.fromEntries(
+    Object.entries(parameters).map(([name, value]) => {
+      const spec = parameterSchema[name];
+      switch (spec.type) {
+        case "prompt":
+          const promptData = promptDataSchema.parse(value);
+          console.log(JSON.stringify(promptData, null, 2));
+          return [name, Prompt.fromPromptData(name, promptData)];
+        case "string":
+          return [name, z.string().parse(value)];
+        case "number":
+          return [name, z.number().parse(value)];
+        case "boolean":
+          return [name, z.boolean().parse(value)];
+        case "unknown":
+          return [name, value];
+      }
+    }),
+  );
 }
 
 const loginCache = new LRUCache<string, BraintrustState>({
