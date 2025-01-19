@@ -602,7 +602,7 @@ export async function Eval<
           baseExperimentId: evaluator.baseExperimentId,
           gitMetadataSettings: evaluator.gitMetadataSettings,
           repoInfo: evaluator.repoInfo,
-          dataset: data instanceof Dataset ? data : undefined,
+          dataset: Dataset.isDataset(data) ? data : undefined,
         });
 
     if (experiment && options.onStart) {
@@ -851,7 +851,7 @@ async function runEvaluatorInternal(
     async (datum: EvalCase<any, any, any>) => {
       const eventDataset: Dataset | undefined = experiment
         ? experiment.dataset
-        : evaluator.data instanceof Dataset
+        : Dataset.isDataset(evaluator.data)
           ? evaluator.data
           : undefined;
 
