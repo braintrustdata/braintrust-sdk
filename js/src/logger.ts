@@ -4753,6 +4753,10 @@ export class Prompt<
     return this.getParsedPromptData()?.options || {};
   }
 
+  public get promptData(): PromptData {
+    return this.getParsedPromptData()!;
+  }
+
   /**
    * Build the prompt with the given formatting options. The args you pass in will
    * be forwarded to the mustache template that defines the prompt and rendered with

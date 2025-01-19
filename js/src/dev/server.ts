@@ -45,7 +45,16 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
         parameters: Object.fromEntries(
           Object.entries(
             getSingleValueParameters(evaluator.evaluator.parameters ?? {})[0],
-          ).map(([name, value]) => [name, deriveParameterType(value)]),
+          ).map(([name, value]) => {
+            return [
+              name,
+              {
+                type: deriveParameterType(value),
+                // A little hacky...
+                default: Prompt.isPrompt(value) ? value.promptData : value,
+              },
+            ];
+          }),
         ),
         evaluator: evaluator.evaluator,
       },
@@ -239,18 +248,25 @@ const evalBodySchema = z.object({
 type EvaluatorManifest = Record<string, EvaluatorSpec>;
 
 interface EvaluatorSpec {
-  parameters: Record<string, ParameterType>;
+  parameters: Record<string, ParameterSpec>;
   evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>;
 }
 
-const _parameterTypeSchema = z.union([
+const parameterTypeSchema = z.union([
   z.literal("string"),
   z.literal("number"),
   z.literal("boolean"),
   z.literal("prompt"),
   z.literal("unknown"),
 ]);
-export type ParameterType = z.infer<typeof _parameterTypeSchema>;
+export type ParameterType = z.infer<typeof parameterTypeSchema>;
+
+const _parameterSpecSchema = z.object({
+  type: parameterTypeSchema,
+  default: z.unknown(),
+});
+
+type ParameterSpec = z.infer<typeof _parameterSpecSchema>;
 
 function deriveParameterType(value: unknown): ParameterType {
   if (Prompt.isPrompt(value)) {
@@ -273,7 +289,7 @@ class MissingParameterError extends Error {
 
 function validateParameters(
   parameters: Record<string, unknown>,
-  parameterSchema: Record<string, ParameterType>,
+  parameterSchema: Record<string, ParameterSpec>,
 ) {
   const missingParameters: string[] = [];
   for (const paramName of Object.keys(parameterSchema)) {
@@ -286,8 +302,8 @@ function validateParameters(
   }
 
   for (const [name, value] of Object.entries(parameters)) {
-    const parameterType = parameterSchema[name];
-    switch (parameterType) {
+    const spec = parameterSchema[name];
+    switch (spec.type) {
       case "prompt":
         throw new Error("TODO");
       case "string":
