@@ -123,7 +123,7 @@ async function initExperiment(
     baseExperimentId: evaluator.baseExperimentId,
     gitMetadataSettings: evaluator.gitMetadataSettings,
     repoInfo: evaluator.repoInfo,
-    dataset: data instanceof Dataset ? data : undefined,
+    dataset: Dataset.isDataset(data) ? data : undefined,
     setCurrent: false,
   });
   const info = await logger.summarize({ summarizeScores: false });

@@ -4313,6 +4313,7 @@ export class Dataset<
   IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET,
 > extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
   private readonly lazyMetadata: LazyValue<ProjectDatasetMetadata>;
+  private readonly __braintrust_dataset_marker = true;
 
   constructor(
     private state: BraintrustState,
@@ -4587,6 +4588,14 @@ export class Dataset<
       "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed",
     );
     return this.id;
+  }
+
+  public static isDataset(data: unknown): data is Dataset {
+    return (
+      typeof data === "object" &&
+      data !== null &&
+      "__braintrust_dataset_marker" in data
+    );
   }
 }
 
