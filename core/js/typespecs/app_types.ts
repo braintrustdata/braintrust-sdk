@@ -101,7 +101,6 @@ export const organizationSchema = z
     realtime_url: z.string().nullish(),
     created: organizationBaseSchema.shape.created,
     content_security_policy: z.string().nullish(),
-    content_security_policy_report_only: z.string().nullish(),
   })
   .openapi("Organization");
 export type Organization = z.infer<typeof organizationSchema>;
@@ -1161,8 +1160,6 @@ export const patchOrganizationSchema = z
     realtime_url: organizationSchema.shape.realtime_url.nullish(),
     content_security_policy:
       organizationSchema.shape.content_security_policy.nullish(),
-    content_security_policy_report_only:
-      organizationSchema.shape.content_security_policy_report_only.nullish(),
   })
   .openapi("PatchOrganization");
 
