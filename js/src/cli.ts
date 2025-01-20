@@ -695,14 +695,78 @@ async function collectFiles(
 // In addition to marking node_modules external, explicitly mark
 // our packages (braintrust and autoevals) external, in case they're
 // installed in a relative path.
-const markOurPackagesExternalPlugin = {
-  name: "make-all-packages-external",
+const markPackagesExternalPlugin = {
+  name: "make-packages-external",
   setup(build: esbuild.PluginBuild) {
-    const filter = /^(braintrust|autoevals|@braintrust\/)/;
-    build.onResolve({ filter }, (args) => ({
+    // Mark our packages as external
+    const ourPackagesFilter = /^(braintrust|autoevals|@braintrust\/)/;
+    build.onResolve({ filter: ourPackagesFilter }, (args) => ({
       path: args.path,
       external: true,
     }));
+  },
+};
+
+// From https://github.com/evanw/esbuild/issues/1051
+const nativeNodeModulesPlugin = {
+  name: "native-node-modules",
+  setup(build: esbuild.PluginBuild) {
+    // Keep track of packages that contain .node files
+    const nativePackages = new Set<string>();
+
+    // Helper to add a package and its platform-specific variants
+    const addNativePackage = (pkgName: string) => {
+      nativePackages.add(pkgName);
+      if (pkgName.includes("@")) {
+        const [scope, name] = pkgName.split("/");
+        const platformPkgs = [
+          `${scope}/${name}-darwin-arm64`,
+          `${scope}/${name}-darwin-x64`,
+          `${scope}/${name}-linux-x64-gnu`,
+          `${scope}/${name}-win32-x64-msvc`,
+        ];
+        platformPkgs.forEach((pkg) => nativePackages.add(pkg));
+      }
+    };
+
+    // When a .node file is imported, mark its package as native
+    build.onResolve({ filter: /\.node$/ }, (args) => {
+      try {
+        const path = require.resolve(args.path, { paths: [args.resolveDir] });
+        const match = path.match(
+          /node_modules[/\\]((?:@[^/\\]+[/\\])?[^/\\]+)/,
+        );
+        if (match) {
+          addNativePackage(match[1]);
+        }
+        return { external: true };
+      } catch {
+        return { external: true };
+      }
+    });
+
+    // Handle direct imports of native packages
+    build.onResolve(
+      { filter: /@[^/]+\/[^/]+-(?:darwin|linux|win32)/ },
+      (args) => {
+        const match = args.path.match(/^(@[^/]+\/[^/]+)/);
+        if (match) {
+          addNativePackage(match[1]);
+        }
+        return { external: true };
+      },
+    );
+
+    // Mark all imports from native packages as external
+    build.onResolve({ filter: /.*/ }, (args) => {
+      if (!args.path.startsWith(".") && !args.path.startsWith("/")) {
+        const match = args.path.match(/^(?:@[^/]+\/)?[^/]+/);
+        if (match && nativePackages.has(match[0])) {
+          return { external: true };
+        }
+      }
+      return null;
+    });
   },
 };
 
@@ -720,7 +784,8 @@ function buildOpts({
   plugins?: PluginMaker[];
 }): esbuild.BuildOptions {
   const plugins = [
-    markOurPackagesExternalPlugin,
+    nativeNodeModulesPlugin,
+    markPackagesExternalPlugin,
     ...(argPlugins || []).map((fn) => fn(fileName)),
   ];
   return {
