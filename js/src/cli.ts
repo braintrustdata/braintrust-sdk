@@ -707,7 +707,7 @@ const markOurPackagesExternalPlugin = {
   },
 };
 
-// From https://github.com/evanw/esbuild/issues/1051
+// Inspired by and modified from https://github.com/evanw/esbuild/issues/1051
 const nativeNodeModulesPlugin = {
   name: "native-node-modules",
   setup(build: esbuild.PluginBuild) {
