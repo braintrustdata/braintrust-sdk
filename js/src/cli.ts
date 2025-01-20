@@ -695,8 +695,8 @@ async function collectFiles(
 // In addition to marking node_modules external, explicitly mark
 // our packages (braintrust and autoevals) external, in case they're
 // installed in a relative path.
-const markPackagesExternalPlugin = {
-  name: "make-packages-external",
+const markOurPackagesExternalPlugin = {
+  name: "make-our-packages-external",
   setup(build: esbuild.PluginBuild) {
     // Mark our packages as external
     const ourPackagesFilter = /^(braintrust|autoevals|@braintrust\/)/;
@@ -739,9 +739,9 @@ const nativeNodeModulesPlugin = {
         if (match) {
           addNativePackage(match[1]);
         }
-        return { external: true };
+        return { path: args.path, external: true };
       } catch {
-        return { external: true };
+        return { path: args.path, external: true };
       }
     });
 
@@ -753,7 +753,7 @@ const nativeNodeModulesPlugin = {
         if (match) {
           addNativePackage(match[1]);
         }
-        return { external: true };
+        return { path: args.path, external: true };
       },
     );
 
@@ -762,7 +762,7 @@ const nativeNodeModulesPlugin = {
       if (!args.path.startsWith(".") && !args.path.startsWith("/")) {
         const match = args.path.match(/^(?:@[^/]+\/)?[^/]+/);
         if (match && nativePackages.has(match[0])) {
-          return { external: true };
+          return { path: require.resolve(args.path), external: true };
         }
       }
       return null;
@@ -785,7 +785,7 @@ function buildOpts({
 }): esbuild.BuildOptions {
   const plugins = [
     nativeNodeModulesPlugin,
-    markPackagesExternalPlugin,
+    markOurPackagesExternalPlugin,
     ...(argPlugins || []).map((fn) => fn(fileName)),
   ];
   return {
