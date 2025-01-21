@@ -3,7 +3,7 @@
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 import { objectNullish } from "../src/zod_util";
-import { ObjectType, datetimeStringSchema, objectTypes } from "./common_types";
+import { ObjectType, datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
@@ -208,7 +208,7 @@ export const apiKeySchema = z
 export type ApiKey = z.infer<typeof apiKeySchema>;
 
 export const spanFieldOrderItem = z.object({
-  object_type: objectTypes,
+  object_type: z.string(),
   column_id: z.string(),
   position: z.string(),
 });
