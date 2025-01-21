@@ -32,7 +32,7 @@ extras_require = {
         "flake8",
         "flake8-isort",
         "IPython",
-        "isort==5.10.1",
+        "isort==5.12.0",
         "pre-commit",
         "pytest",
         "twine",
