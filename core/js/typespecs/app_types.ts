@@ -219,8 +219,18 @@ export const projectSettingsSchema = z
     comparison_key: z
       .string()
       .nullish()
-      .describe("The key used to join two experiments (defaults to `input`)."),
-    spanFieldOrder: z.array(spanFieldOrderItem).nullish(),
+      .describe("The key used to join two experiments (defaults to `input`)"),
+    baseline_experiment_id: z
+      .string()
+      .uuid()
+      .nullish()
+      .describe(
+        "The id of the experiment to use as the default baseline for comparisons",
+      ),
+    spanFieldOrder: z
+      .array(spanFieldOrderItem)
+      .nullish()
+      .describe("The order of the fields to display in the trace view"),
   })
   .openapi("ProjectSettings");
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
