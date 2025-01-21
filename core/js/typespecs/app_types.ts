@@ -211,6 +211,7 @@ export const spanFieldOrderItem = z.object({
   object_type: z.string(),
   column_id: z.string(),
   position: z.string(),
+  layout: z.literal("full").or(z.literal("two_column")).nullish(),
 });
 export type SpanFieldOrderItem = z.infer<typeof spanFieldOrderItem>;
 
