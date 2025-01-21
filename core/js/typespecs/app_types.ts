@@ -2,15 +2,15 @@
 
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
-extendZodWithOpenApi(z);
 import { objectNullish } from "../src/zod_util";
-import { ObjectType, datetimeStringSchema } from "./common_types";
+import { ObjectType, datetimeStringSchema, objectTypes } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
 import { functionTypeEnum, runtimeContextSchema } from "./functions";
 import { savedFunctionIdSchema } from "./function_id";
 import { repoInfoSchema } from "./git_types";
+extendZodWithOpenApi(z);
 
 // Section: App DB table schemas
 
@@ -207,12 +207,20 @@ export const apiKeySchema = z
   .openapi("ApiKey");
 export type ApiKey = z.infer<typeof apiKeySchema>;
 
+export const spanFieldOrderItem = z.object({
+  object_type: objectTypes,
+  column_id: z.string(),
+  position: z.string(),
+});
+export type SpanFieldOrderItem = z.infer<typeof spanFieldOrderItem>;
+
 export const projectSettingsSchema = z
   .object({
     comparison_key: z
       .string()
       .nullish()
       .describe("The key used to join two experiments (defaults to `input`)."),
+    spanFieldOrder: z.array(spanFieldOrderItem).nullish(),
   })
   .openapi("ProjectSettings");
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
