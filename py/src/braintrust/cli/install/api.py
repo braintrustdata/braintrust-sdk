@@ -307,7 +307,9 @@ def main(args):
             ]
             if v is not None
         ]
-        _logger.info(f"Using params: {params}")
+        _logger.info("Using params:")
+        for param in params:
+            _logger.info(f"  {param['ParameterKey']}: {param['ParameterValue']}")
 
         cloudformation.create_stack(
             StackName=args.name,
