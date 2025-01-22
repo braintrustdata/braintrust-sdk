@@ -37,6 +37,12 @@ PARAMS = {
     "OutboundRateLimitMaxRequests": "outbound_rate_limit_max_requests",
     "UseGlobalProxy": "use_global_proxy",
     "EnableQuarantine": "enable_quarantine",
+    "EnableBrainstore": "enable_brainstore",
+    "BrainstoreInstanceKeyPairName": "brainstore_instance_key_pair_name",
+    "BrainstoreInstanceType": "brainstore_instance_type",
+    "BrainstoreInstanceCount": "brainstore_instance_count",
+    "BrainstoreMaxInstanceCount": "brainstore_max_instance_count",
+    "BrainstoreVersionOverride": "brainstore_version_override",
 }
 
 REMOVED_PARAMS = ["ThirdAZIndex"]
@@ -241,6 +247,41 @@ def build_parser(subparsers, parents):
         default=os.environ.get("BRAINTRUST_API_KEY", None),
     )
 
+    # Brainstore configuration
+    parser.add_argument(
+        "--enable-brainstore",
+        help="Enable Brainstore object-storage data backend",
+        choices=[None, "true", "false"],
+        default=None,
+    )
+    parser.add_argument(
+        "--brainstore-instance-key-pair-name",
+        help="The EC2 Key Pair to allow SSH access to the Brainstore instance",
+        default=None,
+    )
+    parser.add_argument(
+        "--brainstore-instance-type",
+        help="EC2 instance type for Brainstore. Must be a Graviton instance type.",
+        default=None,
+    )
+    parser.add_argument(
+        "--brainstore-instance-count",
+        help="Number of Brainstore instances to run",
+        type=int,
+        default=None,
+    )
+    parser.add_argument(
+        "--brainstore-max-instance-count",
+        help="Max scaling size for Brainstore instances",
+        type=int,
+        default=None,
+    )
+    parser.add_argument(
+        "--brainstore-version-override",
+        help="Lock Brainstore to a specific docker tag",
+        default=None,
+    )
+
     parser.set_defaults(func=main)
 
 
@@ -270,6 +311,12 @@ def main(args):
         PARAMS["ClickhouseCatchupEtlArn"] = "clickhouse_catchup_etl_arn"
         PARAMS["ClickhouseConnectUrl"] = "clickhouse_connect_url"
         PARAMS["ClickhousePGUrl"] = "clickhouse_pg_url"
+        PARAMS["EnableBrainstore"] = "enable_brainstore"
+        PARAMS["BrainstoreInstanceKeyPairName"] = "brainstore_instance_key_pair_name"
+        PARAMS["BrainstoreInstanceType"] = "brainstore_instance_type"
+        PARAMS["BrainstoreInstanceCount"] = "brainstore_instance_count"
+        PARAMS["BrainstoreMaxInstanceCount"] = "brainstore_max_instance_count"
+        PARAMS["BrainstoreVersionOverride"] = "brainstore_version_override"
 
         if args.template is None:
             template = "https://braintrust-cf.s3.amazonaws.com/braintrust-latest-vpc.yaml"
