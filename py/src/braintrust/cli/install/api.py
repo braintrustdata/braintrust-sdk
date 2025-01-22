@@ -399,9 +399,11 @@ def main(args):
             param_updates[param] = args.__dict__[arg_name]
     if len(param_updates) > 0 or args.update_template:
         template_kwargs = {"TemplateURL": template} if args.update_template else {"UsePreviousTemplate": True}
-        _logger.info(
-            f"Updating stack with name {args.name} with params: {param_updates} and template: {template_kwargs}"
-        )
+        _logger.info(f"Updating stack with name {args.name} with template: {template_kwargs}")
+
+        _logger.info("Using params:")
+        for param, value in param_updates.items():
+            _logger.info(f"  {param}: {value}")
 
         if args.template:
             new_template = cloudformation.get_template_summary(TemplateURL=template)
