@@ -365,7 +365,7 @@ def main(args):
             Capabilities=CAPABILITIES,
         )
 
-        for _ in range(120):
+        for _ in range(240):
             status = cloudformation.describe_stacks(StackName=args.name)["Stacks"][0]
             if status["StackStatus"] != "CREATE_IN_PROGRESS":
                 exists = True
