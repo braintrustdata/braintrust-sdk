@@ -358,6 +358,8 @@ def main(args):
         for param in params:
             _logger.info(f"  {param['ParameterKey']}: {param['ParameterValue']}")
 
+        _logger.info(f"Typical stack creation takes 10-15 minutes.")
+
         cloudformation.create_stack(
             StackName=args.name,
             TemplateURL=template,
@@ -365,13 +367,13 @@ def main(args):
             Capabilities=CAPABILITIES,
         )
 
-        for _ in range(240):
+        for _ in range(80):
             status = cloudformation.describe_stacks(StackName=args.name)["Stacks"][0]
             if status["StackStatus"] != "CREATE_IN_PROGRESS":
                 exists = True
                 break
             _logger.info("Waiting for stack to be created...")
-            time.sleep(5)
+            time.sleep(15)
         else:
             _logger.error(
                 textwrap.dedent(
