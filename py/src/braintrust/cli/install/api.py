@@ -43,6 +43,7 @@ PARAMS = {
     "BrainstoreInstanceCount": "brainstore_instance_count",
     "BrainstoreMaxInstanceCount": "brainstore_max_instance_count",
     "BrainstoreVersionOverride": "brainstore_version_override",
+    "BrainstoreLicenseKey": "brainstore_license_key",
 }
 
 REMOVED_PARAMS = ["ThirdAZIndex"]
@@ -255,6 +256,11 @@ def build_parser(subparsers, parents):
         default=None,
     )
     parser.add_argument(
+        "--brainstore-license-key",
+        help="The license key to use for Brainstore",
+        default=None,
+    )
+    parser.add_argument(
         "--brainstore-instance-key-pair-name",
         help="The EC2 Key Pair to allow SSH access to the Brainstore instance",
         default=None,
@@ -313,6 +319,7 @@ def main(args):
         PARAMS["ClickhousePGUrl"] = "clickhouse_pg_url"
         PARAMS["EnableBrainstore"] = "enable_brainstore"
         PARAMS["BrainstoreInstanceKeyPairName"] = "brainstore_instance_key_pair_name"
+        PARAMS["BrainstoreLicenseKey"] = "brainstore_license_key"
         PARAMS["BrainstoreInstanceType"] = "brainstore_instance_type"
         PARAMS["BrainstoreInstanceCount"] = "brainstore_instance_count"
         PARAMS["BrainstoreMaxInstanceCount"] = "brainstore_max_instance_count"
