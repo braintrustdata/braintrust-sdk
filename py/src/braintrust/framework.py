@@ -11,7 +11,6 @@ import warnings
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from importlib import metadata
 from multiprocessing import cpu_count
 from typing import (
     Any,
@@ -41,6 +40,7 @@ from .git_fields import GitMetadataSettings, RepoInfo
 from .logger import (
     NOOP_SPAN,
     Dataset,
+    Experiment,
     ExperimentSummary,
     Metadata,
     ScoreSummary,
@@ -154,7 +154,7 @@ class EvalHooks(abc.ABC, Generic[Output]):
         """
 
     @abc.abstractmethod
-    def meta(self, **info) -> None:
+    def meta(self, **info: Any) -> None:
         """
         DEPRECATED: Use the metadata field on the hook directly.
 
@@ -397,7 +397,7 @@ async def call_user_fn(event_loop, fn, **kwargs):
 
 
 @dataclasses.dataclass
-class ReporterDef(SerializableDataClass, Generic[EvalReport]):
+class ReporterDef(SerializableDataClass, Generic[Input, Output, EvalReport]):
     """
     A reporter takes an evaluator and its result and returns a report.
     """
@@ -407,7 +407,10 @@ class ReporterDef(SerializableDataClass, Generic[EvalReport]):
     The name of the reporter.
     """
 
-    report_eval: Callable[[Evaluator, EvalResultWithSummary, bool, bool], Union[EvalReport, Awaitable[EvalReport]]]
+    report_eval: Callable[
+        [Evaluator[Input, Output], EvalResultWithSummary[Input, Output], bool, bool],
+        Union[EvalReport, Awaitable[EvalReport]],
+    ]
     """
     A function that takes an evaluator and its result and returns a report.
     """
@@ -418,21 +421,29 @@ class ReporterDef(SerializableDataClass, Generic[EvalReport]):
     If you return false, the `braintrust eval` command will exit with a non-zero status code.
     """
 
-    async def _call_report_eval(self, evaluator: Evaluator, result: EvalResultWithSummary, verbose: bool, jsonl: bool):
+    async def _call_report_eval(
+        self,
+        evaluator: Evaluator[Input, Output],
+        result: EvalResultWithSummary[Input, Output],
+        verbose: bool,
+        jsonl: bool,
+    ) -> Union[EvalReport, Awaitable[EvalReport]]:
         event_loop = asyncio.get_event_loop()
         return await call_user_fn(
             event_loop, self.report_eval, evaluator=evaluator, result=result, verbose=verbose, jsonl=jsonl
         )
 
-    async def _call_report_run(self, results: List[EvalReport], verbose: bool, jsonl: bool):
+    async def _call_report_run(
+        self, results: List[EvalReport], verbose: bool, jsonl: bool
+    ) -> Union[bool, Awaitable[bool]]:
         event_loop = asyncio.get_event_loop()
         return await call_user_fn(event_loop, self.report_run, results=results, verbose=verbose, jsonl=jsonl)
 
 
 @dataclasses.dataclass
-class EvaluatorInstance(SerializableDataClass):
-    evaluator: Evaluator
-    reporter: Optional[Union[ReporterDef, str]]
+class EvaluatorInstance(SerializableDataClass, Generic[Input, Output, EvalReport]):
+    evaluator: Evaluator[Input, Output]
+    reporter: Optional[Union[ReporterDef[Input, Output, EvalReport], str]]
 
 
 @dataclasses.dataclass
@@ -527,13 +538,13 @@ def _EvalCommon(
     name: str,
     data: EvalData[Input, Output],
     task: EvalTask[Input, Output],
-    scores: List[EvalScorer[Input, Output]],
+    scores: Sequence[EvalScorer[Input, Output]],
     experiment_name: Optional[str],
     trial_count: int,
     metadata: Optional[Metadata],
     is_public: bool,
     update: bool,
-    reporter: Optional[ReporterDef],
+    reporter: Optional[ReporterDef[Input, Output, EvalReport]],
     timeout: Optional[float],
     max_concurrency: Optional[int],
     project_id: Optional[str],
@@ -541,7 +552,7 @@ def _EvalCommon(
     base_experiment_id: Optional[str],
     git_metadata_settings: Optional[GitMetadataSettings],
     repo_info: Optional[RepoInfo],
-) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary]]:
+) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary[Input, Output]]]:
     """
     This helper is needed because in case of `_lazy_load`, we need to update
     the `_evals` global immediately instead of whenever the coroutine is
@@ -627,13 +638,13 @@ async def EvalAsync(
     name: str,
     data: EvalData[Input, Output],
     task: EvalTask[Input, Output],
-    scores: List[EvalScorer[Input, Output]],
+    scores: Sequence[EvalScorer[Input, Output]],
     experiment_name: Optional[str] = None,
     trial_count: int = 1,
     metadata: Optional[Metadata] = None,
     is_public: bool = False,
     update: bool = False,
-    reporter: Optional[ReporterDef] = None,
+    reporter: Optional[ReporterDef[Input, Output, EvalReport]] = None,
     timeout: Optional[float] = None,
     max_concurrency: Optional[int] = None,
     project_id: Optional[str] = None,
@@ -641,7 +652,7 @@ async def EvalAsync(
     base_experiment_id: Optional[str] = None,
     git_metadata_settings: Optional[GitMetadataSettings] = None,
     repo_info: Optional[RepoInfo] = None,
-) -> EvalResultWithSummary:
+) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
 
@@ -717,13 +728,13 @@ def Eval(
     name: str,
     data: EvalData[Input, Output],
     task: EvalTask[Input, Output],
-    scores: List[EvalScorer[Input, Output]],
+    scores: Sequence[EvalScorer[Input, Output]],
     experiment_name: Optional[str] = None,
     trial_count: int = 1,
     metadata: Optional[Metadata] = None,
     is_public: bool = False,
     update: bool = False,
-    reporter: Optional[ReporterDef] = None,
+    reporter: Optional[ReporterDef[Input, Output, EvalReport]] = None,
     timeout: Optional[float] = None,
     max_concurrency: Optional[int] = None,
     project_id: Optional[str] = None,
@@ -731,7 +742,7 @@ def Eval(
     base_experiment_id: Optional[str] = None,
     git_metadata_settings: Optional[GitMetadataSettings] = None,
     repo_info: Optional[RepoInfo] = None,
-) -> EvalResultWithSummary:
+) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
 
@@ -823,7 +834,10 @@ def Eval(
 
 def Reporter(
     name: str,
-    report_eval: Callable[[Evaluator, EvalResultWithSummary, bool, bool], Union[EvalReport, Awaitable[EvalReport]]],
+    report_eval: Callable[
+        [Evaluator[Input, Output], EvalResultWithSummary[Input, Output], bool, bool],
+        Union[EvalReport, Awaitable[EvalReport]],
+    ],
     report_run: Callable[[List[EvalReport], bool, bool], Union[bool, Awaitable[bool]]],
 ):
     """
@@ -909,8 +923,8 @@ def evaluate_filter(object, filter: Filter):
     return filter.pattern.match(serialize_json_with_plain_string(key)) is not None
 
 
-class DictEvalHooks(dict):
-    def __init__(self, metadata=None, expected=None):
+class DictEvalHooks(Dict[str, Any]):
+    def __init__(self, metadata: Optional[Any] = None, expected: Optional[Any] = None):
         if metadata is not None:
             self.update({"metadata": metadata})
         if expected is not None:
@@ -926,13 +940,13 @@ class DictEvalHooks(dict):
         return self.get("expected")
 
     @property
-    def span(self):
+    def span(self) -> Optional[Span]:
         return self._span
 
-    def set_span(self, span):
+    def set_span(self, span: Optional[Span]):
         self._span = span
 
-    def meta(self, **info):
+    def meta(self, **info: Any):
         warnings.warn(
             "meta() is deprecated. Use the metadata field directly instead.", DeprecationWarning, stacklevel=2
         )
@@ -943,7 +957,9 @@ class DictEvalHooks(dict):
         self.get("metadata").update(info)  # type: ignore
 
 
-def init_experiment(project_name=None, experiment_name: Optional[str] = None, set_current=False, **kwargs):
+def init_experiment(
+    project_name: Optional[str] = None, experiment_name: Optional[str] = None, set_current: bool = False, **kwargs: Any
+) -> Experiment:
     ret = _init_experiment(project=project_name, experiment=experiment_name, set_current=set_current, **kwargs)
     summary = ret.summarize(summarize_scores=False)
     eprint(f"Experiment {ret.name} is running at {summary.experiment_url}")
@@ -992,7 +1008,12 @@ def _scorer_name(scorer, scorer_idx):
     return ret
 
 
-async def run_evaluator(experiment, evaluator: Evaluator, position: Optional[int], filters: List[Filter]):
+async def run_evaluator(
+    experiment: Optional[Experiment],
+    evaluator: Evaluator[Input, Output],
+    position: Optional[int],
+    filters: List[Filter],
+) -> EvalResultWithSummary[Input, Output]:
     """Wrapper on _run_evaluator_internal that times out execution after evaluator.timeout."""
     results = await asyncio.wait_for(
         _run_evaluator_internal(experiment, evaluator, position, filters), evaluator.timeout
@@ -1227,7 +1248,9 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
     return results
 
 
-def build_local_summary(evaluator, results):
+def build_local_summary(
+    evaluator: Evaluator[Input, Output], results: List[EvalResultWithSummary[Input, Output]]
+) -> ExperimentSummary:
     scores_by_name = defaultdict(lambda: (0, 0))
     for result in results:
         for name, score in result.scores.items():

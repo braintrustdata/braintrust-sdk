@@ -1,7 +1,8 @@
 import abc
 import time
+from typing import Any, Callable, Dict, List, Optional
 
-from .logger import start_span
+from .logger import Span, start_span
 from .span_types import SpanTypeAttribute
 from .util import merge_dicts
 
@@ -10,14 +11,14 @@ X_CACHED_HEADER = "x-bt-cached"
 
 
 class NamedWrapper:
-    def __init__(self, wrapped):
+    def __init__(self, wrapped: Any):
         self.__wrapped = wrapped
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         return getattr(self.__wrapped, name)
 
 
-def log_headers(response, span):
+def log_headers(response: Any, span: Span):
     cached_value = response.headers.get(X_CACHED_HEADER) or response.headers.get(X_LEGACY_CACHED_HEADER)
 
     if cached_value:
@@ -28,7 +29,7 @@ def log_headers(response, span):
         )
 
 
-def postprocess_streaming_results(all_results):
+def postprocess_streaming_results(all_results: List[Dict[str, Any]]) -> Dict[str, Any]:
     role = None
     content = None
     tool_calls = None
@@ -86,11 +87,11 @@ def postprocess_streaming_results(all_results):
 
 
 class ChatCompletionWrapper:
-    def __init__(self, create_fn, acreate_fn):
+    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]]):
         self.create_fn = create_fn
         self.acreate_fn = acreate_fn
 
-    def create(self, *args, **kwargs):
+    def create(self, *args: Any, **kwargs: Any) -> Any:
         params = self._parse_params(kwargs)
         stream = kwargs.get("stream", False)
 
@@ -146,7 +147,7 @@ class ChatCompletionWrapper:
             if should_end:
                 span.end()
 
-    async def acreate(self, *args, **kwargs):
+    async def acreate(self, *args: Any, **kwargs: Any) -> Any:
         params = self._parse_params(kwargs)
         stream = kwargs.get("stream", False)
 
@@ -204,7 +205,7 @@ class ChatCompletionWrapper:
                 span.end()
 
     @classmethod
-    def _parse_params(cls, params):
+    def _parse_params(cls, params: Dict[str, Any]) -> Dict[str, Any]:
         # First, destructively remove span_info
         ret = params.pop("span_info", {})
 
@@ -221,17 +222,17 @@ class ChatCompletionWrapper:
 
 
 class BaseWrapper(abc.ABC):
-    def __init__(self, create_fn, acreate_fn, name):
+    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]], name: str):
         self._create_fn = create_fn
         self._acreate_fn = acreate_fn
         self._name = name
 
     @abc.abstractmethod
-    def process_output(self, response, span):
+    def process_output(self, response: Dict[str, Any], span: Span):
         """Process the API response and log relevant information to the span."""
         pass
 
-    def create(self, *args, **kwargs):
+    def create(self, *args: Any, **kwargs: Any) -> Any:
         params = self._parse_params(kwargs)
 
         with start_span(
@@ -249,7 +250,7 @@ class BaseWrapper(abc.ABC):
             self.process_output(log_response, span)
             return raw_response
 
-    async def acreate(self, *args, **kwargs):
+    async def acreate(self, *args: Any, **kwargs: Any) -> Any:
         params = self._parse_params(kwargs)
 
         with start_span(
@@ -266,7 +267,7 @@ class BaseWrapper(abc.ABC):
             return raw_response
 
     @classmethod
-    def _parse_params(cls, params):
+    def _parse_params(cls, params: Dict[str, Any]) -> Dict[str, Any]:
         # First, destructively remove span_info
         ret = params.pop("span_info", {})
 
@@ -283,10 +284,10 @@ class BaseWrapper(abc.ABC):
 
 
 class EmbeddingWrapper(BaseWrapper):
-    def __init__(self, create_fn, acreate_fn):
+    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]]):
         super().__init__(create_fn, acreate_fn, "Embedding")
 
-    def process_output(self, response, span):
+    def process_output(self, response: Dict[str, Any], span: Span):
         span.log(
             metrics={
                 "tokens": response["usage"]["total_tokens"],
@@ -299,54 +300,54 @@ class EmbeddingWrapper(BaseWrapper):
 
 
 class ModerationWrapper(BaseWrapper):
-    def __init__(self, create_fn, acreate_fn):
+    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]]):
         super().__init__(create_fn, acreate_fn, "Moderation")
 
-    def process_output(self, response, span):
+    def process_output(self, response: Any, span: Span):
         span.log(
             output=response["results"],
         )
 
 
 class ChatCompletionV0Wrapper(NamedWrapper):
-    def __init__(self, chat):
+    def __init__(self, chat: Any):
         self.__chat = chat
         super().__init__(chat)
 
-    def create(self, *args, **kwargs):
+    def create(self, *args: Any, **kwargs: Any) -> Any:
         return ChatCompletionWrapper(self.__chat.create, self.__chat.acreate).create(*args, **kwargs)
 
-    async def acreate(self, *args, **kwargs):
+    async def acreate(self, *args: Any, **kwargs: Any) -> Any:
         return await ChatCompletionWrapper(self.__chat.create, self.__chat.acreate).acreate(*args, **kwargs)
 
 
 class EmbeddingV0Wrapper(NamedWrapper):
-    def __init__(self, embedding):
+    def __init__(self, embedding: Any):
         self.__embedding = embedding
         super().__init__(embedding)
 
-    def create(self, *args, **kwargs):
+    def create(self, *args: Any, **kwargs: Any) -> Any:
         return EmbeddingWrapper(self.__embedding.create, self.__embedding.acreate).create(*args, **kwargs)
 
-    async def acreate(self, *args, **kwargs):
+    async def acreate(self, *args: Any, **kwargs: Any) -> Any:
         return await ChatCompletionWrapper(self.__embedding.create, self.__embedding.acreate).acreate(*args, **kwargs)
 
 
 class ModerationV0Wrapper(NamedWrapper):
-    def __init__(self, moderation):
+    def __init__(self, moderation: Any):
         self.__moderation = moderation
         super().__init__(moderation)
 
-    def create(self, *args, **kwargs):
+    def create(self, *args: Any, **kwargs: Any) -> Any:
         return ModerationWrapper(self.__moderation.create, self.__moderation.acreate).create(*args, **kwargs)
 
-    async def acreate(self, *args, **kwargs):
+    async def acreate(self, *args: Any, **kwargs: Any) -> Any:
         return await ModerationWrapper(self.__moderation.create, self.__moderation.acreate).acreate(*args, **kwargs)
 
 
 # This wraps 0.*.* versions of the openai module, eg https://github.com/openai/openai-python/tree/v0.28.1
 class OpenAIV0Wrapper(NamedWrapper):
-    def __init__(self, openai):
+    def __init__(self, openai: Any):
         super().__init__(openai)
         self.ChatCompletion = ChatCompletionV0Wrapper(openai.ChatCompletion)
         self.Embedding = EmbeddingV0Wrapper(openai.Embedding)
@@ -354,61 +355,61 @@ class OpenAIV0Wrapper(NamedWrapper):
 
 
 class CompletionsV1Wrapper(NamedWrapper):
-    def __init__(self, completions):
+    def __init__(self, completions: Any):
         self.__completions = completions
         super().__init__(completions)
 
-    def create(self, *args, **kwargs):
+    def create(self, *args: Any, **kwargs: Any) -> Any:
         return ChatCompletionWrapper(self.__completions.with_raw_response.create, None).create(*args, **kwargs)
 
 
 class EmbeddingV1Wrapper(NamedWrapper):
-    def __init__(self, embedding):
+    def __init__(self, embedding: Any):
         self.__embedding = embedding
         super().__init__(embedding)
 
-    def create(self, *args, **kwargs):
+    def create(self, *args: Any, **kwargs: Any) -> Any:
         return EmbeddingWrapper(self.__embedding.with_raw_response.create, None).create(*args, **kwargs)
 
 
 class ModerationV1Wrapper(NamedWrapper):
-    def __init__(self, moderation):
+    def __init__(self, moderation: Any):
         self.__moderation = moderation
         super().__init__(moderation)
 
-    def create(self, *args, **kwargs):
+    def create(self, *args: Any, **kwargs: Any) -> Any:
         return ModerationWrapper(self.__moderation.with_raw_response.create, None).create(*args, **kwargs)
 
 
 class AsyncCompletionsV1Wrapper(NamedWrapper):
-    def __init__(self, completions):
+    def __init__(self, completions: Any):
         self.__completions = completions
         super().__init__(completions)
 
-    async def create(self, *args, **kwargs):
+    async def create(self, *args: Any, **kwargs: Any) -> Any:
         return await ChatCompletionWrapper(None, self.__completions.with_raw_response.create).acreate(*args, **kwargs)
 
 
 class AsyncEmbeddingV1Wrapper(NamedWrapper):
-    def __init__(self, embedding):
+    def __init__(self, embedding: Any):
         self.__embedding = embedding
         super().__init__(embedding)
 
-    async def create(self, *args, **kwargs):
+    async def create(self, *args: Any, **kwargs: Any) -> Any:
         return await EmbeddingWrapper(None, self.__embedding.with_raw_response.create).acreate(*args, **kwargs)
 
 
 class AsyncModerationV1Wrapper(NamedWrapper):
-    def __init__(self, moderation):
+    def __init__(self, moderation: Any):
         self.__moderation = moderation
         super().__init__(moderation)
 
-    async def create(self, *args, **kwargs):
+    async def create(self, *args: Any, **kwargs: Any) -> Any:
         return await ModerationWrapper(None, self.__moderation.with_raw_response.create).acreate(*args, **kwargs)
 
 
 class ChatV1Wrapper(NamedWrapper):
-    def __init__(self, chat):
+    def __init__(self, chat: Any):
         super().__init__(chat)
 
         import openai
@@ -420,25 +421,25 @@ class ChatV1Wrapper(NamedWrapper):
 
 
 class BetaCompletionsV1Wrapper(NamedWrapper):
-    def __init__(self, completions):
+    def __init__(self, completions: Any):
         self.__completions = completions
         super().__init__(completions)
 
-    def parse(self, *args, **kwargs):
+    def parse(self, *args: Any, **kwargs: Any) -> Any:
         return ChatCompletionWrapper(self.__completions.parse, None).create(*args, **kwargs)
 
 
 class AsyncBetaCompletionsV1Wrapper(NamedWrapper):
-    def __init__(self, completions):
+    def __init__(self, completions: Any):
         self.__completions = completions
         super().__init__(completions)
 
-    async def parse(self, *args, **kwargs):
+    async def parse(self, *args: Any, **kwargs: Any) -> Any:
         return await ChatCompletionWrapper(None, self.__completions.parse).acreate(*args, **kwargs)
 
 
 class BetaChatV1Wrapper(NamedWrapper):
-    def __init__(self, chat):
+    def __init__(self, chat: Any):
         super().__init__(chat)
 
         import openai
@@ -450,14 +451,14 @@ class BetaChatV1Wrapper(NamedWrapper):
 
 
 class BetaV1Wrapper(NamedWrapper):
-    def __init__(self, beta):
+    def __init__(self, beta: Any):
         super().__init__(beta)
         self.chat = BetaChatV1Wrapper(beta.chat)
 
 
 # This wraps 1.*.* versions of the openai module, eg https://github.com/openai/openai-python/tree/v1.1.0
 class OpenAIV1Wrapper(NamedWrapper):
-    def __init__(self, openai):
+    def __init__(self, openai: Any):
         super().__init__(openai)
         import openai as oai
 
@@ -477,7 +478,7 @@ class OpenAIV1Wrapper(NamedWrapper):
             self.moderations = ModerationV1Wrapper(openai.moderations)
 
 
-def wrap_openai(openai):
+def wrap_openai(openai: Any):
     """
     Wrap the openai module (pre v1) or OpenAI instance (post v1) to add tracing.
     If Braintrust is not configured, this is a no-op.
