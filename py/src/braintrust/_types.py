@@ -13,6 +13,13 @@ from typing_extensions import NotRequired
 SpanType = Literal["llm", "score", "function", "eval", "task", "tool"]
 
 
+class Metadata(TypedDict):
+    model: NotRequired[Optional[str]]
+    """
+    The model used for this example
+    """
+
+
 class Origin(TypedDict):
     object_type: Union[
         Literal["experiment", "dataset", "prompt", "function", "prompt_session"],
@@ -64,7 +71,7 @@ class DatasetEvent(TypedDict):
     """
     The output of your application, including post-processing (an arbitrary, JSON serializable object)
     """
-    metadata: NotRequired[Optional[Mapping[str, Any]]]
+    metadata: NotRequired[Optional[Metadata]]
     """
     A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
     """
@@ -196,7 +203,7 @@ class ExperimentEvent(TypedDict):
     """
     A dictionary of numeric values (between 0 and 1) to log. The scores should give you a variety of signals that help you determine how accurate the outputs are compared to what you expect and diagnose failures. For example, a summarization app might have one score that tells you how accurate the summary is, and another that measures the word similarity between the generated and grouth truth summary. The word similarity score could help you determine whether the summarization was covering similar concepts or not. You can use these scores to help you sort, filter, and compare experiments
     """
-    metadata: NotRequired[Optional[Mapping[str, Any]]]
+    metadata: NotRequired[Optional[Metadata]]
     """
     A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings
     """
