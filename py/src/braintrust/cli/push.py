@@ -305,7 +305,7 @@ def run(args):
             "Please run the push command from the project root."
         )
     path = os.path.abspath(args.file)
-    module_name = re.sub(".py$", "", re.sub("/", ".", os.path.relpath(path)))
+    module_name = re.sub(".py$", "", os.path.relpath(path).replace("-", "_").replace("/", "."))
 
     try:
         sources = _import_module(module_name, path)
