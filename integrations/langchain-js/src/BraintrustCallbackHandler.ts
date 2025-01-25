@@ -2,8 +2,6 @@ import { isObject } from "@braintrust/core";
 import {
   BaseCallbackHandler,
   BaseCallbackHandlerInput,
-  HandleLLMNewTokenCallbackFields,
-  NewTokenIndices,
 } from "@langchain/core/callbacks/base";
 import { AgentAction, AgentFinish } from "@langchain/core/dist/agents";
 import { DocumentInterface } from "@langchain/core/dist/documents/document";
@@ -193,25 +191,6 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
           ([key, _]) => !this.options.excludeMetadataProps.test(key),
         ),
       )
-    );
-  }
-
-  async handleLLMNewToken(
-    token: string,
-    idx: NewTokenIndices,
-    runId: string,
-    parentRunId?: string,
-    tags?: string[],
-    fields?: HandleLLMNewTokenCallbackFields,
-  ): Promise<void> {
-    console.warn(
-      "handleLLMNewToken not implemented",
-      token,
-      idx,
-      runId,
-      parentRunId,
-      tags,
-      fields,
     );
   }
 
@@ -491,25 +470,6 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
         tags,
       });
     }
-  }
-
-  async handleCustomEvent(
-    eventName: string,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    data: any,
-    runId: string,
-    tags?: string[],
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    metadata?: Record<string, any>,
-  ): Promise<void> {
-    console.warn(
-      "handleCustomEvent not implemented",
-      eventName,
-      data,
-      runId,
-      tags,
-      metadata,
-    );
   }
 }
 
