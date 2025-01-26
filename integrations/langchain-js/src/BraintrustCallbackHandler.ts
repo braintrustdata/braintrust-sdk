@@ -114,7 +114,11 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
 
     let span = parentSpan.startSpan(args);
 
-    if (Object.is(span, NOOP_SPAN)) {
+    if (
+      // If the original logger is NOOP_SPAN, we don't need bother folks to configure it.
+      !Object.is(this.options.logger, NOOP_SPAN) &&
+      Object.is(span, NOOP_SPAN)
+    ) {
       console.warn(
         "Braintrust logging not configured. Pass a `logger`, call `initLogger`, or run an experiment to configure Braintrust logging. Setting up a default.",
       );

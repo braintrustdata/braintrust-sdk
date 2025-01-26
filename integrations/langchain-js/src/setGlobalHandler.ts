@@ -13,3 +13,7 @@ export const setGlobalHandler = (handler: BaseCallbackHandler) => {
     contextVar: BT_HANDLER,
   });
 };
+
+export const clearGlobalHandler = () => {
+  setContextVariable(BT_HANDLER, undefined);
+};
