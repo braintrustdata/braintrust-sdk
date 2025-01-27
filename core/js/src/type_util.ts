@@ -2,18 +2,32 @@
  * @example
  * isObject([1, 2, 3]) // false
  */
-export function isObject(value: any): value is { [key: string]: any } {
+export function isObject(value: unknown): value is { [key: string]: unknown } {
   return value instanceof Object && !(value instanceof Array);
 }
 
-export function isArray(value: any): value is any[] {
+export function isArray(value: unknown): value is unknown[] {
   return value instanceof Array;
 }
 
-export function isEmpty(a: any): a is null | undefined {
+export function isObjectOrArray(
+  value: unknown,
+): value is { [key: string]: unknown } {
+  return value instanceof Object;
+}
+
+export function isEmpty(a: unknown): a is null | undefined {
   return a === undefined || a === null;
 }
 
-export function isNumber(a: any) {
+export function notEmpty<T>(a: T | null | undefined): T {
+  if (!isEmpty(a)) {
+    return a;
+  } else {
+    throw new Error(`Unexpected empty value ${a}`);
+  }
+}
+
+export function isNumber(a: unknown): a is number | bigint {
   return typeof a === "number" || typeof a === "bigint";
 }

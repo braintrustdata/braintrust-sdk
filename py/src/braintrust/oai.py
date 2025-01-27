@@ -196,6 +196,7 @@ class ChatCompletionWrapper:
                         "tokens": log_response["usage"]["total_tokens"],
                         "prompt_tokens": log_response["usage"]["prompt_tokens"],
                         "completion_tokens": log_response["usage"]["completion_tokens"],
+                        "time_to_first_token": time.time() - start,
                     },
                     output=log_response["choices"],
                 )

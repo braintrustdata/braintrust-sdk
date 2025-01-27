@@ -80,7 +80,10 @@ function generateBaseEventOpSchema(objectType: ObjectTypeWithEvent) {
     tags: z.array(z.string()).nullish().describe("A list of tags to log"),
     scores: z.record(z.number().min(0).max(1).nullish()).nullish(),
     metadata: z
-      .record(customTypes.unknown)
+      .object({
+        model: z.string().nullish().describe("The model used for this example"),
+      })
+      .catchall(customTypes.unknown)
       .nullish()
       .describe(
         "A dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings",
