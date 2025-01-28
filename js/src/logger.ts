@@ -32,6 +32,8 @@ import {
   SpanObjectTypeV3,
   spanObjectTypeV3ToString,
   _urljoin,
+  isObject,
+  isArray,
 } from "@braintrust/core";
 import {
   AnyModelParam,
@@ -53,6 +55,8 @@ import {
   BRAINTRUST_ATTACHMENT,
   attachmentStatusSchema,
   attachmentReferenceSchema,
+  ModelParams,
+  responseFormatJsonSchemaSchema,
 } from "@braintrust/core/typespecs";
 import iso, { IsoAsyncLocalStorage } from "./isomorph";
 import {
@@ -4703,6 +4707,80 @@ export type PromptRowWithId<
     ? Pick<PromptRow, "_xact_id">
     : Partial<Pick<PromptRow, "_xact_id">>);
 
+export function deserializePlainStringAsJSON(s: string) {
+  if (s.trim() === "") {
+    return { value: null, error: undefined };
+  }
+
+  try {
+    return { value: JSON.parse(s), error: undefined };
+  } catch (e) {
+    return { value: s, error: e };
+  }
+}
+
+function renderTemplatedObject(obj: unknown, args: unknown): unknown {
+  if (typeof obj === "string") {
+    return Mustache.render(obj, args, undefined, {
+      escape: (value) => {
+        if (typeof value === "string") {
+          return value;
+        } else {
+          return JSON.stringify(value);
+        }
+      },
+    });
+  } else if (isArray(obj)) {
+    return obj.map((item) => renderTemplatedObject(item, args));
+  } else if (isObject(obj)) {
+    return Object.fromEntries(
+      Object.entries(obj).map(([key, value]) => [
+        key,
+        renderTemplatedObject(value, args),
+      ]),
+    );
+  }
+  return obj;
+}
+
+export function renderPromptParams(
+  params: ModelParams | undefined,
+  args: unknown,
+): ModelParams | undefined {
+  const schemaParsed = z
+    .object({
+      response_format: z.object({
+        type: z.literal("json_schema"),
+        json_schema: responseFormatJsonSchemaSchema
+          .omit({ schema: true })
+          .extend({
+            schema: z.unknown(),
+          }),
+      }),
+    })
+    .safeParse(params);
+  if (schemaParsed.success) {
+    const rawSchema = schemaParsed.data.response_format.json_schema.schema;
+    const templatedSchema = renderTemplatedObject(rawSchema, args);
+    const parsedSchema =
+      typeof templatedSchema === "string"
+        ? deserializePlainStringAsJSON(templatedSchema).value
+        : templatedSchema;
+
+    return {
+      ...params,
+      response_format: {
+        ...schemaParsed.data.response_format,
+        json_schema: {
+          ...schemaParsed.data.response_format.json_schema,
+          schema: parsedSchema,
+        },
+      },
+    };
+  }
+  return params;
+}
+
 export class Prompt<
   HasId extends boolean = true,
   HasVersion extends boolean = true,
@@ -4850,7 +4928,7 @@ export class Prompt<
       ];
 
       return {
-        ...params,
+        ...renderPromptParams(params, variables),
         ...spanInfo,
         messages: messages,
         ...(prompt.tools?.trim()
@@ -4872,7 +4950,7 @@ export class Prompt<
       }
 
       return {
-        ...params,
+        ...renderPromptParams(params, variables),
         ...spanInfo,
         prompt: Mustache.render(prompt.content, variables),
       } as CompiledPrompt<Flavor>;

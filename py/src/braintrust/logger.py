@@ -3369,6 +3369,55 @@ def render_message(render, message):
     }
 
 
+_base_get_key = chevron.renderer._get_key
+
+
+def _get_key(key, scopes, warn):
+    thing = _base_get_key(key, scopes, warn)
+    if isinstance(thing, str):
+        return thing
+    return json.dumps(thing)
+
+
+chevron.renderer._get_key = _get_key
+chevron.renderer._html_escape = lambda x: x
+
+
+def render_templated_object(obj: Any, args: Any) -> Any:
+    if isinstance(obj, str):
+        return chevron.render(obj, data=args)
+    elif isinstance(obj, list):
+        return [render_templated_object(item, args) for item in obj]
+    elif isinstance(obj, dict):
+        return {key: render_templated_object(value, args) for key, value in obj.items()}
+    return obj
+
+
+def render_prompt_params(params: Dict[str, Any], args: Any) -> Dict[str, Any]:
+    if not params:
+        return params
+
+    response_format = params.get("response_format")
+    if not response_format or not isinstance(response_format, dict):
+        return params
+
+    if response_format.get("type") != "json_schema":
+        return params
+
+    json_schema = response_format.get("json_schema")
+    if not json_schema or not isinstance(json_schema, dict):
+        return params
+
+    raw_schema = json_schema.get("schema")
+    if raw_schema is None:
+        return params
+
+    templated_schema = render_templated_object(raw_schema, args)
+    parsed_schema = json.loads(templated_schema) if isinstance(templated_schema, str) else templated_schema
+
+    return {**params, "response_format": {**response_format, "json_schema": {**json_schema, "schema": parsed_schema}}}
+
+
 class Prompt:
     """
     A prompt object consists of prompt text, a model, and model parameters (such as temperature), which
@@ -3427,9 +3476,12 @@ class Prompt:
         :returns: A dictionary that includes the rendered prompt and arguments, that can be passed as kwargs to the OpenAI client.
         """
 
+        params = self.options.get("params") or {}
+        params = {k: v for (k, v) in params.items() if k not in BRAINTRUST_PARAMS}
+
         ret = {
             **self.defaults,
-            **{k: v for (k, v) in self.options.get("params", {}).items() if k not in BRAINTRUST_PARAMS},
+            **render_prompt_params(params, build_args),
             **({"model": self.options["model"]} if "model" in self.options else {}),
         }
 
@@ -3450,7 +3502,8 @@ class Prompt:
 
         if not self.prompt:
             raise ValueError("Empty prompt")
-        elif self.prompt.type == "completion":
+
+        if self.prompt.type == "completion":
             ret["prompt"] = chevron.render(self.prompt.content, data=build_args)
         elif self.prompt.type == "chat":
             ret["messages"] = [

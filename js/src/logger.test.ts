@@ -6,6 +6,7 @@ import {
   initExperiment,
   initLogger,
   NOOP_SPAN,
+  Prompt,
 } from "./logger";
 import { BackgroundLogEvent } from "@braintrust/core";
 import { configureNode } from "./node";
@@ -171,4 +172,78 @@ test("deepCopyEvent with attachments", () => {
   expect((copy.output as any).nestedAttachment.attachment).toBe(attachment2);
   expect((copy.output as any).attachmentList[0]).toBe(attachment1);
   expect((copy.output as any).attachmentList[1]).toBe(attachment2);
+});
+
+test("prompt.build with structured output templating", () => {
+  const prompt = new Prompt<false, false>(
+    {
+      name: "Calculator",
+      slug: "calculator",
+      project_id: "p",
+      prompt_data: {
+        prompt: {
+          type: "chat",
+          messages: [
+            {
+              role: "system",
+              content:
+                "Please compute {{input.expression}} and return the result in JSON.",
+            },
+          ],
+        },
+        options: {
+          model: "gpt-4o",
+          params: {
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "schema",
+                schema: "{{input.schema}}",
+                strict: true,
+              },
+            },
+          },
+        },
+      },
+    },
+    {},
+    false,
+  );
+
+  const result = prompt.build({
+    input: {
+      expression: "2 + 3",
+      schema: {
+        type: "object",
+        properties: {
+          final_answer: {
+            type: "string",
+          },
+        },
+        required: ["final_answer"],
+        additionalProperties: false,
+      },
+    },
+  });
+  expect(result).toMatchObject({
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "system",
+        content: "Please compute 2 + 3 and return the result in JSON.",
+      },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "schema",
+        schema: {
+          type: "object",
+          properties: {
+            final_answer: { type: "string" },
+          },
+        },
+      },
+    },
+  });
 });
