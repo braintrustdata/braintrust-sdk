@@ -3,65 +3,58 @@
 import { v4 as uuidv4 } from "uuid";
 
 import {
-  IS_MERGE_FIELD,
-  TRANSACTION_ID_FIELD,
-  mergeDicts,
-  mergeRowBatch,
-  VALID_SOURCES,
-  AUDIT_SOURCE_FIELD,
-  AUDIT_METADATA_FIELD,
-  mergeGitMetadataSettings,
-  TransactionId,
-  IdField,
-  ExperimentLogPartialArgs,
-  ExperimentLogFullArgs,
-  LogFeedbackFullArgs,
-  SanitizedExperimentLogPartialArgs,
-  ExperimentEvent,
-  BackgroundLogEvent,
+  _urljoin,
   AnyDatasetRecord,
-  DEFAULT_IS_LEGACY_DATASET,
-  DatasetRecord,
-  ensureDatasetRecord,
-  makeLegacyEvent,
-  constructJsonArray,
-  SpanTypeAttribute,
-  SpanType,
+  AUDIT_METADATA_FIELD,
+  AUDIT_SOURCE_FIELD,
+  BackgroundLogEvent,
   batchItems,
+  constructJsonArray,
+  DatasetRecord,
+  DEFAULT_IS_LEGACY_DATASET,
+  ensureDatasetRecord,
+  ExperimentEvent,
+  ExperimentLogFullArgs,
+  ExperimentLogPartialArgs,
+  IdField,
+  IS_MERGE_FIELD,
+  LogFeedbackFullArgs,
+  makeLegacyEvent,
+  mergeDicts,
+  mergeGitMetadataSettings,
+  mergeRowBatch,
+  SanitizedExperimentLogPartialArgs,
   SpanComponentsV3,
   SpanObjectTypeV3,
   spanObjectTypeV3ToString,
-  _urljoin,
+  SpanType,
+  SpanTypeAttribute,
+  TRANSACTION_ID_FIELD,
+  TransactionId,
+  VALID_SOURCES,
 } from "@braintrust/core";
 import {
   AnyModelParam,
-  BRAINTRUST_PARAMS,
-  PromptData,
-  Tools,
-  promptDataSchema,
-  promptSchema,
-  Prompt as PromptRow,
-  toolsSchema,
-  PromptSessionEvent,
-  OpenAIMessage,
-  Message,
-  GitMetadataSettings,
-  RepoInfo,
-  gitMetadataSettingsSchema,
   AttachmentReference,
-  AttachmentStatus,
-  BRAINTRUST_ATTACHMENT,
-  attachmentStatusSchema,
   attachmentReferenceSchema,
+  AttachmentStatus,
+  attachmentStatusSchema,
+  BRAINTRUST_ATTACHMENT,
+  BRAINTRUST_PARAMS,
+  GitMetadataSettings,
+  gitMetadataSettingsSchema,
+  Message,
+  OpenAIMessage,
+  PromptData,
+  promptDataSchema,
+  Prompt as PromptRow,
+  promptSchema,
+  PromptSessionEvent,
+  RepoInfo,
+  Tools,
+  toolsSchema,
 } from "@braintrust/core/typespecs";
-import iso, { IsoAsyncLocalStorage } from "./isomorph";
-import {
-  runCatchFinally,
-  GLOBAL_PROJECT,
-  getCurrentUnixTimestamp,
-  isEmpty,
-  LazyValue,
-} from "./util";
+import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
 import { z, ZodError } from "zod";
 import {
@@ -69,10 +62,17 @@ import {
   createFinalValuePassThroughStream,
   devNullWritableStream,
 } from "./functions/stream";
-import { waitUntil } from "@vercel/functions";
-import { PromptCache } from "./prompt-cache/prompt-cache";
+import iso, { IsoAsyncLocalStorage } from "./isomorph";
 import { canUseDiskCache, DiskCache } from "./prompt-cache/disk-cache";
 import { LRUCache } from "./prompt-cache/lru-cache";
+import { PromptCache } from "./prompt-cache/prompt-cache";
+import {
+  getCurrentUnixTimestamp,
+  GLOBAL_PROJECT,
+  isEmpty,
+  LazyValue,
+  runCatchFinally,
+} from "./util";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -98,6 +98,12 @@ export interface Exportable {
    * Return a serialized representation of the object that can be used to start subspans in other places. See {@link Span.traced} for more details.
    */
   export(): Promise<string>;
+}
+
+interface SpanObject {
+  id: string;
+  rootSpanId: string;
+  spanParents: string[];
 }
 
 /**
@@ -207,6 +213,8 @@ export interface Span extends Exportable {
 
   // For type identification.
   kind: "span";
+
+  toObject(): SpanObject;
 }
 
 /**
@@ -254,6 +262,14 @@ export class NoopSpan implements Span {
   }
 
   public setAttributes(_args: Omit<StartSpanArgs, "event">) {}
+
+  public toObject(): SpanObject {
+    return {
+      id: this.id,
+      rootSpanId: this.id,
+      spanParents: [],
+    };
+  }
 }
 
 export const NOOP_SPAN = new NoopSpan();
@@ -4247,6 +4263,14 @@ export class SpanImpl implements Span {
 
   public close(args?: EndSpanArgs): number {
     return this.end(args);
+  }
+
+  public toObject(): SpanObject {
+    return {
+      id: this.id,
+      rootSpanId: this.rootSpanId,
+      spanParents: this.spanParents ?? [],
+    };
   }
 }
 
