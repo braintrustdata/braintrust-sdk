@@ -91,7 +91,7 @@ export interface FileHandle {
 
 function evaluateBuildResults(
   inFile: string,
-  buildResult: esbuild.BuildResult,
+  buildResult: esbuild.BuildResult
 ): EvaluatorFile | null {
   if (!buildResult.outputFiles) {
     return null;
@@ -105,7 +105,7 @@ async function initExperiment(
   evaluatorData: {
     data: EvalData<unknown, unknown, BaseMetadata>;
     baseExperiment: string | undefined;
-  },
+  }
 ) {
   const { data, baseExperiment: defaultBaseExperiment } = evaluatorData;
   // NOTE: This code is duplicated with initExperiment in js/src/framework.ts.
@@ -128,14 +128,14 @@ async function initExperiment(
   });
   const info = await logger.summarize({ summarizeScores: false });
   console.error(
-    `Experiment ${info.experimentName} is running at ${info.experimentUrl}`,
+    `Experiment ${info.experimentName} is running at ${info.experimentUrl}`
   );
   return logger;
 }
 
 function resolveReporter(
   reporter: string | ReporterDef<unknown> | undefined,
-  reporters: Record<string, ReporterDef<unknown>>,
+  reporters: Record<string, ReporterDef<unknown>>
 ) {
   if (typeof reporter === "string") {
     if (!reporters[reporter]) {
@@ -151,7 +151,7 @@ function resolveReporter(
   } else {
     const reporterNames = Object.keys(reporters).join(", ");
     throw new Error(
-      `Multiple reporters found (${reporterNames}). Please specify a reporter explicitly.`,
+      `Multiple reporters found (${reporterNames}). Please specify a reporter explicitly.`
     );
   }
 }
@@ -167,7 +167,7 @@ type AllReports = Record<
 function addReport(
   evalReports: AllReports,
   reporter: ReporterDef<unknown>,
-  report: unknown,
+  report: unknown
 ) {
   if (!evalReports[reporter.name]) {
     evalReports[reporter.name] = {
@@ -180,7 +180,7 @@ function addReport(
 
 function buildWatchPluginForEvaluator(
   inFile: string,
-  opts: EvaluatorOpts,
+  opts: EvaluatorOpts
 ): esbuild.Plugin {
   const evaluators: EvaluatorState = {
     evaluators: [],
@@ -208,7 +208,7 @@ function buildWatchPluginForEvaluator(
         }
 
         evaluators.evaluators = evaluators.evaluators.filter(
-          (e) => e.sourceFile !== inFile,
+          (e) => e.sourceFile !== inFile
         );
 
         // Update the evaluators and reporters
@@ -226,7 +226,7 @@ function buildWatchPluginForEvaluator(
           });
         }
         for (const [reporterName, reporter] of Object.entries(
-          evalResult.reporters,
+          evalResult.reporters
         )) {
           evaluators.reporters[reporterName] = reporter;
         }
@@ -251,11 +251,11 @@ function buildWatchPluginForEvaluator(
               data: evalData.data,
             },
             opts.progressReporter,
-            opts.filters,
+            opts.filters
           );
           const resolvedReporter = resolveReporter(
             reporter,
-            evaluators.reporters, // Let these accumulate across all files.
+            evaluators.reporters // Let these accumulate across all files.
           );
 
           const report = resolvedReporter.reportEval(
@@ -264,14 +264,14 @@ function buildWatchPluginForEvaluator(
             {
               verbose: opts.verbose,
               jsonl: opts.jsonl,
-            },
+            }
           );
 
           addReport(evalReports, resolvedReporter, report);
         }
 
         for (const [reporterName, { reporter, results }] of Object.entries(
-          evalReports,
+          evalReports
         )) {
           const success = await reporter.reportRun(await Promise.all(results));
           if (!success) {
@@ -400,7 +400,7 @@ export function handleBuildFailure({
     console.warn(result.error);
   } else {
     console.warn(
-      `Failed to compile ${result.sourceFile}: ${result.error.message}`,
+      `Failed to compile ${result.sourceFile}: ${result.error.message}`
     );
   }
 }
@@ -408,7 +408,7 @@ export function handleBuildFailure({
 function updateEvaluators(
   evaluators: EvaluatorState,
   buildResults: BtBuildResult[],
-  opts: EvaluatorOpts,
+  opts: EvaluatorOpts
 ) {
   for (const result of buildResults) {
     if (result.type === "failure") {
@@ -435,7 +435,7 @@ function updateEvaluators(
     }
 
     for (const [reporterName, reporter] of Object.entries(
-      result.evaluator.reporters,
+      result.evaluator.reporters
     )) {
       if (
         evaluators.reporters[reporterName] &&
@@ -443,8 +443,8 @@ function updateEvaluators(
       ) {
         console.warn(
           warning(
-            `Reporter '${reporterName}' already exists. Will skip '${reporterName}' from ${result.sourceFile}.`,
-          ),
+            `Reporter '${reporterName}' already exists. Will skip '${reporterName}' from ${result.sourceFile}.`
+          )
         );
         continue;
       }
@@ -482,10 +482,10 @@ async function runAndWatch({
 
 async function runOnce(
   handles: Record<string, FileHandle>,
-  opts: EvaluatorOpts,
+  opts: EvaluatorOpts
 ) {
   const buildPromises = Object.values(handles).map((handle) =>
-    handle.rebuild(),
+    handle.rebuild()
   );
 
   const buildResults = await Promise.all(buildPromises);
@@ -495,7 +495,7 @@ async function runOnce(
         Object.entries(handles).map(([inFile, handle]) => [
           inFile,
           handle.bundle(),
-        ]),
+        ])
       )
     : null;
 
@@ -531,7 +531,7 @@ async function runOnce(
           data: evalData.data,
         },
         opts.progressReporter,
-        opts.filters,
+        opts.filters
       );
     } finally {
       if (logger) {
@@ -562,7 +562,7 @@ async function runOnce(
     const evaluator = evaluators.evaluators[idx];
     const resolvedReporter = resolveReporter(
       evaluator.reporter,
-      evaluators.reporters,
+      evaluators.reporters
     );
 
     const report = resolvedReporter.reportEval(
@@ -572,7 +572,7 @@ async function runOnce(
       {
         verbose: opts.verbose,
         jsonl: opts.jsonl,
-      },
+      }
     );
 
     addReport(evalReports, resolvedReporter, report);
@@ -582,7 +582,7 @@ async function runOnce(
     await uploadHandleBundles({
       buildResults: buildResults.filter(
         // We handle errors above, so it's fine to filter down to successes here.
-        (result): result is BuildSuccess => result.type === "success",
+        (result): result is BuildSuccess => result.type === "success"
       ),
       evalToExperiment,
       bundlePromises,
@@ -595,7 +595,7 @@ async function runOnce(
 
   let allSuccess = true;
   for (const [_reporterName, { reporter, results }] of Object.entries(
-    evalReports,
+    evalReports
   )) {
     const success = await reporter.reportRun(await Promise.all(results));
     allSuccess = allSuccess && success;
@@ -607,7 +607,7 @@ async function runOnce(
 function checkMatch(
   pathInput: string,
   include_patterns: string[] | null,
-  exclude_patterns: string[] | null,
+  exclude_patterns: string[] | null
 ): boolean {
   const p = path.resolve(pathInput);
   if (include_patterns !== null) {
@@ -640,7 +640,7 @@ function checkMatch(
 
 async function collectFiles(
   inputPath: string,
-  mode: "eval" | "bundle",
+  mode: "eval" | "bundle"
 ): Promise<string[]> {
   let pathStat = null;
   try {
@@ -656,15 +656,15 @@ async function collectFiles(
       !checkMatch(
         inputPath,
         mode === "eval" ? INCLUDE_EVAL : INCLUDE_BUNDLE,
-        EXCLUDE,
+        EXCLUDE
       )
     ) {
       const prefix = mode === "eval" ? ".eval" : "";
       console.warn(
         warning(
           `Reading ${inputPath} because it was specified directly. Rename it to end in ${prefix}.ts or ` +
-            `.${prefix}.js to include it automatically when you specify a directory.`,
-        ),
+            `.${prefix}.js to include it automatically when you specify a directory.`
+        )
       );
     }
     files.push(inputPath);
@@ -679,7 +679,7 @@ async function collectFiles(
           checkMatch(
             entry.path,
             mode === "eval" ? INCLUDE_EVAL : INCLUDE_BUNDLE,
-            EXCLUDE,
+            EXCLUDE
           )
         );
       },
@@ -699,7 +699,8 @@ const markOurPackagesExternalPlugin = {
   name: "make-our-packages-external",
   setup(build: esbuild.PluginBuild) {
     // Mark our packages as external
-    const ourPackagesFilter = /^(braintrust|autoevals|@braintrust\/|config)/;
+    const ourPackagesFilter =
+      /^(braintrust|autoevals|@braintrust\/|config|lightningcss)/;
     build.onResolve({ filter: ourPackagesFilter }, (args) => ({
       path: args.path,
       external: true,
@@ -734,7 +735,7 @@ const nativeNodeModulesPlugin = {
       try {
         const path = require.resolve(args.path, { paths: [args.resolveDir] });
         const match = path.match(
-          /node_modules[/\\]((?:@[^/\\]+[/\\])?[^/\\]+)/,
+          /node_modules[/\\]((?:@[^/\\]+[/\\])?[^/\\]+)/
         );
         if (match) {
           addNativePackage(match[1]);
@@ -754,7 +755,7 @@ const nativeNodeModulesPlugin = {
           addNativePackage(match[1]);
         }
         return { path: args.path, external: true };
-      },
+      }
     );
 
     // Mark all imports from native packages as external
@@ -821,8 +822,8 @@ export async function initializeHandles({
     if (newFiles.length == 0) {
       console.warn(
         warning(
-          `Provided path ${inputPath} is not an eval file or a directory containing eval files, skipping...`,
-        ),
+          `Provided path ${inputPath} is not an eval file or a directory containing eval files, skipping...`
+        )
       );
     }
     for (const file of newFiles) {
@@ -832,7 +833,7 @@ export async function initializeHandles({
 
   if (Object.keys(files).length == 0) {
     console.warn(
-      warning("No eval files were found in any of the provided paths."),
+      warning("No eval files were found in any of the provided paths.")
     );
     process.exit(0);
   }
@@ -844,7 +845,7 @@ export async function initializeHandles({
   for (const file of Object.keys(files)) {
     const baseName = `${path.basename(
       file,
-      path.extname(file),
+      path.extname(file)
     )}-${uuidv4().slice(0, 8)}`;
     const outFile = path.join(tmpDir, `${baseName}.${OUT_EXT}`);
     const bundleFile = path.join(tmpDir, `${baseName}.bundle.js`);
@@ -855,7 +856,7 @@ export async function initializeHandles({
         bundleFile,
         plugins,
         tsconfig,
-      }),
+      })
     );
   }
 
