@@ -699,7 +699,7 @@ const markOurPackagesExternalPlugin = {
   name: "make-our-packages-external",
   setup(build: esbuild.PluginBuild) {
     // Mark our packages as external
-    const ourPackagesFilter = /^(braintrust|autoevals|@braintrust\/)/;
+    const ourPackagesFilter = /^(braintrust|autoevals|@braintrust\/|config)/;
     build.onResolve({ filter: ourPackagesFilter }, (args) => ({
       path: args.path,
       external: true,
