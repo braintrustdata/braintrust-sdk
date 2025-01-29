@@ -48,7 +48,7 @@ export interface DevServerOpts {
 
 export function runDevServer(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  evaluators: EvaluatorDef<any, any, any, any>[],
+  evaluators: EvaluatorDef<any, any, any, any, any>[],
   opts: DevServerOpts,
 ) {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
