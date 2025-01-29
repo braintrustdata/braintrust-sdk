@@ -1,10 +1,10 @@
-import { EvaluatorState } from "../cli";
 import express, { NextFunction, Request, Response } from "express";
 import cors from "cors";
 import {
   callEvaluatorData,
   Eval,
   EvalHooks,
+  EvaluatorDef,
   getSingleValueParameters,
 } from "../framework";
 import { z } from "zod";
@@ -46,14 +46,19 @@ export interface DevServerOpts {
   port: number;
 }
 
-export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
+export function runDevServer(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  evaluators: EvaluatorDef<any, any, any, any>[],
+  opts: DevServerOpts,
+) {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   const allEvaluators: EvaluatorManifest = Object.fromEntries(
-    Object.values(evaluators.evaluators).map((evaluator) => [
-      evaluator.evaluator.evalName,
+    evaluators.map((evaluator) => [
+      evaluator.evalName,
       {
         parameters: Object.fromEntries(
           Object.entries(
-            getSingleValueParameters(evaluator.evaluator.parameters ?? {})[0],
+            getSingleValueParameters(evaluator.parameters ?? {})[0],
           ).map(([name, value]) => {
             return [
               name,
@@ -65,10 +70,10 @@ export function runDevServer(evaluators: EvaluatorState, opts: DevServerOpts) {
             ];
           }),
         ),
-        evaluator: evaluator.evaluator,
+        evaluator: evaluator,
       },
     ]),
-  );
+  ) as EvaluatorManifest;
 
   globalThis._lazy_load = false;
 
