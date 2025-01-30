@@ -3,10 +3,10 @@ import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { ChatOpenAI } from "@langchain/openai";
 import { flush as flushBraintrustLogs } from "braintrust";
 import { http, HttpResponse } from "msw";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { BraintrustCallbackHandler } from "./BraintrustCallbackHandler";
 import { CHAT_MATH } from "./BraintrustCallbackHandler.fixtures";
-import { setGlobalHandler } from "./setGlobalHandler";
+import { clearGlobalHandler, setGlobalHandler } from "./setGlobalHandler";
 import { server } from "./test/setup";
 import { LogsRequest } from "./test/types";
 import { logsToSpans, withLogging } from "./test/utils";
@@ -14,6 +14,10 @@ import { logsToSpans, withLogging } from "./test/utils";
 const handler = withLogging(new BraintrustCallbackHandler({ debug: true }));
 
 describe("setGlobalHandler", () => {
+  afterEach(() => {
+    clearGlobalHandler();
+  });
+
   it("should register the BraintrustCallbackHandler", async () => {
     setGlobalHandler(handler);
 

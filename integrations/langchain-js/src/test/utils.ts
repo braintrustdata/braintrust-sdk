@@ -68,7 +68,7 @@ export const logsToSpans = (logs: LogsRequest[]) => {
   };
 };
 
-export const withLogging = (handler: BaseCallbackHandler) => {
+export const withLogging = <T extends BaseCallbackHandler>(handler: T): T => {
   if (process.env.VERBOSE === "false") {
     return handler;
   }
