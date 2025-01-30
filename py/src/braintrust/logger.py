@@ -67,7 +67,7 @@ from .git_fields import GitMetadataSettings, RepoInfo
 from .gitutil import get_past_n_ancestors, get_repo_info
 from .merge_row_batch import batch_items, merge_row_batch
 from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
-from .prompt import BRAINTRUST_PARAMS, PromptBlockData, PromptSchema
+from .prompt import BRAINTRUST_PARAMS, PromptBlockData, PromptChatBlock, PromptCompletionBlock, PromptSchema
 from .prompt_cache.disk_cache import DiskCache
 from .prompt_cache.lru_cache import LRUCache
 from .prompt_cache.prompt_cache import PromptCache
@@ -530,6 +530,13 @@ def _check_json_serializable(event):
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
 
+@dataclasses.dataclass
+class _QueueDropLoggingState:
+    lock: threading.Lock = threading.Lock()
+    num_dropped: int = 0
+    last_logged_timestamp: float = 0
+
+
 # We should only have one instance of this object in
 # 'BraintrustState._global_bg_logger'. Be careful about spawning multiple
 # instances of this class, because concurrent _BackgroundLoggers will not log to
@@ -576,7 +583,7 @@ class _BackgroundLogger:
         except:
             self.queue_drop_logging_period = 60
 
-        self._queue_drop_logging_state = dict(lock=threading.Lock(), num_dropped=0, last_logged_timestamp=0)
+        self._queue_drop_logging_state = _QueueDropLoggingState()
 
         try:
             self.failed_publish_payloads_dir = os.environ["BRAINTRUST_FAILED_PUBLISH_PAYLOADS_DIR"]
@@ -798,18 +805,18 @@ class _BackgroundLogger:
     def _register_dropped_item_count(self, num_items):
         if num_items <= 0:
             return
-        with self._queue_drop_logging_state["lock"]:
-            self._queue_drop_logging_state["num_dropped"] += num_items
+        with self._queue_drop_logging_state.lock:
+            self._queue_drop_logging_state.num_dropped += num_items
             time_now = time.time()
-            if time_now - self._queue_drop_logging_state["last_logged_timestamp"] >= self.queue_drop_logging_period:
+            if time_now - self._queue_drop_logging_state.last_logged_timestamp >= self.queue_drop_logging_period:
                 print(
-                    f"Dropped {self._queue_drop_logging_state['num_dropped']} elements due to full queue",
+                    f"Dropped {self._queue_drop_logging_state.num_dropped} elements due to full queue",
                     file=self.outfile,
                 )
                 if self.failed_publish_payloads_dir:
                     self._log_failed_payloads_dir()
-                self._queue_drop_logging_state["num_dropped"] = 0
-                self._queue_drop_logging_state["last_logged_timestamp"] = time_now
+                self._queue_drop_logging_state.num_dropped = 0
+                self._queue_drop_logging_state.last_logged_timestamp = time_now
 
     @staticmethod
     def _write_payload_to_dir(payload_dir, payload, debug_logging_adjective=None):
@@ -852,7 +859,7 @@ def _internal_with_custom_background_logger():
 class ObjectMetadata:
     id: str
     name: str
-    full_info: Dict[str, Any]
+    full_info: Mapping[str, Any]
 
 
 @dataclasses.dataclass
@@ -1022,6 +1029,7 @@ def init(
             repo_info_arg = repo_info
         else:
             merged_git_metadata_settings = _state.git_metadata_settings
+            assert merged_git_metadata_settings is not None
             if git_metadata_settings is not None:
                 merged_git_metadata_settings = GitMetadataSettings.merge(
                     merged_git_metadata_settings, git_metadata_settings
@@ -1131,6 +1139,7 @@ def init_dataset(
 def _compute_logger_metadata(project_name: Optional[str] = None, project_id: Optional[str] = None):
     login()
     org_id = _state.org_id
+    assert org_id is not None
     if project_id is None:
         response = _state.app_conn().post_json(
             "api/project/register",
@@ -1362,6 +1371,7 @@ def login(
         # this point because we know the connection _can_ successfully ping.
         conn.make_long_lived()
 
+        assert conn.token is not None
         # Set the same token in the API
         _state.app_conn().set_token(conn.token)
         if _state.proxy_url:
@@ -2392,7 +2402,9 @@ def _start_span_parent_args(
             return parent_object_id.get()
 
         arg_parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)
-        if parent_components.row_id:
+        if parent_components.row_id is not None:
+            assert parent_components.span_id is not None
+            assert parent_components.root_span_id is not None
             arg_parent_span_ids = ParentSpanIds(
                 span_id=parent_components.span_id, root_span_id=parent_components.root_span_id
             )
@@ -2677,6 +2689,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         self.flush()
 
         state = self._get_state()
+        assert state.org_name is not None
         project_url = f"{state.app_public_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
         experiment_url = f"{project_url}/experiments/{encode_uri_component(self.name)}"
 
@@ -3330,6 +3343,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         # includes the new experiment.
         self.flush()
         state = self._get_state()
+        assert state.org_name is not None
         project_url = f"{state.app_public_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
         dataset_url = f"{project_url}/datasets/{encode_uri_component(self.name)}"
 
@@ -3446,9 +3460,10 @@ class Prompt:
         :returns: A dictionary that includes the rendered prompt and arguments, that can be passed as kwargs to the OpenAI client.
         """
 
+        params = self.options.get("params") or {}
         ret = {
             **self.defaults,
-            **{k: v for (k, v) in self.options.get("params", {}).items() if k not in BRAINTRUST_PARAMS},
+            **{k: v for (k, v) in params.items() if k not in BRAINTRUST_PARAMS},
             **({"model": self.options["model"]} if "model" in self.options else {}),
         }
 
@@ -3487,6 +3502,7 @@ class Prompt:
         return ret
 
     def _make_iter_list(self) -> Sequence[str]:
+        assert self.prompt is not None
         meta_keys = list(self.options.keys())
         if self.prompt.type == "completion":
             meta_keys.append("prompt")
@@ -3504,10 +3520,13 @@ class Prompt:
 
     def __getitem__(self, x):
         if x == "prompt":
-            return self.prompt.prompt
+            assert isinstance(self.prompt, PromptCompletionBlock)
+            return self.prompt.content
         elif x == "chat":
+            assert isinstance(self.prompt, PromptChatBlock)
             return self.prompt.messages
         elif x == "tools":
+            assert isinstance(self.prompt, PromptChatBlock)
             return self.prompt.tools
         else:
             return self.options[x]
@@ -3541,6 +3560,7 @@ class Project:
     @property
     def id(self) -> str:
         self.lazy_init()
+        assert self._id is not None
         return self._id
 
     @property
@@ -3916,7 +3936,7 @@ class DatasetSummary(SerializableDataClass):
     """URL to the project's page in the Braintrust app."""
     dataset_url: str
     """URL to the experiment's page in the Braintrust app."""
-    data_summary: int
+    data_summary: Optional[DataSummary]
     """Summary of the dataset's data."""
 
     def __str__(self):
