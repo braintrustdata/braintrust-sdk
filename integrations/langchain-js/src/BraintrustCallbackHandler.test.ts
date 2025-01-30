@@ -3,7 +3,7 @@ import { RunnableMap } from "@langchain/core/runnables";
 import { tool } from "@langchain/core/tools";
 import { END, START, StateGraph, StateGraphArgs } from "@langchain/langgraph";
 import { ChatOpenAI } from "@langchain/openai";
-import { flush, initLogger } from "braintrust";
+import { flush, initLogger, NOOP_SPAN } from "braintrust";
 import { http, HttpResponse } from "msw";
 import { ReadableStream } from "stream/web";
 import { describe, expect, it } from "vitest";
@@ -806,6 +806,96 @@ describe("BraintrustCallbackHandler", () => {
           tags: ["langsmith:hidden"],
         },
         output: {},
+      },
+    ]);
+  });
+
+  it("should have correctly typed constructor parameters", async () => {
+    const logs: LogsRequest[] = [];
+
+    server.use(
+      http.post("https://api.openai.com/v1/chat/completions", () => {
+        return HttpResponse.json(CHAT_MATH);
+      }),
+
+      http.post(/.+logs/, async ({ request }) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        logs.push((await request.json()) as LogsRequest);
+        return HttpResponse.json(["4bc6305f-2175-4481-bc84-7c55a456b7ea"]);
+      }),
+    );
+
+    const handler = new BraintrustCallbackHandler({
+      logger: NOOP_SPAN,
+    });
+
+    handler.handleLLMStart(
+      {
+        name: "test",
+        lc: 1,
+        type: "secret",
+        id: ["test"],
+      },
+      ["test"],
+      "test",
+      "test",
+    );
+
+    await flush();
+
+    expect(logs).toEqual([]);
+  });
+
+  it("should handle chain inputs/outputs with null/undefined values", async () => {
+    const logs: LogsRequest[] = [];
+
+    server.use(
+      http.post(/.+logs/, async ({ request }) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        logs.push((await request.json()) as LogsRequest);
+        return HttpResponse.json(["null-span-id"]);
+      }),
+    );
+
+    // Test chain with null/undefined inputs
+    await handler.handleChainStart(
+      { id: ["TestChain"], lc: 1, type: "not_implemented" },
+      { input1: "value1", input2: null, input3: undefined },
+      "run-1",
+      undefined,
+      ["test"],
+    );
+
+    await handler.handleChainEnd(
+      { output1: "value1", output2: null, output3: undefined },
+      "run-1",
+      undefined,
+      ["test"],
+    );
+
+    await flush();
+
+    const { spans, root_span_id } = logsToSpans(logs);
+
+    expect(spans).toMatchObject([
+      {
+        root_span_id,
+        span_attributes: {
+          name: "TestChain",
+          type: "task",
+        },
+        input: {
+          input1: "value1",
+          input2: null,
+        },
+        metadata: {
+          tags: ["test"],
+          runId: "run-1",
+        },
+        output: {
+          output1: "value1",
+          output2: null,
+        },
       },
     ]);
   });
