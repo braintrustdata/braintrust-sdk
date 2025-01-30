@@ -845,4 +845,58 @@ describe("BraintrustCallbackHandler", () => {
 
     expect(logs).toEqual([]);
   });
+
+  it("should handle chain inputs/outputs with null/undefined values", async () => {
+    const logs: LogsRequest[] = [];
+
+    server.use(
+      http.post(/.+logs/, async ({ request }) => {
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        logs.push((await request.json()) as LogsRequest);
+        return HttpResponse.json(["null-span-id"]);
+      }),
+    );
+
+    // Test chain with null/undefined inputs
+    await handler.handleChainStart(
+      { id: ["TestChain"], lc: 1, type: "not_implemented" },
+      { input1: "value1", input2: null, input3: undefined },
+      "run-1",
+      undefined,
+      ["test"],
+    );
+
+    await handler.handleChainEnd(
+      { output1: "value1", output2: null, output3: undefined },
+      "run-1",
+      undefined,
+      ["test"],
+    );
+
+    await flush();
+
+    const { spans, root_span_id } = logsToSpans(logs);
+
+    expect(spans).toMatchObject([
+      {
+        root_span_id,
+        span_attributes: {
+          name: "TestChain",
+          type: "task",
+        },
+        input: {
+          input1: "value1",
+          input2: null,
+        },
+        metadata: {
+          tags: ["test"],
+          runId: "run-1",
+        },
+        output: {
+          output1: "value1",
+          output2: null,
+        },
+      },
+    ]);
+  });
 });

@@ -600,6 +600,10 @@ const parseChainValue = (output: any): any => {
     return output;
   }
 
+  if (!output) {
+    return output;
+  }
+
   if (output.content) {
     return output.content;
   }
@@ -634,6 +638,5 @@ const inputFromChainValues = (inputs: ChainValues) => {
   const parsed = (Array.isArray(inputs) ? inputs : [inputs]).flatMap(
     parseChainValue,
   );
-
   return parsed.length === 1 ? parsed[0] : parsed;
 };
