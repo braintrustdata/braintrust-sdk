@@ -259,7 +259,7 @@ function convertTools(
   }) as Tools;
 }
 
-function postProcessPrompt(prompt: LanguageModelV1Prompt): Message[] {
+export function postProcessPrompt(prompt: LanguageModelV1Prompt): Message[] {
   return prompt.flatMap((message): Message[] => {
     switch (message.role) {
       case "system":
@@ -283,14 +283,18 @@ function postProcessPrompt(prompt: LanguageModelV1Prompt): Message[] {
           {
             role: "assistant",
             content: textPart?.text,
-            tool_calls: toolCallParts.map((part) => ({
-              id: part.toolCallId,
-              function: {
-                name: part.toolName,
-                arguments: JSON.stringify(part.args),
-              },
-              type: "function" as const,
-            })),
+            ...(toolCallParts.length > 0
+              ? {
+                  tool_calls: toolCallParts.map((part) => ({
+                    id: part.toolCallId,
+                    function: {
+                      name: part.toolName,
+                      arguments: JSON.stringify(part.args),
+                    },
+                    type: "function" as const,
+                  })),
+                }
+              : {}),
           },
         ];
       case "user":

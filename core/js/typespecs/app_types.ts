@@ -1140,6 +1140,7 @@ export const patchSpanIframeSchema = z
     name: spanIframeSchema.shape.name.nullish(),
     url: spanIframeSchema.shape.url.nullish(),
     post_message: spanIframeSchema.shape.post_message.nullish(),
+    description: spanIframeSchema.shape.description.nullish(),
   })
   .openapi("PatchSpanIFrame");
 
