@@ -42,9 +42,10 @@ export function isEmpty(a: unknown): a is null | undefined {
 export class LazyValue<T> {
   private callable: () => Promise<T>;
   private value:
-    | { hasComputed: true; val: Promise<T> }
-    | { hasComputed: false } = {
-    hasComputed: false,
+    | { computedState: "succeeded"; val: Promise<T> }
+    | { computedState: "in_progress"; val: Promise<T> }
+    | { computedState: "uninitialized" } = {
+    computedState: "uninitialized",
   };
 
   constructor(callable: () => Promise<T>) {
@@ -52,19 +53,30 @@ export class LazyValue<T> {
   }
 
   get(): Promise<T> {
-    if (this.value.hasComputed) {
+    if (this.value.computedState !== "uninitialized") {
       return this.value.val;
     }
     // Note that we do not want to await the Promise returned by the callable
-    // inside `get` before setting `hasComputed` to true, because that would
-    // allow multiple async tasks to invoke `.get` concurrently and potentially
-    // invoke `this.callable` multiple times. By keeping this method fully
-    // synchronous, we guarantee that `callable` is only invoked once.
-    this.value = { hasComputed: true, val: this.callable() };
+    // inside `get` before updating `computedState`, because that would allow
+    // multiple async tasks to invoke `.get` concurrently and potentially invoke
+    // `this.callable` multiple times. By keeping this method fully synchronous,
+    // we guarantee that `callable` is only invoked once.
+    //
+    // Once the callable completes successfully, we update the computedState to
+    // "succeeded".
+    this.value = {
+      computedState: "in_progress",
+      val: this.callable().then((x) => {
+        this.value.computedState = "succeeded";
+        return x;
+      }),
+    };
     return this.value.val;
   }
 
-  public get hasComputed(): boolean {
-    return this.value.hasComputed;
+  // If this is true, the caller should be able to obtain the LazyValue without
+  // it throwing.
+  public get hasSucceeded(): boolean {
+    return this.value.computedState === "succeeded";
   }
 }
