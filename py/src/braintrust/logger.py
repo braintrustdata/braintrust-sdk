@@ -3017,7 +3017,7 @@ class SpanImpl(Span):
         return end_time
 
     def export(self) -> str:
-        if self.parent_compute_object_metadata_args and not self.parent_object_id.has_computed:
+        if self.parent_compute_object_metadata_args and not self.parent_object_id.has_succeeded:
             object_id = None
             compute_object_metadata_args = self.parent_compute_object_metadata_args
         else:
@@ -3767,10 +3767,10 @@ class Logger(Exportable):
     def export(self) -> str:
         """Return a serialized representation of the logger that can be used to start subspans in other places. See `Span.start_span` for more details."""
         # Note: it is important that the object id we are checking for
-        # `has_computed` is the same as the one we are passing into the span
+        # `has_succeeded` is the same as the one we are passing into the span
         # logging functions. So that if the spans actually do get logged, then
         # this `_lazy_id` object specifically will also be marked as computed.
-        if self._compute_metadata_args and not self._lazy_id.has_computed:
+        if self._compute_metadata_args and not self._lazy_id.has_succeeded:
             object_id = None
             compute_object_metadata_args = self._compute_metadata_args
         else:
