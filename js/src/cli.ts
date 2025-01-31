@@ -697,13 +697,13 @@ async function collectFiles(
 // In addition to marking node_modules external, explicitly mark
 // our packages (braintrust and autoevals) external, in case they're
 // installed in a relative path.
-const markOurPackagesExternalPlugin = {
-  name: "make-our-packages-external",
+const markKnownPackagesExternalPlugin = {
+  name: "make-known-packages-external",
   setup(build: esbuild.PluginBuild) {
-    // Mark our packages as external
-    const ourPackagesFilter =
+    // Mark known packages as external
+    const knownPackagesFilter =
       /^(braintrust|autoevals|@braintrust\/|config|lightningcss)/;
-    build.onResolve({ filter: ourPackagesFilter }, (args) => ({
+    build.onResolve({ filter: knownPackagesFilter }, (args) => ({
       path: args.path,
       external: true,
     }));
@@ -742,10 +742,10 @@ const nativeNodeModulesPlugin = {
         if (match) {
           addNativePackage(match[1]);
         }
-        return { path: args.path, external: true };
       } catch {
-        return { path: args.path, external: true };
+        // Ignore errors
       }
+      return { path: args.path, external: true };
     });
 
     // Handle direct imports of native packages
@@ -788,7 +788,7 @@ function buildOpts({
 }): esbuild.BuildOptions {
   const plugins = [
     nativeNodeModulesPlugin,
-    markOurPackagesExternalPlugin,
+    markKnownPackagesExternalPlugin,
     ...(argPlugins || []).map((fn) => fn(fileName)),
   ];
   return {
