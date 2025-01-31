@@ -100,12 +100,6 @@ export interface Exportable {
   export(): Promise<string>;
 }
 
-interface SpanObject {
-  id: string;
-  rootSpanId: string;
-  spanParents: string[];
-}
-
 /**
  * A Span encapsulates logged data and metrics for a unit of work. This interface is shared by all span implementations.
  *
@@ -116,6 +110,21 @@ export interface Span extends Exportable {
    * Row ID of the span.
    */
   id: string;
+
+  /**
+   * Span ID of the span.
+   */
+  spanId: string;
+
+  /**
+   * Root span ID of the span.
+   */
+  rootSpanId: string;
+
+  /**
+   * Parent span IDs of the span.
+   */
+  spanParents: string[];
 
   /**
    * Incrementally update the current span with new data. The event will be batched and uploaded behind the scenes.
@@ -213,8 +222,6 @@ export interface Span extends Exportable {
 
   // For type identification.
   kind: "span";
-
-  toObject(): SpanObject;
 }
 
 /**
@@ -222,10 +229,17 @@ export interface Span extends Exportable {
  */
 export class NoopSpan implements Span {
   public id: string;
+  public spanId: string;
+  public rootSpanId: string;
+  public spanParents: string[];
+
   public kind: "span" = "span";
 
   constructor() {
     this.id = "";
+    this.spanId = "";
+    this.rootSpanId = "";
+    this.spanParents = [];
   }
 
   public log(_: ExperimentLogPartialArgs) {}
@@ -262,14 +276,6 @@ export class NoopSpan implements Span {
   }
 
   public setAttributes(_args: Omit<StartSpanArgs, "event">) {}
-
-  public toObject(): SpanObject {
-    return {
-      id: this.id,
-      rootSpanId: this.id,
-      spanParents: [],
-    };
-  }
 }
 
 export const NOOP_SPAN = new NoopSpan();
@@ -4031,9 +4037,9 @@ export class SpanImpl implements Span {
   private parentObjectId: LazyValue<string>;
   private parentComputeObjectMetadataArgs: Record<string, any> | undefined;
   private _id: string;
-  private spanId: string;
-  private rootSpanId: string;
-  private spanParents: string[] | undefined;
+  private _spanId: string;
+  private _rootSpanId: string;
+  private _spanParents: string[] | undefined;
 
   public kind: "span" = "span";
 
@@ -4098,13 +4104,13 @@ export class SpanImpl implements Span {
     };
 
     this._id = eventId ?? uuidv4();
-    this.spanId = uuidv4();
+    this._spanId = uuidv4();
     if (args.parentSpanIds) {
-      this.rootSpanId = args.parentSpanIds.rootSpanId;
-      this.spanParents = [args.parentSpanIds.spanId];
+      this._rootSpanId = args.parentSpanIds.rootSpanId;
+      this._spanParents = [args.parentSpanIds.spanId];
     } else {
-      this.rootSpanId = this.spanId;
-      this.spanParents = undefined;
+      this._rootSpanId = this._spanId;
+      this._spanParents = undefined;
     }
 
     // The first log is a replacement, but subsequent logs to the same span
@@ -4116,6 +4122,18 @@ export class SpanImpl implements Span {
 
   public get id(): string {
     return this._id;
+  }
+
+  public get spanId(): string {
+    return this._spanId;
+  }
+
+  public get rootSpanId(): string {
+    return this._rootSpanId;
+  }
+
+  public get spanParents(): string[] {
+    return this._spanParents ?? [];
   }
 
   public setAttributes(args: Omit<StartSpanArgs, "event">): void {
@@ -4143,9 +4161,9 @@ export class SpanImpl implements Span {
     // Deep copy mutable user data.
     const partialRecord = deepCopyEvent({
       id: this.id,
-      span_id: this.spanId,
-      root_span_id: this.rootSpanId,
-      span_parents: this.spanParents,
+      span_id: this._spanId,
+      root_span_id: this._rootSpanId,
+      span_parents: this._spanParents,
       ...serializableInternalData,
       [IS_MERGE_FIELD]: this.isMerge,
     });
@@ -4154,7 +4172,7 @@ export class SpanImpl implements Span {
       this.loggedEndTime = partialRecord.metrics?.end as number;
     }
 
-    if ((partialRecord.tags ?? []).length > 0 && this.spanParents?.length) {
+    if ((partialRecord.tags ?? []).length > 0 && this._spanParents?.length) {
       throw new Error("Tags can only be logged to the root span");
     }
 
@@ -4208,7 +4226,7 @@ export class SpanImpl implements Span {
   public startSpan(args?: StartSpanArgs): Span {
     const parentSpanIds: ParentSpanIds | undefined = args?.parent
       ? undefined
-      : { spanId: this.spanId, rootSpanId: this.rootSpanId };
+      : { spanId: this._spanId, rootSpanId: this._rootSpanId };
     return new SpanImpl({
       state: this.state,
       ...args,
@@ -4245,8 +4263,8 @@ export class SpanImpl implements Span {
         ? { compute_object_metadata_args: this.parentComputeObjectMetadataArgs }
         : { object_id: await this.parentObjectId.get() }),
       row_id: this.id,
-      span_id: this.spanId,
-      root_span_id: this.rootSpanId,
+      span_id: this._spanId,
+      root_span_id: this._rootSpanId,
       propagated_event: this.propagatedEvent,
     }).toStr();
   }
@@ -4263,14 +4281,6 @@ export class SpanImpl implements Span {
 
   public close(args?: EndSpanArgs): number {
     return this.end(args);
-  }
-
-  public toObject(): SpanObject {
-    return {
-      id: this.id,
-      rootSpanId: this.rootSpanId,
-      spanParents: this.spanParents ?? [],
-    };
   }
 }
 
