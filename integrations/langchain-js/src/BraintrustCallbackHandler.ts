@@ -2,8 +2,6 @@ import { isObject } from "@braintrust/core";
 import {
   BaseCallbackHandler,
   BaseCallbackHandlerInput,
-  HandleLLMNewTokenCallbackFields,
-  NewTokenIndices,
 } from "@langchain/core/callbacks/base";
 import { AgentAction, AgentFinish } from "@langchain/core/dist/agents";
 import { DocumentInterface } from "@langchain/core/dist/documents/document";
@@ -116,7 +114,11 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
 
     let span = parentSpan.startSpan(args);
 
-    if (Object.is(span, NOOP_SPAN)) {
+    if (
+      // If the original logger is NOOP_SPAN, we don't need bother folks to configure it.
+      !Object.is(this.options.logger, NOOP_SPAN) &&
+      Object.is(span, NOOP_SPAN)
+    ) {
       console.warn(
         "Braintrust logging not configured. Pass a `logger`, call `initLogger`, or run an experiment to configure Braintrust logging. Setting up a default.",
       );
@@ -193,25 +195,6 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
           ([key, _]) => !this.options.excludeMetadataProps.test(key),
         ),
       )
-    );
-  }
-
-  async handleLLMNewToken(
-    token: string,
-    idx: NewTokenIndices,
-    runId: string,
-    parentRunId?: string,
-    tags?: string[],
-    fields?: HandleLLMNewTokenCallbackFields,
-  ): Promise<void> {
-    console.warn(
-      "handleLLMNewToken not implemented",
-      token,
-      idx,
-      runId,
-      parentRunId,
-      tags,
-      fields,
     );
   }
 
@@ -492,25 +475,6 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
       });
     }
   }
-
-  async handleCustomEvent(
-    eventName: string,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    data: any,
-    runId: string,
-    tags?: string[],
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    metadata?: Record<string, any>,
-  ): Promise<void> {
-    console.warn(
-      "handleCustomEvent not implemented",
-      eventName,
-      data,
-      runId,
-      tags,
-      metadata,
-    );
-  }
 }
 
 const extractCallArgs = (
@@ -636,6 +600,10 @@ const parseChainValue = (output: any): any => {
     return output;
   }
 
+  if (!output) {
+    return output;
+  }
+
   if (output.content) {
     return output.content;
   }
@@ -670,6 +638,5 @@ const inputFromChainValues = (inputs: ChainValues) => {
   const parsed = (Array.isArray(inputs) ? inputs : [inputs]).flatMap(
     parseChainValue,
   );
-
   return parsed.length === 1 ? parsed[0] : parsed;
 };
