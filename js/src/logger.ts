@@ -1598,7 +1598,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     // `_lazy_id` object specifically will also be marked as computed.
     return new SpanComponentsV3({
       object_type: this.parentObjectType(),
-      ...(this.computeMetadataArgs && !this.lazyId.hasComputed
+      ...(this.computeMetadataArgs && !this.lazyId.hasSucceeded
         ? { compute_object_metadata_args: this.computeMetadataArgs }
         : { object_id: await this.lazyId.get() }),
     }).toStr();
@@ -4225,7 +4225,7 @@ export class SpanImpl implements Span {
     return new SpanComponentsV3({
       object_type: this.parentObjectType,
       ...(this.parentComputeObjectMetadataArgs &&
-      !this.parentObjectId.hasComputed
+      !this.parentObjectId.hasSucceeded
         ? { compute_object_metadata_args: this.parentComputeObjectMetadataArgs }
         : { object_id: await this.parentObjectId.get() }),
       row_id: this.id,

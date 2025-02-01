@@ -113,12 +113,12 @@ T = TypeVar("T")
 @dataclass
 class _LazyValueResolvedState(Generic[T]):
     value: T
-    has_computed: Literal[True] = True
+    has_succeeded: Literal[True] = True
 
 
 @dataclass
 class _LazyValuePendingState:
-    has_computed: Literal[False] = False
+    has_succeeded: Literal[False] = False
 
 
 _LazyValueState = Union[_LazyValueResolvedState[T], _LazyValuePendingState]
@@ -135,25 +135,25 @@ class LazyValue(Generic[T]):
         self._state: _LazyValueState[T] = _LazyValuePendingState()
 
     @property
-    def has_computed(self) -> bool:
-        return self._state.has_computed
+    def has_succeeded(self) -> bool:
+        return self._state.has_succeeded
 
     @property
     def value(self) -> Optional[T]:
-        return self._state.value if self._state.has_computed == True else None
+        return self._state.value if self._state.has_succeeded == True else None
 
     def get(self) -> T:
-        # Short-circuit check `has_computed`. This should be fine because
+        # Short-circuit check `has_succeeded`. This should be fine because
         # setting `_state` is atomic and python should have sequentially
         # consistent semantics, so we'll observe the write to
         # `self._state.value` as well.
         # https://docs.python.org/3/faq/library.html#what-kinds-of-global-value-mutation-are-thread-safe
-        if self._state.has_computed == True:
+        if self._state.has_succeeded == True:
             return self._state.value
         if self.mutex:
             self.mutex.acquire()
         try:
-            if self._state.has_computed == False:
+            if self._state.has_succeeded == False:
                 res = self.callable()
                 self._state = _LazyValueResolvedState(value=res)
             return self._state.value
