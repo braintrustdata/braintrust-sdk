@@ -19,6 +19,7 @@ import uuid
 from abc import ABC, abstractmethod
 from functools import partial, wraps
 from multiprocessing import cpu_count
+from types import TracebackType
 from typing import (
     Any,
     Callable,
@@ -33,6 +34,7 @@ from typing import (
     Sequence,
     Set,
     Tuple,
+    Type,
     TypedDict,
     TypeVar,
     Union,
@@ -65,20 +67,13 @@ from .git_fields import GitMetadataSettings, RepoInfo
 from .gitutil import get_past_n_ancestors, get_repo_info
 from .merge_row_batch import batch_items, merge_row_batch
 from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
-from .prompt import BRAINTRUST_PARAMS, PromptBlockData, PromptSchema
+from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptMessage, PromptSchema, TextPart
 from .prompt_cache.disk_cache import DiskCache
 from .prompt_cache.lru_cache import LRUCache
 from .prompt_cache.prompt_cache import PromptCache
 from .span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from .span_types import SpanTypeAttribute
-from .types import (
-    AttachmentReference,
-    AttachmentStatus,
-    DatasetEvent,
-    ExperimentEvent,
-    PromptOptions,
-    SpanAttributes,
-)
+from .types import AttachmentReference, AttachmentStatus, DatasetEvent, ExperimentEvent, PromptOptions, SpanAttributes
 from .util import (
     GLOBAL_PROJECT,
     AugmentedHTTPError,
@@ -120,14 +115,14 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
         """Row ID of the span."""
 
     @abstractmethod
-    def log(self, **event) -> None:
+    def log(self, **event: Any) -> None:
         """Incrementally update the current span with new data. The event will be batched and uploaded behind the scenes.
 
         :param **event: Data to be logged. See `Experiment.log` for full details.
         """
 
     @abstractmethod
-    def log_feedback(self, **event) -> None:
+    def log_feedback(self, **event: Any) -> None:
         """Add feedback to the current span. Unlike `Experiment.log_feedback` and `Logger.log_feedback`, this method does not accept an id parameter, because it logs feedback to the current span.
 
         :param **event: Data to be logged. See `Experiment.log_feedback` for full details.
@@ -136,13 +131,13 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
     @abstractmethod
     def start_span(
         self,
-        name=None,
-        type=None,
-        span_attributes=None,
-        start_time=None,
-        set_current=None,
-        parent=None,
-        **event,
+        name: Optional[str] = None,
+        type: Optional[SpanTypeAttribute] = None,
+        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
+        start_time: Optional[float] = None,
+        set_current: Optional[bool] = None,
+        parent: Optional[str] = None,
+        **event: Any,
     ) -> "Span":
         """Create a new span. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `Span.log` will be merged into one logical row.
 
@@ -218,32 +213,32 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
 class _NoopSpan(Span):
     """A fake implementation of the Span API which does nothing. This can be used as the default span."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any):
         pass
 
     @property
     def id(self):
         return ""
 
-    def log(self, **event):
+    def log(self, **event: Any):
         pass
 
-    def log_feedback(self, **event):
+    def log_feedback(self, **event: Any):
         pass
 
     def start_span(
         self,
-        name=None,
-        type=None,
-        span_attributes=None,
-        start_time=None,
-        set_current=None,
-        parent=None,
-        **event,
+        name: Optional[str] = None,
+        type: Optional[SpanTypeAttribute] = None,
+        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
+        start_time: Optional[float] = None,
+        set_current: Optional[bool] = None,
+        parent: Optional[str] = None,
+        **event: Any,
     ):
         return self
 
-    def end(self, end_time=None):
+    def end(self, end_time: Optional[float] = None) -> float:
         return end_time or time.time()
 
     def export(self):
@@ -255,17 +250,27 @@ class _NoopSpan(Span):
     def flush(self):
         pass
 
-    def close(self, end_time=None):
+    def close(self, end_time: Optional[float] = None) -> float:
         return self.end(end_time)
 
-    def set_attributes(self, name=None, type=None, span_attributes=None):
+    def set_attributes(
+        self,
+        name: Optional[str] = None,
+        type: Optional[SpanTypeAttribute] = None,
+        span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
+    ):
         pass
 
     def __enter__(self):
         return super().__enter__()
 
-    def __exit__(self, exc_type, exc_value, traceback):
-        return super().__exit__(exc_type, exc_value, traceback)
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ):
+        pass
 
 
 NOOP_SPAN: Span = _NoopSpan()
@@ -395,7 +400,7 @@ def set_http_adapter(adapter: HTTPAdapter) -> None:
 
 
 class HTTPConnection:
-    def __init__(self, base_url, adapter=None):
+    def __init__(self, base_url: str, adapter: Optional[HTTPAdapter] = None):
         self.base_url = base_url
         self.token = None
         self.adapter = adapter
@@ -423,10 +428,10 @@ class HTTPConnection:
         self.token = token
         self._set_session_token()
 
-    def _set_adapter(self, adapter) -> None:
+    def _set_adapter(self, adapter: Optional[HTTPAdapter]) -> None:
         self.adapter = adapter
 
-    def _reset(self, **retry_kwargs) -> None:
+    def _reset(self, **retry_kwargs: Any) -> None:
         self.session = requests.Session()
 
         adapter = self.adapter
@@ -443,19 +448,21 @@ class HTTPConnection:
         if self.token:
             self.session.headers.update({"Authorization": f"Bearer {self.token}"})
 
-    def get(self, path, *args, **kwargs) -> requests.Response:
+    def get(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         return self.session.get(_urljoin(self.base_url, path), *args, **kwargs)
 
-    def post(self, path, *args, **kwargs) -> requests.Response:
+    def post(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         return self.session.post(_urljoin(self.base_url, path), *args, **kwargs)
 
-    def put(self, path, *args, **kwargs) -> requests.Response:
+    def put(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         return self.session.put(_urljoin(self.base_url, path), *args, **kwargs)
 
-    def delete(self, path, *args, **kwargs) -> requests.Response:
+    def delete(self, path: str, *args: Any, **kwargs: Any) -> requests.Response:
         return self.session.delete(_urljoin(self.base_url, path), *args, **kwargs)
 
-    def get_json(self, object_type, args=None, retries=0) -> Mapping[str, Any]:
+    def get_json(
+        self, object_type: str, args: Optional[Mapping[str, Any]] = None, retries: int = 0
+    ) -> Mapping[str, Any]:
         tries = retries + 1
         for i in range(tries):
             resp = self.get(f"/{object_type}", params=args)
@@ -468,7 +475,7 @@ class HTTPConnection:
         # Needed for type checking.
         raise Exception("unreachable")
 
-    def post_json(self, object_type, args) -> Any:
+    def post_json(self, object_type: str, args: Optional[Mapping[str, Any]] = None) -> Any:
         resp = self.post(f"/{object_type.lstrip('/')}", json=args)
         response_raise_for_status(resp)
         return resp.json()
@@ -639,7 +646,7 @@ class _BackgroundLogger:
             except:
                 traceback.print_exc(file=self.outfile)
 
-    def flush(self, batch_size=None):
+    def flush(self, batch_size: Optional[int] = None):
         if batch_size is None:
             batch_size = self.default_batch_size
 
@@ -1359,7 +1366,7 @@ def login(
         _state.login_replace_api_conn(conn)
 
 
-def log(**event) -> str:
+def log(**event: Any) -> str:
     """
     Log a single event to the current experiment. The event will be batched and uploaded behind the scenes.
 
@@ -1375,7 +1382,7 @@ def log(**event) -> str:
     return e.log(**event)
 
 
-def summarize(summarize_scores=True, comparison_experiment_id=None) -> "ExperimentSummary":
+def summarize(summarize_scores: bool = True, comparison_experiment_id: Optional[str] = None) -> "ExperimentSummary":
     """
     Summarize the current experiment, including the scores (compared to the closest reference experiment) and metadata.
 
@@ -1459,7 +1466,7 @@ def _try_log_output(span, output):
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def traced(*span_args, **span_kwargs) -> Callable[[F], F]:
+def traced(*span_args: Any, **span_kwargs: Any) -> Callable[[F], F]:
     """Decorator to trace the wrapped function. Can either be applied bare (`@traced`) or by providing arguments (`@traced(*span_args, **span_kwargs)`), which will be forwarded to the created span. See `Span.start_span` for full details on the span arguments.
 
     It checks the following (in precedence order):
@@ -1533,7 +1540,7 @@ def start_span(
     set_current: Optional[bool] = None,
     parent: Optional[str] = None,
     propagated_event: Optional[Dict[str, Any]] = None,
-    **event,
+    **event: Any,
 ) -> Span:
     """Lower-level alternative to `@traced` for starting a span at the toplevel. It creates a span under the first active object (using the same precedence order as `@traced`), or if `parent` is specified, under the specified parent row, or returns a no-op span object.
 
@@ -2234,7 +2241,7 @@ def _update_span_impl(
     parent_object_type: SpanObjectTypeV3,
     parent_object_id: LazyValue[str],
     id: str,
-    **event,
+    **event: Any,
 ):
     update_event = _validate_and_sanitize_experiment_log_partial_args(
         event=event,
@@ -2260,7 +2267,7 @@ def _update_span_impl(
     _state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
 
 
-def update_span(exported, **event) -> None:
+def update_span(exported: str, **event: Any) -> None:
     """
     Update a span using the output of `span.export()`. It is important that you only resume updating
     to a span once the original span has been fully written and flushed, since otherwise updates to
@@ -2314,7 +2321,7 @@ def span_components_to_object_id(components: SpanComponentsV3) -> str:
     return _span_components_to_object_id_lambda(components)()
 
 
-def permalink(slug: str, org_name=None, app_url=None) -> str:
+def permalink(slug: str, org_name: Optional[str] = None, app_url: Optional[str] = None) -> str:
     """
     Format a permalink to the Braintrust application for viewing the span represented by the provided `slug`.
 
@@ -2357,9 +2364,9 @@ def _start_span_parent_args(
     parent: Optional[str],
     parent_object_type: SpanObjectTypeV3,
     parent_object_id: LazyValue[str],
-    parent_compute_object_metadata_args: Optional[Dict],
+    parent_compute_object_metadata_args: Optional[Dict[str, Any]],
     parent_span_ids: Optional[ParentSpanIds],
-    propagated_event: Optional[Dict],
+    propagated_event: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
@@ -2599,7 +2606,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         set_current: Optional[bool] = None,
         parent: Optional[str] = None,
         propagated_event: Optional[Dict[str, Any]] = None,
-        **event,
+        **event: Any,
     ) -> Span:
         """Create a new toplevel span underneath the experiment. The name defaults to "root" and the span type to "eval".
 
@@ -2617,7 +2624,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
             **event,
         )
 
-    def update_span(self, id: str, **event) -> None:
+    def update_span(self, id: str, **event: Any) -> None:
         """
         Update a span in the experiment using its id. It is important that you only update a span once the original span has been fully written and flushed,
         since otherwise updates to the span may conflict with the original span.
@@ -2735,7 +2742,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         set_current: Optional[bool] = None,
         parent: Optional[str] = None,
         propagated_event: Optional[Dict[str, Any]] = None,
-        **event,
+        **event: Any,
     ) -> Span:
         return SpanImpl(
             **_start_span_parent_args(
@@ -2758,7 +2765,12 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
     def __enter__(self) -> "Experiment":
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_value: Optional[BaseException],
+        traceback: Optional[TracebackType],
+    ) -> None:
         del exc_type, exc_value, traceback
 
 
@@ -2807,7 +2819,7 @@ class SpanImpl(Span):
         self,
         parent_object_type: SpanObjectTypeV3,
         parent_object_id: LazyValue[str],
-        parent_compute_object_metadata_args: Optional[Dict],
+        parent_compute_object_metadata_args: Optional[Dict[str, Any]],
         parent_span_ids: Optional[ParentSpanIds],
         name: Optional[str] = None,
         type: Optional[SpanTypeAttribute] = None,
@@ -2912,7 +2924,7 @@ class SpanImpl(Span):
             }
         )
 
-    def log(self, **event) -> None:
+    def log(self, **event: Any) -> None:
         return self.log_internal(event=event, internal_data=None)
 
     def log_internal(
@@ -2954,7 +2966,7 @@ class SpanImpl(Span):
 
         _state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
 
-    def log_feedback(self, **event) -> None:
+    def log_feedback(self, **event: Any) -> None:
         return _log_feedback_impl(
             parent_object_type=self.parent_object_type,
             parent_object_id=self.parent_object_id,
@@ -2971,7 +2983,7 @@ class SpanImpl(Span):
         set_current: Optional[bool] = None,
         parent: Optional[str] = None,
         propagated_event: Optional[Dict[str, Any]] = None,
-        **event,
+        **event: Any,
     ) -> Span:
         if parent:
             parent_span_ids = None
@@ -3005,7 +3017,7 @@ class SpanImpl(Span):
         return end_time
 
     def export(self) -> str:
-        if self.parent_compute_object_metadata_args and not self.parent_object_id.has_computed:
+        if self.parent_compute_object_metadata_args and not self.parent_object_id.has_succeeded:
             object_id = None
             compute_object_metadata_args = self.parent_compute_object_metadata_args
         else:
@@ -3049,7 +3061,7 @@ class SpanImpl(Span):
             self.end()
 
 
-def stringify_exception(exc_type, exc_value, tb) -> str:
+def stringify_exception(exc_type: Type[BaseException], exc_value: BaseException, tb: Optional[TracebackType]) -> str:
     return "".join(
         traceback.format_exception_only(exc_type, exc_value)
         + ["\nTraceback (most recent call last):\n"]
@@ -3128,7 +3140,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
 
     @property
     def data(self):
-        return self._lazy_metadata.get().experiment.full_info
+        return self._lazy_metadata.get().dataset.full_info
 
     @property
     def project(self):
@@ -3300,7 +3312,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         _state.global_bg_logger().log(LazyValue(compute_args, use_mutex=False))
         return id
 
-    def summarize(self, summarize_data=True) -> "DatasetSummary":
+    def summarize(self, summarize_data: bool = True) -> "DatasetSummary":
         """
         Summarize the dataset, including high level metrics about its size and other metadata.
 
@@ -3353,20 +3365,55 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         del exc_type, exc_value, traceback
 
 
-def render_message(render, message):
-    return {
-        **{k: v for (k, v) in message.as_dict().items() if v is not None},
-        "content": render(message.content)
-        if isinstance(message.content, str)
-        else [
-            {**c.as_dict(), "text": render(c.text)}
-            if c.type == "text"
-            else {**c.as_dict(), "image_url": {**c.image_url, "url": render(c.image_url.url)}}
-            if c.type == "image_url"
-            else c
-            for c in message.content
-        ],
-    }
+def render_message(render: Callable[[str], str], message: PromptMessage):
+    base = {k: v for (k, v) in message.as_dict().items() if v is not None}
+    # TODO: shouldn't load_prompt guarantee content is a PromptMessage?
+    content = cast(Union[str, List[TextPart | ImagePart], Dict[str, Any]], message.content)
+    if content is not None:
+        if isinstance(content, str):
+            base["content"] = render(content)
+        else:
+            rendered_content = []
+            for c in content:
+                if isinstance(c, str):
+                    rendered_content.append(c)
+                    continue
+
+                if not isinstance(c, dict):
+                    c = c.as_dict()
+
+                if c["type"] == "text":
+                    rendered_content.append({**c, "text": render(c["text"])})
+                elif c["type"] == "image_url":
+                    rendered_content.append(
+                        {**c, "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])}}
+                    )
+                else:
+                    raise ValueError(f"Unknown content type: {c['type']}")
+
+            base["content"] = rendered_content
+    else:
+        base["content"] = None
+
+    tool_calls = getattr(message, "tool_calls", None)
+    if tool_calls is not None:
+        base["tool_calls"] = [
+            {
+                "type": t.type,
+                "id": render(t.id),
+                "function": {
+                    "name": render(t.function.name),
+                    "arguments": render(t.function.arguments),
+                },
+            }
+            for t in tool_calls
+        ]
+
+    tool_call_id = getattr(message, "tool_call_id", None)
+    if tool_call_id is not None:
+        base["tool_call_id"] = render(tool_call_id)
+
+    return base
 
 
 _base_get_key = chevron.renderer._get_key
@@ -3467,7 +3514,7 @@ class Prompt:
     def __getattr__(self, name: str) -> Any:
         return getattr(self._lazy_metadata.get(), name)
 
-    def build(self, **build_args) -> Mapping[str, Any]:
+    def build(self, **build_args: Any) -> Mapping[str, Any]:
         """
         Build the prompt with the given formatting options. The args you pass in will
         be forwarded to the mustache template that defines the prompt and rendered with
@@ -3506,15 +3553,12 @@ class Prompt:
         if self.prompt.type == "completion":
             ret["prompt"] = chevron.render(self.prompt.content, data=build_args)
         elif self.prompt.type == "chat":
-            ret["messages"] = [
-                {
-                    **{k: v for (k, v) in m.as_dict().items() if v is not None},
-                    "content": chevron.render(m.content, data=build_args) if isinstance(m.content, str)
-                    # XXX Fix
-                    else json.loads(chevron.render(json.dumps(m.content), data=build_args)),
-                }
-                for m in self.prompt.messages
-            ]
+
+            def render(template: str):
+                return chevron.render(template, data=build_args)
+
+            ret["messages"] = [render_message(render, m) for m in (self.prompt.messages or [])]
+
             if self.prompt.tools and self.prompt.tools.strip():
                 ret["tools"] = json.loads(chevron.render(self.prompt.tools, data=build_args))
 
@@ -3548,7 +3592,7 @@ class Prompt:
 
 
 class Project:
-    def __init__(self, name=None, id=None):
+    def __init__(self, name: Optional[str] = None, id: Optional[str] = None):
         self._name = name
         self._id = id
         self.init_lock = threading.RLock()
@@ -3573,7 +3617,7 @@ class Project:
         return self
 
     @property
-    def id(self):
+    def id(self) -> str:
         self.lazy_init()
         return self._id
 
@@ -3671,7 +3715,7 @@ class Logger(Exportable):
 
     def log_feedback(
         self,
-        id,
+        id: str,
         scores: Optional[Mapping[str, Union[int, float]]] = None,
         expected: Optional[Any] = None,
         tags: Optional[Sequence[str]] = None,
@@ -3711,7 +3755,7 @@ class Logger(Exportable):
         set_current: Optional[bool] = None,
         parent: Optional[str] = None,
         propagated_event: Optional[Dict[str, Any]] = None,
-        **event,
+        **event: Any,
     ) -> Span:
         """Create a new toplevel span underneath the logger. The name defaults to "root" and the span type to "task".
 
@@ -3729,7 +3773,7 @@ class Logger(Exportable):
             **event,
         )
 
-    def update_span(self, id: str, **event) -> None:
+    def update_span(self, id: str, **event: Any) -> None:
         """
         Update a span in the experiment using its id. It is important that you only update a span once the original span
         has been fully written and flushed, since otherwise updates to the span may conflict with the original span.
@@ -3753,7 +3797,7 @@ class Logger(Exportable):
         set_current: Optional[bool] = None,
         parent: Optional[str] = None,
         propagated_event: Optional[Dict[str, Any]] = None,
-        **event,
+        **event: Any,
     ) -> Span:
         return SpanImpl(
             **_start_span_parent_args(
@@ -3776,10 +3820,10 @@ class Logger(Exportable):
     def export(self) -> str:
         """Return a serialized representation of the logger that can be used to start subspans in other places. See `Span.start_span` for more details."""
         # Note: it is important that the object id we are checking for
-        # `has_computed` is the same as the one we are passing into the span
+        # `has_succeeded` is the same as the one we are passing into the span
         # logging functions. So that if the spans actually do get logged, then
         # this `_lazy_id` object specifically will also be marked as computed.
-        if self._compute_metadata_args and not self._lazy_id.has_computed:
+        if self._compute_metadata_args and not self._lazy_id.has_succeeded:
             object_id = None
             compute_object_metadata_args = self._compute_metadata_args
         else:
@@ -3965,7 +4009,8 @@ class DatasetSummary(SerializableDataClass):
 
 
 class TracedThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
-    def submit(self, fn, *args, **kwargs):
+    # Returns Any because Future is not generic in Python 3.8.
+    def submit(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         # Capture all current context variables
         context = contextvars.copy_context()
 
