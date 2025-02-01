@@ -173,16 +173,22 @@ export const envVarSchema = z
   .openapi("EnvVar");
 export type EnvVar = z.infer<typeof envVarSchema>;
 
+export const projectColumnTypeEnum = z
+  .enum(["project", "experiments", "experiment", "dataset", "project_log"])
+  .describe("The object type that the custom column applies to")
+  .openapi("CustomColumnType");
+export type CustomColumnType = z.infer<typeof projectColumnTypeEnum>;
+
 const customColumnBaseSchema = generateBaseTableSchema("custom columns");
 export const customColumnSchema = z
   .object({
     id: customColumnBaseSchema.shape.id,
-    object_type: aclObjectTypeEnum,
+    object_type: projectColumnTypeEnum,
     object_id: z
       .string()
       .uuid()
       .describe("The id of the object the custom column is scoped for"),
-    subtype: aclObjectTypeEnum.nullable(),
+    subtype: projectColumnTypeEnum.nullable(),
     name: z.string().describe("The name of the custom column"),
     expr: z
       .string()
