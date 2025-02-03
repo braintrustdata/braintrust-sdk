@@ -3444,7 +3444,7 @@ def _create_custom_render() -> Callable[..., Any]:
     return custom_render
 
 
-_custom_render = _create_custom_render()
+_custom_render: Callable[..., Any] = _create_custom_render()
 
 
 def render_templated_object(obj: Any, args: Any) -> Any:
