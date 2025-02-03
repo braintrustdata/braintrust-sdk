@@ -3417,7 +3417,7 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
     return base
 
 
-def _create_custom_render() -> Callable[..., Any]:
+def _create_custom_render():
     def _get_key(key: str, scopes: List[Dict[str, Any]], warn: bool) -> Any:
         thing = chevron.renderer._get_key(key, scopes, warn)  # type: ignore
         if isinstance(thing, str):
@@ -3444,12 +3444,12 @@ def _create_custom_render() -> Callable[..., Any]:
     return custom_render
 
 
-_custom_render: Callable[..., Any] = _create_custom_render()
+_custom_render = _create_custom_render()
 
 
 def render_templated_object(obj: Any, args: Any) -> Any:
     if isinstance(obj, str):
-        return _custom_render(obj, data=args)
+        return _custom_render(obj, data=args)  # pylint: disable=not-callable
     elif isinstance(obj, list):
         return [render_templated_object(item, args) for item in obj]  # type: ignore
     elif isinstance(obj, dict):
