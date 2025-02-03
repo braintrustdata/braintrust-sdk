@@ -3369,7 +3369,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
 def render_message(render: Callable[[str], str], message: PromptMessage):
     base = {k: v for (k, v) in message.as_dict().items() if v is not None}
     # TODO: shouldn't load_prompt guarantee content is a PromptMessage?
-    content = cast(Union[str, List[TextPart | ImagePart], Dict[str, Any]], message.content)
+    content = cast(Union[str, List[Union[TextPart, ImagePart]], Dict[str, Any]], message.content)
     if content is not None:
         if isinstance(content, str):
             base["content"] = render(content)
