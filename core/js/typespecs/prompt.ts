@@ -70,7 +70,7 @@ export const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 export const responseFormatJsonSchemaSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
-  schema: z.record(customTypes.unknown).optional(),
+  schema: z.union([z.record(customTypes.unknown), z.string()]).optional(),
   strict: z.boolean().nullish(),
 });
 export type ResponseFormatJsonSchema = z.infer<
