@@ -3417,7 +3417,7 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
     return base
 
 
-def _create_custom_render():
+def _create_custom_render() -> Callable[..., Any]:
     def _get_key(key: str, scopes: List[Dict[str, Any]], warn: bool) -> Any:
         thing = chevron.renderer._get_key(key, scopes, warn)  # type: ignore
         if isinstance(thing, str):
