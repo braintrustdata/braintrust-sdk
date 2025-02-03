@@ -15,6 +15,7 @@ import textwrap
 import threading
 import time
 import traceback
+import types
 import uuid
 from abc import ABC, abstractmethod
 from functools import partial, wraps
@@ -3416,27 +3417,43 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
     return base
 
 
-_base_get_key = chevron.renderer._get_key
+def _create_custom_render():
+    def _get_key(key: str, scopes: List[Dict[str, Any]], warn: bool) -> Any:
+        thing = chevron.renderer._get_key(key, scopes, warn)  # type: ignore
+        if isinstance(thing, str):
+            return thing
+        return json.dumps(thing)
+
+    def _html_escape(x: Any) -> Any:
+        return x
+
+    custom_render = types.FunctionType(
+        chevron.render.__code__,
+        {
+            **chevron.render.__globals__,
+            **{
+                "_get_key": _get_key,
+                "_html_escape": _html_escape,
+            },
+        },
+        chevron.render.__name__,
+        chevron.render.__defaults__,
+        chevron.render.__closure__,
+    )
+    custom_render.__kwdefaults__ = chevron.render.__kwdefaults__
+    return custom_render
 
 
-def _get_key(key, scopes, warn):
-    thing = _base_get_key(key, scopes, warn)
-    if isinstance(thing, str):
-        return thing
-    return json.dumps(thing)
-
-
-chevron.renderer._get_key = _get_key
-chevron.renderer._html_escape = lambda x: x
+_custom_render = _create_custom_render()
 
 
 def render_templated_object(obj: Any, args: Any) -> Any:
     if isinstance(obj, str):
-        return chevron.render(obj, data=args)
+        return _custom_render(obj, data=args)
     elif isinstance(obj, list):
-        return [render_templated_object(item, args) for item in obj]
+        return [render_templated_object(item, args) for item in obj]  # type: ignore
     elif isinstance(obj, dict):
-        return {key: render_templated_object(value, args) for key, value in obj.items()}
+        return {str(k): render_templated_object(v, args) for k, v in obj.items()}  # type: ignore
     return obj
 
 
