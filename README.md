@@ -10,6 +10,7 @@ This repository contains the Python and Javascript SDKs for Braintrust. The SDKs
 - Manage an on-premises installation of Braintrust (Python)
 
 ## Quickstart: TypeScript
+[![Open Val Town Template](https://stevekrouse-badge.web.val.run/?3)](https://www.val.town/v/charmaine/braintrustSDK)
 
 First, install the Braintrust SDK:
 
