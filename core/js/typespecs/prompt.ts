@@ -77,6 +77,19 @@ export type ResponseFormatJsonSchema = z.infer<
   typeof responseFormatJsonSchemaSchema
 >;
 
+export const responseFormatSchema = z.union([
+  z
+    .object({ type: z.literal("json_object") })
+    .openapi({ title: "json_object" }),
+  z
+    .object({
+      type: z.literal("json_schema"),
+      json_schema: responseFormatJsonSchemaSchema,
+    })
+    .openapi({ title: "json_schema" }),
+  z.object({ type: z.literal("text") }).openapi({ title: "text" }),
+]);
+
 const openAIModelParamsSchema = z.object({
   temperature: z.number().optional(),
   top_p: z.number().optional(),
@@ -87,20 +100,7 @@ const openAIModelParamsSchema = z.object({
     .describe("The successor to max_tokens"),
   frequency_penalty: z.number().optional(),
   presence_penalty: z.number().optional(),
-  response_format: z
-    .union([
-      z
-        .object({ type: z.literal("json_object") })
-        .openapi({ title: "json_object" }),
-      z
-        .object({
-          type: z.literal("json_schema"),
-          json_schema: responseFormatJsonSchemaSchema,
-        })
-        .openapi({ title: "json_schema" }),
-      z.object({ type: z.literal("text") }).openapi({ title: "text" }),
-    ])
-    .nullish(),
+  response_format: responseFormatSchema.nullish(),
   tool_choice: z
     .union([
       z.literal("auto").openapi({ title: "auto" }),
