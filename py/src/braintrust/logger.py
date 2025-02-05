@@ -15,6 +15,7 @@ import textwrap
 import threading
 import time
 import traceback
+import types
 import uuid
 from abc import ABC, abstractmethod
 from functools import partial, wraps
@@ -3368,7 +3369,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
 def render_message(render: Callable[[str], str], message: PromptMessage):
     base = {k: v for (k, v) in message.as_dict().items() if v is not None}
     # TODO: shouldn't load_prompt guarantee content is a PromptMessage?
-    content = cast(Union[str, List[TextPart | ImagePart], Dict[str, Any]], message.content)
+    content = cast(Union[str, List[Union[TextPart, ImagePart]], Dict[str, Any]], message.content)
     if content is not None:
         if isinstance(content, str):
             base["content"] = render(content)
@@ -3414,6 +3415,71 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
         base["tool_call_id"] = render(tool_call_id)
 
     return base
+
+
+def _create_custom_render():
+    def _get_key(key: str, scopes: List[Dict[str, Any]], warn: bool) -> Any:
+        thing = chevron.renderer._get_key(key, scopes, warn)  # type: ignore
+        if isinstance(thing, str):
+            return thing
+        return json.dumps(thing)
+
+    def _html_escape(x: Any) -> Any:
+        return x
+
+    custom_render = types.FunctionType(
+        chevron.render.__code__,
+        {
+            **chevron.render.__globals__,
+            **{
+                "_get_key": _get_key,
+                "_html_escape": _html_escape,
+            },
+        },
+        chevron.render.__name__,
+        chevron.render.__defaults__,
+        chevron.render.__closure__,
+    )
+    custom_render.__kwdefaults__ = chevron.render.__kwdefaults__
+    return custom_render
+
+
+_custom_render = _create_custom_render()
+
+
+def render_templated_object(obj: Any, args: Any) -> Any:
+    if isinstance(obj, str):
+        return _custom_render(obj, data=args)  # pylint: disable=not-callable
+    elif isinstance(obj, list):
+        return [render_templated_object(item, args) for item in obj]  # type: ignore
+    elif isinstance(obj, dict):
+        return {str(k): render_templated_object(v, args) for k, v in obj.items()}  # type: ignore
+    return obj
+
+
+def render_prompt_params(params: Dict[str, Any], args: Any) -> Dict[str, Any]:
+    if not params:
+        return params
+
+    response_format = params.get("response_format")
+    if not response_format or not isinstance(response_format, dict):
+        return params
+
+    if response_format.get("type") != "json_schema":
+        return params
+
+    json_schema = response_format.get("json_schema")
+    if not json_schema or not isinstance(json_schema, dict):
+        return params
+
+    raw_schema = json_schema.get("schema")
+    if raw_schema is None:
+        return params
+
+    templated_schema = render_templated_object(raw_schema, args)
+    parsed_schema = json.loads(templated_schema) if isinstance(templated_schema, str) else templated_schema
+
+    return {**params, "response_format": {**response_format, "json_schema": {**json_schema, "schema": parsed_schema}}}
 
 
 class Prompt:
@@ -3474,9 +3540,12 @@ class Prompt:
         :returns: A dictionary that includes the rendered prompt and arguments, that can be passed as kwargs to the OpenAI client.
         """
 
+        params = self.options.get("params") or {}
+        params = {k: v for (k, v) in params.items() if k not in BRAINTRUST_PARAMS}
+
         ret = {
             **self.defaults,
-            **{k: v for (k, v) in self.options.get("params", {}).items() if k not in BRAINTRUST_PARAMS},
+            **render_prompt_params(params, build_args),
             **({"model": self.options["model"]} if "model" in self.options else {}),
         }
 
@@ -3497,7 +3566,8 @@ class Prompt:
 
         if not self.prompt:
             raise ValueError("Empty prompt")
-        elif self.prompt.type == "completion":
+
+        if self.prompt.type == "completion":
             ret["prompt"] = chevron.render(self.prompt.content, data=build_args)
         elif self.prompt.type == "chat":
 
