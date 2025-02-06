@@ -746,6 +746,7 @@ class HTTPConnection {
 export interface ObjectMetadata {
   id: string;
   name: string;
+  created?: string;
   fullInfo: Record<string, unknown>;
 }
 
@@ -2240,6 +2241,7 @@ export function init<IsOpen extends boolean = false>(
           experiment: {
             id: info.id,
             name: info.name,
+            created: info.created,
             fullInfo: info,
           },
         };
@@ -2344,6 +2346,7 @@ export function init<IsOpen extends boolean = false>(
         experiment: {
           id: response.experiment.id,
           name: response.experiment.name,
+          created: response.experiment.created,
           fullInfo: response.experiment,
         },
       };
@@ -2544,11 +2547,13 @@ export function initDataset<
         project: {
           id: response.project.id,
           name: response.project.name,
+          created: response.project.created,
           fullInfo: response.project,
         },
         dataset: {
           id: response.dataset.id,
           name: response.dataset.name,
+          created: response.dataset.created,
           fullInfo: response.dataset,
         },
       };
@@ -4387,6 +4392,12 @@ export class Dataset<
   public get project(): Promise<ObjectMetadata> {
     return (async () => {
       return (await this.lazyMetadata.get()).project;
+    })();
+  }
+
+  public get created(): Promise<string> {
+    return (async () => {
+      return (await this.lazyMetadata.get()).dataset.created;
     })();
   }
 
