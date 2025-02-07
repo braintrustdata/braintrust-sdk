@@ -2240,7 +2240,6 @@ export function init<IsOpen extends boolean = false>(
           experiment: {
             id: info.id,
             name: info.name,
-            created: info.created,
             fullInfo: info,
           },
         };
@@ -2546,13 +2545,11 @@ export function initDataset<
         project: {
           id: response.project.id,
           name: response.project.name,
-          created: response.project.created,
           fullInfo: response.project,
         },
         dataset: {
           id: response.dataset.id,
           name: response.dataset.name,
-          created: response.dataset.created,
           fullInfo: response.dataset,
         },
       };

@@ -1090,6 +1090,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                     "object_type": "dataset",
                     "object_id": experiment.dataset.id,
                     "id": datum.id,
+                    "created": datum.created,
                     "_xact_id": datum._xact_id,
                 }
                 if experiment.dataset and datum.id and datum._xact_id
