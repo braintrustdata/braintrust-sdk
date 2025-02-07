@@ -82,9 +82,10 @@ class EvalCase(SerializableDataClass, Generic[Input, Output]):
     metadata: Optional[Metadata] = None
     tags: Optional[Sequence[str]] = None
 
-    # Id is only set if the EvalCase is part of a Dataset.
+    # These fields are only set if the EvalCase is part of a Dataset.
     id: Optional[str] = None
     _xact_id: Optional[str] = None
+    created: Optional[str] = None
 
 
 class _EvalCaseDictNoOutput(Generic[Input], TypedDict):
