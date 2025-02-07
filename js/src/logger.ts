@@ -4395,7 +4395,7 @@ export class Dataset<
     })();
   }
 
-  public get created(): Promise<string> {
+  public get created(): Promise<string | undefined> {
     return (async () => {
       return (await this.lazyMetadata.get()).dataset.created;
     })();
