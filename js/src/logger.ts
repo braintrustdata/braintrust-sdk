@@ -746,7 +746,6 @@ class HTTPConnection {
 export interface ObjectMetadata {
   id: string;
   name: string;
-  created?: string;
   fullInfo: Record<string, unknown>;
 }
 
@@ -3645,6 +3644,7 @@ export type EvalCase<Input, Expected, Metadata> = {
   // These fields are only set if the EvalCase is part of a Dataset.
   id?: string;
   _xact_id?: TransactionId;
+  created?: string;
   // This field is used to help re-run a particular experiment row.
   upsert_id?: string;
 } & (Expected extends void ? object : { expected: Expected }) &
@@ -4392,12 +4392,6 @@ export class Dataset<
   public get project(): Promise<ObjectMetadata> {
     return (async () => {
       return (await this.lazyMetadata.get()).project;
-    })();
-  }
-
-  public get created(): Promise<string | undefined> {
-    return (async () => {
-      return (await this.lazyMetadata.get()).dataset.created;
     })();
   }
 
