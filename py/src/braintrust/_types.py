@@ -40,6 +40,10 @@ class Origin(TypedDict):
     """
     Transaction ID of the original event.
     """
+    created: NotRequired[Optional[str]]
+    """
+    Created timestamp of the original event.
+    """
 
 
 class DatasetEvent(TypedDict):
