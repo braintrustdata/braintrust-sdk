@@ -3644,7 +3644,7 @@ export type EvalCase<Input, Expected, Metadata> = {
   // These fields are only set if the EvalCase is part of a Dataset.
   id?: string;
   _xact_id?: TransactionId;
-  created?: string;
+  created?: string | null;
   // This field is used to help re-run a particular experiment row.
   upsert_id?: string;
 } & (Expected extends void ? object : { expected: Expected }) &

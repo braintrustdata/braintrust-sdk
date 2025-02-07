@@ -116,6 +116,6 @@ export const objectReferenceSchema = z.object({
   _xact_id: z.string().describe("Transaction ID of the original event."),
   created: z
     .string()
-    .optional()
+    .nullish()
     .describe("Created timestamp of the original event."),
 });
