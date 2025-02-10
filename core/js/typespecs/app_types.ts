@@ -177,12 +177,18 @@ const customColumnBaseSchema = generateBaseTableSchema("custom columns");
 export const customColumnSchema = z
   .object({
     id: customColumnBaseSchema.shape.id,
-    object_type: aclObjectTypeEnum,
+    object_type: z
+      .string()
+      .describe("The object type that the custom column applies to"),
     object_id: z
       .string()
       .uuid()
       .describe("The id of the object the custom column is scoped for"),
-    subtype: aclObjectTypeEnum.nullable(),
+    subtype: z
+      .string()
+      .nullable()
+      .describe("The object type that the custom column applies to"),
+    variant: z.string().describe("The table that the custom column applies to"),
     name: z.string().describe("The name of the custom column"),
     expr: z
       .string()
