@@ -37,6 +37,9 @@ export const viewOptionsSchema = z
     columnVisibility: z.record(z.boolean()).nullish(),
     columnOrder: z.array(z.string()).nullish(),
     columnSizing: z.record(z.number()).nullish(),
+    grouping: z.string().nullish(),
+    rowHeight: z.string().nullish(),
+    layout: z.string().nullish(),
   })
   .strip()
   .openapi("ViewOptions");
