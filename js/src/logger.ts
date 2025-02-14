@@ -2436,6 +2436,8 @@ type InitDatasetOptions<IsLegacyDataset extends boolean> = FullLoginOptions & {
   projectId?: string;
   metadata?: Record<string, unknown>;
   state?: BraintrustState;
+  //btql?: ParsedQuery;
+  btql?: any;
 } & UseOutputOption<IsLegacyDataset>;
 
 type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
@@ -2514,6 +2516,7 @@ export function initDataset<
     metadata,
     useOutput: legacy,
     state: stateArg,
+    btql,
   } = options;
 
   const state = stateArg ?? _globalState;
@@ -2555,7 +2558,13 @@ export function initDataset<
     },
   );
 
-  return new Dataset(stateArg ?? _globalState, lazyMetadata, version, legacy);
+  return new Dataset(
+    stateArg ?? _globalState,
+    lazyMetadata,
+    version,
+    legacy,
+    btql,
+  );
 }
 
 /**
@@ -3572,6 +3581,8 @@ class ObjectFetcher<RecordType>
     private objectType: "dataset" | "experiment",
     private pinnedVersion: string | undefined,
     private mutateRecord?: (r: any) => RecordType,
+    //private btql?: ParsedQuery,
+    private btql?: any,
   ) {}
 
   public get id(): Promise<string> {
@@ -3596,14 +3607,47 @@ class ObjectFetcher<RecordType>
   async fetchedData() {
     if (this._fetchedData === undefined) {
       const state = await this.getState();
-      const resp = await state.apiConn().get(
-        `v1/${this.objectType}/${await this.id}/fetch`,
-        {
-          version: this.pinnedVersion,
-        },
-        { headers: { "Accept-Encoding": "gzip" } },
-      );
-      const data = (await resp.json()).events;
+      let data = null;
+      if (this.btql) {
+        const resp = await state.apiConn().post(
+          `btql`,
+          {
+            query: {
+              ...this.btql,
+              select: [
+                {
+                  op: "star",
+                },
+              ],
+              from: {
+                op: "function",
+                name: {
+                  op: "ident",
+                  name: [this.objectType],
+                },
+                args: [
+                  {
+                    op: "literal",
+                    value: await this.id,
+                  },
+                ],
+              },
+              //version: this.pinnedVersion,
+            },
+          },
+          { headers: { "Accept-Encoding": "gzip" } },
+        );
+        data = (await resp.json()).data;
+      } else {
+        const resp = await state.apiConn().get(
+          `v1/${this.objectType}/${await this.id}/fetch`,
+          {
+            version: this.pinnedVersion,
+          },
+          { headers: { "Accept-Encoding": "gzip" } },
+        );
+        data = (await resp.json()).events;
+      }
       this._fetchedData = this.mutateRecord
         ? data?.map(this.mutateRecord)
         : data;
@@ -3994,6 +4038,7 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     EvalCase<Input, Expected, void>
   > {
     const records = this.fetch();
+
     for await (const record of records) {
       if (record.root_span_id !== record.span_id) {
         continue;
@@ -4358,6 +4403,8 @@ export class Dataset<
     lazyMetadata: LazyValue<ProjectDatasetMetadata>,
     pinnedVersion?: string,
     legacy?: IsLegacyDataset,
+    //btql?: ParsedQuery,
+    btql?: any,
   ) {
     const isLegacyDataset = (legacy ??
       DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
@@ -4366,8 +4413,12 @@ export class Dataset<
         `Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use \`braintrust.initDataset()\` with \`{ useOutput: false }\`, which will become the default in a future version of Braintrust.`,
       );
     }
-    super("dataset", pinnedVersion, (r: AnyDatasetRecord) =>
-      ensureDatasetRecord(enrichAttachments(r), isLegacyDataset),
+    super(
+      "dataset",
+      pinnedVersion,
+      (r: AnyDatasetRecord) =>
+        ensureDatasetRecord(enrichAttachments(r), isLegacyDataset),
+      btql,
     );
     this.lazyMetadata = lazyMetadata;
   }
