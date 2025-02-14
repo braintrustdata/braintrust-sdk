@@ -3,65 +3,62 @@
 import { v4 as uuidv4 } from "uuid";
 
 import {
-  IS_MERGE_FIELD,
-  TRANSACTION_ID_FIELD,
-  mergeDicts,
-  mergeRowBatch,
-  VALID_SOURCES,
-  AUDIT_SOURCE_FIELD,
-  AUDIT_METADATA_FIELD,
-  mergeGitMetadataSettings,
-  TransactionId,
-  IdField,
-  ExperimentLogPartialArgs,
-  ExperimentLogFullArgs,
-  LogFeedbackFullArgs,
-  SanitizedExperimentLogPartialArgs,
-  ExperimentEvent,
-  BackgroundLogEvent,
+  _urljoin,
   AnyDatasetRecord,
-  DEFAULT_IS_LEGACY_DATASET,
-  DatasetRecord,
-  ensureDatasetRecord,
-  makeLegacyEvent,
-  constructJsonArray,
-  SpanTypeAttribute,
-  SpanType,
+  AUDIT_METADATA_FIELD,
+  AUDIT_SOURCE_FIELD,
+  BackgroundLogEvent,
   batchItems,
+  constructJsonArray,
+  DatasetRecord,
+  DEFAULT_IS_LEGACY_DATASET,
+  ensureDatasetRecord,
+  ExperimentEvent,
+  ExperimentLogFullArgs,
+  ExperimentLogPartialArgs,
+  IdField,
+  IS_MERGE_FIELD,
+  LogFeedbackFullArgs,
+  makeLegacyEvent,
+  mergeDicts,
+  mergeGitMetadataSettings,
+  mergeRowBatch,
+  SanitizedExperimentLogPartialArgs,
   SpanComponentsV3,
   SpanObjectTypeV3,
   spanObjectTypeV3ToString,
-  _urljoin,
+  SpanType,
+  SpanTypeAttribute,
+  TRANSACTION_ID_FIELD,
+  TransactionId,
+  VALID_SOURCES,
+  isArray,
+  isObject,
 } from "@braintrust/core";
 import {
   AnyModelParam,
-  BRAINTRUST_PARAMS,
-  PromptData,
-  Tools,
-  promptDataSchema,
-  promptSchema,
-  Prompt as PromptRow,
-  toolsSchema,
-  PromptSessionEvent,
-  OpenAIMessage,
-  Message,
-  GitMetadataSettings,
-  RepoInfo,
-  gitMetadataSettingsSchema,
   AttachmentReference,
-  AttachmentStatus,
-  BRAINTRUST_ATTACHMENT,
-  attachmentStatusSchema,
   attachmentReferenceSchema,
+  ModelParams,
+  responseFormatJsonSchemaSchema,
+  AttachmentStatus,
+  attachmentStatusSchema,
+  BRAINTRUST_ATTACHMENT,
+  BRAINTRUST_PARAMS,
+  GitMetadataSettings,
+  gitMetadataSettingsSchema,
+  Message,
+  OpenAIMessage,
+  PromptData,
+  promptDataSchema,
+  Prompt as PromptRow,
+  promptSchema,
+  PromptSessionEvent,
+  RepoInfo,
+  Tools,
+  toolsSchema,
 } from "@braintrust/core/typespecs";
-import iso, { IsoAsyncLocalStorage } from "./isomorph";
-import {
-  runCatchFinally,
-  GLOBAL_PROJECT,
-  getCurrentUnixTimestamp,
-  isEmpty,
-  LazyValue,
-} from "./util";
+import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
 import { z, ZodError } from "zod";
 import {
@@ -69,10 +66,17 @@ import {
   createFinalValuePassThroughStream,
   devNullWritableStream,
 } from "./functions/stream";
-import { waitUntil } from "@vercel/functions";
-import { PromptCache } from "./prompt-cache/prompt-cache";
+import iso, { IsoAsyncLocalStorage } from "./isomorph";
 import { canUseDiskCache, DiskCache } from "./prompt-cache/disk-cache";
 import { LRUCache } from "./prompt-cache/lru-cache";
+import { PromptCache } from "./prompt-cache/prompt-cache";
+import {
+  getCurrentUnixTimestamp,
+  GLOBAL_PROJECT,
+  isEmpty,
+  LazyValue,
+  runCatchFinally,
+} from "./util";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -110,6 +114,21 @@ export interface Span extends Exportable {
    * Row ID of the span.
    */
   id: string;
+
+  /**
+   * Span ID of the span.
+   */
+  spanId: string;
+
+  /**
+   * Root span ID of the span.
+   */
+  rootSpanId: string;
+
+  /**
+   * Parent span IDs of the span.
+   */
+  spanParents: string[];
 
   /**
    * Incrementally update the current span with new data. The event will be batched and uploaded behind the scenes.
@@ -214,10 +233,17 @@ export interface Span extends Exportable {
  */
 export class NoopSpan implements Span {
   public id: string;
+  public spanId: string;
+  public rootSpanId: string;
+  public spanParents: string[];
+
   public kind: "span" = "span";
 
   constructor() {
     this.id = "";
+    this.spanId = "";
+    this.rootSpanId = "";
+    this.spanParents = [];
   }
 
   public log(_: ExperimentLogPartialArgs) {}
@@ -1598,7 +1624,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     // `_lazy_id` object specifically will also be marked as computed.
     return new SpanComponentsV3({
       object_type: this.parentObjectType(),
-      ...(this.computeMetadataArgs && !this.lazyId.hasComputed
+      ...(this.computeMetadataArgs && !this.lazyId.hasSucceeded
         ? { compute_object_metadata_args: this.computeMetadataArgs }
         : { object_id: await this.lazyId.get() }),
     }).toStr();
@@ -4015,9 +4041,9 @@ export class SpanImpl implements Span {
   private parentObjectId: LazyValue<string>;
   private parentComputeObjectMetadataArgs: Record<string, any> | undefined;
   private _id: string;
-  private spanId: string;
-  private rootSpanId: string;
-  private spanParents: string[] | undefined;
+  private _spanId: string;
+  private _rootSpanId: string;
+  private _spanParents: string[] | undefined;
 
   public kind: "span" = "span";
 
@@ -4082,13 +4108,13 @@ export class SpanImpl implements Span {
     };
 
     this._id = eventId ?? uuidv4();
-    this.spanId = uuidv4();
+    this._spanId = uuidv4();
     if (args.parentSpanIds) {
-      this.rootSpanId = args.parentSpanIds.rootSpanId;
-      this.spanParents = [args.parentSpanIds.spanId];
+      this._rootSpanId = args.parentSpanIds.rootSpanId;
+      this._spanParents = [args.parentSpanIds.spanId];
     } else {
-      this.rootSpanId = this.spanId;
-      this.spanParents = undefined;
+      this._rootSpanId = this._spanId;
+      this._spanParents = undefined;
     }
 
     // The first log is a replacement, but subsequent logs to the same span
@@ -4100,6 +4126,18 @@ export class SpanImpl implements Span {
 
   public get id(): string {
     return this._id;
+  }
+
+  public get spanId(): string {
+    return this._spanId;
+  }
+
+  public get rootSpanId(): string {
+    return this._rootSpanId;
+  }
+
+  public get spanParents(): string[] {
+    return this._spanParents ?? [];
   }
 
   public setAttributes(args: Omit<StartSpanArgs, "event">): void {
@@ -4127,9 +4165,9 @@ export class SpanImpl implements Span {
     // Deep copy mutable user data.
     const partialRecord = deepCopyEvent({
       id: this.id,
-      span_id: this.spanId,
-      root_span_id: this.rootSpanId,
-      span_parents: this.spanParents,
+      span_id: this._spanId,
+      root_span_id: this._rootSpanId,
+      span_parents: this._spanParents,
       ...serializableInternalData,
       [IS_MERGE_FIELD]: this.isMerge,
     });
@@ -4138,7 +4176,7 @@ export class SpanImpl implements Span {
       this.loggedEndTime = partialRecord.metrics?.end as number;
     }
 
-    if ((partialRecord.tags ?? []).length > 0 && this.spanParents?.length) {
+    if ((partialRecord.tags ?? []).length > 0 && this._spanParents?.length) {
       throw new Error("Tags can only be logged to the root span");
     }
 
@@ -4192,7 +4230,7 @@ export class SpanImpl implements Span {
   public startSpan(args?: StartSpanArgs): Span {
     const parentSpanIds: ParentSpanIds | undefined = args?.parent
       ? undefined
-      : { spanId: this.spanId, rootSpanId: this.rootSpanId };
+      : { spanId: this._spanId, rootSpanId: this._rootSpanId };
     return new SpanImpl({
       state: this.state,
       ...args,
@@ -4225,12 +4263,12 @@ export class SpanImpl implements Span {
     return new SpanComponentsV3({
       object_type: this.parentObjectType,
       ...(this.parentComputeObjectMetadataArgs &&
-      !this.parentObjectId.hasComputed
+      !this.parentObjectId.hasSucceeded
         ? { compute_object_metadata_args: this.parentComputeObjectMetadataArgs }
         : { object_id: await this.parentObjectId.get() }),
       row_id: this.id,
-      span_id: this.spanId,
-      root_span_id: this.rootSpanId,
+      span_id: this._spanId,
+      root_span_id: this._rootSpanId,
       propagated_event: this.propagatedEvent,
     }).toStr();
   }
@@ -4703,6 +4741,80 @@ export type PromptRowWithId<
     ? Pick<PromptRow, "_xact_id">
     : Partial<Pick<PromptRow, "_xact_id">>);
 
+export function deserializePlainStringAsJSON(s: string) {
+  if (s.trim() === "") {
+    return { value: null, error: undefined };
+  }
+
+  try {
+    return { value: JSON.parse(s), error: undefined };
+  } catch (e) {
+    return { value: s, error: e };
+  }
+}
+
+function renderTemplatedObject(obj: unknown, args: unknown): unknown {
+  if (typeof obj === "string") {
+    return Mustache.render(obj, args, undefined, {
+      escape: (value) => {
+        if (typeof value === "string") {
+          return value;
+        } else {
+          return JSON.stringify(value);
+        }
+      },
+    });
+  } else if (isArray(obj)) {
+    return obj.map((item) => renderTemplatedObject(item, args));
+  } else if (isObject(obj)) {
+    return Object.fromEntries(
+      Object.entries(obj).map(([key, value]) => [
+        key,
+        renderTemplatedObject(value, args),
+      ]),
+    );
+  }
+  return obj;
+}
+
+export function renderPromptParams(
+  params: ModelParams | undefined,
+  args: unknown,
+): ModelParams | undefined {
+  const schemaParsed = z
+    .object({
+      response_format: z.object({
+        type: z.literal("json_schema"),
+        json_schema: responseFormatJsonSchemaSchema
+          .omit({ schema: true })
+          .extend({
+            schema: z.unknown(),
+          }),
+      }),
+    })
+    .safeParse(params);
+  if (schemaParsed.success) {
+    const rawSchema = schemaParsed.data.response_format.json_schema.schema;
+    const templatedSchema = renderTemplatedObject(rawSchema, args);
+    const parsedSchema =
+      typeof templatedSchema === "string"
+        ? deserializePlainStringAsJSON(templatedSchema).value
+        : templatedSchema;
+
+    return {
+      ...params,
+      response_format: {
+        ...schemaParsed.data.response_format,
+        json_schema: {
+          ...schemaParsed.data.response_format.json_schema,
+          schema: parsedSchema,
+        },
+      },
+    };
+  }
+  return params;
+}
+
 export class Prompt<
   HasId extends boolean = true,
   HasVersion extends boolean = true,
@@ -4859,7 +4971,7 @@ export class Prompt<
 
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...params,
+        ...renderPromptParams(params, variables),
         ...spanInfo,
         messages: messages,
         ...(prompt.tools?.trim()
@@ -4882,7 +4994,7 @@ export class Prompt<
 
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...params,
+        ...renderPromptParams(params, variables),
         ...spanInfo,
         prompt: Mustache.render(prompt.content, variables),
       } as CompiledPrompt<Flavor>;

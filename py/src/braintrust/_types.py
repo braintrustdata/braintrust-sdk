@@ -249,7 +249,7 @@ class ResponseFormat(TypedDict):
 class JsonSchema(TypedDict):
     name: str
     description: NotRequired[Optional[str]]
-    schema_: NotRequired[Optional[Mapping[str, Any]]]
+    schema: NotRequired[Optional[Union[Mapping[str, Any], str]]]
     strict: NotRequired[Optional[bool]]
 
 

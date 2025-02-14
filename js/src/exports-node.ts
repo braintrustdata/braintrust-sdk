@@ -21,6 +21,19 @@ export {
 export * from "./framework2";
 export { LazyValue } from "./util";
 export * from "./wrappers/oai";
-export * from "./wrappers/ai-sdk";
+export { wrapAISDKModel } from "./wrappers/ai-sdk";
 export * from "./exports-types";
 export { runDevServer } from "./dev/server";
+export type {
+  ParentExperimentIds,
+  ParentProjectLogIds,
+  IdField,
+  InputField,
+  OtherExperimentLogFields,
+  ExperimentLogPartialArgs,
+  ExperimentLogFullArgs,
+  LogFeedbackFullArgs,
+  LogCommentFullArgs,
+  CommentEvent,
+  DatasetRecord,
+} from "@braintrust/core";

@@ -15,6 +15,7 @@ import textwrap
 import threading
 import time
 import traceback
+import types
 import uuid
 from abc import ABC, abstractmethod
 from functools import partial, wraps
@@ -67,20 +68,13 @@ from .git_fields import GitMetadataSettings, RepoInfo
 from .gitutil import get_past_n_ancestors, get_repo_info
 from .merge_row_batch import batch_items, merge_row_batch
 from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
-from .prompt import BRAINTRUST_PARAMS, PromptBlockData, PromptSchema
+from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptMessage, PromptSchema, TextPart
 from .prompt_cache.disk_cache import DiskCache
 from .prompt_cache.lru_cache import LRUCache
 from .prompt_cache.prompt_cache import PromptCache
 from .span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from .span_types import SpanTypeAttribute
-from .types import (
-    AttachmentReference,
-    AttachmentStatus,
-    DatasetEvent,
-    ExperimentEvent,
-    PromptOptions,
-    SpanAttributes,
-)
+from .types import AttachmentReference, AttachmentStatus, DatasetEvent, ExperimentEvent, PromptOptions, SpanAttributes
 from .util import (
     GLOBAL_PROJECT,
     AugmentedHTTPError,
@@ -3024,7 +3018,7 @@ class SpanImpl(Span):
         return end_time
 
     def export(self) -> str:
-        if self.parent_compute_object_metadata_args and not self.parent_object_id.has_computed:
+        if self.parent_compute_object_metadata_args and not self.parent_object_id.has_succeeded:
             object_id = None
             compute_object_metadata_args = self.parent_compute_object_metadata_args
         else:
@@ -3372,20 +3366,120 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         del exc_type, exc_value, traceback
 
 
-def render_message(render, message):
-    return {
-        **{k: v for (k, v) in message.as_dict().items() if v is not None},
-        "content": render(message.content)
-        if isinstance(message.content, str)
-        else [
-            {**c.as_dict(), "text": render(c.text)}
-            if c.type == "text"
-            else {**c.as_dict(), "image_url": {**c.image_url, "url": render(c.image_url.url)}}
-            if c.type == "image_url"
-            else c
-            for c in message.content
-        ],
-    }
+def render_message(render: Callable[[str], str], message: PromptMessage):
+    base = {k: v for (k, v) in message.as_dict().items() if v is not None}
+    # TODO: shouldn't load_prompt guarantee content is a PromptMessage?
+    content = cast(Union[str, List[Union[TextPart, ImagePart]], Dict[str, Any]], message.content)
+    if content is not None:
+        if isinstance(content, str):
+            base["content"] = render(content)
+        else:
+            rendered_content = []
+            for c in content:
+                if isinstance(c, str):
+                    rendered_content.append(c)
+                    continue
+
+                if not isinstance(c, dict):
+                    c = c.as_dict()
+
+                if c["type"] == "text":
+                    rendered_content.append({**c, "text": render(c["text"])})
+                elif c["type"] == "image_url":
+                    rendered_content.append(
+                        {**c, "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])}}
+                    )
+                else:
+                    raise ValueError(f"Unknown content type: {c['type']}")
+
+            base["content"] = rendered_content
+    else:
+        base["content"] = None
+
+    tool_calls = getattr(message, "tool_calls", None)
+    if tool_calls is not None:
+        base["tool_calls"] = [
+            {
+                "type": t.type,
+                "id": render(t.id),
+                "function": {
+                    "name": render(t.function.name),
+                    "arguments": render(t.function.arguments),
+                },
+            }
+            for t in tool_calls
+        ]
+
+    tool_call_id = getattr(message, "tool_call_id", None)
+    if tool_call_id is not None:
+        base["tool_call_id"] = render(tool_call_id)
+
+    return base
+
+
+def _create_custom_render():
+    def _get_key(key: str, scopes: List[Dict[str, Any]], warn: bool) -> Any:
+        thing = chevron.renderer._get_key(key, scopes, warn)  # type: ignore
+        if isinstance(thing, str):
+            return thing
+        return json.dumps(thing)
+
+    def _html_escape(x: Any) -> Any:
+        return x
+
+    custom_render = types.FunctionType(
+        chevron.render.__code__,
+        {
+            **chevron.render.__globals__,
+            **{
+                "_get_key": _get_key,
+                "_html_escape": _html_escape,
+            },
+        },
+        chevron.render.__name__,
+        chevron.render.__defaults__,
+        chevron.render.__closure__,
+    )
+    custom_render.__kwdefaults__ = chevron.render.__kwdefaults__
+    return custom_render
+
+
+_custom_render = _create_custom_render()
+
+
+def render_templated_object(obj: Any, args: Any) -> Any:
+    if isinstance(obj, str):
+        return _custom_render(obj, data=args)  # pylint: disable=not-callable
+    elif isinstance(obj, list):
+        return [render_templated_object(item, args) for item in obj]  # type: ignore
+    elif isinstance(obj, dict):
+        return {str(k): render_templated_object(v, args) for k, v in obj.items()}  # type: ignore
+    return obj
+
+
+def render_prompt_params(params: Dict[str, Any], args: Any) -> Dict[str, Any]:
+    if not params:
+        return params
+
+    response_format = params.get("response_format")
+    if not response_format or not isinstance(response_format, dict):
+        return params
+
+    if response_format.get("type") != "json_schema":
+        return params
+
+    json_schema = response_format.get("json_schema")
+    if not json_schema or not isinstance(json_schema, dict):
+        return params
+
+    raw_schema = json_schema.get("schema")
+    if raw_schema is None:
+        return params
+
+    templated_schema = render_templated_object(raw_schema, args)
+    parsed_schema = json.loads(templated_schema) if isinstance(templated_schema, str) else templated_schema
+
+    return {**params, "response_format": {**response_format, "json_schema": {**json_schema, "schema": parsed_schema}}}
 
 
 class Prompt:
@@ -3446,9 +3540,12 @@ class Prompt:
         :returns: A dictionary that includes the rendered prompt and arguments, that can be passed as kwargs to the OpenAI client.
         """
 
+        params = self.options.get("params") or {}
+        params = {k: v for (k, v) in params.items() if k not in BRAINTRUST_PARAMS}
+
         ret = {
             **self.defaults,
-            **{k: v for (k, v) in self.options.get("params", {}).items() if k not in BRAINTRUST_PARAMS},
+            **render_prompt_params(params, build_args),
             **({"model": self.options["model"]} if "model" in self.options else {}),
         }
 
@@ -3469,18 +3566,16 @@ class Prompt:
 
         if not self.prompt:
             raise ValueError("Empty prompt")
-        elif self.prompt.type == "completion":
+
+        if self.prompt.type == "completion":
             ret["prompt"] = chevron.render(self.prompt.content, data=build_args)
         elif self.prompt.type == "chat":
-            ret["messages"] = [
-                {
-                    **{k: v for (k, v) in m.as_dict().items() if v is not None},
-                    "content": chevron.render(m.content, data=build_args) if isinstance(m.content, str)
-                    # XXX Fix
-                    else json.loads(chevron.render(json.dumps(m.content), data=build_args)),
-                }
-                for m in self.prompt.messages
-            ]
+
+            def render(template: str):
+                return chevron.render(template, data=build_args)
+
+            ret["messages"] = [render_message(render, m) for m in (self.prompt.messages or [])]
+
             if self.prompt.tools and self.prompt.tools.strip():
                 ret["tools"] = json.loads(chevron.render(self.prompt.tools, data=build_args))
 
@@ -3742,10 +3837,10 @@ class Logger(Exportable):
     def export(self) -> str:
         """Return a serialized representation of the logger that can be used to start subspans in other places. See `Span.start_span` for more details."""
         # Note: it is important that the object id we are checking for
-        # `has_computed` is the same as the one we are passing into the span
+        # `has_succeeded` is the same as the one we are passing into the span
         # logging functions. So that if the spans actually do get logged, then
         # this `_lazy_id` object specifically will also be marked as computed.
-        if self._compute_metadata_args and not self._lazy_id.has_computed:
+        if self._compute_metadata_args and not self._lazy_id.has_succeeded:
             object_id = None
             compute_object_metadata_args = self._compute_metadata_args
         else:
