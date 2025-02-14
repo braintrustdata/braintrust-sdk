@@ -3632,7 +3632,6 @@ class ObjectFetcher<RecordType>
                   },
                 ],
               },
-              //version: this.pinnedVersion,
             },
           },
           { headers: { "Accept-Encoding": "gzip" } },
