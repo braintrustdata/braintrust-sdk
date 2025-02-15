@@ -202,8 +202,18 @@ def _upload_bundle(entry_module_name: str, sources: List[str], requirements: Opt
             for source in sources:
                 zf.write(source, os.path.relpath(source))
             zf.writestr("register.py", f"import {entry_module_name} as _\n")
+        print(bundle_upload_url)
+        headers = {}
+        # According to https://stackoverflow.com/questions/37824136/put-on-sas-blob-url-without-specifying-x-ms-blob-type-header,
+        # there is no way to avoid including this.
+        if "blob.core.windows.net" in bundle_upload_url:
+            headers["x-ms-blob-type"] = "BlockBlob"
         with open(os.path.join(td, "pkg.zip"), "rb") as zf:
-            requests.put(bundle_upload_url, data=zf.read()).raise_for_status()
+            requests.put(
+                bundle_upload_url,
+                data=zf.read(),
+                headers=headers,
+            ).raise_for_status()
 
     return bundle_id
 
