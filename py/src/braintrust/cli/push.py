@@ -20,6 +20,7 @@ import requests
 from .. import api_conn, app_conn, login, org_id, proxy_conn
 from ..framework2 import CodeFunction, global_
 from ..types import IfExists
+from ..util import add_azure_blob_headers
 
 
 class _ProjectIdCache:
@@ -204,10 +205,7 @@ def _upload_bundle(entry_module_name: str, sources: List[str], requirements: Opt
             zf.writestr("register.py", f"import {entry_module_name} as _\n")
         print(bundle_upload_url)
         headers = {}
-        # According to https://stackoverflow.com/questions/37824136/put-on-sas-blob-url-without-specifying-x-ms-blob-type-header,
-        # there is no way to avoid including this.
-        if "blob.core.windows.net" in bundle_upload_url:
-            headers["x-ms-blob-type"] = "BlockBlob"
+        add_azure_blob_headers(headers, bundle_upload_url)
         with open(os.path.join(td, "pkg.zip"), "rb") as zf:
             requests.put(
                 bundle_upload_url,
