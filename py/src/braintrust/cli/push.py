@@ -203,7 +203,6 @@ def _upload_bundle(entry_module_name: str, sources: List[str], requirements: Opt
             for source in sources:
                 zf.write(source, os.path.relpath(source))
             zf.writestr("register.py", f"import {entry_module_name} as _\n")
-        print(bundle_upload_url)
         headers = {}
         add_azure_blob_headers(headers, bundle_upload_url)
         with open(os.path.join(td, "pkg.zip"), "rb") as zf:
