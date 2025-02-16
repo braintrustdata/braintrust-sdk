@@ -903,6 +903,8 @@ export class Attachment {
         throw error;
       }
 
+      addAzureBlobHeaders(headers, signedUrl);
+
       // TODO multipart upload.
       let objectStoreResponse: Response | undefined;
       try {

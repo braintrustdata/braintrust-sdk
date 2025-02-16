@@ -369,12 +369,15 @@ async function uploadBundles({
       bundleStream.on("error", reject);
     });
 
+    const headers = {
+      "Content-Encoding": "gzip",
+    };
+    addAzureBlobHeaders(headers, pathInfo.url);
+
     const resp = await fetch(pathInfo.url, {
       method: "PUT",
       body: bundleData,
-      headers: {
-        "Content-Encoding": "gzip",
-      },
+      headers,
     });
     if (!resp.ok) {
       throw new Error(
