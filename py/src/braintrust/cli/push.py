@@ -20,6 +20,7 @@ import requests
 from .. import api_conn, app_conn, login, org_id, proxy_conn
 from ..framework2 import CodeFunction, global_
 from ..types import IfExists
+from ..util import add_azure_blob_headers
 
 
 class _ProjectIdCache:
@@ -202,8 +203,14 @@ def _upload_bundle(entry_module_name: str, sources: List[str], requirements: Opt
             for source in sources:
                 zf.write(source, os.path.relpath(source))
             zf.writestr("register.py", f"import {entry_module_name} as _\n")
+        headers = {}
+        add_azure_blob_headers(headers, bundle_upload_url)
         with open(os.path.join(td, "pkg.zip"), "rb") as zf:
-            requests.put(bundle_upload_url, data=zf.read()).raise_for_status()
+            requests.put(
+                bundle_upload_url,
+                data=zf.read(),
+                headers=headers,
+            ).raise_for_status()
 
     return bundle_id
 

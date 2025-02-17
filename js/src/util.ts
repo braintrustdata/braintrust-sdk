@@ -80,3 +80,14 @@ export class LazyValue<T> {
     return this.value.computedState === "succeeded";
   }
 }
+
+export function addAzureBlobHeaders(
+  headers: Record<string, string>,
+  url: string,
+) {
+  // According to https://stackoverflow.com/questions/37824136/put-on-sas-blob-url-without-specifying-x-ms-blob-type-header,
+  // there is no way to avoid including this.
+  if (url.includes("blob.core.windows.net")) {
+    headers["x-ms-blob-type"] = "BlockBlob";
+  }
+}

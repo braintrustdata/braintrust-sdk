@@ -71,6 +71,7 @@ import { canUseDiskCache, DiskCache } from "./prompt-cache/disk-cache";
 import { LRUCache } from "./prompt-cache/lru-cache";
 import { PromptCache } from "./prompt-cache/prompt-cache";
 import {
+  addAzureBlobHeaders,
   getCurrentUnixTimestamp,
   GLOBAL_PROJECT,
   isEmpty,
@@ -902,6 +903,8 @@ export class Attachment {
         }
         throw error;
       }
+
+      addAzureBlobHeaders(headers, signedUrl);
 
       // TODO multipart upload.
       let objectStoreResponse: Response | undefined;
