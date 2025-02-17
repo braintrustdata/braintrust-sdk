@@ -80,6 +80,7 @@ from .util import (
     AugmentedHTTPError,
     LazyValue,
     _urljoin,
+    add_azure_blob_headers,
     bt_iscoroutinefunction,
     coalesce,
     encode_uri_component,
@@ -2037,6 +2038,8 @@ class Attachment:
             headers = metadata.get("headers")
             if not isinstance(signed_url, str) or not isinstance(headers, dict):
                 raise RuntimeError(f"Invalid response from API server: {metadata}")
+
+            add_azure_blob_headers(headers, signed_url)
 
             # TODO multipart upload.
             try:
