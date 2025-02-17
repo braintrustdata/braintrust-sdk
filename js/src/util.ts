@@ -87,7 +87,7 @@ export function addAzureBlobHeaders(
 ) {
   // According to https://stackoverflow.com/questions/37824136/put-on-sas-blob-url-without-specifying-x-ms-blob-type-header,
   // there is no way to avoid including this.
-  if ("blob.core.windows.net" in url) {
+  if (url.includes("blob.core.windows.net")) {
     headers["x-ms-blob-type"] = "BlockBlob";
   }
 }
