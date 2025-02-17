@@ -1085,7 +1085,7 @@ def init_dataset(
     project_id: Optional[str] = None,
     metadata: Optional[Metadata] = None,
     use_output: bool = DEFAULT_IS_LEGACY_DATASET,
-    btql: Optional[Any] = None,
+    _internal_btql: Optional[Dict[str, Any]] = None,
 ) -> "Dataset":
     """
     Create a new dataset in a specified project. If the project does not exist, it will be created.
@@ -1121,7 +1121,10 @@ def init_dataset(
         )
 
     return Dataset(
-        lazy_metadata=LazyValue(compute_metadata, use_mutex=True), version=version, legacy=use_output, btql=btql
+        lazy_metadata=LazyValue(compute_metadata, use_mutex=True),
+        version=version,
+        legacy=use_output,
+        _internal_btql=_internal_btql,
     )
 
 
@@ -1866,7 +1869,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
         object_type: str,
         pinned_version: Union[None, int, str] = None,
         mutate_record: Optional[Callable[[TMapping], TMapping]] = None,
-        btql: Optional[Any] = None,
+        _internal_btql: Optional[Dict[str, Any]] = None,
     ):
         self.object_type = object_type
 
@@ -1881,7 +1884,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
         self._mutate_record = mutate_record
 
         self._fetched_data: Optional[List[TMapping]] = None
-        self.btql = btql
+        self._internal_btql = _internal_btql
 
     def fetch(self) -> Iterator[TMapping]:
         """
@@ -1922,12 +1925,12 @@ class ObjectFetcher(ABC, Generic[TMapping]):
     def _refetch(self) -> List[TMapping]:
         state = self._get_state()
         if self._fetched_data is None:
-            if self.btql and isinstance(self.btql, dict):
+            if self._internal_btql:
                 resp = state.api_conn().post(
                     f"btql",
                     json={
                         "query": {
-                            **self.btql,
+                            **self._internal_btql,
                             "select": [{"op": "star"}],
                             "from": {
                                 "op": "function",
@@ -3150,7 +3153,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         lazy_metadata: LazyValue[ProjectDatasetMetadata],
         version: Union[None, int, str] = None,
         legacy: bool = DEFAULT_IS_LEGACY_DATASET,
-        btql: Optional[Any] = None,
+        _internal_btql: Optional[Dict[str, Any]] = None,
     ):
         if legacy:
             eprint(
@@ -3165,7 +3168,11 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         self.new_records = 0
 
         ObjectFetcher.__init__(
-            self, object_type="dataset", pinned_version=version, mutate_record=mutate_record, btql=btql
+            self,
+            object_type="dataset",
+            pinned_version=version,
+            mutate_record=mutate_record,
+            _internal_btql=_internal_btql,
         )
 
     @property

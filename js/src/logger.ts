@@ -2436,8 +2436,7 @@ type InitDatasetOptions<IsLegacyDataset extends boolean> = FullLoginOptions & {
   projectId?: string;
   metadata?: Record<string, unknown>;
   state?: BraintrustState;
-  //btql?: ParsedQuery;
-  btql?: any;
+  _internal_btql?: Record<string, unknown>;
 } & UseOutputOption<IsLegacyDataset>;
 
 type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
@@ -2516,7 +2515,7 @@ export function initDataset<
     metadata,
     useOutput: legacy,
     state: stateArg,
-    btql,
+    _internal_btql,
   } = options;
 
   const state = stateArg ?? _globalState;
@@ -2563,7 +2562,7 @@ export function initDataset<
     lazyMetadata,
     version,
     legacy,
-    btql,
+    _internal_btql,
   );
 }
 
@@ -3581,8 +3580,7 @@ class ObjectFetcher<RecordType>
     private objectType: "dataset" | "experiment",
     private pinnedVersion: string | undefined,
     private mutateRecord?: (r: any) => RecordType,
-    //private btql?: ParsedQuery,
-    private btql?: any,
+    private _internal_btql?: Record<string, unknown>,
   ) {}
 
   public get id(): Promise<string> {
@@ -3608,12 +3606,12 @@ class ObjectFetcher<RecordType>
     if (this._fetchedData === undefined) {
       const state = await this.getState();
       let data = null;
-      if (this.btql) {
+      if (this._internal_btql) {
         const resp = await state.apiConn().post(
           `btql`,
           {
             query: {
-              ...this.btql,
+              ...this._internal_btql,
               select: [
                 {
                   op: "star",
@@ -4402,8 +4400,7 @@ export class Dataset<
     lazyMetadata: LazyValue<ProjectDatasetMetadata>,
     pinnedVersion?: string,
     legacy?: IsLegacyDataset,
-    //btql?: ParsedQuery,
-    btql?: any,
+    _internal_btql?: Record<string, unknown>,
   ) {
     const isLegacyDataset = (legacy ??
       DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
@@ -4417,7 +4414,7 @@ export class Dataset<
       pinnedVersion,
       (r: AnyDatasetRecord) =>
         ensureDatasetRecord(enrichAttachments(r), isLegacyDataset),
-      btql,
+      _internal_btql,
     );
     this.lazyMetadata = lazyMetadata;
   }
