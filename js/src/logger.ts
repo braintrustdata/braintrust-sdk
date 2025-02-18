@@ -3062,7 +3062,7 @@ export function getSpanParentObject<IsAsyncFlush extends boolean>(
   return NOOP_SPAN;
 }
 
-export function logError(span: Span, error: unknown) {
+export function logError(span: Span, error: unknown, errorScores?: {}) {
   let errorMessage = "<error>";
   let stackTrace = "";
   if (error instanceof Error) {
@@ -3071,7 +3071,7 @@ export function logError(span: Span, error: unknown) {
   } else {
     errorMessage = String(error);
   }
-  span.log({ error: `${errorMessage}\n\n${stackTrace}` });
+  span.log({ error: `${errorMessage}\n\n${stackTrace}`, scores: errorScores });
 }
 
 /**

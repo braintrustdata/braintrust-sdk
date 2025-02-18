@@ -1,5 +1,5 @@
-import { beforeAll, expect, test } from "vitest";
-import { runEvaluator } from "./framework";
+import { beforeAll, expect, describe, test } from "vitest";
+import { EvalScorer, runEvaluator } from "./framework";
 import { configureNode } from "./node";
 import { BarProgressReporter } from "./progress";
 
@@ -156,5 +156,110 @@ test("expected (read/write) is passed to task", async () => {
   expect(out.results[0].expected).toEqual({
     bar: "baz",
     foo: "barbar",
+  });
+});
+
+function makeTestScorer(
+  name: string,
+  willError?: boolean,
+): EvalScorer<any, any, any, any> {
+  return () => {
+    if (willError) {
+      throw new Error("scorer errored");
+    }
+    return {
+      name,
+      score: 1,
+    };
+  };
+}
+
+describe("runEvaluator", () => {
+  describe("errors", () => {
+    test("task errors generate no scores", async () => {
+      const out = await runEvaluator(
+        null,
+        {
+          projectName: "proj",
+          evalName: "eval",
+          data: [{ input: 1 }],
+          task: async () => {
+            throw new Error("test error");
+          },
+          scores: Array.from({ length: 3 }, (_, i) =>
+            makeTestScorer(`scorer_${i}`),
+          ),
+        },
+        new BarProgressReporter(),
+        [],
+        undefined,
+      );
+
+      expect(
+        out.results.every((r) => Object.keys(r.scores).length === 0),
+      ).toBeTruthy();
+    });
+
+    describe("defaultErrorScore", () => {
+      test("task errors generate 0 scores for all scorers", async () => {
+        const out = await runEvaluator(
+          null,
+          {
+            projectName: "proj",
+            evalName: "eval",
+            data: [{ input: 1 }],
+            task: async () => {
+              throw new Error("test error");
+            },
+            scores: Array.from({ length: 3 }, (_, i) =>
+              makeTestScorer(`scorer_${i}`),
+            ),
+            defaultErrorScore: true,
+          },
+          new BarProgressReporter(),
+          [],
+          undefined,
+        );
+
+        expect(
+          out.results.every(
+            (r) =>
+              Object.keys(r.scores).length === 3 &&
+              Object.values(r.scores).every((v) => v === 0),
+          ),
+        ).toBeTruthy();
+      });
+
+      test("scorer errors generate 0 scores for all errored scorers", async () => {
+        const out = await runEvaluator(
+          null,
+          {
+            projectName: "proj",
+            evalName: "eval",
+            data: [{ input: 1 }],
+            task: async () => {
+              return "valid output";
+            },
+            scores: Array.from({ length: 3 }, (_, i) =>
+              makeTestScorer(`scorer_${i}`, i % 2 === 0),
+            ),
+            defaultErrorScore: true,
+          },
+          new BarProgressReporter(),
+          [],
+          undefined,
+        );
+
+        expect(
+          out.results.every(
+            (r) =>
+              Object.keys(r.scores).length === 3 &&
+              r.scores.scorer_0 === 0 &&
+              r.scores.scorer_1 === 1 &&
+              r.scores.scorer_2 === 0,
+          ),
+        ).toBeTruthy();
+      });
+    });
   });
 });

@@ -245,6 +245,11 @@ export interface Evaluator<
    * Optionally explicitly specify the git metadata for this experiment. This takes precedence over `gitMetadataSettings` if specified.
    */
   repoInfo?: RepoInfo;
+
+  /**
+   * Optionally generate 0% value scores for any scorer that errored. For a task that errors, all scores will be given a 0% value.
+   */
+  defaultErrorScore?: boolean;
 }
 
 export class EvalResultWithSummary<
@@ -802,6 +807,7 @@ async function runEvaluatorInternal(
         let output: unknown = undefined;
         let error: unknown | undefined = undefined;
         const scores: Record<string, number | null> = {};
+        const scorerNames = evaluator.scores.map(scorerName);
         try {
           const meta = (o: Record<string, unknown>) =>
             (metadata = { ...metadata, ...o });
@@ -844,7 +850,6 @@ async function runEvaluatorInternal(
             metadata,
             output,
           };
-          const scorerNames = evaluator.scores.map(scorerName);
           const scoreResults = await Promise.all(
             evaluator.scores.map(async (score, score_idx) => {
               try {
@@ -936,20 +941,12 @@ async function runEvaluatorInternal(
           );
           // Resolve each promise on its own so that we can separate the passing
           // from the failing ones.
-          const passingScorersAndResults: {
-            name: string;
-            score: Score | null;
-          }[] = [];
           const failingScorersAndResults: { name: string; error: unknown }[] =
             [];
           scoreResults.forEach((results, i) => {
             const name = scorerNames[i];
             if (results.kind === "score") {
               (results.value || []).forEach((result) => {
-                passingScorersAndResults.push({
-                  name: result.name,
-                  score: result,
-                });
                 scores[result.name] = result.score;
               });
             } else {
@@ -965,7 +962,14 @@ async function runEvaluatorInternal(
               ]),
             );
             metadata["scorer_errors"] = scorerErrors;
-            rootSpan.log({ metadata: { scorer_errors: scorerErrors } });
+            rootSpan.log({
+              metadata: { scorer_errors: scorerErrors },
+              scores: evaluator.defaultErrorScore
+                ? Object.fromEntries(
+                    failingScorersAndResults.map(({ name }) => [name, 0]),
+                  )
+                : undefined,
+            });
             const names = Object.keys(scorerErrors).join(", ");
             const errors = failingScorersAndResults.map((item) => item.error);
             throw new AggregateError(
@@ -974,7 +978,13 @@ async function runEvaluatorInternal(
             );
           }
         } catch (e) {
-          logSpanError(rootSpan, e);
+          logSpanError(
+            rootSpan,
+            e,
+            evaluator.defaultErrorScore
+              ? Object.fromEntries(scorerNames.map((n) => [n, 0]))
+              : undefined,
+          );
           error = e;
         } finally {
           progressReporter.increment(evaluator.evalName);
@@ -986,7 +996,12 @@ async function runEvaluatorInternal(
           output,
           tags: datum.tags,
           metadata,
-          scores,
+          scores: {
+            ...(evaluator.defaultErrorScore
+              ? Object.fromEntries(scorerNames.map((n) => [n, 0]))
+              : undefined),
+            ...scores,
+          },
           error,
         });
       };
