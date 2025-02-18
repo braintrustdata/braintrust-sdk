@@ -1086,6 +1086,7 @@ def init_dataset(
     project_id: Optional[str] = None,
     metadata: Optional[Metadata] = None,
     use_output: bool = DEFAULT_IS_LEGACY_DATASET,
+    _internal_btql: Optional[Dict[str, Any]] = None,
 ) -> "Dataset":
     """
     Create a new dataset in a specified project. If the project does not exist, it will be created.
@@ -1120,7 +1121,12 @@ def init_dataset(
             dataset=ObjectMetadata(id=resp_dataset["id"], name=resp_dataset["name"], full_info=resp_dataset),
         )
 
-    return Dataset(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), version=version, legacy=use_output)
+    return Dataset(
+        lazy_metadata=LazyValue(compute_metadata, use_mutex=True),
+        version=version,
+        legacy=use_output,
+        _internal_btql=_internal_btql,
+    )
 
 
 def _compute_logger_metadata(project_name: Optional[str] = None, project_id: Optional[str] = None):
@@ -1864,6 +1870,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
         object_type: str,
         pinned_version: Union[None, int, str] = None,
         mutate_record: Optional[Callable[[TMapping], TMapping]] = None,
+        _internal_btql: Optional[Dict[str, Any]] = None,
     ):
         self.object_type = object_type
 
@@ -1878,6 +1885,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
         self._mutate_record = mutate_record
 
         self._fetched_data: Optional[List[TMapping]] = None
+        self._internal_btql = _internal_btql
 
     def fetch(self) -> Iterator[TMapping]:
         """
@@ -1918,20 +1926,49 @@ class ObjectFetcher(ABC, Generic[TMapping]):
     def _refetch(self) -> List[TMapping]:
         state = self._get_state()
         if self._fetched_data is None:
-            resp = state.api_conn().get(
-                f"v1/{self.object_type}/{self.id}/fetch",
-                params={
-                    "version": self._pinned_version,
-                },
-                headers={
-                    "Accept-Encoding": "gzip",
-                },
-            )
-            response_raise_for_status(resp)
-            data = cast(List[TMapping], resp.json()["events"])
+            if self._internal_btql:
+                resp = state.api_conn().post(
+                    f"btql",
+                    json={
+                        "query": {
+                            **self._internal_btql,
+                            "select": [{"op": "star"}],
+                            "from": {
+                                "op": "function",
+                                "name": {
+                                    "op": "ident",
+                                    "name": [self.object_type],
+                                },
+                                "args": [
+                                    {
+                                        "op": "literal",
+                                        "value": self.id,
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                    headers={
+                        "Accept-Encoding": "gzip",
+                    },
+                )
+                response_raise_for_status(resp)
+                data = cast(List[TMapping], resp.json()["data"])
+            else:
+                resp = state.api_conn().get(
+                    f"v1/{self.object_type}/{self.id}/fetch",
+                    params={
+                        "version": self._pinned_version,
+                    },
+                    headers={
+                        "Accept-Encoding": "gzip",
+                    },
+                )
+                response_raise_for_status(resp)
+                data = cast(List[TMapping], resp.json()["events"])
+
             if not isinstance(data, list):
                 raise ValueError(f"Expected a list in the response, got {type(data)}")
-
             if self._mutate_record is not None:
                 self._fetched_data = [self._mutate_record(r) for r in data]
             else:
@@ -3119,6 +3156,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         lazy_metadata: LazyValue[ProjectDatasetMetadata],
         version: Union[None, int, str] = None,
         legacy: bool = DEFAULT_IS_LEGACY_DATASET,
+        _internal_btql: Optional[Dict[str, Any]] = None,
     ):
         if legacy:
             eprint(
@@ -3132,7 +3170,13 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         self._lazy_metadata = lazy_metadata
         self.new_records = 0
 
-        ObjectFetcher.__init__(self, object_type="dataset", pinned_version=version, mutate_record=mutate_record)
+        ObjectFetcher.__init__(
+            self,
+            object_type="dataset",
+            pinned_version=version,
+            mutate_record=mutate_record,
+            _internal_btql=_internal_btql,
+        )
 
     @property
     def id(self) -> str:
