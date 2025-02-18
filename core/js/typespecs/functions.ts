@@ -174,7 +174,7 @@ export const runEvalSchema = z
         z
           .object({
             dataset_id: z.string(),
-            _internal_btql: z.record(z.string(), z.unknown()),
+            _internal_btql: z.record(z.string(), z.unknown()).nullish(),
           })
           .describe("Dataset id")
           .openapi({ title: "dataset_id" }),
@@ -182,7 +182,7 @@ export const runEvalSchema = z
           .object({
             project_name: z.string(),
             dataset_name: z.string(),
-            _internal_btql: z.record(z.string(), z.unknown()),
+            _internal_btql: z.record(z.string(), z.unknown()).nullish(),
           })
           .describe("Project and dataset name")
           .openapi({ title: "project_dataset_name" }),
