@@ -808,6 +808,7 @@ async function runEvaluatorInternal(
         let error: unknown | undefined = undefined;
         const scores: Record<string, number | null> = {};
         const scorerNames = evaluator.scores.map(scorerName);
+        let failedScores = null;
         try {
           const meta = (o: Record<string, unknown>) =>
             (metadata = { ...metadata, ...o });
@@ -964,14 +965,12 @@ async function runEvaluatorInternal(
             metadata["scorer_errors"] = scorerErrors;
             rootSpan.log({
               metadata: { scorer_errors: scorerErrors },
-              scores: evaluator.defaultErrorScore
-                ? Object.fromEntries(
-                    failingScorersAndResults.map(({ name }) => [name, 0]),
-                  )
-                : undefined,
             });
             const names = Object.keys(scorerErrors).join(", ");
             const errors = failingScorersAndResults.map((item) => item.error);
+            failedScores = Object.fromEntries(
+              failingScorersAndResults.map(({ name }) => [name, 0]),
+            );
             throw new AggregateError(
               errors,
               `Found exceptions for the following scorers: ${names}`,
@@ -982,7 +981,8 @@ async function runEvaluatorInternal(
             rootSpan,
             e,
             evaluator.defaultErrorScore
-              ? Object.fromEntries(scorerNames.map((n) => [n, 0]))
+              ? failedScores ??
+                  Object.fromEntries(scorerNames.map((n) => [n, 0]))
               : undefined,
           );
           error = e;

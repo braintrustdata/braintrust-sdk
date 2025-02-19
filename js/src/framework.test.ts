@@ -241,7 +241,7 @@ describe("runEvaluator", () => {
               return "valid output";
             },
             scores: Array.from({ length: 3 }, (_, i) =>
-              makeTestScorer(`scorer_${i}`, i % 2 === 0),
+              makeTestScorer(`scorer_${i}`, i === 0),
             ),
             defaultErrorScore: true,
           },
@@ -256,7 +256,7 @@ describe("runEvaluator", () => {
               Object.keys(r.scores).length === 3 &&
               r.scores.scorer_0 === 0 &&
               r.scores.scorer_1 === 1 &&
-              r.scores.scorer_2 === 0,
+              r.scores.scorer_2 === 1,
           ),
         ).toBeTruthy();
       });
