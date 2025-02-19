@@ -20,7 +20,7 @@ import * as esbuild from "esbuild";
 import fs from "fs";
 import path from "path";
 import { createGzip } from "zlib";
-import { isEmpty } from "../util";
+import { addAzureBlobHeaders, isEmpty } from "../util";
 import { z } from "zod";
 import { capitalize } from "@braintrust/core";
 import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
