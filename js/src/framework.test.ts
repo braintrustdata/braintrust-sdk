@@ -200,7 +200,63 @@ describe("runEvaluator", () => {
       ).toBeTruthy();
     });
 
-    describe("defaultErrorScore", () => {
+    describe("unhandledScoresFallback", () => {
+      describe("function", () => {
+        test("noop function generates no scores", async () => {
+          const out = await runEvaluator(
+            null,
+            {
+              projectName: "proj",
+              evalName: "eval",
+              data: [{ input: 1 }],
+              task: async () => {
+                throw new Error("test error");
+              },
+              scores: Array.from({ length: 3 }, (_, i) =>
+                makeTestScorer(`scorer_${i}`),
+              ),
+              unhandledScoresFallback: () => undefined,
+            },
+            new BarProgressReporter(),
+            [],
+            undefined,
+          );
+
+          expect(
+            out.results.every((r) => Object.keys(r.scores).length === 0),
+          ).toBeTruthy();
+        });
+
+        test("function can generate arbitrary scores", async () => {
+          const out = await runEvaluator(
+            null,
+            {
+              projectName: "proj",
+              evalName: "eval",
+              data: [{ input: 1 }],
+              task: async () => {
+                throw new Error("test error");
+              },
+              scores: Array.from({ length: 3 }, (_, i) =>
+                makeTestScorer(`scorer_${i}`),
+              ),
+              unhandledScoresFallback: () => ({ error_score: 1 }),
+            },
+            new BarProgressReporter(),
+            [],
+            undefined,
+          );
+
+          expect(
+            out.results.every(
+              (r) =>
+                Object.keys(r.scores).length === 1 &&
+                r.scores.error_score === 1,
+            ),
+          ).toBeTruthy();
+        });
+      });
+
       test("task errors generate 0 scores for all scorers", async () => {
         const out = await runEvaluator(
           null,
@@ -214,7 +270,7 @@ describe("runEvaluator", () => {
             scores: Array.from({ length: 3 }, (_, i) =>
               makeTestScorer(`scorer_${i}`),
             ),
-            defaultErrorScore: true,
+            unhandledScoresFallback: true,
           },
           new BarProgressReporter(),
           [],
@@ -243,7 +299,7 @@ describe("runEvaluator", () => {
             scores: Array.from({ length: 3 }, (_, i) =>
               makeTestScorer(`scorer_${i}`, i === 0),
             ),
-            defaultErrorScore: true,
+            unhandledScoresFallback: true,
           },
           new BarProgressReporter(),
           [],

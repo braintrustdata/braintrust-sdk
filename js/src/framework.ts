@@ -247,9 +247,17 @@ export interface Evaluator<
   repoInfo?: RepoInfo;
 
   /**
-   * Optionally generate 0% value scores for any scorer that errored. For a task that errors, all scores will be given a 0% value.
+   * Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
+   * Any returned value will be automatically logged as scores to the root span.
+   * If set to true, generate 0% value scores for any scorer that errored. For a task that errored, all scores will be given a 0% value.
    */
-  defaultErrorScore?: boolean;
+  unhandledScoresFallback?:
+    | ((args: {
+        rootSpan: Span;
+        data: EvalCase<Input, Expected, Metadata>;
+        unhandledScores: string[];
+      }) => Record<string, number> | undefined)
+    | true;
 }
 
 export class EvalResultWithSummary<
@@ -692,6 +700,18 @@ export async function runEvaluator(
   return winner;
 }
 
+function defaultErrorScoreFallback({
+  rootSpan,
+  data,
+  unhandledScores,
+}: {
+  rootSpan: Span;
+  data: EvalCase<any, any, any>;
+  unhandledScores: string[];
+}) {
+  return Object.fromEntries(unhandledScores.map((s) => [s, 0]));
+}
+
 async function runEvaluatorInternal(
   experiment: Experiment | null,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -767,6 +787,10 @@ async function runEvaluatorInternal(
     scores: Record<string, number | null>;
     error: unknown;
   }
+  const errorScoreFallback =
+    evaluator.unhandledScoresFallback === true
+      ? defaultErrorScoreFallback
+      : evaluator.unhandledScoresFallback;
   const results: EvalResult[] = [];
   const q = queue(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -808,7 +832,7 @@ async function runEvaluatorInternal(
         let error: unknown | undefined = undefined;
         const scores: Record<string, number | null> = {};
         const scorerNames = evaluator.scores.map(scorerName);
-        let failedScores = null;
+        let unhandledScores: string[] | null = scorerNames;
         try {
           const meta = (o: Record<string, unknown>) =>
             (metadata = { ...metadata, ...o });
@@ -955,6 +979,7 @@ async function runEvaluatorInternal(
             }
           });
 
+          unhandledScores = null;
           if (failingScorersAndResults.length) {
             const scorerErrors = Object.fromEntries(
               failingScorersAndResults.map(({ name, error }) => [
@@ -968,9 +993,7 @@ async function runEvaluatorInternal(
             });
             const names = Object.keys(scorerErrors).join(", ");
             const errors = failingScorersAndResults.map((item) => item.error);
-            failedScores = Object.fromEntries(
-              failingScorersAndResults.map(({ name }) => [name, 0]),
-            );
+            unhandledScores = failingScorersAndResults.map(({ name }) => name);
             throw new AggregateError(
               errors,
               `Found exceptions for the following scorers: ${names}`,
@@ -980,9 +1003,8 @@ async function runEvaluatorInternal(
           logSpanError(
             rootSpan,
             e,
-            evaluator.defaultErrorScore
-              ? failedScores ??
-                  Object.fromEntries(scorerNames.map((n) => [n, 0]))
+            errorScoreFallback && unhandledScores
+              ? errorScoreFallback({ rootSpan, data: datum, unhandledScores })
               : undefined,
           );
           error = e;
@@ -997,8 +1019,8 @@ async function runEvaluatorInternal(
           tags: datum.tags,
           metadata,
           scores: {
-            ...(evaluator.defaultErrorScore
-              ? Object.fromEntries(scorerNames.map((n) => [n, 0]))
+            ...(errorScoreFallback && unhandledScores
+              ? errorScoreFallback({ rootSpan, data: datum, unhandledScores })
               : undefined),
             ...scores,
           },
