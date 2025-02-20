@@ -248,7 +248,7 @@ export interface Evaluator<
 
   /**
    * Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
-   * If set to true, generate 0% value scores for any scorer that errored. For a task that errored, all scores will be given a 0% value.
+   * If set to true, log a 0 score to the root span for any scorer that was not run. For a task that errored, all scores will to the root span with a 0 value.
    */
   unhandledScoresFallback?:
     | ((args: {
