@@ -4,13 +4,16 @@ import { customTypes } from "./custom_types";
 export const viewTypeEnum = z
   .enum([
     "projects",
-    "logs",
     "experiments",
-    "datasets",
-    "prompts",
-    "playgrounds",
     "experiment",
+    "playgrounds",
+    "playground",
+    "datasets",
     "dataset",
+    "prompts",
+    "tools",
+    "scorers",
+    "logs",
   ])
   .describe("Type of table that the view corresponds to.");
 export type ViewType = z.infer<typeof viewTypeEnum>;
@@ -37,6 +40,9 @@ export const viewOptionsSchema = z
     columnVisibility: z.record(z.boolean()).nullish(),
     columnOrder: z.array(z.string()).nullish(),
     columnSizing: z.record(z.number()).nullish(),
+    grouping: z.string().nullish(),
+    rowHeight: z.string().nullish(),
+    layout: z.string().nullish(),
   })
   .strip()
   .openapi("ViewOptions");

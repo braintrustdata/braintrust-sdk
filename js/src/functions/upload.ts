@@ -20,7 +20,7 @@ import * as esbuild from "esbuild";
 import fs from "fs";
 import path from "path";
 import { createGzip } from "zlib";
-import { isEmpty } from "../util";
+import { addAzureBlobHeaders, isEmpty } from "../util";
 import { z } from "zod";
 import { capitalize } from "@braintrust/core";
 import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
@@ -369,12 +369,15 @@ async function uploadBundles({
       bundleStream.on("error", reject);
     });
 
+    const headers = {
+      "Content-Encoding": "gzip",
+    };
+    addAzureBlobHeaders(headers, pathInfo.url);
+
     const resp = await fetch(pathInfo.url, {
       method: "PUT",
       body: bundleData,
-      headers: {
-        "Content-Encoding": "gzip",
-      },
+      headers,
     });
     if (!resp.ok) {
       throw new Error(

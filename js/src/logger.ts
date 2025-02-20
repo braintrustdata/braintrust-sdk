@@ -71,6 +71,7 @@ import { canUseDiskCache, DiskCache } from "./prompt-cache/disk-cache";
 import { LRUCache } from "./prompt-cache/lru-cache";
 import { PromptCache } from "./prompt-cache/prompt-cache";
 import {
+  addAzureBlobHeaders,
   getCurrentUnixTimestamp,
   GLOBAL_PROJECT,
   isEmpty,
@@ -902,6 +903,8 @@ export class Attachment {
         }
         throw error;
       }
+
+      addAzureBlobHeaders(headers, signedUrl);
 
       // TODO multipart upload.
       let objectStoreResponse: Response | undefined;
@@ -2437,6 +2440,7 @@ type InitDatasetOptions<IsLegacyDataset extends boolean> = FullLoginOptions & {
   projectId?: string;
   metadata?: Record<string, unknown>;
   state?: BraintrustState;
+  _internal_btql?: Record<string, unknown>;
 } & UseOutputOption<IsLegacyDataset>;
 
 type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
@@ -2515,6 +2519,7 @@ export function initDataset<
     metadata,
     useOutput: legacy,
     state: stateArg,
+    _internal_btql,
   } = options;
 
   const state = stateArg ?? _globalState;
@@ -2556,7 +2561,13 @@ export function initDataset<
     },
   );
 
-  return new Dataset(stateArg ?? _globalState, lazyMetadata, version, legacy);
+  return new Dataset(
+    stateArg ?? _globalState,
+    lazyMetadata,
+    version,
+    legacy,
+    _internal_btql,
+  );
 }
 
 /**
@@ -3573,6 +3584,7 @@ class ObjectFetcher<RecordType>
     private objectType: "dataset" | "experiment",
     private pinnedVersion: string | undefined,
     private mutateRecord?: (r: any) => RecordType,
+    private _internal_btql?: Record<string, unknown>,
   ) {}
 
   public get id(): Promise<string> {
@@ -3597,14 +3609,46 @@ class ObjectFetcher<RecordType>
   async fetchedData() {
     if (this._fetchedData === undefined) {
       const state = await this.getState();
-      const resp = await state.apiConn().get(
-        `v1/${this.objectType}/${await this.id}/fetch`,
-        {
-          version: this.pinnedVersion,
-        },
-        { headers: { "Accept-Encoding": "gzip" } },
-      );
-      const data = (await resp.json()).events;
+      let data = null;
+      if (this._internal_btql) {
+        const resp = await state.apiConn().post(
+          `btql`,
+          {
+            query: {
+              ...this._internal_btql,
+              select: [
+                {
+                  op: "star",
+                },
+              ],
+              from: {
+                op: "function",
+                name: {
+                  op: "ident",
+                  name: [this.objectType],
+                },
+                args: [
+                  {
+                    op: "literal",
+                    value: await this.id,
+                  },
+                ],
+              },
+            },
+          },
+          { headers: { "Accept-Encoding": "gzip" } },
+        );
+        data = (await resp.json()).data;
+      } else {
+        const resp = await state.apiConn().get(
+          `v1/${this.objectType}/${await this.id}/fetch`,
+          {
+            version: this.pinnedVersion,
+          },
+          { headers: { "Accept-Encoding": "gzip" } },
+        );
+        data = (await resp.json()).events;
+      }
       this._fetchedData = this.mutateRecord
         ? data?.map(this.mutateRecord)
         : data;
@@ -3996,6 +4040,7 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     EvalCase<Input, Expected, void>
   > {
     const records = this.fetch();
+
     for await (const record of records) {
       if (record.root_span_id !== record.span_id) {
         continue;
@@ -4360,6 +4405,7 @@ export class Dataset<
     lazyMetadata: LazyValue<ProjectDatasetMetadata>,
     pinnedVersion?: string,
     legacy?: IsLegacyDataset,
+    _internal_btql?: Record<string, unknown>,
   ) {
     const isLegacyDataset = (legacy ??
       DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
@@ -4368,8 +4414,12 @@ export class Dataset<
         `Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use \`braintrust.initDataset()\` with \`{ useOutput: false }\`, which will become the default in a future version of Braintrust.`,
       );
     }
-    super("dataset", pinnedVersion, (r: AnyDatasetRecord) =>
-      ensureDatasetRecord(enrichAttachments(r), isLegacyDataset),
+    super(
+      "dataset",
+      pinnedVersion,
+      (r: AnyDatasetRecord) =>
+        ensureDatasetRecord(enrichAttachments(r), isLegacyDataset),
+      _internal_btql,
     );
     this.lazyMetadata = lazyMetadata;
   }

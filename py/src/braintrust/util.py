@@ -164,6 +164,7 @@ class LazyValue(Generic[T]):
 
 _MARK_ASYNC_WRAPPER_UNDERLYING_CALLABLE_ATTRIBUTE = "_MarkAsyncWrapper_underlying_callable"
 
+
 # A wrapper class to enable explicitly marking a callable object as async. This
 # can be useful for scenarios where the user wants to provide an awaitable
 # function that is not recognized as async with `inspect.iscoroutinefunction`.
@@ -190,3 +191,10 @@ class MarkAsyncWrapper:
 
 def bt_iscoroutinefunction(f):
     return inspect.iscoroutinefunction(f) or getattr(f, BT_IS_ASYNC_ATTRIBUTE, False)
+
+
+def add_azure_blob_headers(headers: Dict[str, str], url: str) -> None:
+    # According to https://stackoverflow.com/questions/37824136/put-on-sas-blob-url-without-specifying-x-ms-blob-type-header,
+    # there is no way to avoid including this.
+    if "blob.core.windows.net" in url:
+        headers["x-ms-blob-type"] = "BlockBlob"
