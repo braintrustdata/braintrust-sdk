@@ -248,7 +248,6 @@ export interface Evaluator<
 
   /**
    * Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
-   * Any returned value will be automatically logged as scores to the root span.
    * If set to true, generate 0% value scores for any scorer that errored. For a task that errored, all scores will be given a 0% value.
    */
   unhandledScoresFallback?:
@@ -709,7 +708,9 @@ function defaultErrorScoreFallback({
   data: EvalCase<any, any, any>;
   unhandledScores: string[];
 }) {
-  return Object.fromEntries(unhandledScores.map((s) => [s, 0]));
+  const scores = Object.fromEntries(unhandledScores.map((s) => [s, 0]));
+  rootSpan.log({ scores });
+  return scores;
 }
 
 async function runEvaluatorInternal(
@@ -1000,13 +1001,7 @@ async function runEvaluatorInternal(
             );
           }
         } catch (e) {
-          logSpanError(
-            rootSpan,
-            e,
-            errorScoreFallback && unhandledScores
-              ? errorScoreFallback({ rootSpan, data: datum, unhandledScores })
-              : undefined,
-          );
+          logSpanError(rootSpan, e);
           error = e;
         } finally {
           progressReporter.increment(evaluator.evalName);
