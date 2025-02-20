@@ -3634,6 +3634,7 @@ class ObjectFetcher<RecordType>
                 ],
               },
             },
+            use_columnstore: false,
           },
           { headers: { "Accept-Encoding": "gzip" } },
         );
