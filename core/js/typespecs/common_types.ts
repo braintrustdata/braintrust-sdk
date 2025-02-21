@@ -117,5 +117,7 @@ export const objectReferenceSchema = z.object({
   created: z
     .string()
     .nullish()
-    .describe("Created timestamp of the original event."),
+    .describe(
+      "Created timestamp of the original event. Used to help sort in the UI",
+    ),
 });
