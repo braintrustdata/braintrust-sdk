@@ -4641,15 +4641,24 @@ export class Dataset<
       await this.name,
     )}`;
 
-    let dataSummary = undefined;
+    let dataSummary: DataSummary | undefined;
     if (summarizeData) {
-      dataSummary = await state.apiConn().get_json(
-        "dataset-summary",
-        {
-          dataset_id: await this.id,
-        },
-        3,
-      );
+      const rawDataSummary = z
+        .object({
+          total_records: z.number(),
+        })
+        .parse(
+          await state.apiConn().get_json(
+            "dataset-summary",
+            {
+              dataset_id: await this.id,
+            },
+            3,
+          ),
+        );
+      dataSummary = {
+        totalRecords: rawDataSummary.total_records,
+      };
     }
 
     return {
@@ -5113,11 +5122,9 @@ export interface ExperimentSummary {
 /**
  * Summary of a dataset's data.
  *
- * @property newRecords New or updated records added in this session.
  * @property totalRecords Total records in the dataset.
  */
 export interface DataSummary {
-  newRecords: number;
   totalRecords: number;
 }
 
@@ -5135,7 +5142,7 @@ export interface DatasetSummary {
   datasetName: string;
   projectUrl: string;
   datasetUrl: string;
-  dataSummary: DataSummary;
+  dataSummary: DataSummary | undefined;
 }
 
 /**

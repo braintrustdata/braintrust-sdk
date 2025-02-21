@@ -4037,8 +4037,6 @@ class ExperimentSummary(SerializableDataClass):
 class DataSummary(SerializableDataClass):
     """Summary of a dataset's data."""
 
-    new_records: int
-    """New or updated records added in this session."""
     total_records: int
     """Total records in the dataset."""
 
@@ -4058,7 +4056,7 @@ class DatasetSummary(SerializableDataClass):
     """URL to the project's page in the Braintrust app."""
     dataset_url: str
     """URL to the experiment's page in the Braintrust app."""
-    data_summary: int
+    data_summary: Optional[DataSummary]
     """Summary of the dataset's data."""
 
     def __str__(self):
