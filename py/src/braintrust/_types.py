@@ -42,7 +42,7 @@ class Origin(TypedDict):
     """
     created: NotRequired[Optional[str]]
     """
-    Created timestamp of the original event.
+    Created timestamp of the original event. Used to help sort in the UI
     """
 
 
