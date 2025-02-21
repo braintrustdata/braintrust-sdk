@@ -3329,7 +3329,6 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         )
 
         self._clear_cache()  # We may be able to optimize this
-        self.new_records += 1
         _state.global_bg_logger().log(args)
         return id
 
@@ -4058,7 +4057,7 @@ class DatasetSummary(SerializableDataClass):
     """URL to the project's page in the Braintrust app."""
     dataset_url: str
     """URL to the experiment's page in the Braintrust app."""
-    data_summary: int
+    data_summary: Optional[DataSummary]
     """Summary of the dataset's data."""
 
     def __str__(self):
