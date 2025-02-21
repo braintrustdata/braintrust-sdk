@@ -2347,6 +2347,7 @@ export function init<IsOpen extends boolean = false>(
         experiment: {
           id: response.experiment.id,
           name: response.experiment.name,
+          created: response.experiment.created,
           fullInfo: response.experiment,
         },
       };
@@ -3684,6 +3685,7 @@ export type EvalCase<Input, Expected, Metadata> = {
   // These fields are only set if the EvalCase is part of a Dataset.
   id?: string;
   _xact_id?: TransactionId;
+  created?: string | null;
   // This field is used to help re-run a particular experiment row.
   upsert_id?: string;
 } & (Expected extends void ? object : { expected: Expected }) &
