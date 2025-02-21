@@ -253,7 +253,7 @@ export interface Evaluator<
   unhandledScoresFallback?:
     | ((args: {
         rootSpan: Span;
-        data: EvalCase<Input, Expected, Metadata>;
+        data: EvalCase<any, any, any>;
         unhandledScores: string[];
       }) => Record<string, number> | undefined)
     | true;
