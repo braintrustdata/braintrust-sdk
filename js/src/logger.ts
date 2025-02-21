@@ -4397,6 +4397,7 @@ export class Dataset<
 > extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
   private readonly lazyMetadata: LazyValue<ProjectDatasetMetadata>;
   private readonly __braintrust_dataset_marker = true;
+  private newRecords = 0;
 
   constructor(
     private state: BraintrustState,
@@ -4563,6 +4564,7 @@ export class Dataset<
     );
 
     this.state.bgLogger().log([args]);
+    this.newRecords++;
     return rowId;
   }
 
@@ -4657,6 +4659,7 @@ export class Dataset<
           ),
         );
       dataSummary = {
+        newRecords: this.newRecords,
         totalRecords: rawDataSummary.total_records,
       };
     }
@@ -5125,6 +5128,13 @@ export interface ExperimentSummary {
  * @property totalRecords Total records in the dataset.
  */
 export interface DataSummary {
+  /**
+   * New or updated records added in this session.
+   */
+  newRecords: number;
+  /**
+   * Total records in the dataset.
+   */
   totalRecords: number;
 }
 

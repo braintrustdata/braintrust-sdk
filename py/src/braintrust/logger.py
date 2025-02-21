@@ -3329,7 +3329,6 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         )
 
         self._clear_cache()  # We may be able to optimize this
-        self.new_records += 1
         _state.global_bg_logger().log(args)
         return id
 
@@ -4037,6 +4036,8 @@ class ExperimentSummary(SerializableDataClass):
 class DataSummary(SerializableDataClass):
     """Summary of a dataset's data."""
 
+    new_records: int
+    """New or updated records added in this session."""
     total_records: int
     """Total records in the dataset."""
 
