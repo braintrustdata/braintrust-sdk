@@ -870,6 +870,7 @@ async function runEvaluatorInternal(
                   object_type: "dataset",
                   object_id: await eventDataset.id,
                   id: datum.id,
+                  created: datum.created,
                   _xact_id: datum._xact_id,
                 }
               : undefined,
