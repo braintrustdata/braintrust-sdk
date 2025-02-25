@@ -995,7 +995,7 @@ async function runEvaluatorInternal(
             });
             const names = Object.keys(scorerErrors).join(", ");
             const errors = failingScorersAndResults.map((item) => item.error);
-            unhandledScores = Object.keys(failingScorersAndResults);
+            unhandledScores = Object.keys(scorerErrors);
             throw new AggregateError(
               errors,
               `Found exceptions for the following scorers: ${names}`,

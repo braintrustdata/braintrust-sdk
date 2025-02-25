@@ -200,7 +200,7 @@ describe("runEvaluator", () => {
       ).toBeTruthy();
     });
 
-    describe("unhandledScoresFallback", () => {
+    describe("errorScoreHandler", () => {
       describe("function", () => {
         test("noop function generates no scores", async () => {
           const out = await runEvaluator(

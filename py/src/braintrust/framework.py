@@ -22,6 +22,7 @@ from typing import (
     Iterable,
     Iterator,
     List,
+    Literal,
     Optional,
     Sequence,
     Type,
