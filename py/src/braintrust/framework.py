@@ -1092,6 +1092,10 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
     error_score_handler = (
         default_error_score_handler if evaluator.error_score_handler is True else evaluator.error_score_handler
     )
+    # First, resolve the scorers if they are classes
+    scorers = [
+        scorer() if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer for scorer in evaluator.scores
+    ]
     scorer_names = [_scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
     unhandled_scores = scorer_names
 
@@ -1142,11 +1146,6 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                     span.log(input=task_args[0], output=output)
                 root_span.log(output=output, metadata=metadata)
 
-                # First, resolve the scorers if they are classes
-                scorers = [
-                    scorer() if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer
-                    for scorer in evaluator.scores
-                ]
                 score_promises = [
                     asyncio.create_task(
                         await_or_run_scorer(
