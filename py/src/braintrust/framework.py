@@ -82,9 +82,10 @@ class EvalCase(SerializableDataClass, Generic[Input, Output]):
     metadata: Optional[Metadata] = None
     tags: Optional[Sequence[str]] = None
 
-    # Id is only set if the EvalCase is part of a Dataset.
+    # These fields are only set if the EvalCase is part of a Dataset.
     id: Optional[str] = None
     _xact_id: Optional[str] = None
+    created: Optional[str] = None
 
 
 class _EvalCaseDictNoOutput(Generic[Input], TypedDict):
@@ -1090,6 +1091,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                     "object_type": "dataset",
                     "object_id": experiment.dataset.id,
                     "id": datum.id,
+                    "created": datum.created,
                     "_xact_id": datum._xact_id,
                 }
                 if experiment.dataset and datum.id and datum._xact_id

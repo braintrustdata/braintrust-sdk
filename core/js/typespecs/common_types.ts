@@ -114,4 +114,10 @@ export const objectReferenceSchema = z.object({
     .describe("ID of the object the event is originating from."),
   id: z.string().describe("ID of the original event."),
   _xact_id: z.string().describe("Transaction ID of the original event."),
+  created: z
+    .string()
+    .nullish()
+    .describe(
+      "Created timestamp of the original event. Used to help sort in the UI",
+    ),
 });
