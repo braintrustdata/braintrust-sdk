@@ -215,7 +215,7 @@ describe("runEvaluator", () => {
               scores: Array.from({ length: 3 }, (_, i) =>
                 makeTestScorer(`scorer_${i}`),
               ),
-              unhandledScoresFallback: () => undefined,
+              errorScoreHandler: () => undefined,
             },
             new BarProgressReporter(),
             [],
@@ -240,7 +240,7 @@ describe("runEvaluator", () => {
               scores: Array.from({ length: 3 }, (_, i) =>
                 makeTestScorer(`scorer_${i}`),
               ),
-              unhandledScoresFallback: () => ({ error_score: 1 }),
+              errorScoreHandler: () => ({ error_score: 1 }),
             },
             new BarProgressReporter(),
             [],
@@ -270,7 +270,7 @@ describe("runEvaluator", () => {
             scores: Array.from({ length: 3 }, (_, i) =>
               makeTestScorer(`scorer_${i}`),
             ),
-            unhandledScoresFallback: true,
+            errorScoreHandler: true,
           },
           new BarProgressReporter(),
           [],
@@ -299,7 +299,7 @@ describe("runEvaluator", () => {
             scores: Array.from({ length: 3 }, (_, i) =>
               makeTestScorer(`scorer_${i}`, i === 0),
             ),
-            unhandledScoresFallback: true,
+            errorScoreHandler: true,
           },
           new BarProgressReporter(),
           [],

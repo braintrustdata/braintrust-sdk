@@ -699,7 +699,7 @@ export async function runEvaluator(
   return winner;
 }
 
-function defaultErrorScoreFallback({
+function defaultErrorScoreHandler({
   rootSpan,
   data,
   unhandledScores,
@@ -788,9 +788,9 @@ async function runEvaluatorInternal(
     scores: Record<string, number | null>;
     error: unknown;
   }
-  const errorScoreFallback =
+  const errorScoreHandler =
     evaluator.errorScoreHandler === true
-      ? defaultErrorScoreFallback
+      ? defaultErrorScoreHandler
       : evaluator.errorScoreHandler;
   const results: EvalResult[] = [];
   const q = queue(
@@ -995,7 +995,7 @@ async function runEvaluatorInternal(
             });
             const names = Object.keys(scorerErrors).join(", ");
             const errors = failingScorersAndResults.map((item) => item.error);
-            unhandledScores = failingScorersAndResults.map(({ name }) => name);
+            unhandledScores = Object.keys(failingScorersAndResults);
             throw new AggregateError(
               errors,
               `Found exceptions for the following scorers: ${names}`,
@@ -1015,8 +1015,8 @@ async function runEvaluatorInternal(
           tags: datum.tags,
           metadata,
           scores: {
-            ...(errorScoreFallback && unhandledScores
-              ? errorScoreFallback({ rootSpan, data: datum, unhandledScores })
+            ...(errorScoreHandler && unhandledScores
+              ? errorScoreHandler({ rootSpan, data: datum, unhandledScores })
               : undefined),
             ...scores,
           },
