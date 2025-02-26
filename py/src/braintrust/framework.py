@@ -562,6 +562,9 @@ def _EvalCommon(
     base_experiment_id: Optional[str],
     git_metadata_settings: Optional[GitMetadataSettings],
     repo_info: Optional[RepoInfo],
+    error_score_handler: Optional[
+        Union[Callable[[Span, EvalCase[Input, Output], List[str]], Optional[Dict[str, float]]], Literal[True]]
+    ] = None,
 ) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary[Input, Output]]]:
     """
     This helper is needed because in case of `_lazy_load`, we need to update
@@ -592,6 +595,7 @@ def _EvalCommon(
         base_experiment_id=base_experiment_id,
         git_metadata_settings=git_metadata_settings,
         repo_info=repo_info,
+        error_score_handler=error_score_handler,
     )
 
     if _lazy_load:
@@ -752,6 +756,9 @@ def Eval(
     base_experiment_id: Optional[str] = None,
     git_metadata_settings: Optional[GitMetadataSettings] = None,
     repo_info: Optional[RepoInfo] = None,
+    error_score_handler: Optional[
+        Union[Callable[[Span, EvalCase[Input, Output], List[str]], Optional[Dict[str, float]]], Literal[True]]
+    ] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -796,6 +803,8 @@ def Eval(
     summarized and compared to this experiment. This takes precedence over `base_experiment_name` if specified.
     :param git_metadata_settings: Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param repo_info: Optionally explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
+    :param error_score_handler: Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
+    If set to true, log a 0 score to the root span for any scorer that was not run. For a task that errored, all scores will be logged to the root span with a 0 value.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
 
@@ -817,6 +826,7 @@ def Eval(
         base_experiment_id=base_experiment_id,
         git_metadata_settings=git_metadata_settings,
         repo_info=repo_info,
+        error_score_handler=error_score_handler,
     )
 
     # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
@@ -1174,6 +1184,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                         exc_info = traceback.format_exc()
                         failing_scorers_and_exceptions.append((name, e, exc_info))
 
+                nonlocal unhandled_scores
                 unhandled_scores = None
                 if failing_scorers_and_exceptions:
                     scorer_errors = {
@@ -1183,7 +1194,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                     root_span.log(metadata=metadata)
                     names = ", ".join(scorer_errors.keys())
                     exceptions = [x[1] for x in failing_scorers_and_exceptions]
-                    unhandled_scores = scorer_errors.keys()
+                    unhandled_scores = list(scorer_errors.keys())
                     raise exceptiongroup.ExceptionGroup(
                         f"Found exceptions for the following scorers: {names}", exceptions
                     )
@@ -1204,8 +1215,8 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             output=output,
             scores={
                 **(
-                    evaluator.error_score_handler(root_span=root_span, data=datum, unhandled_scores=unhandled_scores)
-                    if evaluator.error_score_handler and unhandled_scores
+                    error_score_handler(root_span, datum, unhandled_scores) or {}
+                    if error_score_handler is not None and unhandled_scores
                     else {}
                 ),
                 **scores,
