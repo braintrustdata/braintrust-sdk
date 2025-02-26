@@ -53,6 +53,7 @@ from .framework import *
 from .framework2 import *
 from .functions.invoke import *
 from .functions.stream import *
+from .gitutil import repo_info
 from .logger import *
 from .logger import _internal_reset_global_state, _internal_with_custom_background_logger
 from .oai import wrap_openai
