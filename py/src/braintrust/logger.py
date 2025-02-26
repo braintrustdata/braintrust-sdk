@@ -1021,7 +1021,9 @@ def init(
                 merged_git_metadata_settings = GitMetadataSettings.merge(
                     merged_git_metadata_settings, git_metadata_settings
                 )
+            print("merged_git_metadata_settings", merged_git_metadata_settings)
             repo_info_arg = get_repo_info(merged_git_metadata_settings)
+        print("repo_info_arg", repo_info_arg)
 
         if repo_info_arg:
             args["repo_info"] = repo_info_arg.as_dict()
