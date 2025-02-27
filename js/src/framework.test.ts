@@ -199,9 +199,9 @@ describe("runEvaluator", () => {
         undefined,
       );
 
-      expect(
-        out.results.every((r) => Object.keys(r.scores).length === 0),
-      ).toBeTruthy();
+      expect(out.results.every((r) => Object.keys(r.scores).length === 0)).toBe(
+        true,
+      );
     });
 
     describe("errorScoreHandler", () => {
@@ -232,7 +232,7 @@ describe("runEvaluator", () => {
                 Object.keys(r.scores).length === 3 &&
                 Object.values(r.scores).every((v) => v === 0),
             ),
-          ).toBeTruthy();
+          ).toBe(true);
         });
 
         test("scorer errors generate 0 scores for all errored scorers", async () => {
@@ -263,7 +263,7 @@ describe("runEvaluator", () => {
                 r.scores.scorer_1 === 1 &&
                 r.scores.scorer_2 === 1,
             ),
-          ).toBeTruthy();
+          ).toBe(true);
         });
       });
 
@@ -290,7 +290,7 @@ describe("runEvaluator", () => {
 
           expect(
             out.results.every((r) => Object.keys(r.scores).length === 0),
-          ).toBeTruthy();
+          ).toBe(true);
         });
 
         test("function can generate arbitrary scores", async () => {
@@ -319,7 +319,7 @@ describe("runEvaluator", () => {
                 Object.keys(r.scores).length === 1 &&
                 r.scores.error_score === 1,
             ),
-          ).toBeTruthy();
+          ).toBe(true);
         });
       });
     });

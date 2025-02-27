@@ -254,7 +254,7 @@ export interface Evaluator<
     rootSpan: Span;
     data: EvalCase<any, any, any>;
     unhandledScores: string[];
-  }) => Record<string, number> | undefined;
+  }) => Record<string, number> | undefined | void;
 }
 
 export class EvalResultWithSummary<
