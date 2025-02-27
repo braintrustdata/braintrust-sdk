@@ -153,6 +153,12 @@ export type EvalResult<
   error: unknown;
 };
 
+type ErrorScoreHandler = (args: {
+  rootSpan: Span;
+  data: EvalCase<any, any, any>;
+  unhandledScores: string[];
+}) => Record<string, number> | undefined | void;
+
 export interface Evaluator<
   Input,
   Output,
@@ -250,11 +256,7 @@ export interface Evaluator<
    * Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
    * A default implementation is exported as `defaultErrorScoreHandler` which will log a 0 score to the root span for any scorer that was not run.
    */
-  errorScoreHandler?: (args: {
-    rootSpan: Span;
-    data: EvalCase<any, any, any>;
-    unhandledScores: string[];
-  }) => Record<string, number> | undefined | void;
+  errorScoreHandler?: ErrorScoreHandler;
 }
 
 export class EvalResultWithSummary<
@@ -697,19 +699,15 @@ export async function runEvaluator(
   return winner;
 }
 
-export function defaultErrorScoreHandler({
+export const defaultErrorScoreHandler: ErrorScoreHandler = ({
   rootSpan,
   data,
   unhandledScores,
-}: {
-  rootSpan: Span;
-  data: EvalCase<any, any, any>;
-  unhandledScores: string[];
-}) {
+}) => {
   const scores = Object.fromEntries(unhandledScores.map((s) => [s, 0]));
   rootSpan.log({ scores });
   return scores;
-}
+};
 
 async function runEvaluatorInternal(
   experiment: Experiment | null,

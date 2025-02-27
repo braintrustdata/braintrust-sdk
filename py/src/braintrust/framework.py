@@ -224,6 +224,8 @@ EvalTask = Union[
     Callable[[Input, EvalHooks[Output]], Union[Output, Awaitable[Output]]],
 ]
 
+ErrorScoreHandler = Callable[[Span, EvalCase[Input, Output], List[str]], Optional[Dict[str, float]]]
+
 
 @dataclasses.dataclass
 class Evaluator(Generic[Input, Output]):
@@ -334,9 +336,7 @@ class Evaluator(Generic[Input, Output]):
     takes precedence over `git_metadata_settings` if specified.
     """
 
-    error_score_handler: Optional[
-        Callable[[Span, EvalCase[Input, Output], List[str]], Optional[Dict[str, float]]]
-    ] = None
+    error_score_handler: Optional[ErrorScoreHandler] = None
     """
     Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
     A default implementation is exported as `default_error_score_handler` which will log a 0 score to the root span for any scorer that was not run.
@@ -562,9 +562,7 @@ def _EvalCommon(
     base_experiment_id: Optional[str],
     git_metadata_settings: Optional[GitMetadataSettings],
     repo_info: Optional[RepoInfo],
-    error_score_handler: Optional[
-        Callable[[Span, EvalCase[Input, Output], List[str]], Optional[Dict[str, float]]]
-    ] = None,
+    error_score_handler: Optional[ErrorScoreHandler] = None,
 ) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary[Input, Output]]]:
     """
     This helper is needed because in case of `_lazy_load`, we need to update
@@ -756,9 +754,7 @@ def Eval(
     base_experiment_id: Optional[str] = None,
     git_metadata_settings: Optional[GitMetadataSettings] = None,
     repo_info: Optional[RepoInfo] = None,
-    error_score_handler: Optional[
-        Callable[[Span, EvalCase[Input, Output], List[str]], Optional[Dict[str, float]]]
-    ] = None,
+    error_score_handler: Optional[ErrorScoreHandler] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.

@@ -5,11 +5,17 @@ import {
   runEvaluator,
 } from "./framework";
 import { configureNode } from "./node";
-import { BarProgressReporter } from "./progress";
+import { BarProgressReporter, type ProgressReporter } from "./progress";
 
 beforeAll(() => {
   configureNode();
 });
+
+class NoopProgressReporter implements ProgressReporter {
+  public start() {}
+  public stop() {}
+  public increment() {}
+}
 
 test("runEvaluator rejects on timeout", async () => {
   await expect(
@@ -26,7 +32,7 @@ test("runEvaluator rejects on timeout", async () => {
         scores: [],
         timeout: 100,
       },
-      new BarProgressReporter(),
+      new NoopProgressReporter(),
       [],
       undefined,
     ),
@@ -46,7 +52,7 @@ test("runEvaluator works with no timeout", async () => {
       },
       scores: [],
     },
-    new BarProgressReporter(),
+    new NoopProgressReporter(),
     [],
     undefined,
   );
@@ -72,7 +78,7 @@ test("meta (write) is passed to task", async () => {
       },
       scores: [],
     },
-    new BarProgressReporter(),
+    new NoopProgressReporter(),
     [],
     undefined,
   );
@@ -108,7 +114,7 @@ test("metadata (read/write) is passed to task", async () => {
       },
       scores: [],
     },
-    new BarProgressReporter(),
+    new NoopProgressReporter(),
     [],
     undefined,
   );
@@ -146,7 +152,7 @@ test("expected (read/write) is passed to task", async () => {
       },
       scores: [],
     },
-    new BarProgressReporter(),
+    new NoopProgressReporter(),
     [],
     undefined,
   );
@@ -194,7 +200,7 @@ describe("runEvaluator", () => {
             makeTestScorer(`scorer_${i}`),
           ),
         },
-        new BarProgressReporter(),
+        new NoopProgressReporter(),
         [],
         undefined,
       );
@@ -221,7 +227,7 @@ describe("runEvaluator", () => {
               ),
               errorScoreHandler: defaultErrorScoreHandler,
             },
-            new BarProgressReporter(),
+            new NoopProgressReporter(),
             [],
             undefined,
           );
@@ -250,7 +256,7 @@ describe("runEvaluator", () => {
               ),
               errorScoreHandler: defaultErrorScoreHandler,
             },
-            new BarProgressReporter(),
+            new NoopProgressReporter(),
             [],
             undefined,
           );
@@ -283,7 +289,7 @@ describe("runEvaluator", () => {
               ),
               errorScoreHandler: () => undefined,
             },
-            new BarProgressReporter(),
+            new NoopProgressReporter(),
             [],
             undefined,
           );
