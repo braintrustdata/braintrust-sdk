@@ -1,11 +1,21 @@
-import { beforeAll, expect, test } from "vitest";
-import { runEvaluator } from "./framework";
+import { beforeAll, expect, describe, test } from "vitest";
+import {
+  defaultErrorScoreHandler,
+  EvalScorer,
+  runEvaluator,
+} from "./framework";
 import { configureNode } from "./node";
-import { BarProgressReporter } from "./progress";
+import { BarProgressReporter, type ProgressReporter } from "./progress";
 
 beforeAll(() => {
   configureNode();
 });
+
+class NoopProgressReporter implements ProgressReporter {
+  public start() {}
+  public stop() {}
+  public increment() {}
+}
 
 test("runEvaluator rejects on timeout", async () => {
   await expect(
@@ -22,7 +32,7 @@ test("runEvaluator rejects on timeout", async () => {
         scores: [],
         timeout: 100,
       },
-      new BarProgressReporter(),
+      new NoopProgressReporter(),
       [],
       undefined,
     ),
@@ -42,7 +52,7 @@ test("runEvaluator works with no timeout", async () => {
       },
       scores: [],
     },
-    new BarProgressReporter(),
+    new NoopProgressReporter(),
     [],
     undefined,
   );
@@ -68,7 +78,7 @@ test("meta (write) is passed to task", async () => {
       },
       scores: [],
     },
-    new BarProgressReporter(),
+    new NoopProgressReporter(),
     [],
     undefined,
   );
@@ -104,7 +114,7 @@ test("metadata (read/write) is passed to task", async () => {
       },
       scores: [],
     },
-    new BarProgressReporter(),
+    new NoopProgressReporter(),
     [],
     undefined,
   );
@@ -142,7 +152,7 @@ test("expected (read/write) is passed to task", async () => {
       },
       scores: [],
     },
-    new BarProgressReporter(),
+    new NoopProgressReporter(),
     [],
     undefined,
   );
@@ -156,5 +166,168 @@ test("expected (read/write) is passed to task", async () => {
   expect(out.results[0].expected).toEqual({
     bar: "baz",
     foo: "barbar",
+  });
+});
+
+function makeTestScorer(
+  name: string,
+  willError?: boolean,
+): EvalScorer<any, any, any, any> {
+  return () => {
+    if (willError) {
+      throw new Error("scorer errored");
+    }
+    return {
+      name,
+      score: 1,
+    };
+  };
+}
+
+describe("runEvaluator", () => {
+  describe("errors", () => {
+    test("task errors generate no scores", async () => {
+      const out = await runEvaluator(
+        null,
+        {
+          projectName: "proj",
+          evalName: "eval",
+          data: [{ input: 1 }],
+          task: async () => {
+            throw new Error("test error");
+          },
+          scores: Array.from({ length: 3 }, (_, i) =>
+            makeTestScorer(`scorer_${i}`),
+          ),
+        },
+        new NoopProgressReporter(),
+        [],
+        undefined,
+      );
+
+      expect(out.results.every((r) => Object.keys(r.scores).length === 0)).toBe(
+        true,
+      );
+    });
+
+    describe("errorScoreHandler", () => {
+      describe("default function", () => {
+        test("task errors generate 0 scores for all scorers", async () => {
+          const out = await runEvaluator(
+            null,
+            {
+              projectName: "proj",
+              evalName: "eval",
+              data: [{ input: 1 }],
+              task: async () => {
+                throw new Error("test error");
+              },
+              scores: Array.from({ length: 3 }, (_, i) =>
+                makeTestScorer(`scorer_${i}`),
+              ),
+              errorScoreHandler: defaultErrorScoreHandler,
+            },
+            new NoopProgressReporter(),
+            [],
+            undefined,
+          );
+
+          expect(
+            out.results.every(
+              (r) =>
+                Object.keys(r.scores).length === 3 &&
+                Object.values(r.scores).every((v) => v === 0),
+            ),
+          ).toBe(true);
+        });
+
+        test("scorer errors generate 0 scores for all errored scorers", async () => {
+          const out = await runEvaluator(
+            null,
+            {
+              projectName: "proj",
+              evalName: "eval",
+              data: [{ input: 1 }],
+              task: async () => {
+                return "valid output";
+              },
+              scores: Array.from({ length: 3 }, (_, i) =>
+                makeTestScorer(`scorer_${i}`, i === 0),
+              ),
+              errorScoreHandler: defaultErrorScoreHandler,
+            },
+            new NoopProgressReporter(),
+            [],
+            undefined,
+          );
+
+          expect(
+            out.results.every(
+              (r) =>
+                Object.keys(r.scores).length === 3 &&
+                r.scores.scorer_0 === 0 &&
+                r.scores.scorer_1 === 1 &&
+                r.scores.scorer_2 === 1,
+            ),
+          ).toBe(true);
+        });
+      });
+
+      describe("custom function", () => {
+        test("noop function generates no scores", async () => {
+          const out = await runEvaluator(
+            null,
+            {
+              projectName: "proj",
+              evalName: "eval",
+              data: [{ input: 1 }],
+              task: async () => {
+                throw new Error("test error");
+              },
+              scores: Array.from({ length: 3 }, (_, i) =>
+                makeTestScorer(`scorer_${i}`),
+              ),
+              errorScoreHandler: () => undefined,
+            },
+            new NoopProgressReporter(),
+            [],
+            undefined,
+          );
+
+          expect(
+            out.results.every((r) => Object.keys(r.scores).length === 0),
+          ).toBe(true);
+        });
+
+        test("function can generate arbitrary scores", async () => {
+          const out = await runEvaluator(
+            null,
+            {
+              projectName: "proj",
+              evalName: "eval",
+              data: [{ input: 1 }],
+              task: async () => {
+                throw new Error("test error");
+              },
+              scores: Array.from({ length: 3 }, (_, i) =>
+                makeTestScorer(`scorer_${i}`),
+              ),
+              errorScoreHandler: () => ({ error_score: 1 }),
+            },
+            new BarProgressReporter(),
+            [],
+            undefined,
+          );
+
+          expect(
+            out.results.every(
+              (r) =>
+                Object.keys(r.scores).length === 1 &&
+                r.scores.error_score === 1,
+            ),
+          ).toBe(true);
+        });
+      });
+    });
   });
 });
