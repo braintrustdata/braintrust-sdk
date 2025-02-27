@@ -1,5 +1,9 @@
 import { beforeAll, expect, describe, test } from "vitest";
-import { EvalScorer, runEvaluator } from "./framework";
+import {
+  defaultErrorScoreHandler,
+  EvalScorer,
+  runEvaluator,
+} from "./framework";
 import { configureNode } from "./node";
 import { BarProgressReporter } from "./progress";
 
@@ -201,7 +205,69 @@ describe("runEvaluator", () => {
     });
 
     describe("errorScoreHandler", () => {
-      describe("function", () => {
+      describe("default function", () => {
+        test("task errors generate 0 scores for all scorers", async () => {
+          const out = await runEvaluator(
+            null,
+            {
+              projectName: "proj",
+              evalName: "eval",
+              data: [{ input: 1 }],
+              task: async () => {
+                throw new Error("test error");
+              },
+              scores: Array.from({ length: 3 }, (_, i) =>
+                makeTestScorer(`scorer_${i}`),
+              ),
+              errorScoreHandler: defaultErrorScoreHandler,
+            },
+            new BarProgressReporter(),
+            [],
+            undefined,
+          );
+
+          expect(
+            out.results.every(
+              (r) =>
+                Object.keys(r.scores).length === 3 &&
+                Object.values(r.scores).every((v) => v === 0),
+            ),
+          ).toBeTruthy();
+        });
+
+        test("scorer errors generate 0 scores for all errored scorers", async () => {
+          const out = await runEvaluator(
+            null,
+            {
+              projectName: "proj",
+              evalName: "eval",
+              data: [{ input: 1 }],
+              task: async () => {
+                return "valid output";
+              },
+              scores: Array.from({ length: 3 }, (_, i) =>
+                makeTestScorer(`scorer_${i}`, i === 0),
+              ),
+              errorScoreHandler: defaultErrorScoreHandler,
+            },
+            new BarProgressReporter(),
+            [],
+            undefined,
+          );
+
+          expect(
+            out.results.every(
+              (r) =>
+                Object.keys(r.scores).length === 3 &&
+                r.scores.scorer_0 === 0 &&
+                r.scores.scorer_1 === 1 &&
+                r.scores.scorer_2 === 1,
+            ),
+          ).toBeTruthy();
+        });
+      });
+
+      describe("custom function", () => {
         test("noop function generates no scores", async () => {
           const out = await runEvaluator(
             null,
@@ -255,66 +321,6 @@ describe("runEvaluator", () => {
             ),
           ).toBeTruthy();
         });
-      });
-
-      test("task errors generate 0 scores for all scorers", async () => {
-        const out = await runEvaluator(
-          null,
-          {
-            projectName: "proj",
-            evalName: "eval",
-            data: [{ input: 1 }],
-            task: async () => {
-              throw new Error("test error");
-            },
-            scores: Array.from({ length: 3 }, (_, i) =>
-              makeTestScorer(`scorer_${i}`),
-            ),
-            errorScoreHandler: true,
-          },
-          new BarProgressReporter(),
-          [],
-          undefined,
-        );
-
-        expect(
-          out.results.every(
-            (r) =>
-              Object.keys(r.scores).length === 3 &&
-              Object.values(r.scores).every((v) => v === 0),
-          ),
-        ).toBeTruthy();
-      });
-
-      test("scorer errors generate 0 scores for all errored scorers", async () => {
-        const out = await runEvaluator(
-          null,
-          {
-            projectName: "proj",
-            evalName: "eval",
-            data: [{ input: 1 }],
-            task: async () => {
-              return "valid output";
-            },
-            scores: Array.from({ length: 3 }, (_, i) =>
-              makeTestScorer(`scorer_${i}`, i === 0),
-            ),
-            errorScoreHandler: true,
-          },
-          new BarProgressReporter(),
-          [],
-          undefined,
-        );
-
-        expect(
-          out.results.every(
-            (r) =>
-              Object.keys(r.scores).length === 3 &&
-              r.scores.scorer_0 === 0 &&
-              r.scores.scorer_1 === 1 &&
-              r.scores.scorer_2 === 1,
-          ),
-        ).toBeTruthy();
       });
     });
   });

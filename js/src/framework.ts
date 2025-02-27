@@ -248,15 +248,13 @@ export interface Evaluator<
 
   /**
    * Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
-   * If set to true, log a 0 score to the root span for any scorer that was not run. For a task that errored, all scores will be logged to the root span with a 0 value.
+   * A default implementation is exported as `defaultErrorScoreHandler` which will log a 0 score to the root span for any scorer that was not run.
    */
-  errorScoreHandler?:
-    | ((args: {
-        rootSpan: Span;
-        data: EvalCase<any, any, any>;
-        unhandledScores: string[];
-      }) => Record<string, number> | undefined)
-    | true;
+  errorScoreHandler?: (args: {
+    rootSpan: Span;
+    data: EvalCase<any, any, any>;
+    unhandledScores: string[];
+  }) => Record<string, number> | undefined;
 }
 
 export class EvalResultWithSummary<
@@ -699,7 +697,7 @@ export async function runEvaluator(
   return winner;
 }
 
-function defaultErrorScoreHandler({
+export function defaultErrorScoreHandler({
   rootSpan,
   data,
   unhandledScores,
@@ -788,10 +786,6 @@ async function runEvaluatorInternal(
     scores: Record<string, number | null>;
     error: unknown;
   }
-  const errorScoreHandler =
-    evaluator.errorScoreHandler === true
-      ? defaultErrorScoreHandler
-      : evaluator.errorScoreHandler;
   const results: EvalResult[] = [];
   const q = queue(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1015,8 +1009,12 @@ async function runEvaluatorInternal(
           tags: datum.tags,
           metadata,
           scores: {
-            ...(errorScoreHandler && unhandledScores
-              ? errorScoreHandler({ rootSpan, data: datum, unhandledScores })
+            ...(evaluator.errorScoreHandler && unhandledScores
+              ? evaluator.errorScoreHandler({
+                  rootSpan,
+                  data: datum,
+                  unhandledScores,
+                })
               : undefined),
             ...scores,
           },

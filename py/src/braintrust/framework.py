@@ -335,11 +335,11 @@ class Evaluator(Generic[Input, Output]):
     """
 
     error_score_handler: Optional[
-        Union[Callable[[Span, EvalCase[Input, Output], List[str]], Optional[Dict[str, float]]], Literal[True]]
+        Callable[[Span, EvalCase[Input, Output], List[str]], Optional[Dict[str, float]]]
     ] = None
     """
     Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
-    If set to true, log a 0 score to the root span for any scorer that was not run. For a task that errored, all scores will be logged to the root span with a 0 value.
+    A default implementation is exported as `default_error_score_handler` which will log a 0 score to the root span for any scorer that was not run.
     """
 
 
@@ -563,7 +563,7 @@ def _EvalCommon(
     git_metadata_settings: Optional[GitMetadataSettings],
     repo_info: Optional[RepoInfo],
     error_score_handler: Optional[
-        Union[Callable[[Span, EvalCase[Input, Output], List[str]], Optional[Dict[str, float]]], Literal[True]]
+        Callable[[Span, EvalCase[Input, Output], List[str]], Optional[Dict[str, float]]]
     ] = None,
 ) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary[Input, Output]]]:
     """
@@ -757,7 +757,7 @@ def Eval(
     git_metadata_settings: Optional[GitMetadataSettings] = None,
     repo_info: Optional[RepoInfo] = None,
     error_score_handler: Optional[
-        Union[Callable[[Span, EvalCase[Input, Output], List[str]], Optional[Dict[str, float]]], Literal[True]]
+        Callable[[Span, EvalCase[Input, Output], List[str]], Optional[Dict[str, float]]]
     ] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """
@@ -804,7 +804,6 @@ def Eval(
     :param git_metadata_settings: Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param repo_info: Optionally explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
     :param error_score_handler: Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
-    If set to true, log a 0 score to the root span for any scorer that was not run. For a task that errored, all scores will be logged to the root span with a 0 value.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
 
@@ -1099,9 +1098,6 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             span.log(output=result_output, metadata=result_metadata, scores=scores)
             return result
 
-    error_score_handler = (
-        default_error_score_handler if evaluator.error_score_handler is True else evaluator.error_score_handler
-    )
     # First, resolve the scorers if they are classes
     scorers = [
         scorer() if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer for scorer in evaluator.scores
@@ -1215,8 +1211,8 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             output=output,
             scores={
                 **(
-                    error_score_handler(root_span, datum, unhandled_scores) or {}
-                    if error_score_handler is not None and unhandled_scores
+                    evaluator.error_score_handler(root_span, datum, unhandled_scores) or {}
+                    if evaluator.error_score_handler is not None and unhandled_scores
                     else {}
                 ),
                 **scores,
