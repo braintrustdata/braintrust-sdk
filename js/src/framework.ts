@@ -153,6 +153,12 @@ export type EvalResult<
   error: unknown;
 };
 
+type ErrorScoreHandler = (args: {
+  rootSpan: Span;
+  data: EvalCase<any, any, any>;
+  unhandledScores: string[];
+}) => Record<string, number> | undefined | void;
+
 export interface Evaluator<
   Input,
   Output,
@@ -245,6 +251,12 @@ export interface Evaluator<
    * Optionally explicitly specify the git metadata for this experiment. This takes precedence over `gitMetadataSettings` if specified.
    */
   repoInfo?: RepoInfo;
+
+  /**
+   * Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
+   * A default implementation is exported as `defaultErrorScoreHandler` which will log a 0 score to the root span for any scorer that was not run.
+   */
+  errorScoreHandler?: ErrorScoreHandler;
 }
 
 export class EvalResultWithSummary<
@@ -687,6 +699,16 @@ export async function runEvaluator(
   return winner;
 }
 
+export const defaultErrorScoreHandler: ErrorScoreHandler = ({
+  rootSpan,
+  data,
+  unhandledScores,
+}) => {
+  const scores = Object.fromEntries(unhandledScores.map((s) => [s, 0]));
+  rootSpan.log({ scores });
+  return scores;
+};
+
 async function runEvaluatorInternal(
   experiment: Experiment | null,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -787,6 +809,7 @@ async function runEvaluatorInternal(
                   object_type: "dataset",
                   object_id: await eventDataset.id,
                   id: datum.id,
+                  created: datum.created,
                   _xact_id: datum._xact_id,
                 }
               : undefined,
@@ -802,6 +825,8 @@ async function runEvaluatorInternal(
         let output: unknown = undefined;
         let error: unknown | undefined = undefined;
         const scores: Record<string, number | null> = {};
+        const scorerNames = evaluator.scores.map(scorerName);
+        let unhandledScores: string[] | null = scorerNames;
         try {
           const meta = (o: Record<string, unknown>) =>
             (metadata = { ...metadata, ...o });
@@ -844,7 +869,6 @@ async function runEvaluatorInternal(
             metadata,
             output,
           };
-          const scorerNames = evaluator.scores.map(scorerName);
           const scoreResults = await Promise.all(
             evaluator.scores.map(async (score, score_idx) => {
               try {
@@ -936,20 +960,12 @@ async function runEvaluatorInternal(
           );
           // Resolve each promise on its own so that we can separate the passing
           // from the failing ones.
-          const passingScorersAndResults: {
-            name: string;
-            score: Score | null;
-          }[] = [];
           const failingScorersAndResults: { name: string; error: unknown }[] =
             [];
           scoreResults.forEach((results, i) => {
             const name = scorerNames[i];
             if (results.kind === "score") {
               (results.value || []).forEach((result) => {
-                passingScorersAndResults.push({
-                  name: result.name,
-                  score: result,
-                });
                 scores[result.name] = result.score;
               });
             } else {
@@ -957,6 +973,7 @@ async function runEvaluatorInternal(
             }
           });
 
+          unhandledScores = null;
           if (failingScorersAndResults.length) {
             const scorerErrors = Object.fromEntries(
               failingScorersAndResults.map(({ name, error }) => [
@@ -965,9 +982,12 @@ async function runEvaluatorInternal(
               ]),
             );
             metadata["scorer_errors"] = scorerErrors;
-            rootSpan.log({ metadata: { scorer_errors: scorerErrors } });
+            rootSpan.log({
+              metadata: { scorer_errors: scorerErrors },
+            });
             const names = Object.keys(scorerErrors).join(", ");
             const errors = failingScorersAndResults.map((item) => item.error);
+            unhandledScores = Object.keys(scorerErrors);
             throw new AggregateError(
               errors,
               `Found exceptions for the following scorers: ${names}`,
@@ -986,7 +1006,16 @@ async function runEvaluatorInternal(
           output,
           tags: datum.tags,
           metadata,
-          scores,
+          scores: {
+            ...(evaluator.errorScoreHandler && unhandledScores
+              ? evaluator.errorScoreHandler({
+                  rootSpan,
+                  data: datum,
+                  unhandledScores,
+                })
+              : undefined),
+            ...scores,
+          },
           error,
         });
       };

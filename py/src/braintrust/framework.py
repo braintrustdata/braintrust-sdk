@@ -22,6 +22,7 @@ from typing import (
     Iterable,
     Iterator,
     List,
+    Literal,
     Optional,
     Sequence,
     Type,
@@ -82,9 +83,10 @@ class EvalCase(SerializableDataClass, Generic[Input, Output]):
     metadata: Optional[Metadata] = None
     tags: Optional[Sequence[str]] = None
 
-    # Id is only set if the EvalCase is part of a Dataset.
+    # These fields are only set if the EvalCase is part of a Dataset.
     id: Optional[str] = None
     _xact_id: Optional[str] = None
+    created: Optional[str] = None
 
 
 class _EvalCaseDictNoOutput(Generic[Input], TypedDict):
@@ -222,6 +224,8 @@ EvalTask = Union[
     Callable[[Input, EvalHooks[Output]], Union[Output, Awaitable[Output]]],
 ]
 
+ErrorScoreHandler = Callable[[Span, EvalCase[Input, Output], List[str]], Optional[Dict[str, float]]]
+
 
 @dataclasses.dataclass
 class Evaluator(Generic[Input, Output]):
@@ -330,6 +334,12 @@ class Evaluator(Generic[Input, Output]):
     """
     Optionally explicitly specify the git metadata for this experiment. This
     takes precedence over `git_metadata_settings` if specified.
+    """
+
+    error_score_handler: Optional[ErrorScoreHandler] = None
+    """
+    Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
+    A default implementation is exported as `default_error_score_handler` which will log a 0 score to the root span for any scorer that was not run.
     """
 
 
@@ -552,6 +562,7 @@ def _EvalCommon(
     base_experiment_id: Optional[str],
     git_metadata_settings: Optional[GitMetadataSettings],
     repo_info: Optional[RepoInfo],
+    error_score_handler: Optional[ErrorScoreHandler] = None,
 ) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary[Input, Output]]]:
     """
     This helper is needed because in case of `_lazy_load`, we need to update
@@ -582,6 +593,7 @@ def _EvalCommon(
         base_experiment_id=base_experiment_id,
         git_metadata_settings=git_metadata_settings,
         repo_info=repo_info,
+        error_score_handler=error_score_handler,
     )
 
     if _lazy_load:
@@ -742,6 +754,7 @@ def Eval(
     base_experiment_id: Optional[str] = None,
     git_metadata_settings: Optional[GitMetadataSettings] = None,
     repo_info: Optional[RepoInfo] = None,
+    error_score_handler: Optional[ErrorScoreHandler] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -786,6 +799,7 @@ def Eval(
     summarized and compared to this experiment. This takes precedence over `base_experiment_name` if specified.
     :param git_metadata_settings: Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param repo_info: Optionally explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
+    :param error_score_handler: Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
 
@@ -807,6 +821,7 @@ def Eval(
         base_experiment_id=base_experiment_id,
         git_metadata_settings=git_metadata_settings,
         repo_info=repo_info,
+        error_score_handler=error_score_handler,
     )
 
     # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
@@ -1027,6 +1042,16 @@ async def run_evaluator(
     return EvalResultWithSummary(results=results, summary=summary)
 
 
+def default_error_score_handler(
+    root_span: Span,
+    data: EvalCase[Input, Output],
+    unhandled_scores: List[str],
+):
+    scores = {s: 0 for s in unhandled_scores}
+    root_span.log(scores=scores)
+    return scores
+
+
 async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Optional[int], filters: List[Filter]):
     event_loop = asyncio.get_event_loop()
 
@@ -1069,6 +1094,13 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             span.log(output=result_output, metadata=result_metadata, scores=scores)
             return result
 
+    # First, resolve the scorers if they are classes
+    scorers = [
+        scorer() if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer for scorer in evaluator.scores
+    ]
+    scorer_names = [_scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
+    unhandled_scores = scorer_names
+
     async def run_evaluator_task(datum):
         if isinstance(datum, dict):
             datum = EvalCase.from_dict(datum)
@@ -1090,6 +1122,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                     "object_type": "dataset",
                     "object_id": experiment.dataset.id,
                     "id": datum.id,
+                    "created": datum.created,
                     "_xact_id": datum._xact_id,
                 }
                 if experiment.dataset and datum.id and datum._xact_id
@@ -1115,12 +1148,6 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                     span.log(input=task_args[0], output=output)
                 root_span.log(output=output, metadata=metadata)
 
-                # First, resolve the scorers if they are classes
-                scorers = [
-                    scorer() if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer
-                    for scorer in evaluator.scores
-                ]
-                scorer_names = [_scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
                 score_promises = [
                     asyncio.create_task(
                         await_or_run_scorer(
@@ -1149,6 +1176,8 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                         exc_info = traceback.format_exc()
                         failing_scorers_and_exceptions.append((name, e, exc_info))
 
+                nonlocal unhandled_scores
+                unhandled_scores = None
                 if failing_scorers_and_exceptions:
                     scorer_errors = {
                         scorer_name: exc_info for scorer_name, _, exc_info in failing_scorers_and_exceptions
@@ -1157,6 +1186,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                     root_span.log(metadata=metadata)
                     names = ", ".join(scorer_errors.keys())
                     exceptions = [x[1] for x in failing_scorers_and_exceptions]
+                    unhandled_scores = list(scorer_errors.keys())
                     raise exceptiongroup.ExceptionGroup(
                         f"Found exceptions for the following scorers: {names}", exceptions
                     )
@@ -1175,7 +1205,14 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             metadata=metadata,
             tags=list(datum.tags) if datum.tags else None,
             output=output,
-            scores=scores,
+            scores={
+                **(
+                    evaluator.error_score_handler(root_span, datum, unhandled_scores) or {}
+                    if evaluator.error_score_handler is not None and unhandled_scores
+                    else {}
+                ),
+                **scores,
+            },
             error=error,
             exc_info=exc_info,
         )
