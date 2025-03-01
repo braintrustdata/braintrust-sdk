@@ -988,9 +988,9 @@ async function runEvaluatorInternal(
             const names = Object.keys(scorerErrors).join(", ");
             const errors = failingScorersAndResults.map((item) => item.error);
             unhandledScores = Object.keys(scorerErrors);
-            throw new AggregateError(
-              errors,
+            console.warn(
               `Found exceptions for the following scorers: ${names}`,
+              errors,
             );
           }
         } catch (e) {

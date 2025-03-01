@@ -1187,8 +1187,9 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                     names = ", ".join(scorer_errors.keys())
                     exceptions = [x[1] for x in failing_scorers_and_exceptions]
                     unhandled_scores = list(scorer_errors.keys())
-                    raise exceptiongroup.ExceptionGroup(
-                        f"Found exceptions for the following scorers: {names}", exceptions
+                    eprint(
+                        f"Found exceptions for the following scorers: {names}",
+                        exceptions,
                     )
             except Exception as e:
                 exc_type, exc_value, tb = sys.exc_info()
