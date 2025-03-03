@@ -17,6 +17,7 @@ export {
   buildLocalSummary,
   reportFailures,
   runEvaluator,
+  defaultErrorScoreHandler,
 } from "./framework";
 export * from "./framework2";
 export { LazyValue } from "./util";

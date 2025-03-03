@@ -2347,6 +2347,7 @@ export function init<IsOpen extends boolean = false>(
         experiment: {
           id: response.experiment.id,
           name: response.experiment.name,
+          created: response.experiment.created,
           fullInfo: response.experiment,
         },
       };
@@ -3684,6 +3685,7 @@ export type EvalCase<Input, Expected, Metadata> = {
   // These fields are only set if the EvalCase is part of a Dataset.
   id?: string;
   _xact_id?: TransactionId;
+  created?: string | null;
   // This field is used to help re-run a particular experiment row.
   upsert_id?: string;
 } & (Expected extends void ? object : { expected: Expected }) &
@@ -4397,6 +4399,7 @@ export class Dataset<
 > extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
   private readonly lazyMetadata: LazyValue<ProjectDatasetMetadata>;
   private readonly __braintrust_dataset_marker = true;
+  private newRecords = 0;
 
   constructor(
     private state: BraintrustState,
@@ -4563,6 +4566,7 @@ export class Dataset<
     );
 
     this.state.bgLogger().log([args]);
+    this.newRecords++;
     return rowId;
   }
 
@@ -4641,15 +4645,25 @@ export class Dataset<
       await this.name,
     )}`;
 
-    let dataSummary = undefined;
+    let dataSummary: DataSummary | undefined;
     if (summarizeData) {
-      dataSummary = await state.apiConn().get_json(
-        "dataset-summary",
-        {
-          dataset_id: await this.id,
-        },
-        3,
-      );
+      const rawDataSummary = z
+        .object({
+          total_records: z.number(),
+        })
+        .parse(
+          await state.apiConn().get_json(
+            "dataset-summary",
+            {
+              dataset_id: await this.id,
+            },
+            3,
+          ),
+        );
+      dataSummary = {
+        newRecords: this.newRecords,
+        totalRecords: rawDataSummary.total_records,
+      };
     }
 
     return {
@@ -5113,11 +5127,16 @@ export interface ExperimentSummary {
 /**
  * Summary of a dataset's data.
  *
- * @property newRecords New or updated records added in this session.
  * @property totalRecords Total records in the dataset.
  */
 export interface DataSummary {
+  /**
+   * New or updated records added in this session.
+   */
   newRecords: number;
+  /**
+   * Total records in the dataset.
+   */
   totalRecords: number;
 }
 
@@ -5135,7 +5154,7 @@ export interface DatasetSummary {
   datasetName: string;
   projectUrl: string;
   datasetUrl: string;
-  dataSummary: DataSummary;
+  dataSummary: DataSummary | undefined;
 }
 
 /**
