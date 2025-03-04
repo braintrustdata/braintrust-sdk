@@ -17,6 +17,9 @@ class NamedWrapper:
     def __getattr__(self, name: str) -> Any:
         return getattr(self.__wrapped, name)
 
+    def unwrap(self) -> Any:
+        return self.__wrapped
+
 
 def log_headers(response: Any, span: Span):
     cached_value = response.headers.get(X_CACHED_HEADER) or response.headers.get(X_LEGACY_CACHED_HEADER)
