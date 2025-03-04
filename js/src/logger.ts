@@ -2668,7 +2668,7 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
   const {
     projectName,
     projectId,
-    asyncFlush,
+    asyncFlush: asyncFlushArg,
     appUrl,
     apiKey,
     orgName,
@@ -2676,6 +2676,9 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
     fetch,
     state: stateArg,
   } = options || {};
+
+  const asyncFlush =
+    asyncFlushArg === undefined ? (true as IsAsyncFlush) : asyncFlushArg;
 
   const computeMetadataArgs = {
     project_name: projectName,
