@@ -1835,13 +1835,16 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
             return v
         elif isinstance(v, ReadonlyAttachment):
             return v.reference
+        elif isinstance(v, (int, float, str, bool)) or v is None:
+            # Skip roundtrip for primitive types.
+            return v
         else:
-            # No need to handle primitives explicitly because deepcopy will do
-            # it for us.
-            try:
-                return copy.deepcopy(v)
-            except:
-                json.loads(bt_dumps(v))
+            # Note: we avoid using copy.deepcopy, because it's difficult to
+            # guarantee the independence of such copied types from their origin.
+            # E.g. the original type could have a `__del__` method that alters
+            # some shared internal state, and we need this deep copy to be
+            # fully-independent from the original.
+            return json.loads(bt_dumps(v))
 
     return _deep_copy_object(event)
 
