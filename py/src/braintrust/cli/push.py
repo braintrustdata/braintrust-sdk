@@ -130,6 +130,24 @@ def _py_version() -> str:
     return f"{sys.version_info.major}.{sys.version_info.minor}"
 
 
+def _run_install(install_args: List[str], packages_dir: str):
+    subprocess.run(
+        [
+            "uv",
+            "pip",
+            "install",
+            *install_args,
+            "--target",
+            packages_dir,
+            "--python-platform",
+            os.environ.get("BRAINTRUST_INTERNAL_PY_BUNDLE_PLATFORM_OVERRIDE", "linux"),
+            "--python-version",
+            os.environ.get("BRAINTRUST_INTERNAL_PY_BUNDLE_VERSION_OVERRIDE", _py_version()),
+        ],
+        check=True,
+    )
+
+
 def _upload_bundle(entry_module_name: str, sources: List[str], requirements: Optional[str]) -> str:
     _check_uv()
 
@@ -148,12 +166,11 @@ def _upload_bundle(entry_module_name: str, sources: List[str], requirements: Opt
 
     with tempfile.TemporaryDirectory() as td:
         packages_dir = os.path.join(td, "pkg")
-        if requirements:
-            install_args = ["--requirement", requirements]
-        else:
-            # Though not strictly necessary, these packages should be those supported in the Python code editor
-            # with the exception of pydantic, which is necessary to allow the user to express function input schemas.
-            install_args = [
+
+        # Though not strictly necessary, these packages should be those supported in the Python code editor
+        # with the exception of pydantic, which is necessary to allow the user to express function input schemas.
+        _run_install(
+            [
                 arg
                 for arg in [
                     _pkg_install_arg(pkg)
@@ -166,24 +183,13 @@ def _upload_bundle(entry_module_name: str, sources: List[str], requirements: Opt
                     ]
                 ]
                 if arg is not None
-            ]
-
-        # Install the bundled dependencies for server platform into packages_dir.
-        subprocess.run(
-            [
-                "uv",
-                "pip",
-                "install",
-                *install_args,
-                "--target",
-                packages_dir,
-                "--python-platform",
-                os.environ.get("BRAINTRUST_INTERNAL_PY_BUNDLE_PLATFORM_OVERRIDE", "linux"),
-                "--python-version",
-                os.environ.get("BRAINTRUST_INTERNAL_PY_BUNDLE_VERSION_OVERRIDE", _py_version()),
             ],
-            check=True,
+            packages_dir,
         )
+        if requirements:
+            # Overwrite any packages that are already installed.
+            _run_install(["--requirement", requirements], packages_dir)
+
         with zipfile.ZipFile(
             os.path.join(td, "pkg.zip"), "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
         ) as zf:
