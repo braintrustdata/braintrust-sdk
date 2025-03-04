@@ -8,7 +8,7 @@ export interface StackTraceEntry {
 
 export function getStackTrace(): StackTraceEntry[] {
   const trace = new Error().stack;
-  if (trace === undefined) {
+  if (typeof trace !== "string") {
     return [];
   }
   const traceLines = trace.split("\n");
