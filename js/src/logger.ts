@@ -3229,7 +3229,7 @@ export const traceable = wrapTraced;
  *
  * See {@link traced} for full details.
  */
-export function startSpan<IsAsyncFlush extends boolean = false>(
+export function startSpan<IsAsyncFlush extends boolean = true>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
 ): Span {
   return startSpanAndIsLogger(args).span;
@@ -3253,7 +3253,7 @@ export function setFetch(fetch: typeof globalThis.fetch): void {
   _globalState.setFetch(fetch);
 }
 
-function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
+function startSpanAndIsLogger<IsAsyncFlush extends boolean = true>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
 ): { span: Span; isSyncFlushLogger: boolean } {
   const state = args?.state ?? _globalState;
