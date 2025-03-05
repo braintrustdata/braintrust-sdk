@@ -3114,7 +3114,7 @@ export function traced<IsAsyncFlush extends boolean = true, R = void>(
 
   type Ret = PromiseUnless<IsAsyncFlush, R>;
 
-  if (args?.asyncFlush) {
+  if (args?.asyncFlush === undefined || args?.asyncFlush) {
     return ret as Ret;
   } else {
     return (async () => {
@@ -3294,7 +3294,7 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = true>(
         components.data.object_type === SpanObjectTypeV3.PROJECT_LOGS &&
         // Since there's no parent logger here, we're free to choose the async flush
         // behavior, and therefore propagate along whatever we get from the arguments
-        !args?.asyncFlush,
+        (args?.asyncFlush === undefined ? false : !args?.asyncFlush),
     };
   } else {
     const parentObject = getSpanParentObject<IsAsyncFlush>({
@@ -3304,7 +3304,10 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = true>(
     return {
       span,
       isSyncFlushLogger:
-        parentObject.kind === "logger" && !parentObject.asyncFlush,
+        parentObject.kind === "logger" &&
+        (parentObject.asyncFlush === undefined
+          ? false
+          : !parentObject.asyncFlush),
     };
   }
 }
