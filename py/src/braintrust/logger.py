@@ -1728,6 +1728,7 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any])
         "dataset_record_id",
         "origin",
         "inputs",
+        "span_attributes",
         ASYNC_SCORING_CONTROL_FIELD,
         MERGE_PATHS_FIELD,
         SKIP_ASYNC_SCORING_FIELD,
