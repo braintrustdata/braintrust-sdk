@@ -13,7 +13,7 @@ py: ${VENV_PYTHON_PACKAGES}
 VENV_INITIALIZED := venv/.initialized
 
 ${VENV_INITIALIZED}:
-	rm -rf venv && python3 -m venv venv
+	rm -rf venv && python -m venv venv
 	@touch ${VENV_INITIALIZED}
 
 VENV_PYTHON_PACKAGES := venv/.python_packages
@@ -33,3 +33,16 @@ develop: ${VENV_PRE_COMMIT}
 
 fixup:
 	source env.sh && pre-commit run --all-files
+
+.PHONY: test test-py test-js
+
+test: test-py-core test-js
+
+test-py-core:
+	source env.sh && python -m unittest discover ./core/py/src
+
+test-py-sdk:
+	source env.sh && cd py && pytest
+
+test-js:
+	pnpm install && pnpm test
