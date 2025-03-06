@@ -1,36 +1,53 @@
 import contextvars
 import logging
-import sys
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from uuid import UUID
+
+from typing_extensions import Protocol
 
 import braintrust
 
 _logger = logging.getLogger("braintrust.wrappers.langchain")
 
 try:
-    from langchain.callbacks.base import BaseCallbackHandler
-    from langchain.schema import Document
-    from langchain.schema.agent import AgentAction
-    from langchain.schema.messages import BaseMessage
-    from langchain.schema.output import LLMResult
+    from langchain.callbacks.base import BaseCallbackHandler  # type: ignore
+    from langchain.schema import Document  # type: ignore
+    from langchain.schema.messages import BaseMessage  # type: ignore
+    from langchain.schema.output import LLMResult  # type: ignore
 except ImportError:
     _logger.warning("Failed to import langchain, using stubs")
-    BaseCallbackHandler = object
-    Document = object
-    AgentAction = object
-    BaseMessage = object
-    LLMResult = object
+    class BaseCallbackHandler:
+        def on_llm_start(self, *args: Any, **kwargs: Any) -> None: ...
+        def on_llm_end(self, *args: Any, **kwargs: Any) -> None: ...
+        def on_chain_start(self, *args: Any, **kwargs: Any) -> None: ...
+        def on_chain_end(self, *args: Any, **kwargs: Any) -> None: ...
+        def on_tool_start(self, *args: Any, **kwargs: Any) -> None: ...
+        def on_tool_end(self, *args: Any, **kwargs: Any) -> None: ...
+        def on_retriever_start(self, *args: Any, **kwargs: Any) -> None: ...
+        def on_retriever_end(self, *args: Any, **kwargs: Any) -> None: ...
 
-langchain_parent = contextvars.ContextVar("langchain_current_span", default=None)
+    class Document:
+        pass
+
+    class BaseMessage(Protocol):
+        def dict(self) -> Dict[str, Any]:
+            ...
+
+    class LLMResult(Protocol):
+        llm_output: Dict[str, Any]
+        generations: List[List[BaseMessage]]
+        def dict(self) -> Dict[str, Any]:
+            ...
+
+langchain_parent: contextvars.ContextVar[Optional[braintrust.Span]] = contextvars.ContextVar("langchain_current_span", default=None)
 
 
 class BraintrustTracer(BaseCallbackHandler):
-    def __init__(self, logger=None):
+    def __init__(self, logger: Optional[braintrust.Logger] = None):
         self.logger = logger
-        self.spans = {}
+        self.spans: Dict[UUID, braintrust.Span] = {}
 
-    def _start_span(self, parent_run_id, run_id, name: Optional[str], **kwargs: Any) -> Any:
+    def _start_span(self, parent_run_id: Optional[UUID], run_id: UUID, name: Optional[str], **kwargs: Any) -> Any:
         assert run_id not in self.spans, f"Span already exists for run_id {run_id} (this is likely a bug)"
 
         current_parent = langchain_parent.get()
@@ -48,7 +65,7 @@ class BraintrustTracer(BaseCallbackHandler):
         self.spans[run_id] = span
         return span
 
-    def _end_span(self, run_id, **kwargs: Any) -> Any:
+    def _end_span(self, run_id: UUID, **kwargs: Any) -> Any:
         assert run_id in self.spans, f"No span exists for run_id {run_id} (this is likely a bug)"
         span = self.spans.pop(run_id)
         span.log(**kwargs)
