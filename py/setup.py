@@ -31,12 +31,16 @@ extras_require = {
         "build",
         "flake8",
         "flake8-isort",
+        "httpx",  # for testing langchain wrappers
         "IPython",
         "langchain",  # for testing langchain wrappers
+        "langchain-openai",  # for testing langchain wrappers
         "isort==5.12.0",
         "pre-commit",
         "pytest",
         "pytest-watch",
+        "responses",  # for testing langchain wrappers
+        "respx",  # for testing langchain wrappers
         "twine",
     ],
     "doc": ["pydoc-markdown"],
