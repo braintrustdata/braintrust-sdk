@@ -1731,9 +1731,11 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any])
         ASYNC_SCORING_CONTROL_FIELD,
         MERGE_PATHS_FIELD,
         SKIP_ASYNC_SCORING_FIELD,
+        "span_id",
+        "root_span_id",
     }
     if forbidden_keys:
-        raise ValueError(f"The following keys may are not permitted: {forbidden_keys}")
+        raise ValueError(f"The following keys are not permitted: {forbidden_keys}")
 
     scores = event.get("scores")
     if scores:
@@ -2873,6 +2875,8 @@ class SpanImpl(Span):
         set_current: Optional[bool] = None,
         event: Optional[Dict[str, Any]] = None,
         propagated_event: Optional[Dict[str, Any]] = None,
+        span_id: Optional[str] = None,
+        root_span_id: Optional[str] = None,
     ):
         if span_attributes is None:
             span_attributes = SpanAttributes()
@@ -2931,12 +2935,12 @@ class SpanImpl(Span):
         if id is None or not isinstance(id, str):
             id = str(uuid.uuid4())
         self._id = id
-        self.span_id = str(uuid.uuid4())
+        self.span_id = span_id or str(uuid.uuid4())
         if parent_span_ids:
             self.root_span_id = parent_span_ids.root_span_id
             self.span_parents = [parent_span_ids.span_id]
         else:
-            self.root_span_id = self.span_id
+            self.root_span_id = root_span_id or self.span_id
             self.span_parents = None
 
         # The first log is a replacement, but subsequent logs to the same span
@@ -3821,6 +3825,8 @@ class Logger(Exportable):
         set_current: Optional[bool] = None,
         parent: Optional[str] = None,
         propagated_event: Optional[Dict[str, Any]] = None,
+        span_id: Optional[str] = None,
+        root_span_id: Optional[str] = None,
         **event: Any,
     ) -> Span:
         """Create a new toplevel span underneath the logger. The name defaults to "root" and the span type to "task".
@@ -3836,6 +3842,8 @@ class Logger(Exportable):
             set_current=set_current,
             parent=parent,
             propagated_event=propagated_event,
+            span_id=span_id,
+            root_span_id=root_span_id,
             **event,
         )
 
@@ -3863,6 +3871,8 @@ class Logger(Exportable):
         set_current: Optional[bool] = None,
         parent: Optional[str] = None,
         propagated_event: Optional[Dict[str, Any]] = None,
+        span_id: Optional[str] = None,
+        root_span_id: Optional[str] = None,
         **event: Any,
     ) -> Span:
         return SpanImpl(
@@ -3881,6 +3891,8 @@ class Logger(Exportable):
             start_time=start_time,
             set_current=set_current,
             event=event,
+            span_id=span_id,
+            root_span_id=root_span_id,
         )
 
     def export(self) -> str:
