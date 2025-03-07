@@ -2934,6 +2934,7 @@ export async function loginToState(options: LoginOptions = {}) {
       }),
     );
     const info = await resp.json();
+    console.log("RECEIVED LOGIN INFO: ", info);
 
     _check_org_info(state, info.org_info, orgName);
 
