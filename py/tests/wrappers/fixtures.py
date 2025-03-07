@@ -1,3 +1,96 @@
+import json
+from typing import List, Mapping, Tuple, Union
+
+import pytest
+import responses
+from braintrust import init_logger
+from requests import PreparedRequest
+
+from .types import LogRequest
+
+
+@pytest.fixture(autouse=True)
+def setup():
+    init_logger(project="langchain")
+    yield
+
+
+@pytest.fixture
+def logs() -> List[LogRequest]:
+    return []
+
+
+@pytest.fixture(autouse=True)
+def mock_braintrust(logs: List[LogRequest]) -> None:
+    # Set up responses for Braintrust endpoints
+    responses.add(
+        responses.POST,
+        "https://www.braintrust.dev/api/apikey/login",
+        json={
+            "org_info": [
+                {
+                    "id": "5d7c97d7-fef1-4cb7-bda6-7e3756a0ca8e",
+                    "name": "braintrustdata.com",
+                    "api_url": "https://test.braintrust.dev",
+                    "git_metadata": {
+                        "fields": [
+                            "commit",
+                            "branch",
+                            "tag",
+                            "author_name",
+                            "author_email",
+                            "commit_message",
+                            "commit_time",
+                            "dirty",
+                        ],
+                        "collect": "some",
+                    },
+                    "is_universal_api": True,
+                    "proxy_url": "https://test.braintrust.dev",
+                    "realtime_url": "wss://realtime.braintrustapi.com",
+                }
+            ]
+        },
+        status=200,
+    )
+
+    responses.add(
+        responses.POST,
+        "https://www.braintrust.dev/api/project/register",
+        json={
+            "project": {
+                "id": "3ffc90fe-f806-4e53-8455-41f3f84a1e0c",
+                "org_id": "5d7c97d7-fef1-4cb7-bda6-7e3756a0ca8e",
+                "name": "langchain",
+                "created": "2025-03-06T21:49:31.547Z",
+                "deleted_at": None,
+                "user_id": "526d851f-97bd-4215-b534-1f4bd62b307c",
+                "settings": None,
+            }
+        },
+        status=200,
+    )
+
+    def track_log_callback(request: PreparedRequest) -> Union[Exception, Tuple[int, Mapping[str, str], str]]:
+        logs.append(json.loads(request.body or ""))
+        return (
+            200,
+            {},
+            json.dumps(
+                {
+                    "ids": ["8cb40987-0c16-4e6e-8d90-c3ee6836b37f", "23a20c74-99d2-4eba-9f1e-a47e5447f719"],
+                    "xact_id": "1000194711624809737",
+                }
+            ),
+        )
+
+    responses.add_callback(
+        responses.POST,
+        "https://test.braintrust.dev/logs3",
+        callback=track_log_callback,
+    )
+
+
 CHAT_MATH = {
     "id": "chatcmpl-Aao716hWOt9HBihjWh9iAPGWRpkFd",
     "object": "chat.completion",
