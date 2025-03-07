@@ -23,6 +23,7 @@ export type OtherExperimentLogFields = {
   metrics: Record<string, unknown>;
   datasetRecordId: string;
   origin: z.infer<typeof objectReferenceSchema>;
+  span_attributes: Record<string, unknown>;
   [ASYNC_SCORING_CONTROL_FIELD]: AsyncScoringControl;
   [MERGE_PATHS_FIELD]: string[][];
   [SKIP_ASYNC_SCORING_FIELD]: boolean;

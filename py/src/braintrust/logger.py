@@ -1728,6 +1728,7 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any])
         "dataset_record_id",
         "origin",
         "inputs",
+        "span_attributes",
         ASYNC_SCORING_CONTROL_FIELD,
         MERGE_PATHS_FIELD,
         SKIP_ASYNC_SCORING_FIELD,
@@ -1776,6 +1777,14 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any])
     tags = event.get("tags")
     if tags:
         validate_tags(tags)
+
+    span_attributes = event.get("span_attributes")
+    if span_attributes:
+        if not isinstance(span_attributes, dict):
+            raise ValueError("span_attributes must be a dictionary")
+        for key in span_attributes.keys():
+            if not isinstance(key, str):
+                raise ValueError("span_attributes keys must be strings")
 
     input = event.get("input")
     inputs = event.get("inputs")
