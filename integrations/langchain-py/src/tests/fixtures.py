@@ -4,6 +4,7 @@ from typing import List, Mapping, Tuple, Union
 import pytest
 import responses
 from braintrust import init_logger
+from braintrust_langchain.context import clear_global_handler
 from requests import PreparedRequest
 
 from .types import LogRequest
@@ -11,6 +12,7 @@ from .types import LogRequest
 
 @pytest.fixture(autouse=True)
 def setup():
+    clear_global_handler()
     init_logger(project="langchain")
     yield
 
