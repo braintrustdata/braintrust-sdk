@@ -8,16 +8,15 @@ from typing import Dict, List, Union, cast
 import pytest
 import responses
 from braintrust.logger import flush
-from braintrust.wrappers.langchain import BraintrustTracer
+from braintrust_langchain import BraintrustCallbackHandler
 from langchain.prompts import ChatPromptTemplate, PromptTemplate
-from langchain_core.callbacks.base import BaseCallbackHandler
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import BaseMessage
 from langchain_core.runnables import RunnableMap, RunnableSerializable
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
-from ..helpers import assert_matches_object
 from .fixtures import (
     CHAT_BEAR_JOKE,
     CHAT_BEAR_POEM,
@@ -29,14 +28,14 @@ from .fixtures import (
     mock_braintrust,  # type: ignore[reportUnusedImport]
     setup,  # type: ignore[reportUnusedImport]
 )
-from .helpers import find_spans_by_attributes, logs_to_spans, mock_openai
+from .helpers import assert_matches_object, find_spans_by_attributes, logs_to_spans, mock_openai
 from .types import LogRequest
 
 
 @responses.activate
 def test_llm_calls(logs: List[LogRequest]):
     with mock_openai([CHAT_MATH]):
-        handler = BraintrustTracer()
+        handler = BraintrustCallbackHandler()
         prompt = ChatPromptTemplate.from_template("What is 1 + {number}?")
         model = ChatOpenAI(model="gpt-4o-mini", temperature=1, top_p=1, frequency_penalty=0, presence_penalty=0, n=1)
         chain: RunnableSerializable[Dict[str, str], BaseMessage] = prompt.pipe(model)
@@ -92,7 +91,7 @@ def test_llm_calls(logs: List[LogRequest]):
 @responses.activate
 def test_chain_with_memory(logs: List[LogRequest]):
     with mock_openai([CHAT_CHAIN_MEMORY]):
-        handler = BraintrustTracer()
+        handler = BraintrustCallbackHandler()
         prompt = ChatPromptTemplate.from_template("{history} User: {input}")
         model = ChatOpenAI(model="gpt-4o-mini")
         chain: RunnableSerializable[Dict[str, str], BaseMessage] = prompt.pipe(model)
@@ -148,7 +147,7 @@ def test_chain_with_memory(logs: List[LogRequest]):
 @responses.activate
 def test_tool_usage(logs: List[LogRequest]):
     with mock_openai([CHAT_TOOL_CALCULATOR]):
-        handler = BraintrustTracer()
+        handler = BraintrustCallbackHandler()
 
         class CalculatorInput(BaseModel):
             operation: str = Field(
@@ -259,7 +258,7 @@ def test_tool_usage(logs: List[LogRequest]):
 @responses.activate
 def test_parallel_execution(logs: List[LogRequest]):
     with mock_openai([CHAT_BEAR_JOKE, CHAT_BEAR_POEM]):
-        handler = BraintrustTracer()
+        handler = BraintrustCallbackHandler()
         model = ChatOpenAI(model="gpt-4o-mini", temperature=1, top_p=1, frequency_penalty=0, presence_penalty=0, n=1)
 
         joke_chain = PromptTemplate.from_template("Tell me a joke about {topic}").pipe(model)
@@ -311,7 +310,7 @@ def test_langgraph_state_management(logs: List[LogRequest]):
         pytest.skip("langgraph not installed")
 
     with mock_openai([CHAT_SAY_HELLO]):
-        handler = BraintrustTracer()
+        handler = BraintrustCallbackHandler()
         model = ChatOpenAI(
             model="gpt-4o-mini",
             temperature=1,
@@ -410,7 +409,7 @@ def test_langgraph_state_management(logs: List[LogRequest]):
 
 @responses.activate
 def test_chain_null_values(logs: List[LogRequest]):
-    handler = BraintrustTracer()
+    handler = BraintrustCallbackHandler()
 
     run_id = uuid.UUID("f81d4fae-7dec-11d0-a765-00a0c91e6bf6")
 

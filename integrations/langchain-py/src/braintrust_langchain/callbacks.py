@@ -16,6 +16,8 @@ from typing import (
 )
 from uuid import UUID
 
+import braintrust
+from braintrust import NOOP_SPAN, Logger, Span, SpanAttributes, SpanTypeAttribute, current_span, init_logger
 from langchain_core.agents import AgentAction, AgentFinish
 from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.documents import Document
@@ -24,12 +26,7 @@ from langchain_core.outputs.llm_result import LLMResult
 from tenacity import RetryCallState
 from typing_extensions import NotRequired
 
-import braintrust
-from braintrust._types import SpanAttributes
-from braintrust.logger import NOOP_SPAN, current_span, init_logger
-from braintrust.span_types import SpanTypeAttribute
-
-_logger = logging.getLogger("braintrust.wrappers.langchain")
+_logger = logging.getLogger("braintrust_langchain")
 
 
 class LogEvent(TypedDict):
@@ -45,17 +42,17 @@ class LogEvent(TypedDict):
     dataset_record_id: NotRequired[str]
 
 
-class BraintrustTracer(BaseCallbackHandler):
+class BraintrustCallbackHandler(BaseCallbackHandler):
     root_run_id: Optional[UUID] = None
 
     def __init__(
         self,
-        logger: Optional[Union[braintrust.Logger, braintrust.Span]] = None,
+        logger: Optional[Union[Logger, Span]] = None,
         debug: bool = False,
         exclude_metadata_props: Optional[Pattern[str]] = None,
     ):
         self.logger = logger
-        self.spans: Dict[UUID, braintrust.Span] = {}
+        self.spans: Dict[UUID, Span] = {}
         self.debug = bool(os.environ.get("DEBUG")) or debug
         self.exclude_metadata_props = exclude_metadata_props or re.compile(
             r"^(l[sc]_|langgraph_|__pregel_|checkpoint_ns)"
