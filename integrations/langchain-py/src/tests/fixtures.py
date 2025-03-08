@@ -1,4 +1,5 @@
 import json
+import os
 from typing import List, Mapping, Tuple, Union
 
 import pytest
@@ -12,6 +13,8 @@ from .types import LogRequest
 
 @pytest.fixture(autouse=True)
 def setup():
+    os.environ["BRAINTRUST_API_KEY"] = "test"
+    os.environ["OPENAI_API_KEY"] = "test"
     clear_global_handler()
     init_logger(project="langchain")
     yield
