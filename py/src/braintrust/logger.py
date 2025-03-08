@@ -1351,6 +1351,14 @@ def login(
 
             _check_org_info(info["org_info"], org_name)
 
+            if not _state.api_url:
+                if org_name:
+                    raise ValueError(
+                        f"Unable to log into organization '{org_name}'. Are you sure this credential is scoped to the organization?"
+                    )
+                else:
+                    raise ValueError("Unable to log into any organization with the provided credential.")
+
             conn = _state.api_conn()
             conn.set_token(api_key)
 

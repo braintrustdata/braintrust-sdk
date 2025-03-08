@@ -2939,6 +2939,17 @@ export async function loginToState(options: LoginOptions = {}) {
     const info = await resp.json();
 
     _check_org_info(state, info.org_info, orgName);
+    if (!state.apiUrl) {
+      if (orgName) {
+        throw new Error(
+          `Unable to log into organization '${orgName}'. Are you sure this credential is scoped to the organization?`,
+        );
+      } else {
+        throw new Error(
+          "Unable to log into any organization with the provided credential.",
+        );
+      }
+    }
 
     conn = state.apiConn();
     conn.set_token(apiKey);
