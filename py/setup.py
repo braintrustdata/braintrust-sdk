@@ -35,6 +35,7 @@ extras_require = {
         "IPython",
         "langchain",  # for testing langchain wrappers
         "langchain-openai",  # for testing langchain wrappers
+        "langgraph",  # for testing langgraph wrappers
         "isort==5.12.0",
         "pre-commit",
         "pytest",

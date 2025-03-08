@@ -10,12 +10,12 @@ from .types import LogRequest, Span
 
 
 @contextmanager
-def mock_openai(chat_response: Dict[str, Any]) -> Generator[respx.MockRouter, None, None]:
+def mock_openai(responses: List[Dict[str, Any]]) -> Generator[respx.MockRouter, None, None]:
     """Context manager for mocking OpenAI API with custom responses."""
     with respx.mock(assert_all_mocked=True) as respx_mock:
 
         def success_response(request: httpx.Request) -> httpx.Response:
-            return httpx.Response(200, json=chat_response)
+            return httpx.Response(200, json=responses.pop(0))
 
         respx_mock.post("https://api.openai.com/v1/chat/completions").mock(side_effect=success_response)
 
@@ -50,3 +50,17 @@ def logs_to_spans(logs: List[LogRequest]) -> Tuple[List[Span], Optional[str], Op
                         existing_span[key] = value
 
     return spans, spans[0]["span_id"] if spans else None, spans[0].get("metadata", {}).get("runId") if spans else None
+
+
+def find_spans_by_attributes(spans, **attributes):
+    """Find all spans that match the given attributes."""
+    matching_spans = []
+    for span in spans:
+        matches = True
+        for key, value in attributes.items():
+            if key not in span["span_attributes"] or span["span_attributes"][key] != value:
+                matches = False
+                break
+        if matches:
+            matching_spans.append(span)
+    return matching_spans

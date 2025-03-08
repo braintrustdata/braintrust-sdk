@@ -1,10 +1,21 @@
-import contextvars
 import json
 import logging
 import os
 import re
 import traceback
-from typing import Any, Dict, List, Mapping, Optional, Sequence, TypedDict, Union, cast, runtime_checkable
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    TypedDict,
+    Union,
+    cast,
+    runtime_checkable,
+)
 from uuid import UUID
 
 from typing_extensions import NotRequired, Protocol
@@ -17,17 +28,8 @@ from braintrust.span_types import SpanTypeAttribute
 _logger = logging.getLogger("braintrust.wrappers.langchain")
 
 try:
-    from langchain.schema import Document  # type: ignore
-    from langchain.schema.messages import BaseMessage  # type: ignore
-    from langchain.schema.output import LLMResult  # type: ignore
-    from langchain_core.agents import AgentAction, AgentFinish  # type: ignore
     from langchain_core.callbacks.base import BaseCallbackHandler  # type: ignore
-    from langchain_core.messages import ChatGeneration, Generation  # type: ignore
-    from langchain_core.runnables import ChatGenerationChunk, GenerationChunk  # type: ignore
-    from langchain_core.runnables.base import RetryCallState  # type: ignore
-    from langchain_core.tools import ToolMessage  # type: ignore
-
-except ImportError:
+except ImportError as e:
     _logger.warning("Failed to import langchain, using stubs")
 
     class BaseCallbackHandler:
@@ -55,27 +57,30 @@ except ImportError:
         def on_retriever_end(self, *args: Any, **kwargs: Any) -> None:
             ...
 
-    class Document:
-        pass
+
+if TYPE_CHECKING:
 
     class BaseMessage(Protocol):
         def model_dump(self) -> Dict[str, Any]:
             ...
 
-    class Generation(Protocol):
+    class ChatGeneration(Protocol):
         message: BaseMessage
 
-    class ChatGeneration(Protocol):
+    class AgentAction(Protocol):
+        tool: str
+        args: Dict[str, Any]
+
+    class AgentFinish(Protocol):
+        return_values: Dict[str, Any]
+
+    class Generation(Protocol):
         message: BaseMessage
 
     class GenerationChunk(Protocol):
         pass
 
     class ChatGenerationChunk(Protocol):
-        pass
-
-    @runtime_checkable
-    class ToolMessage(Protocol):
         pass
 
     class LLMResult(Protocol):
@@ -85,15 +90,16 @@ except ImportError:
         def dict(self) -> Dict[str, Any]:
             ...
 
-    class AgentAction(Protocol):
-        tool: str
-        args: Dict[str, Any]
-
-    class AgentFinish(Protocol):
-        return_values: Dict[str, Any]
+    class Document(Protocol):
+        pass
 
     class RetryCallState(Protocol):
         pass
+
+
+@runtime_checkable
+class ToolMessage(Protocol):
+    pass
 
 
 class LogEvent(TypedDict):
@@ -132,7 +138,7 @@ class BraintrustTracer(BaseCallbackHandler):
         self.spans: Dict[UUID, braintrust.Span] = {}
         self.debug = bool(os.environ.get("DEBUG")) or debug
         self.exclude_metadata_props = exclude_metadata_props or re.compile(
-            r"/^(l[sc]_|langgraph_|__pregel_|checkpoint_ns)/"
+            r"^(l[sc]_|langgraph_|__pregel_|checkpoint_ns)"
         )
 
     def _start_span(
@@ -171,16 +177,19 @@ class BraintrustTracer(BaseCallbackHandler):
         if event is None:
             event = {}
 
-        tags = event.get("tags")
+        tags = event.get("tags") or []
         event = {
             **event,
             "tags": None,
             "metadata": {
-                **({"tags": tags} if tags else {}),
+                **({"tags": tags}),
                 **(event.get("metadata") or {}),
                 **({"runId": run_id, "parentRunId": parent_run_id} if self.debug else {}),
             },
         }
+
+        if "__start__" in name:
+            breakpoint()
 
         span = parent_span.start_span(
             name=name,
@@ -265,13 +274,13 @@ class BraintrustTracer(BaseCallbackHandler):
         span.end()
 
     def clean_metadata(self, metadata: Optional[Mapping[str, Any]]) -> Mapping[str, Any]:
-        return {k: v for k, v in (metadata or {}).items() if not self.exclude_metadata_props.match(k)}
+        return {k: v for k, v in (metadata or {}).items() if not self.exclude_metadata_props.search(k)}
 
     def on_llm_new_token(
         self,
         token: str,
         *,
-        chunk: Optional[Union[GenerationChunk, ChatGenerationChunk]] = None,  # type: ignore
+        chunk: Optional[Union["GenerationChunk", "ChatGenerationChunk"]] = None,  # type: ignore
         run_id: UUID,
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
@@ -348,7 +357,7 @@ class BraintrustTracer(BaseCallbackHandler):
     # Agent Methods
     def on_agent_action(
         self,
-        action: AgentAction,
+        action: "AgentAction",
         *,
         run_id: UUID,
         parent_run_id: Optional[UUID] = None,
@@ -361,7 +370,7 @@ class BraintrustTracer(BaseCallbackHandler):
 
     def on_agent_finish(
         self,
-        finish: AgentFinish,
+        finish: "AgentFinish",
         *,
         run_id: UUID,
         parent_run_id: Optional[UUID] = None,
@@ -391,7 +400,7 @@ class BraintrustTracer(BaseCallbackHandler):
 
     def on_retry(
         self,
-        retry_state: RetryCallState,  # type: ignore
+        retry_state: "RetryCallState",
         *,
         run_id: UUID,
         parent_run_id: Optional[UUID] = None,
@@ -429,16 +438,21 @@ class BraintrustTracer(BaseCallbackHandler):
         metadata: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Any:
-        resolved_name = name or last_item(serialized.get("id") or []) or "Chain"
+        metadata = metadata or {}
+        resolved_name = metadata.get("langgraph_node") or name or last_item(serialized.get("id") or []) or "Chain"
 
         if self.debug:
             breakpoint()
+
+        tags = tags or []
+        if "langsmith:hidden" in tags:
+            return
 
         self._start_span(
             parent_run_id,
             run_id,
             name=resolved_name,
-            event={"input": inputs, "metadata": {"tags": tags, **(metadata or {}), **kwargs}},
+            event={"input": inputs, "metadata": {"tags": tags, **metadata, **kwargs}},
         )
 
     def on_chain_end(
@@ -490,7 +504,7 @@ class BraintrustTracer(BaseCallbackHandler):
     def on_chat_model_start(
         self,
         serialized: dict[str, Any],
-        messages: list[list[BaseMessage]],
+        messages: list[list["BaseMessage"]],
         *,
         run_id: UUID,
         parent_run_id: Optional[UUID] = None,
@@ -525,7 +539,7 @@ class BraintrustTracer(BaseCallbackHandler):
 
     def on_llm_end(
         self,
-        response: LLMResult,
+        response: "LLMResult",
         *,
         run_id: UUID,
         parent_run_id: Optional[UUID] = None,
@@ -540,7 +554,7 @@ class BraintrustTracer(BaseCallbackHandler):
 
         llm_output: Dict[str, Any] = response.llm_output or {}  # type: ignore
         generations = response.generations
-        metadata = {k: v for k, v in response.dict().items() if k not in ("llm_output", "generations")}  # type: ignore
+        metadata = {k: v for k, v in response.model_dump().items() if k not in ("llm_output", "generations")}
 
         model_name = llm_output.get("model_name")
         token_usage: Dict[str, Any] = llm_output.get("token_usage") or llm_output.get("estimatedTokens") or {}
@@ -637,7 +651,7 @@ class BraintrustTracer(BaseCallbackHandler):
 
     def on_retriever_end(
         self,
-        documents: Sequence[Document],
+        documents: Sequence["Document"],
         *,
         run_id: UUID,
         parent_run_id: Optional[UUID] = None,
