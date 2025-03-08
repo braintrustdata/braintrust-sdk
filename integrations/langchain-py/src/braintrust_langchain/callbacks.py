@@ -370,7 +370,12 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
 
         llm_output: Dict[str, Any] = response.llm_output or {}  # type: ignore
         generations = response.generations
-        metadata = {k: v for k, v in response.model_dump().items() if k not in ("llm_output", "generations")}
+        metadata = {
+            k: v
+            # for 3.8 we need to use dict()
+            for k, v in response.dict().items()  # type: ignore
+            if k not in ("llm_output", "generations")
+        }
 
         model_name = llm_output.get("model_name")
         token_usage: Dict[str, Any] = llm_output.get("token_usage") or llm_output.get("estimatedTokens") or {}
