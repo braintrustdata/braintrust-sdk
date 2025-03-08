@@ -10,7 +10,6 @@ from langchain_core.messages import BaseMessage
 from langchain_core.runnables import RunnableMap, RunnableSerializable
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
-from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, Field
 
 from ..helpers import assert_matches_object
@@ -306,6 +305,11 @@ def test_parallel_execution(logs: List[LogRequest]):
 
 @responses.activate
 def test_langgraph_state_management(logs: List[LogRequest]):
+    try:
+        from langgraph.graph import END, START, StateGraph
+    except ImportError:
+        pytest.skip("langgraph not installed")
+
     with mock_openai([CHAT_SAY_HELLO]):
         handler = BraintrustTracer()
         model = ChatOpenAI(

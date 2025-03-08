@@ -1,4 +1,5 @@
 import os
+import sys
 
 import setuptools
 
@@ -24,26 +25,31 @@ install_requires = [
     "typing_extensions>=4.1.0",
 ]
 
+dev_requires = [
+    "black",
+    "build",
+    "flake8",
+    "flake8-isort",
+    "httpx",  # for testing langchain wrappers
+    "IPython",
+    "langchain",  # for testing langchain wrappers
+    "langchain-openai",  # for testing langchain wrappers
+    "isort==5.12.0",
+    "pre-commit",
+    "pytest",
+    "pytest-watch",
+    "responses",  # for testing langchain wrappers
+    "respx",  # for testing langchain wrappers
+    "twine",
+]
+
+# Add langgraph only for Python 3.9+
+if sys.version_info >= (3, 9):
+    dev_requires.append("langgraph>=0.2.1,<0.4.0")  # for testing langgraph wrappers
+
 extras_require = {
     "cli": ["boto3", "psycopg2-binary", "uv"],
-    "dev": [
-        "black",
-        "build",
-        "flake8",
-        "flake8-isort",
-        "httpx",  # for testing langchain wrappers
-        "IPython",
-        "langchain",  # for testing langchain wrappers
-        "langchain-openai",  # for testing langchain wrappers
-        "langgraph",  # for testing langgraph wrappers
-        "isort==5.12.0",
-        "pre-commit",
-        "pytest",
-        "pytest-watch",
-        "responses",  # for testing langchain wrappers
-        "respx",  # for testing langchain wrappers
-        "twine",
-    ],
+    "dev": dev_requires,
     "doc": ["pydoc-markdown"],
 }
 
