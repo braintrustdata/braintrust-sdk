@@ -1,0 +1,14 @@
+[tool.black]
+line-length = 120
+target-version = ['py38']
+
+[tool.isort]
+profile = "black"
+line_length = 120
+known_first_party = ["braintrust_langchain"]
+known_third_party = ["braintrust", "langchain"]
+
+[tool.pytest.ini_options]
+testpaths = ["src/tests"]
+python_files = ["test_*.py"]
+addopts = "-v"

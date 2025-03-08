@@ -1,53 +1,55 @@
 import os
+import sys
+from typing import Any, Dict, Optional
 
 import setuptools
 
 dir_name = os.path.abspath(os.path.dirname(__file__))
 
-version_contents = {}
-with open(os.path.join(dir_name, "src", "braintrust", "version.py"), encoding="utf-8") as f:
+version_contents: Optional[Dict[str, Any]] = {}
+with open(os.path.join(dir_name, "src", "braintrust_langchain", "version.py"), encoding="utf-8") as f:
     exec(f.read(), version_contents)
 
 with open(os.path.join(dir_name, "README.md"), "r", encoding="utf-8") as f:
     long_description = f.read()
 
 install_requires = [
-    "GitPython",
-    "requests",
-    "chevron",
-    "braintrust_core",
-    "tqdm",
-    "exceptiongroup>=1.2.0",
-    "python-dotenv",
-    "sseclient-py",
-    "python-slugify",
-    "typing_extensions>=4.1.0",
+    "braintrust",
+    "langchain",
 ]
 
+dev_requires = [
+    "black",
+    "build",
+    "flake8",
+    "flake8-isort",
+    "httpx",
+    "langchain-openai",
+    "isort==5.12.0",
+    "pre-commit",
+    "pytest",
+    "pytest-watch",
+    "responses",
+    "respx",
+    "tenacity",
+]
+
+# Add langgraph only for Python 3.9+
+if sys.version_info >= (3, 9):
+    dev_requires.append("langgraph>=0.2.1,<0.4.0")  # for testing langgraph wrappers
+
 extras_require = {
-    "cli": ["boto3", "psycopg2-binary", "uv"],
-    "dev": [
-        "black",
-        "build",
-        "flake8",
-        "flake8-isort",
-        "IPython",
-        "isort==5.12.0",
-        "pre-commit",
-        "pytest",
-        "twine",
-    ],
-    "doc": ["pydoc-markdown"],
+    "dev": dev_requires,
 }
 
 extras_require["all"] = sorted({package for packages in extras_require.values() for package in packages})
 
 setuptools.setup(
-    name="braintrust",
+    name="braintrust-langchain",
     version=version_contents["VERSION"],
     author="Braintrust",
     author_email="info@braintrust.dev",
-    description="SDK for integrating Braintrust",
+    description="Integration for LangChain and Braintrust Tracing",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://www.braintrust.dev",
@@ -61,9 +63,8 @@ setuptools.setup(
     ],
     package_dir={"": "src"},
     packages=setuptools.find_packages(where="src"),
-    package_data={"braintrust": ["py.typed"]},
+    package_data={"braintrust_langchain": ["py.typed"]},
     python_requires=">=3.8.0",
-    entry_points={"console_scripts": ["braintrust = braintrust.cli.__main__:main"]},
     install_requires=install_requires,
     extras_require=extras_require,
 )
