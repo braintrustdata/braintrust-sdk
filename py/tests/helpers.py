@@ -1,6 +1,10 @@
-from typing import Dict, Sequence, Union, cast
+from typing import Any, Dict, Sequence, Union, cast
 
-RecursiveValue = Union[str, int, float, bool, None, Sequence["RecursiveValue"], Dict[str, "RecursiveValue"]]
+from braintrust.logger import Span
+
+# Base types that can appear in values
+PrimitiveValue = Union[str, int, float, bool, None, Span]
+RecursiveValue = Union[PrimitiveValue, Dict[str, Any], Sequence[Any]]
 
 
 def assert_matches_object(

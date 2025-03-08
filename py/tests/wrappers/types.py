@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import Any, List, Optional, TypedDict
 
 
 class SpanAttributes(TypedDict):
@@ -23,7 +23,7 @@ class SpanRequired(TypedDict):
 
 class Span(SpanRequired, total=False):
     span_attributes: SpanAttributes
-    input: Dict[str, Any]
+    input: Any
     output: Any
     span_parents: Optional[List[str]]
     metadata: SpanMetadata

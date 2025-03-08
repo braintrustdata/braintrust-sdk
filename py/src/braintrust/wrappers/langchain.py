@@ -3,25 +3,26 @@ import logging
 import os
 import re
 from typing import (
-    TYPE_CHECKING,
     Any,
-    Callable,
     Dict,
     List,
     Mapping,
     Optional,
     Pattern,
     Sequence,
-    Set,
-    Tuple,
     TypedDict,
     Union,
     cast,
-    runtime_checkable,
 )
 from uuid import UUID
 
-from typing_extensions import NotRequired, Protocol
+from langchain_core.agents import AgentAction, AgentFinish
+from langchain_core.callbacks.base import BaseCallbackHandler
+from langchain_core.documents import Document
+from langchain_core.messages import BaseMessage, ToolMessage
+from langchain_core.outputs.llm_result import LLMResult
+from tenacity import RetryCallState
+from typing_extensions import NotRequired
 
 import braintrust
 from braintrust._types import SpanAttributes
@@ -29,80 +30,6 @@ from braintrust.logger import NOOP_SPAN, current_span, init_logger
 from braintrust.span_types import SpanTypeAttribute
 
 _logger = logging.getLogger("braintrust.wrappers.langchain")
-
-try:
-    from langchain_core.callbacks.base import BaseCallbackHandler  # type: ignore
-except ImportError as e:
-    _logger.warning("Failed to import langchain, using stubs")
-
-    class BaseCallbackHandler:
-        def on_llm_start(self, *args: Any, **kwargs: Any) -> None:
-            ...
-
-        def on_llm_end(self, *args: Any, **kwargs: Any) -> None:
-            ...
-
-        def on_chain_start(self, *args: Any, **kwargs: Any) -> None:
-            ...
-
-        def on_chain_end(self, *args: Any, **kwargs: Any) -> None:
-            ...
-
-        def on_tool_start(self, *args: Any, **kwargs: Any) -> None:
-            ...
-
-        def on_tool_end(self, *args: Any, **kwargs: Any) -> None:
-            ...
-
-        def on_retriever_start(self, *args: Any, **kwargs: Any) -> None:
-            ...
-
-        def on_retriever_end(self, *args: Any, **kwargs: Any) -> None:
-            ...
-
-
-if TYPE_CHECKING:
-
-    class BaseMessage(Protocol):
-        def model_dump(self) -> Dict[str, Any]:
-            ...
-
-    class ChatGeneration(Protocol):
-        message: BaseMessage
-
-    class AgentAction(Protocol):
-        tool: str
-        args: Dict[str, Any]
-
-    class AgentFinish(Protocol):
-        return_values: Dict[str, Any]
-
-    class Generation(Protocol):
-        message: BaseMessage
-
-    class GenerationChunk(Protocol):
-        pass
-
-    class ChatGenerationChunk(Protocol):
-        pass
-
-    class LLMResult(Protocol):
-        llm_output: Optional[Dict[str, Any]] = None
-        generations: List[List[Union[Generation, ChatGeneration, GenerationChunk, ChatGenerationChunk]]]
-
-        def dict(self) -> Dict[str, Any]:
-            ...
-
-    class Document(Protocol):
-        pass
-
-    class RetryCallState(Protocol):
-        pass
-
-
-@runtime_checkable
-class ToolMessage(Protocol):
-    pass
 
 
 class LogEvent(TypedDict):
@@ -119,23 +46,13 @@ class LogEvent(TypedDict):
 
 
 class BraintrustTracer(BaseCallbackHandler):
-    raise_error = False
-    run_inline = False
-    ignore_llm = False
-    ignore_retry = False
-    ignore_chain = False
-    ignore_agent = False
-    ignore_retriever = False
-    ignore_chat_model = False
-    ignore_custom_event = False
-
     root_run_id: Optional[UUID] = None
 
     def __init__(
         self,
         logger: Optional[Union[braintrust.Logger, braintrust.Span]] = None,
         debug: bool = False,
-        exclude_metadata_props: Optional[Pattern] = None,
+        exclude_metadata_props: Optional[Pattern[str]] = None,
     ):
         self.logger = logger
         self.spans: Dict[UUID, braintrust.Span] = {}
@@ -313,17 +230,24 @@ class BraintrustTracer(BaseCallbackHandler):
     # Agent Methods
     def on_agent_action(
         self,
-        action: "AgentAction",
+        action: AgentAction,
         *,
         run_id: UUID,
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        self._start_span(parent_run_id, run_id, name=action.tool, event={"input": action.args})
+        self._start_span(
+            parent_run_id,
+            run_id,
+            name=action.tool,
+            event={
+                "input": action.tool_input,  # type: ignore[arg-type]
+            },
+        )
 
     def on_agent_finish(
         self,
-        finish: "AgentFinish",
+        finish: AgentFinish,
         *,
         run_id: UUID,
         parent_run_id: Optional[UUID] = None,
@@ -437,7 +361,7 @@ class BraintrustTracer(BaseCallbackHandler):
 
     def on_llm_end(
         self,
-        response: "LLMResult",
+        response: LLMResult,
         *,
         run_id: UUID,
         parent_run_id: Optional[UUID] = None,
@@ -537,7 +461,7 @@ class BraintrustTracer(BaseCallbackHandler):
 
     def on_retriever_end(
         self,
-        documents: Sequence["Document"],
+        documents: Sequence[Document],
         *,
         run_id: UUID,
         parent_run_id: Optional[UUID] = None,
@@ -559,7 +483,6 @@ class BraintrustTracer(BaseCallbackHandler):
     ) -> Any:
         pass
 
-    # Run Methods
     def on_text(
         self,
         text: str,
@@ -572,7 +495,7 @@ class BraintrustTracer(BaseCallbackHandler):
 
     def on_retry(
         self,
-        retry_state: "RetryCallState",
+        retry_state: RetryCallState,
         *,
         run_id: UUID,
         parent_run_id: Optional[UUID] = None,

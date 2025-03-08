@@ -1,5 +1,9 @@
-import sys
-from typing import Dict, List, cast
+# pyright: reportUnknownVariableType=none
+# pyright: reportUnknownArgumentType=none
+# pyright: reportUnknownMemberType=none
+# pyright: reportTypedDictNotRequiredAccess=none
+import uuid
+from typing import Dict, List, Union, cast
 
 import pytest
 import responses
@@ -21,9 +25,9 @@ from .fixtures import (
     CHAT_MATH,
     CHAT_SAY_HELLO,
     CHAT_TOOL_CALCULATOR,
-    logs,
-    mock_braintrust,
-    setup,
+    logs,  # type: ignore[reportUnusedImport]
+    mock_braintrust,  # type: ignore[reportUnusedImport]
+    setup,  # type: ignore[reportUnusedImport]
 )
 from .helpers import find_spans_by_attributes, logs_to_spans, mock_openai
 from .types import LogRequest
@@ -272,11 +276,6 @@ def test_parallel_execution(logs: List[LogRequest]):
 
     spans, *_ = logs_to_spans(logs)
 
-    # Find the sequence spans first
-    sequence_spans = find_spans_by_attributes(spans, name="RunnableSequence")
-    joke_seq = next(s for s in sequence_spans if "map:key:joke" in s["metadata"]["tags"])
-    poem_seq = next(s for s in sequence_spans if "map:key:poem" in s["metadata"]["tags"])
-
     # Find the LLM spans
     llm_spans = find_spans_by_attributes(spans, name="ChatOpenAI")
     assert len(llm_spans) == 2
@@ -320,14 +319,13 @@ def test_langgraph_state_management(logs: List[LogRequest]):
             frequency_penalty=0,
             presence_penalty=0,
             n=1,
-            callbacks=[handler],
         )
 
-        def say_hello(state: Dict):
+        def say_hello(state: Dict[str, str]):
             response = model.invoke("Say hello")
-            return response.content
+            return cast(Union[str, List[str], Dict[str, str]], response.content)
 
-        def say_bye(state: Dict):
+        def say_bye(state: Dict[str, str]):
             print("From the 'sayBye' node: Bye world!")
             return "Bye"
 
@@ -341,7 +339,7 @@ def test_langgraph_state_management(logs: List[LogRequest]):
         )
 
         graph = workflow.compile()
-        graph.invoke({}, config={"callbacks": [cast(BaseCallbackHandler, handler)]})
+        graph.invoke({}, config={"callbacks": [handler]})
 
     spans, _, _ = logs_to_spans(logs)
 
@@ -414,17 +412,19 @@ def test_langgraph_state_management(logs: List[LogRequest]):
 def test_chain_null_values(logs: List[LogRequest]):
     handler = BraintrustTracer()
 
+    run_id = uuid.UUID("f81d4fae-7dec-11d0-a765-00a0c91e6bf6")
+
     handler.on_chain_start(
         {"id": ["TestChain"], "lc": 1, "type": "not_implemented"},
         {"input1": "value1", "input2": None, "input3": None},
-        run_id="run-1",
+        run_id=run_id,
         parent_run_id=None,
         tags=["test"],
     )
 
     handler.on_chain_end(
         {"output1": "value1", "output2": None, "output3": None},
-        run_id="run-1",
+        run_id=run_id,
         parent_run_id=None,
         tags=["test"],
     )

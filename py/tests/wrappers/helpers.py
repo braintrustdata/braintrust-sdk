@@ -1,6 +1,5 @@
-import json
 from contextlib import contextmanager
-from typing import Any, Dict, Generator, List, Mapping, Optional, Set, Tuple, Union
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple
 
 import httpx
 import respx
@@ -52,11 +51,14 @@ def logs_to_spans(logs: List[LogRequest]) -> Tuple[List[Span], Optional[str], Op
     return spans, spans[0]["span_id"] if spans else None, spans[0].get("metadata", {}).get("runId") if spans else None
 
 
-def find_spans_by_attributes(spans, **attributes):
+def find_spans_by_attributes(spans: List[Span], **attributes: Any) -> List[Span]:
     """Find all spans that match the given attributes."""
-    matching_spans = []
+    matching_spans: List[Span] = []
     for span in spans:
         matches = True
+        if "span_attributes" not in span:
+            matches = False
+            continue
         for key, value in attributes.items():
             if key not in span["span_attributes"] or span["span_attributes"][key] != value:
                 matches = False
