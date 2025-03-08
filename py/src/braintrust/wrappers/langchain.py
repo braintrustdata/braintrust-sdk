@@ -5,11 +5,15 @@ import re
 from typing import (
     TYPE_CHECKING,
     Any,
+    Callable,
     Dict,
     List,
     Mapping,
     Optional,
+    Pattern,
     Sequence,
+    Set,
+    Tuple,
     TypedDict,
     Union,
     cast,
@@ -84,7 +88,7 @@ if TYPE_CHECKING:
 
     class LLMResult(Protocol):
         llm_output: Optional[Dict[str, Any]] = None
-        generations: list[list[Union[Generation, ChatGeneration, GenerationChunk, ChatGenerationChunk]]]
+        generations: List[List[Union[Generation, ChatGeneration, GenerationChunk, ChatGenerationChunk]]]
 
         def dict(self) -> Dict[str, Any]:
             ...
@@ -131,7 +135,7 @@ class BraintrustTracer(BaseCallbackHandler):
         self,
         logger: Optional[Union[braintrust.Logger, braintrust.Span]] = None,
         debug: bool = False,
-        exclude_metadata_props: Optional[re.Pattern[str]] = None,
+        exclude_metadata_props: Optional[Pattern] = None,
     ):
         self.logger = logger
         self.spans: Dict[UUID, braintrust.Span] = {}
@@ -371,13 +375,13 @@ class BraintrustTracer(BaseCallbackHandler):
 
     def on_llm_start(
         self,
-        serialized: dict[str, Any],
-        prompts: list[str],
+        serialized: Dict[str, Any],
+        prompts: List[str],
         *,
         run_id: UUID,
         parent_run_id: Optional[UUID] = None,
-        tags: Optional[list[str]] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        tags: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         name: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
@@ -400,15 +404,15 @@ class BraintrustTracer(BaseCallbackHandler):
 
     def on_chat_model_start(
         self,
-        serialized: dict[str, Any],
-        messages: list[list["BaseMessage"]],
+        serialized: Dict[str, Any],
+        messages: List[List["BaseMessage"]],
         *,
         run_id: UUID,
         parent_run_id: Optional[UUID] = None,
-        tags: Optional[list[str]] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        tags: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         name: Optional[str] = None,
-        invocation_params: Optional[dict[str, Any]] = None,
+        invocation_params: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Any:
         invocation_params = invocation_params or {}
@@ -466,14 +470,14 @@ class BraintrustTracer(BaseCallbackHandler):
 
     def on_tool_start(
         self,
-        serialized: dict[str, Any],
+        serialized: Dict[str, Any],
         input_str: str,
         *,
         run_id: UUID,
         parent_run_id: Optional[UUID] = None,
-        tags: Optional[list[str]] = None,
-        metadata: Optional[dict[str, Any]] = None,
-        inputs: Optional[dict[str, Any]] = None,
+        tags: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        inputs: Optional[Dict[str, Any]] = None,
         name: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
@@ -506,13 +510,13 @@ class BraintrustTracer(BaseCallbackHandler):
 
     def on_retriever_start(
         self,
-        serialized: dict[str, Any],
+        serialized: Dict[str, Any],
         query: str,
         *,
         run_id: UUID,
         parent_run_id: Optional[UUID] = None,
-        tags: Optional[list[str]] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        tags: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         name: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
@@ -582,7 +586,7 @@ class BraintrustTracer(BaseCallbackHandler):
         data: Any,
         *,
         run_id: UUID,
-        tags: Optional[list[str]] = None,
+        tags: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Any:
@@ -685,18 +689,18 @@ def output_from_tool_output(output: Any) -> Optional[Dict[str, Any]]:
     return get_message_content(output) if isinstance(output, ToolMessage) else None
 
 
-def flatten_list(items: list[Any]) -> list[Any]:
-    result: list[Any] = []
+def flatten_list(items: List[Any]) -> List[Any]:
+    result: List[Any] = []
     for item in items:
         if isinstance(item, list):
-            result.extend(cast(list[Any], item))
+            result.extend(cast(List[Any], item))
         else:
             result.append(item)
     return result
 
 
 def output_from_chain_values(output: Any) -> Any:
-    output_list: list[Any] = [output] if not isinstance(output, list) else output
+    output_list: List[Any] = [output] if not isinstance(output, list) else output
 
     processed = [parse_chain_value(x) for x in output_list]
 
@@ -739,5 +743,5 @@ def input_from_chain_values(inputs: Any) -> Any:
     return parsed[0] if len(parsed) == 1 else parsed
 
 
-def last_item(items: list[Any]) -> Any:
+def last_item(items: List[Any]) -> Any:
     return items[-1] if items else None

@@ -1,3 +1,4 @@
+import sys
 from typing import Dict, List, cast
 
 import pytest
@@ -34,7 +35,7 @@ def test_llm_calls(logs: List[LogRequest]):
         handler = BraintrustTracer()
         prompt = ChatPromptTemplate.from_template("What is 1 + {number}?")
         model = ChatOpenAI(model="gpt-4o-mini", temperature=1, top_p=1, frequency_penalty=0, presence_penalty=0, n=1)
-        chain: RunnableSerializable[Dict[str, str], BaseMessage] = prompt | model
+        chain: RunnableSerializable[Dict[str, str], BaseMessage] = prompt.pipe(model)
         chain.invoke({"number": "2"}, config={"callbacks": [cast(BaseCallbackHandler, handler)]})
 
     spans, root_span_id, _ = logs_to_spans(logs)
@@ -90,7 +91,7 @@ def test_chain_with_memory(logs: List[LogRequest]):
         handler = BraintrustTracer()
         prompt = ChatPromptTemplate.from_template("{history} User: {input}")
         model = ChatOpenAI(model="gpt-4o-mini")
-        chain: RunnableSerializable[Dict[str, str], BaseMessage] = prompt | model
+        chain: RunnableSerializable[Dict[str, str], BaseMessage] = prompt.pipe(model)
 
         memory = {"history": "Assistant: Hello! How can I assist you today?"}
         chain.invoke(
@@ -257,8 +258,8 @@ def test_parallel_execution(logs: List[LogRequest]):
         handler = BraintrustTracer()
         model = ChatOpenAI(model="gpt-4o-mini", temperature=1, top_p=1, frequency_penalty=0, presence_penalty=0, n=1)
 
-        joke_chain = PromptTemplate.from_template("Tell me a joke about {topic}") | model
-        poem_chain = PromptTemplate.from_template("write a 2-line poem about {topic}") | model
+        joke_chain = PromptTemplate.from_template("Tell me a joke about {topic}").pipe(model)
+        poem_chain = PromptTemplate.from_template("write a 2-line poem about {topic}").pipe(model)
 
         map_chain = RunnableMap(
             {
