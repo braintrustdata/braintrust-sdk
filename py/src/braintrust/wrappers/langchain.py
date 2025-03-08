@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import re
-import traceback
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -154,8 +153,6 @@ class BraintrustTracer(BaseCallbackHandler):
         event: Optional[LogEvent] = None,
     ) -> Any:
         if run_id in self.spans:
-            breakpoint()
-
             # XXX: See graph test case of an example where this _may_ be intended.
             _logger.warning(f"Span already exists for run_id {run_id} (this is likely a bug)")
             return
@@ -188,9 +185,6 @@ class BraintrustTracer(BaseCallbackHandler):
             },
         }
 
-        if "__start__" in name:
-            breakpoint()
-
         span = parent_span.start_span(
             name=name,
             type=type,
@@ -200,14 +194,6 @@ class BraintrustTracer(BaseCallbackHandler):
             parent=parent,
             **event,
         )
-
-        current_frame = traceback.extract_stack()[-2]  # -2 to get the caller's frame
-        print(f"_start_span called from: {current_frame.filename}:{current_frame.lineno} in {current_frame.name}")
-        print(f"root_run_id: {self.root_run_id}")
-        print(f"parent_run_id: {parent_run_id}")
-        print(f"run_id: {run_id}")
-        print(f"span_id: {span.id} ({'NOOP' if span == NOOP_SPAN else 'REAL'})")
-        print("")
 
         if self.logger != NOOP_SPAN and span == NOOP_SPAN:
             _logger.warning(
@@ -240,14 +226,6 @@ class BraintrustTracer(BaseCallbackHandler):
         metrics: Optional[Mapping[str, Union[int, float]]] = None,
         dataset_record_id: Optional[str] = None,
     ) -> Any:
-        current_frame = traceback.extract_stack()[-2]  # -2 to get the caller's frame
-        print(f"_end_span called from: {current_frame.filename}:{current_frame.lineno} in {current_frame.name}")
-        print(f"root_run_id: {self.root_run_id}")
-        print(f"parent_run_id: {parent_run_id}")
-        print(f"run_id: {run_id}")
-        print(f"span_id: {self.spans[run_id].id} ({'NOOP' if self.spans[run_id] == NOOP_SPAN else 'REAL'})")
-        print("")
-
         if run_id not in self.spans:
             raise ValueError(f"No span exists for run_id {run_id} (this is likely a bug)")
 
@@ -276,20 +254,6 @@ class BraintrustTracer(BaseCallbackHandler):
     def clean_metadata(self, metadata: Optional[Mapping[str, Any]]) -> Mapping[str, Any]:
         return {k: v for k, v in (metadata or {}).items() if not self.exclude_metadata_props.search(k)}
 
-    def on_llm_new_token(
-        self,
-        token: str,
-        *,
-        chunk: Optional[Union["GenerationChunk", "ChatGenerationChunk"]] = None,  # type: ignore
-        run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        **kwargs: Any,
-    ) -> Any:
-        if self.debug:
-            breakpoint()
-
-        pass
-
     def on_llm_error(
         self,
         error: BaseException,
@@ -298,9 +262,6 @@ class BraintrustTracer(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,  # TODO: response=
     ) -> Any:
-        if self.debug:
-            breakpoint()
-
         if run_id not in self.spans:
             return
 
@@ -314,9 +275,6 @@ class BraintrustTracer(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,  # TODO: some metadata
     ) -> Any:
-        if self.debug:
-            breakpoint()
-
         if run_id not in self.spans:
             return
 
@@ -330,9 +288,6 @@ class BraintrustTracer(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        if self.debug:
-            breakpoint()
-
         if run_id not in self.spans:
             return
 
@@ -346,9 +301,6 @@ class BraintrustTracer(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        if self.debug:
-            breakpoint()
-
         if run_id not in self.spans:
             return
 
@@ -363,9 +315,6 @@ class BraintrustTracer(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        if self.debug:
-            breakpoint()
-
         self._start_span(parent_run_id, run_id, name=action.tool, event={"input": action.args})
 
     def on_agent_finish(
@@ -376,55 +325,10 @@ class BraintrustTracer(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        if self.debug:
-            breakpoint()
-
         if run_id not in self.spans:
             return
 
         self._end_span(run_id, output=finish.return_values)  # type: ignore
-
-    # Run Methods
-    def on_text(
-        self,
-        text: str,
-        *,
-        run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        **kwargs: Any,
-    ) -> Any:
-        if self.debug:
-            breakpoint()
-
-        pass
-
-    def on_retry(
-        self,
-        retry_state: "RetryCallState",
-        *,
-        run_id: UUID,
-        parent_run_id: Optional[UUID] = None,
-        **kwargs: Any,
-    ) -> Any:
-        if self.debug:
-            breakpoint()
-
-        pass
-
-    def on_custom_event(
-        self,
-        name: str,
-        data: Any,
-        *,
-        run_id: UUID,
-        tags: Optional[list[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        **kwargs: Any,
-    ) -> Any:
-        if self.debug:
-            breakpoint()
-
-        pass
 
     def on_chain_start(
         self,
@@ -441,10 +345,9 @@ class BraintrustTracer(BaseCallbackHandler):
         metadata = metadata or {}
         resolved_name = metadata.get("langgraph_node") or name or last_item(serialized.get("id") or []) or "Chain"
 
-        if self.debug:
-            breakpoint()
-
         tags = tags or []
+
+        # avoids extra logs that seem not as useful esp. with langgraph
         if "langsmith:hidden" in tags:
             return
 
@@ -464,9 +367,6 @@ class BraintrustTracer(BaseCallbackHandler):
         tags: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> Any:
-        if self.debug:
-            breakpoint()
-
         self._end_span(run_id, output=output_from_chain_values(outputs), tags=tags)
 
     def on_llm_start(
@@ -481,9 +381,6 @@ class BraintrustTracer(BaseCallbackHandler):
         name: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
-        if self.debug:
-            breakpoint()
-
         name = name or last_item(serialized.get("id") or []) or "LLM"
 
         self._start_span(
@@ -514,9 +411,6 @@ class BraintrustTracer(BaseCallbackHandler):
         invocation_params: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Any:
-        if self.debug:
-            breakpoint()
-
         invocation_params = invocation_params or {}
 
         self._start_span(
@@ -546,9 +440,6 @@ class BraintrustTracer(BaseCallbackHandler):
         tags: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> Any:
-        if self.debug:
-            breakpoint()
-
         if run_id not in self.spans:
             return
 
@@ -586,9 +477,6 @@ class BraintrustTracer(BaseCallbackHandler):
         name: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
-        if self.debug:
-            breakpoint()
-
         self._start_span(
             parent_run_id,
             run_id,
@@ -611,9 +499,6 @@ class BraintrustTracer(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        if self.debug:
-            breakpoint()
-
         if run_id not in self.spans:
             return
 
@@ -631,9 +516,6 @@ class BraintrustTracer(BaseCallbackHandler):
         name: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
-        if self.debug:
-            breakpoint()
-
         self._start_span(
             parent_run_id,
             run_id,
@@ -657,13 +539,54 @@ class BraintrustTracer(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        if self.debug:
-            breakpoint()
-
         if run_id not in self.spans:
             return
 
         self._end_span(run_id, output=documents)
+
+    def on_llm_new_token(
+        self,
+        token: str,
+        *,
+        chunk: Optional[Union["GenerationChunk", "ChatGenerationChunk"]] = None,  # type: ignore
+        run_id: UUID,
+        parent_run_id: Optional[UUID] = None,
+        **kwargs: Any,
+    ) -> Any:
+        pass
+
+    # Run Methods
+    def on_text(
+        self,
+        text: str,
+        *,
+        run_id: UUID,
+        parent_run_id: Optional[UUID] = None,
+        **kwargs: Any,
+    ) -> Any:
+        pass
+
+    def on_retry(
+        self,
+        retry_state: "RetryCallState",
+        *,
+        run_id: UUID,
+        parent_run_id: Optional[UUID] = None,
+        **kwargs: Any,
+    ) -> Any:
+        pass
+
+    def on_custom_event(
+        self,
+        name: str,
+        data: Any,
+        *,
+        run_id: UUID,
+        tags: Optional[list[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        **kwargs: Any,
+    ) -> Any:
+        pass
 
 
 def extract_call_args(
