@@ -32,6 +32,7 @@ dev_requires = [
     "responses",
     "respx",
     "tenacity",
+    "twine",
 ]
 
 # Add langgraph only for Python 3.9+
