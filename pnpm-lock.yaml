@@ -59,14 +59,14 @@ importers:
         version: link:../../js
     devDependencies:
       '@langchain/core':
-        specifier: ^0.3.26
-        version: 0.3.30
+        specifier: ^0.3.42
+        version: 0.3.42
       '@langchain/langgraph':
         specifier: ^0.2.25
-        version: 0.2.25(@langchain/core@0.3.30)
+        version: 0.2.25(@langchain/core@0.3.42)
       '@langchain/openai':
         specifier: ^0.3.14
-        version: 0.3.14(@langchain/core@0.3.30)
+        version: 0.3.14(@langchain/core@0.3.42)
       '@types/node':
         specifier: ^20.10.5
         version: 20.10.5
@@ -1909,8 +1909,8 @@ packages:
     resolution: {integrity: sha512-GaHYm+c0O9MjZRu0ongGBRbinu8gVAMd2UZjji6jVmqKtZluZnptXGWhz1E8j8D2HJ3f/yMxKAUC0b+57wncIw==}
     dev: false
 
-  /@langchain/core@0.3.30:
-    resolution: {integrity: sha512-HFUpjJ6FkPSSeLKzCLKxba4VN1DKnrXRmjaWHDb5KUyE9DZrqak3Sh6k2dkzXDJIcdd/uNeeQGFyQnubVEMkPw==}
+  /@langchain/core@0.3.42:
+    resolution: {integrity: sha512-pT/jC5lqWK3YGDq8dQwgKoa6anqAhMtG1x5JbnrOj9NdaLeBbCKBDQ+/Ykzk3nZ8o+0UMsaXNZo7IVL83VVjHg==}
     engines: {node: '>=18'}
     dependencies:
       '@cfworker/json-schema': 4.0.3
@@ -1929,13 +1929,13 @@ packages:
       - openai
     dev: true
 
-  /@langchain/langgraph-checkpoint@0.0.13(@langchain/core@0.3.30):
+  /@langchain/langgraph-checkpoint@0.0.13(@langchain/core@0.3.42):
     resolution: {integrity: sha512-amdmBcNT8a9xP2VwcEWxqArng4gtRDcnVyVI4DsQIo1Aaz8e8+hH17zSwrUF3pt1pIYztngIfYnBOim31mtKMg==}
     engines: {node: '>=18'}
     peerDependencies:
       '@langchain/core': '>=0.2.31 <0.4.0'
     dependencies:
-      '@langchain/core': 0.3.30
+      '@langchain/core': 0.3.42
       uuid: 10.0.0
     dev: true
 
@@ -1948,26 +1948,26 @@ packages:
       uuid: 9.0.1
     dev: true
 
-  /@langchain/langgraph@0.2.25(@langchain/core@0.3.30):
+  /@langchain/langgraph@0.2.25(@langchain/core@0.3.42):
     resolution: {integrity: sha512-i+WnwmSxHiyB8gDzFaRBMUO1qomGHSz93bEg5SkS4Y/AjcyoJNZBgYSKNUcSKPQ2tqGAXI5XNPN5jrTUVnWOFw==}
     engines: {node: '>=18'}
     peerDependencies:
       '@langchain/core': '>=0.2.36 <0.3.0 || >=0.3.9 < 0.4.0'
     dependencies:
-      '@langchain/core': 0.3.30
-      '@langchain/langgraph-checkpoint': 0.0.13(@langchain/core@0.3.30)
+      '@langchain/core': 0.3.42
+      '@langchain/langgraph-checkpoint': 0.0.13(@langchain/core@0.3.42)
       '@langchain/langgraph-sdk': 0.0.31
       uuid: 10.0.0
       zod: 3.24.0
     dev: true
 
-  /@langchain/openai@0.3.14(@langchain/core@0.3.30):
+  /@langchain/openai@0.3.14(@langchain/core@0.3.42):
     resolution: {integrity: sha512-lNWjUo1tbvsss45IF7UQtMu1NJ6oUKvhgPYWXnX9f/d6OmuLu7D99HQ3Y88vLcUo9XjjOy417olYHignMduMjA==}
     engines: {node: '>=18'}
     peerDependencies:
       '@langchain/core': '>=0.2.26 <0.4.0'
     dependencies:
-      '@langchain/core': 0.3.30
+      '@langchain/core': 0.3.42
       js-tiktoken: 1.0.15
       openai: 4.75.0(zod@3.24.0)
       zod: 3.24.0

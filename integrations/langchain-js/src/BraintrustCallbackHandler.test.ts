@@ -726,16 +726,6 @@ describe("BraintrustCallbackHandler", () => {
       },
       {
         span_attributes: {
-          name: "__start__",
-        },
-        input: {},
-        metadata: {
-          tags: ["graph:step:0", "langsmith:hidden"],
-        },
-        output: {},
-      },
-      {
-        span_attributes: {
           name: "sayHello",
         },
         input: {},
@@ -775,35 +765,11 @@ describe("BraintrustCallbackHandler", () => {
       },
       {
         span_attributes: {
-          name: "ChannelWrite<sayHello>",
-        },
-        input: {
-          input: "Hello! How can I assist you today?",
-        },
-        metadata: {
-          tags: ["langsmith:hidden"],
-        },
-        output: {
-          output: "Hello! How can I assist you today?",
-        },
-      },
-      {
-        span_attributes: {
           name: "sayBye",
         },
         input: {},
         metadata: {
           tags: ["graph:step:2"],
-        },
-        output: {},
-      },
-      {
-        span_attributes: {
-          name: "ChannelWrite<sayBye>",
-        },
-        input: {},
-        metadata: {
-          tags: ["langsmith:hidden"],
         },
         output: {},
       },

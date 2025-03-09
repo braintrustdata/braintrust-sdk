@@ -286,6 +286,10 @@ export class BraintrustCallbackHandler<IsAsyncFlush extends boolean>
     runType?: string,
     runName?: string,
   ): Promise<void> {
+    if (tags?.includes("langsmith:hidden")) {
+      return;
+    }
+
     this.startSpan({
       runId,
       parentRunId,
