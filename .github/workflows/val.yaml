@@ -1,0 +1,26 @@
+name: val.town
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "integrations/val.town/vals/**"
+  push:
+    branches: [main]
+    paths:
+      - "integrations/val.town/vals/**"
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Update val
+        env:
+          VALTOWN_API_KEY: ${{ secrets.VALTOWN_API_KEY }}
+        run: |
+          ./integrations/val.town/src/cli.ts update
