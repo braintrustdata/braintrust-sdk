@@ -25,6 +25,7 @@ repos:
           (?x)^(
               .*\.(json|prisma|svg)
               |.*pnpm-lock.yaml
+              |.*deno.lock
           )$
         args:
           - "-L"

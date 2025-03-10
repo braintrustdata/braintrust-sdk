@@ -1,0 +1,280 @@
+---
+description: Extra Deno 2.0 Context
+globs: deno.json, deno.jsonc
+alwaysApply: false
+---
+# Deno 2.0 Project Best Practices
+This project uses the latest Deno 2
+Full documentation for the Deno namespace is at [https://docs.deno.com/api/deno/~/Deno](mdc:https:/docs.deno.com/api/deno/~/Deno). You must adhere to the best practices for Deno.
+
+## Deno Rules
+### 1) Prefer Deno Methods
+- **Environment Variables**: `Deno.env.get` `Deno.env.set`
+- **Console and Logging**: `Console.table`, `Deno.inspect`
+- **File System**: `Deno.chown`, `Deno.chmod`, `Deno.create`, `Deno.mkdir`, `Deno.realpath`, `Deno.remove`, `Deno.rename`, `Deno.umask`, `Deno.utime`, `Deno.watchFs`, `Deno.writeTextFile`, `Deno.stat`
+- **Networking**: `Deno.connect`, `Deno.connectQuic`, `Deno.connectTls`, `Deno.listen`, `Deno.listenDatagram`, `Deno.listenTls`, `Deno.networkInterfaces`, `Deno.resolveDns`, `Deno.startTls`
+- **Runtime**: `Deno.addSignalListener`, `Deno.bench`, `Deno.chdir`, `Deno.chmod`, `Deno.chmodSync`, `Deno.chown`, `Deno.chownSync`, `Deno.consoleSize`, `Deno.copyFile`, `Deno.copyFileSync`, `Deno.create`, `Deno.createHttpClient`, `Deno.createSync`, `Deno.cron`, `Deno.cwd`, `Deno.dlopen`, `Deno.execPath`, `Deno.exit`, `Deno.gid`, `Deno.hostname`, `Deno.inspect`, `Deno.kill`, `Deno.link`, `Deno.linkSync`, `Deno.loadavg`, `Deno.lstat`, `Deno.lstatSync`, `Deno.makeTempDir`, `Deno.makeTempDirSync`, `Deno.makeTempFile`, `Deno.makeTempFileSync`, `Deno.memoryUsage`, `Deno.mkdir`, `Deno.mkdirSync`, `Deno.open`, `Deno.openKv`, `Deno.openSync`, `Deno.osRelease`, `Deno.osUptime`, `Deno.refTimer`, `Deno.removeSignalListener`, `Deno.startTls`, `Deno.stat`, `Deno.statSync`, `Deno.systemMemoryInfo`, `Deno.uid`, `Deno.unrefTimer`, `Deno.utime`, `Deno.utimeSync`, `Deno.version`
+- **Process and Commands**: CRITICAL: ALWAYS USE `Deno.command`. There is also `Deno.ChildProcess`. [Full documentation can be found here](mdc:https:/docs.deno.com/api/deno/~/Deno.Command)
+
+
+### 2) Prefer `@std` Libraries
+
+Deno's standard library, written in TypeScript, offers audited, reusable modules for common tasks, ensuring consistency and reliability. Modules are independently versioned following semantic versioning, allowing version pinning to prevent breaking changes. To import modules, use the `deno add` command to update your `deno.json` import map, or import directly with the `jsr:` specifier.
+
+#### Full list of `@std` packages
+@std/assert, @std/async, @std/bytes, @std/cache, @std/cbor, @std/cli, @std/collections, @std/crypto, @std/csv, @std/data-structures, @std/datetime, @std/dotenv, @std/encoding, @std/expect, @std/fmt, @std/front-matter, @std/fs, @std/html, @std/http, @std/ini, @std/internal, @std/io, @std/json, @std/jsonc, @std/log, @std/media-types, @std/msgpack, @std/net, @std/path, @std/random, @std/regexp, @std/semver, @std/streams, @std/tar, @std/testing, @std/text, @std/toml, @std/ulid, @std/uuid, @std/webgpu, @std/yaml
+
+### 3) Understand the Deno CLI for Building, Testing, Running, Formatting, Linting and Debugging
+It provides helpful functionality. Most common methods:
+
+- `deno add [OPTIONS] [packages]`: Add dependencies to your configuration file.
+- `deno install`: Installs dependencies either in the local project or globally to a bin directory. Allows " --global" flag to install globally.
+- `deno task`: runs a task specified in deno.json or deno.jsonc.
+- `deno info [OPTIONS] [file]`:Show information about a module or the cache directories.
+- `deno compile [OPTIONS] [SCRIPT_ARG]`: Cross-compiling to different target architectures is supported using the --target flag. On the first invocation with deno will download the proper binary and cache it in $DENO_DIR.
+- `deno run [OPTIONS] [file]`: Run a JavaScript or TypeScript program, or a task or script. By default all programs are run in sandbox without access to disk, network or ability to spawn subprocesses. Should rarely be used over "deno task".
+- `deno publish [options]`: Publish the current working directory's package or workspace to JSR. Options "--token", "--dry-run" etc.
+- `deno repl [OPTIONS] [-- [ARGS]...]`: Starts a read-eval-print-loop, which lets you interactively build up program state in the global context. It is especially useful for quick prototyping and checking snippets of code.
+- Debugging flags: `--inspect`, `--inspect-wait`, `--inspect-brk`. Deno supports the V8 Inspector Protocol. This makes it possible to debug Deno programs using Chrome DevTools or other clients that support the protocol (for example VSCode). Visit chrome://inspect in a Chromium derived browser to connect Deno to the inspector server.
+
+**NOTE ON CACHING AND RLOADING:** By default, Deno uses a global cache directory (DENO_DIR) for downloaded dependencies. This cache is shared across all projects.You can force deno to refetch and recompile modules into the cache using the `--reload` flag.
+
+## 4) Know the Latest Deno 2 Methods
+### Deno Serve
+`deno serve [OPTIONS] [SCRIPT_ARG]...`: Run a server defined in a main module.he serve command uses the default exports of the main module to determine which servers to start. For example, it can run a file as a server which exports:
+```
+export default {
+  async fetch(request) {
+    if (request.url.startsWith("/json")) {
+      return Response.json({ hello: "world" })
+    }
+    return new Response("Hello world!")
+    // You can also respond with a stream:
+    // Setup readable stream... then:
+    //  return new Response(body.pipeThrough(new TextEncoderStream()), {
+    //    headers: {
+    //      "content-type": "text/plain; charset=utf-8",
+    //    },
+    //  });
+  },
+} satisfies Deno.ServeDefaultExport;
+```
+[Full documentation on Deno.serve](mdc:https:/docs.deno.com/runtime/fundamentals/http_server)
+
+### Deno Native APIs
+[Full documentation of Deno Native APIs](mdc:https:/docs.deno.com/api/deno/~/Deno).
+
+#### Example Deno Native API Classes
+Deno.AtomicOperation, Deno.ChildProcess, Deno.Command, Deno.FsFile, Deno.HttpClient, Deno.Kv, Deno.KvListIterator, Deno.KvU64, Deno.Permissions, Deno.PermissionStatus, Deno.QuicEndpoint, Deno.UnsafeCallback, Deno.UnsafeFnPointer, Deno.UnsafePointer, Deno.UnsafePointerView, Deno.UnsafeWindowSurface
+
+
+### Web APIs
+[Full documentation of Deno Web APIs](mdc:https:/docs.deno.com/api/web).
+
+#### Supported Web APIs:
+AbortController, AbortSignal, addEventListener, atob, Blob, btoa, BroadcastChannel, caches, CacheStorage, clearInterval, clearTimeout, console, createImageBitmap, crypto, Crypto, CryptoKey, CustomEvent, DOMException, ErrorEvent, Event, EventSource, EventTarget, fetch, File, FileReader, FormData, Headers, localStorage, location, MessageChannel, MessageEvent, MessagePort, navigator, offscreenCanvas, Performance, performance, removeEventListener, Request, Response, setInterval, setTimeout, Storage, TextDecoder, TextEncoder, URL, URLSearchParams, WebSocket, Worker, WritableStream, ReadableStream, TransformStream, XMLHttpRequest
+
+## 5) Know How to Test in Deno 2
+`deno test [OPTIONS] [files]... [-- [SCRIPT_ARG]...]`: Run tests using Deno's built-in test runner. Evaluate the given modules, run all tests declared with Deno.test() and report results to standard output. Directory arguments are expanded to all contained files matching the glob `{*_,*.,}test.{js,mjs,ts,mts,jsx,tsx}` or `**/__tests__/**`. Typechecking errors can be skipped with `--no-check`.
+
+### Deno Native Test Methods
+```
+import { assertEquals } from "@std/assert"
+Deno.test("simple test", () => {
+  const x = 1 + 2
+  assertEquals(x, 3)
+})
+
+import { delay } from "@std/async"
+Deno.test("async test", async () => {
+  const x = 1 + 2
+  await delay(100)
+  assertEquals(x, 3)
+})
+
+import { expect } from "@std/expect"
+Deno.test("add function adds two numbers correctly", () => {
+  const wrongValue = false
+  expect(wrongValue).toBe(true)
+})
+
+// Example of test steps
+Deno.test("database operations", async (t) => {
+  await t.step("insert", async () => {
+    // Insert logic goes here
+  })
+  await t.step("delete", async () => {
+    // Delete logic goes here
+  })
+})
+```
+
+### Filter Tests with Test Steps
+Deno allows you to run specific tests or groups of tests using the --filter option on the command line. This option accepts either a string or a pattern to match test names. Filtering does not affect steps; if a test name matches the filter, all of its steps are executed. Example:
+
+```
+Deno.test("my-test", () => {});
+Deno.test("test-1", () => {});
+Deno.test("test-2", () => {});
+// Run just "my-test" with `deno test --filter "my" tests/`
+```
+
+### Ignoring Deno Tests
+```
+Deno.test({
+  name: "do macOS feature",
+  ignore: Deno.build.os !== "darwin", // This test will be ignored if not running on macOS
+  fn() {
+    // do MacOS feature here
+  },
+})
+
+// OR a ignore a test with the ".ignore" method
+Deno.test.ignore("my test", () => {
+})
+```
+### Failing Fast
+Fail log test suites fast with `deno test --fail-fast`
+
+### Reporters
+```
+// Use the default pretty reporter
+deno test
+// Use the dot reporter for concise output
+deno test --reporter=dot
+// Use the JUnit reporter
+deno test --reporter=junit
+```
+
+### Mocking Spying and Complicated Testing
+Must use [@std/testing](mdc:https:/jsr.io/@std/testing/doc)
+```
+import { describe, it } from "@std/testing/bdd"
+import { assertEquals } from "@std/assert"
+describe("Math operations", () => {
+  it("should add numbers correctly", () => {
+    assertEquals(1 + 2, 3)
+  })
+})
+import { spy, assertSpyCalls } from "@std/testing/mock"
+function greet() {
+  console.log("Hello")
+}
+const greetSpy = spy(greet)
+greetSpy()
+assertSpyCalls(greetSpy, 1)
+```
+
+### Documentation Tests
+Deno supports both type-checking evaluating your documentation examples. This makes sure that examples within your documentation are up to date and working.
+
+#### Example
+If this example was in a file named foo.ts, running deno test --doc foo.ts will extract this example, and then both type-check and evaluate it as a standalone module living in the same directory as the module being documented.
+
+The basic idea is this:
+```
+/**
+ * # Examples
+ *
+ * ```ts
+ * const x = 42;
+ * ```
+ */
+```
+The triple backticks mark the start and end of code blocks, the language is determined by the language identifier attribute which may be any of the following:
+
+To document your exports, import the module using a relative path specifier:
+```
+/**
+ * # Examples
+ *
+ * ```ts
+ * import { foo } from "./foo.ts";
+ * ```
+ */
+export function foo(): string {
+  return "foo";
+}
+```
+
+## 6) Understand the Extras
+
+### ClI Usages
+Use `@std/cli`. Methods: parseArgs, promptSecret, unicodeWidth, ProgressBar, ProgressBarStream, promptMultipleSelect, promptSelect, Spinner
+
+Example
+```
+import cli from "@std/cli"
+
+// For proper use, one should use `parseArgs(Deno.args)`
+cli.parseArgs(["--foo", "--bar=baz", "./deno.txt"], {
+  foo: true,
+  bar: "baz",
+  _: ["./deno.txt"],
+})
+const userSelection = cli.promptSelect("Please select a browser:", ["safari", "chrome", "firefox"], { clear: true })
+
+```
+
+### Module Metadata
+import.meta can provide information on the context of the module.
+The boolean import.meta.main will let you know if the current module is the program entry point.
+The string import.meta.url will give you the URL of the current module.
+The string import.meta.filename will give you the fully resolved path to the current module. For local modules only.
+The string import.meta.dirname will give you the fully resolved path to the directory containing the current module. For local modules only.
+The import.meta.resolve allows you to resolve specifier relative to the current module. This function takes into account an import map (if one was provided on startup).
+The string Deno.mainModule will give you the URL of the main module entry point, i.e. the module invoked by the deno runtime.
+
+### Formatting
+The Deno CLI comes with a built-in formatter which can be accessed using `deno fmt` but can also be configured to be used by VS Code in ".vscode/settings.json" and adding "editor.defaultFormatter": "denoland.vscode-deno".
+
+### Workspaces and Monorepos
+Deno supports [workspaces](mdc:https:/docs.deno.com/runtime/fundamentals/workspaces), also known as "monorepos", which allow you to manage multiple related and interdependent packages simultaneously. A "workspace" is a collection of folders containing deno.json or deno.jsonc configuration file. The root configuration file defines the workspace:
+```
+// deno.jsonc
+{
+  "workspace": ["./add", "./subtract"]
+}
+```
+
+### Compiler Options / Typescript Options
+`deno.json` or `deno.jsonc` configuration files can specify a `compilerOptions`. The full possible list of compiler options someone could choose are:
+```
+{
+  // Just an example, you will rarely need most of these.
+  "compilerOptions": {
+    "allowJs": true, // Allow JavaScript files to be compiled
+    "allowUnreachableCode": false, // Allow unreachable code in functions
+    "allowUnusedLabels": false, // Allow unused labels in code
+    "checkJs": false, // Enable type checking in JavaScript files
+    "jsx": "react", // Set JSX mode, can be "preserve", "react", "react-jsx", "react-jsxdev"
+    "jsxFactory": "React.createElement", // Specify the function used to create JSX elements
+    "jsxFragmentFactory": "React.Fragment", // Specify the function used for JSX fragments
+    "keyofStringsOnly": false, // Restrict keyof to only return string keys
+    "lib": ["deno.window"], // Specify the libraries available (default: "deno.window" for Deno)
+    "noErrorTruncation": false, // Disable error message truncation
+    "noFallthroughCasesInSwitch": false, // Disallow fallthrough cases in switch statements
+    "noImplicitAny": true, // Disallow implicit "any" type
+    "noImplicitOverride": true, // Ensure methods overridden in subclasses are explicitly marked with "override"
+    "noImplicitReturns": false, // Report error when not all code paths in a function return a value
+    "noImplicitThis": true, // Disallow "this" being used implicitly
+    "noImplicitUseStrict": true, // Disable implicit strict mode in modules
+    "noStrictGenericChecks": false, // Disable strict checking for generic function calls
+    "noUnusedLocals": false, // Report unused local variables as errors
+    "noUnusedParameters": false, // Report unused parameters in functions as errors
+    "noUncheckedIndexedAccess": false, // Treat indexed access types as potentially undefined
+    "reactNamespace": "React", // Specify the React namespace for JSX support
+    "strict": true, // Enable all strict type-checking options
+    "strictBindCallApply": true, // Enable stricter rules for `call`, `apply`, and `bind`
+    "strictFunctionTypes": true, // Enable strict checking of function types
+    "strictPropertyInitialization": true, // Require initialization of class properties
+    "strictNullChecks": true, // Enable strict null checks
+    "suppressExcessPropertyErrors": false, // Suppress excess property errors in object literals
+    "suppressImplicitAnyIndexErrors": false, // Suppress implicit any errors for index signatures
+    "useUnknownInCatchVariables": true // Use "unknown" type for variables caught in "catch" blocks
+  }
+}
+```
+
+### VS Code Extension and Debugger
+You're using the Deno extension. This extension provides integration with the built-in VS Code debugger. You can generate a configuration by: going to Run and Debug panel, clicking create a launch.json file and selecting Deno option from the available debugger options.
