@@ -1351,6 +1351,14 @@ def login(
 
             _check_org_info(info["org_info"], org_name)
 
+            if not _state.api_url:
+                if org_name:
+                    raise ValueError(
+                        f"Unable to log into organization '{org_name}'. Are you sure this credential is scoped to the organization?"
+                    )
+                else:
+                    raise ValueError("Unable to log into any organization with the provided credential.")
+
             conn = _state.api_conn()
             conn.set_token(api_key)
 
@@ -1728,6 +1736,7 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any])
         "dataset_record_id",
         "origin",
         "inputs",
+        "span_attributes",
         ASYNC_SCORING_CONTROL_FIELD,
         MERGE_PATHS_FIELD,
         SKIP_ASYNC_SCORING_FIELD,
@@ -1776,6 +1785,14 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any])
     tags = event.get("tags")
     if tags:
         validate_tags(tags)
+
+    span_attributes = event.get("span_attributes")
+    if span_attributes:
+        if not isinstance(span_attributes, dict):
+            raise ValueError("span_attributes must be a dictionary")
+        for key in span_attributes.keys():
+            if not isinstance(key, str):
+                raise ValueError("span_attributes keys must be strings")
 
     input = event.get("input")
     inputs = event.get("inputs")
@@ -1835,13 +1852,16 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
             return v
         elif isinstance(v, ReadonlyAttachment):
             return v.reference
+        elif isinstance(v, (int, float, str, bool)) or v is None:
+            # Skip roundtrip for primitive types.
+            return v
         else:
-            # No need to handle primitives explicitly because deepcopy will do
-            # it for us.
-            try:
-                return copy.deepcopy(v)
-            except:
-                json.loads(bt_dumps(v))
+            # Note: we avoid using copy.deepcopy, because it's difficult to
+            # guarantee the independence of such copied types from their origin.
+            # E.g. the original type could have a `__del__` method that alters
+            # some shared internal state, and we need this deep copy to be
+            # fully-independent from the original.
+            return json.loads(bt_dumps(v))
 
     return _deep_copy_object(event)
 

@@ -43,6 +43,7 @@ jobs:
         run: |
           python -m pip install -e ./core/py[all]
           python -m pip install -e ./py[all]
+          python -m pip install -e ./integrations/langchain-py[all]
       - name: Test whether the Python SDK can be imported
         run: |
           python -c 'import braintrust'
@@ -57,3 +58,4 @@ jobs:
         run: |
           python -m unittest discover ./core/py/src
           python -m unittest discover ./py/src
+          pytest ./integrations/langchain-py/src

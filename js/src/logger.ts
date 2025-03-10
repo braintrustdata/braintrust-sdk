@@ -2668,7 +2668,7 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
   const {
     projectName,
     projectId,
-    asyncFlush,
+    asyncFlush: asyncFlushArg,
     appUrl,
     apiKey,
     orgName,
@@ -2676,6 +2676,9 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
     fetch,
     state: stateArg,
   } = options || {};
+
+  const asyncFlush =
+    asyncFlushArg === undefined ? (true as IsAsyncFlush) : asyncFlushArg;
 
   const computeMetadataArgs = {
     project_name: projectName,
@@ -2936,6 +2939,17 @@ export async function loginToState(options: LoginOptions = {}) {
     const info = await resp.json();
 
     _check_org_info(state, info.org_info, orgName);
+    if (!state.apiUrl) {
+      if (orgName) {
+        throw new Error(
+          `Unable to log into organization '${orgName}'. Are you sure this credential is scoped to the organization?`,
+        );
+      } else {
+        throw new Error(
+          "Unable to log into any organization with the provided credential.",
+        );
+      }
+    }
 
     conn = state.apiConn();
     conn.set_token(apiKey);
@@ -3111,7 +3125,7 @@ export function traced<IsAsyncFlush extends boolean = true, R = void>(
 
   type Ret = PromiseUnless<IsAsyncFlush, R>;
 
-  if (args?.asyncFlush) {
+  if (args?.asyncFlush === undefined || args?.asyncFlush) {
     return ret as Ret;
   } else {
     return (async () => {
@@ -3226,7 +3240,7 @@ export const traceable = wrapTraced;
  *
  * See {@link traced} for full details.
  */
-export function startSpan<IsAsyncFlush extends boolean = false>(
+export function startSpan<IsAsyncFlush extends boolean = true>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
 ): Span {
   return startSpanAndIsLogger(args).span;
@@ -3250,7 +3264,7 @@ export function setFetch(fetch: typeof globalThis.fetch): void {
   _globalState.setFetch(fetch);
 }
 
-function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
+function startSpanAndIsLogger<IsAsyncFlush extends boolean = true>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
 ): { span: Span; isSyncFlushLogger: boolean } {
   const state = args?.state ?? _globalState;
@@ -3291,7 +3305,7 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
         components.data.object_type === SpanObjectTypeV3.PROJECT_LOGS &&
         // Since there's no parent logger here, we're free to choose the async flush
         // behavior, and therefore propagate along whatever we get from the arguments
-        !args?.asyncFlush,
+        args?.asyncFlush === false,
     };
   } else {
     const parentObject = getSpanParentObject<IsAsyncFlush>({
@@ -3301,7 +3315,7 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
     return {
       span,
       isSyncFlushLogger:
-        parentObject.kind === "logger" && !parentObject.asyncFlush,
+        parentObject.kind === "logger" && parentObject.asyncFlush === false,
     };
   }
 }
