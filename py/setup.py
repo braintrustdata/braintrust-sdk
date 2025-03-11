@@ -38,6 +38,7 @@ extras_require = {
         "twine",
     ],
     "doc": ["pydoc-markdown"],
+    "openai-agents": ["openai-agents"],
 }
 
 extras_require["all"] = sorted({package for packages in extras_require.values() for package in packages})
