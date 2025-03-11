@@ -29,63 +29,6 @@ def log_headers(response: Any, span: Span):
         )
 
 
-def postprocess_streaming_results(all_results: List[Dict[str, Any]]) -> Dict[str, Any]:
-    role = None
-    content = None
-    tool_calls = None
-    finish_reason = None
-    metrics = {}
-    for result in all_results:
-        if "usage" in result and result["usage"] is not None:
-            metrics = {
-                "tokens": result["usage"]["total_tokens"],
-                "prompt_tokens": result["usage"]["prompt_tokens"],
-                "completion_tokens": result["usage"]["completion_tokens"],
-            }
-        choices = result["choices"]
-        if not choices:
-            continue
-        delta = choices[0]["delta"]
-        if not delta:
-            continue
-
-        if role is None and delta.get("role") is not None:
-            role = delta.get("role")
-
-        if delta.get("finish_reason") is not None:
-            finish_reason = delta.get("finish_reason")
-
-        if delta.get("content") is not None:
-            content = (content or "") + delta.get("content")
-        if delta.get("tool_calls") is not None:
-            if tool_calls is None:
-                tool_calls = [
-                    {
-                        "id": delta["tool_calls"][0]["id"],
-                        "type": delta["tool_calls"][0]["type"],
-                        "function": delta["tool_calls"][0]["function"],
-                    }
-                ]
-            else:
-                tool_calls[0]["function"]["arguments"] += delta["tool_calls"][0]["function"]["arguments"]
-
-    return {
-        "metrics": metrics,
-        "output": [
-            {
-                "index": 0,
-                "message": {
-                    "role": role,
-                    "content": content,
-                    "tool_calls": tool_calls,
-                },
-                "logprobs": None,
-                "finish_reason": finish_reason,
-            }
-        ],
-    }
-
-
 class ChatCompletionWrapper:
     def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]]):
         self.create_fn = create_fn
@@ -125,7 +68,7 @@ class ChatCompletionWrapper:
                             all_results.append(item if isinstance(item, dict) else item.dict())
                             yield item
 
-                        span.log(**postprocess_streaming_results(all_results))
+                        span.log(**self._postprocess_streaming_results(all_results))
                     finally:
                         span.end()
 
@@ -183,7 +126,7 @@ class ChatCompletionWrapper:
                             all_results.append(item if isinstance(item, dict) else item.dict())
                             yield item
 
-                        span.log(**postprocess_streaming_results(all_results))
+                        span.log(**self._postprocess_streaming_results(all_results))
                     finally:
                         span.end()
 
@@ -220,6 +163,253 @@ class ChatCompletionWrapper:
                 "metadata": params,
             },
         )
+
+    @classmethod
+    def _postprocess_streaming_results(cls, all_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        role = None
+        content = None
+        tool_calls = None
+        finish_reason = None
+        metrics = {}
+        for result in all_results:
+            if "usage" in result and result["usage"] is not None:
+                metrics = {
+                    "tokens": result["usage"]["total_tokens"],
+                    "prompt_tokens": result["usage"]["prompt_tokens"],
+                    "completion_tokens": result["usage"]["completion_tokens"],
+                }
+            choices = result["choices"]
+            if not choices:
+                continue
+            delta = choices[0]["delta"]
+            if not delta:
+                continue
+
+            if role is None and delta.get("role") is not None:
+                role = delta.get("role")
+
+            if delta.get("finish_reason") is not None:
+                finish_reason = delta.get("finish_reason")
+
+            if delta.get("content") is not None:
+                content = (content or "") + delta.get("content")
+            if delta.get("tool_calls") is not None:
+                if tool_calls is None:
+                    tool_calls = [
+                        {
+                            "id": delta["tool_calls"][0]["id"],
+                            "type": delta["tool_calls"][0]["type"],
+                            "function": delta["tool_calls"][0]["function"],
+                        }
+                    ]
+                else:
+                    tool_calls[0]["function"]["arguments"] += delta["tool_calls"][0]["function"]["arguments"]
+
+        return {
+            "metrics": metrics,
+            "output": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": role,
+                        "content": content,
+                        "tool_calls": tool_calls,
+                    },
+                    "logprobs": None,
+                    "finish_reason": finish_reason,
+                }
+            ],
+        }
+
+
+class ResponseWrapper:
+    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]]):
+        self.create_fn = create_fn
+        self.acreate_fn = acreate_fn
+
+    def create(self, *args: Any, **kwargs: Any) -> Any:
+        params = self._parse_params(kwargs)
+        stream = kwargs.get("stream", False)
+
+        span = start_span(
+            **merge_dicts(dict(name="Response", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+        )
+        should_end = True
+
+        try:
+            start = time.time()
+            create_response = self.create_fn(*args, **kwargs)
+            if hasattr(create_response, "parse"):
+                raw_response = create_response.parse()
+                log_headers(create_response, span)
+            else:
+                raw_response = create_response
+            if stream:
+
+                def gen():
+                    try:
+                        first = True
+                        all_results = []
+                        for item in raw_response:
+                            if first:
+                                span.log(
+                                    metrics={
+                                        "time_to_first_token": time.time() - start,
+                                    }
+                                )
+                                first = False
+                            all_results.append(item)
+                            yield item
+
+                        span.log(**self._postprocess_streaming_results(all_results))
+                    finally:
+                        span.end()
+
+                should_end = False
+                return gen()
+            else:
+                log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+                span.log(
+                    metrics={
+                        "time_to_first_token": time.time() - start,
+                        "tokens": log_response["usage"]["total_tokens"],
+                        "prompt_tokens": log_response["usage"]["input_tokens"],
+                        "completion_tokens": log_response["usage"]["output_tokens"],
+                    },
+                    output=log_response["output"],
+                )
+                return raw_response
+        finally:
+            if should_end:
+                span.end()
+
+    async def acreate(self, *args: Any, **kwargs: Any) -> Any:
+        params = self._parse_params(kwargs)
+        stream = kwargs.get("stream", False)
+
+        span = start_span(
+            **merge_dicts(dict(name="Response", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+        )
+        should_end = True
+
+        try:
+            start = time.time()
+            create_response = await self.acreate_fn(*args, **kwargs)
+            if hasattr(create_response, "parse"):
+                raw_response = create_response.parse()
+                log_headers(create_response, span)
+            else:
+                raw_response = create_response
+            if stream:
+
+                async def gen():
+                    try:
+                        first = True
+                        all_results = []
+                        async for item in raw_response:
+                            if first:
+                                span.log(
+                                    metrics={
+                                        "time_to_first_token": time.time() - start,
+                                    }
+                                )
+                                first = False
+                            all_results.append(item)
+                            yield item
+
+                        span.log(**self._postprocess_streaming_results(all_results))
+                    finally:
+                        span.end()
+
+                should_end = False
+                return gen()
+            else:
+                log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+                span.log(
+                    metrics={
+                        "time_to_first_token": time.time() - start,
+                        "tokens": log_response["usage"]["total_tokens"],
+                        "prompt_tokens": log_response["usage"]["input_tokens"],
+                        "completion_tokens": log_response["usage"]["output_tokens"],
+                    },
+                    output=log_response["output"],
+                )
+                return raw_response
+        finally:
+            if should_end:
+                span.end()
+
+    @classmethod
+    def _parse_params(cls, params: Dict[str, Any]) -> Dict[str, Any]:
+        # First, destructively remove span_info
+        ret = params.pop("span_info", {})
+
+        # Then, copy the rest of the params
+        params = {**params}
+        input = params.pop("input", None)
+        return merge_dicts(
+            ret,
+            {
+                "input": input,
+                "metadata": params,
+            },
+        )
+
+    @classmethod
+    def _postprocess_streaming_results(cls, all_results: List[Any]) -> Dict[str, Any]:
+        role = None
+        content = None
+        tool_calls = None
+        finish_reason = None
+        metrics = {}
+        output = []
+        for result in all_results:
+            if hasattr(result, "usage"):
+                metrics = {
+                    "tokens": result.usage.total_tokens,
+                    "prompt_tokens": result.usage.input_tokens,
+                    "completion_tokens": result.usage.output_tokens,
+                }
+
+            if result.type == "response.output_item.added":
+                output.append({"id": result.item.id, "type": result.item.type})
+                continue
+
+            if not hasattr(result, "output_index"):
+                continue
+
+            output_index = result.output_index
+            current_output = output[output_index]
+            if result.type == "response.output_item.done":
+                current_output["status"] = result.item.status
+                continue
+
+            if result.type == "response.output_item.delta":
+                current_output["delta"] = result.delta
+                continue
+
+            if hasattr(result, "content_index"):
+                if "content" not in current_output:
+                    current_output["content"] = []
+                content_index = result.content_index
+                if content_index == len(current_output["content"]):
+                    current_output["content"].append({})
+                current_content = current_output["content"][content_index]
+                if hasattr(result, "delta") and result.delta:
+                    current_content["text"] = (current_content.get("text") or "") + result.delta
+
+                if result.type == "response.output_text.annotation.added":
+                    annotation_index = result.annotation_index
+                    if "annotations" not in current_content:
+                        current_content["annotations"] = []
+                    if annotation_index == len(current_content["annotations"]):
+                        current_content["annotations"].append({})
+                    current_content["annotations"][annotation_index] = result.annotation.dict()
+
+        return {
+            "metrics": metrics,
+            "output": output,
+        }
 
 
 class BaseWrapper(abc.ABC):
@@ -421,6 +611,24 @@ class ChatV1Wrapper(NamedWrapper):
             self.completions = CompletionsV1Wrapper(chat.completions)
 
 
+class ResponsesV1Wrapper(NamedWrapper):
+    def __init__(self, responses: Any):
+        self.__responses = responses
+        super().__init__(responses)
+
+    def create(self, *args: Any, **kwargs: Any) -> Any:
+        return ResponseWrapper(self.__responses.with_raw_response.create, None).create(*args, **kwargs)
+
+
+class AsyncResponsesV1Wrapper(NamedWrapper):
+    def __init__(self, responses: Any):
+        self.__responses = responses
+        super().__init__(responses)
+
+    async def create(self, *args: Any, **kwargs: Any) -> Any:
+        return await ResponseWrapper(None, self.__responses.with_raw_response.create).acreate(*args, **kwargs)
+
+
 class BetaCompletionsV1Wrapper(NamedWrapper):
     def __init__(self, completions: Any):
         self.__completions = completions
@@ -454,7 +662,8 @@ class BetaChatV1Wrapper(NamedWrapper):
 class BetaV1Wrapper(NamedWrapper):
     def __init__(self, beta: Any):
         super().__init__(beta)
-        self.chat = BetaChatV1Wrapper(beta.chat)
+        if hasattr(beta, "chat"):
+            self.chat = BetaChatV1Wrapper(beta.chat)
 
 
 # This wraps 1.*.* versions of the openai module, eg https://github.com/openai/openai-python/tree/v1.1.0
@@ -467,6 +676,11 @@ class OpenAIV1Wrapper(NamedWrapper):
 
         if hasattr(openai, "beta"):
             self.beta = BetaV1Wrapper(openai.beta)
+
+        if type(openai.responses) == oai.resources.responses.responses.AsyncResponses:
+            self.responses = AsyncResponsesV1Wrapper(openai.responses)
+        else:
+            self.responses = ResponsesV1Wrapper(openai.responses)
 
         if type(openai.embeddings) == oai.resources.embeddings.AsyncEmbeddings:
             self.embeddings = AsyncEmbeddingV1Wrapper(openai.embeddings)
