@@ -219,7 +219,7 @@ function makeFunctionDefinition({
   const promptContents =
     prompt.type === "completion"
       ? `prompt: ${doubleQuote(prompt.content)}`
-      : `messages: ${util.inspect(prompt.messages, { depth: null }).trimStart()}`;
+      : `messages: ${util.inspect(prompt.messages, { depth: null, maxStringLength: Infinity }).trimStart()}`;
 
   const rawToolsParsed =
     prompt.type === "chat" && prompt.tools && prompt.tools.length > 0
@@ -296,7 +296,7 @@ async function getPrettierModule() {
   if (!prettierModule) {
     try {
       prettierModule = await import("prettier");
-    } catch (e) {
+    } catch {
       console.warn(
         warning(
           "Failed to load prettier module. Will not use prettier to format output.",
