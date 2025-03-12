@@ -750,16 +750,20 @@ class _BackgroundLogger:
             _BackgroundLogger._write_payload_to_dir(payload_dir=self.all_publish_payloads_dir, payload=dataStr)
         for i in range(self.num_tries):
             start_time = time.time()
-            resp = conn.post("/logs3", data=dataStr)
-            if not resp.ok:
-                legacyDataS = construct_json_array([json.dumps(make_legacy_event(json.loads(r))) for r in items])
-                resp = conn.post("/logs", data=legacyDataS)
-            if resp.ok:
-                return
+            try:
+                resp = conn.post("/logs3", data=dataStr)
+                if not resp.ok:
+                    legacyDataS = construct_json_array([json.dumps(make_legacy_event(json.loads(r))) for r in items])
+                    resp = conn.post("/logs", data=legacyDataS)
+                if resp.ok:
+                    return
+                resp_errmsg = f"{resp.status_code}: {resp.text}"
+            except Exception as e:
+                resp_errmsg = f"{e}"
 
             is_retrying = i + 1 < self.num_tries
             retrying_text = "" if is_retrying else " Retrying"
-            errmsg = f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataStr)}.{retrying_text}\nError: {resp.status_code}: {resp.text}"
+            errmsg = f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataStr)}.{retrying_text}\nError: {resp_errmsg}"
 
             if not is_retrying and self.failed_publish_payloads_dir:
                 _BackgroundLogger._write_payload_to_dir(payload_dir=self.failed_publish_payloads_dir, payload=dataStr)
