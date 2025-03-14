@@ -1,8 +1,9 @@
 import { z } from "zod";
 
 export const BRAINTRUST_ATTACHMENT = "braintrust_attachment";
+export const EXTERNAL_ATTACHMENT = "external_attachment";
 
-export const attachmentReferenceSchema = z
+export const braintrustAttachmentReferenceSchema = z
   .object({
     type: z
       .literal(BRAINTRUST_ATTACHMENT)
@@ -19,7 +20,45 @@ export const attachmentReferenceSchema = z
       .min(1)
       .describe("Key in the object store bucket for this attachment."),
   })
-  .openapi("AttachmentReference");
+  .openapi("BraintrustAttachmentReference");
+
+export const externalAttachmentReferenceSchema = z
+  .object({
+    type: z
+      .literal(EXTERNAL_ATTACHMENT)
+      .describe("An identifier to help disambiguate parsing."),
+    filename: z
+      .string()
+      .min(1)
+      .describe(
+        "Human-readable filename for user interfaces. Not related to attachment storage.",
+      ),
+    content_type: z.string().min(1).describe("MIME type of this file."),
+    url: z
+      .string()
+      .min(1)
+      .describe(
+        "Fully qualified URL to the object in the external object store.",
+      ),
+  })
+  .openapi("ExternalAttachmentReference");
+
+export const attachmentReferenceSchema = z.discriminatedUnion("type", [
+  braintrustAttachmentReferenceSchema,
+  externalAttachmentReferenceSchema,
+]);
+
+/**
+ * Represents an attachment in the Braintrust object store.
+ *
+ * @property type An identifier to help disambiguate parsing.
+ * @property filename Human-readable filename for user interfaces. Not related to attachment storage.
+ * @property content_type MIME type of this file.
+ * @property key Key in the object store bucket for this attachment.
+ */
+export type BraintrustAttachmentReference = z.infer<
+  typeof braintrustAttachmentReferenceSchema
+>;
 
 /**
  * Represents an attachment in an external object store.
@@ -27,8 +66,12 @@ export const attachmentReferenceSchema = z
  * @property type An identifier to help disambiguate parsing.
  * @property filename Human-readable filename for user interfaces. Not related to attachment storage.
  * @property content_type MIME type of this file.
- * @property key Key in the object store bucket for this attachment.
+ * @property url Fully qualified URL to the object in the external object store.
  */
+export type ExternalAttachmentReference = z.infer<
+  typeof externalAttachmentReferenceSchema
+>;
+
 export type AttachmentReference = z.infer<typeof attachmentReferenceSchema>;
 
 export const uploadStatusSchema = z
