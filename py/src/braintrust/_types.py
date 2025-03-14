@@ -332,7 +332,7 @@ class PromptOptions(TypedDict):
     position: NotRequired[Optional[str]]
 
 
-class AttachmentReference(TypedDict):
+class BraintrustAttachmentReference(TypedDict):
     type: Literal["braintrust_attachment"]
     """
     An identifier to help disambiguate parsing.
@@ -349,6 +349,28 @@ class AttachmentReference(TypedDict):
     """
     Key in the object store bucket for this attachment.
     """
+
+
+class ExternalAttachmentReference(TypedDict):
+    type: Literal["external_attachment"]
+    """
+    An identifier to help disambiguate parsing.
+    """
+    filename: str
+    """
+    Human-readable filename for user interfaces. Not related to attachment storage.
+    """
+    content_type: str
+    """
+    MIME type of this file.
+    """
+    url: str
+    """
+    Fully qualified URL to the object in the external object store.
+    """
+
+
+AttachmentReference = Union[BraintrustAttachmentReference, ExternalAttachmentReference]
 
 
 UploadStatus = Literal["uploading", "done", "error"]

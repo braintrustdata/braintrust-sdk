@@ -2,7 +2,6 @@ import atexit
 import concurrent.futures
 import contextlib
 import contextvars
-import copy
 import dataclasses
 import datetime
 import inspect
@@ -711,13 +710,13 @@ class _BackgroundLogger:
 
     def _unwrap_lazy_values(
         self, wrapped_items: Sequence[LazyValue[Dict[str, Any]]]
-    ) -> Tuple[List[List[Dict[str, Any]]], List["Attachment"]]:
+    ) -> Tuple[List[List[Dict[str, Any]]], List["_Attachment"]]:
         for i in range(self.num_tries):
             try:
                 unwrapped_items = [item.get() for item in wrapped_items]
                 batched_items = merge_row_batch(unwrapped_items)
 
-                attachments: List["Attachment"] = []
+                attachments: List["_Attachment"] = []
                 for batch in batched_items:
                     for item in batch:
                         _extract_attachments(item, attachments)
@@ -1658,11 +1657,11 @@ def validate_tags(tags: Sequence[str]) -> None:
         seen.add(tag)
 
 
-def _extract_attachments(event: Dict[str, Any], attachments: List["Attachment"]) -> None:
+def _extract_attachments(event: Dict[str, Any], attachments: List["_Attachment"]) -> None:
     """
     Helper function for uploading attachments. Recursively extracts `Attachment`
-    values and replaces them with their associated `AttachmentReference`
-    objects.
+    and `ExternalAttachment` values and replaces them with their associated
+    `_AttachmentReference` objects.
 
     :param event: The event to filter. Will be modified in-place.
     :param attachments: Flat array of extracted attachments (output parameter).
@@ -1670,7 +1669,7 @@ def _extract_attachments(event: Dict[str, Any], attachments: List["Attachment"])
 
     def _helper(v: Any) -> Any:
         # Base case: Attachment.
-        if isinstance(v, Attachment):
+        if isinstance(v, Attachment) or isinstance(v, ExternalAttachment):
             attachments.append(v)
             return v.reference  # Attachment cannot be nested.
 
@@ -1695,7 +1694,7 @@ def _extract_attachments(event: Dict[str, Any], attachments: List["Attachment"])
 
 def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
     """
-    Recursively hydrates any `AttachmentReference` into `Attachment` by modifying the input in-place.
+    Recursively hydrates any `AttachmentReference` into `Attachment` and `ExternalAttachment` by modifying the input in-place.
 
     :returns: The same event instance as the input.
     """
@@ -1704,6 +1703,8 @@ def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
         if isinstance(v, Dict):
             # Base case: AttachmentReference.
             if v.get("type") == "braintrust_attachment":
+                return ReadonlyAttachment(cast(AttachmentReference, v))
+            elif v.get("type") == "external_attachment":
                 return ReadonlyAttachment(cast(AttachmentReference, v))
             else:
                 # Recursive case: object.
@@ -1833,7 +1834,7 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
     """
     Creates a deep copy of the given event. Replaces references to user objects
     with placeholder strings to ensure serializability, except for `Attachment`
-    objects, which are preserved and not deep-copied.
+    and `ExternalAttachment` objects, which are preserved and not deep-copied.
     """
 
     def _deep_copy_object(v: Any) -> Any:
@@ -1854,7 +1855,7 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
             return "<dataset>"
         elif isinstance(v, Logger):
             return "<logger>"
-        elif isinstance(v, Attachment):
+        elif isinstance(v, Attachment) or isinstance(v, ExternalAttachment):
             return v
         elif isinstance(v, ReadonlyAttachment):
             return v.reference
@@ -2013,7 +2014,27 @@ class ObjectFetcher(ABC, Generic[TMapping]):
             return max([str(record.get(TRANSACTION_ID_FIELD, "0")) for record in self._refetch()] or ["0"])
 
 
-class Attachment:
+class _Attachment(ABC):
+    @property
+    @abstractmethod
+    def reference(self) -> AttachmentReference:
+        ...
+
+    @property
+    @abstractmethod
+    def data(self) -> bytes:
+        ...
+
+    @abstractmethod
+    def upload(self) -> AttachmentStatus:
+        ...
+
+    @abstractmethod
+    def debug_info(self) -> Mapping[str, Any]:
+        ...
+
+
+class Attachment(_Attachment):
     """
     Represents an attachment to be uploaded and the associated metadata.
 
@@ -2078,6 +2099,8 @@ class Attachment:
 
     def _init_uploader(self) -> LazyValue[AttachmentStatus]:
         def do_upload(api_conn: HTTPConnection, org_id: str) -> Mapping[str, Any]:
+            assert self._reference["type"] == "braintrust_attachment"
+
             request_params = {
                 "key": self._reference["key"],
                 "filename": self._reference["filename"],
@@ -2160,6 +2183,72 @@ class Attachment:
             return LazyValue(lambda: bytes(data), use_mutex=False)
 
 
+class ExternalAttachment(_Attachment):
+    """
+    Represents an attachment that resides in an external object store.
+
+    `ExternalAttachment` objects can be inserted anywhere in an event, similar to
+    `Attachment` objects, but they reference files that already exist in an external
+    object store rather than requiring upload. The SDK will replace the `ExternalAttachment`
+    object with an `AttachmentReference` during logging.
+    """
+
+    def __init__(
+        self,
+        *,
+        url: str,
+        filename: str,
+        content_type: str,
+    ):
+        """
+        Construct an external attachment reference.
+
+        :param url: A fully qualified URL to the object in the external object store.
+
+        :param filename: The desired name of the file in Braintrust. This parameter is for visualization
+        purposes only and has no effect on attachment storage.
+
+        :param content_type: The MIME type of the file.
+        """
+        self._reference: AttachmentReference = {
+            "type": "external_attachment",
+            "filename": filename,
+            "content_type": content_type,
+            "url": url,
+        }
+        self._url = url
+
+    @property
+    def reference(self) -> AttachmentReference:
+        """The object that replaces this `Attachment` at upload time."""
+        return self._reference
+
+    @property
+    def data(self) -> bytes:
+        """
+        Accessing the data is not supported for ExternalAttachment since the data
+        resides in an external object store.
+        """
+        raise NotImplementedError("ExternalAttachment does not support accessing the data directly. ")
+
+    def upload(self) -> AttachmentStatus:
+        """
+        For ExternalAttachment, this is a no-op since the data already resides
+        in the external object store. It marks the attachment as already uploaded.
+
+        :returns: The attachment status, which will always indicate success.
+        """
+        return AttachmentStatus(upload_status="done")
+
+    def debug_info(self) -> Mapping[str, Any]:
+        """
+        A human-readable description for logging and debugging.
+
+        :returns: The debug object. The return type is not stable and may change in a future release.
+        """
+        return {"url": self._url, "reference": self._reference}
+
+
 class AttachmentMetadata(TypedDict):
     downloadUrl: str
     status: AttachmentStatus
@@ -2187,11 +2276,16 @@ class ReadonlyAttachment:
         org_id = _state.org_id or ""
 
         params = {
-            "key": self.reference["key"],
             "filename": self.reference["filename"],
             "content_type": self.reference["content_type"],
             "org_id": org_id,
         }
+        if self.reference["type"] == "braintrust_attachment":
+            params["key"] = self.reference["key"]
+        elif self.reference["type"] == "external_attachment":
+            params["url"] = self.reference["url"]
+        else:
+            raise RuntimeError(f"Unknown attachment type: {self.reference['type']}")
 
         response = api_conn.get("/attachment", params=params)
         response.raise_for_status()
