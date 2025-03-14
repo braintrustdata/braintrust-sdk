@@ -551,6 +551,7 @@ const insertExperimentEventBaseSchema = objectNullish(
       span_attributes: true,
       id: true,
       created: true,
+      origin: true,
     })
     .extend({
       [OBJECT_DELETE_FIELD]:
@@ -571,6 +572,7 @@ const insertDatasetEventBaseSchema = objectNullish(
       tags: true,
       id: true,
       created: true,
+      origin: true,
     })
     .extend({
       [OBJECT_DELETE_FIELD]: datasetEventBaseSchema.shape[OBJECT_DELETE_FIELD],
@@ -596,6 +598,7 @@ const insertProjectLogsEventBaseSchema = objectNullish(
       span_attributes: true,
       id: true,
       created: true,
+      origin: true,
     })
     .extend({
       [OBJECT_DELETE_FIELD]:
