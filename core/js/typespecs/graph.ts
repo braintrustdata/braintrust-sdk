@@ -21,16 +21,6 @@ export const nodeDataSchema = z.union([
   }),
 ]);
 
-export const ifNodeParametersSchema = z.object({
-  condition: z.string().describe("A BTQL expression to evaluate"),
-  then: z
-    .string()
-    .describe("The id of the node to execute if the condition is true"),
-  else: z
-    .string()
-    .describe("The id of the node to execute if the condition is false"),
-});
-
 export const graphNodeSchema = z.object({
   id: z.string().uuid().describe("The id of the node"),
   data: nodeDataSchema,
