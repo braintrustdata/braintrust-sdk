@@ -323,7 +323,7 @@ export const functionObjectTypeEnum = z
   .openapi("FunctionObjectType");
 export type FunctionObjectType = z.infer<typeof functionObjectTypeEnum>;
 export const functionFormatEnum = z
-  .enum(["llm", "code", "global"])
+  .enum(["llm", "code", "global", "graph"])
   .openapi("FunctionFormat");
 export type FunctionFormat = z.infer<typeof functionFormatEnum>;
 export const functionOutputTypeEnum = z
