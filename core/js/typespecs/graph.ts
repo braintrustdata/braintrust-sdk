@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { functionIdSchema } from "./functions";
 
+export const nodeIdSchema = z
+  .string()
+  .max(16384)
+  .describe("The id of the node");
+
 export const nodeDataSchema = z.union([
   z.object({
     type: z.literal("function"),
@@ -22,17 +27,18 @@ export const nodeDataSchema = z.union([
 ]);
 
 export const graphNodeSchema = z.object({
-  id: z.string().uuid().describe("The id of the node"),
-  data: nodeDataSchema,
+  id: nodeIdSchema,
   description: z.string().nullish().describe("The description of the node"),
+  data: nodeDataSchema,
 });
 
 export const graphDataSchema = z.object({
+  type: z.literal("graph"),
   nodes: z.array(graphNodeSchema),
   edges: z.array(
     z.object({
-      source: z.string().uuid().describe("The id of the source node"),
-      target: z.string().uuid().describe("The id of the target node"),
+      source: nodeIdSchema,
+      target: nodeIdSchema,
       variable: z.string().describe("The variable name for the edge"),
     }),
   ),
