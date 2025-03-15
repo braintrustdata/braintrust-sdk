@@ -10,6 +10,7 @@ import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
 import { functionTypeEnum, runtimeContextSchema } from "./functions";
 import { savedFunctionIdSchema } from "./function_id";
 import { repoInfoSchema } from "./git_types";
+import { graphDataSchema } from "./graph";
 extendZodWithOpenApi(z);
 
 // Section: App DB table schemas
@@ -369,6 +370,12 @@ export const functionDataSchema = z
         ]),
       })
       .openapi({ title: "code" }),
+    z
+      .object({
+        type: z.literal("graph"),
+        graph: graphDataSchema,
+      })
+      .openapi({ title: "graph" }),
     z
       .object({
         type: z.literal("global"),
