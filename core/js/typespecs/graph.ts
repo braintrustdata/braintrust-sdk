@@ -24,7 +24,7 @@ export const nodeDataSchema = z.union([
 export const graphNodeSchema = z.object({
   id: z.string().uuid().describe("The id of the node"),
   data: nodeDataSchema,
-  description: z.string().describe("The description of the node"),
+  description: z.string().nullish().describe("The description of the node"),
 });
 
 export const graphDataSchema = z.object({
