@@ -22,6 +22,10 @@ export const nodeDataSchema = z.union([
     value: z.unknown().describe("A literal value to be returned"),
   }),
   z.object({
+    type: z.literal("btql"),
+    expr: z.string().describe("A BTQL expression to be evaluated"),
+  }),
+  z.object({
     type: z.literal("if"),
   }),
 ]);
