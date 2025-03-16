@@ -401,6 +401,7 @@ export const promptSessionEventSchema = z
       "Data about the prompt session",
     ),
     prompt_data: customTypes.unknown.describe("Data about the prompt"),
+    function_data: customTypes.unknown.describe("Data about the function"),
     object_data: customTypes.unknown.describe("Data about the mapped data"),
     completion: customTypes.unknown.describe("Data about the completion"),
     tags: promptSessionEventBaseSchema.shape.tags,
