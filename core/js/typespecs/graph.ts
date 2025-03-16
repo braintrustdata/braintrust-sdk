@@ -12,6 +12,13 @@ const edgeIdSchema = graphElemIdSchema.describe(
 
 const baseNodeDataSchema = z.object({
   description: z.string().nullish().describe("The description of the node"),
+  position: z
+    .object({
+      x: z.number().describe("The x position of the node"),
+      y: z.number().describe("The y position of the node"),
+    })
+    .nullish()
+    .describe("The position of the node"),
 });
 
 export const graphNodeSchema = z.union([
