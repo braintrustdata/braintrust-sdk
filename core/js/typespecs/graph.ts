@@ -25,6 +25,7 @@ export const nodeDataSchema = z.union([
     type: z.literal("if"),
   }),
 ]);
+export type NodeData = z.infer<typeof nodeDataSchema>;
 
 export const graphNodeSchema = z.object({
   id: nodeIdSchema,

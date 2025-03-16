@@ -190,6 +190,50 @@ export class BraintrustStream {
       }
     }
   }
+
+  static serializeRawEvent(event: BraintrustStreamChunk): CallEventSchema {
+    switch (event.type) {
+      case "text_delta":
+        return {
+          event: "text_delta",
+          data: JSON.stringify(event.data),
+        };
+      case "json_delta":
+        return {
+          event: "json_delta",
+          data: event.data,
+        };
+      case "error":
+        return {
+          event: "error",
+          data: JSON.stringify(event.data),
+        };
+      case "progress":
+        return {
+          event: "progress",
+          data: JSON.stringify(event.data),
+        };
+      case "console":
+        return {
+          event: "console",
+          data: JSON.stringify(event.data),
+        };
+      case "start":
+        return {
+          event: "start",
+          data: "",
+        };
+      case "done":
+        return {
+          event: "done",
+          data: "",
+        };
+      default: {
+        const _event: never = event;
+        throw new Error(`Unknown event type ${JSON.stringify(_event)}`);
+      }
+    }
+  }
 }
 
 function btStreamParser() {
