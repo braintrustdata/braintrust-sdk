@@ -1,52 +1,57 @@
 import { z } from "zod";
 import { functionIdSchema } from "./functions";
 
-export const nodeIdSchema = z
-  .string()
-  .max(16384)
-  .describe("The id of the node");
+const graphElemIdSchema = z.string().max(1024);
 
-export const nodeDataSchema = z.union([
-  z.object({
+const nodeIdSchema = graphElemIdSchema.describe(
+  "The id of the node in the graph",
+);
+const edgeIdSchema = graphElemIdSchema.describe(
+  "The id of the edge in the graph",
+);
+
+const baseNodeDataSchema = z.object({
+  description: z.string().nullish().describe("The description of the node"),
+});
+
+export const graphNodeSchema = z.union([
+  baseNodeDataSchema.extend({
     type: z.literal("function"),
     function: functionIdSchema,
   }),
-  z.object({
+  baseNodeDataSchema.extend({
     type: z.literal("input").describe("The input to the graph"),
   }),
-  z.object({
+  baseNodeDataSchema.extend({
     type: z.literal("output").describe("The output of the graph"),
   }),
-  z.object({
+  baseNodeDataSchema.extend({
     type: z.literal("literal"),
     value: z.unknown().describe("A literal value to be returned"),
   }),
-  z.object({
+  baseNodeDataSchema.extend({
     type: z.literal("btql"),
     expr: z.string().describe("A BTQL expression to be evaluated"),
   }),
-  z.object({
+  baseNodeDataSchema.extend({
     type: z.literal("if"),
   }),
 ]);
-export type NodeData = z.infer<typeof nodeDataSchema>;
+export type GraphNode = z.infer<typeof graphNodeSchema>;
 
-export const graphNodeSchema = z.object({
-  id: nodeIdSchema,
-  description: z.string().nullish().describe("The description of the node"),
-  data: nodeDataSchema,
+export const graphEdgeSchema = z.object({
+  source: nodeIdSchema,
+  target: nodeIdSchema,
+  // TODO: Maybe should be nested under `data`
+  variable: z.string().describe("The variable name for the edge"),
 });
+export type GraphEdge = z.infer<typeof graphEdgeSchema>;
 
 export const graphDataSchema = z.object({
   type: z.literal("graph"),
-  nodes: z.array(graphNodeSchema),
-  edges: z.array(
-    z.object({
-      source: nodeIdSchema,
-      target: nodeIdSchema,
-      variable: z.string().describe("The variable name for the edge"),
-    }),
-  ),
+  // Use record so that updates can be efficient
+  nodes: z.record(nodeIdSchema, graphNodeSchema),
+  edges: z.record(edgeIdSchema, graphEdgeSchema),
 });
 
 export type GraphData = z.infer<typeof graphDataSchema>;
