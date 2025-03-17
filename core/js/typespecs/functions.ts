@@ -319,7 +319,7 @@ export const sseDoneEventSchema = baseSSEEventSchema.omit({ data: true }).merge(
 );
 
 export const functionObjectTypeEnum = z
-  .enum(["prompt", "tool", "scorer", "task"])
+  .enum(["prompt", "tool", "scorer", "task", "graph"])
   .openapi("FunctionObjectType");
 export type FunctionObjectType = z.infer<typeof functionObjectTypeEnum>;
 export const functionFormatEnum = z
