@@ -2229,7 +2229,7 @@ class ExternalAttachment(_Attachment):
         Accessing the data is not supported for ExternalAttachment since the data
         resides in an external object store.
         """
-        raise NotImplementedError("ExternalAttachment does not support accessing the data directly. ")
+        return ReadonlyAttachment(self.reference).data
 
     def upload(self) -> AttachmentStatus:
         """

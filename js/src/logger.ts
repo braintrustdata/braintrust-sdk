@@ -1053,11 +1053,7 @@ export class ExternalAttachment implements _Attachment {
    * resides in an external object store.
    */
   async data() {
-    return Promise.reject(
-      new Error(
-        "ExternalAttachment does not support accessing the data directly.",
-      ),
-    );
+    return new ReadonlyAttachment(this.reference, this.state).data();
   }
 
   /**
