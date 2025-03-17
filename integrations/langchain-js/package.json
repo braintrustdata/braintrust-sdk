@@ -28,9 +28,9 @@
     "@langchain/openai": "^0.3.14",
     "@types/node": "^20.10.5",
     "msw": "^2.6.6",
-    "tsup": "^8.0.1",
+    "tsup": "^8.3.5",
     "typescript": "^5.3.3",
-    "vitest": "^1.6.0",
+    "vitest": "^1.6.1",
     "zod": "^3.22.4",
     "zod-to-json-schema": "^3.22.5"
   },
