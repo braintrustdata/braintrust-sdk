@@ -107,7 +107,7 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
     });
   }
 
-  return new Proxy(openai, {
+  const proxy = new Proxy(openai, {
     get(target, name, receiver) {
       if (name === "chat") {
         return chatProxy;
@@ -124,6 +124,15 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
       return Reflect.get(target, name, receiver);
     },
   });
+
+  Object.defineProperty(proxy, "__is_wrapped", {
+    value: true,
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+
+  return proxy;
 }
 
 type SpanInfo = {
@@ -342,7 +351,7 @@ function parseBaseParams<T extends Record<string, any>>(
 ): StartSpanArgs {
   const { span_info, ...params } = allParams;
   const { metadata: spanInfoMetadata, ...spanInfoRest } = span_info ?? {};
-  let ret: StartSpanArgs = {
+  const ret: StartSpanArgs = {
     ...spanInfoRest,
     event: {
       metadata: spanInfoMetadata,
@@ -565,7 +574,7 @@ class WrapperStream<Item> implements AsyncIterable<Item> {
 
   async *[Symbol.asyncIterator](): AsyncIterator<Item, any, undefined> {
     let first = true;
-    let allResults = [];
+    const allResults = [];
     try {
       for await (const item of this.iter) {
         if (first) {
