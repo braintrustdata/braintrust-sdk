@@ -36,7 +36,7 @@ fixup:
 
 .PHONY: test test-py test-js
 
-test: test-py-core test-js
+test: test-py-core test-py-sdk test-js
 
 test-py-core:
 	source env.sh && python -m unittest discover ./core/py/src
