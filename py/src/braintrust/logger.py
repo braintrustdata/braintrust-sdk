@@ -710,13 +710,13 @@ class _BackgroundLogger:
 
     def _unwrap_lazy_values(
         self, wrapped_items: Sequence[LazyValue[Dict[str, Any]]]
-    ) -> Tuple[List[List[Dict[str, Any]]], List["_Attachment"]]:
+    ) -> Tuple[List[List[Dict[str, Any]]], List["BaseAttachment"]]:
         for i in range(self.num_tries):
             try:
                 unwrapped_items = [item.get() for item in wrapped_items]
                 batched_items = merge_row_batch(unwrapped_items)
 
-                attachments: List["_Attachment"] = []
+                attachments: List["BaseAttachment"] = []
                 for batch in batched_items:
                     for item in batch:
                         _extract_attachments(item, attachments)
@@ -1657,19 +1657,19 @@ def validate_tags(tags: Sequence[str]) -> None:
         seen.add(tag)
 
 
-def _extract_attachments(event: Dict[str, Any], attachments: List["_Attachment"]) -> None:
+def _extract_attachments(event: Dict[str, Any], attachments: List["BaseAttachment"]) -> None:
     """
     Helper function for uploading attachments. Recursively extracts `Attachment`
     and `ExternalAttachment` values and replaces them with their associated
-    `_AttachmentReference` objects.
+    `BaseAttachmentReference` objects.
 
     :param event: The event to filter. Will be modified in-place.
     :param attachments: Flat array of extracted attachments (output parameter).
     """
 
     def _helper(v: Any) -> Any:
-        # Base case: Attachment.
-        if isinstance(v, Attachment) or isinstance(v, ExternalAttachment):
+        # Base case: Attachment or ExternalAttachment.
+        if isinstance(v, BaseAttachment):
             attachments.append(v)
             return v.reference  # Attachment cannot be nested.
 
@@ -1855,7 +1855,7 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
             return "<dataset>"
         elif isinstance(v, Logger):
             return "<logger>"
-        elif isinstance(v, Attachment) or isinstance(v, ExternalAttachment):
+        elif isinstance(v, BaseAttachment):
             return v
         elif isinstance(v, ReadonlyAttachment):
             return v.reference
@@ -2014,7 +2014,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
             return max([str(record.get(TRANSACTION_ID_FIELD, "0")) for record in self._refetch()] or ["0"])
 
 
-class _Attachment(ABC):
+class BaseAttachment(ABC):
     @property
     @abstractmethod
     def reference(self) -> AttachmentReference:
@@ -2034,7 +2034,7 @@ class _Attachment(ABC):
         ...
 
 
-class Attachment(_Attachment):
+class Attachment(BaseAttachment):
     """
     Represents an attachment to be uploaded and the associated metadata.
 
@@ -2183,7 +2183,7 @@ class Attachment(_Attachment):
             return LazyValue(lambda: bytes(data), use_mutex=False)
 
 
-class ExternalAttachment(_Attachment):
+class ExternalAttachment(BaseAttachment):
     """
     Represents an attachment that resides in an external object store.
 

@@ -789,11 +789,11 @@ export interface ExternalAttachmentParams {
   state?: BraintrustState;
 }
 
-interface _Attachment {
-  readonly reference: AttachmentReference;
-  upload: () => Promise<AttachmentStatus>;
-  data: () => Promise<Blob>;
-  debugInfo: () => Record<string, unknown>;
+export abstract class BaseAttachment {
+  readonly reference!: AttachmentReference;
+  abstract upload(): Promise<AttachmentStatus>;
+  abstract data(): Promise<Blob>;
+  abstract debugInfo(): Record<string, unknown>;
 }
 
 /**
@@ -803,7 +803,7 @@ interface _Attachment {
  * object storage and replace the `Attachment` object with an
  * `AttachmentReference`.
  */
-export class Attachment implements _Attachment {
+export class Attachment extends BaseAttachment {
   /**
    * The object that replaces this `Attachment` at upload time.
    */
@@ -833,6 +833,7 @@ export class Attachment implements _Attachment {
    * `state`: (Optional) For internal use.
    */
   constructor({ data, filename, contentType, state }: AttachmentParams) {
+    super();
     this.reference = {
       type: BRAINTRUST_ATTACHMENT,
       filename,
@@ -1007,7 +1008,7 @@ with a Blob/ArrayBuffer, or run the program on Node.js.`,
  * object store rather than requiring upload. The SDK will replace the `ExternalAttachment`
  * object with an `AttachmentReference` during logging.
  */
-export class ExternalAttachment implements _Attachment {
+export class ExternalAttachment extends BaseAttachment {
   /**
    * The object that replaces this `ExternalAttachment` at upload time.
    */
@@ -1031,6 +1032,7 @@ export class ExternalAttachment implements _Attachment {
    * `state`: (Optional) For internal use.
    */
   constructor({ url, filename, contentType, state }: ExternalAttachmentParams) {
+    super();
     this.reference = {
       type: EXTERNAL_ATTACHMENT,
       filename,
@@ -3549,7 +3551,7 @@ function validateAndSanitizeExperimentLogPartialArgs(
  * and not deep-copied.
  */
 function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
-  const attachments: _Attachment[] = [];
+  const attachments: BaseAttachment[] = [];
   const IDENTIFIER = "_bt_internal_saved_attachment";
   const savedAttachmentSchema = z.strictObject({ [IDENTIFIER]: z.number() });
 
@@ -3568,7 +3570,7 @@ function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
       return `<dataset>`;
     } else if (v instanceof Logger) {
       return `<logger>`;
-    } else if (v instanceof Attachment || v instanceof ExternalAttachment) {
+    } else if (v instanceof BaseAttachment) {
       const idx = attachments.push(v);
       return { [IDENTIFIER]: idx - 1 };
     } else if (v instanceof ReadonlyAttachment) {
@@ -3596,11 +3598,11 @@ function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
  */
 function extractAttachments(
   event: Record<string, any>,
-  attachments: _Attachment[],
+  attachments: BaseAttachment[],
 ): void {
   for (const [key, value] of Object.entries(event)) {
-    // Base case: Attachment.
-    if (value instanceof Attachment || value instanceof ExternalAttachment) {
+    // Base case: Attachment or ExternalAttachment.
+    if (value instanceof BaseAttachment) {
       attachments.push(value);
       event[key] = value.reference;
       continue; // Attachment cannot be nested.
