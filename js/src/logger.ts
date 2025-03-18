@@ -225,6 +225,11 @@ export interface Span extends Exportable {
    */
   setAttributes(args: Omit<StartSpanArgs, "event">): void;
 
+  /**
+   * Set the span's parents (advanced usage).
+   */
+  setSpanParents(parents: string[]): void;
+
   // For type identification.
   kind: "span";
 }
@@ -281,6 +286,7 @@ export class NoopSpan implements Span {
   }
 
   public setAttributes(_args: Omit<StartSpanArgs, "event">) {}
+  public setSpanParents(_parents: string[]) {}
 }
 
 export const NOOP_SPAN = new NoopSpan();
@@ -4203,6 +4209,10 @@ export class SpanImpl implements Span {
 
   public setAttributes(args: Omit<StartSpanArgs, "event">): void {
     this.logInternal({ internalData: { span_attributes: args } });
+  }
+
+  public setSpanParents(parents: string[]): void {
+    this.logInternal({ internalData: { span_parents: parents } });
   }
 
   public log(event: ExperimentLogPartialArgs): void {
