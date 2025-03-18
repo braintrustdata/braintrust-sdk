@@ -2183,7 +2183,7 @@ class Attachment(BaseAttachment):
 
 class ExternalAttachment(BaseAttachment):
     """
-    Represents an attachment that resides in an external object store.
+    Represents an attachment that resides in an external object store and the associated metadata.
 
     `ExternalAttachment` objects can be inserted anywhere in an event, similar to
     `Attachment` objects, but they reference files that already exist in an external
@@ -2223,7 +2223,7 @@ class ExternalAttachment(BaseAttachment):
 
     @property
     def data(self) -> bytes:
-        """The attachment contents. This is a lazy value that will read the attachment contents from disk or memory on first access."""
+        """The attachment contents. This is a lazy value that will read the attachment contents from the external object store on first access."""
         return self._data.get()
 
     def upload(self) -> AttachmentStatus:

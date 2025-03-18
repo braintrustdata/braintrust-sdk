@@ -1002,7 +1002,8 @@ with a Blob/ArrayBuffer, or run the program on Node.js.`,
 }
 
 /**
- * Represents an attachment that resides in an external object store.
+ * Represents an attachment that resides in an external object store and the associated metadata.
+ *
  * `ExternalAttachment` objects can be inserted anywhere in an event, similar to
  * `Attachment` objects, but they reference files that already exist in an external
  * object store rather than requiring upload. The SDK will replace the `ExternalAttachment`
@@ -1045,7 +1046,8 @@ export class ExternalAttachment extends BaseAttachment {
   }
 
   /**
-   * Uploading an external attachment is a no-op.
+   * For ExternalAttachment, this is a no-op since the data already resides
+   * in the external object store. It marks the attachment as already uploaded.
    *
    * @returns The attachment status, which will always indicate success.
    */
@@ -1054,7 +1056,7 @@ export class ExternalAttachment extends BaseAttachment {
   }
 
   /**
-   * The attachment contents. This is a lazy value that will read the attachment contents from disk or memory on first access.
+   * The attachment contents. This is a lazy value that will read the attachment contents from the external object store on first access.
    */
   async data() {
     return this._data.get();
