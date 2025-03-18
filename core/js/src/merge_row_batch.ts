@@ -30,7 +30,7 @@ const MERGE_ROW_SKIP_FIELDS = [
   "created",
   "span_id",
   "root_span_id",
-  // "span_parents",
+  "span_parents",
   "_parent_id",
   // TODO: handle merge paths.
 ] as const;

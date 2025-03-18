@@ -226,9 +226,13 @@ export interface Span extends Exportable {
   setAttributes(args: Omit<StartSpanArgs, "event">): void;
 
   /**
-   * Set the span's parents (advanced usage).
+   * Start a span with a specific id and parent span ids.
    */
-  setSpanParents(parents: string[]): void;
+  startSpanWithParents(
+    spanId: string,
+    spanParents: string[],
+    args?: StartSpanArgs,
+  ): Span;
 
   // For type identification.
   kind: "span";
@@ -286,7 +290,14 @@ export class NoopSpan implements Span {
   }
 
   public setAttributes(_args: Omit<StartSpanArgs, "event">) {}
-  public setSpanParents(_parents: string[]) {}
+
+  public startSpanWithParents(
+    _spanId: string,
+    _spanParents: string[],
+    _args?: StartSpanArgs,
+  ): Span {
+    return this;
+  }
 }
 
 export const NOOP_SPAN = new NoopSpan();
@@ -1242,6 +1253,11 @@ interface ParentSpanIds {
   rootSpanId: string;
 }
 
+interface MultiParentSpanIds {
+  parentSpanIds: string[];
+  rootSpanId: string;
+}
+
 function spanComponentsToObjectIdLambda(
   state: BraintrustState,
   components: SpanComponentsV3,
@@ -1366,17 +1382,18 @@ function startSpanParentArgs(args: {
   parentObjectType: SpanObjectTypeV3;
   parentObjectId: LazyValue<string>;
   parentComputeObjectMetadataArgs: Record<string, any> | undefined;
-  parentSpanIds: ParentSpanIds | undefined;
+  parentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined;
   propagatedEvent: StartSpanEventArgs | undefined;
 }): {
   parentObjectType: SpanObjectTypeV3;
   parentObjectId: LazyValue<string>;
   parentComputeObjectMetadataArgs: Record<string, any> | undefined;
-  parentSpanIds: ParentSpanIds | undefined;
+  parentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined;
   propagatedEvent: StartSpanEventArgs | undefined;
 } {
   let argParentObjectId: LazyValue<string> | undefined = undefined;
-  let argParentSpanIds: ParentSpanIds | undefined = undefined;
+  let argParentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined =
+    undefined;
   let argPropagatedEvent: StartSpanEventArgs | undefined = undefined;
   if (args.parent) {
     if (args.parentSpanIds) {
@@ -4120,8 +4137,9 @@ export class SpanImpl implements Span {
       parentObjectType: SpanObjectTypeV3;
       parentObjectId: LazyValue<string>;
       parentComputeObjectMetadataArgs: Record<string, any> | undefined;
-      parentSpanIds: ParentSpanIds | undefined;
+      parentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined;
       defaultRootType?: SpanType;
+      spanId?: string;
     } & Omit<StartSpanArgs, "parent">,
   ) {
     this.state = args.state;
@@ -4175,10 +4193,13 @@ export class SpanImpl implements Span {
     };
 
     this._id = eventId ?? uuidv4();
-    this._spanId = uuidv4();
+    this._spanId = args.spanId ?? uuidv4();
     if (args.parentSpanIds) {
       this._rootSpanId = args.parentSpanIds.rootSpanId;
-      this._spanParents = [args.parentSpanIds.spanId];
+      this._spanParents =
+        "parentSpanIds" in args.parentSpanIds
+          ? args.parentSpanIds.parentSpanIds
+          : [args.parentSpanIds.spanId];
     } else {
       this._rootSpanId = this._spanId;
       this._spanParents = undefined;
@@ -4314,6 +4335,31 @@ export class SpanImpl implements Span {
         parentSpanIds,
         propagatedEvent: args?.propagatedEvent ?? this.propagatedEvent,
       }),
+    });
+  }
+
+  public startSpanWithParents(
+    spanId: string,
+    spanParents: string[],
+    args?: StartSpanArgs,
+  ): Span {
+    const parentSpanIds: MultiParentSpanIds = {
+      parentSpanIds: spanParents,
+      rootSpanId: this._rootSpanId,
+    };
+    return new SpanImpl({
+      state: this.state,
+      ...args,
+      ...startSpanParentArgs({
+        state: this.state,
+        parent: args?.parent,
+        parentObjectType: this.parentObjectType,
+        parentObjectId: this.parentObjectId,
+        parentComputeObjectMetadataArgs: this.parentComputeObjectMetadataArgs,
+        parentSpanIds,
+        propagatedEvent: args?.propagatedEvent ?? this.propagatedEvent,
+      }),
+      spanId,
     });
   }
 
