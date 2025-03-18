@@ -43,10 +43,12 @@ export const externalAttachmentReferenceSchema = z
   })
   .openapi("ExternalAttachmentReference");
 
-export const attachmentReferenceSchema = z.discriminatedUnion("type", [
-  braintrustAttachmentReferenceSchema,
-  externalAttachmentReferenceSchema,
-]);
+export const attachmentReferenceSchema = z
+  .discriminatedUnion("type", [
+    braintrustAttachmentReferenceSchema,
+    externalAttachmentReferenceSchema,
+  ])
+  .openapi("AttachmentReference");
 
 /**
  * Represents an attachment in the Braintrust object store.

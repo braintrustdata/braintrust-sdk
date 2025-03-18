@@ -1661,7 +1661,7 @@ def _extract_attachments(event: Dict[str, Any], attachments: List["BaseAttachmen
     """
     Helper function for uploading attachments. Recursively extracts `Attachment`
     and `ExternalAttachment` values and replaces them with their associated
-    `BaseAttachmentReference` objects.
+    `AttachmentReference` objects.
 
     :param event: The event to filter. Will be modified in-place.
     :param attachments: Flat array of extracted attachments (output parameter).
