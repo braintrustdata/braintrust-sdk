@@ -1694,7 +1694,7 @@ def _extract_attachments(event: Dict[str, Any], attachments: List["BaseAttachmen
 
 def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
     """
-    Recursively hydrates any `AttachmentReference` into `Attachment` and `ExternalAttachment` by modifying the input in-place.
+    Recursively hydrates any `AttachmentReference` into `ReadonlyAttachment` by modifying the input in-place.
 
     :returns: The same event instance as the input.
     """
@@ -1702,9 +1702,7 @@ def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
     def _helper(v: Any) -> Any:
         if isinstance(v, Dict):
             # Base case: AttachmentReference.
-            if v.get("type") == "braintrust_attachment":
-                return ReadonlyAttachment(cast(AttachmentReference, v))
-            elif v.get("type") == "external_attachment":
+            if v.get("type") == "braintrust_attachment" or v.get("type") == "external_attachment":
                 return ReadonlyAttachment(cast(AttachmentReference, v))
             else:
                 # Recursive case: object.
@@ -2216,7 +2214,7 @@ class ExternalAttachment(BaseAttachment):
             "content_type": content_type,
             "url": url,
         }
-        self._url = url
+        self._data = self._init_downloader()
 
     @property
     def reference(self) -> AttachmentReference:
@@ -2225,11 +2223,8 @@ class ExternalAttachment(BaseAttachment):
 
     @property
     def data(self) -> bytes:
-        """
-        Accessing the data is not supported for ExternalAttachment since the data
-        resides in an external object store.
-        """
-        return ReadonlyAttachment(self.reference).data
+        """The attachment contents. This is a lazy value that will read the attachment contents from disk or memory on first access."""
+        return self._data.get()
 
     def upload(self) -> AttachmentStatus:
         """
@@ -2246,7 +2241,14 @@ class ExternalAttachment(BaseAttachment):
 
         :returns: The debug object. The return type is not stable and may change in a future release.
         """
-        return {"url": self._url, "reference": self._reference}
+        return {"reference": self._reference}
+
+    def _init_downloader(self) -> LazyValue[bytes]:
+        def download() -> bytes:
+            readonly = ReadonlyAttachment(self.reference)
+            return readonly.data
+
+        return LazyValue(download, use_mutex=True)
 
 
 class AttachmentMetadata(TypedDict):

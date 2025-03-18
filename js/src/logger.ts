@@ -1014,6 +1014,7 @@ export class ExternalAttachment extends BaseAttachment {
    */
   readonly reference: ExternalAttachmentReference;
 
+  private readonly _data: LazyValue<Blob>;
   private readonly state?: BraintrustState;
 
   /**
@@ -1039,6 +1040,8 @@ export class ExternalAttachment extends BaseAttachment {
       content_type: contentType,
       url,
     };
+
+    this._data = this.initData();
   }
 
   /**
@@ -1051,11 +1054,10 @@ export class ExternalAttachment extends BaseAttachment {
   }
 
   /**
-   * Accessing the data is not supported for ExternalAttachment since the data
-   * resides in an external object store.
+   * The attachment contents. This is a lazy value that will read the attachment contents from disk or memory on first access.
    */
   async data() {
-    return new ReadonlyAttachment(this.reference, this.state).data();
+    return this._data.get();
   }
 
   /**
@@ -1070,6 +1072,13 @@ export class ExternalAttachment extends BaseAttachment {
       reference: this.reference,
       state: this.state,
     };
+  }
+
+  private initData(): LazyValue<Blob> {
+    return new LazyValue(async () => {
+      const readonly = new ReadonlyAttachment(this.reference, this.state);
+      return await readonly.data();
+    });
   }
 }
 
