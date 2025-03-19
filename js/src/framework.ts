@@ -214,6 +214,11 @@ export interface Evaluator<
   timeout?: number;
 
   /**
+   * An abort signal that can be used to stop the evaluation.
+   */
+  signal?: AbortSignal;
+
+  /**
    * The maximum number of tasks/scorers that will be run concurrently.
    * Defaults to undefined, in which case there is no max concurrency.
    */
@@ -682,17 +687,22 @@ export async function runEvaluator(
     filters,
     stream,
   );
-  const timer = async () => {
+  const cancel = async () => {
     await new Promise((_, reject) => {
       if (evaluator.timeout) {
         setTimeout(() => {
           reject("evaluator timed out");
         }, evaluator.timeout);
       }
+      if (evaluator.signal) {
+        evaluator.signal.addEventListener("abort", () => {
+          reject("evaluator aborted");
+        });
+      }
     });
     return null;
   };
-  const winner = await Promise.race([result, timer()]);
+  const winner = await Promise.race([result, cancel()]);
   if (!winner) {
     throw new Error("unreachable");
   }

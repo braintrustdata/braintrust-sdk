@@ -39,7 +39,32 @@ test("runEvaluator rejects on timeout", async () => {
   ).rejects.toEqual("evaluator timed out");
 });
 
-test("runEvaluator works with no timeout", async () => {
+test("runEvaluator rejects on abort signal", async () => {
+  const abortController = new AbortController();
+
+  setTimeout(() => abortController.abort(), 1000);
+  await expect(
+    runEvaluator(
+      null,
+      {
+        projectName: "proj",
+        evalName: "eval",
+        data: [{ input: 1, expected: 2 }],
+        task: async (input: number) => {
+          await new Promise((r) => setTimeout(r, 100000));
+          return input * 2;
+        },
+        scores: [],
+        signal: abortController.signal,
+      },
+      new NoopProgressReporter(),
+      [],
+      undefined,
+    ),
+  ).rejects.toEqual("evaluator aborted");
+});
+
+test("runEvaluator works with no timeout or abort signal", async () => {
   await runEvaluator(
     null,
     {
