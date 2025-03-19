@@ -1335,18 +1335,20 @@ export async function permalink(
     return state.appUrl;
   };
 
-  const components = SpanComponentsV3.fromStr(slug);
-  const object_type = spanObjectTypeV3ToString(components.data.object_type);
-  const [orgName, appUrl, object_id] = await Promise.all([
-    getOrgName(),
-    getAppUrl(),
-    spanComponentsToObjectId({ components, state }),
-  ]);
-  const id = components.data.row_id;
-  if (!id) {
-    throw new Error("Span slug does not refer to an individual row");
+  let urlParams = "span=noop-span";
+  // no-op spans have an empty slug, so make sure we handle permalinking them gracefully.
+  if (slug !== "") {
+    const components = SpanComponentsV3.fromStr(slug);
+    const object_type = spanObjectTypeV3ToString(components.data.object_type);
+    const object_id = await spanComponentsToObjectId({ components, state });
+    const id = components.data.row_id;
+    if (!id) {
+      throw new Error("Span slug does not refer to an individual row");
+    }
+    urlParams = new URLSearchParams({ object_type, object_id, id }).toString();
   }
-  const urlParams = new URLSearchParams({ object_type, object_id, id });
+
+  const [orgName, appUrl] = await Promise.all([getOrgName(), getAppUrl()]);
   return `${appUrl}/app/${orgName}/object?${urlParams}`;
 }
 
