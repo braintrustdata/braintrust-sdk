@@ -158,7 +158,7 @@ def repo_info():
         branch = attempt(lambda: repo.active_branch.name)
 
         if dirty:
-            git_diff = attempt(lambda: truncate_to_byte_limit(repo.git.diff("HEAD")))
+            git_diff = attempt(lambda: truncate_to_byte_limit(repo.git.diff("HEAD", no_ext_diff=True)))
 
         return RepoInfo(
             commit=commit,
