@@ -1,7 +1,9 @@
 import { expect, test } from "vitest";
 import {
   _exportsForTestingOnly,
+  BaseAttachment,
   Attachment,
+  ExternalAttachment,
   initDataset,
   initExperiment,
   initLogger,
@@ -16,7 +18,7 @@ configureNode();
 const { extractAttachments, deepCopyEvent } = _exportsForTestingOnly;
 
 test("extractAttachments no op", () => {
-  const attachments: Attachment[] = [];
+  const attachments: BaseAttachment[] = [];
 
   extractAttachments({}, attachments);
   expect(attachments).toHaveLength(0);
@@ -41,15 +43,30 @@ test("extractAttachments with attachments", () => {
     filename: "filename2",
     contentType: "text/plain",
   });
+  const attachment3 = new ExternalAttachment({
+    url: "s3://bucket/path/to/key.pdf",
+    filename: "filename3",
+    contentType: "application/pdf",
+  });
   const date = new Date();
   const event = {
     foo: "bar",
     baz: [1, 2],
     attachment1,
+    attachment3,
     nested: {
       attachment2,
+      attachment3,
       info: "another string",
-      anArray: [attachment1, null, "string", attachment2, attachment1],
+      anArray: [
+        attachment1,
+        null,
+        "string",
+        attachment2,
+        attachment1,
+        attachment3,
+        attachment3,
+      ],
     },
     null: null,
     undefined: undefined,
@@ -59,21 +76,29 @@ test("extractAttachments with attachments", () => {
   };
   const savedNested = event.nested;
 
-  const attachments: Attachment[] = [];
+  const attachments: BaseAttachment[] = [];
   extractAttachments(event, attachments);
 
   expect(attachments).toEqual([
     attachment1,
+    attachment3,
     attachment2,
+    attachment3,
     attachment1,
     attachment2,
     attachment1,
+    attachment3,
+    attachment3,
   ]);
   expect(attachments[0]).toBe(attachment1);
-  expect(attachments[1]).toBe(attachment2);
-  expect(attachments[2]).toBe(attachment1);
-  expect(attachments[3]).toBe(attachment2);
+  expect(attachments[1]).toBe(attachment3);
+  expect(attachments[2]).toBe(attachment2);
+  expect(attachments[3]).toBe(attachment3);
   expect(attachments[4]).toBe(attachment1);
+  expect(attachments[5]).toBe(attachment2);
+  expect(attachments[6]).toBe(attachment1);
+  expect(attachments[7]).toBe(attachment3);
+  expect(attachments[8]).toBe(attachment3);
 
   expect(event.nested).toBe(savedNested);
 
@@ -81,8 +106,10 @@ test("extractAttachments with attachments", () => {
     foo: "bar",
     baz: [1, 2],
     attachment1: attachment1.reference,
+    attachment3: attachment3.reference,
     nested: {
       attachment2: attachment2.reference,
+      attachment3: attachment3.reference,
       info: "another string",
       anArray: [
         attachment1.reference,
@@ -90,6 +117,8 @@ test("extractAttachments with attachments", () => {
         "string",
         attachment2.reference,
         attachment1.reference,
+        attachment3.reference,
+        attachment3.reference,
       ],
     },
     null: null,
@@ -123,6 +152,11 @@ test("deepCopyEvent with attachments", () => {
     filename: "filename2",
     contentType: "text/plain",
   });
+  const attachment3 = new ExternalAttachment({
+    url: "s3://bucket/path/to/key.pdf",
+    filename: "filename3",
+    contentType: "application/pdf",
+  });
   const date = new Date("2024-10-23T05:02:48.796Z");
 
   const span = NOOP_SPAN;
@@ -137,9 +171,11 @@ test("deepCopyEvent with attachments", () => {
       myIllegalObjects: [experiment, dataset, logger],
       myOtherWeirdObjects: [Math.max, date, null, undefined],
       attachment: attachment1,
-      attachmentList: [attachment1, attachment2, "string"],
+      another_attachment: attachment3,
+      attachmentList: [attachment1, attachment2, "string", attachment3],
       nestedAttachment: {
         attachment: attachment2,
+        another_attachment: attachment3,
       },
       fake: {
         _bt_internal_saved_attachment: "not a number",
@@ -156,9 +192,11 @@ test("deepCopyEvent with attachments", () => {
       myIllegalObjects: ["<experiment>", "<dataset>", "<logger>"],
       myOtherWeirdObjects: [null, "2024-10-23T05:02:48.796Z", null, null],
       attachment: attachment1,
-      attachmentList: [attachment1, attachment2, "string"],
+      another_attachment: attachment3,
+      attachmentList: [attachment1, attachment2, "string", attachment3],
       nestedAttachment: {
         attachment: attachment2,
+        another_attachment: attachment3,
       },
       fake: {
         _bt_internal_saved_attachment: "not a number",
@@ -169,9 +207,14 @@ test("deepCopyEvent with attachments", () => {
   expect(copy).not.toBe(original);
 
   expect((copy.output as any).attachment).toBe(attachment1);
+  expect((copy.output as any).another_attachment).toBe(attachment3);
   expect((copy.output as any).nestedAttachment.attachment).toBe(attachment2);
+  expect((copy.output as any).nestedAttachment.another_attachment).toBe(
+    attachment3,
+  );
   expect((copy.output as any).attachmentList[0]).toBe(attachment1);
   expect((copy.output as any).attachmentList[1]).toBe(attachment2);
+  expect((copy.output as any).attachmentList[3]).toBe(attachment3);
 });
 
 test("prompt.build with structured output templating", () => {
