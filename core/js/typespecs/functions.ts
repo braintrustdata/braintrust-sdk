@@ -10,13 +10,7 @@ import { objectReferenceSchema } from "./common_types";
 export const validRuntimesEnum = z.enum(["node", "python"]);
 export type Runtime = z.infer<typeof validRuntimesEnum>;
 
-export const functionTypeEnum = z.enum([
-  "llm",
-  "scorer",
-  "task",
-  "tool",
-  "agent",
-]);
+export const functionTypeEnum = z.enum(["llm", "scorer", "task", "tool"]);
 export type FunctionType = z.infer<typeof functionTypeEnum>;
 
 export const runtimeContextSchema = z.object({
