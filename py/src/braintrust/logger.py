@@ -46,6 +46,7 @@ from urllib.parse import urlencode
 import chevron
 import exceptiongroup
 import requests
+import urllib3
 from braintrust_core.serializable_data_class import SerializableDataClass
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
