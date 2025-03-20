@@ -384,7 +384,8 @@ _http_adapter: Optional[HTTPAdapter] = None
 def set_http_adapter(adapter: HTTPAdapter) -> None:
     """
     Specify a custom HTTP adapter to use for all network requests. This is useful for setting custom retry policies, timeouts, etc.
-    Braintrust uses the `requests` library, so the adapter should be an instance of `requests.adapters.HTTPAdapter`.
+    Braintrust uses the `requests` library, so the adapter should be an instance of `requests.adapters.HTTPAdapter`. Alternatively, consider
+    sub-classing our `RetryRequestExceptionsAdapter` to get automatic retries on network-related exceptions.
 
     :param adapter: The adapter to use.
     """
