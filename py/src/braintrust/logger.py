@@ -401,7 +401,20 @@ def set_http_adapter(adapter: HTTPAdapter) -> None:
         _state._api_conn._reset()
 
 
-class LongLivedAdapter(HTTPAdapter):
+class RetryRequestExceptionsAdapter(HTTPAdapter):
+    """An HTTP adapter that automatically retries requests on connection exceptions.
+
+    This adapter extends requests' HTTPAdapter to add retry logic for common network-related
+    exceptions including connection errors, timeouts, and other HTTP errors. It implements
+    an exponential backoff strategy between retries to avoid overwhelming servers during
+    intermittent connectivity issues.
+
+    Attributes:
+        base_num_retries: Maximum number of retries before giving up and re-raising the exception.
+        backoff_factor: A multiplier used to determine the time to wait between retries.
+                       The actual wait time is calculated as: backoff_factor * (2 ** retry_count).
+    """
+
     def __init__(self, *args: Any, base_num_retries: int = 0, backoff_factor: float = 0.5, **kwargs: Any):
         self.base_num_retries = base_num_retries
         self.backoff_factor = backoff_factor
@@ -447,7 +460,7 @@ class HTTPConnection:
 
     def make_long_lived(self) -> None:
         if not self.adapter:
-            self.adapter = LongLivedAdapter(base_num_retries=10, backoff_factor=0.5)
+            self.adapter = RetryRequestExceptionsAdapter(base_num_retries=10, backoff_factor=0.5)
         self._reset()
 
     @staticmethod
