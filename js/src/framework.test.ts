@@ -36,7 +36,7 @@ test("runEvaluator rejects on timeout", async () => {
       [],
       undefined,
     ),
-  ).rejects.toEqual("evaluator timed out");
+  ).rejects.toEqual(new Error("Evaluator timed out"));
 });
 
 test("runEvaluator rejects on abort signal", async () => {
@@ -61,7 +61,7 @@ test("runEvaluator rejects on abort signal", async () => {
       [],
       undefined,
     ),
-  ).rejects.toEqual("evaluator aborted");
+  ).rejects.toEqual(new Error("Evaluator aborted"));
 });
 
 test("runEvaluator works with no timeout or abort signal", async () => {

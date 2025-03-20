@@ -680,33 +680,13 @@ export async function runEvaluator(
   stream: ((data: SSEProgressEventData) => void) | undefined,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
-  const result = runEvaluatorInternal(
+  return await runEvaluatorInternal(
     experiment,
     evaluator,
     progressReporter,
     filters,
     stream,
   );
-  const cancel = async () => {
-    await new Promise((_, reject) => {
-      if (evaluator.timeout) {
-        setTimeout(() => {
-          reject("evaluator timed out");
-        }, evaluator.timeout);
-      }
-      if (evaluator.signal) {
-        evaluator.signal.addEventListener("abort", () => {
-          reject("evaluator aborted");
-        });
-      }
-    });
-    return null;
-  };
-  const winner = await Promise.race([result, cancel()]);
-  if (!winner) {
-    throw new Error("unreachable");
-  }
-  return winner;
 }
 
 export const defaultErrorScoreHandler: ErrorScoreHandler = ({
@@ -1044,7 +1024,37 @@ async function runEvaluatorInternal(
     Math.max(evaluator.maxConcurrency ?? data.length, 1),
   );
   q.push(data);
-  await q.drain();
+
+  const cancel = async () => {
+    await new Promise((_, reject) => {
+      if (evaluator.timeout) {
+        setTimeout(() => {
+          reject(new Error("Evaluator timed out"));
+        }, evaluator.timeout);
+      }
+      if (evaluator.signal) {
+        evaluator.signal.addEventListener("abort", () => {
+          reject(new Error("Evaluator aborted"));
+        });
+      }
+    });
+  };
+
+  // wait for tasks to be completed or the evaluator to be cancelled
+  // if the evaluator is cancelled, the remaining tasks that have not been started will be killed
+  try {
+    await Promise.race([q.drain(), cancel()]);
+  } catch (e) {
+    if (
+      e instanceof Error &&
+      (e.message === "Evaluator timed out" || e.message === "Evaluator aborted")
+    ) {
+      q.kill();
+    }
+
+    throw e;
+  }
+
   const summary = experiment
     ? await experiment.summarize()
     : buildLocalSummary(evaluator, results);
