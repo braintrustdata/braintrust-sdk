@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import {
   _exportsForTestingOnly,
+  init,
   BaseAttachment,
   Attachment,
   ExternalAttachment,
@@ -16,6 +17,18 @@ import { configureNode } from "./node";
 configureNode();
 
 const { extractAttachments, deepCopyEvent } = _exportsForTestingOnly;
+
+test("init validation", () => {
+  expect(() => init({})).toThrow(
+    "Must specify at least one of project or projectId",
+  );
+  expect(() => init({ project: "project", open: true, update: true })).toThrow(
+    "Cannot open and update an experiment at the same time",
+  );
+  expect(() => init({ project: "project", open: true })).toThrow(
+    "Cannot open an experiment without specifying its name",
+  );
+});
 
 test("extractAttachments no op", () => {
   const attachments: BaseAttachment[] = [];
@@ -161,7 +174,7 @@ test("deepCopyEvent with attachments", () => {
 
   const span = NOOP_SPAN;
   const logger = initLogger();
-  const experiment = initExperiment({});
+  const experiment = initExperiment("project");
   const dataset = initDataset({});
 
   const original = {

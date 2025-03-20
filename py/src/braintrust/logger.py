@@ -1008,6 +1008,9 @@ def init(
     :returns: The experiment object.
     """
 
+    if project is None and project_id is None:
+        raise ValueError("Must specify at least one of project or project_id")
+
     if open and update:
         raise ValueError("Cannot open and update an experiment at the same time")
 

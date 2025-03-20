@@ -2306,6 +2306,10 @@ export function init<IsOpen extends boolean = false>(
     state: stateArg,
   } = options;
 
+  if (!project && !projectId) {
+    throw new Error("Must specify at least one of project or projectId");
+  }
+
   if (open && update) {
     throw new Error("Cannot open and update an experiment at the same time");
   }
