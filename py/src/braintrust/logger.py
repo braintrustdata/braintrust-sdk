@@ -400,6 +400,34 @@ def set_http_adapter(adapter: HTTPAdapter) -> None:
         _state._api_conn._reset()
 
 
+class LongLivedAdapter(HTTPAdapter):
+    def __init__(self, *args: Any, base_num_retries: int = 0, backoff_factor: float = 0.5, **kwargs: Any):
+        self.base_num_retries = base_num_retries
+        self.backoff_factor = backoff_factor
+        super().__init__(*args, **kwargs)
+
+    def send(self, *args, **kwargs):
+        num_prev_retries = 0
+        while True:
+            try:
+                response = super().send(*args, **kwargs)
+                # Fully-download the content to ensure we catch any errors from
+                # downloading.
+                if response.content:
+                    pass
+                return response
+            except (urllib3.exceptions.HTTPError, requests.exceptions.RequestException) as e:
+                if num_prev_retries < self.base_num_retries:
+                    # Emulates the sleeping logic in the backoff_factor of urllib3 Retry
+                    sleep_s = self.backoff_factor * (2**num_prev_retries)
+                    print("Retrying request after error:", e)
+                    print("Sleeping for", sleep_s, "seconds")
+                    time.sleep(sleep_s)
+                    num_prev_retries += 1
+                else:
+                    raise e
+
+
 class HTTPConnection:
     def __init__(self, base_url: str, adapter: Optional[HTTPAdapter] = None):
         self.base_url = base_url
@@ -417,8 +445,9 @@ class HTTPConnection:
             return False
 
     def make_long_lived(self) -> None:
-        # Following a suggestion in https://stackoverflow.com/questions/23013220/max-retries-exceeded-with-url-in-requests
-        self._reset(connect=10, backoff_factor=0.5)
+        if not self.adapter:
+            self.adapter = LongLivedAdapter(base_num_retries=10, backoff_factor=0.5)
+        self._reset()
 
     @staticmethod
     def sanitize_token(token: str) -> str:
@@ -749,16 +778,13 @@ class _BackgroundLogger:
             _BackgroundLogger._write_payload_to_dir(payload_dir=self.all_publish_payloads_dir, payload=dataStr)
         for i in range(self.num_tries):
             start_time = time.time()
-            try:
-                resp = conn.post("/logs3", data=dataStr)
-                if not resp.ok:
-                    legacyDataS = construct_json_array([json.dumps(make_legacy_event(json.loads(r))) for r in items])
-                    resp = conn.post("/logs", data=legacyDataS)
-                if resp.ok:
-                    return
-                resp_errmsg = f"{resp.status_code}: {resp.text}"
-            except Exception as e:
-                resp_errmsg = f"{e}"
+            resp = conn.post("/logs3", data=dataStr)
+            if not resp.ok:
+                legacyDataS = construct_json_array([json.dumps(make_legacy_event(json.loads(r))) for r in items])
+                resp = conn.post("/logs", data=legacyDataS)
+            if resp.ok:
+                return
+            resp_errmsg = f"{resp.status_code}: {resp.text}"
 
             is_retrying = i + 1 < self.num_tries
             retrying_text = "" if is_retrying else " Retrying"
