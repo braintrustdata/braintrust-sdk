@@ -301,18 +301,26 @@ export const sseConsoleEventSchema = baseSSEEventSchema.merge(
   }),
 );
 
-// start is a no-op event that just helps display progress and shares the stop token
-export const sseStartEventSchema = baseSSEEventSchema.merge(
-  z.object({
-    event: z.literal("start"),
-  }),
-);
+// Both start and end are no-op events that just help display progress
+export const sseStartEventSchema = baseSSEEventSchema
+  .omit({ data: true })
+  .merge(
+    z.object({
+      event: z.literal("start"),
+      data: z.literal(""),
+    }),
+  );
 
-// end is a no-op event that just helps display progress
 export const sseDoneEventSchema = baseSSEEventSchema.omit({ data: true }).merge(
   z.object({
     event: z.literal("done"),
     data: z.literal(""),
+  }),
+);
+
+export const sseMetaEventSchema = baseSSEEventSchema.merge(
+  z.object({
+    event: z.literal("meta"),
   }),
 );
 
@@ -328,13 +336,6 @@ export const functionOutputTypeEnum = z
   .enum(["completion", "score", "any"])
   .openapi("FunctionOutputType");
 export type FunctionOutputType = z.infer<typeof functionOutputTypeEnum>;
-
-export const sseStartEventDataSchema = z
-  .object({
-    stop_token: z.string().describe("The token to stop the run"),
-  })
-  .openapi("SSEStartEventData");
-export type SSEStartEventData = z.infer<typeof sseStartEventDataSchema>;
 
 export const sseProgressEventDataSchema = z
   .object({
@@ -363,6 +364,13 @@ export const sseConsoleEventDataSchema = z.object({
   message: z.string(),
 });
 export type SSEConsoleEventData = z.infer<typeof sseConsoleEventDataSchema>;
+
+export const sseMetaEventDataSchema = z
+  .object({
+    stop_token: z.string().describe("The token to stop the run"),
+  })
+  .openapi("SSEMetaEventData");
+export type SSEMetaEventData = z.infer<typeof sseMetaEventDataSchema>;
 
 export const callEventSchema = z
   .union([
