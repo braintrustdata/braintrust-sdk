@@ -434,8 +434,8 @@ class RetryRequestExceptionsAdapter(HTTPAdapter):
                 if num_prev_retries < self.base_num_retries:
                     # Emulates the sleeping logic in the backoff_factor of urllib3 Retry
                     sleep_s = self.backoff_factor * (2**num_prev_retries)
-                    print("Retrying request after error:", e)
-                    print("Sleeping for", sleep_s, "seconds")
+                    print("Retrying request after error:", e, file=sys.stderr)
+                    print("Sleeping for", sleep_s, "seconds", file=sys.stderr)
                     time.sleep(sleep_s)
                     num_prev_retries += 1
                 else:
