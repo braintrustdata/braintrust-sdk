@@ -3922,7 +3922,6 @@ class Logger(Exportable):
 
     @property
     def org_id(self) -> str:
-        return "org-123"
         return self._lazy_metadata.get().org_id
 
     @property
