@@ -3926,7 +3926,6 @@ class Logger(Exportable):
 
     @property
     def project(self) -> ObjectMetadata:
-        return ObjectMetadata(id="proj-123", name="test-project", full_info=dict())
         return self._lazy_metadata.get().project
 
     @property
