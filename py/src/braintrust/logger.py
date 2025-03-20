@@ -294,7 +294,9 @@ class BraintrustState:
         # Any time we re-log in, we directly update the api_conn inside the
         # logger. This is preferable to replacing the whole logger, which would
         # create the possibility of multiple loggers floating around.
-        self._global_bg_logger = _BackgroundLogger(LazyValue(default_get_api_conn, use_mutex=True))
+        self._global_bg_logger: _BackgroundLogger = _HTTPBackgroundLogger(
+            LazyValue(default_get_api_conn, use_mutex=True)
+        )
 
         # For unit-testing, tests may wish to temporarily override the global
         # logger with a custom one. We allow this but keep the override variable
@@ -568,11 +570,40 @@ def _check_json_serializable(event):
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
 
+class _BackgroundLogger(ABC):
+    @abstractmethod
+    def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
+        pass
+
+    @abstractmethod
+    def flush(self, batch_size: Optional[int] = None):
+        pass
+
+
+class _MemoryBackgroundLogger(_BackgroundLogger):
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.logs = []
+
+    def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
+        with self.lock:
+            self.logs.extend(args)
+
+    def flush(self, batch_size: Optional[int] = None):
+        pass
+
+    def clear(self):
+        with self.lock:
+            logs = self.logs
+            self.logs = []
+            return logs
+
+
 # We should only have one instance of this object in
 # 'BraintrustState._global_bg_logger'. Be careful about spawning multiple
 # instances of this class, because concurrent _BackgroundLoggers will not log to
 # the backend in a deterministic order.
-class _BackgroundLogger:
+class _HTTPBackgroundLogger:
     def __init__(self, api_conn: LazyValue[HTTPConnection]):
         self.api_conn = api_conn
         self.outfile = sys.stderr
@@ -790,7 +821,7 @@ class _BackgroundLogger:
         conn = self.api_conn.get()
         dataStr = construct_logs3_data(items)
         if self.all_publish_payloads_dir:
-            _BackgroundLogger._write_payload_to_dir(payload_dir=self.all_publish_payloads_dir, payload=dataStr)
+            _HTTPBackgroundLogger._write_payload_to_dir(payload_dir=self.all_publish_payloads_dir, payload=dataStr)
         for i in range(self.num_tries):
             start_time = time.time()
             resp = conn.post("/logs3", data=dataStr)
@@ -806,7 +837,9 @@ class _BackgroundLogger:
             errmsg = f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataStr)}.{retrying_text}\nError: {resp_errmsg}"
 
             if not is_retrying and self.failed_publish_payloads_dir:
-                _BackgroundLogger._write_payload_to_dir(payload_dir=self.failed_publish_payloads_dir, payload=dataStr)
+                _HTTPBackgroundLogger._write_payload_to_dir(
+                    payload_dir=self.failed_publish_payloads_dir, payload=dataStr
+                )
                 self._log_failed_payloads_dir()
 
             if not is_retrying and self.sync_flush:
@@ -830,7 +863,7 @@ class _BackgroundLogger:
             for output_dir in publish_payloads_dir:
                 if not output_dir:
                     continue
-                _BackgroundLogger._write_payload_to_dir(payload_dir=output_dir, payload=payload)
+                _HTTPBackgroundLogger._write_payload_to_dir(payload_dir=output_dir, payload=payload)
         except Exception as e:
             traceback.print_exc(file=self.outfile)
 
@@ -879,10 +912,20 @@ _logger = logging.getLogger("braintrust")
 
 @contextlib.contextmanager
 def _internal_with_custom_background_logger():
-    custom_logger = _BackgroundLogger(LazyValue(lambda: _state.api_conn(), use_mutex=True))
+    custom_logger = _HTTPBackgroundLogger(LazyValue(lambda: _state.api_conn(), use_mutex=True))
     _state._override_bg_logger.logger = custom_logger
     try:
         yield custom_logger
+    finally:
+        _state._override_bg_logger.logger = None
+
+
+@contextlib.contextmanager
+def _internal_with_memory_background_logger():
+    memory_logger = _MemoryBackgroundLogger()
+    _state._override_bg_logger.logger = memory_logger
+    try:
+        yield memory_logger
     finally:
         _state._override_bg_logger.logger = None
 
