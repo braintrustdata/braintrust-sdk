@@ -47,9 +47,8 @@ class TracedMessages(NamedWrapper):
             if usage:
                 in_t = getattr(usage, "input_tokens", 0)
                 out_t = getattr(usage, "output_tokens", 0)
-                tokens = in_t + out_t
                 metrics = {
-                    "tokens": tokens,
+                    "tokens": in_t + out_t,
                     "prompt_tokens": in_t,
                     "completion_tokens": out_t,
                 }
@@ -58,6 +57,10 @@ class TracedMessages(NamedWrapper):
 
             return msg
         except Exception as e:
+            try:
+                span.log(error=e)
+            except Exception:
+                pass
             raise e
         finally:
             span.end()
