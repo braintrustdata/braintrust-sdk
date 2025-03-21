@@ -46,6 +46,32 @@ def test_memory_logger():
         assert logs
 
 
+def test_anthropic_client_error():
+    project_name = "test-anthropic-err"
+    _setup_test_logger(project_name)
+
+    with logger._internal_with_memory_background_logger() as bgl:
+        assert not bgl.pop()
+
+        client = wrap_anthropic_client(_get_anthropic_client())
+
+        model = "there-is-no-such-model"
+        msg_in = {"role": "user", "content": "who are you?"}
+
+        try:
+            client.messages.create(model=model, max_tokens=999, messages=[msg_in])
+        except Exception:
+            pass
+        else:
+            raise Exception("should have raised an exception")
+
+        logs = bgl.pop()
+        assert len(logs) == 1
+        log = logs[0][0]
+        assert log["project_id"] == project_name
+        assert "404" in log["error"]
+
+
 def test_anthropic_client():
     project_name = "test-anthropic-app"
     _setup_test_logger(project_name)
