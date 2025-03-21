@@ -46,6 +46,7 @@ from urllib.parse import urlencode
 import chevron
 import exceptiongroup
 import requests
+import urllib3
 from braintrust_core.serializable_data_class import SerializableDataClass
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -383,7 +384,8 @@ _http_adapter: Optional[HTTPAdapter] = None
 def set_http_adapter(adapter: HTTPAdapter) -> None:
     """
     Specify a custom HTTP adapter to use for all network requests. This is useful for setting custom retry policies, timeouts, etc.
-    Braintrust uses the `requests` library, so the adapter should be an instance of `requests.adapters.HTTPAdapter`.
+    Braintrust uses the `requests` library, so the adapter should be an instance of `requests.adapters.HTTPAdapter`. Alternatively, consider
+    sub-classing our `RetryRequestExceptionsAdapter` to get automatic retries on network-related exceptions.
 
     :param adapter: The adapter to use.
     """
@@ -398,6 +400,47 @@ def set_http_adapter(adapter: HTTPAdapter) -> None:
     if _state._api_conn:
         _state._api_conn._set_adapter(adapter=adapter)
         _state._api_conn._reset()
+
+
+class RetryRequestExceptionsAdapter(HTTPAdapter):
+    """An HTTP adapter that automatically retries requests on connection exceptions.
+
+    This adapter extends requests' HTTPAdapter to add retry logic for common network-related
+    exceptions including connection errors, timeouts, and other HTTP errors. It implements
+    an exponential backoff strategy between retries to avoid overwhelming servers during
+    intermittent connectivity issues.
+
+    Attributes:
+        base_num_retries: Maximum number of retries before giving up and re-raising the exception.
+        backoff_factor: A multiplier used to determine the time to wait between retries.
+                       The actual wait time is calculated as: backoff_factor * (2 ** retry_count).
+    """
+
+    def __init__(self, *args: Any, base_num_retries: int = 0, backoff_factor: float = 0.5, **kwargs: Any):
+        self.base_num_retries = base_num_retries
+        self.backoff_factor = backoff_factor
+        super().__init__(*args, **kwargs)
+
+    def send(self, *args, **kwargs):
+        num_prev_retries = 0
+        while True:
+            try:
+                response = super().send(*args, **kwargs)
+                # Fully-download the content to ensure we catch any errors from
+                # downloading.
+                if response.content:
+                    pass
+                return response
+            except (urllib3.exceptions.HTTPError, requests.exceptions.RequestException) as e:
+                if num_prev_retries < self.base_num_retries:
+                    # Emulates the sleeping logic in the backoff_factor of urllib3 Retry
+                    sleep_s = self.backoff_factor * (2**num_prev_retries)
+                    print("Retrying request after error:", e, file=sys.stderr)
+                    print("Sleeping for", sleep_s, "seconds", file=sys.stderr)
+                    time.sleep(sleep_s)
+                    num_prev_retries += 1
+                else:
+                    raise e
 
 
 class HTTPConnection:
@@ -417,8 +460,9 @@ class HTTPConnection:
             return False
 
     def make_long_lived(self) -> None:
-        # Following a suggestion in https://stackoverflow.com/questions/23013220/max-retries-exceeded-with-url-in-requests
-        self._reset(connect=10, backoff_factor=0.5)
+        if not self.adapter:
+            self.adapter = RetryRequestExceptionsAdapter(base_num_retries=10, backoff_factor=0.5)
+        self._reset()
 
     @staticmethod
     def sanitize_token(token: str) -> str:
@@ -749,16 +793,13 @@ class _BackgroundLogger:
             _BackgroundLogger._write_payload_to_dir(payload_dir=self.all_publish_payloads_dir, payload=dataStr)
         for i in range(self.num_tries):
             start_time = time.time()
-            try:
-                resp = conn.post("/logs3", data=dataStr)
-                if not resp.ok:
-                    legacyDataS = construct_json_array([json.dumps(make_legacy_event(json.loads(r))) for r in items])
-                    resp = conn.post("/logs", data=legacyDataS)
-                if resp.ok:
-                    return
-                resp_errmsg = f"{resp.status_code}: {resp.text}"
-            except Exception as e:
-                resp_errmsg = f"{e}"
+            resp = conn.post("/logs3", data=dataStr)
+            if not resp.ok:
+                legacyDataS = construct_json_array([json.dumps(make_legacy_event(json.loads(r))) for r in items])
+                resp = conn.post("/logs", data=legacyDataS)
+            if resp.ok:
+                return
+            resp_errmsg = f"{resp.status_code}: {resp.text}"
 
             is_retrying = i + 1 < self.num_tries
             retrying_text = "" if is_retrying else " Retrying"
