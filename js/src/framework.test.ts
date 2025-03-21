@@ -6,6 +6,7 @@ import {
 } from "./framework";
 import { configureNode } from "./node";
 import { BarProgressReporter, type ProgressReporter } from "./progress";
+import { InternalAbortError } from "./util";
 
 beforeAll(() => {
   configureNode();
@@ -17,51 +18,81 @@ class NoopProgressReporter implements ProgressReporter {
   public increment() {}
 }
 
-test("runEvaluator rejects on timeout", async () => {
+test("runEvaluator rejects on timeout and kills remaining tasks", async () => {
+  const taskStarts: Set<number> = new Set();
+  const taskCompletions: Set<number> = new Set();
+
   await expect(
     runEvaluator(
       null,
       {
         projectName: "proj",
         evalName: "eval",
-        data: [{ input: 1, expected: 2 }],
+        data: Array.from({ length: 10 }, (_, i) => ({
+          input: i,
+          expected: i * 2,
+        })),
         task: async (input: number) => {
-          await new Promise((r) => setTimeout(r, 100000));
+          taskStarts.add(input);
+          if (input > 2) {
+            await new Promise((r) => setTimeout(r, 100000));
+          }
+          taskCompletions.add(input);
           return input * 2;
         },
         scores: [],
-        timeout: 100,
+        timeout: 10,
+        maxConcurrency: 1,
       },
       new NoopProgressReporter(),
       [],
       undefined,
     ),
-  ).rejects.toEqual(new Error("Evaluator timed out"));
+  ).rejects.toThrow(new InternalAbortError("Evaluator timed out"));
+
+  // first 3 tasks complete and 4th task was started but not completed before timeout
+  expect(taskStarts).toEqual(new Set([0, 1, 2, 3]));
+  expect(taskCompletions).toEqual(new Set([0, 1, 2]));
 });
 
-test("runEvaluator rejects on abort signal", async () => {
+test("runEvaluator rejects on abort signal and kills remaining tasks", async () => {
+  const taskStarts: Set<number> = new Set();
+  const taskCompletions: Set<number> = new Set();
+
   const abortController = new AbortController();
 
-  setTimeout(() => abortController.abort(), 1000);
+  setTimeout(() => abortController.abort(), 10);
   await expect(
     runEvaluator(
       null,
       {
         projectName: "proj",
         evalName: "eval",
-        data: [{ input: 1, expected: 2 }],
+        data: Array.from({ length: 10 }, (_, i) => ({
+          input: i,
+          expected: i * 2,
+        })),
         task: async (input: number) => {
-          await new Promise((r) => setTimeout(r, 100000));
+          taskStarts.add(input);
+          if (input > 2) {
+            await new Promise((r) => setTimeout(r, 100000));
+          }
+          taskCompletions.add(input);
           return input * 2;
         },
         scores: [],
         signal: abortController.signal,
+        maxConcurrency: 1,
       },
       new NoopProgressReporter(),
       [],
       undefined,
     ),
-  ).rejects.toEqual(new Error("Evaluator aborted"));
+  ).rejects.toThrow(new InternalAbortError("Evaluator aborted"));
+
+  // first 3 tasks complete and 4th task was started but not completed before abort
+  expect(taskStarts).toEqual(new Set([0, 1, 2, 3]));
+  expect(taskCompletions).toEqual(new Set([0, 1, 2]));
 });
 
 test("runEvaluator works with no timeout or abort signal", async () => {

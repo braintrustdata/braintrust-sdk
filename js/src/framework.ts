@@ -33,7 +33,7 @@ import {
   withParent,
 } from "./logger";
 import { BarProgressReporter, ProgressReporter } from "./progress";
-import { isEmpty } from "./util";
+import { isEmpty, InternalAbortError } from "./util";
 
 export type BaseExperiment<
   Input,
@@ -1029,12 +1029,12 @@ async function runEvaluatorInternal(
     await new Promise((_, reject) => {
       if (evaluator.timeout) {
         setTimeout(() => {
-          reject(new Error("Evaluator timed out"));
+          reject(new InternalAbortError("Evaluator timed out"));
         }, evaluator.timeout);
       }
       if (evaluator.signal) {
         evaluator.signal.addEventListener("abort", () => {
-          reject(new Error("Evaluator aborted"));
+          reject(new InternalAbortError("Evaluator aborted"));
         });
       }
     });
@@ -1045,10 +1045,7 @@ async function runEvaluatorInternal(
   try {
     await Promise.race([q.drain(), cancel()]);
   } catch (e) {
-    if (
-      e instanceof Error &&
-      (e.message === "Evaluator timed out" || e.message === "Evaluator aborted")
-    ) {
+    if (e instanceof InternalAbortError) {
       q.kill();
     }
 
