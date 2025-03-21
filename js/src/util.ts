@@ -91,3 +91,11 @@ export function addAzureBlobHeaders(
     headers["x-ms-blob-type"] = "BlockBlob";
   }
 }
+
+// Internal error class for indicating that an operation was aborted.
+export class InternalAbortError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InternalAbortError";
+  }
+}
