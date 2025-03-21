@@ -595,11 +595,13 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
     def flush(self, batch_size: Optional[int] = None):
         pass
 
-    def clear(self):
+    def pop(self):
         with self.lock:
-            logs = self.logs
+            logs = [l.get() for l in self.logs]  # unwrap the LazyValues
             self.logs = []
-            return logs
+            # all the logs get merged before gettig sent to the server, so simulate that
+            # here
+            return merge_row_batch(logs)
 
 
 # We should only have one instance of this object in
