@@ -7,12 +7,12 @@ TEST_PROJECT_NAME = "test-project-456"
 
 
 def _setup_test_logger(project_name: str):
-    """Return test logger and it's background logger (so you can test the loggers data)"""
     project_metadata = ObjectMetadata(id=project_name + "-id", name=project_name, full_info=dict())
     metadata = OrgProjectMetadata(org_id=TEST_ORG_ID, project=project_metadata)
     lazy_metadata = LazyValue(lambda: metadata, use_mutex=False)
     l = logger.init_logger(project=project_name)
-    l.lazy_metadata = lazy_metadata  # this is cheesy but it stops us from having to login
+    l._lazy_metadata = lazy_metadata  # FIXME[matt] this is cheesy but it stops us from having to login
+    return l
 
 
 def test_anthropic():
