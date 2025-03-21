@@ -3,6 +3,7 @@ from typing import Any
 
 import anthropic
 
+from braintrust import span_types
 from braintrust.logger import start_span
 
 log = logging.getLogger(__name__)
@@ -32,10 +33,32 @@ class TracedMessages(NamedWrapper):
         self.__messages = messages
 
     def create(self, *args, **kwargs):
-        log.debug("doing it")
-        span = start_span(name="anthropic.messages.create")
+        span = start_span(name="anthropic.messages.create", type="llm")
         try:
-            return self.__messages.create(*args, **kwargs)
+            msg = self.__messages.create(*args, **kwargs)
+
+            metadata = {
+                "provider": "anthropic",  # FIXME[matt] is there a field for this?
+                "model": getattr(msg, "model", ""),
+            }
+
+            metrics = {}
+            usage = getattr(msg, "usage", None)
+            if usage:
+                in_t = getattr(usage, "input_tokens", 0)
+                out_t = getattr(usage, "output_tokens", 0)
+                tokens = in_t + out_t
+                metrics = {
+                    "tokens": tokens,
+                    "prompt_tokens": in_t,
+                    "completion_tokens": out_t,
+                }
+
+            span.log(tags={}, metadata=metadata, metrics=metrics)
+
+            return msg
+        except Exception as e:
+            raise e
         finally:
             span.end()
 
