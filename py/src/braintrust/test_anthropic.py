@@ -2,11 +2,12 @@
 Tests to ensure we reliably wrpa the Anthropic API.
 """
 
-
+import asyncio
 import os
 import time
 
 import anthropic
+import pytest
 
 from braintrust import logger
 from braintrust.logger import ObjectMetadata, OrgProjectMetadata
@@ -14,6 +15,7 @@ from braintrust.util import LazyValue
 from braintrust.wrappers.anthropic import wrap_anthropic_client
 
 TEST_ORG_ID = "test-org-123"
+MODEL = "claude-3-haiku-20240307"  # use the cheapest model since answers dont matter
 
 
 def _setup_test_logger(project_name: str):
@@ -43,6 +45,7 @@ def test_memory_logger():
 
         logs = bgl.pop()
         assert len(logs) == 1
+
         assert logs
 
 
@@ -55,11 +58,11 @@ def test_anthropic_client_error():
 
         client = wrap_anthropic_client(_get_anthropic_client())
 
-        model = "there-is-no-such-model"
+        fake_model = "there-is-no-such-model"
         msg_in = {"role": "user", "content": "who are you?"}
 
         try:
-            client.messages.create(model=model, max_tokens=999, messages=[msg_in])
+            client.messages.create(model=fake_model, max_tokens=999, messages=[msg_in])
         except Exception:
             pass
         else:
@@ -72,7 +75,36 @@ def test_anthropic_client_error():
         assert "404" in log["error"]
 
 
-def test_anthropic_client():
+def test_anthropic_messages_streaming():
+    async def _test():
+
+        project_name = "test-anthropic-app"
+        _setup_test_logger(project_name)
+
+        with logger._internal_with_memory_background_logger() as bgl:
+            assert not bgl.pop()
+
+            client = wrap_anthropic_client(_get_anthropic_client())
+
+            msg_in = {"role": "user", "content": "what's the point of it all?"}
+
+            start = time.time()
+            with client.messages.stream(model=MODEL, max_tokens=300, messages=[msg_in]) as stream:
+                for chunk in stream:
+                    pass
+
+            end = time.time()
+            logs = bgl.pop()
+            assert len(logs) == 1
+            log = logs[0][0]
+            assert log["project_id"] == project_name
+            assert start < log["metrics"]["start"] < end
+            assert start < log["metrics"]["end"] < end
+
+    asyncio.run(_test())
+
+
+def test_anthropic_messages():
     project_name = "test-anthropic-app"
     _setup_test_logger(project_name)
 
@@ -81,11 +113,10 @@ def test_anthropic_client():
 
         client = wrap_anthropic_client(_get_anthropic_client())
 
-        model = "claude-3-haiku-20240307"
         msg_in = {"role": "user", "content": "who are you?"}
 
         start = time.time()
-        msg = client.messages.create(model=model, max_tokens=300, messages=[msg_in])
+        msg = client.messages.create(model=MODEL, max_tokens=300, messages=[msg_in])
         end = time.time()
 
         text = msg.content[0].text
@@ -110,3 +141,4 @@ def test_anthropic_client():
         assert metrics["tokens"] > 0
         assert metrics["prompt_tokens"] > 0
         assert metrics["completion_tokens"] > 0
+        assert log["metadata"]["model"] == MODEL
