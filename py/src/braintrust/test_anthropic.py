@@ -1,3 +1,8 @@
+"""
+Tests to ensure we reliably wrpa the Anthropic API.
+"""
+
+
 import os
 import time
 
@@ -9,11 +14,11 @@ from braintrust.util import LazyValue
 from braintrust.wrappers.anthropic import wrap_anthropic_client
 
 TEST_ORG_ID = "test-org-123"
-TEST_PROJECT_NAME = "test-project-456"
 
 
 def _setup_test_logger(project_name: str):
-    project_metadata = ObjectMetadata(id=project_name + "-id", name=project_name, full_info=dict())
+    # FIXME[matt] make reusable
+    project_metadata = ObjectMetadata(id=project_name, name=project_name, full_info=dict())
     metadata = OrgProjectMetadata(org_id=TEST_ORG_ID, project=project_metadata)
     lazy_metadata = LazyValue(lambda: metadata, use_mutex=False)
     l = logger.init_logger(project=project_name)
@@ -25,8 +30,8 @@ def _get_anthropic_client():
 
 
 def test_memory_logger():
+    # FIXME[matt] this should be moved to a common place
     _setup_test_logger("test-anthropic-app")
-
     with logger._internal_with_memory_background_logger() as bgl:
         assert not bgl.pop()
 
@@ -42,27 +47,40 @@ def test_memory_logger():
 
 
 def test_anthropic_client():
-    _setup_test_logger("test-anthropic-app")
+    project_name = "test-anthropic-app"
+    _setup_test_logger(project_name)
+
     with logger._internal_with_memory_background_logger() as bgl:
         assert not bgl.pop()
 
-        start = time.time()
-
         client = wrap_anthropic_client(_get_anthropic_client())
-        msg = client.messages.create(
-            model="claude-3-haiku-20240307", max_tokens=300, messages=[{"role": "user", "content": "who are you?"}]
-        )
-        out = msg.content[0].text
-        assert out
 
+        model = "claude-3-haiku-20240307"
+        msg_in = {"role": "user", "content": "who are you?"}
+
+        start = time.time()
+        msg = client.messages.create(model=model, max_tokens=300, messages=[msg_in])
         end = time.time()
+
+        text = msg.content[0].text
+        assert text
+
+        # verify we generated the right spans.
         logs = bgl.pop()
 
         assert len(logs) == 1
         log = logs[0][0]
 
-        import pprint
-
-        pprint.pprint(log)
+        assert log["project_id"] == project_name
         assert start < log["metrics"]["start"] < end
         assert start < log["metrics"]["end"] < end
+        assert log["span_id"]
+        assert log["root_span_id"]
+        attrs = log["span_attributes"]
+        assert attrs["type"] == "llm"
+        assert "anthropic" in attrs["name"]
+        metrics = log["metrics"]
+        assert start < metrics["start"] < metrics["end"] < end
+        assert metrics["tokens"] > 0
+        assert metrics["prompt_tokens"] > 0
+        assert metrics["completion_tokens"] > 0
