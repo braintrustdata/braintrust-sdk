@@ -152,20 +152,17 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
             metrics["prompt_tokens"] = usage["prompt_tokens"]
         elif "input_tokens" in usage:
             metrics["prompt_tokens"] = usage["input_tokens"]
-        else:
-            metrics["prompt_tokens"] = 0
 
         if "completion_tokens" in usage:
             metrics["completion_tokens"] = usage["completion_tokens"]
         elif "output_tokens" in usage:
             metrics["completion_tokens"] = usage["output_tokens"]
-        else:
-            metrics["completion_tokens"] = 0
 
         if "total_tokens" in usage:
             metrics["tokens"] = usage["total_tokens"]
-        else:
-            metrics["tokens"] = metrics["prompt_tokens"] + metrics["completion_tokens"]
+        elif "input_tokens" in usage and "output_tokens" in usage:
+            metrics["tokens"] = usage["input_tokens"] + usage["output_tokens"]
+        
 
         return {
             "input": span.span_data.input,
