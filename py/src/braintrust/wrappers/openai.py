@@ -162,7 +162,6 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
             metrics["tokens"] = usage["total_tokens"]
         elif "input_tokens" in usage and "output_tokens" in usage:
             metrics["tokens"] = usage["input_tokens"] + usage["output_tokens"]
-        
 
         return {
             "input": span.span_data.input,
@@ -173,7 +172,6 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
             },
             "metrics": metrics,
         }
-
 
     def _custom_log_data(self, span: tracing.Span[tracing.CustomSpanData]) -> Dict[str, Any]:
         return span.span_data.data
