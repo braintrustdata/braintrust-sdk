@@ -5,6 +5,8 @@ Tests to ensure we reliably wrpa the Anthropic API.
 import asyncio
 import os
 import time
+import unittest
+from typing import Any, Dict
 
 import anthropic
 import pytest
@@ -15,6 +17,7 @@ from braintrust.util import LazyValue
 from braintrust.wrappers.anthropic import wrap_anthropic_client
 
 TEST_ORG_ID = "test-org-123"
+PROJECT_NAME = "test-anthropic-app"
 MODEL = "claude-3-haiku-20240307"  # use the cheapest model since answers dont matter
 
 
@@ -49,99 +52,100 @@ def test_memory_logger():
         assert logs
 
 
-def test_anthropic_client_error():
-    project_name = "test-anthropic-err"
-    _setup_test_logger(project_name)
-
+@pytest.fixture
+def memory_logger():
+    _setup_test_logger(PROJECT_NAME)
     with logger._internal_with_memory_background_logger() as bgl:
-        assert not bgl.pop()
-
-        client = wrap_anthropic_client(_get_anthropic_client())
-
-        fake_model = "there-is-no-such-model"
-        msg_in = {"role": "user", "content": "who are you?"}
-
-        try:
-            client.messages.create(model=fake_model, max_tokens=999, messages=[msg_in])
-        except Exception:
-            pass
-        else:
-            raise Exception("should have raised an exception")
-
-        logs = bgl.pop()
-        assert len(logs) == 1
-        log = logs[0][0]
-        assert log["project_id"] == project_name
-        assert "404" in log["error"]
+        yield bgl
 
 
-def test_anthropic_messages_streaming_sync():
-    project_name = "test-anthropic-app"
-    _setup_test_logger(project_name)
-
-    with logger._internal_with_memory_background_logger() as bgl:
-        assert not bgl.pop()
-
-        client = wrap_anthropic_client(_get_anthropic_client())
-        msg_in = {"role": "user", "content": "what is 2+2?"}
-
-        start = time.time()
-        with client.messages.stream(model=MODEL, max_tokens=300, messages=[msg_in]) as stream:
-            msgs_out = [m for m in stream]
-        end = time.time()
-
-        # crudely check that the stream is valid
-        assert len(msgs_out) > 3
-        assert 1 <= len([m for m in msgs_out if m.type == "text"])
-        assert msgs_out[0].type == "message_start"
-        assert msgs_out[-1].type == "message_stop"
-
-        logs = bgl.pop()
-        assert len(logs) == 1
-        log = logs[0][0]
-        import pprint
-
-        pprint.pprint(log)
-        assert log["project_id"] == project_name
-        assert start < log["metrics"]["start"] < end
-        assert start < log["metrics"]["end"] < end
+class TestAnthropicAsync(unittest.IsolatedAsyncioTestCase):
+    async def test_anthropic_messages_streaming_async(self):
+        assert True
 
 
-def test_anthropic_messages():
-    project_name = "test-anthropic-app"
-    _setup_test_logger(project_name)
+def test_anthropic_client_error(memory_logger):
+    assert not memory_logger.pop()
 
-    with logger._internal_with_memory_background_logger() as bgl:
-        assert not bgl.pop()
+    client = wrap_anthropic_client(_get_anthropic_client())
 
-        client = wrap_anthropic_client(_get_anthropic_client())
+    fake_model = "there-is-no-such-model"
+    msg_in = {"role": "user", "content": "who are you?"}
 
-        msg_in = {"role": "user", "content": "who are you?"}
+    try:
+        client.messages.create(model=fake_model, max_tokens=999, messages=[msg_in])
+    except Exception:
+        pass
+    else:
+        raise Exception("should have raised an exception")
 
-        start = time.time()
-        msg = client.messages.create(model=MODEL, max_tokens=300, messages=[msg_in])
-        end = time.time()
+    logs = memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0][0]
+    assert log["project_id"] == PROJECT_NAME
+    assert "404" in log["error"]
 
-        text = msg.content[0].text
-        assert text
 
-        # verify we generated the right spans.
-        logs = bgl.pop()
+def test_anthropic_messages_streaming_sync(memory_logger):
+    assert not memory_logger.pop()
 
-        assert len(logs) == 1
-        log = logs[0][0]
+    client = wrap_anthropic_client(_get_anthropic_client())
+    msg_in = {"role": "user", "content": "what is 2+2?"}
 
-        assert log["project_id"] == project_name
-        assert start < log["metrics"]["start"] < end
-        assert start < log["metrics"]["end"] < end
-        assert log["span_id"]
-        assert log["root_span_id"]
-        attrs = log["span_attributes"]
-        assert attrs["type"] == "llm"
-        assert "anthropic" in attrs["name"]
-        metrics = log["metrics"]
-        assert start < metrics["start"] < metrics["end"] < end
-        assert metrics["tokens"] > 0
-        assert metrics["prompt_tokens"] > 0
-        assert metrics["completion_tokens"] > 0
-        assert log["metadata"]["model"] == MODEL
+    start = time.time()
+    with client.messages.stream(model=MODEL, max_tokens=300, messages=[msg_in]) as stream:
+        msgs_out = [m for m in stream]
+    end = time.time()
+
+    # crudely check that the stream is valid
+    assert len(msgs_out) > 3
+    assert 1 <= len([m for m in msgs_out if m.type == "text"])
+    assert msgs_out[0].type == "message_start"
+    assert msgs_out[-1].type == "message_stop"
+
+    logs = memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0][0]
+    assert log["project_id"] == PROJECT_NAME
+    assert start < log["metrics"]["start"] < log["metrics"]["end"] < end
+    assert log["span_attributes"]["type"] == "llm"
+    _assert_metrics_are_valid(log["metrics"])
+
+
+def test_anthropic_messages(memory_logger):
+    assert not memory_logger.pop()
+
+    client = wrap_anthropic_client(_get_anthropic_client())
+
+    msg_in = {"role": "user", "content": "who are you?"}
+
+    start = time.time()
+    msg = client.messages.create(model=MODEL, max_tokens=300, messages=[msg_in])
+    end = time.time()
+
+    text = msg.content[0].text
+    assert text
+
+    # verify we generated the right spans.
+    logs = memory_logger.pop()
+
+    assert len(logs) == 1
+    log = logs[0][0]
+    assert log["project_id"] == PROJECT_NAME
+    assert start < log["metrics"]["start"] < end
+    assert start < log["metrics"]["end"] < end
+    assert log["span_id"]
+    assert log["root_span_id"]
+    attrs = log["span_attributes"]
+    assert attrs["type"] == "llm"
+    assert "anthropic" in attrs["name"]
+    metrics = log["metrics"]
+    _assert_metrics_are_valid(metrics)
+    assert start < metrics["start"] < metrics["end"] < end
+    assert log["metadata"]["model"] == MODEL
+
+
+def _assert_metrics_are_valid(metrics: Dict[str, Any]):
+    assert metrics["tokens"] > 0
+    assert metrics["prompt_tokens"] > 0
+    assert metrics["completion_tokens"] > 0

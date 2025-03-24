@@ -42,21 +42,7 @@ class TracedMessages(NamedWrapper):
         try:
             msg = self.__messages.create(*args, **kwargs)
 
-            metadata = {
-                "provider": "anthropic",  # FIXME[matt] is there a field for this?
-                "model": getattr(msg, "model", ""),
-            }
-
-            metrics = {}
-            usage = getattr(msg, "usage", None)
-            if usage:
-                in_t = getattr(usage, "input_tokens", 0)
-                out_t = getattr(usage, "output_tokens", 0)
-                metrics = {
-                    "tokens": in_t + out_t,
-                    "prompt_tokens": in_t,
-                    "completion_tokens": out_t,
-                }
+            metadata, metrics = _extract_metadata_metrics(msg)
 
             span.log(tags={}, metadata=metadata, metrics=metrics)
 
@@ -91,16 +77,45 @@ class TracedMessageStream(NamedWrapper):
         super().__init__(msg_stream)
         self.__msg_stream = msg_stream
         self.__span = span
+        self.__tokens_in = 0
+        self.__tokens_out = 0
 
     def __iter__(self):
         return self
 
     def __next__(self):
         try:
-            return next(self.__msg_stream)
+            m = next(self.__msg_stream)
+            print(m)
+            if m.type == "message_start":
+                metadata, metrics = _extract_metadata_metrics(m.message)
+                self.__tokens_in += metrics.get("prompt_tokens", 0)
+                self.__tokens_out += metrics.get("completion_tokens", 0)
+                self.__span.log(tags={}, metadata=metadata, metrics=metrics)
+            return m
         except StopIteration:
+            print(f"tokens in: {self.__tokens_in}, tokens out: {self.__tokens_out}")
             self.__span.end()
             raise
+
+
+def _extract_metadata_metrics(msg):
+    metadata = {
+        "provider": "anthropic",  # FIXME[matt] is there a field for this?
+        "model": getattr(msg, "model", ""),
+    }
+
+    metrics = {}
+    usage = getattr(msg, "usage", None)
+    if usage:
+        in_t = getattr(usage, "input_tokens", 0)
+        out_t = getattr(usage, "output_tokens", 0)
+        metrics = {
+            "tokens": in_t + out_t,
+            "prompt_tokens": in_t,
+            "completion_tokens": out_t,
+        }
+    return metadata, metrics
 
 
 def wrap_anthropic_client(client: anthropic.Anthropic) -> TracedAnthropic:
