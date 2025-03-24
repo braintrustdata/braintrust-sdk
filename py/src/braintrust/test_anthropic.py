@@ -113,7 +113,7 @@ def test_anthropic_messages_streaming_sync(memory_logger):
     assert not memory_logger.pop()
 
     client = wrap_anthropic_client(_get_client())
-    msg_in = {"role": "user", "content": "what is 2+2?"}
+    msg_in = {"role": "user", "content": "what is 2+2? (just the number)"}
 
     start = time.time()
     with client.messages.stream(model=MODEL, max_tokens=300, messages=[msg_in]) as stream:
@@ -129,6 +129,9 @@ def test_anthropic_messages_streaming_sync(memory_logger):
     logs = memory_logger.pop()
     assert len(logs) == 1
     log = logs[0][0]
+    assert "user" in str(log["input"])
+    assert "2+2" in str(log["input"])
+    assert "4" in str(log["output"])
     assert log["project_id"] == PROJECT_NAME
     assert start < log["metrics"]["start"] < log["metrics"]["end"] < end
     assert log["span_attributes"]["type"] == "llm"
@@ -140,7 +143,7 @@ def test_anthropic_messages_sync(memory_logger):
 
     client = wrap_anthropic_client(_get_client())
 
-    msg_in = {"role": "user", "content": "who are you?"}
+    msg_in = {"role": "user", "content": "what's 2+2?"}
 
     start = time.time()
     msg = client.messages.create(model=MODEL, max_tokens=300, messages=[msg_in])
@@ -154,6 +157,8 @@ def test_anthropic_messages_sync(memory_logger):
 
     assert len(logs) == 1
     log = logs[0][0]
+    assert "2+2" in str(log["input"])
+    assert "4" in str(log["output"])
     assert log["project_id"] == PROJECT_NAME
     assert start < log["metrics"]["start"] < end
     assert start < log["metrics"]["end"] < end

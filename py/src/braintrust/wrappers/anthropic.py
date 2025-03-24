@@ -9,7 +9,7 @@ from braintrust.logger import start_span
 log = logging.getLogger(__name__)
 
 
-class NamedWrapper:
+class Wrapper:
     def __init__(self, wrapped: Any):
         self.__wrapped = wrapped
 
@@ -17,7 +17,7 @@ class NamedWrapper:
         return getattr(self.__wrapped, name)
 
 
-class TracedAnthropic(NamedWrapper):
+class TracedAnthropic(Wrapper):
     def __init__(self, client: anthropic.Anthropic):
         super().__init__(client)
         self.__client = client
@@ -27,22 +27,30 @@ class TracedAnthropic(NamedWrapper):
         return TracedMessages(self.__client.messages)
 
 
-class TracedMessages(NamedWrapper):
+class TracedMessages(Wrapper):
     def __init__(self, messages):
         super().__init__(messages)
         self.__messages = messages
 
     def stream(self, *args, **kwargs):
-        span = start_span(name="anthropic.messages.stream", type="llm")
+        # note: messages is *always* a kwarg in this library
+        msgs_in = list(kwargs.get("messages", []))
+        kwargs["messages"] = msgs_in  # just in case it's a generator
+
+        span = start_span(name="anthropic.messages.stream", input=msgs_in, type="llm")
         s = self.__messages.stream(*args, **kwargs)
         return TracedMessageStreamManager(s, span)
 
     def create(self, *args, **kwargs):
+        msgs_in = list(kwargs.get("messages", []))
+        kwargs["messages"] = msgs_in  # just in case it's a generator
+
         span = start_span(name="anthropic.messages.create", type="llm")
         try:
             msg = self.__messages.create(*args, **kwargs)
             metadata, metrics = _extract_metadata_metrics(msg)
-            span.log(metadata=metadata, metrics=metrics)
+            print(msg.content)
+            span.log(input=msgs_in, output=msg.content, metadata=metadata, metrics=metrics)
             return msg
         except Exception as e:
             try:
@@ -54,7 +62,7 @@ class TracedMessages(NamedWrapper):
             span.end()
 
 
-class TracedMessageStreamManager(NamedWrapper):
+class TracedMessageStreamManager(Wrapper):
     def __init__(self, msg_stream_mgr, span):
         super().__init__(msg_stream_mgr)
         self.__msg_stream_mgr = msg_stream_mgr
@@ -76,7 +84,7 @@ class TracedMessageStreamManager(NamedWrapper):
         self.__msg_stream_mgr.__exit__(exc_type, exc_value, traceback)
 
 
-class TracedMessageStream(NamedWrapper):
+class TracedMessageStream(Wrapper):
     """TracedMessageStream wraps both sync and async message streams. Obviously only one
     makes sense at a time
     """
@@ -121,6 +129,9 @@ class TracedMessageStream(NamedWrapper):
             self.__tokens_in += metrics.get("prompt_tokens", 0)
             self.__tokens_out += metrics.get("completion_tokens", 0)
             self.__span.log(metadata=metadata, metrics=metrics)
+        elif m.type == "text":
+            # snapshot accumulates all messages, this we'll be dedup'ed downstream
+            self.__span.log(output=str(m.snapshot))
 
 
 def _extract_metadata_metrics(msg):
