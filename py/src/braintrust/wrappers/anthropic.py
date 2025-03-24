@@ -32,6 +32,11 @@ class TracedMessages(NamedWrapper):
         super().__init__(messages)
         self.__messages = messages
 
+    def stream(self, *args, **kwargs):
+        span = start_span(name="anthropic.messages.stream", type="llm")
+        s = self.__messages.stream(*args, **kwargs)
+        return TracedMessageStreamManager(s, span)
+
     def create(self, *args, **kwargs):
         span = start_span(name="anthropic.messages.create", type="llm")
         try:
@@ -64,6 +69,40 @@ class TracedMessages(NamedWrapper):
             raise e
         finally:
             span.end()
+
+
+class TracedMessageStreamManager(NamedWrapper):
+    def __init__(self, msg_stream_mgr, span):
+        super().__init__(msg_stream_mgr)
+        self.__msg_stream_mgr = msg_stream_mgr
+        self.__span = span
+
+    def __enter__(self):
+        ms = self.__msg_stream_mgr.__enter__()
+        return TracedMessageStream(ms, self.__span)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        # FIXME[matt] do we need to implement __exit__?
+        return self.__msg_stream_mgr.__exit__(exc_type, exc_value, traceback)
+
+
+class TracedMessageStream(NamedWrapper):
+    def __init__(self, msg_stream, span):
+        super().__init__(msg_stream)
+        self.__msg_stream = msg_stream
+        self.__span = span
+
+    def __iter__(self):
+        print("iter")
+        return self
+
+    def __next__(self):
+        print("next")
+        try:
+            return next(self.__msg_stream)
+        except StopIteration:
+            self.__span.end()
+            raise
 
 
 def wrap_anthropic_client(client: anthropic.Anthropic) -> TracedAnthropic:

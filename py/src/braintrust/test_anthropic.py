@@ -75,33 +75,36 @@ def test_anthropic_client_error():
         assert "404" in log["error"]
 
 
-def test_anthropic_messages_streaming():
-    async def _test():
+def test_anthropic_messages_streaming_sync():
+    project_name = "test-anthropic-app"
+    _setup_test_logger(project_name)
 
-        project_name = "test-anthropic-app"
-        _setup_test_logger(project_name)
+    with logger._internal_with_memory_background_logger() as bgl:
+        assert not bgl.pop()
 
-        with logger._internal_with_memory_background_logger() as bgl:
-            assert not bgl.pop()
+        client = wrap_anthropic_client(_get_anthropic_client())
+        msg_in = {"role": "user", "content": "what is 2+2?"}
 
-            client = wrap_anthropic_client(_get_anthropic_client())
+        start = time.time()
+        with client.messages.stream(model=MODEL, max_tokens=300, messages=[msg_in]) as stream:
+            msgs_out = [m for m in stream]
+        end = time.time()
 
-            msg_in = {"role": "user", "content": "what's the point of it all?"}
+        # crudely check that the stream is valid
+        assert len(msgs_out) > 3
+        assert 1 <= len([m for m in msgs_out if m.type == "text"])
+        assert msgs_out[0].type == "message_start"
+        assert msgs_out[-1].type == "message_stop"
 
-            start = time.time()
-            with client.messages.stream(model=MODEL, max_tokens=300, messages=[msg_in]) as stream:
-                for chunk in stream:
-                    pass
+        logs = bgl.pop()
+        assert len(logs) == 1
+        log = logs[0][0]
+        import pprint
 
-            end = time.time()
-            logs = bgl.pop()
-            assert len(logs) == 1
-            log = logs[0][0]
-            assert log["project_id"] == project_name
-            assert start < log["metrics"]["start"] < end
-            assert start < log["metrics"]["end"] < end
-
-    asyncio.run(_test())
+        pprint.pprint(log)
+        assert log["project_id"] == project_name
+        assert start < log["metrics"]["start"] < end
+        assert start < log["metrics"]["end"] < end
 
 
 def test_anthropic_messages():
