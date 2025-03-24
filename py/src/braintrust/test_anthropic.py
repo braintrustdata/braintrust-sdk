@@ -30,8 +30,12 @@ def _setup_test_logger(project_name: str):
     l._lazy_metadata = lazy_metadata  # FIXME[matt] this is cheesy but it stops us from having to login
 
 
-def _get_anthropic_client():
+def _get_client():
     return anthropic.Anthropic()
+
+
+def _get_async_client():
+    return anthropic.AsyncAnthropic()
 
 
 def test_memory_logger():
@@ -59,15 +63,29 @@ def memory_logger():
         yield bgl
 
 
-class TestAnthropicAsync(unittest.IsolatedAsyncioTestCase):
-    async def test_anthropic_messages_streaming_async(self):
-        assert True
+@pytest.mark.asyncio
+async def test_anthropic_messages_streaming_async(memory_logger):
+    assert not memory_logger.pop()
+
+    client = wrap_anthropic_client(_get_async_client())
+    msgs_in = [{"role": "user", "content": "what is 1+1?, just return the number"}]
+
+    async with client.messages.stream(max_tokens=1024, messages=msgs_in, model=MODEL) as stream:
+        async for event in stream:
+            pass
+            if event.type == "text":
+                pass
+            elif event.type == "content_block_stop":
+                pass
+
+        acc = await stream.get_final_message()
+        assert acc.content[0].text == "2"
 
 
 def test_anthropic_client_error(memory_logger):
     assert not memory_logger.pop()
 
-    client = wrap_anthropic_client(_get_anthropic_client())
+    client = wrap_anthropic_client(_get_client())
 
     fake_model = "there-is-no-such-model"
     msg_in = {"role": "user", "content": "who are you?"}
@@ -89,7 +107,7 @@ def test_anthropic_client_error(memory_logger):
 def test_anthropic_messages_streaming_sync(memory_logger):
     assert not memory_logger.pop()
 
-    client = wrap_anthropic_client(_get_anthropic_client())
+    client = wrap_anthropic_client(_get_client())
     msg_in = {"role": "user", "content": "what is 2+2?"}
 
     start = time.time()
@@ -115,7 +133,7 @@ def test_anthropic_messages_streaming_sync(memory_logger):
 def test_anthropic_messages(memory_logger):
     assert not memory_logger.pop()
 
-    client = wrap_anthropic_client(_get_anthropic_client())
+    client = wrap_anthropic_client(_get_client())
 
     msg_in = {"role": "user", "content": "who are you?"}
 

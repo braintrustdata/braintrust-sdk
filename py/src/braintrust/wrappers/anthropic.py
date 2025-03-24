@@ -38,13 +38,15 @@ class TracedMessages(NamedWrapper):
         return TracedMessageStreamManager(s, span)
 
     def create(self, *args, **kwargs):
+
         span = start_span(name="anthropic.messages.create", type="llm")
+
         try:
             msg = self.__messages.create(*args, **kwargs)
 
             metadata, metrics = _extract_metadata_metrics(msg)
 
-            span.log(tags={}, metadata=metadata, metrics=metrics)
+            span.log(metadata=metadata, metrics=metrics)
 
             return msg
         except Exception as e:
@@ -63,6 +65,13 @@ class TracedMessageStreamManager(NamedWrapper):
         self.__msg_stream_mgr = msg_stream_mgr
         self.__span = span
 
+    def __aenter__(self):
+        ms = self.__msg_stream_mgr.__aenter__()
+        return TracedMessageStream(ms, self.__span)
+
+    def __aexit__(self, exc_type, exc_value, traceback):
+        return self.__msg_stream_mgr.__aexit__(exc_type, exc_value, traceback)
+
     def __enter__(self):
         ms = self.__msg_stream_mgr.__enter__()
         return TracedMessageStream(ms, self.__span)
@@ -80,21 +89,28 @@ class TracedMessageStream(NamedWrapper):
         self.__tokens_in = 0
         self.__tokens_out = 0
 
+    async def __await__(self):
+        await self.__msg_stream.__await__()
+
+    async def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        return await self.__msg_stream.__anext__()
+
     def __iter__(self):
         return self
 
     def __next__(self):
         try:
             m = next(self.__msg_stream)
-            print(m)
             if m.type == "message_start":
                 metadata, metrics = _extract_metadata_metrics(m.message)
                 self.__tokens_in += metrics.get("prompt_tokens", 0)
                 self.__tokens_out += metrics.get("completion_tokens", 0)
-                self.__span.log(tags={}, metadata=metadata, metrics=metrics)
+                self.__span.log(metadata=metadata, metrics=metrics)
             return m
         except StopIteration:
-            print(f"tokens in: {self.__tokens_in}, tokens out: {self.__tokens_out}")
             self.__span.end()
             raise
 

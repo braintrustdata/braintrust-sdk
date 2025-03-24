@@ -16,11 +16,12 @@ import time
 
 import anthropic
 import braintrust
+from braintrust.wrappers.anthropic import wrap_anthropic_client
 
 print("BRAINTRUST CLIENT", braintrust.__file__)
 
-# Initialize Anthropic client (needs ANTHROPIC_API_KEY) (needs
-client = anthropic.Anthropic()
+# Initialize Anthropic client (needs ANTHROPIC_API_KEY)
+client = wrap_anthropic_client(anthropic.Anthropic())
 
 braintrust.init_logger(project="test-anthropic-app")
 
@@ -35,17 +36,16 @@ questions = [
 
 @braintrust.traced
 def _ask_anthropic(question):
-    time.sleep(random.random())
-    return "TODO"
-
     msg = client.messages.create(
         model="claude-3-haiku-20240307", max_tokens=300, messages=[{"role": "user", "content": question}]
     )
+
     return msg.content[0].text
 
 
 @braintrust.traced
 def ask():
+    print("asking questions")
     # Ask each question and display the response
     for i, question in enumerate(questions):
         _ask_anthropic(question)
