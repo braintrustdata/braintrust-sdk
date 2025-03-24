@@ -135,7 +135,7 @@ def test_anthropic_messages_streaming_sync(memory_logger):
     _assert_metrics_are_valid(log["metrics"])
 
 
-def test_anthropic_messages(memory_logger):
+def test_anthropic_messages_sync(memory_logger):
     assert not memory_logger.pop()
 
     client = wrap_anthropic_client(_get_client())

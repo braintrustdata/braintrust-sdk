@@ -38,16 +38,11 @@ class TracedMessages(NamedWrapper):
         return TracedMessageStreamManager(s, span)
 
     def create(self, *args, **kwargs):
-
         span = start_span(name="anthropic.messages.create", type="llm")
-
         try:
             msg = self.__messages.create(*args, **kwargs)
-
             metadata, metrics = _extract_metadata_metrics(msg)
-
             span.log(metadata=metadata, metrics=metrics)
-
             return msg
         except Exception as e:
             try:
@@ -82,6 +77,10 @@ class TracedMessageStreamManager(NamedWrapper):
 
 
 class TracedMessageStream(NamedWrapper):
+    """TracedMessageStream wraps both sync and async message streams. Obviously only one
+    makes sense at a time
+    """
+
     def __init__(self, msg_stream, span):
         super().__init__(msg_stream)
         self.__msg_stream = msg_stream
