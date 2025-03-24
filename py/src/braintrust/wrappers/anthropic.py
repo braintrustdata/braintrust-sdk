@@ -82,8 +82,8 @@ class TracedMessageStreamManager(NamedWrapper):
         return TracedMessageStream(ms, self.__span)
 
     def __exit__(self, exc_type, exc_value, traceback):
-        # FIXME[matt] do we need to implement __exit__?
-        return self.__msg_stream_mgr.__exit__(exc_type, exc_value, traceback)
+        # do we need to implement __exit__? the span is ended when the iterator is exhausted
+        self.__msg_stream_mgr.__exit__(exc_type, exc_value, traceback)
 
 
 class TracedMessageStream(NamedWrapper):
@@ -93,11 +93,9 @@ class TracedMessageStream(NamedWrapper):
         self.__span = span
 
     def __iter__(self):
-        print("iter")
         return self
 
     def __next__(self):
-        print("next")
         try:
             return next(self.__msg_stream)
         except StopIteration:
