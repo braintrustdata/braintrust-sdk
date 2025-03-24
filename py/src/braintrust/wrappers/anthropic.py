@@ -65,8 +65,8 @@ class TracedMessageStreamManager(NamedWrapper):
         self.__msg_stream_mgr = msg_stream_mgr
         self.__span = span
 
-    def __aenter__(self):
-        ms = self.__msg_stream_mgr.__aenter__()
+    async def __aenter__(self):
+        ms = await self.__msg_stream_mgr.__aenter__()
         return TracedMessageStream(ms, self.__span)
 
     def __aexit__(self, exc_type, exc_value, traceback):
@@ -89,30 +89,39 @@ class TracedMessageStream(NamedWrapper):
         self.__tokens_in = 0
         self.__tokens_out = 0
 
-    async def __await__(self):
-        await self.__msg_stream.__await__()
+    def __await__(self):
+        return self.__msg_stream.__await__()
 
-    async def __aiter__(self):
+    def __aiter__(self):
         return self
-
-    async def __anext__(self):
-        return await self.__msg_stream.__anext__()
 
     def __iter__(self):
         return self
 
+    async def __anext__(self):
+        try:
+            m = await anext(self.__msg_stream)
+            self.__process_message(m)
+            return m
+        except StopAsyncIteration:
+            self.__span.end()
+            raise
+
     def __next__(self):
         try:
             m = next(self.__msg_stream)
-            if m.type == "message_start":
-                metadata, metrics = _extract_metadata_metrics(m.message)
-                self.__tokens_in += metrics.get("prompt_tokens", 0)
-                self.__tokens_out += metrics.get("completion_tokens", 0)
-                self.__span.log(metadata=metadata, metrics=metrics)
+            self.__process_message(m)
             return m
         except StopIteration:
             self.__span.end()
             raise
+
+    def __process_message(self, m):
+        if m.type == "message_start":
+            metadata, metrics = _extract_metadata_metrics(m.message)
+            self.__tokens_in += metrics.get("prompt_tokens", 0)
+            self.__tokens_out += metrics.get("completion_tokens", 0)
+            self.__span.log(metadata=metadata, metrics=metrics)
 
 
 def _extract_metadata_metrics(msg):

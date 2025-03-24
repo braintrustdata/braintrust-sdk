@@ -70,16 +70,21 @@ async def test_anthropic_messages_streaming_async(memory_logger):
     client = wrap_anthropic_client(_get_async_client())
     msgs_in = [{"role": "user", "content": "what is 1+1?, just return the number"}]
 
+    start = time.time()
     async with client.messages.stream(max_tokens=1024, messages=msgs_in, model=MODEL) as stream:
         async for event in stream:
             pass
-            if event.type == "text":
-                pass
-            elif event.type == "content_block_stop":
-                pass
-
         acc = await stream.get_final_message()
+        end = time.time()
         assert acc.content[0].text == "2"
+
+        logs = memory_logger.pop()
+        assert len(logs) == 1
+        log = logs[0][0]
+        assert log["project_id"] == PROJECT_NAME
+        assert log["span_attributes"]["type"] == "llm"
+        _assert_metrics_are_valid(log["metrics"])
+        assert start < log["metrics"]["start"] < log["metrics"]["end"] < end
 
 
 def test_anthropic_client_error(memory_logger):
