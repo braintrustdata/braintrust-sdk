@@ -1,14 +1,7 @@
 #!/usr/bin/env python
-
-
-# ASDF !/usr/bin/env uv run --script
-# ASDF  /// script
-# ASDF  dependencies = [
-# ASDF    "anthropic",
-# ASDF    "braintrust",
-# ASDF  ]
-# ASDF  ///
-
+"""
+An app demonstrating how to wrap the Anthropic python client.
+"""
 
 import os
 import random
@@ -18,12 +11,10 @@ import anthropic
 import braintrust
 from braintrust.wrappers.anthropic import wrap_anthropic_client
 
-print("BRAINTRUST CLIENT", braintrust.__file__)
-
 # Initialize Anthropic client (needs ANTHROPIC_API_KEY)
 client = wrap_anthropic_client(anthropic.Anthropic())
 
-braintrust.init_logger(project="test-anthropic-app")
+braintrust.init_logger(project="example-anthropic-app")
 
 
 # List of questions to ask
