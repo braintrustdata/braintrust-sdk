@@ -1,5 +1,5 @@
 """
-Tests to ensure we reliably wrpa the Anthropic API.
+Tests to ensure we reliably wrap the Anthropic API.
 """
 
 import asyncio

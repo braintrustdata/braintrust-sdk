@@ -151,7 +151,8 @@ class TracedMessageStream(Wrapper):
 
             self.__span.log(metadata=metadata, metrics=self.__metrics)
         elif m.type == "text":
-            # snapshot accumulates all messages, this we'll be dedup'ed downstream
+            # snapshot accumulates the whole message as it streams in. We can send the whole thing
+            # and updates will be dedup'ed downstream
             self.__span.log(output=str(m.snapshot))
 
 
