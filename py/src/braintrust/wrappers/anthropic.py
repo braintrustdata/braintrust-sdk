@@ -107,7 +107,7 @@ class TracedMessageStream(Wrapper):
 
     async def __anext__(self):
         try:
-            m = await anext(self.__msg_stream)
+            m = await self.__msg_stream.__anext__()
             self.__process_message(m)
             return m
         except StopAsyncIteration:
