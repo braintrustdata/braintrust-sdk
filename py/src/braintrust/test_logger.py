@@ -302,3 +302,13 @@ class TestLogger(TestCase):
                 },
             },
         )
+
+
+def test_noop_permalink():
+    # fixes issue #BRA-1837
+    span = braintrust.NOOP_SPAN
+    assert span.permalink() == "https://braintrust.dev/noop"
+
+    link = braintrust.permalink(span.export())
+    assert link
+    assert link == "https://braintrust.dev/noop"
