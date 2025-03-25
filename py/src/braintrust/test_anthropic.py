@@ -81,6 +81,9 @@ async def test_anthropic_messages_streaming_async(memory_logger):
         logs = memory_logger.pop()
         assert len(logs) == 1
         log = logs[0][0]
+        assert "user" in str(log["input"])
+        assert "1+1" in str(log["input"])
+        assert "2" in str(log["output"])
         assert log["project_id"] == PROJECT_NAME
         assert log["span_attributes"]["type"] == "llm"
         _assert_metrics_are_valid(log["metrics"])
