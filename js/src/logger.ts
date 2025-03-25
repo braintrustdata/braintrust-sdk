@@ -79,6 +79,7 @@ import {
   GLOBAL_PROJECT,
   isEmpty,
   LazyValue,
+  SyncLazyValue,
   runCatchFinally,
 } from "./util";
 
@@ -322,7 +323,7 @@ export class BraintrustState {
   // This is preferable to replacing the whole logger, which would create the
   // possibility of multiple loggers floating around, which may not log in a
   // deterministic order.
-  private _bgLogger: BackgroundLogger;
+  private _bgLogger: SyncLazyValue<BackgroundLogger>;
 
   public appUrl: string | null = null;
   public appPublicUrl: string | null = null;
@@ -356,9 +357,8 @@ export class BraintrustState {
       await this.login({});
       return this.apiConn();
     };
-    this._bgLogger = new BackgroundLogger(
-      new LazyValue(defaultGetLogConn),
-      loginParams,
+    this._bgLogger = new SyncLazyValue(
+      () => new BackgroundLogger(new LazyValue(defaultGetLogConn), loginParams),
     );
 
     this.resetLoginInfo();
@@ -532,12 +532,12 @@ export class BraintrustState {
   }
 
   public bgLogger(): BackgroundLogger {
-    return this._bgLogger;
+    return this._bgLogger.get();
   }
 
   // Should only be called by the login function.
   public loginReplaceApiConn(apiConn: HTTPConnection) {
-    this._bgLogger.internalReplaceApiConn(apiConn);
+    this._bgLogger.get().internalReplaceApiConn(apiConn);
   }
 }
 

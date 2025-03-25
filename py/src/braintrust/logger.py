@@ -294,7 +294,12 @@ class BraintrustState:
         # Any time we re-log in, we directly update the api_conn inside the
         # logger. This is preferable to replacing the whole logger, which would
         # create the possibility of multiple loggers floating around.
-        self._global_bg_logger = _BackgroundLogger(LazyValue(default_get_api_conn, use_mutex=True))
+        #
+        # We lazily-initialize the logger so that it does any initialization
+        # (including reading env variables) upon the first actual usage.
+        self._global_bg_logger = LazyValue(
+            lambda: _BackgroundLogger(LazyValue(default_get_api_conn, use_mutex=True)), use_mutex=True
+        )
 
         # For unit-testing, tests may wish to temporarily override the global
         # logger with a custom one. We allow this but keep the override variable
@@ -367,12 +372,12 @@ class BraintrustState:
         if not self._user_info:
             self._user_info = info
 
-    def global_bg_logger(self):
-        return getattr(self._override_bg_logger, "logger", None) or self._global_bg_logger
+    def global_bg_logger(self) -> "_BackgroundLogger":
+        return getattr(self._override_bg_logger, "logger", None) or self._global_bg_logger.get()
 
     # Should only be called by the login function.
     def login_replace_api_conn(self, api_conn: "HTTPConnection"):
-        self._global_bg_logger.internal_replace_api_conn(api_conn)
+        self._global_bg_logger.get().internal_replace_api_conn(api_conn)
 
 
 _state: BraintrustState = None  # type: ignore
@@ -871,6 +876,10 @@ class _BackgroundLogger:
 def _internal_reset_global_state() -> None:
     global _state
     _state = BraintrustState()
+
+
+def _internal_get_global_state() -> BraintrustState:
+    return _state
 
 
 _internal_reset_global_state()
