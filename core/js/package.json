@@ -1,6 +1,6 @@
 {
   "name": "@braintrust/core",
-  "version": "0.0.82",
+  "version": "0.0.83",
   "description": "Shared core dependencies for Braintrust packages",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
