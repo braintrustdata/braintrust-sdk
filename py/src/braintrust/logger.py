@@ -298,7 +298,7 @@ class BraintrustState:
         # We lazily-initialize the logger so that it does any initialization
         # (including reading env variables) upon the first actual usage.
         self._global_bg_logger = LazyValue(
-            lambda: _BackgroundLogger(LazyValue(default_get_api_conn, use_mutex=True)), use_mutex=True
+            lambda: _HTTPBackgroundLogger(LazyValue(default_get_api_conn, use_mutex=True)), use_mutex=True
         )
 
         # For unit-testing, tests may wish to temporarily override the global
@@ -573,11 +573,40 @@ def _check_json_serializable(event):
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
 
+class _BackgroundLogger(ABC):
+    @abstractmethod
+    def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
+        pass
+
+    @abstractmethod
+    def flush(self, batch_size: Optional[int] = None):
+        pass
+
+
+class _MemoryBackgroundLogger(_BackgroundLogger):
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.logs = []
+
+    def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
+        with self.lock:
+            self.logs.extend(args)
+
+    def flush(self, batch_size: Optional[int] = None):
+        pass
+
+    def clear(self):
+        with self.lock:
+            logs = self.logs
+            self.logs = []
+            return logs
+
+
 # We should only have one instance of this object in
 # 'BraintrustState._global_bg_logger'. Be careful about spawning multiple
 # instances of this class, because concurrent _BackgroundLoggers will not log to
 # the backend in a deterministic order.
-class _BackgroundLogger:
+class _HTTPBackgroundLogger:
     def __init__(self, api_conn: LazyValue[HTTPConnection]):
         self.api_conn = api_conn
         self.outfile = sys.stderr
@@ -892,6 +921,16 @@ def _internal_with_custom_background_logger():
     _state._override_bg_logger.logger = custom_logger
     try:
         yield custom_logger
+    finally:
+        _state._override_bg_logger.logger = None
+
+
+@contextlib.contextmanager
+def _internal_with_memory_background_logger():
+    memory_logger = _MemoryBackgroundLogger()
+    _state._override_bg_logger.logger = memory_logger
+    try:
+        yield memory_logger
     finally:
         _state._override_bg_logger.logger = None
 
@@ -3883,10 +3922,12 @@ class Logger(Exportable):
 
     @property
     def org_id(self) -> str:
+        return "org-123"
         return self._lazy_metadata.get().org_id
 
     @property
     def project(self) -> ObjectMetadata:
+        return ObjectMetadata(id="proj-123", name="test-project", full_info=dict())
         return self._lazy_metadata.get().project
 
     @property
