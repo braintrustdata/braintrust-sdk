@@ -428,7 +428,7 @@ class RetryRequestExceptionsAdapter(HTTPAdapter):
                 response = super().send(*args, **kwargs)
                 # Fully-download the content to ensure we catch any errors from
                 # downloading.
-                if response.content:
+                if not response.is_redirect and response.content:
                     pass
                 return response
             except (urllib3.exceptions.HTTPError, requests.exceptions.RequestException) as e:
