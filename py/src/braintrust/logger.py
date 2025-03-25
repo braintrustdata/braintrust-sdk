@@ -247,7 +247,7 @@ class _NoopSpan(Span):
         return ""
 
     def permalink(self) -> str:
-        return ""
+        return NOOP_SPAN_PERMALINK
 
     def flush(self):
         pass
@@ -276,6 +276,7 @@ class _NoopSpan(Span):
 
 
 NOOP_SPAN: Span = _NoopSpan()
+NOOP_SPAN_PERMALINK = "https://braintrust.dev/noop-span"
 
 
 class BraintrustState:
@@ -2593,6 +2594,9 @@ def permalink(slug: str, org_name: Optional[str] = None, app_url: Optional[str] 
     :param app_url: The app URL to use. If not provided, the app URL will be inferred from the global login state.
     :returns: A permalink to the exported span.
     """
+    if not slug:
+        # Noop spans have an empty slug, so return a dummy permalink.
+        return NOOP_SPAN_PERMALINK
 
     if not org_name:
         login()
