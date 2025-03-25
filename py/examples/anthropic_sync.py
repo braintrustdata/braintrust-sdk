@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-An app demonstrating how to wrap the Anthropic python client.
+An app demonstrating how to wrap the sync Anthropic Client.
 """
 
 import os
@@ -35,11 +35,27 @@ def _ask_anthropic(question):
 
 
 @braintrust.traced
+def _ask_anthropic_stream(question):
+    args = {
+        "max_tokens": 1024,
+        "model": "claude-3-haiku-20240307",
+        "messages": [{"role": "user", "content": question}],
+    }
+    with client.messages.stream(**args) as stream:
+        for msg in stream:
+            pass
+        message = stream.get_final_message()
+        print(message)
+    print("done")
+
+
+@braintrust.traced
 def ask():
     print("asking questions")
     # Ask each question and display the response
     for i, question in enumerate(questions):
         _ask_anthropic(question)
+        _ask_anthropic_stream(question)
 
 
 def main():
