@@ -10,6 +10,8 @@ import {
   initLogger,
   NOOP_SPAN,
   Prompt,
+  NOOP_SPAN_PERMALINK,
+  permalink,
 } from "./logger";
 import { BackgroundLogEvent } from "@braintrust/core";
 import { configureNode } from "./node";
@@ -228,6 +230,18 @@ test("deepCopyEvent with attachments", () => {
   expect((copy.output as any).attachmentList[0]).toBe(attachment1);
   expect((copy.output as any).attachmentList[1]).toBe(attachment2);
   expect((copy.output as any).attachmentList[3]).toBe(attachment3);
+});
+
+test("noop span permalink #BRA-1837", async () => {
+  const span = NOOP_SPAN;
+  const link1 = await span.permalink();
+  expect(link1).toBe("https://braintrust.dev/noop");
+
+  const slug = await span.export();
+  expect(slug).toBe("");
+
+  const link2 = await permalink(slug);
+  expect(link2).toBe("https://braintrust.dev/noop");
 });
 
 test("prompt.build with structured output templating", () => {

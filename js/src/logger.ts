@@ -275,7 +275,7 @@ export class NoopSpan implements Span {
   }
 
   public async permalink(): Promise<string> {
-    return "";
+    return NOOP_SPAN_PERMALINK;
   }
 
   public async flush(): Promise<void> {}
@@ -288,6 +288,7 @@ export class NoopSpan implements Span {
 }
 
 export const NOOP_SPAN = new NoopSpan();
+export const NOOP_SPAN_PERMALINK = "https://braintrust.dev/noop-span";
 
 // In certain situations (e.g. the cli), we want separately-compiled modules to
 // use the same state as the toplevel module. This global variable serves as a
@@ -1417,6 +1418,11 @@ export async function permalink(
     appUrl?: string;
   },
 ): Promise<string> {
+  // Noop spans have an empty slug, so return a dummy permalink.
+  if (slug === "") {
+    return NOOP_SPAN_PERMALINK;
+  }
+
   const state = opts?.state ?? _globalState;
   const getOrgName = async () => {
     if (opts?.orgName) {
