@@ -81,6 +81,35 @@ export class LazyValue<T> {
   }
 }
 
+// Synchronous version of LazyValue.
+export class SyncLazyValue<T> {
+  private callable: () => T;
+  private value:
+    | { computedState: "succeeded"; val: T }
+    | { computedState: "uninitialized" } = {
+    computedState: "uninitialized",
+  };
+
+  constructor(callable: () => T) {
+    this.callable = callable;
+  }
+
+  get(): T {
+    if (this.value.computedState !== "uninitialized") {
+      return this.value.val;
+    }
+    const result = this.callable();
+    this.value = { computedState: "succeeded", val: result };
+    return result;
+  }
+
+  // If this is true, the caller should be able to obtain the SyncLazyValue without
+  // it throwing.
+  public get hasSucceeded(): boolean {
+    return this.value.computedState === "succeeded";
+  }
+}
+
 export function addAzureBlobHeaders(
   headers: Record<string, string>,
   url: string,
