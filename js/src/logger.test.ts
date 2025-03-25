@@ -235,13 +235,13 @@ test("deepCopyEvent with attachments", () => {
 test("noop span permalink #BRA-1837", async () => {
   const span = NOOP_SPAN;
   const link1 = await span.permalink();
-  expect(link1).toBe("https://braintrust.dev/noop");
+  expect(link1).toBe("https://braintrust.dev/noop-span");
 
   const slug = await span.export();
   expect(slug).toBe("");
 
   const link2 = await permalink(slug);
-  expect(link2).toBe("https://braintrust.dev/noop");
+  expect(link2).toBe("https://braintrust.dev/noop-span");
 });
 
 test("prompt.build with structured output templating", () => {
