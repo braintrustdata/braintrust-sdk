@@ -36,6 +36,7 @@ extras_require = {
         "pre-commit",
         "pytest",
         "twine",
+        "pytest-asyncio",
     ],
     "doc": ["pydoc-markdown"],
     "openai-agents": ["openai-agents"],
