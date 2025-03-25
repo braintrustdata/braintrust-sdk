@@ -276,7 +276,7 @@ class _NoopSpan(Span):
 
 
 NOOP_SPAN: Span = _NoopSpan()
-NOOP_SPAN_PERMALINK = "https://braintrust.dev/noop"
+NOOP_SPAN_PERMALINK = "https://braintrust.dev/noop-span"
 
 
 class BraintrustState:
