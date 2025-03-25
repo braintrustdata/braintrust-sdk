@@ -48,8 +48,8 @@ class TracedMessages(Wrapper):
         span = start_span(name="anthropic.messages.create", type="llm")
         try:
             msg = self.__messages.create(*args, **kwargs)
-            metadata, metrics = _extract_metadata_metrics(msg)
-            print(msg.content)
+            metadata = _extract_metadata(msg)
+            metrics = _extract_metrics(getattr(msg, "usage", {}))
             span.log(input=msgs_in, output=msg.content, metadata=metadata, metrics=metrics)
             return msg
         except Exception as e:
@@ -93,8 +93,7 @@ class TracedMessageStream(Wrapper):
         super().__init__(msg_stream)
         self.__msg_stream = msg_stream
         self.__span = span
-        self.__tokens_in = 0
-        self.__tokens_out = 0
+        self.__metrics = {}
 
     def __await__(self):
         return self.__msg_stream.__await__()
@@ -124,33 +123,62 @@ class TracedMessageStream(Wrapper):
             raise
 
     def __process_message(self, m):
-        if m.type == "message_start":
-            metadata, metrics = _extract_metadata_metrics(m.message)
-            self.__tokens_in += metrics.get("prompt_tokens", 0)
-            self.__tokens_out += metrics.get("completion_tokens", 0)
-            self.__span.log(metadata=metadata, metrics=metrics)
+        if m.type in ("message_start", "message_delta", "message_stop"):
+            metadata = None
+            metrics = None
+            usage = None
+
+            # Some messages have usage & metadata and others only have usage.
+            if hasattr(m, "message"):
+                # start & end has usage & metadata
+                msg = m.message
+                metadata = _extract_metadata(msg)
+                usage = getattr(msg, "usage", None)
+            elif hasattr(m, "usage"):
+                # messages deltas only have usage
+                usage = m.usage
+
+            # Not every message has every stat, but the total depends on sum of prompt & completion tokens,
+            # so we need to track the current max for each value.
+            if usage:
+                cur_metrics = _extract_metrics(usage)
+                for k, v in cur_metrics.items():
+                    if v > self.__metrics.get(k, -1):
+                        self.__metrics[k] = v
+                self.__metrics["tokens"] = self.__metrics.get("prompt_tokens", 0) + self.__metrics.get(
+                    "completion_tokens", 0
+                )
+
+            self.__span.log(metadata=metadata, metrics=self.__metrics)
         elif m.type == "text":
             # snapshot accumulates all messages, this we'll be dedup'ed downstream
             self.__span.log(output=str(m.snapshot))
 
 
-def _extract_metadata_metrics(msg):
-    metadata = {
+def _extract_metadata(msg):
+    return {
         "provider": "anthropic",  # FIXME[matt] is there a field for this?
         "model": getattr(msg, "model", ""),
     }
 
+
+def _extract_metrics(usage):
     metrics = {}
-    usage = getattr(msg, "usage", None)
-    if usage:
-        in_t = getattr(usage, "input_tokens", 0)
-        out_t = getattr(usage, "output_tokens", 0)
-        metrics = {
-            "tokens": in_t + out_t,
-            "prompt_tokens": in_t,
-            "completion_tokens": out_t,
-        }
-    return metadata, metrics
+    if not usage:
+        return {}
+
+    def _save_if_exists_to(source, target=None):
+        n = getattr(usage, source, None)
+        if n is not None:
+            metrics[target or source] = n
+
+    _save_if_exists_to("input_tokens", "prompt_tokens")
+    _save_if_exists_to("output_tokens", "completion_tokens")
+    _save_if_exists_to("cache_read_input_tokens")
+    _save_if_exists_to("cache_creation_input_tokens")
+    metrics["tokens"] = metrics.get("prompt_tokens", 0) + metrics.get("completion_tokens", 0)
+
+    return metrics
 
 
 def wrap_anthropic_client(client: anthropic.Anthropic) -> TracedAnthropic:

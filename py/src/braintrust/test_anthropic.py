@@ -74,9 +74,10 @@ async def test_anthropic_messages_streaming_async(memory_logger):
     async with client.messages.stream(max_tokens=1024, messages=msgs_in, model=MODEL) as stream:
         async for event in stream:
             pass
-        acc = await stream.get_final_message()
+        msg_out = await stream.get_final_message()
         end = time.time()
-        assert acc.content[0].text == "2"
+        assert msg_out.content[0].text == "2"
+        usage = msg_out.usage
 
         logs = memory_logger.pop()
         assert len(logs) == 1
@@ -88,6 +89,12 @@ async def test_anthropic_messages_streaming_async(memory_logger):
         assert log["span_attributes"]["type"] == "llm"
         _assert_metrics_are_valid(log["metrics"])
         assert start < log["metrics"]["start"] < log["metrics"]["end"] < end
+        metrics = log["metrics"]
+        assert metrics["prompt_tokens"] == usage.input_tokens
+        assert metrics["completion_tokens"] == usage.output_tokens
+        assert metrics["tokens"] == usage.input_tokens + usage.output_tokens
+        assert metrics["cache_read_input_tokens"] == usage.cache_read_input_tokens
+        assert metrics["cache_creation_input_tokens"] == usage.cache_creation_input_tokens
 
 
 def test_anthropic_client_error(memory_logger):
@@ -122,7 +129,8 @@ def test_anthropic_messages_streaming_sync(memory_logger):
     with client.messages.stream(model=MODEL, max_tokens=300, messages=[msg_in]) as stream:
         msgs_out = [m for m in stream]
     end = time.time()
-
+    msg_out = stream.get_final_message()
+    usage = msg_out.usage
     # crudely check that the stream is valid
     assert len(msgs_out) > 3
     assert 1 <= len([m for m in msgs_out if m.type == "text"])
@@ -139,6 +147,11 @@ def test_anthropic_messages_streaming_sync(memory_logger):
     assert start < log["metrics"]["start"] < log["metrics"]["end"] < end
     assert log["span_attributes"]["type"] == "llm"
     _assert_metrics_are_valid(log["metrics"])
+    assert log["metrics"]["prompt_tokens"] == usage.input_tokens
+    assert log["metrics"]["completion_tokens"] == usage.output_tokens
+    assert log["metrics"]["tokens"] == usage.input_tokens + usage.output_tokens
+    assert log["metrics"]["cache_read_input_tokens"] == usage.cache_read_input_tokens
+    assert log["metrics"]["cache_creation_input_tokens"] == usage.cache_creation_input_tokens
 
 
 def test_anthropic_messages_sync(memory_logger):
