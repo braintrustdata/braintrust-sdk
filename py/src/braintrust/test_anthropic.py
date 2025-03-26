@@ -61,7 +61,50 @@ def memory_logger():
         yield bgl
 
 
-def test_anthropic_with_system_prompt_input(memory_logger):
+def test_anthropic_messages_create_stream_true(memory_logger):
+    pass
+    # FIXME[matt] implement this
+
+
+def test_anthropic_messages_model_params_inputs(memory_logger):
+    assert not memory_logger.pop()
+    client = wrap_anthropic_client(_get_client())
+
+    kw = {
+        "model": MODEL,
+        "max_tokens": 300,
+        "system": "just return the number",
+        "messages": [{"role": "user", "content": "what is 1+1?"}],
+        "temperature": 0.5,
+        "top_p": 0.5,
+    }
+
+    def _with_messages_create():
+        return client.messages.create(**kw)
+
+    def _with_messages_stream():
+        with client.messages.stream(**kw) as stream:
+            for msg in stream:
+                pass
+        return stream.get_final_message()
+
+    for f in [_with_messages_create, _with_messages_stream]:
+        msg = f()
+        assert msg.content[0].text == "2"
+
+        logs = memory_logger.pop()
+        assert len(logs) == 1
+        log = logs[0][0]
+        import pprint
+
+        pprint.pprint(log)
+        assert log["metadata"]["model"] == MODEL
+        assert log["metadata"]["model_parameters"]["max_tokens"] == 300
+        assert log["metadata"]["model_parameters"]["temperature"] == 0.5
+        assert log["metadata"]["model_parameters"]["top_p"] == 0.5
+
+
+def test_anthropic_messages_system_prompt_inputs(memory_logger):
     assert not memory_logger.pop()
 
     client = wrap_anthropic_client(_get_client())
@@ -116,6 +159,8 @@ async def test_anthropic_messages_streaming_async(memory_logger):
         assert "2" in str(log["output"])
         assert log["project_id"] == PROJECT_NAME
         assert log["span_attributes"]["type"] == "llm"
+        assert log["metadata"]["model"] == MODEL
+        assert log["metadata"]["model_parameters"]["max_tokens"] == 1024
         _assert_metrics_are_valid(log["metrics"])
         assert start < log["metrics"]["start"] < log["metrics"]["end"] < end
         metrics = log["metrics"]
@@ -124,6 +169,8 @@ async def test_anthropic_messages_streaming_async(memory_logger):
         assert metrics["tokens"] == usage.input_tokens + usage.output_tokens
         assert metrics["cache_read_input_tokens"] == usage.cache_read_input_tokens
         assert metrics["cache_creation_input_tokens"] == usage.cache_creation_input_tokens
+        assert log["metadata"]["model"] == MODEL
+        assert log["metadata"]["model_parameters"]["max_tokens"] == 1024
 
 
 def test_anthropic_client_error(memory_logger):

@@ -21,6 +21,7 @@ def ask_anthropic_sync(question, system=None):
     args = {
         "model": "claude-3-haiku-20240307",
         "max_tokens": 300,
+        "temperature": 0.5,
         "messages": [{"role": "user", "content": question}],
     }
     if system:

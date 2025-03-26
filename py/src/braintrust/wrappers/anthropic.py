@@ -9,6 +9,10 @@ from braintrust.logger import start_span
 log = logging.getLogger(__name__)
 
 
+# Anthropic model parameters that we want to track as span metadata.
+MODEL_PARAMS = ("max_tokens", "temperature", "top_k", "top_p", "stop_sequences", "tool_chice", "tools")
+
+
 class Wrapper:
     def __init__(self, wrapped: Any):
         self.__wrapped = wrapped
@@ -34,21 +38,27 @@ class TracedMessages(Wrapper):
 
     def stream(self, *args, **kwargs):
         # note: this library mandates kwargs, so we can ignore args
-        prompt_input = self.__get_input_from_kwargs(kwargs)
+        _input = self.__get_input_from_kwargs(kwargs)
+        metadata = self.__get_metadata_from_kwargs(kwargs)
+        span = start_span(
+            name="anthropic.messages.stream",
+            metadata=metadata,
+            input=_input,
+            type="llm",
+        )
 
-        span = start_span(name="anthropic.messages.stream", input=prompt_input, type="llm")
         s = self.__messages.stream(*args, **kwargs)
         return TracedMessageStreamManager(s, span)
 
     def create(self, *args, **kwargs):
-        prompt_input = self.__get_input_from_kwargs(kwargs)
+        _input = self.__get_input_from_kwargs(kwargs)
+        metadata = self.__get_metadata_from_kwargs(kwargs)
 
-        span = start_span(name="anthropic.messages.create", type="llm")
+        span = start_span(name="anthropic.messages.create", type="llm", metadata=metadata, input=_input)
         try:
             msg = self.__messages.create(*args, **kwargs)
-            metadata = _extract_metadata(msg)
             metrics = _extract_metrics(getattr(msg, "usage", {}))
-            span.log(input=prompt_input, output=msg.content, metadata=metadata, metrics=metrics)
+            span.log(input=_input, output=msg.content, metrics=metrics)
             return msg
         except Exception as e:
             try:
@@ -70,6 +80,20 @@ class TracedMessages(Wrapper):
         if system:
             msgs.append({"role": "system", "content": system})
         return msgs
+
+    @staticmethod
+    def __get_metadata_from_kwargs(kwargs):
+        model_params = {}
+        for k in MODEL_PARAMS:
+            v = kwargs.get(k, None)
+            if v is not None:
+                model_params[k] = v
+
+        return {
+            "model": kwargs.get("model"),
+            "model_parameters": model_params,
+            "provider": "anthropic",
+        }
 
 
 class TracedMessageStreamManager(Wrapper):
@@ -133,19 +157,17 @@ class TracedMessageStream(Wrapper):
             raise
 
     def __process_message(self, m):
-        if m.type in ("message_start", "message_delta", "message_stop"):
-            metadata = None
-            metrics = None
+        if m.type == "text":
+            # snapshot accumulates the whole message as it streams in. We can send the whole thing
+            # and updates will be dedup'ed downstream
+            self.__span.log(output=str(m.snapshot))
+        elif m.type in ("message_start", "message_delta", "message_stop"):
+            # Parse the metrics from usage.
+            # Note: For some messages it's on m.usage and others m.message.usage.
             usage = None
-
-            # Some messages have usage & metadata and others only have usage.
             if hasattr(m, "message"):
-                # start & end has usage & metadata
-                msg = m.message
-                metadata = _extract_metadata(msg)
-                usage = getattr(msg, "usage", None)
+                usage = getattr(m.message, "usage", None)
             elif hasattr(m, "usage"):
-                # messages deltas only have usage
                 usage = m.usage
 
             # Not every message has every stat, but the total depends on sum of prompt & completion tokens,
@@ -159,18 +181,7 @@ class TracedMessageStream(Wrapper):
                     "completion_tokens", 0
                 )
 
-            self.__span.log(metadata=metadata, metrics=self.__metrics)
-        elif m.type == "text":
-            # snapshot accumulates the whole message as it streams in. We can send the whole thing
-            # and updates will be dedup'ed downstream
-            self.__span.log(output=str(m.snapshot))
-
-
-def _extract_metadata(msg):
-    return {
-        "provider": "anthropic",  # FIXME[matt] is there a field for this?
-        "model": getattr(msg, "model", ""),
-    }
+            self.__span.log(metrics=self.__metrics)
 
 
 def _extract_metrics(usage):
