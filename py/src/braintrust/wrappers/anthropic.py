@@ -46,20 +46,14 @@ class TracedMessages(Wrapper):
         self.__messages = messages
 
     def stream(self, *args, **kwargs):
-        # note: this library mandates kwargs, so we can ignore args
-        _input = self.__get_input_from_kwargs(kwargs)
-        metadata = self.__get_metadata_from_kwargs(kwargs)
-        span = start_span(
-            name="anthropic.messages.stream",
-            metadata=metadata,
-            input=_input,
-            type="llm",
-        )
-
-        s = self.__messages.stream(*args, **kwargs)
-        return TracedMessageStreamManager(s, span)
+        return self.__trace_stream(self.__messages.stream, *args, **kwargs)
 
     def create(self, *args, **kwargs):
+        # If stream is True, we need to trace the stream function
+        if kwargs.get("stream"):
+            return self.__trace_stream(self.__messages.create, *args, **kwargs)
+
+        # Otherwise, trace synchronouly.
         _input = self.__get_input_from_kwargs(kwargs)
         metadata = self.__get_metadata_from_kwargs(kwargs)
 
@@ -77,6 +71,19 @@ class TracedMessages(Wrapper):
             raise e
         finally:
             span.end()
+
+    def __trace_stream(self, stream_func, *args, **kwargs):
+        _input = self.__get_input_from_kwargs(kwargs)
+        metadata = self.__get_metadata_from_kwargs(kwargs)
+        span = start_span(
+            name="anthropic.messages.stream",
+            metadata=metadata,
+            input=_input,
+            type="llm",
+        )
+
+        s = stream_func(*args, **kwargs)
+        return TracedMessageStreamManager(s, span)
 
     @staticmethod
     def __get_input_from_kwargs(kwargs):
