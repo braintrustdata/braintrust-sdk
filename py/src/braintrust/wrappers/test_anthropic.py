@@ -14,7 +14,7 @@ import pytest
 from braintrust import logger
 from braintrust.logger import ObjectMetadata, OrgProjectMetadata
 from braintrust.util import LazyValue
-from braintrust.wrappers.anthropic import wrap_anthropic_client
+from braintrust.wrappers.anthropic import wrap_anthropic
 
 TEST_ORG_ID = "test-org-123"
 PROJECT_NAME = "test-anthropic-app"
@@ -65,7 +65,7 @@ def test_anthropic_messages_create_stream_true(memory_logger):
     return
     assert not memory_logger.pop()
 
-    client = wrap_anthropic_client(_get_client())
+    client = wrap_anthropic(_get_client())
     msg = {"role": "user", "content": "what's 2+2?"}
     start = time.time()
     msg = client.messages.create(model=MODEL, max_tokens=300, messages=[msg], stream=True)
@@ -77,7 +77,7 @@ def test_anthropic_messages_create_stream_true(memory_logger):
 
 def test_anthropic_messages_model_params_inputs(memory_logger):
     assert not memory_logger.pop()
-    client = wrap_anthropic_client(_get_client())
+    client = wrap_anthropic(_get_client())
 
     kw = {
         "model": MODEL,
@@ -116,7 +116,7 @@ def test_anthropic_messages_model_params_inputs(memory_logger):
 def test_anthropic_messages_system_prompt_inputs(memory_logger):
     assert not memory_logger.pop()
 
-    client = wrap_anthropic_client(_get_client())
+    client = wrap_anthropic(_get_client())
     system = "Today's date is 2024-03-26."
     q = [{"role": "user", "content": "what is tomorrow's date? only return the date"}]
 
@@ -148,7 +148,7 @@ def test_anthropic_messages_system_prompt_inputs(memory_logger):
 async def test_anthropic_messages_streaming_async(memory_logger):
     assert not memory_logger.pop()
 
-    client = wrap_anthropic_client(_get_async_client())
+    client = wrap_anthropic(_get_async_client())
     msgs_in = [{"role": "user", "content": "what is 1+1?, just return the number"}]
 
     start = time.time()
@@ -185,7 +185,7 @@ async def test_anthropic_messages_streaming_async(memory_logger):
 def test_anthropic_client_error(memory_logger):
     assert not memory_logger.pop()
 
-    client = wrap_anthropic_client(_get_client())
+    client = wrap_anthropic(_get_client())
 
     fake_model = "there-is-no-such-model"
     msg_in = {"role": "user", "content": "who are you?"}
@@ -207,7 +207,7 @@ def test_anthropic_client_error(memory_logger):
 def test_anthropic_messages_streaming_sync(memory_logger):
     assert not memory_logger.pop()
 
-    client = wrap_anthropic_client(_get_client())
+    client = wrap_anthropic(_get_client())
     msg_in = {"role": "user", "content": "what is 2+2? (just the number)"}
 
     start = time.time()
@@ -242,7 +242,7 @@ def test_anthropic_messages_streaming_sync(memory_logger):
 def test_anthropic_messages_sync(memory_logger):
     assert not memory_logger.pop()
 
-    client = wrap_anthropic_client(_get_client())
+    client = wrap_anthropic(_get_client())
 
     msg_in = {"role": "user", "content": "what's 2+2?"}
 

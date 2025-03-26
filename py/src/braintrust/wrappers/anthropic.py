@@ -99,14 +99,11 @@ class TracedMessages(Wrapper):
 
     @staticmethod
     def __get_metadata_from_kwargs(kwargs):
-
         metadata = {"provider": "anthropic"}
-
         for k in METADATA_PARAMS:
             v = kwargs.get(k, None)
             if v is not None:
                 metadata[k] = v
-
         return metadata
 
 
@@ -217,5 +214,10 @@ def _extract_metrics(usage):
     return metrics
 
 
-def wrap_anthropic_client(client: anthropic.Anthropic) -> TracedAnthropic:
+def wrap_anthropic(client):
+    return TracedAnthropic(client)
+
+
+def wrap_anthropic_client(client: anthropic.Anthropic):
+    # for backwards compatibility
     return TracedAnthropic(client)
