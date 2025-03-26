@@ -62,17 +62,29 @@ def memory_logger():
 
 
 def test_anthropic_messages_create_stream_true(memory_logger):
-    return
     assert not memory_logger.pop()
 
     client = wrap_anthropic(_get_client())
-    msg = {"role": "user", "content": "what's 2+2?"}
+    kws = {
+        "model": MODEL,
+        "max_tokens": 300,
+        "messages": [{"role": "user", "content": "what's the capital of Canada?"}],
+        "stream": True,
+    }
+
     start = time.time()
-    msg = client.messages.create(model=MODEL, max_tokens=300, messages=[msg], stream=True)
+    with client.messages.create(**kws) as out:
+        msgs = [m for m in out]
     end = time.time()
 
-    text = msg.content[0].text
-    assert text == "4"
+    assert msgs  # a very coarse grained check that this works
+
+    logs = memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0][0]
+    assert log["metadata"]["model"] == MODEL
+    assert log["metadata"]["max_tokens"] == 300
+    assert start < log["metrics"]["start"] < log["metrics"]["end"] < end
 
 
 def test_anthropic_messages_model_params_inputs(memory_logger):
