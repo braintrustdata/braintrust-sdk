@@ -13,14 +13,7 @@ from typing_extensions import NotRequired
 SpanType = Literal["llm", "score", "function", "eval", "task", "tool"]
 
 
-class Metadata(TypedDict):
-    model: NotRequired[Optional[str]]
-    """
-    The model used for this example
-    """
-
-
-class Origin(TypedDict):
+class ObjectReference(TypedDict):
     object_type: Union[
         Literal["experiment", "dataset", "prompt", "function", "prompt_session"],
         Literal["project_logs"],
@@ -43,6 +36,13 @@ class Origin(TypedDict):
     created: NotRequired[Optional[str]]
     """
     Created timestamp of the original event. Used to help sort in the UI
+    """
+
+
+class Metadata(TypedDict):
+    model: NotRequired[Optional[str]]
+    """
+    The model used for this example
     """
 
 
@@ -95,10 +95,7 @@ class DatasetEvent(TypedDict):
     """
     Whether this span is a root span
     """
-    origin: NotRequired[Optional[Origin]]
-    """
-    Indicates the event was copied from another object.
-    """
+    origin: NotRequired[Optional[ObjectReference]]
     output: NotRequired[Optional[Any]]
     """
     Deprecated.
@@ -240,10 +237,7 @@ class ExperimentEvent(TypedDict):
     """
     Whether this span is a root span
     """
-    origin: NotRequired[Optional[Origin]]
-    """
-    Indicates the event was copied from another object.
-    """
+    origin: NotRequired[Optional[ObjectReference]]
 
 
 class ResponseFormat(TypedDict):
@@ -338,7 +332,7 @@ class PromptOptions(TypedDict):
     position: NotRequired[Optional[str]]
 
 
-class AttachmentReference(TypedDict):
+class BraintrustAttachmentReference(TypedDict):
     type: Literal["braintrust_attachment"]
     """
     An identifier to help disambiguate parsing.
@@ -355,6 +349,28 @@ class AttachmentReference(TypedDict):
     """
     Key in the object store bucket for this attachment.
     """
+
+
+class ExternalAttachmentReference(TypedDict):
+    type: Literal["external_attachment"]
+    """
+    An identifier to help disambiguate parsing.
+    """
+    filename: str
+    """
+    Human-readable filename for user interfaces. Not related to attachment storage.
+    """
+    content_type: str
+    """
+    MIME type of this file.
+    """
+    url: str
+    """
+    Fully qualified URL to the object in the external object store.
+    """
+
+
+AttachmentReference = Union[BraintrustAttachmentReference, ExternalAttachmentReference]
 
 
 UploadStatus = Literal["uploading", "done", "error"]
@@ -497,7 +513,7 @@ class Parser(TypedDict):
     choice_scores: Mapping[str, float]
 
 
-class Origin2(TypedDict):
+class Origin(TypedDict):
     prompt_id: NotRequired[Optional[str]]
     project_id: NotRequired[Optional[str]]
     prompt_version: NotRequired[Optional[str]]
@@ -508,7 +524,7 @@ class PromptData(TypedDict):
     options: NotRequired[Optional[PromptOptions]]
     parser: NotRequired[Optional[Parser]]
     tool_functions: NotRequired[Optional[Sequence[SavedFunctionId]]]
-    origin: NotRequired[Optional[Origin2]]
+    origin: NotRequired[Optional[Origin]]
 
 
 __all__ = []

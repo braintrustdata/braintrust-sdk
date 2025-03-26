@@ -33,7 +33,7 @@ import {
   withParent,
 } from "./logger";
 import { BarProgressReporter, ProgressReporter } from "./progress";
-import { isEmpty } from "./util";
+import { isEmpty, InternalAbortError } from "./util";
 
 export type BaseExperiment<
   Input,
@@ -226,6 +226,12 @@ export function getSingleValueParameters<T extends Record<string, unknown>>(
   return combinations as SingleValueParameters<T>[];
 }
 
+type ErrorScoreHandler = (args: {
+  rootSpan: Span;
+  data: EvalCase<any, any, any>;
+  unhandledScores: string[];
+}) => Record<string, number> | undefined | void;
+
 export interface Evaluator<
   Input,
   Output,
@@ -289,6 +295,11 @@ export interface Evaluator<
   timeout?: number;
 
   /**
+   * An abort signal that can be used to stop the evaluation.
+   */
+  signal?: AbortSignal;
+
+  /**
    * The maximum number of tasks/scorers that will be run concurrently.
    * Defaults to undefined, in which case there is no max concurrency.
    */
@@ -326,6 +337,12 @@ export interface Evaluator<
    * Optionally explicitly specify the git metadata for this experiment. This takes precedence over `gitMetadataSettings` if specified.
    */
   repoInfo?: RepoInfo;
+
+  /**
+   * Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
+   * A default implementation is exported as `defaultErrorScoreHandler` which will log a 0 score to the root span for any scorer that was not run.
+   */
+  errorScoreHandler?: ErrorScoreHandler;
 }
 
 export class EvalResultWithSummary<
@@ -746,29 +763,24 @@ export async function runEvaluator(
   stream: ((data: SSEProgressEventData) => void) | undefined,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
-  const result = runEvaluatorInternal(
+  return await runEvaluatorInternal(
     experiment,
     evaluator,
     progressReporter,
     filters,
     stream,
   );
-  const timer = async () => {
-    await new Promise((_, reject) => {
-      if (evaluator.timeout) {
-        setTimeout(() => {
-          reject("evaluator timed out");
-        }, evaluator.timeout);
-      }
-    });
-    return null;
-  };
-  const winner = await Promise.race([result, timer()]);
-  if (!winner) {
-    throw new Error("unreachable");
-  }
-  return winner;
 }
+
+export const defaultErrorScoreHandler: ErrorScoreHandler = ({
+  rootSpan,
+  data,
+  unhandledScores,
+}) => {
+  const scores = Object.fromEntries(unhandledScores.map((s) => [s, 0]));
+  rootSpan.log({ scores });
+  return scores;
+};
 
 async function runEvaluatorInternal(
   experiment: Experiment | null,
@@ -886,6 +898,8 @@ async function runEvaluatorInternal(
         let output: unknown = undefined;
         let error: unknown | undefined = undefined;
         const scores: Record<string, number | null> = {};
+        const scorerNames = evaluator.scores.map(scorerName);
+        let unhandledScores: string[] | null = scorerNames;
         try {
           const meta = (o: Record<string, unknown>) =>
             (metadata = { ...metadata, ...o });
@@ -931,7 +945,6 @@ async function runEvaluatorInternal(
             metadata,
             output,
           };
-          const scorerNames = evaluator.scores.map(scorerName);
           const scoreResults = await Promise.all(
             evaluator.scores.map(async (score, score_idx) => {
               try {
@@ -1023,20 +1036,12 @@ async function runEvaluatorInternal(
           );
           // Resolve each promise on its own so that we can separate the passing
           // from the failing ones.
-          const passingScorersAndResults: {
-            name: string;
-            score: Score | null;
-          }[] = [];
           const failingScorersAndResults: { name: string; error: unknown }[] =
             [];
           scoreResults.forEach((results, i) => {
             const name = scorerNames[i];
             if (results.kind === "score") {
               (results.value || []).forEach((result) => {
-                passingScorersAndResults.push({
-                  name: result.name,
-                  score: result,
-                });
                 scores[result.name] = result.score;
               });
             } else {
@@ -1044,6 +1049,7 @@ async function runEvaluatorInternal(
             }
           });
 
+          unhandledScores = null;
           if (failingScorersAndResults.length) {
             const scorerErrors = Object.fromEntries(
               failingScorersAndResults.map(({ name, error }) => [
@@ -1052,12 +1058,15 @@ async function runEvaluatorInternal(
               ]),
             );
             metadata["scorer_errors"] = scorerErrors;
-            rootSpan.log({ metadata: { scorer_errors: scorerErrors } });
+            rootSpan.log({
+              metadata: { scorer_errors: scorerErrors },
+            });
             const names = Object.keys(scorerErrors).join(", ");
             const errors = failingScorersAndResults.map((item) => item.error);
-            throw new AggregateError(
-              errors,
+            unhandledScores = Object.keys(scorerErrors);
+            console.warn(
               `Found exceptions for the following scorers: ${names}`,
+              errors,
             );
           }
         } catch (e) {
@@ -1073,7 +1082,16 @@ async function runEvaluatorInternal(
           output,
           tags: datum.tags,
           metadata,
-          scores,
+          scores: {
+            ...(evaluator.errorScoreHandler && unhandledScores
+              ? evaluator.errorScoreHandler({
+                  rootSpan,
+                  data: datum,
+                  unhandledScores,
+                })
+              : undefined),
+            ...scores,
+          },
           error,
         });
       };
@@ -1092,7 +1110,34 @@ async function runEvaluatorInternal(
     Math.max(evaluator.maxConcurrency ?? data.length, 1),
   );
   q.push(data);
-  await q.drain();
+
+  const cancel = async () => {
+    await new Promise((_, reject) => {
+      if (evaluator.timeout) {
+        setTimeout(() => {
+          reject(new InternalAbortError("Evaluator timed out"));
+        }, evaluator.timeout);
+      }
+      if (evaluator.signal) {
+        evaluator.signal.addEventListener("abort", () => {
+          reject(new InternalAbortError("Evaluator aborted"));
+        });
+      }
+    });
+  };
+
+  // wait for tasks to be completed or the evaluator to be cancelled
+  // if the evaluator is cancelled, the remaining tasks that have not been started will be killed
+  try {
+    await Promise.race([q.drain(), cancel()]);
+  } catch (e) {
+    if (e instanceof InternalAbortError) {
+      q.kill();
+    }
+
+    throw e;
+  }
+
   const summary = experiment
     ? await experiment.summarize()
     : buildLocalSummary(evaluator, results);

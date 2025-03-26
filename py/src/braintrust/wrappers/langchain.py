@@ -27,6 +27,7 @@ langchain_parent = contextvars.ContextVar("langchain_current_span", default=None
 
 class BraintrustTracer(BaseCallbackHandler):
     def __init__(self, logger=None):
+        _logger.warning("BraintrustTracer is deprecated, use `pip install braintrust-langchain` instead")
         self.logger = logger
         self.spans = {}
 

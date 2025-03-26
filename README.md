@@ -96,6 +96,15 @@ BRAINTRUST_API_KEY=<YOUR_API_KEY> \
   braintrust eval eval_tutorial.py
 ```
 
+## Integrations
+
+Braintrust provides integrations with several popular AI development tools and platforms:
+
+- **LangChain.js**: A callback handler to automatically log LangChain.js executions to Braintrust. [Learn more](integrations/langchain-js)
+- **LangChain Python**: Integration for logging LangChain Python executions to Braintrust. [Learn more](integrations/langchain-py)
+- **Val Town**: Examples and templates for using Braintrust with Val Town's serverless JavaScript/TypeScript environment. [Learn more](integrations/val.town)
+- **Vercel AI SDK**: Integration with Vercel's AI SDK for building AI-powered applications. [Learn more](integrations/vercel-ai-sdk)
+
 ## Documentation
 
 For more information, check out the [docs](https://www.braintrust.dev/docs):

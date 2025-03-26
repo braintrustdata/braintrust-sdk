@@ -7,7 +7,6 @@ import {
   AUDIT_SOURCE_FIELD,
   IS_MERGE_FIELD,
   MERGE_PATHS_FIELD,
-  PARENT_ID_FIELD,
   SKIP_ASYNC_SCORING_FIELD,
 } from "./db_fields";
 import { objectReferenceSchema } from "typespecs";
@@ -24,6 +23,7 @@ export type OtherExperimentLogFields = {
   metrics: Record<string, unknown>;
   datasetRecordId: string;
   origin: z.infer<typeof objectReferenceSchema>;
+  span_attributes: Record<string, unknown>;
   [ASYNC_SCORING_CONTROL_FIELD]: AsyncScoringControl;
   [MERGE_PATHS_FIELD]: string[][];
   [SKIP_ASYNC_SCORING_FIELD]: boolean;
@@ -88,7 +88,6 @@ export type ExperimentEvent = Partial<InputField> &
     span_parents: string[];
     span_attributes: Record<string, unknown>;
     context: Record<string, unknown>;
-    [PARENT_ID_FIELD]: string;
     [AUDIT_SOURCE_FIELD]: Source;
     [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
   }>;

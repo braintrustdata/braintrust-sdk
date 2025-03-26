@@ -38,6 +38,8 @@ import {
 import {
   AnyModelParam,
   AttachmentReference,
+  BraintrustAttachmentReference,
+  ExternalAttachmentReference,
   attachmentReferenceSchema,
   ModelParams,
   responseFormatJsonSchemaSchema,
@@ -57,6 +59,7 @@ import {
   RepoInfo,
   Tools,
   toolsSchema,
+  EXTERNAL_ATTACHMENT,
 } from "@braintrust/core/typespecs";
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
@@ -76,6 +79,7 @@ import {
   GLOBAL_PROJECT,
   isEmpty,
   LazyValue,
+  SyncLazyValue,
   runCatchFinally,
 } from "./util";
 
@@ -271,7 +275,7 @@ export class NoopSpan implements Span {
   }
 
   public async permalink(): Promise<string> {
-    return "";
+    return NOOP_SPAN_PERMALINK;
   }
 
   public async flush(): Promise<void> {}
@@ -284,6 +288,7 @@ export class NoopSpan implements Span {
 }
 
 export const NOOP_SPAN = new NoopSpan();
+export const NOOP_SPAN_PERMALINK = "https://braintrust.dev/noop-span";
 
 // In certain situations (e.g. the cli), we want separately-compiled modules to
 // use the same state as the toplevel module. This global variable serves as a
@@ -319,7 +324,7 @@ export class BraintrustState {
   // This is preferable to replacing the whole logger, which would create the
   // possibility of multiple loggers floating around, which may not log in a
   // deterministic order.
-  private _bgLogger: BackgroundLogger;
+  private _bgLogger: SyncLazyValue<BackgroundLogger>;
 
   public appUrl: string | null = null;
   public appPublicUrl: string | null = null;
@@ -353,9 +358,8 @@ export class BraintrustState {
       await this.login({});
       return this.apiConn();
     };
-    this._bgLogger = new BackgroundLogger(
-      new LazyValue(defaultGetLogConn),
-      loginParams,
+    this._bgLogger = new SyncLazyValue(
+      () => new BackgroundLogger(new LazyValue(defaultGetLogConn), loginParams),
     );
 
     this.resetLoginInfo();
@@ -529,12 +533,12 @@ export class BraintrustState {
   }
 
   public bgLogger(): BackgroundLogger {
-    return this._bgLogger;
+    return this._bgLogger.get();
   }
 
   // Should only be called by the login function.
   public loginReplaceApiConn(apiConn: HTTPConnection) {
-    this._bgLogger.internalReplaceApiConn(apiConn);
+    this._bgLogger.get().internalReplaceApiConn(apiConn);
   }
 }
 
@@ -779,6 +783,20 @@ export interface AttachmentParams {
   state?: BraintrustState;
 }
 
+export interface ExternalAttachmentParams {
+  url: string;
+  filename: string;
+  contentType: string;
+  state?: BraintrustState;
+}
+
+export abstract class BaseAttachment {
+  readonly reference!: AttachmentReference;
+  abstract upload(): Promise<AttachmentStatus>;
+  abstract data(): Promise<Blob>;
+  abstract debugInfo(): Record<string, unknown>;
+}
+
 /**
  * Represents an attachment to be uploaded and the associated metadata.
  * `Attachment` objects can be inserted anywhere in an event, allowing you to
@@ -786,11 +804,11 @@ export interface AttachmentParams {
  * object storage and replace the `Attachment` object with an
  * `AttachmentReference`.
  */
-export class Attachment {
+export class Attachment extends BaseAttachment {
   /**
    * The object that replaces this `Attachment` at upload time.
    */
-  readonly reference: AttachmentReference;
+  readonly reference: BraintrustAttachmentReference;
 
   private readonly uploader: LazyValue<AttachmentStatus>;
   private readonly _data: LazyValue<Blob>;
@@ -816,6 +834,7 @@ export class Attachment {
    * `state`: (Optional) For internal use.
    */
   constructor({ data, filename, contentType, state }: AttachmentParams) {
+    super();
     this.reference = {
       type: BRAINTRUST_ATTACHMENT,
       filename,
@@ -983,6 +1002,89 @@ with a Blob/ArrayBuffer, or run the program on Node.js.`,
   }
 }
 
+/**
+ * Represents an attachment that resides in an external object store and the associated metadata.
+ *
+ * `ExternalAttachment` objects can be inserted anywhere in an event, similar to
+ * `Attachment` objects, but they reference files that already exist in an external
+ * object store rather than requiring upload. The SDK will replace the `ExternalAttachment`
+ * object with an `AttachmentReference` during logging.
+ */
+export class ExternalAttachment extends BaseAttachment {
+  /**
+   * The object that replaces this `ExternalAttachment` at upload time.
+   */
+  readonly reference: ExternalAttachmentReference;
+
+  private readonly _data: LazyValue<Blob>;
+  private readonly state?: BraintrustState;
+
+  /**
+   * Construct an external attachment.
+   *
+   * @param param A parameter object with:
+   *
+   * `url`: The fully qualified URL of the file in the external object store.
+   *
+   * `filename`: The desired name of the file in Braintrust after uploading.
+   * This parameter is for visualization purposes only and has no effect on
+   * attachment storage.
+   *
+   * `contentType`: The MIME type of the file.
+   *
+   * `state`: (Optional) For internal use.
+   */
+  constructor({ url, filename, contentType, state }: ExternalAttachmentParams) {
+    super();
+    this.reference = {
+      type: EXTERNAL_ATTACHMENT,
+      filename,
+      content_type: contentType,
+      url,
+    };
+
+    this._data = this.initData();
+  }
+
+  /**
+   * For ExternalAttachment, this is a no-op since the data already resides
+   * in the external object store. It marks the attachment as already uploaded.
+   *
+   * @returns The attachment status, which will always indicate success.
+   */
+  async upload() {
+    return { upload_status: "done" as const };
+  }
+
+  /**
+   * The attachment contents. This is a lazy value that will read the attachment contents from the external object store on first access.
+   */
+  async data() {
+    return this._data.get();
+  }
+
+  /**
+   * A human-readable description for logging and debugging.
+   *
+   * @returns The debug object. The return type is not stable and may change in
+   * a future release.
+   */
+  debugInfo(): Record<string, unknown> {
+    return {
+      url: this.reference.url,
+      reference: this.reference,
+      state: this.state,
+    };
+  }
+
+  private initData(): LazyValue<Blob> {
+    return new LazyValue(async () => {
+      const readonly = new ReadonlyAttachment(this.reference, this.state);
+      return await readonly.data();
+    });
+  }
+}
+
 const attachmentMetadataSchema = z.object({
   downloadUrl: z.string(),
   status: attachmentStatusSchema,
@@ -1033,12 +1135,17 @@ export class ReadonlyAttachment {
     const state = this.state ?? _globalState;
     await state.login({});
 
-    const resp = await state.apiConn().get("/attachment", {
-      key: this.reference.key,
+    let params: Record<string, string> = {
       filename: this.reference.filename,
       content_type: this.reference.content_type,
       org_id: state.orgId || "",
-    });
+    };
+    if (this.reference.type === "braintrust_attachment") {
+      params.key = this.reference.key;
+    } else if (this.reference.type === "external_attachment") {
+      params.url = this.reference.url;
+    }
+    const resp = await state.apiConn().get("/attachment", params);
     if (!resp.ok) {
       const errorStr = JSON.stringify(resp);
       throw new Error(`Invalid response from API server: ${errorStr}`);
@@ -1311,6 +1418,11 @@ export async function permalink(
     appUrl?: string;
   },
 ): Promise<string> {
+  // Noop spans have an empty slug, so return a dummy permalink.
+  if (slug === "") {
+    return NOOP_SPAN_PERMALINK;
+  }
+
   const state = opts?.state ?? _globalState;
   const getOrgName = async () => {
     if (opts?.orgName) {
@@ -2200,6 +2312,10 @@ export function init<IsOpen extends boolean = false>(
     state: stateArg,
   } = options;
 
+  if (!project && !projectId) {
+    throw new Error("Must specify at least one of project or projectId");
+  }
+
   if (open && update) {
     throw new Error("Cannot open and update an experiment at the same time");
   }
@@ -2668,7 +2784,7 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
   const {
     projectName,
     projectId,
-    asyncFlush,
+    asyncFlush: asyncFlushArg,
     appUrl,
     apiKey,
     orgName,
@@ -2676,6 +2792,9 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
     fetch,
     state: stateArg,
   } = options || {};
+
+  const asyncFlush =
+    asyncFlushArg === undefined ? (true as IsAsyncFlush) : asyncFlushArg;
 
   const computeMetadataArgs = {
     project_name: projectName,
@@ -2936,6 +3055,17 @@ export async function loginToState(options: LoginOptions = {}) {
     const info = await resp.json();
 
     _check_org_info(state, info.org_info, orgName);
+    if (!state.apiUrl) {
+      if (orgName) {
+        throw new Error(
+          `Unable to log into organization '${orgName}'. Are you sure this credential is scoped to the organization?`,
+        );
+      } else {
+        throw new Error(
+          "Unable to log into any organization with the provided credential.",
+        );
+      }
+    }
 
     conn = state.apiConn();
     conn.set_token(apiKey);
@@ -3111,7 +3241,7 @@ export function traced<IsAsyncFlush extends boolean = true, R = void>(
 
   type Ret = PromiseUnless<IsAsyncFlush, R>;
 
-  if (args?.asyncFlush) {
+  if (args?.asyncFlush === undefined || args?.asyncFlush) {
     return ret as Ret;
   } else {
     return (async () => {
@@ -3226,7 +3356,7 @@ export const traceable = wrapTraced;
  *
  * See {@link traced} for full details.
  */
-export function startSpan<IsAsyncFlush extends boolean = false>(
+export function startSpan<IsAsyncFlush extends boolean = true>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
 ): Span {
   return startSpanAndIsLogger(args).span;
@@ -3250,7 +3380,7 @@ export function setFetch(fetch: typeof globalThis.fetch): void {
   _globalState.setFetch(fetch);
 }
 
-function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
+function startSpanAndIsLogger<IsAsyncFlush extends boolean = true>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
 ): { span: Span; isSyncFlushLogger: boolean } {
   const state = args?.state ?? _globalState;
@@ -3291,7 +3421,7 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
         components.data.object_type === SpanObjectTypeV3.PROJECT_LOGS &&
         // Since there's no parent logger here, we're free to choose the async flush
         // behavior, and therefore propagate along whatever we get from the arguments
-        !args?.asyncFlush,
+        args?.asyncFlush === false,
     };
   } else {
     const parentObject = getSpanParentObject<IsAsyncFlush>({
@@ -3301,7 +3431,7 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
     return {
       span,
       isSyncFlushLogger:
-        parentObject.kind === "logger" && !parentObject.asyncFlush,
+        parentObject.kind === "logger" && parentObject.asyncFlush === false,
     };
   }
 }
@@ -3438,10 +3568,11 @@ function validateAndSanitizeExperimentLogPartialArgs(
 /**
  * Creates a deep copy of the given event. Replaces references to user objects
  * with placeholder strings to ensure serializability, except for
- * {@link Attachment} objects, which are preserved and not deep-copied.
+ * {@link Attachment} and {@link ExternalAttachment} objects, which are preserved
+ * and not deep-copied.
  */
 function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
-  const attachments: Attachment[] = [];
+  const attachments: BaseAttachment[] = [];
   const IDENTIFIER = "_bt_internal_saved_attachment";
   const savedAttachmentSchema = z.strictObject({ [IDENTIFIER]: z.number() });
 
@@ -3460,7 +3591,7 @@ function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
       return `<dataset>`;
     } else if (v instanceof Logger) {
       return `<logger>`;
-    } else if (v instanceof Attachment) {
+    } else if (v instanceof BaseAttachment) {
       const idx = attachments.push(v);
       return { [IDENTIFIER]: idx - 1 };
     } else if (v instanceof ReadonlyAttachment) {
@@ -3480,18 +3611,19 @@ function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
 
 /**
  * Helper function for uploading attachments. Recursively extracts `Attachment`
- * values and replaces them with their associated `AttachmentReference` objects.
+ * and `ExternalAttachment` objects and replaces them with their associated
+ * `AttachmentReference` objects.
  *
  * @param event The event to filter. Will be modified in-place.
  * @param attachments Flat array of extracted attachments (output parameter).
  */
 function extractAttachments(
   event: Record<string, any>,
-  attachments: Attachment[],
+  attachments: BaseAttachment[],
 ): void {
   for (const [key, value] of Object.entries(event)) {
-    // Base case: Attachment.
-    if (value instanceof Attachment) {
+    // Base case: Attachment or ExternalAttachment.
+    if (value instanceof BaseAttachment) {
       attachments.push(value);
       event[key] = value.reference;
       continue; // Attachment cannot be nested.

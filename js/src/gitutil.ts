@@ -202,7 +202,7 @@ async function repoInfo() {
 
   if (dirty) {
     git_diff = await attempt(async () =>
-      truncateToByteLimit(await git.raw(["diff", "HEAD"])),
+      truncateToByteLimit(await git.raw(["--no-ext-diff", "diff", "HEAD"])),
     );
   }
 

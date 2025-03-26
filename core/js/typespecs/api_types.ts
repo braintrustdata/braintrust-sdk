@@ -29,7 +29,6 @@ import {
   OBJECT_DELETE_FIELD,
   IS_MERGE_FIELD,
   MERGE_PATHS_FIELD,
-  PARENT_ID_FIELD,
   VALID_SOURCES,
 } from "../src/db_fields";
 import { spanTypeAttributeValues } from "../src/span_types";
@@ -402,6 +401,7 @@ export const promptSessionEventSchema = z
       "Data about the prompt session",
     ),
     prompt_data: customTypes.unknown.describe("Data about the prompt"),
+    function_data: customTypes.unknown.describe("Data about the function"),
     object_data: customTypes.unknown.describe("Data about the mapped data"),
     completion: customTypes.unknown.describe("Data about the completion"),
     tags: promptSessionEventBaseSchema.shape.tags,
@@ -454,7 +454,7 @@ export type ProjectLogsEvent = z.infer<typeof projectLogsEventSchema>;
 // Merge system control fields.
 
 const spanIdsDescription = [
-  "Use span_id, root_span_id, and span_parents as a more explicit alternative to _parent_id. The span_id is a unique identifier describing the row's place in the a trace, and the root_span_id is a unique identifier for the whole trace. See the [guide](https://www.braintrust.dev/docs/guides/tracing) for full details.",
+  "Use `span_id`, `root_span_id`, and `span_parents` instead of `_parent_id`, which is now deprecated. The span_id is a unique identifier describing the row's place in the a trace, and the root_span_id is a unique identifier for the whole trace. See the [guide](https://www.braintrust.dev/docs/guides/tracing) for full details.",
   'For example, say we have logged a row `{"id": "abc", "span_id": "span0", "root_span_id": "root_span0", "input": "foo", "output": "bar", "expected": "boo", "scores": {"correctness": 0.33}}`. We can create a sub-span of the parent row by logging `{"id": "llm_call", "span_id": "span1", "root_span_id": "root_span0", "span_parents": ["span0"], "input": {"prompt": "What comes after foo?"}, "output": "bar", "metrics": {"tokens": 1}}`. In the webapp, only the root span row `"abc"` will show up in the summary view. You can view the full trace hierarchy (in this case, the `"llm_call"` row) by clicking on the "abc" row.',
   "If the row is being merged into an existing row, this field will be ignored.",
 ].join("\n\n");
@@ -480,11 +480,12 @@ const insertSystemControlFieldsSchema = z.object({
         'For example, say there is an existing row in the DB `{"id": "foo", "input": {"a": {"b": 10}, "c": {"d": 20}}, "output": {"a": 20}}`. If we merge a new row as `{"_is_merge": true, "_merge_paths": [["input", "a"], ["output"]], "input": {"a": {"q": 30}, "c": {"e": 30}, "bar": "baz"}, "output": {"d": 40}}`, the new row will be `{"id": "foo": "input": {"a": {"q": 30}, "c": {"d": 20, "e": 30}, "bar": "baz"}, "output": {"d": 40}}`. In this case, due to the merge paths, we have replaced `input.a` and `output`, but have still deep-merged `input` and `input.c`.',
       ].join("\n\n"),
     ),
-  [PARENT_ID_FIELD]: z
+  _parent_id: z
     .string()
     .nullish()
     .describe(
       [
+        "DEPRECATED: The `_parent_id` field is deprecated and should not be used. Support for `_parent_id` will be dropped in a future version of Braintrust. Log `span_id`, `root_span_id`, and `span_parents` explicitly instead.",
         "Use the `_parent_id` field to create this row as a subspan of an existing row. Tracking hierarchical relationships are important for tracing (see the [guide](https://www.braintrust.dev/docs/guides/tracing) for full details).",
         'For example, say we have logged a row `{"id": "abc", "input": "foo", "output": "bar", "expected": "boo", "scores": {"correctness": 0.33}}`. We can create a sub-span of the parent row by logging `{"_parent_id": "abc", "id": "llm_call", "input": {"prompt": "What comes after foo?"}, "output": "bar", "metrics": {"tokens": 1}}`. In the webapp, only the root span row `"abc"` will show up in the summary view. You can view the full trace hierarchy (in this case, the `"llm_call"` row) by clicking on the "abc" row.',
         "If the row is being merged into an existing row, this field will be ignored.",
@@ -551,6 +552,7 @@ const insertExperimentEventBaseSchema = objectNullish(
       span_attributes: true,
       id: true,
       created: true,
+      origin: true,
     })
     .extend({
       [OBJECT_DELETE_FIELD]:
@@ -571,6 +573,7 @@ const insertDatasetEventBaseSchema = objectNullish(
       tags: true,
       id: true,
       created: true,
+      origin: true,
     })
     .extend({
       [OBJECT_DELETE_FIELD]: datasetEventBaseSchema.shape[OBJECT_DELETE_FIELD],
@@ -596,6 +599,7 @@ const insertProjectLogsEventBaseSchema = objectNullish(
       span_attributes: true,
       id: true,
       created: true,
+      origin: true,
     })
     .extend({
       [OBJECT_DELETE_FIELD]:

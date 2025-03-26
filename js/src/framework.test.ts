@@ -1,54 +1,31 @@
-import { beforeAll, expect, test } from "vitest";
-import { getSingleValueParameters, runEvaluator } from "./framework";
-import { BarProgressReporter } from "./progress";
-import { runEvaluator } from "./framework";
+import {
+  beforeAll,
+  expect,
+  describe,
+  test,
+  beforeEach,
+  afterEach,
+  vi,
+} from "vitest";
+import {
+  defaultErrorScoreHandler,
+  getSingleValueParameters,
+  EvalScorer,
+  runEvaluator,
+} from "./framework";
 import { configureNode } from "./node";
-import { BarProgressReporter } from "./progress";
+import { BarProgressReporter, type ProgressReporter } from "./progress";
+import { InternalAbortError } from "./util";
 
 beforeAll(() => {
   configureNode();
 });
 
-test("runEvaluator rejects on timeout", async () => {
-  await expect(
-    runEvaluator(
-      null,
-      {
-        projectName: "proj",
-        evalName: "eval",
-        data: [{ input: 1, expected: 2 }],
-        task: async (input: number) => {
-          await new Promise((r) => setTimeout(r, 100000));
-          return input * 2;
-        },
-        scores: [],
-        timeout: 100,
-      },
-      new BarProgressReporter(),
-      [],
-      undefined,
-    ),
-  ).rejects.toEqual("evaluator timed out");
-});
-
-test("runEvaluator works with no timeout", async () => {
-  await runEvaluator(
-    null,
-    {
-      projectName: "proj",
-      evalName: "eval",
-      data: [{ input: 1, expected: 2 }],
-      task: async (input: number) => {
-        await new Promise((r) => setTimeout(r, 100));
-        return input * 2;
-      },
-      scores: [],
-    },
-    new BarProgressReporter(),
-    [],
-    undefined,
-  );
-});
+class NoopProgressReporter implements ProgressReporter {
+  public start() {}
+  public stop() {}
+  public increment() {}
+}
 
 test("meta (write) is passed to task", async () => {
   const metadata = {
@@ -70,7 +47,7 @@ test("meta (write) is passed to task", async () => {
       },
       scores: [],
     },
-    new BarProgressReporter(),
+    new NoopProgressReporter(),
     [],
     undefined,
   );
@@ -106,7 +83,7 @@ test("metadata (read/write) is passed to task", async () => {
       },
       scores: [],
     },
-    new BarProgressReporter(),
+    new NoopProgressReporter(),
     [],
     undefined,
   );
@@ -144,7 +121,7 @@ test("expected (read/write) is passed to task", async () => {
       },
       scores: [],
     },
-    new BarProgressReporter(),
+    new NoopProgressReporter(),
     [],
     undefined,
   );
@@ -256,4 +233,298 @@ test("getSingleValueParameters preserves object references for non-array values"
   const result = getSingleValueParameters(params);
   expect(result[0].b).toBe(obj);
   expect(result[1].b).toBe(obj);
+});
+
+function makeTestScorer(
+  name: string,
+  willError?: boolean,
+): EvalScorer<any, any, any, any> {
+  return () => {
+    if (willError) {
+      throw new Error("scorer errored");
+    }
+    return {
+      name,
+      score: 1,
+    };
+  };
+}
+
+describe("runEvaluator", () => {
+  describe("errors", () => {
+    test("task errors generate no scores", async () => {
+      const out = await runEvaluator(
+        null,
+        {
+          projectName: "proj",
+          evalName: "eval",
+          data: [{ input: 1 }],
+          task: async () => {
+            throw new Error("test error");
+          },
+          scores: Array.from({ length: 3 }, (_, i) =>
+            makeTestScorer(`scorer_${i}`),
+          ),
+        },
+        new NoopProgressReporter(),
+        [],
+        undefined,
+      );
+
+      expect(out.results.every((r) => Object.keys(r.scores).length === 0)).toBe(
+        true,
+      );
+    });
+
+    describe("errorScoreHandler", () => {
+      describe("default function", () => {
+        test("task errors generate 0 scores for all scorers", async () => {
+          const out = await runEvaluator(
+            null,
+            {
+              projectName: "proj",
+              evalName: "eval",
+              data: [{ input: 1 }],
+              task: async () => {
+                throw new Error("test error");
+              },
+              scores: Array.from({ length: 3 }, (_, i) =>
+                makeTestScorer(`scorer_${i}`),
+              ),
+              errorScoreHandler: defaultErrorScoreHandler,
+            },
+            new NoopProgressReporter(),
+            [],
+            undefined,
+          );
+
+          expect(
+            out.results.every(
+              (r) =>
+                Object.keys(r.scores).length === 3 &&
+                Object.values(r.scores).every((v) => v === 0),
+            ),
+          ).toBe(true);
+        });
+
+        test("scorer errors generate 0 scores for all errored scorers", async () => {
+          const out = await runEvaluator(
+            null,
+            {
+              projectName: "proj",
+              evalName: "eval",
+              data: [{ input: 1 }],
+              task: async () => {
+                return "valid output";
+              },
+              scores: Array.from({ length: 3 }, (_, i) =>
+                makeTestScorer(`scorer_${i}`, i === 0),
+              ),
+              errorScoreHandler: defaultErrorScoreHandler,
+            },
+            new NoopProgressReporter(),
+            [],
+            undefined,
+          );
+
+          expect(
+            out.results.every(
+              (r) =>
+                Object.keys(r.scores).length === 3 &&
+                r.scores.scorer_0 === 0 &&
+                r.scores.scorer_1 === 1 &&
+                r.scores.scorer_2 === 1,
+            ),
+          ).toBe(true);
+        });
+      });
+
+      describe("custom function", () => {
+        test("noop function generates no scores", async () => {
+          const out = await runEvaluator(
+            null,
+            {
+              projectName: "proj",
+              evalName: "eval",
+              data: [{ input: 1 }],
+              task: async () => {
+                throw new Error("test error");
+              },
+              scores: Array.from({ length: 3 }, (_, i) =>
+                makeTestScorer(`scorer_${i}`),
+              ),
+              errorScoreHandler: () => undefined,
+            },
+            new NoopProgressReporter(),
+            [],
+            undefined,
+          );
+
+          expect(
+            out.results.every((r) => Object.keys(r.scores).length === 0),
+          ).toBe(true);
+        });
+
+        test("function can generate arbitrary scores", async () => {
+          const out = await runEvaluator(
+            null,
+            {
+              projectName: "proj",
+              evalName: "eval",
+              data: [{ input: 1 }],
+              task: async () => {
+                throw new Error("test error");
+              },
+              scores: Array.from({ length: 3 }, (_, i) =>
+                makeTestScorer(`scorer_${i}`),
+              ),
+              errorScoreHandler: () => ({ error_score: 1 }),
+            },
+            new BarProgressReporter(),
+            [],
+            undefined,
+          );
+
+          expect(
+            out.results.every(
+              (r) =>
+                Object.keys(r.scores).length === 1 &&
+                r.scores.error_score === 1,
+            ),
+          ).toBe(true);
+        });
+      });
+    });
+  });
+
+  describe("aborts", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    });
+
+    test("runEvaluator rejects on timeout and kills remaining tasks", async () => {
+      const taskStarts: Set<number> = new Set();
+      const taskCompletions: Set<number> = new Set();
+
+      const runExpect = expect(
+        runEvaluator(
+          null,
+          {
+            projectName: "proj",
+            evalName: "eval",
+            data: Array.from({ length: 10 }, (_, i) => ({
+              input: i,
+              expected: i * 2,
+            })),
+            task: async (input: number) => {
+              taskStarts.add(input);
+              if (input > 2) {
+                await new Promise((r) => setTimeout(r, 100));
+              }
+              taskCompletions.add(input);
+              return input * 2;
+            },
+            scores: [],
+            timeout: 10,
+            maxConcurrency: 1,
+          },
+          new NoopProgressReporter(),
+          [],
+          undefined,
+        ),
+      ).rejects.toThrow(new InternalAbortError("Evaluator timed out"));
+
+      await vi.advanceTimersByTimeAsync(10);
+      await runExpect;
+
+      // first 3 tasks complete and 4th task was started but not completed before timeout
+      expect(taskStarts).toEqual(new Set([0, 1, 2, 3]));
+      expect(taskCompletions).toEqual(new Set([0, 1, 2]));
+
+      await vi.advanceTimersByTimeAsync(200);
+
+      // no other tasks are started after evaluator is aborted and the 4th in-flight task completes
+      expect(taskStarts).toEqual(new Set([0, 1, 2, 3]));
+      expect(taskCompletions).toEqual(new Set([0, 1, 2, 3]));
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    test("runEvaluator rejects on abort signal and kills remaining tasks", async () => {
+      const taskStarts: Set<number> = new Set();
+      const taskCompletions: Set<number> = new Set();
+
+      const abortController = new AbortController();
+
+      const runExpect = expect(
+        runEvaluator(
+          null,
+          {
+            projectName: "proj",
+            evalName: "eval",
+            data: Array.from({ length: 10 }, (_, i) => ({
+              input: i,
+              expected: i * 2,
+            })),
+            task: async (input: number) => {
+              taskStarts.add(input);
+              if (input > 2) {
+                await new Promise((r) => setTimeout(r, 100));
+              }
+              taskCompletions.add(input);
+              return input * 2;
+            },
+            scores: [],
+            signal: abortController.signal,
+            maxConcurrency: 1,
+          },
+          new NoopProgressReporter(),
+          [],
+          undefined,
+        ),
+      ).rejects.toThrow(new InternalAbortError("Evaluator aborted"));
+
+      await vi.advanceTimersByTimeAsync(10);
+      abortController.abort();
+      await runExpect;
+
+      // first 3 tasks complete and 4th task was started but not completed before abort
+      expect(taskStarts).toEqual(new Set([0, 1, 2, 3]));
+      expect(taskCompletions).toEqual(new Set([0, 1, 2]));
+
+      await vi.advanceTimersByTimeAsync(200);
+
+      // no other tasks are started after evaluator is aborted and the 4th in-flight task completes
+      expect(taskStarts).toEqual(new Set([0, 1, 2, 3]));
+      expect(taskCompletions).toEqual(new Set([0, 1, 2, 3]));
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    test("runEvaluator works with no timeout or abort signal", async () => {
+      const run = runEvaluator(
+        null,
+        {
+          projectName: "proj",
+          evalName: "eval",
+          data: [{ input: 1, expected: 2 }],
+          task: async (input: number) => {
+            await new Promise((r) => setTimeout(r, 100));
+            return input * 2;
+          },
+          scores: [],
+        },
+        new NoopProgressReporter(),
+        [],
+        undefined,
+      );
+
+      await vi.advanceTimersByTimeAsync(100);
+      await run;
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  });
 });

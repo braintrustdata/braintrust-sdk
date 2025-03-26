@@ -2,7 +2,6 @@ import atexit
 import concurrent.futures
 import contextlib
 import contextvars
-import copy
 import dataclasses
 import datetime
 import inspect
@@ -47,6 +46,7 @@ from urllib.parse import urlencode
 import chevron
 import exceptiongroup
 import requests
+import urllib3
 from braintrust_core.serializable_data_class import SerializableDataClass
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -247,7 +247,7 @@ class _NoopSpan(Span):
         return ""
 
     def permalink(self) -> str:
-        return ""
+        return NOOP_SPAN_PERMALINK
 
     def flush(self):
         pass
@@ -276,6 +276,7 @@ class _NoopSpan(Span):
 
 
 NOOP_SPAN: Span = _NoopSpan()
+NOOP_SPAN_PERMALINK = "https://braintrust.dev/noop-span"
 
 
 class BraintrustState:
@@ -294,7 +295,12 @@ class BraintrustState:
         # Any time we re-log in, we directly update the api_conn inside the
         # logger. This is preferable to replacing the whole logger, which would
         # create the possibility of multiple loggers floating around.
-        self._global_bg_logger = _BackgroundLogger(LazyValue(default_get_api_conn, use_mutex=True))
+        #
+        # We lazily-initialize the logger so that it does any initialization
+        # (including reading env variables) upon the first actual usage.
+        self._global_bg_logger = LazyValue(
+            lambda: _HTTPBackgroundLogger(LazyValue(default_get_api_conn, use_mutex=True)), use_mutex=True
+        )
 
         # For unit-testing, tests may wish to temporarily override the global
         # logger with a custom one. We allow this but keep the override variable
@@ -367,12 +373,12 @@ class BraintrustState:
         if not self._user_info:
             self._user_info = info
 
-    def global_bg_logger(self):
-        return getattr(self._override_bg_logger, "logger", None) or self._global_bg_logger
+    def global_bg_logger(self) -> "_BackgroundLogger":
+        return getattr(self._override_bg_logger, "logger", None) or self._global_bg_logger.get()
 
     # Should only be called by the login function.
     def login_replace_api_conn(self, api_conn: "HTTPConnection"):
-        self._global_bg_logger.internal_replace_api_conn(api_conn)
+        self._global_bg_logger.get().internal_replace_api_conn(api_conn)
 
 
 _state: BraintrustState = None  # type: ignore
@@ -384,7 +390,8 @@ _http_adapter: Optional[HTTPAdapter] = None
 def set_http_adapter(adapter: HTTPAdapter) -> None:
     """
     Specify a custom HTTP adapter to use for all network requests. This is useful for setting custom retry policies, timeouts, etc.
-    Braintrust uses the `requests` library, so the adapter should be an instance of `requests.adapters.HTTPAdapter`.
+    Braintrust uses the `requests` library, so the adapter should be an instance of `requests.adapters.HTTPAdapter`. Alternatively, consider
+    sub-classing our `RetryRequestExceptionsAdapter` to get automatic retries on network-related exceptions.
 
     :param adapter: The adapter to use.
     """
@@ -399,6 +406,47 @@ def set_http_adapter(adapter: HTTPAdapter) -> None:
     if _state._api_conn:
         _state._api_conn._set_adapter(adapter=adapter)
         _state._api_conn._reset()
+
+
+class RetryRequestExceptionsAdapter(HTTPAdapter):
+    """An HTTP adapter that automatically retries requests on connection exceptions.
+
+    This adapter extends requests' HTTPAdapter to add retry logic for common network-related
+    exceptions including connection errors, timeouts, and other HTTP errors. It implements
+    an exponential backoff strategy between retries to avoid overwhelming servers during
+    intermittent connectivity issues.
+
+    Attributes:
+        base_num_retries: Maximum number of retries before giving up and re-raising the exception.
+        backoff_factor: A multiplier used to determine the time to wait between retries.
+                       The actual wait time is calculated as: backoff_factor * (2 ** retry_count).
+    """
+
+    def __init__(self, *args: Any, base_num_retries: int = 0, backoff_factor: float = 0.5, **kwargs: Any):
+        self.base_num_retries = base_num_retries
+        self.backoff_factor = backoff_factor
+        super().__init__(*args, **kwargs)
+
+    def send(self, *args, **kwargs):
+        num_prev_retries = 0
+        while True:
+            try:
+                response = super().send(*args, **kwargs)
+                # Fully-download the content to ensure we catch any errors from
+                # downloading.
+                if not response.is_redirect and response.content:
+                    pass
+                return response
+            except (urllib3.exceptions.HTTPError, requests.exceptions.RequestException) as e:
+                if num_prev_retries < self.base_num_retries:
+                    # Emulates the sleeping logic in the backoff_factor of urllib3 Retry
+                    sleep_s = self.backoff_factor * (2**num_prev_retries)
+                    print("Retrying request after error:", e, file=sys.stderr)
+                    print("Sleeping for", sleep_s, "seconds", file=sys.stderr)
+                    time.sleep(sleep_s)
+                    num_prev_retries += 1
+                else:
+                    raise e
 
 
 class HTTPConnection:
@@ -418,8 +466,9 @@ class HTTPConnection:
             return False
 
     def make_long_lived(self) -> None:
-        # Following a suggestion in https://stackoverflow.com/questions/23013220/max-retries-exceeded-with-url-in-requests
-        self._reset(connect=10, backoff_factor=0.5)
+        if not self.adapter:
+            self.adapter = RetryRequestExceptionsAdapter(base_num_retries=10, backoff_factor=0.5)
+        self._reset()
 
     @staticmethod
     def sanitize_token(token: str) -> str:
@@ -525,11 +574,42 @@ def _check_json_serializable(event):
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
 
+class _BackgroundLogger(ABC):
+    @abstractmethod
+    def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
+        pass
+
+    @abstractmethod
+    def flush(self, batch_size: Optional[int] = None):
+        pass
+
+
+class _MemoryBackgroundLogger(_BackgroundLogger):
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.logs = []
+
+    def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
+        with self.lock:
+            self.logs.extend(args)
+
+    def flush(self, batch_size: Optional[int] = None):
+        pass
+
+    def pop(self):
+        with self.lock:
+            logs = [l.get() for l in self.logs]  # unwrap the LazyValues
+            self.logs = []
+            # all the logs get merged before gettig sent to the server, so simulate that
+            # here
+            return merge_row_batch(logs)
+
+
 # We should only have one instance of this object in
 # 'BraintrustState._global_bg_logger'. Be careful about spawning multiple
 # instances of this class, because concurrent _BackgroundLoggers will not log to
 # the backend in a deterministic order.
-class _BackgroundLogger:
+class _HTTPBackgroundLogger:
     def __init__(self, api_conn: LazyValue[HTTPConnection]):
         self.api_conn = api_conn
         self.outfile = sys.stderr
@@ -711,13 +791,13 @@ class _BackgroundLogger:
 
     def _unwrap_lazy_values(
         self, wrapped_items: Sequence[LazyValue[Dict[str, Any]]]
-    ) -> Tuple[List[List[Dict[str, Any]]], List["Attachment"]]:
+    ) -> Tuple[List[List[Dict[str, Any]]], List["BaseAttachment"]]:
         for i in range(self.num_tries):
             try:
                 unwrapped_items = [item.get() for item in wrapped_items]
                 batched_items = merge_row_batch(unwrapped_items)
 
-                attachments: List["Attachment"] = []
+                attachments: List["BaseAttachment"] = []
                 for batch in batched_items:
                     for item in batch:
                         _extract_attachments(item, attachments)
@@ -747,7 +827,7 @@ class _BackgroundLogger:
         conn = self.api_conn.get()
         dataStr = construct_logs3_data(items)
         if self.all_publish_payloads_dir:
-            _BackgroundLogger._write_payload_to_dir(payload_dir=self.all_publish_payloads_dir, payload=dataStr)
+            _HTTPBackgroundLogger._write_payload_to_dir(payload_dir=self.all_publish_payloads_dir, payload=dataStr)
         for i in range(self.num_tries):
             start_time = time.time()
             resp = conn.post("/logs3", data=dataStr)
@@ -756,13 +836,16 @@ class _BackgroundLogger:
                 resp = conn.post("/logs", data=legacyDataS)
             if resp.ok:
                 return
+            resp_errmsg = f"{resp.status_code}: {resp.text}"
 
             is_retrying = i + 1 < self.num_tries
             retrying_text = "" if is_retrying else " Retrying"
-            errmsg = f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataStr)}.{retrying_text}\nError: {resp.status_code}: {resp.text}"
+            errmsg = f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataStr)}.{retrying_text}\nError: {resp_errmsg}"
 
             if not is_retrying and self.failed_publish_payloads_dir:
-                _BackgroundLogger._write_payload_to_dir(payload_dir=self.failed_publish_payloads_dir, payload=dataStr)
+                _HTTPBackgroundLogger._write_payload_to_dir(
+                    payload_dir=self.failed_publish_payloads_dir, payload=dataStr
+                )
                 self._log_failed_payloads_dir()
 
             if not is_retrying and self.sync_flush:
@@ -786,7 +869,7 @@ class _BackgroundLogger:
             for output_dir in publish_payloads_dir:
                 if not output_dir:
                     continue
-                _BackgroundLogger._write_payload_to_dir(payload_dir=output_dir, payload=payload)
+                _HTTPBackgroundLogger._write_payload_to_dir(payload_dir=output_dir, payload=payload)
         except Exception as e:
             traceback.print_exc(file=self.outfile)
 
@@ -829,16 +912,30 @@ def _internal_reset_global_state() -> None:
     _state = BraintrustState()
 
 
+def _internal_get_global_state() -> BraintrustState:
+    return _state
+
+
 _internal_reset_global_state()
 _logger = logging.getLogger("braintrust")
 
 
 @contextlib.contextmanager
 def _internal_with_custom_background_logger():
-    custom_logger = _BackgroundLogger(LazyValue(lambda: _state.api_conn(), use_mutex=True))
+    custom_logger = _HTTPBackgroundLogger(LazyValue(lambda: _state.api_conn(), use_mutex=True))
     _state._override_bg_logger.logger = custom_logger
     try:
         yield custom_logger
+    finally:
+        _state._override_bg_logger.logger = None
+
+
+@contextlib.contextmanager
+def _internal_with_memory_background_logger():
+    memory_logger = _MemoryBackgroundLogger()
+    _state._override_bg_logger.logger = memory_logger
+    try:
+        yield memory_logger
     finally:
         _state._override_bg_logger.logger = None
 
@@ -963,6 +1060,9 @@ def init(
     :param repo_info: (Optional) Explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
     :returns: The experiment object.
     """
+
+    if project is None and project_id is None:
+        raise ValueError("Must specify at least one of project or project_id")
 
     if open and update:
         raise ValueError("Cannot open and update an experiment at the same time")
@@ -1351,6 +1451,14 @@ def login(
 
             _check_org_info(info["org_info"], org_name)
 
+            if not _state.api_url:
+                if org_name:
+                    raise ValueError(
+                        f"Unable to log into organization '{org_name}'. Are you sure this credential is scoped to the organization?"
+                    )
+                else:
+                    raise ValueError("Unable to log into any organization with the provided credential.")
+
             conn = _state.api_conn()
             conn.set_token(api_key)
 
@@ -1646,19 +1754,19 @@ def validate_tags(tags: Sequence[str]) -> None:
         seen.add(tag)
 
 
-def _extract_attachments(event: Dict[str, Any], attachments: List["Attachment"]) -> None:
+def _extract_attachments(event: Dict[str, Any], attachments: List["BaseAttachment"]) -> None:
     """
     Helper function for uploading attachments. Recursively extracts `Attachment`
-    values and replaces them with their associated `AttachmentReference`
-    objects.
+    and `ExternalAttachment` values and replaces them with their associated
+    `AttachmentReference` objects.
 
     :param event: The event to filter. Will be modified in-place.
     :param attachments: Flat array of extracted attachments (output parameter).
     """
 
     def _helper(v: Any) -> Any:
-        # Base case: Attachment.
-        if isinstance(v, Attachment):
+        # Base case: Attachment or ExternalAttachment.
+        if isinstance(v, BaseAttachment):
             attachments.append(v)
             return v.reference  # Attachment cannot be nested.
 
@@ -1683,7 +1791,7 @@ def _extract_attachments(event: Dict[str, Any], attachments: List["Attachment"])
 
 def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
     """
-    Recursively hydrates any `AttachmentReference` into `Attachment` by modifying the input in-place.
+    Recursively hydrates any `AttachmentReference` into `ReadonlyAttachment` by modifying the input in-place.
 
     :returns: The same event instance as the input.
     """
@@ -1691,7 +1799,7 @@ def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
     def _helper(v: Any) -> Any:
         if isinstance(v, Dict):
             # Base case: AttachmentReference.
-            if v.get("type") == "braintrust_attachment":
+            if v.get("type") == "braintrust_attachment" or v.get("type") == "external_attachment":
                 return ReadonlyAttachment(cast(AttachmentReference, v))
             else:
                 # Recursive case: object.
@@ -1728,12 +1836,15 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any])
         "dataset_record_id",
         "origin",
         "inputs",
+        "span_attributes",
         ASYNC_SCORING_CONTROL_FIELD,
         MERGE_PATHS_FIELD,
         SKIP_ASYNC_SCORING_FIELD,
+        "span_id",
+        "root_span_id",
     }
     if forbidden_keys:
-        raise ValueError(f"The following keys may are not permitted: {forbidden_keys}")
+        raise ValueError(f"The following keys are not permitted: {forbidden_keys}")
 
     scores = event.get("scores")
     if scores:
@@ -1777,6 +1888,14 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any])
     if tags:
         validate_tags(tags)
 
+    span_attributes = event.get("span_attributes")
+    if span_attributes:
+        if not isinstance(span_attributes, dict):
+            raise ValueError("span_attributes must be a dictionary")
+        for key in span_attributes.keys():
+            if not isinstance(key, str):
+                raise ValueError("span_attributes keys must be strings")
+
     input = event.get("input")
     inputs = event.get("inputs")
     if input is not None and inputs is not None:
@@ -1810,7 +1929,7 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
     """
     Creates a deep copy of the given event. Replaces references to user objects
     with placeholder strings to ensure serializability, except for `Attachment`
-    objects, which are preserved and not deep-copied.
+    and `ExternalAttachment` objects, which are preserved and not deep-copied.
     """
 
     def _deep_copy_object(v: Any) -> Any:
@@ -1831,17 +1950,20 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
             return "<dataset>"
         elif isinstance(v, Logger):
             return "<logger>"
-        elif isinstance(v, Attachment):
+        elif isinstance(v, BaseAttachment):
             return v
         elif isinstance(v, ReadonlyAttachment):
             return v.reference
+        elif isinstance(v, (int, float, str, bool)) or v is None:
+            # Skip roundtrip for primitive types.
+            return v
         else:
-            # No need to handle primitives explicitly because deepcopy will do
-            # it for us.
-            try:
-                return copy.deepcopy(v)
-            except:
-                json.loads(bt_dumps(v))
+            # Note: we avoid using copy.deepcopy, because it's difficult to
+            # guarantee the independence of such copied types from their origin.
+            # E.g. the original type could have a `__del__` method that alters
+            # some shared internal state, and we need this deep copy to be
+            # fully-independent from the original.
+            return json.loads(bt_dumps(v))
 
     return _deep_copy_object(event)
 
@@ -1987,7 +2109,27 @@ class ObjectFetcher(ABC, Generic[TMapping]):
             return max([str(record.get(TRANSACTION_ID_FIELD, "0")) for record in self._refetch()] or ["0"])
 
 
-class Attachment:
+class BaseAttachment(ABC):
+    @property
+    @abstractmethod
+    def reference(self) -> AttachmentReference:
+        ...
+
+    @property
+    @abstractmethod
+    def data(self) -> bytes:
+        ...
+
+    @abstractmethod
+    def upload(self) -> AttachmentStatus:
+        ...
+
+    @abstractmethod
+    def debug_info(self) -> Mapping[str, Any]:
+        ...
+
+
+class Attachment(BaseAttachment):
     """
     Represents an attachment to be uploaded and the associated metadata.
 
@@ -2052,6 +2194,8 @@ class Attachment:
 
     def _init_uploader(self) -> LazyValue[AttachmentStatus]:
         def do_upload(api_conn: HTTPConnection, org_id: str) -> Mapping[str, Any]:
+            assert self._reference["type"] == "braintrust_attachment"
+
             request_params = {
                 "key": self._reference["key"],
                 "filename": self._reference["filename"],
@@ -2134,6 +2278,76 @@ class Attachment:
             return LazyValue(lambda: bytes(data), use_mutex=False)
 
 
+class ExternalAttachment(BaseAttachment):
+    """
+    Represents an attachment that resides in an external object store and the associated metadata.
+
+    `ExternalAttachment` objects can be inserted anywhere in an event, similar to
+    `Attachment` objects, but they reference files that already exist in an external
+    object store rather than requiring upload. The SDK will replace the `ExternalAttachment`
+    object with an `AttachmentReference` during logging.
+    """
+
+    def __init__(
+        self,
+        *,
+        url: str,
+        filename: str,
+        content_type: str,
+    ):
+        """
+        Construct an external attachment reference.
+
+        :param url: A fully qualified URL to the object in the external object store.
+
+        :param filename: The desired name of the file in Braintrust. This parameter is for visualization
+        purposes only and has no effect on attachment storage.
+
+        :param content_type: The MIME type of the file.
+        """
+        self._reference: AttachmentReference = {
+            "type": "external_attachment",
+            "filename": filename,
+            "content_type": content_type,
+            "url": url,
+        }
+        self._data = self._init_downloader()
+
+    @property
+    def reference(self) -> AttachmentReference:
+        """The object that replaces this `Attachment` at upload time."""
+        return self._reference
+
+    @property
+    def data(self) -> bytes:
+        """The attachment contents. This is a lazy value that will read the attachment contents from the external object store on first access."""
+        return self._data.get()
+
+    def upload(self) -> AttachmentStatus:
+        """
+        For ExternalAttachment, this is a no-op since the data already resides
+        in the external object store. It marks the attachment as already uploaded.
+
+        :returns: The attachment status, which will always indicate success.
+        """
+        return AttachmentStatus(upload_status="done")
+
+    def debug_info(self) -> Mapping[str, Any]:
+        """
+        A human-readable description for logging and debugging.
+
+        :returns: The debug object. The return type is not stable and may change in a future release.
+        """
+        return {"reference": self._reference}
+
+    def _init_downloader(self) -> LazyValue[bytes]:
+        def download() -> bytes:
+            readonly = ReadonlyAttachment(self.reference)
+            return readonly.data
+
+        return LazyValue(download, use_mutex=True)
+
+
 class AttachmentMetadata(TypedDict):
     downloadUrl: str
     status: AttachmentStatus
@@ -2161,11 +2375,16 @@ class ReadonlyAttachment:
         org_id = _state.org_id or ""
 
         params = {
-            "key": self.reference["key"],
             "filename": self.reference["filename"],
             "content_type": self.reference["content_type"],
             "org_id": org_id,
         }
+        if self.reference["type"] == "braintrust_attachment":
+            params["key"] = self.reference["key"]
+        elif self.reference["type"] == "external_attachment":
+            params["url"] = self.reference["url"]
+        else:
+            raise RuntimeError(f"Unknown attachment type: {self.reference['type']}")
 
         response = api_conn.get("/attachment", params=params)
         response.raise_for_status()
@@ -2375,6 +2594,9 @@ def permalink(slug: str, org_name: Optional[str] = None, app_url: Optional[str] 
     :param app_url: The app URL to use. If not provided, the app URL will be inferred from the global login state.
     :returns: A permalink to the exported span.
     """
+    if not slug:
+        # Noop spans have an empty slug, so return a dummy permalink.
+        return NOOP_SPAN_PERMALINK
 
     if not org_name:
         login()
@@ -2870,6 +3092,8 @@ class SpanImpl(Span):
         set_current: Optional[bool] = None,
         event: Optional[Dict[str, Any]] = None,
         propagated_event: Optional[Dict[str, Any]] = None,
+        span_id: Optional[str] = None,
+        root_span_id: Optional[str] = None,
     ):
         if span_attributes is None:
             span_attributes = SpanAttributes()
@@ -2928,12 +3152,12 @@ class SpanImpl(Span):
         if id is None or not isinstance(id, str):
             id = str(uuid.uuid4())
         self._id = id
-        self.span_id = str(uuid.uuid4())
+        self.span_id = span_id or str(uuid.uuid4())
         if parent_span_ids:
             self.root_span_id = parent_span_ids.root_span_id
             self.span_parents = [parent_span_ids.span_id]
         else:
-            self.root_span_id = self.span_id
+            self.root_span_id = root_span_id or self.span_id
             self.span_parents = None
 
         # The first log is a replacement, but subsequent logs to the same span
@@ -3818,6 +4042,8 @@ class Logger(Exportable):
         set_current: Optional[bool] = None,
         parent: Optional[str] = None,
         propagated_event: Optional[Dict[str, Any]] = None,
+        span_id: Optional[str] = None,
+        root_span_id: Optional[str] = None,
         **event: Any,
     ) -> Span:
         """Create a new toplevel span underneath the logger. The name defaults to "root" and the span type to "task".
@@ -3833,6 +4059,8 @@ class Logger(Exportable):
             set_current=set_current,
             parent=parent,
             propagated_event=propagated_event,
+            span_id=span_id,
+            root_span_id=root_span_id,
             **event,
         )
 
@@ -3860,6 +4088,8 @@ class Logger(Exportable):
         set_current: Optional[bool] = None,
         parent: Optional[str] = None,
         propagated_event: Optional[Dict[str, Any]] = None,
+        span_id: Optional[str] = None,
+        root_span_id: Optional[str] = None,
         **event: Any,
     ) -> Span:
         return SpanImpl(
@@ -3878,6 +4108,8 @@ class Logger(Exportable):
             start_time=start_time,
             set_current=set_current,
             event=event,
+            span_id=span_id,
+            root_span_id=root_span_id,
         )
 
     def export(self) -> str:
