@@ -2049,34 +2049,41 @@ class ObjectFetcher(ABC, Generic[TMapping]):
         state = self._get_state()
         if self._fetched_data is None:
             if self._internal_btql:
-                resp = state.api_conn().post(
-                    f"btql",
-                    json={
-                        "query": {
-                            **self._internal_btql,
-                            "select": [{"op": "star"}],
-                            "from": {
-                                "op": "function",
-                                "name": {
-                                    "op": "ident",
-                                    "name": [self.object_type],
-                                },
-                                "args": [
-                                    {
-                                        "op": "literal",
-                                        "value": self.id,
+                cursor = None
+                while True:
+                    resp = state.api_conn().post(
+                        f"btql",
+                        json={
+                            "query": {
+                                **self._internal_btql,
+                                "select": [{"op": "star"}],
+                                "from": {
+                                    "op": "function",
+                                    "name": {
+                                        "op": "ident",
+                                        "name": [self.object_type],
                                     },
-                                ],
+                                    "args": [
+                                        {
+                                            "op": "literal",
+                                            "value": self.id,
+                                        },
+                                    ],
+                                },
                             },
+                            "disable_limit": True if self.object_type in ("experiment", "dataset") else None,
                         },
-                        "disable_limit": True if self.object_type in ("experiment", "dataset") else None,
-                    },
-                    headers={
-                        "Accept-Encoding": "gzip",
-                    },
-                )
-                response_raise_for_status(resp)
-                data = cast(List[TMapping], resp.json()["data"])
+                        headers={
+                            "Accept-Encoding": "gzip",
+                        },
+                    )
+                    response_raise_for_status(resp)
+                    resp_json = resp.json()
+                    data = (data or []) + cast(List[TMapping], resp_json["data"])
+                    print("cursor", resp_json["cursor"], data)
+                    if not resp_json["cursor"]:
+                        break
+                    cursor = resp_json["cursor"]
             else:
                 resp = state.api_conn().get(
                     f"v1/{self.object_type}/{self.id}/fetch",

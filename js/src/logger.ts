@@ -3743,37 +3743,43 @@ class ObjectFetcher<RecordType>
       const state = await this.getState();
       let data = null;
       if (this._internal_btql) {
-        const resp = await state.apiConn().post(
-          `btql`,
-          {
-            query: {
-              ...this._internal_btql,
-              select: [
-                {
-                  op: "star",
-                },
-              ],
-              from: {
-                op: "function",
-                name: {
-                  op: "ident",
-                  name: [this.objectType],
-                },
-                args: [
+        let cursor = undefined;
+        while (true) {
+          const resp = await state.apiConn().post(
+            `btql`,
+            {
+              query: {
+                ...this._internal_btql,
+                select: [
                   {
-                    op: "literal",
-                    value: await this.id,
+                    op: "star",
                   },
                 ],
+                from: {
+                  op: "function",
+                  name: {
+                    op: "ident",
+                    name: [this.objectType],
+                  },
+                  args: [
+                    {
+                      op: "literal",
+                      value: await this.id,
+                    },
+                  ],
+                },
+                cursor,
               },
             },
-            disable_limit: ["experiment", "dataset"].includes(this.objectType)
-              ? true
-              : undefined,
-          },
-          { headers: { "Accept-Encoding": "gzip" } },
-        );
-        data = (await resp.json()).data;
+            { headers: { "Accept-Encoding": "gzip" } },
+          );
+          const respJson = await resp.json();
+          data = (data ?? []).concat(respJson.data);
+          if (!respJson.cursor) {
+            break;
+          }
+          cursor = respJson.cursor;
+        }
       } else {
         const resp = await state.apiConn().get(
           `v1/${this.objectType}/${await this.id}/fetch`,
