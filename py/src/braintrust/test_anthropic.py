@@ -62,8 +62,17 @@ def memory_logger():
 
 
 def test_anthropic_messages_create_stream_true(memory_logger):
-    pass
-    # FIXME[matt] implement this
+    return
+    assert not memory_logger.pop()
+
+    client = wrap_anthropic_client(_get_client())
+    msg = {"role": "user", "content": "what's 2+2?"}
+    start = time.time()
+    msg = client.messages.create(model=MODEL, max_tokens=300, messages=[msg], stream=True)
+    end = time.time()
+
+    text = msg.content[0].text
+    assert text == "4"
 
 
 def test_anthropic_messages_model_params_inputs(memory_logger):
@@ -99,9 +108,9 @@ def test_anthropic_messages_model_params_inputs(memory_logger):
 
         pprint.pprint(log)
         assert log["metadata"]["model"] == MODEL
-        assert log["metadata"]["model_parameters"]["max_tokens"] == 300
-        assert log["metadata"]["model_parameters"]["temperature"] == 0.5
-        assert log["metadata"]["model_parameters"]["top_p"] == 0.5
+        assert log["metadata"]["max_tokens"] == 300
+        assert log["metadata"]["temperature"] == 0.5
+        assert log["metadata"]["top_p"] == 0.5
 
 
 def test_anthropic_messages_system_prompt_inputs(memory_logger):
@@ -160,7 +169,7 @@ async def test_anthropic_messages_streaming_async(memory_logger):
         assert log["project_id"] == PROJECT_NAME
         assert log["span_attributes"]["type"] == "llm"
         assert log["metadata"]["model"] == MODEL
-        assert log["metadata"]["model_parameters"]["max_tokens"] == 1024
+        assert log["metadata"]["max_tokens"] == 1024
         _assert_metrics_are_valid(log["metrics"])
         assert start < log["metrics"]["start"] < log["metrics"]["end"] < end
         metrics = log["metrics"]
@@ -170,7 +179,7 @@ async def test_anthropic_messages_streaming_async(memory_logger):
         assert metrics["cache_read_input_tokens"] == usage.cache_read_input_tokens
         assert metrics["cache_creation_input_tokens"] == usage.cache_creation_input_tokens
         assert log["metadata"]["model"] == MODEL
-        assert log["metadata"]["model_parameters"]["max_tokens"] == 1024
+        assert log["metadata"]["max_tokens"] == 1024
 
 
 def test_anthropic_client_error(memory_logger):

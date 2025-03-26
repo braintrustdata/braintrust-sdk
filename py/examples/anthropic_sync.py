@@ -55,7 +55,7 @@ def ask_anthropic():
 
 
 def main():
-    while True:
+    for _ in range(3):
         ask_anthropic()
         time.sleep(3)
 

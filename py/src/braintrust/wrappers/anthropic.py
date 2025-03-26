@@ -10,7 +10,16 @@ log = logging.getLogger(__name__)
 
 
 # Anthropic model parameters that we want to track as span metadata.
-MODEL_PARAMS = ("max_tokens", "temperature", "top_k", "top_p", "stop_sequences", "tool_chice", "tools")
+METADATA_PARAMS = (
+    "model",
+    "max_tokens",
+    "temperature",
+    "top_k",
+    "top_p",
+    "stop_sequences",
+    "tool_choice",
+    "tools",
+)
 
 
 class Wrapper:
@@ -83,17 +92,15 @@ class TracedMessages(Wrapper):
 
     @staticmethod
     def __get_metadata_from_kwargs(kwargs):
-        model_params = {}
-        for k in MODEL_PARAMS:
+
+        metadata = {"provider": "anthropic"}
+
+        for k in METADATA_PARAMS:
             v = kwargs.get(k, None)
             if v is not None:
-                model_params[k] = v
+                metadata[k] = v
 
-        return {
-            "model": kwargs.get("model"),
-            "model_parameters": model_params,
-            "provider": "anthropic",
-        }
+        return metadata
 
 
 class TracedMessageStreamManager(Wrapper):
