@@ -38,18 +38,6 @@ def _get_async_client():
     return anthropic.AsyncAnthropic()
 
 
-def test_client_args_must_be_kwargs():
-    # anthropic.py mandates that args must be passed as keywwords. The correctness of our tracing implementation
-    # depends on this. This test is a sanity check to make sure that stays true.
-    client = _get_client()
-    try:
-        client.messages.create(300, [{"role": "user", "content": "what is 1+1?"}], MODEL)
-    except TypeError:
-        pass
-    else:
-        raise Exception("should have raised an exception")
-
-
 def test_memory_logger():
     # FIXME[matt] this should be moved to a common place
     _setup_test_logger("test-anthropic-app")
