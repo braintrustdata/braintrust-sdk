@@ -33,24 +33,22 @@ class TracedMessages(Wrapper):
         self.__messages = messages
 
     def stream(self, *args, **kwargs):
-        # note: messages is *always* a kwarg in this library
-        msgs_in = list(kwargs.get("messages", []))
-        kwargs["messages"] = msgs_in  # just in case it's a generator
+        # note: this library mandates kwargs, so we can ignore args
+        prompt_input = self.__get_input_from_kwargs(kwargs)
 
-        span = start_span(name="anthropic.messages.stream", input=msgs_in, type="llm")
+        span = start_span(name="anthropic.messages.stream", input=prompt_input, type="llm")
         s = self.__messages.stream(*args, **kwargs)
         return TracedMessageStreamManager(s, span)
 
     def create(self, *args, **kwargs):
-        msgs_in = list(kwargs.get("messages", []))
-        kwargs["messages"] = msgs_in  # just in case it's a generator
+        prompt_input = self.__get_input_from_kwargs(kwargs)
 
         span = start_span(name="anthropic.messages.create", type="llm")
         try:
             msg = self.__messages.create(*args, **kwargs)
             metadata = _extract_metadata(msg)
             metrics = _extract_metrics(getattr(msg, "usage", {}))
-            span.log(input=msgs_in, output=msg.content, metadata=metadata, metrics=metrics)
+            span.log(input=prompt_input, output=msg.content, metadata=metadata, metrics=metrics)
             return msg
         except Exception as e:
             try:
@@ -60,6 +58,18 @@ class TracedMessages(Wrapper):
             raise e
         finally:
             span.end()
+
+    @staticmethod
+    def __get_input_from_kwargs(kwargs):
+        msgs = list(kwargs.get("messages", []))
+        # save a copy of the messages because it might be a generator
+        # and we may mutate it.
+        kwargs["messages"] = msgs.copy()
+
+        system = kwargs.get("system", None)
+        if system:
+            msgs.append({"role": "system", "content": system})
+        return msgs
 
 
 class TracedMessageStreamManager(Wrapper):

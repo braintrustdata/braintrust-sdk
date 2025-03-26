@@ -38,6 +38,18 @@ def _get_async_client():
     return anthropic.AsyncAnthropic()
 
 
+def test_client_args_must_be_kwargs():
+    # anthropic.py mandates that args must be passed as keywwords. The correctness of our tracing implementation
+    # depends on this. This test is a sanity check to make sure that stays true.
+    client = _get_client()
+    try:
+        client.messages.create(300, [{"role": "user", "content": "what is 1+1?"}], MODEL)
+    except TypeError:
+        pass
+    else:
+        raise Exception("should have raised an exception")
+
+
 def test_memory_logger():
     # FIXME[matt] this should be moved to a common place
     _setup_test_logger("test-anthropic-app")
@@ -49,10 +61,8 @@ def test_memory_logger():
             return "hello"
 
         thing()
-
         logs = bgl.pop()
         assert len(logs) == 1
-
         assert logs
 
 
@@ -61,6 +71,37 @@ def memory_logger():
     _setup_test_logger(PROJECT_NAME)
     with logger._internal_with_memory_background_logger() as bgl:
         yield bgl
+
+
+def test_anthropic_with_system_prompt_input(memory_logger):
+    assert not memory_logger.pop()
+
+    client = wrap_anthropic_client(_get_client())
+    system = "Today's date is 2024-03-26."
+    q = [{"role": "user", "content": "what is tomorrow's date? only return the date"}]
+
+    def _with_messages_create():
+        return client.messages.create(model=MODEL, max_tokens=300, system=system, messages=q)
+
+    def _with_messages_stream():
+        with client.messages.stream(model=MODEL, max_tokens=300, system=system, messages=q) as stream:
+            for msg in stream:
+                pass
+        return stream.get_final_message()
+
+    for f in [_with_messages_create, _with_messages_stream]:
+        print("testing %s" % f.__name__)
+        msg = f()
+        assert msg.content[0].text == "2024-03-27"
+
+        logs = memory_logger.pop()
+        assert len(logs) == 1
+        log = logs[0][0]
+        inputs = log["input"]
+        assert len(inputs) == 2
+        inputs_by_role = {m["role"]: m["content"] for m in inputs}
+        assert inputs_by_role["system"] == system
+        assert inputs_by_role["user"] == q[0]["content"]
 
 
 @pytest.mark.asyncio
