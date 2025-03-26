@@ -58,3 +58,4 @@ from .logger import _internal_get_global_state, _internal_reset_global_state, _i
 from .oai import wrap_openai
 from .types import *
 from .util import BT_IS_ASYNC_ATTRIBUTE, MarkAsyncWrapper
+from .wrappers.anthropic import wrap_anthropic
