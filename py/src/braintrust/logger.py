@@ -2069,7 +2069,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                                 ],
                             },
                         },
-                        disable_limit: True if object_type in ("experiment", "dataset") else None,
+                        "disable_limit": True if self.object_type in ("experiment", "dataset") else None,
                     },
                     headers={
                         "Accept-Encoding": "gzip",
