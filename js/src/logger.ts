@@ -3767,6 +3767,9 @@ class ObjectFetcher<RecordType>
                 ],
               },
             },
+            disable_limit: ["experiment", "dataset"].includes(this.objectType)
+              ? true
+              : undefined,
           },
           { headers: { "Accept-Encoding": "gzip" } },
         );
