@@ -44,6 +44,7 @@ def test_anthropic(session, version):
 
 def _install_test_deps(session):
     session.install("pytest")
+    session.install("pytest-asyncio")
     session.install("-e", ".[test]")
 
 
