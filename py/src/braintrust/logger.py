@@ -2075,8 +2075,8 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                                         },
                                     ],
                                 },
+                                "limit": 1000,
                             },
-                            "limit": 1000,
                         },
                         headers={
                             "Accept-Encoding": "gzip",
