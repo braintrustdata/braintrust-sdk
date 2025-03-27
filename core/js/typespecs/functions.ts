@@ -318,6 +318,12 @@ export const sseDoneEventSchema = baseSSEEventSchema.omit({ data: true }).merge(
   }),
 );
 
+export const sseMetaEventSchema = baseSSEEventSchema.merge(
+  z.object({
+    event: z.literal("meta"),
+  }),
+);
+
 export const functionObjectTypeEnum = z
   .enum(["prompt", "tool", "scorer", "task", "agent"])
   .openapi("FunctionObjectType");
@@ -358,6 +364,13 @@ export const sseConsoleEventDataSchema = z.object({
   message: z.string(),
 });
 export type SSEConsoleEventData = z.infer<typeof sseConsoleEventDataSchema>;
+
+export const sseMetaEventDataSchema = z
+  .object({
+    stop_token: z.string().describe("The token to stop the run"),
+  })
+  .openapi("SSEMetaEventData");
+export type SSEMetaEventData = z.infer<typeof sseMetaEventDataSchema>;
 
 export const callEventSchema = z
   .union([
@@ -405,3 +418,10 @@ export const toolFunctionDefinitionSchema = z.object({
 export type ToolFunctionDefinition = z.infer<
   typeof toolFunctionDefinitionSchema
 >;
+
+export const stopFunctionSchema = z
+  .object({
+    stop_token: z.string().describe("The token to stop the run"),
+  })
+  .openapi("StopFunction");
+export type StopFunction = z.infer<typeof stopFunctionSchema>;

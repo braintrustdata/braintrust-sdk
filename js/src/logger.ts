@@ -79,6 +79,7 @@ import {
   GLOBAL_PROJECT,
   isEmpty,
   LazyValue,
+  SyncLazyValue,
   runCatchFinally,
 } from "./util";
 
@@ -283,7 +284,7 @@ export class NoopSpan implements Span {
   }
 
   public async permalink(): Promise<string> {
-    return "";
+    return NOOP_SPAN_PERMALINK;
   }
 
   public async flush(): Promise<void> {}
@@ -304,6 +305,7 @@ export class NoopSpan implements Span {
 }
 
 export const NOOP_SPAN = new NoopSpan();
+export const NOOP_SPAN_PERMALINK = "https://braintrust.dev/noop-span";
 
 // In certain situations (e.g. the cli), we want separately-compiled modules to
 // use the same state as the toplevel module. This global variable serves as a
@@ -339,7 +341,7 @@ export class BraintrustState {
   // This is preferable to replacing the whole logger, which would create the
   // possibility of multiple loggers floating around, which may not log in a
   // deterministic order.
-  private _bgLogger: BackgroundLogger;
+  private _bgLogger: SyncLazyValue<BackgroundLogger>;
 
   public appUrl: string | null = null;
   public appPublicUrl: string | null = null;
@@ -373,9 +375,8 @@ export class BraintrustState {
       await this.login({});
       return this.apiConn();
     };
-    this._bgLogger = new BackgroundLogger(
-      new LazyValue(defaultGetLogConn),
-      loginParams,
+    this._bgLogger = new SyncLazyValue(
+      () => new BackgroundLogger(new LazyValue(defaultGetLogConn), loginParams),
     );
 
     this.resetLoginInfo();
@@ -549,12 +550,12 @@ export class BraintrustState {
   }
 
   public bgLogger(): BackgroundLogger {
-    return this._bgLogger;
+    return this._bgLogger.get();
   }
 
   // Should only be called by the login function.
   public loginReplaceApiConn(apiConn: HTTPConnection) {
-    this._bgLogger.internalReplaceApiConn(apiConn);
+    this._bgLogger.get().internalReplaceApiConn(apiConn);
   }
 }
 
@@ -1439,6 +1440,11 @@ export async function permalink(
     appUrl?: string;
   },
 ): Promise<string> {
+  // Noop spans have an empty slug, so return a dummy permalink.
+  if (slug === "") {
+    return NOOP_SPAN_PERMALINK;
+  }
+
   const state = opts?.state ?? _globalState;
   const getOrgName = async () => {
     if (opts?.orgName) {
@@ -2328,6 +2334,10 @@ export function init<IsOpen extends boolean = false>(
     repoInfo,
     state: stateArg,
   } = options;
+
+  if (!project && !projectId) {
+    throw new Error("Must specify at least one of project or projectId");
+  }
 
   if (open && update) {
     throw new Error("Cannot open and update an experiment at the same time");

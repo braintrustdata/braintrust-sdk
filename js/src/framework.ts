@@ -33,7 +33,7 @@ import {
   withParent,
 } from "./logger";
 import { BarProgressReporter, ProgressReporter } from "./progress";
-import { isEmpty } from "./util";
+import { isEmpty, InternalAbortError } from "./util";
 
 export type BaseExperiment<
   Input,
@@ -212,6 +212,11 @@ export interface Evaluator<
    * Defaults to undefined, in which case there is no timeout.
    */
   timeout?: number;
+
+  /**
+   * An abort signal that can be used to stop the evaluation.
+   */
+  signal?: AbortSignal;
 
   /**
    * The maximum number of tasks/scorers that will be run concurrently.
@@ -675,28 +680,13 @@ export async function runEvaluator(
   stream: ((data: SSEProgressEventData) => void) | undefined,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
-  const result = runEvaluatorInternal(
+  return await runEvaluatorInternal(
     experiment,
     evaluator,
     progressReporter,
     filters,
     stream,
   );
-  const timer = async () => {
-    await new Promise((_, reject) => {
-      if (evaluator.timeout) {
-        setTimeout(() => {
-          reject("evaluator timed out");
-        }, evaluator.timeout);
-      }
-    });
-    return null;
-  };
-  const winner = await Promise.race([result, timer()]);
-  if (!winner) {
-    throw new Error("unreachable");
-  }
-  return winner;
 }
 
 export const defaultErrorScoreHandler: ErrorScoreHandler = ({
@@ -1034,7 +1024,34 @@ async function runEvaluatorInternal(
     Math.max(evaluator.maxConcurrency ?? data.length, 1),
   );
   q.push(data);
-  await q.drain();
+
+  const cancel = async () => {
+    await new Promise((_, reject) => {
+      if (evaluator.timeout) {
+        setTimeout(() => {
+          reject(new InternalAbortError("Evaluator timed out"));
+        }, evaluator.timeout);
+      }
+      if (evaluator.signal) {
+        evaluator.signal.addEventListener("abort", () => {
+          reject(new InternalAbortError("Evaluator aborted"));
+        });
+      }
+    });
+  };
+
+  // wait for tasks to be completed or the evaluator to be cancelled
+  // if the evaluator is cancelled, the remaining tasks that have not been started will be killed
+  try {
+    await Promise.race([q.drain(), cancel()]);
+  } catch (e) {
+    if (e instanceof InternalAbortError) {
+      q.kill();
+    }
+
+    throw e;
+  }
+
   const summary = experiment
     ? await experiment.summarize()
     : buildLocalSummary(evaluator, results);

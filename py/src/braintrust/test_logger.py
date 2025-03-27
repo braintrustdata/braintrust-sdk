@@ -1,9 +1,28 @@
 from typing import List
 from unittest import TestCase
 
+import braintrust
 from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt
 from braintrust.logger import _deep_copy_event, _extract_attachments
 from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
+
+
+class TestInit(TestCase):
+    def test_init_validation(self):
+        with self.assertRaises(ValueError) as cm:
+            braintrust.init()
+
+        assert str(cm.exception) == "Must specify at least one of project or project_id"
+
+        with self.assertRaises(ValueError) as cm:
+            braintrust.init(project="project", open=True, update=True)
+
+        assert str(cm.exception) == "Cannot open and update an experiment at the same time"
+
+        with self.assertRaises(ValueError) as cm:
+            braintrust.init(project="project", open=True)
+
+        assert str(cm.exception) == "Cannot open an experiment without specifying its name"
 
 
 class TestLogger(TestCase):
@@ -283,3 +302,12 @@ class TestLogger(TestCase):
                 },
             },
         )
+
+
+def test_noop_permalink_issue_1837():
+    # fixes issue #BRA-1837
+    span = braintrust.NOOP_SPAN
+    assert span.permalink() == "https://braintrust.dev/noop-span"
+
+    link = braintrust.permalink(span.export())
+    assert link == "https://braintrust.dev/noop-span"

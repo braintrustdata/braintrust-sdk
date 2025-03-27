@@ -247,7 +247,7 @@ class _NoopSpan(Span):
         return ""
 
     def permalink(self) -> str:
-        return ""
+        return NOOP_SPAN_PERMALINK
 
     def flush(self):
         pass
@@ -276,6 +276,7 @@ class _NoopSpan(Span):
 
 
 NOOP_SPAN: Span = _NoopSpan()
+NOOP_SPAN_PERMALINK = "https://braintrust.dev/noop-span"
 
 
 class BraintrustState:
@@ -294,7 +295,12 @@ class BraintrustState:
         # Any time we re-log in, we directly update the api_conn inside the
         # logger. This is preferable to replacing the whole logger, which would
         # create the possibility of multiple loggers floating around.
-        self._global_bg_logger = _BackgroundLogger(LazyValue(default_get_api_conn, use_mutex=True))
+        #
+        # We lazily-initialize the logger so that it does any initialization
+        # (including reading env variables) upon the first actual usage.
+        self._global_bg_logger = LazyValue(
+            lambda: _HTTPBackgroundLogger(LazyValue(default_get_api_conn, use_mutex=True)), use_mutex=True
+        )
 
         # For unit-testing, tests may wish to temporarily override the global
         # logger with a custom one. We allow this but keep the override variable
@@ -367,12 +373,12 @@ class BraintrustState:
         if not self._user_info:
             self._user_info = info
 
-    def global_bg_logger(self):
-        return getattr(self._override_bg_logger, "logger", None) or self._global_bg_logger
+    def global_bg_logger(self) -> "_BackgroundLogger":
+        return getattr(self._override_bg_logger, "logger", None) or self._global_bg_logger.get()
 
     # Should only be called by the login function.
     def login_replace_api_conn(self, api_conn: "HTTPConnection"):
-        self._global_bg_logger.internal_replace_api_conn(api_conn)
+        self._global_bg_logger.get().internal_replace_api_conn(api_conn)
 
 
 _state: BraintrustState = None  # type: ignore
@@ -428,7 +434,7 @@ class RetryRequestExceptionsAdapter(HTTPAdapter):
                 response = super().send(*args, **kwargs)
                 # Fully-download the content to ensure we catch any errors from
                 # downloading.
-                if response.content:
+                if not response.is_redirect and response.content:
                     pass
                 return response
             except (urllib3.exceptions.HTTPError, requests.exceptions.RequestException) as e:
@@ -568,11 +574,42 @@ def _check_json_serializable(event):
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
 
+class _BackgroundLogger(ABC):
+    @abstractmethod
+    def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
+        pass
+
+    @abstractmethod
+    def flush(self, batch_size: Optional[int] = None):
+        pass
+
+
+class _MemoryBackgroundLogger(_BackgroundLogger):
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.logs = []
+
+    def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
+        with self.lock:
+            self.logs.extend(args)
+
+    def flush(self, batch_size: Optional[int] = None):
+        pass
+
+    def pop(self):
+        with self.lock:
+            logs = [l.get() for l in self.logs]  # unwrap the LazyValues
+            self.logs = []
+            # all the logs get merged before gettig sent to the server, so simulate that
+            # here
+            return merge_row_batch(logs)
+
+
 # We should only have one instance of this object in
 # 'BraintrustState._global_bg_logger'. Be careful about spawning multiple
 # instances of this class, because concurrent _BackgroundLoggers will not log to
 # the backend in a deterministic order.
-class _BackgroundLogger:
+class _HTTPBackgroundLogger:
     def __init__(self, api_conn: LazyValue[HTTPConnection]):
         self.api_conn = api_conn
         self.outfile = sys.stderr
@@ -790,7 +827,7 @@ class _BackgroundLogger:
         conn = self.api_conn.get()
         dataStr = construct_logs3_data(items)
         if self.all_publish_payloads_dir:
-            _BackgroundLogger._write_payload_to_dir(payload_dir=self.all_publish_payloads_dir, payload=dataStr)
+            _HTTPBackgroundLogger._write_payload_to_dir(payload_dir=self.all_publish_payloads_dir, payload=dataStr)
         for i in range(self.num_tries):
             start_time = time.time()
             resp = conn.post("/logs3", data=dataStr)
@@ -806,7 +843,9 @@ class _BackgroundLogger:
             errmsg = f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataStr)}.{retrying_text}\nError: {resp_errmsg}"
 
             if not is_retrying and self.failed_publish_payloads_dir:
-                _BackgroundLogger._write_payload_to_dir(payload_dir=self.failed_publish_payloads_dir, payload=dataStr)
+                _HTTPBackgroundLogger._write_payload_to_dir(
+                    payload_dir=self.failed_publish_payloads_dir, payload=dataStr
+                )
                 self._log_failed_payloads_dir()
 
             if not is_retrying and self.sync_flush:
@@ -830,7 +869,7 @@ class _BackgroundLogger:
             for output_dir in publish_payloads_dir:
                 if not output_dir:
                     continue
-                _BackgroundLogger._write_payload_to_dir(payload_dir=output_dir, payload=payload)
+                _HTTPBackgroundLogger._write_payload_to_dir(payload_dir=output_dir, payload=payload)
         except Exception as e:
             traceback.print_exc(file=self.outfile)
 
@@ -873,16 +912,30 @@ def _internal_reset_global_state() -> None:
     _state = BraintrustState()
 
 
+def _internal_get_global_state() -> BraintrustState:
+    return _state
+
+
 _internal_reset_global_state()
 _logger = logging.getLogger("braintrust")
 
 
 @contextlib.contextmanager
 def _internal_with_custom_background_logger():
-    custom_logger = _BackgroundLogger(LazyValue(lambda: _state.api_conn(), use_mutex=True))
+    custom_logger = _HTTPBackgroundLogger(LazyValue(lambda: _state.api_conn(), use_mutex=True))
     _state._override_bg_logger.logger = custom_logger
     try:
         yield custom_logger
+    finally:
+        _state._override_bg_logger.logger = None
+
+
+@contextlib.contextmanager
+def _internal_with_memory_background_logger():
+    memory_logger = _MemoryBackgroundLogger()
+    _state._override_bg_logger.logger = memory_logger
+    try:
+        yield memory_logger
     finally:
         _state._override_bg_logger.logger = None
 
@@ -1007,6 +1060,9 @@ def init(
     :param repo_info: (Optional) Explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
     :returns: The experiment object.
     """
+
+    if project is None and project_id is None:
+        raise ValueError("Must specify at least one of project or project_id")
 
     if open and update:
         raise ValueError("Cannot open and update an experiment at the same time")
@@ -2538,6 +2594,9 @@ def permalink(slug: str, org_name: Optional[str] = None, app_url: Optional[str] 
     :param app_url: The app URL to use. If not provided, the app URL will be inferred from the global login state.
     :returns: A permalink to the exported span.
     """
+    if not slug:
+        # Noop spans have an empty slug, so return a dummy permalink.
+        return NOOP_SPAN_PERMALINK
 
     if not org_name:
         login()

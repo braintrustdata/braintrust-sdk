@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import {
   _exportsForTestingOnly,
+  init,
   BaseAttachment,
   Attachment,
   ExternalAttachment,
@@ -9,6 +10,8 @@ import {
   initLogger,
   NOOP_SPAN,
   Prompt,
+  NOOP_SPAN_PERMALINK,
+  permalink,
 } from "./logger";
 import { BackgroundLogEvent } from "@braintrust/core";
 import { configureNode } from "./node";
@@ -16,6 +19,18 @@ import { configureNode } from "./node";
 configureNode();
 
 const { extractAttachments, deepCopyEvent } = _exportsForTestingOnly;
+
+test("init validation", () => {
+  expect(() => init({})).toThrow(
+    "Must specify at least one of project or projectId",
+  );
+  expect(() => init({ project: "project", open: true, update: true })).toThrow(
+    "Cannot open and update an experiment at the same time",
+  );
+  expect(() => init({ project: "project", open: true })).toThrow(
+    "Cannot open an experiment without specifying its name",
+  );
+});
 
 test("extractAttachments no op", () => {
   const attachments: BaseAttachment[] = [];
@@ -161,7 +176,7 @@ test("deepCopyEvent with attachments", () => {
 
   const span = NOOP_SPAN;
   const logger = initLogger();
-  const experiment = initExperiment({});
+  const experiment = initExperiment("project");
   const dataset = initDataset({});
 
   const original = {
@@ -215,6 +230,18 @@ test("deepCopyEvent with attachments", () => {
   expect((copy.output as any).attachmentList[0]).toBe(attachment1);
   expect((copy.output as any).attachmentList[1]).toBe(attachment2);
   expect((copy.output as any).attachmentList[3]).toBe(attachment3);
+});
+
+test("noop span permalink #BRA-1837", async () => {
+  const span = NOOP_SPAN;
+  const link1 = await span.permalink();
+  expect(link1).toBe("https://braintrust.dev/noop-span");
+
+  const slug = await span.export();
+  expect(slug).toBe("");
+
+  const link2 = await permalink(slug);
+  expect(link2).toBe("https://braintrust.dev/noop-span");
 });
 
 test("prompt.build with structured output templating", () => {

@@ -54,7 +54,8 @@ from .framework2 import *
 from .functions.invoke import *
 from .functions.stream import *
 from .logger import *
-from .logger import _internal_reset_global_state, _internal_with_custom_background_logger
+from .logger import _internal_get_global_state, _internal_reset_global_state, _internal_with_custom_background_logger
 from .oai import wrap_openai
 from .types import *
 from .util import BT_IS_ASYNC_ATTRIBUTE, MarkAsyncWrapper
+from .wrappers.anthropic import wrap_anthropic
