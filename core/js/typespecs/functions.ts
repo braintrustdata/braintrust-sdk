@@ -236,8 +236,9 @@ export const runEvalSchema = z
     max_concurrency: z
       .number()
       .nullish()
+      .transform((val) => (val === undefined ? 10 : val))
       .describe(
-        "The maximum number of tasks/scorers that will be run concurrently. Defaults to undefined, in which case there is no max concurrency.",
+        "The maximum number of tasks/scorers that will be run concurrently. Defaults to 10. If null is provided, no max concurrency will be used.",
       ),
     base_experiment_name: z
       .string()
