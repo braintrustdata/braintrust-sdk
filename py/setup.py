@@ -41,6 +41,8 @@ extras_require = {
     ],
     "doc": ["pydoc-markdown"],
     "openai-agents": ["openai-agents"],
+    # These should only be installed for linting import errors, not for tests.
+    "lint": ["anthropic"],
 }
 
 extras_require["all"] = sorted({package for packages in extras_require.values() for package in packages})
