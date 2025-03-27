@@ -2,4 +2,6 @@
 py/setup.py @ankrgyl @manugoyal
 core/py/setup.py @ankrgyl @manugoyal
 js/package.json @ankrgyl @manugoyal
-core/js/package.json @ankrgyl @manugoyal
+# Skipping core package.json for now because it's changed each time we bump the
+# version.
+# core/js/package.json @ankrgyl @manugoyal
