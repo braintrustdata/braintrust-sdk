@@ -1,0 +1,5 @@
+# Any changes to deps / build configuration need additional scrutiny.
+py/setup.py @ankrgyl @manugoyal
+core/py/setup.py @ankrgyl @manugoyal
+js/package.json @ankrgyl @manugoyal
+core/js/package.json @ankrgyl @manugoyal
