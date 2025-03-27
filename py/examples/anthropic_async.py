@@ -5,10 +5,9 @@ import time
 
 import braintrust
 from anthropic import AsyncAnthropic
-from braintrust.wrappers.anthropic import wrap_anthropic_client
 
 # Initialize Anthropic client (needs ANTHROPIC_API_KEY)
-client = wrap_anthropic_client(AsyncAnthropic())
+client = braintrust.wrap_anthropic(AsyncAnthropic())
 
 braintrust.init_logger(project="example-anthropic-app")
 

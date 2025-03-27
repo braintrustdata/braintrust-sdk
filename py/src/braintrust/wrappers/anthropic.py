@@ -9,6 +9,19 @@ from braintrust.logger import start_span
 log = logging.getLogger(__name__)
 
 
+# Anthropic model parameters that we want to track as span metadata.
+METADATA_PARAMS = (
+    "model",
+    "max_tokens",
+    "temperature",
+    "top_k",
+    "top_p",
+    "stop_sequences",
+    "tool_choice",
+    "tools",
+)
+
+
 class Wrapper:
     def __init__(self, wrapped: Any):
         self.__wrapped = wrapped
@@ -33,24 +46,22 @@ class TracedMessages(Wrapper):
         self.__messages = messages
 
     def stream(self, *args, **kwargs):
-        # note: messages is *always* a kwarg in this library
-        msgs_in = list(kwargs.get("messages", []))
-        kwargs["messages"] = msgs_in  # just in case it's a generator
-
-        span = start_span(name="anthropic.messages.stream", input=msgs_in, type="llm")
-        s = self.__messages.stream(*args, **kwargs)
-        return TracedMessageStreamManager(s, span)
+        return self.__trace_stream(self.__messages.stream, *args, **kwargs)
 
     def create(self, *args, **kwargs):
-        msgs_in = list(kwargs.get("messages", []))
-        kwargs["messages"] = msgs_in  # just in case it's a generator
+        # If stream is True, we need to trace the stream function
+        if kwargs.get("stream"):
+            return self.__trace_stream(self.__messages.create, *args, **kwargs)
 
-        span = start_span(name="anthropic.messages.create", type="llm")
+        # Otherwise, trace synchronouly.
+        _input = self.__get_input_from_kwargs(kwargs)
+        metadata = self.__get_metadata_from_kwargs(kwargs)
+
+        span = start_span(name="anthropic.messages.create", type="llm", metadata=metadata, input=_input)
         try:
             msg = self.__messages.create(*args, **kwargs)
-            metadata = _extract_metadata(msg)
             metrics = _extract_metrics(getattr(msg, "usage", {}))
-            span.log(input=msgs_in, output=msg.content, metadata=metadata, metrics=metrics)
+            span.log(input=_input, output=msg.content, metrics=metrics)
             return msg
         except Exception as e:
             try:
@@ -60,6 +71,40 @@ class TracedMessages(Wrapper):
             raise e
         finally:
             span.end()
+
+    def __trace_stream(self, stream_func, *args, **kwargs):
+        _input = self.__get_input_from_kwargs(kwargs)
+        metadata = self.__get_metadata_from_kwargs(kwargs)
+        span = start_span(
+            name="anthropic.messages.stream",
+            metadata=metadata,
+            input=_input,
+            type="llm",
+        )
+
+        s = stream_func(*args, **kwargs)
+        return TracedMessageStreamManager(s, span)
+
+    @staticmethod
+    def __get_input_from_kwargs(kwargs):
+        msgs = list(kwargs.get("messages", []))
+        # save a copy of the messages because it might be a generator
+        # and we may mutate it.
+        kwargs["messages"] = msgs.copy()
+
+        system = kwargs.get("system", None)
+        if system:
+            msgs.append({"role": "system", "content": system})
+        return msgs
+
+    @staticmethod
+    def __get_metadata_from_kwargs(kwargs):
+        metadata = {"provider": "anthropic"}
+        for k in METADATA_PARAMS:
+            v = kwargs.get(k, None)
+            if v is not None:
+                metadata[k] = v
+        return metadata
 
 
 class TracedMessageStreamManager(Wrapper):
@@ -123,19 +168,17 @@ class TracedMessageStream(Wrapper):
             raise
 
     def __process_message(self, m):
-        if m.type in ("message_start", "message_delta", "message_stop"):
-            metadata = None
-            metrics = None
+        if m.type == "text":
+            # snapshot accumulates the whole message as it streams in. We can send the whole thing
+            # and updates will be dedup'ed downstream
+            self.__span.log(output=str(m.snapshot))
+        elif m.type in ("message_start", "message_delta", "message_stop"):
+            # Parse the metrics from usage.
+            # Note: For some messages it's on m.usage and others m.message.usage.
             usage = None
-
-            # Some messages have usage & metadata and others only have usage.
             if hasattr(m, "message"):
-                # start & end has usage & metadata
-                msg = m.message
-                metadata = _extract_metadata(msg)
-                usage = getattr(msg, "usage", None)
+                usage = getattr(m.message, "usage", None)
             elif hasattr(m, "usage"):
-                # messages deltas only have usage
                 usage = m.usage
 
             # Not every message has every stat, but the total depends on sum of prompt & completion tokens,
@@ -149,18 +192,7 @@ class TracedMessageStream(Wrapper):
                     "completion_tokens", 0
                 )
 
-            self.__span.log(metadata=metadata, metrics=self.__metrics)
-        elif m.type == "text":
-            # snapshot accumulates the whole message as it streams in. We can send the whole thing
-            # and updates will be dedup'ed downstream
-            self.__span.log(output=str(m.snapshot))
-
-
-def _extract_metadata(msg):
-    return {
-        "provider": "anthropic",  # FIXME[matt] is there a field for this?
-        "model": getattr(msg, "model", ""),
-    }
+            self.__span.log(metrics=self.__metrics)
 
 
 def _extract_metrics(usage):
@@ -182,5 +214,10 @@ def _extract_metrics(usage):
     return metrics
 
 
-def wrap_anthropic_client(client: anthropic.Anthropic) -> TracedAnthropic:
+def wrap_anthropic(client):
+    return TracedAnthropic(client)
+
+
+def wrap_anthropic_client(client: anthropic.Anthropic):
+    # for backwards compatibility
     return TracedAnthropic(client)
