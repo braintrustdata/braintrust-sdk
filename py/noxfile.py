@@ -18,32 +18,27 @@ def test_no_deps(session):
     """Ensure that with no dependencies, we can still import and use the
     library.
     """
-    session.install("pytest")
-    session.install("-e", ".[test]")
-
-    # make sure we can import the library
+    _install_deps(session)
     session.run("python", "-c", "import braintrust")
-
-    # run tests that don't require any dependencies
     session.run("pytest", SRC, f"--ignore={SRC}/wrappers")
 
 
 @nox.session()
 @nox.parametrize("version", ANTHROPIC_VERSIONS)
 def test_anthropic(session, version):
-    """Run pytest against a specific version of
-    the anthropic SDK."""
-
-    session.install("pytest")
-    session.install("-e", ".[test]")
-
+    _install_deps(session)
     _install(session, "anthropic", version)
-
-    # Run your tests
     session.run("pytest", f"{SRC}/wrappers/test_anthropic.py")
 
 
+def _install_deps(session):
+    # Install our test dependencies in this session's venv.
+    session.install("pytest")
+    session.install("-e", ".[test]")
+
+
 def _install(session, package, version=LATEST):
+    # install into this session's venv
     cmd = f"{package}=={version}"
     if version == LATEST or not version:
         cmd = package
