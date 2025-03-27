@@ -3708,6 +3708,8 @@ export type WithTransactionId<R> = R & {
   [TRANSACTION_ID_FIELD]: TransactionId;
 };
 
+const MAX_BTQL_ITERATIONS = 10000;
+
 class ObjectFetcher<RecordType>
   implements AsyncIterable<WithTransactionId<RecordType>>
 {
@@ -3745,6 +3747,7 @@ class ObjectFetcher<RecordType>
       let data = null;
       if (this._internal_btql) {
         let cursor = undefined;
+        let iterations = 0;
         while (true) {
           const resp = await state.apiConn().post(
             `btql`,
@@ -3771,6 +3774,7 @@ class ObjectFetcher<RecordType>
                 },
                 cursor,
               },
+              limit: 1000,
             },
             { headers: { "Accept-Encoding": "gzip" } },
           );
@@ -3780,6 +3784,10 @@ class ObjectFetcher<RecordType>
             break;
           }
           cursor = respJson.cursor;
+          iterations++;
+          if (iterations > MAX_BTQL_ITERATIONS) {
+            throw new Error("Too many BTQL iterations");
+          }
         }
       } else {
         const resp = await state.apiConn().get(

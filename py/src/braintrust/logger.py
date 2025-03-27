@@ -1986,6 +1986,9 @@ class ObjectIterator(Generic[T]):
         return value
 
 
+MAX_BTQL_ITERATIONS = 10000
+
+
 class ObjectFetcher(ABC, Generic[TMapping]):
     def __init__(
         self,
@@ -2051,6 +2054,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
             if self._internal_btql:
                 cursor = None
                 data = None
+                iterations = 0
                 while True:
                     resp = state.api_conn().post(
                         f"btql",
@@ -2072,7 +2076,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                                     ],
                                 },
                             },
-                            "disable_limit": True if self.object_type in ("experiment", "dataset") else None,
+                            "limit": 1000,
                         },
                         headers={
                             "Accept-Encoding": "gzip",
@@ -2084,6 +2088,9 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                     if not resp_json["cursor"]:
                         break
                     cursor = resp_json["cursor"]
+                    iterations += 1
+                    if iterations > MAX_BTQL_ITERATIONS:
+                        raise RuntimeError("Too many BTQL iterations")
             else:
                 resp = state.api_conn().get(
                     f"v1/{self.object_type}/{self.id}/fetch",
