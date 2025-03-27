@@ -2075,6 +2075,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                                         },
                                     ],
                                 },
+                                "cursor": cursor,
                                 "limit": 1000,
                             },
                         },
