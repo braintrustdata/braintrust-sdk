@@ -12,7 +12,7 @@ SRC = "src/braintrust"
 ERROR_CODES = tuple(range(1, 256))
 
 # List your package here if it's not guaranteed to be installed. We'll (try to)
-# validate things work with or with them.
+# validate things work with or without them.
 VENDOR_PACKAGES = ("anthropic", "openai")
 
 
