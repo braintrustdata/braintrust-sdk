@@ -408,6 +408,7 @@ export class BraintrustState {
 
     this._appConn = other._appConn;
     this._apiConn = other._apiConn;
+    this.loginReplaceApiConn(this.apiConn());
     this._proxyConn = other._proxyConn;
   }
 
@@ -490,14 +491,13 @@ export class BraintrustState {
     if (this.apiUrl && !loginParams.forceLogin) {
       return;
     }
-    const { state: newState, conn } = await loginToState({
+    const newState = await loginToState({
       ...this.loginParams,
       ...Object.fromEntries(
         Object.entries(loginParams).filter(([k, v]) => !isEmpty(v)),
       ),
     });
     this.copyLoginInfo(newState);
-    this.loginReplaceApiConn(conn);
   }
 
   public appConn(): HTTPConnection {
@@ -3093,7 +3093,7 @@ export async function loginToState(options: LoginOptions = {}) {
   // Relpace the global logger's apiConn with this one.
   state.loginReplaceApiConn(conn);
 
-  return { state, conn };
+  return state;
 }
 
 // XXX We should remove these global functions now
