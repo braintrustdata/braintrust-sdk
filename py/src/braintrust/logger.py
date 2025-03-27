@@ -2051,7 +2051,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
     def _refetch(self) -> List[TMapping]:
         state = self._get_state()
         if self._fetched_data is None:
-            if self._internal_btql:
+            if self._internal_btql is not None:
                 cursor = None
                 data = None
                 iterations = 0
@@ -2086,9 +2086,9 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                     response_raise_for_status(resp)
                     resp_json = resp.json()
                     data = (data or []) + cast(List[TMapping], resp_json["data"])
-                    if not resp_json["cursor"]:
+                    if not resp_json.get("cursor", None):
                         break
-                    cursor = resp_json["cursor"]
+                    cursor = resp_json.get("cursor", None)
                     iterations += 1
                     if iterations > MAX_BTQL_ITERATIONS:
                         raise RuntimeError("Too many BTQL iterations")
