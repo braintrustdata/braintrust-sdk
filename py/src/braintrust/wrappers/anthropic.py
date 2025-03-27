@@ -1,8 +1,6 @@
 import logging
 from typing import Any
 
-import anthropic
-
 from braintrust import span_types
 from braintrust.logger import start_span
 
@@ -31,7 +29,7 @@ class Wrapper:
 
 
 class TracedAnthropic(Wrapper):
-    def __init__(self, client: anthropic.Anthropic):
+    def __init__(self, client):
         super().__init__(client)
         self.__client = client
 
@@ -218,6 +216,6 @@ def wrap_anthropic(client):
     return TracedAnthropic(client)
 
 
-def wrap_anthropic_client(client: anthropic.Anthropic):
+def wrap_anthropic_client(client):
     # for backwards compatibility
     return TracedAnthropic(client)
