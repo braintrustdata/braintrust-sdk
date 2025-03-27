@@ -2050,6 +2050,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
         if self._fetched_data is None:
             if self._internal_btql:
                 cursor = None
+                data = None
                 while True:
                     resp = state.api_conn().post(
                         f"btql",
@@ -2080,7 +2081,6 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                     response_raise_for_status(resp)
                     resp_json = resp.json()
                     data = (data or []) + cast(List[TMapping], resp_json["data"])
-                    print("cursor", resp_json["cursor"], data)
                     if not resp_json["cursor"]:
                         break
                     cursor = resp_json["cursor"]
