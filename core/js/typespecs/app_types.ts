@@ -370,7 +370,10 @@ export const functionDataSchema = z
         ]),
       })
       .openapi({ title: "code" }),
-    graphDataSchema.openapi({ title: "graph" }),
+    graphDataSchema.openapi({
+      title: "graph",
+      description: "This feature is preliminary and unsupported.",
+    }),
     z
       .object({
         type: z.literal("global"),
