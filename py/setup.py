@@ -37,6 +37,7 @@ extras_require = {
         "pytest",
         "twine",
         "pytest-asyncio",
+        "nox",
     ],
     "doc": ["pydoc-markdown"],
     "openai-agents": ["openai-agents"],
