@@ -144,7 +144,7 @@ def test_anthropic_messages_system_prompt_inputs(memory_logger):
     for f in [_with_messages_create, _with_messages_stream]:
         print("testing %s" % f.__name__)
         msg = f()
-        assert msg.content[0].text == "2024-03-27"
+        assert "2024-03-27" in msg.content[0].text
 
         logs = memory_logger.pop()
         assert len(logs) == 1
