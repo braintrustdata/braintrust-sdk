@@ -408,6 +408,7 @@ export class BraintrustState {
 
     this._appConn = other._appConn;
     this._apiConn = other._apiConn;
+    this.loginReplaceApiConn(this.apiConn());
     this._proxyConn = other._proxyConn;
   }
 
@@ -3707,6 +3708,9 @@ export type WithTransactionId<R> = R & {
   [TRANSACTION_ID_FIELD]: TransactionId;
 };
 
+export const INTERNAL_BTQL_LIMIT = 1000;
+const MAX_BTQL_ITERATIONS = 10000;
+
 class ObjectFetcher<RecordType>
   implements AsyncIterable<WithTransactionId<RecordType>>
 {
@@ -3743,34 +3747,49 @@ class ObjectFetcher<RecordType>
       const state = await this.getState();
       let data = null;
       if (this._internal_btql) {
-        const resp = await state.apiConn().post(
-          `btql`,
-          {
-            query: {
-              ...this._internal_btql,
-              select: [
-                {
-                  op: "star",
-                },
-              ],
-              from: {
-                op: "function",
-                name: {
-                  op: "ident",
-                  name: [this.objectType],
-                },
-                args: [
+        let cursor = undefined;
+        let iterations = 0;
+        while (true) {
+          const resp = await state.apiConn().post(
+            `btql`,
+            {
+              query: {
+                ...this._internal_btql,
+                select: [
                   {
-                    op: "literal",
-                    value: await this.id,
+                    op: "star",
                   },
                 ],
+                from: {
+                  op: "function",
+                  name: {
+                    op: "ident",
+                    name: [this.objectType],
+                  },
+                  args: [
+                    {
+                      op: "literal",
+                      value: await this.id,
+                    },
+                  ],
+                },
+                cursor,
+                limit: INTERNAL_BTQL_LIMIT,
               },
             },
-          },
-          { headers: { "Accept-Encoding": "gzip" } },
-        );
-        data = (await resp.json()).data;
+            { headers: { "Accept-Encoding": "gzip" } },
+          );
+          const respJson = await resp.json();
+          data = (data ?? []).concat(respJson.data);
+          if (!respJson.cursor) {
+            break;
+          }
+          cursor = respJson.cursor;
+          iterations++;
+          if (iterations > MAX_BTQL_ITERATIONS) {
+            throw new Error("Too many BTQL iterations");
+          }
+        }
       } else {
         const resp = await state.apiConn().get(
           `v1/${this.objectType}/${await this.id}/fetch`,
