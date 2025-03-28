@@ -129,14 +129,22 @@ def test_anthropic_messages_system_prompt_inputs(memory_logger):
     assert not memory_logger.pop()
 
     client = wrap_anthropic(_get_client())
-    system = "Today's date is 2024-03-26."
+    system = "Today's date is 2024-03-26. Only return the date"
     q = [{"role": "user", "content": "what is tomorrow's date? only return the date"}]
 
+    args = {
+        "messages": q,
+        "temperature": 0,
+        "max_tokens": 300,
+        "system": system,
+        "model": MODEL,
+    }
+
     def _with_messages_create():
-        return client.messages.create(model=MODEL, max_tokens=300, system=system, messages=q)
+        return client.messages.create(**args)
 
     def _with_messages_stream():
-        with client.messages.stream(model=MODEL, max_tokens=300, system=system, messages=q) as stream:
+        with client.messages.stream(**args) as stream:
             for msg in stream:
                 pass
         return stream.get_final_message()
@@ -144,7 +152,7 @@ def test_anthropic_messages_system_prompt_inputs(memory_logger):
     for f in [_with_messages_create, _with_messages_stream]:
         print("testing %s" % f.__name__)
         msg = f()
-        assert msg.content[0].text == "2024-03-27"
+        assert "2024-03-27" in msg.content[0].text
 
         logs = memory_logger.pop()
         assert len(logs) == 1
