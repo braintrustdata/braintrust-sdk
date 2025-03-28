@@ -677,10 +677,11 @@ class OpenAIV1Wrapper(NamedWrapper):
         if hasattr(openai, "beta"):
             self.beta = BetaV1Wrapper(openai.beta)
 
-        if type(openai.responses) == oai.resources.responses.responses.AsyncResponses:
-            self.responses = AsyncResponsesV1Wrapper(openai.responses)
-        else:
-            self.responses = ResponsesV1Wrapper(openai.responses)
+        if hasattr(openai, "responses"):
+            if type(openai.responses) == oai.resources.responses.responses.AsyncResponses:
+                self.responses = AsyncResponsesV1Wrapper(openai.responses)
+            else:
+                self.responses = ResponsesV1Wrapper(openai.responses)
 
         if type(openai.embeddings) == oai.resources.embeddings.AsyncEmbeddings:
             self.embeddings = AsyncEmbeddingV1Wrapper(openai.embeddings)
