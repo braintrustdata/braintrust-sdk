@@ -1986,6 +1986,7 @@ class ObjectIterator(Generic[T]):
         return value
 
 
+INTERNAL_BTQL_LIMIT = 1000
 MAX_BTQL_ITERATIONS = 10000
 
 
@@ -2076,7 +2077,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                                     ],
                                 },
                                 "cursor": cursor,
-                                "limit": 1000,
+                                "limit": INTERNAL_BTQL_LIMIT,
                             },
                         },
                         headers={

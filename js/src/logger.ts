@@ -3708,6 +3708,7 @@ export type WithTransactionId<R> = R & {
   [TRANSACTION_ID_FIELD]: TransactionId;
 };
 
+export const INTERNAL_BTQL_LIMIT = 1000;
 const MAX_BTQL_ITERATIONS = 10000;
 
 class ObjectFetcher<RecordType>
@@ -3773,7 +3774,7 @@ class ObjectFetcher<RecordType>
                   ],
                 },
                 cursor,
-                limit: 1000,
+                limit: INTERNAL_BTQL_LIMIT,
               },
             },
             { headers: { "Accept-Encoding": "gzip" } },
