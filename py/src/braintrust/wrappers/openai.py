@@ -148,7 +148,7 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
             metrics["time_to_first_token"] = ttft
 
         usage = span.span_data.usage or {}
-        if "prompt_tokens" in usage: 
+        if "prompt_tokens" in usage:
             metrics["prompt_tokens"] = usage["prompt_tokens"]
         elif "input_tokens" in usage:
             metrics["prompt_tokens"] = usage["input_tokens"]
