@@ -28,9 +28,6 @@ export type LazyGraphNode = {
   id: string;
 };
 
-// Type for transform functions
-export type TransformFn<T, R> = (input: T) => R;
-
 // Graph builder class to convert functional chains to GraphData
 export class GraphBuilder {
   private nodes: Record<string, GraphNode | LazyGraphNode> = {};
@@ -218,6 +215,43 @@ export class GraphBuilder {
   }
 }
 
+// Add these new types
+export type VariableReference = {
+  __type: "variable-reference";
+  path: string[];
+};
+
+export type ProxyObject = {
+  [key: string]: ProxyObject;
+};
+
+// Create a proxy handler that captures property access paths
+function createVariableProxy(path: string[] = []): ProxyObject {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return new Proxy({} as ProxyObject, {
+    get(target, prop) {
+      if (typeof prop === "string") {
+        const newPath = [...path, prop];
+
+        // Return a variable reference for terminal properties
+        // or a new proxy for further chaining
+        return createVariableProxy(newPath);
+      }
+      return undefined;
+    },
+    // Add this method to convert the proxy to a variable reference when used
+    apply(target, thisArg, args) {
+      return {
+        __type: "variable-reference",
+        path,
+      };
+    },
+  });
+}
+
+// Type for transform functions
+export type TransformFn = (input: ProxyObject) => Node;
+
 // Base Node class for common functionality
 abstract class BaseNode implements INode {
   constructor(
@@ -226,7 +260,7 @@ abstract class BaseNode implements INode {
   ) {}
 
   // Connect this node to another node
-  public then(...args: Array<NodeLike | TransformFn<unknown, unknown>>): Node {
+  public then(...args: Array<NodeLike | TransformFn>): Node {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     let lastNode: Node = this;
 
@@ -234,8 +268,10 @@ abstract class BaseNode implements INode {
     for (const arg of args) {
       // Handle different types of arguments
       if (typeof arg === "function") {
-        // Transform function
-        throw new Error("Individual transform functions not implemented yet");
+        const argsProxy = createVariableProxy();
+        const result = arg(argsProxy);
+        lastNode = result;
+        this.graph.connect(this, result);
       } else {
         const node = this.graph.resolveNode(arg);
         lastNode = node;
@@ -244,6 +280,10 @@ abstract class BaseNode implements INode {
     }
 
     return lastNode;
+  }
+
+  public call(input: ProxyObject): Node {
+    throw new Error("Not implemented");
   }
 }
 
@@ -259,12 +299,6 @@ export class OutputNode extends BaseNode {
   constructor(graph: GraphBuilder, id: string) {
     super(graph, id);
   }
-
-  // Add a value to output
-  public call<T>(value: T): void {
-    const literalNode = this.graph.createLiteralNode(value);
-    this.graph.connect(literalNode, this);
-  }
 }
 
 // Prompt node (wrapper for CodePrompt)
@@ -276,13 +310,6 @@ export class PromptNode extends BaseNode {
   ) {
     super(graph, id);
   }
-
-  // Call the prompt with parameters
-  public call(params: Record<string, unknown>): PromptNode {
-    // In a real implementation, we'd handle parameter binding here
-    // For now, we'll just return this node for chaining
-    return this;
-  }
 }
 
 // Function node (wrapper for CodeFunction)
@@ -293,13 +320,6 @@ export class FunctionNode<T, R> extends BaseNode {
     private func: CodeFunction<T, R, (input: T) => Promise<R>>,
   ) {
     super(graph, id);
-  }
-
-  // Call the function with parameters
-  public call(params: T): FunctionNode<T, R> {
-    // In a real implementation, we'd handle parameter binding here
-    // For now, we'll just return this node for chaining
-    return this;
   }
 }
 
