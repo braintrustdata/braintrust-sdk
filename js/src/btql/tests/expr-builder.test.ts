@@ -22,6 +22,7 @@ import {
   // Dimension/measure helpers
   dimension,
   measure,
+  star,
 } from "../expr";
 import {
   booleanExprSchema,
@@ -33,6 +34,8 @@ import {
   Expr,
   Ident,
   Literal,
+  identSchema,
+  literalSchema,
 } from "../ast";
 import { beforeEach, describe, test, expect } from "vitest";
 
@@ -221,7 +224,7 @@ describe("Expression Builder", () => {
 
   test("arithmetic expressions - addition using helper", () => {
     // Create an addition expression using the helper function
-    query.filter(field("total").eq(add("value1", "value2")));
+    query.filter(field("total").eq(add(field("field1"), "value2")));
 
     // Parse and validate the comparison expression
     const compExpr = comparisonExprSchema.parse(query.queryObj.filter);
@@ -232,14 +235,13 @@ describe("Expression Builder", () => {
     expect(arithExpr.op).toBe("add");
 
     // Check the left operand
-    const leftField = isIdentExpr(arithExpr.left) ? arithExpr.left : null;
-    expect(leftField).not.toBeNull();
-    expect(leftField?.name).toEqual(["value1"]);
+    const leftField = identSchema.parse(arithExpr.left);
+    expect(leftField.op).toBe("ident");
 
     // Check the right operand
-    const rightField = isIdentExpr(arithExpr.right) ? arithExpr.right : null;
-    expect(rightField).not.toBeNull();
-    expect(rightField?.name).toEqual(["value2"]);
+    const rightField = literalSchema.parse(arithExpr.right);
+    expect(rightField.op).toBe("literal");
+    expect(rightField.value).toBe("value2");
   });
 
   test("arithmetic expressions - subtraction using helper", () => {
@@ -254,15 +256,15 @@ describe("Expression Builder", () => {
     const arithExpr = arithmeticExprSchema.parse(compExpr.right);
     expect(arithExpr.op).toBe("sub");
 
-    // Check the left operand
-    const leftField = isIdentExpr(arithExpr.left) ? arithExpr.left : null;
-    expect(leftField).not.toBeNull();
-    expect(leftField?.name).toEqual(["total"]);
+    // Check the left operand - "total" as a string is converted to a literal, not an ident
+    const leftLit = literalSchema.parse(arithExpr.left);
+    expect(leftLit.op).toBe("literal");
+    expect(leftLit.value).toBe("total");
 
     // Check the right operand
-    const rightLit = isLiteralExpr(arithExpr.right) ? arithExpr.right : null;
-    expect(rightLit).not.toBeNull();
-    expect(rightLit?.value).toBe(10);
+    const rightLit = literalSchema.parse(arithExpr.right);
+    expect(rightLit.op).toBe("literal");
+    expect(rightLit.value).toBe(10);
   });
 
   test("arithmetic expressions - complex calculation", () => {
@@ -307,24 +309,20 @@ describe("Expression Builder", () => {
     const arithExpr = arithmeticExprSchema.parse(compExpr.right);
     expect(arithExpr.op).toBe("mod");
 
-    // Check the left operand
-    const leftField = isIdentExpr(arithExpr.left) ? arithExpr.left : null;
-    expect(leftField).not.toBeNull();
-    expect(leftField?.name).toEqual(["value"]);
+    // Check the left operand - "value" as a string is converted to a literal, not an ident
+    const leftLit = literalSchema.parse(arithExpr.left);
+    expect(leftLit.op).toBe("literal");
+    expect(leftLit.value).toBe("value");
 
     // Check the right operand
-    const rightLit = isLiteralExpr(arithExpr.right) ? arithExpr.right : null;
-    expect(rightLit).not.toBeNull();
-    expect(rightLit?.value).toBe(10);
+    const rightLit = literalSchema.parse(arithExpr.right);
+    expect(rightLit.op).toBe("literal");
+    expect(rightLit.value).toBe(10);
   });
 
   test("function calls", () => {
-    // Create a function call expression
-    const funcExpr = {
-      op: "function",
-      name: { op: "ident", name: ["count"] },
-      args: [{ op: "star" }],
-    };
+    // Create a function call expression using func helper instead of raw object
+    const funcExpr = func("count", star());
 
     query.filter(field("records").gt(funcExpr));
 
@@ -403,11 +401,11 @@ describe("Expression Builder", () => {
     expect(funcExpr.name.name).toEqual(["length"]);
     expect(funcExpr.args.length).toBe(1);
 
-    // Validate the argument is a field reference
+    // Validate the argument is a literal (string arguments are converted to literals)
     const argExpr = funcExpr.args[0];
-    expect(argExpr.op).toBe("ident");
-    if (isIdentExpr(argExpr)) {
-      expect(argExpr.name).toEqual(["name"]);
+    expect(argExpr.op).toBe("literal");
+    if (isLiteralExpr(argExpr)) {
+      expect(argExpr.value).toBe("name");
     }
   });
 

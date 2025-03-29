@@ -1,4 +1,10 @@
-import { Expr, ComparisonOp, LiteralValue, Ident } from "./ast";
+import {
+  Expr,
+  ComparisonOp,
+  LiteralValue,
+  Ident,
+  Function as FunctionExpr,
+} from "./ast";
 
 /**
  * Interface for the base field object
@@ -6,14 +12,14 @@ import { Expr, ComparisonOp, LiteralValue, Ident } from "./ast";
 interface FieldObject {
   _fieldName: (string | number)[];
   _toField(): Ident;
-  eq(value: unknown): Expr;
-  ne(value: unknown): Expr;
-  gt(value: unknown): Expr;
-  lt(value: unknown): Expr;
-  ge(value: unknown): Expr;
-  le(value: unknown): Expr;
-  includes(value: unknown): Expr;
-  is(value: unknown): Expr;
+  eq(value: ExprOrPrimitive): Expr;
+  ne(value: ExprOrPrimitive): Expr;
+  gt(value: ExprOrPrimitive): Expr;
+  lt(value: ExprOrPrimitive): Expr;
+  ge(value: ExprOrPrimitive): Expr;
+  le(value: ExprOrPrimitive): Expr;
+  includes(value: ExprOrPrimitive): Expr;
+  is(value: ExprOrPrimitive): Expr;
   isNull(): Expr;
   isNotNull(): Expr;
   match(value: string): Expr;
@@ -63,27 +69,27 @@ export function field(name: string | (string | number)[]): FieldProxy {
     },
 
     // Standard comparison methods
-    eq(value: unknown): Expr {
+    eq(value: ExprOrPrimitive): Expr {
       return createComparisonExpr("eq", this._toField(), value);
     },
 
-    ne(value: unknown): Expr {
+    ne(value: ExprOrPrimitive): Expr {
       return createComparisonExpr("ne", this._toField(), value);
     },
 
-    gt(value: unknown): Expr {
+    gt(value: ExprOrPrimitive): Expr {
       return createComparisonExpr("gt", this._toField(), value);
     },
 
-    lt(value: unknown): Expr {
+    lt(value: ExprOrPrimitive): Expr {
       return createComparisonExpr("lt", this._toField(), value);
     },
 
-    ge(value: unknown): Expr {
+    ge(value: ExprOrPrimitive): Expr {
       return createComparisonExpr("ge", this._toField(), value);
     },
 
-    le(value: unknown): Expr {
+    le(value: ExprOrPrimitive): Expr {
       return createComparisonExpr("le", this._toField(), value);
     },
 
@@ -101,7 +107,7 @@ export function field(name: string | (string | number)[]): FieldProxy {
       return createComparisonExpr("ilike", this._toField(), value);
     },
 
-    includes(value: unknown): Expr {
+    includes(value: ExprOrPrimitive): Expr {
       return {
         op: "includes",
         haystack: this._toField(),
@@ -112,7 +118,7 @@ export function field(name: string | (string | number)[]): FieldProxy {
       };
     },
 
-    is(value: unknown): Expr {
+    is(value: ExprOrPrimitive): Expr {
       return createComparisonExpr("is", this._toField(), value);
     },
 
@@ -165,15 +171,12 @@ export function field(name: string | (string | number)[]): FieldProxy {
 function createComparisonExpr(
   op: ComparisonOp,
   left: Expr,
-  value: unknown,
+  value: ExprOrPrimitive,
 ): Expr {
   return {
     op,
     left,
-    right: isFieldObject(value)
-      ? value._toField()
-      : // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        { op: "literal", value: value as LiteralValue },
+    right: convertToExpr(value),
   };
 }
 
@@ -251,10 +254,7 @@ export function interval(value: number, unit: string): Expr {
  * @param right Right operand
  * @returns An expression representing left + right
  */
-export function add(
-  left: Expr | string | number,
-  right: Expr | string | number,
-): Expr {
+export function add(left: ExprOrPrimitive, right: ExprOrPrimitive): Expr {
   return createArithmeticExpr("add", left, right);
 }
 
@@ -315,8 +315,8 @@ export function mod(
  */
 function createArithmeticExpr(
   op: "add" | "sub" | "mul" | "div" | "mod",
-  left: Expr | string | number,
-  right: Expr | string | number,
+  left: ExprOrPrimitive,
+  right: ExprOrPrimitive,
 ): Expr {
   const leftExpr = convertToExpr(left);
   const rightExpr = convertToExpr(right);
@@ -335,10 +335,7 @@ function createArithmeticExpr(
  * @param args Function arguments
  * @returns An expression representing the function call
  */
-export function func(
-  name: string,
-  ...args: (Expr | string | number | boolean)[]
-): Expr {
+export function func(name: string, ...args: ExprOrPrimitive[]): FunctionExpr {
   return {
     op: "function",
     name: { op: "ident", name: [name] },
@@ -363,7 +360,7 @@ export function star(): Expr {
  * @param args Arguments to concatenate
  * @returns An expression representing concat(arg1, arg2, ...)
  */
-export function concat(...args: (Expr | string | number | boolean)[]): Expr {
+export function concat(...args: ExprOrPrimitive[]): Expr {
   return func("concat", ...args);
 }
 
@@ -372,7 +369,7 @@ export function concat(...args: (Expr | string | number | boolean)[]): Expr {
  * @param arg The argument to get the length of
  * @returns An expression representing length(arg)
  */
-export function length(arg: Expr | string): Expr {
+export function length(arg: ExprOrPrimitive): Expr {
   return func("length", arg);
 }
 
@@ -381,7 +378,7 @@ export function length(arg: Expr | string): Expr {
  * @param arg The string to convert to lowercase
  * @returns An expression representing lower(arg)
  */
-export function lower(arg: Expr | string): Expr {
+export function lower(arg: ExprOrPrimitive): Expr {
   return func("lower", arg);
 }
 
@@ -390,7 +387,7 @@ export function lower(arg: Expr | string): Expr {
  * @param arg The string to convert to uppercase
  * @returns An expression representing upper(arg)
  */
-export function upper(arg: Expr | string): Expr {
+export function upper(arg: ExprOrPrimitive): Expr {
   return func("upper", arg);
 }
 
@@ -402,7 +399,7 @@ export function upper(arg: Expr | string): Expr {
  * @returns An expression representing substring(string, start, length)
  */
 export function substring(
-  string: Expr | string,
+  string: ExprOrPrimitive,
   start: number,
   length?: number,
 ): Expr {
@@ -416,7 +413,7 @@ export function substring(
  * @param args Arguments to check
  * @returns An expression representing coalesce(arg1, arg2, ...)
  */
-export function coalesce(...args: (Expr | string | number | boolean)[]): Expr {
+export function coalesce(...args: ExprOrPrimitive[]): Expr {
   return func("coalesce", ...args);
 }
 
@@ -430,7 +427,7 @@ export function coalesce(...args: (Expr | string | number | boolean)[]): Expr {
  * @param arg The field to count, or star() for count(*)
  * @returns An expression representing count(arg)
  */
-export function count(arg: Expr | string = star()): Expr {
+export function count(arg: ExprOrPrimitive = star()): Expr {
   return func("count", arg);
 }
 
@@ -439,7 +436,7 @@ export function count(arg: Expr | string = star()): Expr {
  * @param arg The field to sum
  * @returns An expression representing sum(arg)
  */
-export function sum(arg: Expr | string): Expr {
+export function sum(arg: ExprOrPrimitive): Expr {
   return func("sum", arg);
 }
 
@@ -448,7 +445,7 @@ export function sum(arg: Expr | string): Expr {
  * @param arg The field to average
  * @returns An expression representing avg(arg)
  */
-export function avg(arg: Expr | string): Expr {
+export function avg(arg: ExprOrPrimitive): Expr {
   return func("avg", arg);
 }
 
@@ -457,7 +454,7 @@ export function avg(arg: Expr | string): Expr {
  * @param arg The field to find the minimum value of
  * @returns An expression representing min(arg)
  */
-export function min(arg: Expr | string): Expr {
+export function min(arg: ExprOrPrimitive): Expr {
   return func("min", arg);
 }
 
@@ -466,18 +463,20 @@ export function min(arg: Expr | string): Expr {
  * @param arg The field to find the maximum value of
  * @returns An expression representing max(arg)
  */
-export function max(arg: Expr | string): Expr {
+export function max(arg: ExprOrPrimitive): Expr {
   return func("max", arg);
 }
+
+export type ExprOrPrimitive = FieldObject | Expr | string | number | boolean;
 
 /**
  * Convert various input types to expressions
  */
-function convertToExpr(value: Expr | string | number | boolean): Expr {
-  if (typeof value === "object" && value !== null && "op" in value) {
+function convertToExpr(value: ExprOrPrimitive): Expr {
+  if (isFieldObject(value)) {
+    return value._toField();
+  } else if (typeof value === "object" && value !== null && "op" in value) {
     return value;
-  } else if (typeof value === "string") {
-    return field(value)._toField();
   } else {
     return literal(value);
   }
