@@ -47,10 +47,20 @@ export const graphNodeSchema = z.union([
 export type GraphNode = z.infer<typeof graphNodeSchema>;
 
 export const graphEdgeSchema = z.object({
-  source: nodeIdSchema,
-  target: nodeIdSchema,
-  // TODO: Maybe should be nested under `data`
-  variable: z.string().describe("The variable name for the edge"),
+  source: z.object({
+    node: nodeIdSchema,
+    variable: z
+      .string()
+      .describe("The variable name for the output")
+      .default("output"),
+  }),
+  target: z.object({
+    node: nodeIdSchema,
+    variable: z
+      .string()
+      .describe("The variable name for the argument")
+      .default("input"),
+  }),
 });
 export type GraphEdge = z.infer<typeof graphEdgeSchema>;
 
