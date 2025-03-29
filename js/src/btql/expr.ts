@@ -244,3 +244,305 @@ export function interval(value: number, unit: string): Expr {
     unit: unit as any, // Type will be refined by Zod validation
   };
 }
+
+/**
+ * Creates an addition expression
+ * @param left Left operand
+ * @param right Right operand
+ * @returns An expression representing left + right
+ */
+export function add(
+  left: Expr | string | number,
+  right: Expr | string | number,
+): Expr {
+  return createArithmeticExpr("add", left, right);
+}
+
+/**
+ * Creates a subtraction expression
+ * @param left Left operand
+ * @param right Right operand
+ * @returns An expression representing left - right
+ */
+export function sub(
+  left: Expr | string | number,
+  right: Expr | string | number,
+): Expr {
+  return createArithmeticExpr("sub", left, right);
+}
+
+/**
+ * Creates a multiplication expression
+ * @param left Left operand
+ * @param right Right operand
+ * @returns An expression representing left * right
+ */
+export function mul(
+  left: Expr | string | number,
+  right: Expr | string | number,
+): Expr {
+  return createArithmeticExpr("mul", left, right);
+}
+
+/**
+ * Creates a division expression
+ * @param left Left operand
+ * @param right Right operand
+ * @returns An expression representing left / right
+ */
+export function div(
+  left: Expr | string | number,
+  right: Expr | string | number,
+): Expr {
+  return createArithmeticExpr("div", left, right);
+}
+
+/**
+ * Creates a modulo expression
+ * @param left Left operand
+ * @param right Right operand
+ * @returns An expression representing left % right
+ */
+export function mod(
+  left: Expr | string | number,
+  right: Expr | string | number,
+): Expr {
+  return createArithmeticExpr("mod", left, right);
+}
+
+/**
+ * Helper for creating arithmetic expressions
+ */
+function createArithmeticExpr(
+  op: "add" | "sub" | "mul" | "div" | "mod",
+  left: Expr | string | number,
+  right: Expr | string | number,
+): Expr {
+  const leftExpr = convertToExpr(left);
+  const rightExpr = convertToExpr(right);
+
+  return {
+    op,
+    left: leftExpr,
+    right: rightExpr,
+  };
+}
+
+/**
+ * Helper to create a generic function call expression
+ *
+ * @param name Function name
+ * @param args Function arguments
+ * @returns An expression representing the function call
+ */
+export function func(
+  name: string,
+  ...args: (Expr | string | number | boolean)[]
+): Expr {
+  return {
+    op: "function",
+    name: { op: "ident", name: [name] },
+    args: args.map((arg) => convertToExpr(arg)),
+  };
+}
+
+/**
+ * Creates a star (*) expression for use in functions like count(*)
+ */
+export function star(): Expr {
+  return { op: "star" };
+}
+
+//=============================================================================
+// SCALAR FUNCTIONS
+// These can be used anywhere in expressions (filter, select, etc.)
+//=============================================================================
+
+/**
+ * Creates a string concatenation function call
+ * @param args Arguments to concatenate
+ * @returns An expression representing concat(arg1, arg2, ...)
+ */
+export function concat(...args: (Expr | string | number | boolean)[]): Expr {
+  return func("concat", ...args);
+}
+
+/**
+ * Creates a length/string length function call
+ * @param arg The argument to get the length of
+ * @returns An expression representing length(arg)
+ */
+export function length(arg: Expr | string): Expr {
+  return func("length", arg);
+}
+
+/**
+ * Creates a lowercase function call
+ * @param arg The string to convert to lowercase
+ * @returns An expression representing lower(arg)
+ */
+export function lower(arg: Expr | string): Expr {
+  return func("lower", arg);
+}
+
+/**
+ * Creates an uppercase function call
+ * @param arg The string to convert to uppercase
+ * @returns An expression representing upper(arg)
+ */
+export function upper(arg: Expr | string): Expr {
+  return func("upper", arg);
+}
+
+/**
+ * Creates a substring function call
+ * @param string The string to extract from
+ * @param start The starting position (1-based index)
+ * @param length Optional length of substring to extract
+ * @returns An expression representing substring(string, start, length)
+ */
+export function substring(
+  string: Expr | string,
+  start: number,
+  length?: number,
+): Expr {
+  return length !== undefined
+    ? func("substring", string, start, length)
+    : func("substring", string, start);
+}
+
+/**
+ * Creates a coalesce function call (returns first non-null value)
+ * @param args Arguments to check
+ * @returns An expression representing coalesce(arg1, arg2, ...)
+ */
+export function coalesce(...args: (Expr | string | number | boolean)[]): Expr {
+  return func("coalesce", ...args);
+}
+
+//=============================================================================
+// AGGREGATE FUNCTIONS
+// These should only be used in measures and having clauses
+//=============================================================================
+
+/**
+ * Creates a count function call (for use in measures)
+ * @param arg The field to count, or star() for count(*)
+ * @returns An expression representing count(arg)
+ */
+export function count(arg: Expr | string = star()): Expr {
+  return func("count", arg);
+}
+
+/**
+ * Creates a sum function call (for use in measures)
+ * @param arg The field to sum
+ * @returns An expression representing sum(arg)
+ */
+export function sum(arg: Expr | string): Expr {
+  return func("sum", arg);
+}
+
+/**
+ * Creates an average function call (for use in measures)
+ * @param arg The field to average
+ * @returns An expression representing avg(arg)
+ */
+export function avg(arg: Expr | string): Expr {
+  return func("avg", arg);
+}
+
+/**
+ * Creates a min function call (for use in measures)
+ * @param arg The field to find the minimum value of
+ * @returns An expression representing min(arg)
+ */
+export function min(arg: Expr | string): Expr {
+  return func("min", arg);
+}
+
+/**
+ * Creates a max function call (for use in measures)
+ * @param arg The field to find the maximum value of
+ * @returns An expression representing max(arg)
+ */
+export function max(arg: Expr | string): Expr {
+  return func("max", arg);
+}
+
+/**
+ * Convert various input types to expressions
+ */
+function convertToExpr(value: Expr | string | number | boolean): Expr {
+  if (typeof value === "object" && value !== null && "op" in value) {
+    return value;
+  } else if (typeof value === "string") {
+    return field(value)._toField();
+  } else {
+    return literal(value);
+  }
+}
+
+/**
+ * Creates a dimension object for use in the dimensions() clause
+ *
+ * @param expr The expression to use as a dimension
+ * @param alias Optional alias name. If not provided, uses a string representation of the expr
+ * @returns A dimension object
+ */
+export function dimension(
+  expr: Expr | string,
+  alias?: string,
+): { expr: Expr; alias: string } {
+  const exprObj = typeof expr === "string" ? field(expr)._toField() : expr;
+  const derivedAlias = alias || (typeof expr === "string" ? expr : "dim");
+
+  return {
+    expr: exprObj,
+    alias: derivedAlias,
+  };
+}
+
+/**
+ * Creates a measure object for use in the measures() clause
+ *
+ * @param expr The aggregation expression to use as a measure
+ * @param alias Optional alias name. If not provided, derives from the expression
+ * @returns A measure object
+ */
+export function measure(
+  expr: Expr | string,
+  alias?: string,
+): { expr: Expr; alias: string } {
+  const exprObj = typeof expr === "string" ? field(expr)._toField() : expr;
+
+  // Try to derive a sensible default alias
+  let derivedAlias = alias;
+  if (!derivedAlias) {
+    if (typeof expr === "string") {
+      derivedAlias = expr;
+    } else if (expr.op === "function" && expr.name.op === "ident") {
+      // For function calls like count(*), use something like "count_star"
+      const funcName = expr.name.name.join("_");
+      let argDesc = "";
+
+      if (expr.args.length > 0) {
+        const firstArg = expr.args[0];
+        if (firstArg.op === "star") {
+          argDesc = "star";
+        } else if (firstArg.op === "ident") {
+          argDesc = firstArg.name.join("_");
+        }
+      }
+
+      derivedAlias = argDesc ? `${funcName}_${argDesc}` : funcName;
+    } else {
+      derivedAlias = "measure";
+    }
+  }
+
+  return {
+    expr: exprObj,
+    alias: derivedAlias,
+  };
+}

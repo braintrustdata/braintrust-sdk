@@ -1,10 +1,35 @@
 import { BTQL } from "../query";
-import { field, and, or, not, literal } from "../expr";
+import {
+  field,
+  and,
+  or,
+  not,
+  literal,
+  add,
+  sub,
+  mul,
+  div,
+  mod,
+  // Function helpers
+  func,
+  concat,
+  length,
+  lower,
+  upper,
+  count,
+  sum,
+  avg,
+  // Dimension/measure helpers
+  dimension,
+  measure,
+} from "../expr";
 import {
   booleanExprSchema,
   unaryExprSchema,
   includesExprSchema,
   comparisonExprSchema,
+  arithmeticExprSchema,
+  functionSchema,
   Expr,
   Ident,
   Literal,
@@ -192,5 +217,298 @@ describe("Expression Builder", () => {
         expect(literalValue).toBe(true);
       }
     }
+  });
+
+  test("arithmetic expressions - addition using helper", () => {
+    // Create an addition expression using the helper function
+    query.filter(field("total").eq(add("value1", "value2")));
+
+    // Parse and validate the comparison expression
+    const compExpr = comparisonExprSchema.parse(query.queryObj.filter);
+    expect(compExpr.op).toBe("eq");
+
+    // Validate the right side is an arithmetic expression
+    const arithExpr = arithmeticExprSchema.parse(compExpr.right);
+    expect(arithExpr.op).toBe("add");
+
+    // Check the left operand
+    const leftField = isIdentExpr(arithExpr.left) ? arithExpr.left : null;
+    expect(leftField).not.toBeNull();
+    expect(leftField?.name).toEqual(["value1"]);
+
+    // Check the right operand
+    const rightField = isIdentExpr(arithExpr.right) ? arithExpr.right : null;
+    expect(rightField).not.toBeNull();
+    expect(rightField?.name).toEqual(["value2"]);
+  });
+
+  test("arithmetic expressions - subtraction using helper", () => {
+    // Create a subtraction expression using the helper function
+    query.filter(field("result").eq(sub("total", 10)));
+
+    // Parse and validate the comparison expression
+    const compExpr = comparisonExprSchema.parse(query.queryObj.filter);
+    expect(compExpr.op).toBe("eq");
+
+    // Validate the right side is an arithmetic expression
+    const arithExpr = arithmeticExprSchema.parse(compExpr.right);
+    expect(arithExpr.op).toBe("sub");
+
+    // Check the left operand
+    const leftField = isIdentExpr(arithExpr.left) ? arithExpr.left : null;
+    expect(leftField).not.toBeNull();
+    expect(leftField?.name).toEqual(["total"]);
+
+    // Check the right operand
+    const rightLit = isLiteralExpr(arithExpr.right) ? arithExpr.right : null;
+    expect(rightLit).not.toBeNull();
+    expect(rightLit?.value).toBe(10);
+  });
+
+  test("arithmetic expressions - complex calculation", () => {
+    // Create a more complex arithmetic expression using multiple operations
+    const complexExpr = add(
+      mul("price", "quantity"),
+      div(sub("tax", "discount"), 100),
+    );
+
+    query.filter(field("finalTotal").eq(complexExpr));
+
+    // Parse and validate the expression structure
+    const compExpr = comparisonExprSchema.parse(query.queryObj.filter);
+    expect(compExpr.op).toBe("eq");
+
+    // Validate top-level addition
+    const addExpr = arithmeticExprSchema.parse(compExpr.right);
+    expect(addExpr.op).toBe("add");
+
+    // Validate multiplication operation (left side of addition)
+    const mulExpr = arithmeticExprSchema.parse(addExpr.left);
+    expect(mulExpr.op).toBe("mul");
+
+    // Validate division operation (right side of addition)
+    const divExpr = arithmeticExprSchema.parse(addExpr.right);
+    expect(divExpr.op).toBe("div");
+
+    // Validate subtraction operation (numerator of division)
+    const subExpr = arithmeticExprSchema.parse(divExpr.left);
+    expect(subExpr.op).toBe("sub");
+  });
+
+  test("arithmetic expressions - modulo operation", () => {
+    // Create a modulo expression using the helper function
+    query.filter(field("remainder").eq(mod("value", 10)));
+
+    // Parse and validate the comparison expression
+    const compExpr = comparisonExprSchema.parse(query.queryObj.filter);
+    expect(compExpr.op).toBe("eq");
+
+    // Validate the right side is an arithmetic expression
+    const arithExpr = arithmeticExprSchema.parse(compExpr.right);
+    expect(arithExpr.op).toBe("mod");
+
+    // Check the left operand
+    const leftField = isIdentExpr(arithExpr.left) ? arithExpr.left : null;
+    expect(leftField).not.toBeNull();
+    expect(leftField?.name).toEqual(["value"]);
+
+    // Check the right operand
+    const rightLit = isLiteralExpr(arithExpr.right) ? arithExpr.right : null;
+    expect(rightLit).not.toBeNull();
+    expect(rightLit?.value).toBe(10);
+  });
+
+  test("function calls", () => {
+    // Create a function call expression
+    const funcExpr = {
+      op: "function",
+      name: { op: "ident", name: ["count"] },
+      args: [{ op: "star" }],
+    };
+
+    query.filter(field("records").gt(funcExpr));
+
+    // Parse and validate the comparison expression
+    const compExpr = comparisonExprSchema.parse(query.queryObj.filter);
+    expect(compExpr.op).toBe("gt");
+
+    // Validate the right side is a function call
+    const fnExpr = functionSchema.parse(compExpr.right);
+    expect(fnExpr.op).toBe("function");
+    expect(fnExpr.name.name).toEqual(["count"]);
+    expect(fnExpr.args.length).toBe(1);
+    expect(fnExpr.args[0].op).toBe("star");
+  });
+
+  test("complex mixed expressions with helper functions", () => {
+    // Create a more complex expression with arithmetic, functions and comparisons
+    const avgExpr: Expr = {
+      op: "function",
+      name: { op: "ident", name: ["avg"] },
+      args: [field("score")._toField()],
+    };
+
+    // Create the threshold using the arithmetic helper
+    const thresholdExpr = add(50, 25);
+
+    // Create the comparison expression
+    query.filter({
+      op: "gt",
+      left: avgExpr,
+      right: thresholdExpr,
+    });
+
+    // Parse and validate the overall expression
+    const compExpr = comparisonExprSchema.parse(query.queryObj.filter);
+    expect(compExpr.op).toBe("gt");
+
+    // Check that the left side is a function
+    const fnExpr = functionSchema.parse(compExpr.left);
+    expect(fnExpr.op).toBe("function");
+    expect(fnExpr.name.name).toEqual(["avg"]);
+
+    // Check that the right side is an arithmetic expression
+    const arithExpr = arithmeticExprSchema.parse(compExpr.right);
+    expect(arithExpr.op).toBe("add");
+    expect(arithExpr.left.op).toBe("literal");
+    expect(arithExpr.right.op).toBe("literal");
+  });
+
+  test("scalar function - concat", () => {
+    // Create a concat function call
+    query.filter(field("fullName").eq(concat("firstName", " ", "lastName")));
+
+    // Parse and validate the comparison expression
+    const compExpr = comparisonExprSchema.parse(query.queryObj.filter);
+    expect(compExpr.op).toBe("eq");
+
+    // Validate right side is a function call
+    const funcExpr = functionSchema.parse(compExpr.right);
+    expect(funcExpr.op).toBe("function");
+    expect(funcExpr.name.name).toEqual(["concat"]);
+    expect(funcExpr.args.length).toBe(3);
+  });
+
+  test("scalar function - length", () => {
+    // Create a length function call
+    query.filter(field("nameLength").eq(length("name")));
+
+    // Parse and validate the comparison expression
+    const compExpr = comparisonExprSchema.parse(query.queryObj.filter);
+    expect(compExpr.op).toBe("eq");
+
+    // Validate right side is a function call
+    const funcExpr = functionSchema.parse(compExpr.right);
+    expect(funcExpr.op).toBe("function");
+    expect(funcExpr.name.name).toEqual(["length"]);
+    expect(funcExpr.args.length).toBe(1);
+
+    // Validate the argument is a field reference
+    const argExpr = funcExpr.args[0];
+    expect(argExpr.op).toBe("ident");
+    if (isIdentExpr(argExpr)) {
+      expect(argExpr.name).toEqual(["name"]);
+    }
+  });
+
+  test("generic function call with func helper", () => {
+    // Create a custom function call using directly convertible values
+    query.filter(
+      field("result").eq(func("my_custom_function", "arg1", 42, "arg3")),
+    );
+
+    // Parse and validate the comparison expression
+    const compExpr = comparisonExprSchema.parse(query.queryObj.filter);
+    expect(compExpr.op).toBe("eq");
+
+    // Validate right side is a function call
+    const funcExpr = functionSchema.parse(compExpr.right);
+    expect(funcExpr.op).toBe("function");
+    expect(funcExpr.name.name).toEqual(["my_custom_function"]);
+    expect(funcExpr.args.length).toBe(3);
+  });
+
+  test("creating dimension objects", () => {
+    // Create a dimension with a string field
+    const dim1 = dimension("category");
+    expect(dim1.expr.op).toBe("ident");
+    expect(dim1.alias).toBe("category");
+
+    // Create a dimension with an expression and custom alias
+    const dim2 = dimension(upper("name"), "upper_name");
+    expect(dim2.expr.op).toBe("function");
+    expect(dim2.alias).toBe("upper_name");
+
+    // Test in a real query
+    const testQuery = BTQL.from("experiment");
+    testQuery.dimensions(
+      dimension("category"),
+      dimension(lower("name"), "lowercase_name"),
+    );
+
+    // Verify the dimensions were added correctly
+    expect(testQuery.queryObj.dimensions?.length).toBe(2);
+    expect(testQuery.queryObj.dimensions?.[0].alias).toBe("category");
+    expect(testQuery.queryObj.dimensions?.[1].alias).toBe("lowercase_name");
+  });
+
+  test("creating measure objects", () => {
+    // Create a measure with count
+    const measure1 = measure(count());
+    expect(measure1.expr.op).toBe("function");
+    expect(measure1.alias).toBe("count_star");
+
+    // Create a measure with a sum aggregation and custom alias
+    const measure2 = measure(sum("amount"), "total_amount");
+    expect(measure2.expr.op).toBe("function");
+    expect(measure2.alias).toBe("total_amount");
+
+    // Test in a real query
+    const testQuery = BTQL.from("experiment");
+    testQuery.measures(
+      measure(count()),
+      measure(avg("score"), "average_score"),
+    );
+
+    // Verify the measures were added correctly
+    expect(testQuery.queryObj.measures?.length).toBe(2);
+    expect(testQuery.queryObj.measures?.[0].alias).toBe("count_star");
+    expect(testQuery.queryObj.measures?.[1].alias).toBe("average_score");
+  });
+
+  test("complete query with dimensions and measures", () => {
+    // Create a complete query with dimensions, measures, and filter
+    const testQuery = BTQL.from("experiment")
+      .dimensions(dimension("category"), dimension("status"))
+      .measures(
+        measure(count(), "record_count"),
+        measure(avg("score"), "average_score"),
+        measure(sum("amount"), "total_amount"),
+      )
+      .filter(and(field("category").ne("deleted"), field("score").gt(0)))
+      .sort({ field: "average_score", dir: "desc" })
+      .limit(100);
+
+    // Verify structure
+    expect(testQuery.queryObj.dimensions?.length).toBe(2);
+    expect(testQuery.queryObj.measures?.length).toBe(3);
+    expect(testQuery.queryObj.filter).toBeDefined();
+    expect(testQuery.queryObj.sort?.length).toBe(1);
+    expect(testQuery.queryObj.limit).toBe(100);
+
+    // Verify dimensions
+    const dimensions = testQuery.queryObj.dimensions || [];
+    expect(dimensions[0].alias).toBe("category");
+    expect(dimensions[1].alias).toBe("status");
+
+    // Verify measures
+    const measures = testQuery.queryObj.measures || [];
+    expect(measures[0].alias).toBe("record_count");
+    expect(measures[1].alias).toBe("average_score");
+    expect(measures[2].alias).toBe("total_amount");
+
+    // Verify filter uses AND
+    const filter = testQuery.queryObj.filter;
+    expect(filter?.op).toBe("and");
   });
 });
