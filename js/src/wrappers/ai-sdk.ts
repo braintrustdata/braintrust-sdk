@@ -220,7 +220,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
                   finishReason!,
                 ),
                 metrics: {
-                  time_to_first_token: getCurrentUnixTimestamp() - startTime,
+                  time_to_first_token,
                   tokens: !isEmpty(usage)
                     ? usage.promptTokens + usage.completionTokens
                     : undefined,
