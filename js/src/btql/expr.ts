@@ -1,25 +1,32 @@
-import { Expr, ComparisonOp, LiteralValue } from "./ast";
+import { Expr, ComparisonOp, LiteralValue, Ident } from "./ast";
 
 /**
  * Interface for the base field object
  */
 interface FieldObject {
   _fieldName: (string | number)[];
-  _toField(): Expr;
+  _toField(): Ident;
   eq(value: unknown): Expr;
   ne(value: unknown): Expr;
   gt(value: unknown): Expr;
   lt(value: unknown): Expr;
   ge(value: unknown): Expr;
   le(value: unknown): Expr;
-  like(value: string): Expr;
-  ilike(value: string): Expr;
   includes(value: unknown): Expr;
   is(value: unknown): Expr;
   isNull(): Expr;
   isNotNull(): Expr;
   match(value: string): Expr;
   get(prop: string): FieldProxy;
+
+  /**
+   * @deprecated Use `match` instead
+   */
+  like(value: string): Expr;
+  /**
+   * @deprecated Use `match` instead
+   */
+  ilike(value: string): Expr;
 }
 
 /**
@@ -51,7 +58,7 @@ export function field(name: string | (string | number)[]): FieldProxy {
     _fieldName: Array.isArray(name) ? name : [name],
 
     // Helper to create the field expression
-    _toField(): Expr {
+    _toField(): Ident {
       return { op: "ident", name: this._fieldName };
     },
 
@@ -80,10 +87,16 @@ export function field(name: string | (string | number)[]): FieldProxy {
       return createComparisonExpr("le", this._toField(), value);
     },
 
+    /**
+     * @deprecated Use `match` instead
+     */
     like(value: string): Expr {
       return createComparisonExpr("like", this._toField(), value);
     },
 
+    /**
+     * @deprecated Use `match` instead
+     */
     ilike(value: string): Expr {
       return createComparisonExpr("ilike", this._toField(), value);
     },
