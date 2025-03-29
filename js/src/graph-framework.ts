@@ -5,7 +5,6 @@ import type {
 } from "@braintrust/core/typespecs/graph";
 import { CodeFunction } from "./framework2";
 import { newId, Prompt } from "./logger";
-import { J } from "vitest/dist/chunks/reporters.nr4dxCkA";
 
 // Base interface for all node types
 export interface INode {
@@ -22,7 +21,7 @@ export type Node =
   | ConditionalGateNode
   | LiteralNode<unknown>;
 
-export type NodeLike = Node | Prompt;
+export type NodeLike = Node | Prompt<boolean, boolean>;
 
 export type LazyGraphNode = {
   type: "lazy";
@@ -53,6 +52,7 @@ export class GraphBuilder {
   public build(): GraphData {
     return {
       type: "graph",
+      // @ts-ignore
       nodes: this.nodes, // XXX Need to resolve the lazy nodes
       edges: this.edges,
     };
@@ -227,9 +227,8 @@ abstract class BaseNode implements INode {
 
   // Connect this node to another node
   public then(...args: Array<NodeLike | TransformFn<unknown, unknown>>): Node {
-    if (args.length === 0) {
-      return this;
-    }
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    let lastNode: Node = this;
 
     // Connect each arg to this node
     for (const arg of args) {
@@ -239,33 +238,12 @@ abstract class BaseNode implements INode {
         throw new Error("Individual transform functions not implemented yet");
       } else {
         const node = this.graph.resolveNode(arg);
-        // Single node
+        lastNode = node;
         this.graph.connect(this, node);
       }
     }
-  }
 
-  // Helper method to handle parallel nodes
-  private handleParallelNodes(
-    source: Node,
-    nodes: Node[],
-    nextArg: Node | Node[] | TransformFn<unknown, unknown> | undefined,
-  ): Node {
-    // Connect source to all nodes
-    for (const node of nodes) {
-      this.graph.connect(source, node);
-    }
-
-    // Check if the next argument is a transform function
-    if (nextArg && typeof nextArg === "function") {
-      // This would create an aggregator with the transform function
-      throw new Error(
-        "Transform function for parallel execution not implemented yet",
-      );
-    }
-
-    // Return the last node for chaining
-    return nodes[nodes.length - 1];
+    return lastNode;
   }
 }
 
