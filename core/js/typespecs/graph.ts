@@ -43,25 +43,25 @@ export const graphNodeSchema = z.union([
   baseNodeDataSchema.extend({
     type: z.literal("if"),
   }),
+  baseNodeDataSchema.extend({
+    type: z.literal("gate"),
+  }),
 ]);
 export type GraphNode = z.infer<typeof graphNodeSchema>;
 
-export const graphEdgeSchema = z.object({
-  source: z.object({
-    node: nodeIdSchema,
-    variable: z
-      .string()
-      .describe("The variable name for the output")
-      .default("output"),
-  }),
-  target: z.object({
-    node: nodeIdSchema,
-    variable: z
-      .string()
-      .describe("The variable name for the argument")
-      .default("input"),
-  }),
+export const graphEdgeDataSchema = z.object({
+  node: nodeIdSchema,
+  variable: z
+    .string()
+    .describe("The variable name for the output")
+    .default("value"),
 });
+
+export const graphEdgeSchema = z.object({
+  source: graphEdgeDataSchema,
+  target: graphEdgeDataSchema,
+});
+
 export type GraphEdge = z.infer<typeof graphEdgeSchema>;
 
 export const graphDataSchema = z.object({
