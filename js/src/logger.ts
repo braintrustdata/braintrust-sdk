@@ -3719,7 +3719,8 @@ class ObjectFetcher<RecordType>
   constructor(
     private objectType: "dataset" | "experiment",
     private pinnedVersion: string | undefined,
-    private mutateRecord?: (r: any) => RecordType,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private mutateRecord?: (r: any) => WithTransactionId<RecordType>,
     private _internal_btql?: Record<string, unknown>,
   ) {}
 
@@ -3745,62 +3746,51 @@ class ObjectFetcher<RecordType>
   async fetchedData() {
     if (this._fetchedData === undefined) {
       const state = await this.getState();
-      let data = null;
-      if (this._internal_btql) {
-        let cursor = undefined;
-        let iterations = 0;
-        while (true) {
-          const resp = await state.apiConn().post(
-            `btql`,
-            {
-              query: {
-                ...this._internal_btql,
-                select: [
+      let data: WithTransactionId<RecordType>[] | undefined = undefined;
+      let cursor = undefined;
+      let iterations = 0;
+      while (true) {
+        const resp = await state.apiConn().post(
+          `btql`,
+          {
+            query: {
+              ...this._internal_btql,
+              select: [
+                {
+                  op: "star",
+                },
+              ],
+              from: {
+                op: "function",
+                name: {
+                  op: "ident",
+                  name: [this.objectType],
+                },
+                args: [
                   {
-                    op: "star",
+                    op: "literal",
+                    value: await this.id,
                   },
                 ],
-                from: {
-                  op: "function",
-                  name: {
-                    op: "ident",
-                    name: [this.objectType],
-                  },
-                  args: [
-                    {
-                      op: "literal",
-                      value: await this.id,
-                    },
-                  ],
-                },
-                cursor,
-                limit: INTERNAL_BTQL_LIMIT,
               },
-              use_columnstore: false,
-              brainstore_realtime: true,
+              cursor,
+              limit: INTERNAL_BTQL_LIMIT,
             },
-            { headers: { "Accept-Encoding": "gzip" } },
-          );
-          const respJson = await resp.json();
-          data = (data ?? []).concat(respJson.data);
-          if (!respJson.cursor) {
-            break;
-          }
-          cursor = respJson.cursor;
-          iterations++;
-          if (iterations > MAX_BTQL_ITERATIONS) {
-            throw new Error("Too many BTQL iterations");
-          }
-        }
-      } else {
-        const resp = await state.apiConn().get(
-          `v1/${this.objectType}/${await this.id}/fetch`,
-          {
-            version: this.pinnedVersion,
+            use_columnstore: false,
+            brainstore_realtime: true,
           },
           { headers: { "Accept-Encoding": "gzip" } },
         );
-        data = (await resp.json()).events;
+        const respJson = await resp.json();
+        data = (data ?? []).concat(respJson.data);
+        if (!respJson.cursor) {
+          break;
+        }
+        cursor = respJson.cursor;
+        iterations++;
+        if (iterations > MAX_BTQL_ITERATIONS) {
+          throw new Error("Too many BTQL iterations");
+        }
       }
       this._fetchedData = this.mutateRecord
         ? data?.map(this.mutateRecord)
@@ -4561,6 +4551,7 @@ export class Dataset<
     legacy?: IsLegacyDataset,
     _internal_btql?: Record<string, unknown>,
   ) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const isLegacyDataset = (legacy ??
       DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
     if (isLegacyDataset) {
@@ -4572,7 +4563,11 @@ export class Dataset<
       "dataset",
       pinnedVersion,
       (r: AnyDatasetRecord) =>
-        ensureDatasetRecord(enrichAttachments(r), isLegacyDataset),
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        ensureDatasetRecord(
+          enrichAttachments(r),
+          isLegacyDataset,
+        ) as WithTransactionId<DatasetRecord<IsLegacyDataset>>,
       _internal_btql,
     );
     this.lazyMetadata = lazyMetadata;
