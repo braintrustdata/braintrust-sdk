@@ -19,6 +19,13 @@ export const runtimeContextSchema = z.object({
 });
 export type RuntimeContext = z.infer<typeof runtimeContextSchema>;
 
+const strictParam = z
+  .boolean()
+  .nullish()
+  .describe(
+    "If true, throw an error if one of the variables in the prompt is not present in the input",
+  );
+
 export const functionIdSchema = z
   .union([
     z
@@ -148,6 +155,7 @@ export const invokeFunctionNonIdArgsSchema = z.object({
   mode: streamingModeEnum
     .nullish()
     .describe("The mode format of the returned value (defaults to 'auto')"),
+  strict: strictParam,
 });
 
 export const invokeFunctionSchema = functionIdSchema
@@ -262,12 +270,7 @@ export const runEvalSchema = z
       .describe(
         "Optionally explicitly specify the git metadata for this experiment. This takes precedence over `gitMetadataSettings` if specified.",
       ),
-    strict: z
-      .boolean()
-      .nullish()
-      .describe(
-        "If true, throw an error if one of the variables in the prompt is not present in the input",
-      ),
+    strict: strictParam,
   })
   .openapi("RunEval");
 
