@@ -6,79 +6,87 @@ describe("prompt strict mode", () => {
   test("strict mode", () => {
     for (const strict of [true, false]) {
       for (const shouldFail of [true, false]) {
-        testPromptBuild({
-          promptData: {
-            options: {
-              model: "gpt-4o",
-            },
-            prompt: {
-              type: "chat",
-              messages: [{ role: "user", content: "{{variable}}" }],
-            },
-          },
-          args: shouldFail
-            ? {}
-            : {
-                variable: "test",
+        for (const testNull of [true, false]) {
+          testPromptBuild({
+            promptData: {
+              options: {
+                model: "gpt-4o",
               },
-          shouldFail,
-          strict,
-        });
-
-        testPromptBuild({
-          promptData: {
-            options: {
-              model: "gpt-4o",
+              prompt: {
+                type: "chat",
+                messages: [{ role: "user", content: "{{variable}}" }],
+              },
             },
-            prompt: {
-              type: "chat",
-              messages: [{ role: "user", content: "What is 1+1" }],
-              tools: JSON.stringify([
-                {
-                  type: "function",
-                  function: {
-                    name: "{{variable}}",
-                    description: "Add two numbers",
-                    parameters: {
-                      type: "object",
-                      properties: {
-                        a: { type: "number" },
-                        b: { type: "number" },
+            args: shouldFail
+              ? {}
+              : testNull
+                ? { variable: null }
+                : {
+                    variable: "test",
+                  },
+            shouldFail,
+            strict,
+          });
+
+          testPromptBuild({
+            promptData: {
+              options: {
+                model: "gpt-4o",
+              },
+              prompt: {
+                type: "chat",
+                messages: [{ role: "user", content: "What is 1+1" }],
+                tools: JSON.stringify([
+                  {
+                    type: "function",
+                    function: {
+                      name: "{{variable}}",
+                      description: "Add two numbers",
+                      parameters: {
+                        type: "object",
+                        properties: {
+                          a: { type: "number" },
+                          b: { type: "number" },
+                        },
+                        required: ["a", "b"],
                       },
-                      required: ["a", "b"],
                     },
                   },
-                },
-              ]),
-            },
-          },
-          args: shouldFail
-            ? {}
-            : {
-                variable: "test",
+                ]),
               },
-          shouldFail,
-          strict,
-        });
+            },
+            args: shouldFail
+              ? {}
+              : testNull
+                ? { variable: null }
+                : {
+                    variable: "test",
+                  },
+            shouldFail,
+            strict,
+          });
 
-        testPromptBuild({
-          promptData: {
-            options: {
-              model: "gpt-4o",
-            },
-            prompt: {
-              type: "completion",
-              content: "{{variable}}",
-            },
-          },
-          args: shouldFail
-            ? {}
-            : {
-                variable: "test",
+          testPromptBuild({
+            promptData: {
+              options: {
+                model: "gpt-4o",
               },
-          shouldFail,
-          strict,
-        });
+              prompt: {
+                type: "completion",
+                content: "{{variable}}",
+              },
+            },
+            args: shouldFail
+              ? {}
+              : testNull
+                ? { variable: null }
+                : {
+                    variable: "test",
+                  },
+            shouldFail,
+            strict,
+          });
+        }
       }
     }
   });
