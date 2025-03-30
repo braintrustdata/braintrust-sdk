@@ -2060,7 +2060,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                     f"btql",
                     json={
                         "query": {
-                            **{self._internal_btql or {}},
+                            **(self._internal_btql or {}),
                             "select": [{"op": "star"}],
                             "from": {
                                 "op": "function",
