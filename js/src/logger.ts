@@ -1136,7 +1136,7 @@ export class ReadonlyAttachment {
     const state = this.state ?? _globalState;
     await state.login({});
 
-    let params: Record<string, string> = {
+    const params: Record<string, string> = {
       filename: this.reference.filename,
       content_type: this.reference.content_type,
       org_id: state.orgId || "",
@@ -3776,6 +3776,7 @@ class ObjectFetcher<RecordType>
                 cursor,
                 limit: INTERNAL_BTQL_LIMIT,
               },
+              use_columnstore: false,
             },
             { headers: { "Accept-Encoding": "gzip" } },
           );
