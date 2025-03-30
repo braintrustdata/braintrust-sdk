@@ -2079,6 +2079,8 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                                 "cursor": cursor,
                                 "limit": INTERNAL_BTQL_LIMIT,
                             },
+                            "use_columnstore": False,
+                            "brainstore_realtime": True,
                         },
                         headers={
                             "Accept-Encoding": "gzip",
