@@ -262,6 +262,12 @@ export const runEvalSchema = z
       .describe(
         "Optionally explicitly specify the git metadata for this experiment. This takes precedence over `gitMetadataSettings` if specified.",
       ),
+    strict: z
+      .boolean()
+      .nullish()
+      .describe(
+        "If true, throw an error if one of the variables in the prompt is not present in the input",
+      ),
   })
   .openapi("RunEval");
 
