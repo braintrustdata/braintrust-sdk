@@ -5105,6 +5105,7 @@ export class Prompt<
     return this.runBuild(buildArgs, {
       flavor: options.flavor ?? "chat",
       messages: options.messages,
+      strict: options.strict,
     }) as CompiledPrompt<Flavor>;
   }
 
