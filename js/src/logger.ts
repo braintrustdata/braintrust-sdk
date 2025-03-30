@@ -3777,6 +3777,7 @@ class ObjectFetcher<RecordType>
                 limit: INTERNAL_BTQL_LIMIT,
               },
               use_columnstore: false,
+              brainstore_realtime: true,
             },
             { headers: { "Accept-Encoding": "gzip" } },
           );
