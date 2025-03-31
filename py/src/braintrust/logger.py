@@ -1986,6 +1986,10 @@ class ObjectIterator(Generic[T]):
         return value
 
 
+INTERNAL_BTQL_LIMIT = 1000
+MAX_BTQL_ITERATIONS = 10000
+
+
 class ObjectFetcher(ABC, Generic[TMapping]):
     def __init__(
         self,
@@ -2048,12 +2052,15 @@ class ObjectFetcher(ABC, Generic[TMapping]):
     def _refetch(self) -> List[TMapping]:
         state = self._get_state()
         if self._fetched_data is None:
-            if self._internal_btql:
+            cursor = None
+            data = None
+            iterations = 0
+            while True:
                 resp = state.api_conn().post(
                     f"btql",
                     json={
                         "query": {
-                            **self._internal_btql,
+                            **(self._internal_btql or {}),
                             "select": [{"op": "star"}],
                             "from": {
                                 "op": "function",
@@ -2068,26 +2075,25 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                                     },
                                 ],
                             },
+                            "cursor": cursor,
+                            "limit": INTERNAL_BTQL_LIMIT,
                         },
+                        "use_columnstore": False,
+                        "brainstore_realtime": True,
                     },
                     headers={
                         "Accept-Encoding": "gzip",
                     },
                 )
                 response_raise_for_status(resp)
-                data = cast(List[TMapping], resp.json()["data"])
-            else:
-                resp = state.api_conn().get(
-                    f"v1/{self.object_type}/{self.id}/fetch",
-                    params={
-                        "version": self._pinned_version,
-                    },
-                    headers={
-                        "Accept-Encoding": "gzip",
-                    },
-                )
-                response_raise_for_status(resp)
-                data = cast(List[TMapping], resp.json()["events"])
+                resp_json = resp.json()
+                data = (data or []) + cast(List[TMapping], resp_json["data"])
+                if not resp_json.get("cursor", None):
+                    break
+                cursor = resp_json.get("cursor", None)
+                iterations += 1
+                if iterations > MAX_BTQL_ITERATIONS:
+                    raise RuntimeError("Too many BTQL iterations")
 
             if not isinstance(data, list):
                 raise ValueError(f"Expected a list in the response, got {type(data)}")

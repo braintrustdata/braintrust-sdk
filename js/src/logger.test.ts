@@ -10,7 +10,6 @@ import {
   initLogger,
   NOOP_SPAN,
   Prompt,
-  NOOP_SPAN_PERMALINK,
   permalink,
 } from "./logger";
 import { BackgroundLogEvent } from "@braintrust/core";
@@ -221,14 +220,21 @@ test("deepCopyEvent with attachments", () => {
 
   expect(copy).not.toBe(original);
 
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
   expect((copy.output as any).attachment).toBe(attachment1);
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
   expect((copy.output as any).another_attachment).toBe(attachment3);
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
   expect((copy.output as any).nestedAttachment.attachment).toBe(attachment2);
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
   expect((copy.output as any).nestedAttachment.another_attachment).toBe(
     attachment3,
   );
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
   expect((copy.output as any).attachmentList[0]).toBe(attachment1);
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
   expect((copy.output as any).attachmentList[1]).toBe(attachment2);
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
   expect((copy.output as any).attachmentList[3]).toBe(attachment3);
 });
 
