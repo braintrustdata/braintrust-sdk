@@ -293,7 +293,7 @@ export class NoopSpan implements Span {
   public setAttributes(_args: Omit<StartSpanArgs, "event">) {}
 
   public state() {
-    return __inherited_braintrust_state;
+    return _internalGetGlobalState();
   }
 }
 
