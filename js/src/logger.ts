@@ -229,6 +229,12 @@ export interface Span extends Exportable {
    */
   setAttributes(args: Omit<StartSpanArgs, "event">): void;
 
+  /**
+   * Gets the span's `state` value, which is usually the global logging state (this is
+   * for very advanced purposes only)
+   */
+  state(): BraintrustState;
+
   // For type identification.
   kind: "span";
 }
@@ -285,6 +291,10 @@ export class NoopSpan implements Span {
   }
 
   public setAttributes(_args: Omit<StartSpanArgs, "event">) {}
+
+  public state() {
+    return __inherited_braintrust_state;
+  }
 }
 
 export const NOOP_SPAN = new NoopSpan();
@@ -1136,7 +1146,7 @@ export class ReadonlyAttachment {
     const state = this.state ?? _globalState;
     await state.login({});
 
-    let params: Record<string, string> = {
+    const params: Record<string, string> = {
       filename: this.reference.filename,
       content_type: this.reference.content_type,
       org_id: state.orgId || "",
@@ -4220,7 +4230,7 @@ export function newId() {
  * We suggest using one of the various `traced` methods, instead of creating Spans directly. See {@link Span.startSpan} for full details.
  */
 export class SpanImpl implements Span {
-  private state: BraintrustState;
+  private _state: BraintrustState;
 
   private isMerge: boolean;
   private loggedEndTime: number | undefined;
@@ -4247,7 +4257,7 @@ export class SpanImpl implements Span {
       defaultRootType?: SpanType;
     } & Omit<StartSpanArgs, "parent">,
   ) {
-    this.state = args.state;
+    this._state = args.state;
 
     const spanAttributes = args.spanAttributes ?? {};
     const rawEvent = args.event ?? {};
@@ -4385,11 +4395,11 @@ export class SpanImpl implements Span {
         object_id: await this.parentObjectId.get(),
       }).objectIdFields(),
     });
-    this.state.bgLogger().log([new LazyValue(computeRecord)]);
+    this._state.bgLogger().log([new LazyValue(computeRecord)]);
   }
 
   public logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void {
-    logFeedbackImpl(this.state, this.parentObjectType, this.parentObjectId, {
+    logFeedbackImpl(this._state, this.parentObjectType, this.parentObjectId, {
       ...event,
       id: this.id,
     });
@@ -4422,10 +4432,10 @@ export class SpanImpl implements Span {
       ? undefined
       : { spanId: this._spanId, rootSpanId: this._rootSpanId };
     return new SpanImpl({
-      state: this.state,
+      state: this._state,
       ...args,
       ...startSpanParentArgs({
-        state: this.state,
+        state: this._state,
         parent: args?.parent,
         parentObjectType: this.parentObjectType,
         parentObjectId: this.parentObjectId,
@@ -4465,16 +4475,20 @@ export class SpanImpl implements Span {
 
   public async permalink(): Promise<string> {
     return await permalink(await this.export(), {
-      state: this.state,
+      state: this._state,
     });
   }
 
   async flush(): Promise<void> {
-    return await this.state.bgLogger().flush();
+    return await this._state.bgLogger().flush();
   }
 
   public close(args?: EndSpanArgs): number {
     return this.end(args);
+  }
+
+  public state(): BraintrustState {
+    return this._state;
   }
 }
 
