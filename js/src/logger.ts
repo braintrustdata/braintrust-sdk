@@ -62,7 +62,7 @@ import {
   EXTERNAL_ATTACHMENT,
 } from "@braintrust/core/typespecs";
 import { waitUntil } from "@vercel/functions";
-import Mustache from "mustache";
+import Mustache, { Context } from "mustache";
 import { z, ZodError } from "zod";
 import {
   BraintrustStream,
@@ -82,6 +82,7 @@ import {
   SyncLazyValue,
   runCatchFinally,
 } from "./util";
+import { lintTemplate } from "./mustache-utils";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -4979,8 +4980,15 @@ export function deserializePlainStringAsJSON(s: string) {
   }
 }
 
-function renderTemplatedObject(obj: unknown, args: unknown): unknown {
+function renderTemplatedObject(
+  obj: unknown,
+  args: Record<string, unknown>,
+  options: { strict?: boolean },
+): unknown {
   if (typeof obj === "string") {
+    if (options.strict) {
+      lintTemplate(obj, args);
+    }
     return Mustache.render(obj, args, undefined, {
       escape: (value) => {
         if (typeof value === "string") {
@@ -4991,12 +4999,12 @@ function renderTemplatedObject(obj: unknown, args: unknown): unknown {
       },
     });
   } else if (isArray(obj)) {
-    return obj.map((item) => renderTemplatedObject(item, args));
+    return obj.map((item) => renderTemplatedObject(item, args, options));
   } else if (isObject(obj)) {
     return Object.fromEntries(
       Object.entries(obj).map(([key, value]) => [
         key,
-        renderTemplatedObject(value, args),
+        renderTemplatedObject(value, args, options),
       ]),
     );
   }
@@ -5005,7 +5013,8 @@ function renderTemplatedObject(obj: unknown, args: unknown): unknown {
 
 export function renderPromptParams(
   params: ModelParams | undefined,
-  args: unknown,
+  args: Record<string, unknown>,
+  options: { strict?: boolean },
 ): ModelParams | undefined {
   const schemaParsed = z
     .object({
@@ -5021,7 +5030,7 @@ export function renderPromptParams(
     .safeParse(params);
   if (schemaParsed.success) {
     const rawSchema = schemaParsed.data.response_format.json_schema.schema;
-    const templatedSchema = renderTemplatedObject(rawSchema, args);
+    const templatedSchema = renderTemplatedObject(rawSchema, args, options);
     const parsedSchema =
       typeof templatedSchema === "string"
         ? deserializePlainStringAsJSON(templatedSchema).value
@@ -5100,11 +5109,14 @@ export class Prompt<
     options: {
       flavor?: Flavor;
       messages?: Message[];
+      strict?: boolean;
     } = {},
   ): CompiledPrompt<Flavor> {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return this.runBuild(buildArgs, {
       flavor: options.flavor ?? "chat",
       messages: options.messages,
+      strict: options.strict,
     }) as CompiledPrompt<Flavor>;
   }
 
@@ -5113,6 +5125,7 @@ export class Prompt<
     options: {
       flavor: Flavor;
       messages?: Message[];
+      strict?: boolean;
     },
   ): CompiledPrompt<Flavor> {
     const { flavor } = options;
@@ -5163,6 +5176,17 @@ export class Prompt<
       throw new Error("Empty prompt");
     }
 
+    const escape = (v: unknown) => {
+      console.log("escape", v);
+      if (v === undefined) {
+        throw new Error("Missing!");
+      } else if (typeof v === "string") {
+        return v;
+      } else {
+        return JSON.stringify(v);
+      }
+    };
+
     const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
     const variables: Record<string, unknown> = {
       input: buildArgs,
@@ -5176,26 +5200,29 @@ export class Prompt<
         );
       }
 
-      const render = (template: string) =>
-        Mustache.render(template, variables, undefined, {
-          escape: (v: unknown) =>
-            typeof v === "string" ? v : JSON.stringify(v),
+      const render = (template: string) => {
+        if (options.strict) {
+          lintTemplate(template, variables);
+        }
+
+        return Mustache.render(template, variables, undefined, {
+          escape,
         });
+      };
 
       const messages = [
         ...(prompt.messages || []).map((m) => renderMessage(render, m)),
         ...(options.messages ?? []),
       ];
 
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...renderPromptParams(params, variables),
+        ...renderPromptParams(params, variables, { strict: options.strict }),
         ...spanInfo,
         messages: messages,
         ...(prompt.tools?.trim()
           ? {
-              tools: toolsSchema.parse(
-                JSON.parse(Mustache.render(prompt.tools, variables)),
-              ),
+              tools: toolsSchema.parse(JSON.parse(render(prompt.tools))),
             }
           : undefined),
       } as CompiledPrompt<Flavor>;
@@ -5209,10 +5236,17 @@ export class Prompt<
         );
       }
 
+      if (options.strict) {
+        lintTemplate(prompt.content, variables);
+      }
+
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...renderPromptParams(params, variables),
+        ...renderPromptParams(params, variables, { strict: options.strict }),
         ...spanInfo,
-        prompt: Mustache.render(prompt.content, variables),
+        prompt: Mustache.render(prompt.content, variables, undefined, {
+          escape,
+        }),
       } as CompiledPrompt<Flavor>;
     } else {
       throw new Error("never!");
