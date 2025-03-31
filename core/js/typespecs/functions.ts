@@ -172,6 +172,8 @@ export const invokeApiSchema = invokeFunctionNonIdArgsSchema
   .describe("The request to invoke a function")
   .openapi("InvokeApi");
 
+const stopToken = z.string().nullish().describe("The token to stop the run");
+
 export const runEvalSchema = z
   .object({
     project_id: z
@@ -271,6 +273,7 @@ export const runEvalSchema = z
         "Optionally explicitly specify the git metadata for this experiment. This takes precedence over `gitMetadataSettings` if specified.",
       ),
     strict: strictParam,
+    stop_token: stopToken,
   })
   .openapi("RunEval");
 
@@ -328,12 +331,6 @@ export const sseDoneEventSchema = baseSSEEventSchema.omit({ data: true }).merge(
   }),
 );
 
-export const sseMetaEventSchema = baseSSEEventSchema.merge(
-  z.object({
-    event: z.literal("meta"),
-  }),
-);
-
 export const functionObjectTypeEnum = z
   .enum(["prompt", "tool", "scorer", "task"])
   .openapi("FunctionObjectType");
@@ -374,13 +371,6 @@ export const sseConsoleEventDataSchema = z.object({
   message: z.string(),
 });
 export type SSEConsoleEventData = z.infer<typeof sseConsoleEventDataSchema>;
-
-export const sseMetaEventDataSchema = z
-  .object({
-    stop_token: z.string().describe("The token to stop the run"),
-  })
-  .openapi("SSEMetaEventData");
-export type SSEMetaEventData = z.infer<typeof sseMetaEventDataSchema>;
 
 export const callEventSchema = z
   .union([
