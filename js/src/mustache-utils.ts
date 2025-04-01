@@ -1,5 +1,10 @@
 import { getObjValueByPath } from "@braintrust/core";
+import {
+  chatCompletionMessageParamSchema,
+  type Message,
+} from "@braintrust/core/typespecs";
 import Mustache from "mustache";
+import { z } from "zod";
 
 export function lintTemplate(
   template: string,
@@ -23,5 +28,33 @@ function getMustacheVars(prompt: string) {
     );
   } catch {
     return [];
+  }
+}
+
+export function renderExtraMessages(
+  extraMessages: string,
+  context: Record<string, unknown>,
+  strict: boolean,
+): Message[] {
+  const path = extraMessages.split(".");
+  const value = getObjValueByPath(context, path);
+  if (value === undefined) {
+    if (strict) {
+      throw new Error(`Variable '${extraMessages}' does not exist.`);
+    } else {
+      return [];
+    }
+  }
+  const parsed = z.array(chatCompletionMessageParamSchema).safeParse(value);
+  if (!parsed.success) {
+    if (strict) {
+      throw new Error(
+        `Variable '${extraMessages}' is not a valid message: ${parsed.error.message}`,
+      );
+    } else {
+      return [];
+    }
+  } else {
+    return parsed.data;
   }
 }

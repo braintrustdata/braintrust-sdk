@@ -82,7 +82,7 @@ import {
   SyncLazyValue,
   runCatchFinally,
 } from "./util";
-import { lintTemplate } from "./mustache-utils";
+import { lintTemplate, renderExtraMessages } from "./mustache-utils";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -5210,9 +5210,24 @@ export class Prompt<
         });
       };
 
+      const baseMessages = (prompt.messages || []).map((m) =>
+        renderMessage(render, m),
+      );
+      const hasSystemPrompt = baseMessages.some((m) => m.role === "system");
+
+      // extraMessages is a path which we'll just evaluate direc
+      const extraMessages = prompt.extraMessages
+        ? renderExtraMessages(prompt.extraMessages, variables, !!options.strict)
+        : [];
+
       const messages = [
-        ...(prompt.messages || []).map((m) => renderMessage(render, m)),
-        ...(options.messages ?? []),
+        ...baseMessages,
+        ...extraMessages.filter(
+          (m) => !(hasSystemPrompt && m.role === "system"),
+        ),
+        ...(options.messages ?? []).filter(
+          (m) => !(hasSystemPrompt && m.role === "system"),
+        ),
       ];
 
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
