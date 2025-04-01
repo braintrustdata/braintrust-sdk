@@ -49,6 +49,7 @@ test-js:
 
 nox:
 	nox -f py/noxfile.py
+	nox -f integrations/langchain-py/noxfile.py
 
 pylint:
 	@pylint --errors-only $(shell git ls-files 'py/**/*.py')
