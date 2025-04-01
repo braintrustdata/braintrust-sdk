@@ -259,12 +259,13 @@ def _collect_function_function_defs(
             },
             "if_exists": f.if_exists if f.if_exists else if_exists,
         }
-        if f.parameters is not None or f.returns is not None:
-            j["function_schema"] = {}
-            if f.parameters is not None:
-                j["function_schema"]["parameters"] = _pydantic_to_json_schema(f.parameters)
-            if f.returns is not None:
-                j["function_schema"]["returns"] = _pydantic_to_json_schema(f.returns)
+        if f.parameters is None:
+            raise ValueError(f"Function {f.name} has no supplied parameters")
+        j["function_schema"] = {
+            "parameters": _pydantic_to_json_schema(f.parameters),
+        }
+        if f.returns is not None:
+            j["function_schema"]["returns"] = _pydantic_to_json_schema(f.returns)
         functions.append(j)
 
 

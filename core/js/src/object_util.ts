@@ -1,4 +1,4 @@
-import { isObject } from "./type_util";
+import { isObject, isObjectOrArray } from "./type_util";
 
 // Mutably updates `mergeInto` with the contents of `mergeFrom`, merging objects
 // deeply. Does not merge any further than `merge_paths`.
@@ -163,4 +163,22 @@ export function getRecordKeys<T extends Record<string | number | symbol, any>>(
   obj: T,
 ): Array<keyof T> {
   return Object.keys(obj);
+}
+
+/**
+ * Get object value by providing a path to it as an array.
+ * @example getObjValueByPath({ bar: { foo: "Hello, world!" } }, ["bar", "foo"]); // "Hello, world!"
+ */
+export function getObjValueByPath(
+  row: Record<string, unknown>,
+  path: string[],
+): unknown {
+  let curr: unknown = row;
+  for (const p of path) {
+    if (!isObjectOrArray(curr)) {
+      return null;
+    }
+    curr = curr[p];
+  }
+  return curr;
 }

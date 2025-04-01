@@ -2052,59 +2052,48 @@ class ObjectFetcher(ABC, Generic[TMapping]):
     def _refetch(self) -> List[TMapping]:
         state = self._get_state()
         if self._fetched_data is None:
-            if self._internal_btql is not None:
-                cursor = None
-                data = None
-                iterations = 0
-                while True:
-                    resp = state.api_conn().post(
-                        f"btql",
-                        json={
-                            "query": {
-                                **self._internal_btql,
-                                "select": [{"op": "star"}],
-                                "from": {
-                                    "op": "function",
-                                    "name": {
-                                        "op": "ident",
-                                        "name": [self.object_type],
-                                    },
-                                    "args": [
-                                        {
-                                            "op": "literal",
-                                            "value": self.id,
-                                        },
-                                    ],
+            cursor = None
+            data = None
+            iterations = 0
+            while True:
+                resp = state.api_conn().post(
+                    f"btql",
+                    json={
+                        "query": {
+                            **(self._internal_btql or {}),
+                            "select": [{"op": "star"}],
+                            "from": {
+                                "op": "function",
+                                "name": {
+                                    "op": "ident",
+                                    "name": [self.object_type],
                                 },
-                                "cursor": cursor,
-                                "limit": INTERNAL_BTQL_LIMIT,
+                                "args": [
+                                    {
+                                        "op": "literal",
+                                        "value": self.id,
+                                    },
+                                ],
                             },
+                            "cursor": cursor,
+                            "limit": INTERNAL_BTQL_LIMIT,
                         },
-                        headers={
-                            "Accept-Encoding": "gzip",
-                        },
-                    )
-                    response_raise_for_status(resp)
-                    resp_json = resp.json()
-                    data = (data or []) + cast(List[TMapping], resp_json["data"])
-                    if not resp_json.get("cursor", None):
-                        break
-                    cursor = resp_json.get("cursor", None)
-                    iterations += 1
-                    if iterations > MAX_BTQL_ITERATIONS:
-                        raise RuntimeError("Too many BTQL iterations")
-            else:
-                resp = state.api_conn().get(
-                    f"v1/{self.object_type}/{self.id}/fetch",
-                    params={
-                        "version": self._pinned_version,
+                        "use_columnstore": False,
+                        "brainstore_realtime": True,
                     },
                     headers={
                         "Accept-Encoding": "gzip",
                     },
                 )
                 response_raise_for_status(resp)
-                data = cast(List[TMapping], resp.json()["events"])
+                resp_json = resp.json()
+                data = (data or []) + cast(List[TMapping], resp_json["data"])
+                if not resp_json.get("cursor", None):
+                    break
+                cursor = resp_json.get("cursor", None)
+                iterations += 1
+                if iterations > MAX_BTQL_ITERATIONS:
+                    raise RuntimeError("Too many BTQL iterations")
 
             if not isinstance(data, list):
                 raise ValueError(f"Expected a list in the response, got {type(data)}")

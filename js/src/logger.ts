@@ -62,7 +62,7 @@ import {
   EXTERNAL_ATTACHMENT,
 } from "@braintrust/core/typespecs";
 import { waitUntil } from "@vercel/functions";
-import Mustache from "mustache";
+import Mustache, { Context } from "mustache";
 import { z, ZodError } from "zod";
 import {
   BraintrustStream,
@@ -82,6 +82,7 @@ import {
   SyncLazyValue,
   runCatchFinally,
 } from "./util";
+import { lintTemplate } from "./mustache-utils";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -238,6 +239,12 @@ export interface Span extends Exportable {
     args?: StartSpanArgs,
   ): Span;
 
+  /*
+   * Gets the span's `state` value, which is usually the global logging state (this is
+   * for very advanced purposes only)
+   */
+  state(): BraintrustState;
+
   // For type identification.
   kind: "span";
 }
@@ -301,6 +308,10 @@ export class NoopSpan implements Span {
     _args?: StartSpanArgs,
   ): Span {
     return this;
+  }
+
+  public state() {
+    return _internalGetGlobalState();
   }
 }
 
@@ -1153,7 +1164,7 @@ export class ReadonlyAttachment {
     const state = this.state ?? _globalState;
     await state.login({});
 
-    let params: Record<string, string> = {
+    const params: Record<string, string> = {
       filename: this.reference.filename,
       content_type: this.reference.content_type,
       org_id: state.orgId || "",
@@ -3742,7 +3753,8 @@ class ObjectFetcher<RecordType>
   constructor(
     private objectType: "dataset" | "experiment",
     private pinnedVersion: string | undefined,
-    private mutateRecord?: (r: any) => RecordType,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private mutateRecord?: (r: any) => WithTransactionId<RecordType>,
     private _internal_btql?: Record<string, unknown>,
   ) {}
 
@@ -3768,60 +3780,51 @@ class ObjectFetcher<RecordType>
   async fetchedData() {
     if (this._fetchedData === undefined) {
       const state = await this.getState();
-      let data = null;
-      if (this._internal_btql) {
-        let cursor = undefined;
-        let iterations = 0;
-        while (true) {
-          const resp = await state.apiConn().post(
-            `btql`,
-            {
-              query: {
-                ...this._internal_btql,
-                select: [
+      let data: WithTransactionId<RecordType>[] | undefined = undefined;
+      let cursor = undefined;
+      let iterations = 0;
+      while (true) {
+        const resp = await state.apiConn().post(
+          `btql`,
+          {
+            query: {
+              ...this._internal_btql,
+              select: [
+                {
+                  op: "star",
+                },
+              ],
+              from: {
+                op: "function",
+                name: {
+                  op: "ident",
+                  name: [this.objectType],
+                },
+                args: [
                   {
-                    op: "star",
+                    op: "literal",
+                    value: await this.id,
                   },
                 ],
-                from: {
-                  op: "function",
-                  name: {
-                    op: "ident",
-                    name: [this.objectType],
-                  },
-                  args: [
-                    {
-                      op: "literal",
-                      value: await this.id,
-                    },
-                  ],
-                },
-                cursor,
-                limit: INTERNAL_BTQL_LIMIT,
               },
+              cursor,
+              limit: INTERNAL_BTQL_LIMIT,
             },
-            { headers: { "Accept-Encoding": "gzip" } },
-          );
-          const respJson = await resp.json();
-          data = (data ?? []).concat(respJson.data);
-          if (!respJson.cursor) {
-            break;
-          }
-          cursor = respJson.cursor;
-          iterations++;
-          if (iterations > MAX_BTQL_ITERATIONS) {
-            throw new Error("Too many BTQL iterations");
-          }
-        }
-      } else {
-        const resp = await state.apiConn().get(
-          `v1/${this.objectType}/${await this.id}/fetch`,
-          {
-            version: this.pinnedVersion,
+            use_columnstore: false,
+            brainstore_realtime: true,
           },
           { headers: { "Accept-Encoding": "gzip" } },
         );
-        data = (await resp.json()).events;
+        const respJson = await resp.json();
+        data = (data ?? []).concat(respJson.data);
+        if (!respJson.cursor) {
+          break;
+        }
+        cursor = respJson.cursor;
+        iterations++;
+        if (iterations > MAX_BTQL_ITERATIONS) {
+          throw new Error("Too many BTQL iterations");
+        }
       }
       this._fetchedData = this.mutateRecord
         ? data?.map(this.mutateRecord)
@@ -4251,7 +4254,7 @@ export function newId() {
  * We suggest using one of the various `traced` methods, instead of creating Spans directly. See {@link Span.startSpan} for full details.
  */
 export class SpanImpl implements Span {
-  private state: BraintrustState;
+  private _state: BraintrustState;
 
   private isMerge: boolean;
   private loggedEndTime: number | undefined;
@@ -4279,7 +4282,7 @@ export class SpanImpl implements Span {
       spanId?: string;
     } & Omit<StartSpanArgs, "parent">,
   ) {
-    this.state = args.state;
+    this._state = args.state;
 
     const spanAttributes = args.spanAttributes ?? {};
     const rawEvent = args.event ?? {};
@@ -4424,11 +4427,11 @@ export class SpanImpl implements Span {
         object_id: await this.parentObjectId.get(),
       }).objectIdFields(),
     });
-    this.state.bgLogger().log([new LazyValue(computeRecord)]);
+    this._state.bgLogger().log([new LazyValue(computeRecord)]);
   }
 
   public logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void {
-    logFeedbackImpl(this.state, this.parentObjectType, this.parentObjectId, {
+    logFeedbackImpl(this._state, this.parentObjectType, this.parentObjectId, {
       ...event,
       id: this.id,
     });
@@ -4461,10 +4464,10 @@ export class SpanImpl implements Span {
       ? undefined
       : { spanId: this._spanId, rootSpanId: this._rootSpanId };
     return new SpanImpl({
-      state: this.state,
+      state: this._state,
       ...args,
       ...startSpanParentArgs({
-        state: this.state,
+        state: this._state,
         parent: args?.parent,
         parentObjectType: this.parentObjectType,
         parentObjectId: this.parentObjectId,
@@ -4529,16 +4532,20 @@ export class SpanImpl implements Span {
 
   public async permalink(): Promise<string> {
     return await permalink(await this.export(), {
-      state: this.state,
+      state: this._state,
     });
   }
 
   async flush(): Promise<void> {
-    return await this.state.bgLogger().flush();
+    return await this._state.bgLogger().flush();
   }
 
   public close(args?: EndSpanArgs): number {
     return this.end(args);
+  }
+
+  public state(): BraintrustState {
+    return this._state;
   }
 }
 
@@ -4615,6 +4622,7 @@ export class Dataset<
     legacy?: IsLegacyDataset,
     _internal_btql?: Record<string, unknown>,
   ) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const isLegacyDataset = (legacy ??
       DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
     if (isLegacyDataset) {
@@ -4626,7 +4634,11 @@ export class Dataset<
       "dataset",
       pinnedVersion,
       (r: AnyDatasetRecord) =>
-        ensureDatasetRecord(enrichAttachments(r), isLegacyDataset),
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        ensureDatasetRecord(
+          enrichAttachments(r),
+          isLegacyDataset,
+        ) as WithTransactionId<DatasetRecord<IsLegacyDataset>>,
       _internal_btql,
     );
     this.lazyMetadata = lazyMetadata;
@@ -5024,8 +5036,15 @@ export function deserializePlainStringAsJSON(s: string) {
   }
 }
 
-function renderTemplatedObject(obj: unknown, args: unknown): unknown {
+function renderTemplatedObject(
+  obj: unknown,
+  args: Record<string, unknown>,
+  options: { strict?: boolean },
+): unknown {
   if (typeof obj === "string") {
+    if (options.strict) {
+      lintTemplate(obj, args);
+    }
     return Mustache.render(obj, args, undefined, {
       escape: (value) => {
         if (typeof value === "string") {
@@ -5036,12 +5055,12 @@ function renderTemplatedObject(obj: unknown, args: unknown): unknown {
       },
     });
   } else if (isArray(obj)) {
-    return obj.map((item) => renderTemplatedObject(item, args));
+    return obj.map((item) => renderTemplatedObject(item, args, options));
   } else if (isObject(obj)) {
     return Object.fromEntries(
       Object.entries(obj).map(([key, value]) => [
         key,
-        renderTemplatedObject(value, args),
+        renderTemplatedObject(value, args, options),
       ]),
     );
   }
@@ -5050,7 +5069,8 @@ function renderTemplatedObject(obj: unknown, args: unknown): unknown {
 
 export function renderPromptParams(
   params: ModelParams | undefined,
-  args: unknown,
+  args: Record<string, unknown>,
+  options: { strict?: boolean },
 ): ModelParams | undefined {
   const schemaParsed = z
     .object({
@@ -5066,7 +5086,7 @@ export function renderPromptParams(
     .safeParse(params);
   if (schemaParsed.success) {
     const rawSchema = schemaParsed.data.response_format.json_schema.schema;
-    const templatedSchema = renderTemplatedObject(rawSchema, args);
+    const templatedSchema = renderTemplatedObject(rawSchema, args, options);
     const parsedSchema =
       typeof templatedSchema === "string"
         ? deserializePlainStringAsJSON(templatedSchema).value
@@ -5145,11 +5165,14 @@ export class Prompt<
     options: {
       flavor?: Flavor;
       messages?: Message[];
+      strict?: boolean;
     } = {},
   ): CompiledPrompt<Flavor> {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return this.runBuild(buildArgs, {
       flavor: options.flavor ?? "chat",
       messages: options.messages,
+      strict: options.strict,
     }) as CompiledPrompt<Flavor>;
   }
 
@@ -5158,6 +5181,7 @@ export class Prompt<
     options: {
       flavor: Flavor;
       messages?: Message[];
+      strict?: boolean;
     },
   ): CompiledPrompt<Flavor> {
     const { flavor } = options;
@@ -5208,6 +5232,17 @@ export class Prompt<
       throw new Error("Empty prompt");
     }
 
+    const escape = (v: unknown) => {
+      console.log("escape", v);
+      if (v === undefined) {
+        throw new Error("Missing!");
+      } else if (typeof v === "string") {
+        return v;
+      } else {
+        return JSON.stringify(v);
+      }
+    };
+
     const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
     const variables: Record<string, unknown> = {
       input: buildArgs,
@@ -5221,26 +5256,29 @@ export class Prompt<
         );
       }
 
-      const render = (template: string) =>
-        Mustache.render(template, variables, undefined, {
-          escape: (v: unknown) =>
-            typeof v === "string" ? v : JSON.stringify(v),
+      const render = (template: string) => {
+        if (options.strict) {
+          lintTemplate(template, variables);
+        }
+
+        return Mustache.render(template, variables, undefined, {
+          escape,
         });
+      };
 
       const messages = [
         ...(prompt.messages || []).map((m) => renderMessage(render, m)),
         ...(options.messages ?? []),
       ];
 
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...renderPromptParams(params, variables),
+        ...renderPromptParams(params, variables, { strict: options.strict }),
         ...spanInfo,
         messages: messages,
         ...(prompt.tools?.trim()
           ? {
-              tools: toolsSchema.parse(
-                JSON.parse(Mustache.render(prompt.tools, variables)),
-              ),
+              tools: toolsSchema.parse(JSON.parse(render(prompt.tools))),
             }
           : undefined),
       } as CompiledPrompt<Flavor>;
@@ -5254,10 +5292,17 @@ export class Prompt<
         );
       }
 
+      if (options.strict) {
+        lintTemplate(prompt.content, variables);
+      }
+
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...renderPromptParams(params, variables),
+        ...renderPromptParams(params, variables, { strict: options.strict }),
         ...spanInfo,
-        prompt: Mustache.render(prompt.content, variables),
+        prompt: Mustache.render(prompt.content, variables, undefined, {
+          escape,
+        }),
       } as CompiledPrompt<Flavor>;
     } else {
       throw new Error("never!");
