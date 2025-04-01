@@ -1,8 +1,4 @@
-.PHONY: examples prune test-anthropic test-anthropic-@0.39.0 test-anthropic-@0.38.0 test-anthropic-latest test
-
-examples:
-	./pnpm_no_save install @anthropic-ai/sdk
-	pnpm examples
+.PHONY: prune test-anthropic test-anthropic-@0.39.0 test-anthropic-@0.38.0 test-anthropic-latest test
 
 prune:
 	pnpm prune
@@ -29,7 +25,7 @@ test-pnpm:
 test: test-anthropic test-pnpm
 
 # Test the core and the latest versions of wrappers.
-test-latest: test-anthropic-latest test-pnpm
+test-latest: test-pnpm test-anthropic-latest
 
 
 
