@@ -29,7 +29,7 @@ interface CallableNode extends BaseNode {
 // Type to represent node types in our graph
 export type Node = AnyNodeImpl & CallableNode;
 
-export type NodeLike = Node | Prompt<boolean, boolean>;
+export type NodeLike = Node | Prompt<boolean, boolean> | ProxyVariable;
 
 export type LazyGraphNode = {
   type: "lazy";
@@ -72,14 +72,20 @@ export class GraphBuilder {
       const promptNode = this.createPromptNode(node);
       this.nodeLikeNodes.set(node, promptNode);
       return promptNode;
+    } else if (isProxyVariable(node)) {
+      // XXX Need to propagate the path, somehow
+      return proxyVariableToNode(node);
     } else {
       return node;
     }
   }
 
   public call(node: NodeLike, input: ProxyVariable): Node {
-    const resolvedNode = this.resolveNode(node);
-    return resolvedNode(input);
+    const resolved = this.resolveNode(node);
+    console.log("resolved", resolved);
+    const rn = makeNodeCallable(resolved);
+    console.log("rn", rn);
+    return rn(input);
   }
 
   // Helper to generate node IDs
@@ -166,6 +172,7 @@ export class GraphBuilder {
     return functionNode;
   }
 
+  // XXX Dead code?
   // Create a gate node for conditional branching
   public createGateNode(): GateNode {
     const id = this.generateId();
@@ -195,6 +202,23 @@ export class GraphBuilder {
     const literalNode = makeNodeCallable(new LiteralNode<T>(this, id, value));
     this.nodeRegistry.set(id, literalNode);
     return literalNode;
+  }
+
+  public gate(options: {
+    condition: NodeLike;
+    true: NodeLike;
+    false: NodeLike;
+  }): GateNode & CallableNode {
+    const id = this.generateId();
+    const node: GraphNode = {
+      type: "gate",
+      description: "Conditional gate",
+      position: null,
+    };
+    this.nodes[id] = node;
+    const gateNode = makeNodeCallable(new GateNode(this, id));
+    this.nodeRegistry.set(id, gateNode);
+    return gateNode;
   }
 
   // Connect two nodes with an edge
@@ -234,21 +258,44 @@ export type ProxyVariable = {
   [key: string]: ProxyVariable;
 };
 
+function isProxyVariable(node: NodeLike): node is ProxyVariable {
+  return (
+    typeof node === "object" &&
+    node !== null &&
+    "__type" in node &&
+    // @ts-ignore
+    node.__type === "proxy-variable"
+  );
+}
+
+function proxyVariableToNode(proxy: ProxyVariable): Node {
+  // @ts-ignore
+  return proxy.__node;
+}
+
 // Create a proxy handler that captures property access paths
-function createVariableProxy(path: string[] = []): ProxyVariable {
+function createVariableProxy({
+  path,
+  node,
+}: {
+  path: string[];
+  node: Node;
+}): ProxyVariable {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   return new Proxy({} as ProxyVariable, {
     get(target, prop) {
       if (typeof prop === "string") {
         if (prop === "__type") {
           return "proxy-variable";
+        } else if (prop === "__node") {
+          return node;
         }
 
         const newPath = [...path, prop];
 
         // Return a variable reference for terminal properties
         // or a new proxy for further chaining
-        return createVariableProxy(newPath);
+        return createVariableProxy({ path: newPath, node });
       }
       return undefined;
     },
@@ -278,7 +325,7 @@ abstract class BaseNode implements INode {
     for (const arg of args) {
       // Handle different types of arguments
       if (typeof arg === "function") {
-        const argsProxy = createVariableProxy();
+        const argsProxy = createVariableProxy({ path: [], node: callableThis });
         const result = arg(argsProxy);
         lastNode = result;
         this.graph.connect(callableThis, result);
@@ -306,7 +353,11 @@ function makeNodeCallable<T extends BaseNode>(node: T): T & CallableNode {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   return new Proxy(node, {
     apply(target, thisArg, args) {
-      return target.__call(args[0]);
+      console.log("apply", target, thisArg, args);
+      return node.__call(args[0]);
+    },
+    get(target, prop, receiver) {
+      return Reflect.get(target, prop, receiver);
     },
   }) as T & CallableNode;
 }
