@@ -5177,7 +5177,6 @@ export class Prompt<
     }
 
     const escape = (v: unknown) => {
-      console.log("escape", v);
       if (v === undefined) {
         throw new Error("Missing!");
       } else if (typeof v === "string") {
