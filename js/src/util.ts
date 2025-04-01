@@ -13,6 +13,7 @@ export function runCatchFinally<R>(
     const ret = f();
     if (ret instanceof Promise) {
       runSyncCleanup = false;
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
       return (ret as any).catch(catchF).finally(finallyF) as R;
     } else {
       return ret;

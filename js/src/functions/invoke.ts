@@ -86,6 +86,11 @@ export interface InvokeFunctionArgs<
    */
   mode?: StreamingMode;
   /**
+   * Whether to use strict mode for the function. If true, the function will throw an error
+   * if the variable names in the prompt do not match the input keys.
+   */
+  strict?: boolean;
+  /**
    * A Zod schema to validate the output of the function and return a typed value. This
    * is only used if `stream` is false.
    */
@@ -130,6 +135,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     stream,
     mode,
     schema,
+    strict,
     ...functionIdArgs
   } = args;
 
@@ -169,6 +175,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     parent,
     stream,
     mode,
+    strict,
   };
 
   const resp = await state.proxyConn().post(`function/invoke`, request, {
@@ -181,9 +188,11 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     if (!resp.body) {
       throw new Error("Received empty stream body");
     }
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return new BraintrustStream(resp.body) as InvokeReturn<Stream, Output>;
   } else {
     const data = await resp.json();
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return (schema ? schema.parse(data) : data) as InvokeReturn<Stream, Output>;
   }
 }
