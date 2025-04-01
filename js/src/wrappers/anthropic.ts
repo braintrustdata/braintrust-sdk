@@ -7,7 +7,7 @@ function debug(message: string) {
   }
 }
 
-export function wrapAnthropic<T extends object>(anthropic: T): T {
+export function wrapAnthropic(anthropic: Anthropic): Anthropic {
   debug(`wrapping anthropic ${anthropic}`);
 
   const proxy = new Proxy(anthropic, {
