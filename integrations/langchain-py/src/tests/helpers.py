@@ -12,9 +12,20 @@ PrimitiveValue = Union[str, int, float, bool, None, Span]
 RecursiveValue = Union[PrimitiveValue, Dict[str, Any], Sequence[Any]]
 
 
+def deep_hashable_dict(d: RecursiveValue):
+    """Recursively convert a dictionary into a hashable representation, handling nested values."""
+    if isinstance(d, dict):
+        return frozenset((k, deep_hashable_dict(v)) for k, v in d.items())
+    elif isinstance(d, Sequence) and not isinstance(d, str):
+        return frozenset(deep_hashable_dict(x) for x in d)
+    else:
+        return d
+
+
 def assert_matches_object(
     actual: RecursiveValue,
     expected: RecursiveValue,
+    ignore_order: bool = False,
 ) -> None:
     """Assert that actual contains all key-value pairs from expected.
 
@@ -33,8 +44,26 @@ def assert_matches_object(
         assert len(actual) >= len(
             expected
         ), f"Expected sequence of length >= {len(expected)} but got length {len(actual)}"
-        for i, expected_item in enumerate(expected):
-            assert_matches_object(actual[i], expected_item)
+        if not ignore_order:
+            for i, expected_item in enumerate(expected):
+                assert_matches_object(actual[i], expected_item)
+        else:
+            for expected_item in expected:
+                matched = False
+                for actual_item in actual:
+                    try:
+                        assert_matches_object(actual_item, expected_item)
+                        matched = True
+                    except:
+                        pass
+
+                assert matched, f"Expected {expected_item} in unordered sequence but couldn't find match in {actual}"
+
+            expected_set = set(deep_hashable_dict(e) for e in expected)
+            actual_set = set(deep_hashable_dict(a) for a in actual)
+            # for expected_item, actual_item in zip(expected_set, actual_set):
+            #     assert_matches_object(expected_item, actual_item)
+
     elif isinstance(expected, dict):
         assert isinstance(actual, dict), f"Expected dict but got {type(actual)}"
         for k, v in expected.items():
