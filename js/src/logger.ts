@@ -4488,10 +4488,10 @@ export class SpanImpl implements Span {
       rootSpanId: this._rootSpanId,
     };
     return new SpanImpl({
-      state: this.state,
+      state: this._state,
       ...args,
       ...startSpanParentArgs({
-        state: this.state,
+        state: this._state,
         parent: args?.parent,
         parentObjectType: this.parentObjectType,
         parentObjectId: this.parentObjectId,
