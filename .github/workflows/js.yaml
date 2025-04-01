@@ -25,3 +25,7 @@ jobs:
           pnpm install
           pnpm run test
           pnpm run build
+      - name: "make test"
+        run: |
+          pnpm install
+          make test
