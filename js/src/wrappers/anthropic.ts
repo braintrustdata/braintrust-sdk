@@ -70,8 +70,6 @@ function createProxy(create: (params: any) => Promise<any>) {
       const promise = Reflect.apply(target, thisArg, argArray);
       if (promise instanceof Promise) {
         return promise.then((msg) => {
-          debugLog("messages.create returned", msg);
-
           try {
             handleCreateResponse(msg, span);
           } catch (err) {
