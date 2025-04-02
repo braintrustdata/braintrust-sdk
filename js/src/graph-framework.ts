@@ -82,10 +82,7 @@ export class GraphBuilder {
 
   public call(node: NodeLike, input: ProxyVariable): Node {
     const resolved = this.resolveNode(node);
-    console.log("resolved", resolved);
-    const rn = makeNodeCallable(resolved);
-    console.log("rn", rn);
-    return rn(input);
+    return resolved.__call(input);
   }
 
   // Helper to generate node IDs
@@ -223,8 +220,8 @@ export class GraphBuilder {
 
   // Connect two nodes with an edge
   public connect(
-    source: Node,
-    target: Node,
+    source: BaseNode,
+    target: BaseNode,
     sourceVar = "value",
     targetVar = "value",
   ): void {
@@ -343,8 +340,9 @@ abstract class BaseNode implements INode {
     if (typeof input === "object" && input !== null && "__type" in input) {
       throw new Error("Not implemented");
     } else {
-      //   const literalNode = this.graph.createLiteralNode(input);
-      throw new Error("TODO: Wire up the literal node");
+      const literalNode = this.graph.literal(input);
+      this.graph.connect(this, literalNode);
+      return literalNode;
     }
   }
 }
