@@ -335,7 +335,8 @@ export class BraintrustState {
   // This is preferable to replacing the whole logger, which would create the
   // possibility of multiple loggers floating around, which may not log in a
   // deterministic order.
-  private _bgLogger: SyncLazyValue<BackgroundLogger>;
+  private _bgLogger: SyncLazyValue<HTTPBackgroundLogger>;
+  private _overrideBgLogger: BackgroundLogger | null = null;
 
   public appUrl: string | null = null;
   public appPublicUrl: string | null = null;
@@ -370,7 +371,8 @@ export class BraintrustState {
       return this.apiConn();
     };
     this._bgLogger = new SyncLazyValue(
-      () => new BackgroundLogger(new LazyValue(defaultGetLogConn), loginParams),
+      () =>
+        new HTTPBackgroundLogger(new LazyValue(defaultGetLogConn), loginParams),
     );
 
     this.resetLoginInfo();
@@ -545,7 +547,14 @@ export class BraintrustState {
   }
 
   public bgLogger(): BackgroundLogger {
+    if (this._overrideBgLogger) {
+      return this._overrideBgLogger;
+    }
     return this._bgLogger.get();
+  }
+
+  public overrideBgLogger(logger: BackgroundLogger | null) {
+    this._overrideBgLogger = logger;
   }
 
   // Should only be called by the login function.
@@ -1795,11 +1804,44 @@ export interface BackgroundLoggerOpts {
   onFlushError?: (error: unknown) => void;
 }
 
+interface BackgroundLogger {
+  log(items: LazyValue<BackgroundLogEvent>[]): void;
+  flush(): Promise<void>;
+}
+
+class MemoryBackgroundLogger implements BackgroundLogger {
+  private items: LazyValue<BackgroundLogEvent>[][] = [[]];
+
+  log(items: LazyValue<BackgroundLogEvent>[]): void {
+    this.items.push(items);
+  }
+
+  async flush(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  async pop(): Promise<BackgroundLogEvent[]> {
+    const items = this.items;
+    this.items = [];
+
+    // get all the values
+    const events: BackgroundLogEvent[] = [];
+    for (const item of items) {
+      for (const event of item) {
+        events.push(await event.get());
+      }
+    }
+
+    const batch = mergeRowBatch(events);
+    return batch.flat();
+  }
+}
+
 // We should only have one instance of this object per state object in
 // 'BraintrustState._bgLogger'. Be careful about spawning multiple
 // instances of this class, because concurrent BackgroundLoggers will not log to
 // the backend in a deterministic order.
-class BackgroundLogger {
+class HTTPBackgroundLogger implements BackgroundLogger {
   private apiConn: LazyValue<HTTPConnection>;
   private items: LazyValue<BackgroundLogEvent>[] = [];
   private activeFlush: Promise<void> = Promise.resolve();
@@ -5177,7 +5219,6 @@ export class Prompt<
     }
 
     const escape = (v: unknown) => {
-      console.log("escape", v);
       if (v === undefined) {
         throw new Error("Missing!");
       } else if (typeof v === "string") {
@@ -5357,4 +5398,9 @@ export interface DatasetSummary {
  * Allows accessing helper functions for testing.
  * @internal
  */
-export const _exportsForTestingOnly = { extractAttachments, deepCopyEvent };
+export const _exportsForTestingOnly = {
+  extractAttachments,
+  deepCopyEvent,
+  MemoryBackgroundLogger,
+  _internalGetGlobalState,
+};
