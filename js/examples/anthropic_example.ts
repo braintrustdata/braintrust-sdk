@@ -1,8 +1,13 @@
 #!/usr/bin/env tsx
 
 import Anthropic from "@anthropic-ai/sdk";
+import { wrapAnthropic, initLogger } from "braintrust";
 
-const client = new Anthropic();
+initLogger({
+  projectName: "anthropic-typescript-example",
+});
+
+const client = wrapAnthropic(new Anthropic());
 
 async function main() {
   const result = await client.messages.create({
