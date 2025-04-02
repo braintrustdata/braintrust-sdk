@@ -1,6 +1,7 @@
 import { test, expect } from "vitest";
-import { Anthropic } from "@anthropic-ai/sdk";
+import Anthropic from "@anthropic-ai/sdk";
 import { wrapAnthropic } from "./anthropic";
+import { TextBlock } from "@anthropic-ai/sdk/resources/messages";
 
 // use the cheapest model for tests
 const TEST_MODEL = "claude-3-haiku-20240307";
@@ -21,5 +22,6 @@ test("test anthropic client", async () => {
 
   expect(response).toBeDefined();
   expect(response.content[0].type).toBe("text");
-  expect(response.content[0].text).toContain("16");
+  const content = response.content[0] as TextBlock;
+  expect(content.text).toContain("16");
 });
