@@ -44,10 +44,19 @@ export class GraphBuilder {
 
   // Create the final GraphData object
   public build(): GraphData {
+    const nodes = Object.values(this.nodes).map((node) => {
+      if (node.type === "lazy") {
+        // We should have a .build() on each of these? For prompts, we can just
+        // use .build() and use the project id + slug as a reference.
+        return this.nodes[node.id];
+      }
+      return node;
+    });
+
     return {
       type: "graph",
       // @ts-ignore
-      nodes: this.nodes, // XXX Need to resolve the lazy nodes
+      nodes, // XXX Need to resolve the lazy nodes
       edges: this.edges,
     };
   }
