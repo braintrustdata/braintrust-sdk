@@ -19,6 +19,16 @@ async function main() {
     ],
     model: "claude-3-5-sonnet-latest",
     max_tokens: 1024,
+    system: [
+      {
+        text: "do this!",
+        type: "text",
+      },
+      {
+        text: "do that!",
+        type: "text",
+      },
+    ],
   });
   console.dir(result);
 }

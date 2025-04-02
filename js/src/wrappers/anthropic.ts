@@ -1,8 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
+import Stream from "@anthropic-ai/sdk";
 import { Span, startSpan } from "..";
 import { SpanTypeAttribute } from "@braintrust/core";
-import { debugLog } from "../util";
-import { Message, Usage } from "@anthropic-ai/sdk/resources/messages";
+import { debugLog, getCurrentUnixTimestamp } from "../util";
+import {
+  Message,
+  Usage,
+  RawMessageStreamEvent,
+} from "@anthropic-ai/sdk/resources/messages";
 const METADATA_PARAMS = [
   "model",
   "max_tokens",
@@ -69,16 +74,18 @@ function createProxy(create: (params: any) => Promise<any>) {
 
       const promise = Reflect.apply(target, thisArg, argArray);
       if (promise instanceof Promise) {
-        return promise.then((msg) => {
-          try {
-            handleCreateResponse(msg, span);
-          } catch (err) {
-            debugLog("handleCreateResponse error", err);
-          } finally {
-            span.end();
+        return promise.then((msgOrStream) => {
+          // handle the sync interface
+          if (!args["stream"]) {
+            handleMessageResponse(msgOrStream, span);
+            return msgOrStream;
           }
-
-          return msg;
+          // ... or the async interface.
+          return new WrapperStream(
+            span,
+            getCurrentUnixTimestamp(),
+            msgOrStream,
+          );
         });
       }
       return promise;
@@ -89,7 +96,7 @@ function createProxy(create: (params: any) => Promise<any>) {
 type MetricsOrUndefined = Record<string, number> | undefined;
 
 // Parse the data from the anthropic response and log it to the span.
-function handleCreateResponse(message: Message, span: Span) {
+function handleMessageResponse(message: Message, span: Span) {
   // FIXME[matt] the whole content or just the text?
   let output = message?.content || null;
 
@@ -108,6 +115,7 @@ function handleCreateResponse(message: Message, span: Span) {
   };
 
   span.log(event);
+  span.end();
 }
 
 function parseMetricsFromUsage(usage: any): MetricsOrUndefined {
@@ -155,4 +163,45 @@ function filterFrom(record: Record<string, any>, keys: string[]) {
     }
   }
   return out;
+}
+
+class WrapperStream<Item> implements AsyncIterable<Item> {
+  private span: Span;
+  private iter: AsyncIterable<Item>;
+  private startTime: number;
+
+  constructor(span: Span, startTime: number, iter: AsyncIterable<Item>) {
+    this.span = span;
+    this.iter = iter;
+    this.startTime = startTime;
+  }
+
+  async *[Symbol.asyncIterator](): AsyncIterator<Item, any, undefined> {
+    let first = true;
+    let allResults = [];
+    try {
+      for await (const item of this.iter) {
+        console.log("item", item);
+        if (first) {
+          const now = getCurrentUnixTimestamp();
+          this.span.log({
+            metrics: {
+              time_to_first_token: now - this.startTime,
+            },
+          });
+          first = false;
+        }
+
+        allResults.push(item);
+        yield item;
+      }
+      this.span.log({
+        metrics: {
+          a: 1,
+        },
+      });
+    } finally {
+      this.span.end();
+    }
+  }
 }

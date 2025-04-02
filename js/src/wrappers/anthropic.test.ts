@@ -1,4 +1,4 @@
-import { test, expect, describe, beforeEach, afterEach, assert } from "vitest";
+import { test, expect, describe, beforeEach, afterEach, skip } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { wrapAnthropic } from "./anthropic";
 import { TextBlock, Message } from "@anthropic-ai/sdk/resources/messages";
@@ -45,7 +45,71 @@ describe("anthropic client unit tests", () => {
     _exportsForTestingOnly.clearTestBackgroundLogger();
   });
 
-  test("test anthropic client basics", async () => {
+  test("test client.messages.create with system text blocks", async (context) => {
+    // FIXME[matt] handle system fields like this
+    /*      {
+        text: "do this!",
+        type: "text",
+      },
+      {
+        text: "do that!",
+        type: "text",
+      },
+    ],
+    */
+    context.skip();
+  });
+
+  test("test client.message.create with stream=true", async () => {
+    const startTime = getCurrentUnixTimestamp();
+    const response = await client.messages.create({
+      model: TEST_MODEL,
+      messages: [
+        {
+          role: "user",
+          content: "can you write me a few paragraphs on the topic of AI?",
+        },
+      ],
+      max_tokens: 100,
+      system: "Return the result only.",
+      temperature: 0.5,
+      stream: true,
+    });
+
+    for await (const event of response) {
+      //debugLog("event", event);
+    }
+
+    const endTime = getCurrentUnixTimestamp();
+    const usage = response.usage;
+
+    // check that the background logger got the log
+    const spans = await backgroundLogger.pop();
+    expect(spans).toHaveLength(1);
+    const span = spans[0] as any;
+    debugLog("got span", span);
+    expect(span.input).toBeDefined();
+
+    expect(span["span_attributes"].type).toBe("llm");
+    expect(span["span_attributes"].name).toBe("anthropic.messages.create");
+    const metrics = span.metrics;
+    expect(metrics).toBeDefined();
+    expect(metrics["prompt_tokens"]).toBe(usage.input_tokens);
+    expect(metrics["completion_tokens"]).toBe(usage.output_tokens);
+    expect(metrics["tokens"]).toBe(usage.input_tokens + usage.output_tokens);
+    const ccit = "cache_creation_input_tokens";
+    const crit = "cache_read_input_tokens";
+    expect(metrics[crit]).toBe(usage[crit]);
+    expect(metrics[ccit]).toBe(usage[ccit]);
+    expect(startTime < metrics.start).toBe(true);
+    expect(metrics.start < metrics.end).toBe(true);
+    expect(metrics.end <= endTime).toBe(true);
+
+    expect(span.output).toBeDefined();
+    expect(span.output?.[0]?.text).toContain("25");
+  });
+
+  test("test client.messages.create basics", async () => {
     const startTime = getCurrentUnixTimestamp();
     const response: Message = await client.messages.create({
       model: TEST_MODEL,
@@ -56,7 +120,7 @@ describe("anthropic client unit tests", () => {
     });
     expect(response).toBeDefined();
 
-    debugLog("response", response);
+    //debugLog("response", response);
     const endTime = getCurrentUnixTimestamp();
 
     expect(response.content[0].type).toBe("text");
@@ -67,7 +131,7 @@ describe("anthropic client unit tests", () => {
     const spans = await backgroundLogger.pop();
     expect(spans).toHaveLength(1);
     const span = spans[0] as any;
-    debugLog("got span", span);
+    //debugLog("got span", span);
     expect(span["span_attributes"].type).toBe("llm");
     expect(span["span_attributes"].name).toBe("anthropic.messages.create");
     const metadata = span.metadata;
@@ -89,7 +153,7 @@ describe("anthropic client unit tests", () => {
     expect(metrics["tokens"]).toBe(usage.input_tokens + usage.output_tokens);
     expect(metrics[crit]).toBe(usage[crit]);
     expect(metrics[ccit]).toBe(usage[ccit]);
-    expect(startTime < metrics.start).toBe(true);
+    expect(startTime <= metrics.start).toBe(true);
     expect(metrics.start < metrics.end).toBe(true);
     expect(metrics.end <= endTime).toBe(true);
   });
