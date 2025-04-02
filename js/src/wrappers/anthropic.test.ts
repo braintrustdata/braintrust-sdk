@@ -1,7 +1,7 @@
 import { test, expect, describe, beforeEach, afterEach } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { wrapAnthropic } from "./anthropic";
-import { TextBlock } from "@anthropic-ai/sdk/resources/messages";
+import { TextBlock, Message } from "@anthropic-ai/sdk/resources/messages";
 import { initLogger, _exportsForTestingOnly, Logger } from "../logger";
 import { configureNode } from "../node";
 import { debugLog } from "../util";
@@ -48,7 +48,7 @@ describe("anthropic client unit tests", () => {
   });
 
   test("test anthropic client", async () => {
-    const response = await client.messages.create({
+    const response: Message = await client.messages.create({
       model: TEST_MODEL,
       messages: [{ role: "user", content: "What's 4*4?" }],
       max_tokens: 100,
@@ -71,6 +71,7 @@ describe("anthropic client unit tests", () => {
     expect(span.metadata?.max_tokens).toBe(100);
     expect(span.input).toBeDefined();
     expect(span.output).toBeDefined();
-    expect(span.output).toContain("16");
+    const output = span.output[0].text;
+    expect(output).toContain("16");
   });
 });
