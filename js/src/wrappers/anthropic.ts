@@ -87,7 +87,7 @@ function createProxy(create: (params: any) => Promise<any>) {
   });
 }
 
-type MetricsOrNull = Record<string, number> | null;
+type MetricsOrUndefined = Record<string, number> | undefined;
 
 // Parse the data from the anthropic response and log it to the span.
 function handleCreateResponse(message: Message, span: Span) {
@@ -104,15 +104,29 @@ function handleCreateResponse(message: Message, span: Span) {
   span.log(event);
 }
 
-function parseMetricsFromUsage(usage: any): MetricsOrNull {
+function parseMetricsFromUsage(usage: any): MetricsOrUndefined {
   if (!usage) {
-    return null;
+    return undefined;
   }
-  return {
-    prompt_tokens: usage.prompt_tokens,
-    completion_tokens: usage.completion_tokens,
-    total_tokens: usage.total_tokens,
-  };
+
+  const metrics: Record<string, number> = {};
+
+  function saveIfExistsTo(source: string, target: string) {
+    const value = usage[source];
+    if (value !== undefined && value !== null) {
+      metrics[target] = value;
+    }
+  }
+
+  saveIfExistsTo("input_tokens", "prompt_tokens");
+  saveIfExistsTo("output_tokens", "completion_tokens");
+  saveIfExistsTo("cache_read_input_tokens", "cache_read_input_tokens");
+  saveIfExistsTo("cache_creation_input_tokens", "cache_creation_input_tokens");
+
+  metrics["tokens"] =
+    (metrics.prompt_tokens || 0) + (metrics.completion_tokens || 0);
+
+  return metrics;
 }
 
 function coalesceInput(messages: any[], system: string | undefined) {

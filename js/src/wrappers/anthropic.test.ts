@@ -1,4 +1,4 @@
-import { test, expect, describe, beforeEach, afterEach } from "vitest";
+import { test, expect, describe, beforeEach, afterEach, assert } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { wrapAnthropic } from "./anthropic";
 import { TextBlock, Message } from "@anthropic-ai/sdk/resources/messages";
@@ -59,6 +59,7 @@ describe("anthropic client unit tests", () => {
     expect(response.content[0].type).toBe("text");
     const content = response.content[0] as TextBlock;
     expect(content.text).toContain("16");
+    const usage = response.usage;
 
     // check that the background logger got the log
     const spans = await backgroundLogger.pop();
@@ -73,5 +74,16 @@ describe("anthropic client unit tests", () => {
     expect(span.output).toBeDefined();
     const output = span.output[0].text;
     expect(output).toContain("16");
+    const metrics = span.metrics;
+    expect(metrics).toBeDefined();
+    expect(metrics["prompt_tokens"]).toBe(usage.input_tokens);
+    expect(metrics["completion_tokens"]).toBe(usage.output_tokens);
+    expect(metrics["tokens"]).toBe(usage.input_tokens + usage.output_tokens);
+    expect(metrics["cache_read_input_tokens"]).toBe(
+      usage.cache_read_input_tokens,
+    );
+    expect(metrics["cache_creation_input_tokens"]).toBe(
+      usage.cache_creation_input_tokens,
+    );
   });
 });
