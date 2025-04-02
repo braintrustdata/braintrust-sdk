@@ -407,6 +407,8 @@ def test_langgraph_state_management(logs: List[LogRequest]):
                 "output": "Bye",
             },
         ],
+        # langgraph doesn't guarantee span ordering
+        ignore_order=True,
     )
 
 
