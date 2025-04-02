@@ -553,7 +553,7 @@ export class BraintrustState {
     return this._bgLogger.get();
   }
 
-  public overrideBgLogger(logger: BackgroundLogger | null) {
+  public setOverrideBgLogger(logger: BackgroundLogger | null) {
     this._overrideBgLogger = logger;
   }
 
@@ -564,6 +564,23 @@ export class BraintrustState {
 }
 
 let _globalState: BraintrustState;
+
+// Return a TestBackgroundLogger that will intercept logs before they are sent to the server.
+// Used for testing only.
+function useTestBackgroundLogger(): TestBackgroundLogger {
+  const state = _internalGetGlobalState();
+  if (!state) {
+    throw new Error("global state not set yet");
+  }
+
+  const logger = new TestBackgroundLogger();
+  state.setOverrideBgLogger(logger);
+  return logger;
+}
+
+function clearTestBackgroundLogger() {
+  _internalGetGlobalState()?.setOverrideBgLogger(null);
+}
 
 /**
  * This function should be invoked exactly once after configuring the `iso`
@@ -1809,7 +1826,7 @@ interface BackgroundLogger {
   flush(): Promise<void>;
 }
 
-class MemoryBackgroundLogger implements BackgroundLogger {
+class TestBackgroundLogger implements BackgroundLogger {
   private items: LazyValue<BackgroundLogEvent>[][] = [[]];
 
   log(items: LazyValue<BackgroundLogEvent>[]): void {
@@ -2081,7 +2098,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     const conn = await this.apiConn.get();
     const dataStr = constructLogs3Data(items);
     if (this.allPublishPayloadsDir) {
-      await BackgroundLogger.writePayloadToDir({
+      await HTTPBackgroundLogger.writePayloadToDir({
         payloadDir: this.allPublishPayloadsDir,
         payload: dataStr,
       });
@@ -2123,7 +2140,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       }.${retryingText}\nError: ${errorText}`;
 
       if (!isRetrying && this.failedPublishPayloadsDir) {
-        await BackgroundLogger.writePayloadToDir({
+        await HTTPBackgroundLogger.writePayloadToDir({
           payloadDir: this.failedPublishPayloadsDir,
           payload: dataStr,
         });
@@ -5401,6 +5418,6 @@ export interface DatasetSummary {
 export const _exportsForTestingOnly = {
   extractAttachments,
   deepCopyEvent,
-  MemoryBackgroundLogger,
-  _internalGetGlobalState,
+  useTestBackgroundLogger,
+  clearTestBackgroundLogger,
 };

@@ -1,27 +1,51 @@
-import { test, expect } from "vitest";
+import { test, expect, describe, beforeEach, afterEach } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { wrapAnthropic } from "./anthropic";
 import { TextBlock } from "@anthropic-ai/sdk/resources/messages";
+import { initLogger, _exportsForTestingOnly, Logger } from "../logger";
+import { configureNode } from "../node";
 
 // use the cheapest model for tests
 const TEST_MODEL = "claude-3-haiku-20240307";
+
+configureNode(); // set up the global state
 
 test("anthropic is installed", () => {
   expect(Anthropic).toBeDefined();
 });
 
-test("test anthropic client", async () => {
-  const client = wrapAnthropic(new Anthropic());
+describe("anthropic client unit tests", () => {
+  let client: Anthropic;
+  const logger = initLogger({ projectName: "anthropic.test.ts" });
+  // FIXME[matt] I don't know how to export a type just for testing.
+  // Probably not that important.
+  let backgroundLogger: any;
 
-  const response = await client.messages.create({
-    model: TEST_MODEL,
-    messages: [{ role: "user", content: "What's 4*4?" }],
-    max_tokens: 100,
-    system: "Return the result only.",
+  beforeEach(() => {
+    client = wrapAnthropic(new Anthropic());
+    backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
   });
 
-  expect(response).toBeDefined();
-  expect(response.content[0].type).toBe("text");
-  const content = response.content[0] as TextBlock;
-  expect(content.text).toContain("16");
+  afterEach(() => {
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+  });
+
+  test("test anthropic client", async () => {
+    const response = await client.messages.create({
+      model: TEST_MODEL,
+      messages: [{ role: "user", content: "What's 4*4?" }],
+      max_tokens: 100,
+      system: "Return the result only.",
+    });
+
+    expect(response).toBeDefined();
+    expect(response.content[0].type).toBe("text");
+    const content = response.content[0] as TextBlock;
+    expect(content.text).toContain("16");
+
+    // check that the background logger got the log
+    const logs = await backgroundLogger.pop();
+    expect(logs).toHaveLength(1);
+    expect(logs[0].message).toContain("16");
+  });
 });

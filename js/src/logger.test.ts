@@ -22,9 +22,7 @@ const { extractAttachments, deepCopyEvent } = _exportsForTestingOnly;
 test("verify MemoryBackgroundLogger intercepts logs", async () => {
   // Log to memory for the tests.
   const logger = initLogger({ projectName: "test" });
-  const state = _exportsForTestingOnly._internalGetGlobalState();
-  const memoryLogger = new _exportsForTestingOnly.MemoryBackgroundLogger();
-  state.overrideBgLogger(memoryLogger);
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
 
   // assert it's empty
   await memoryLogger.flush();
@@ -52,6 +50,8 @@ test("verify MemoryBackgroundLogger intercepts logs", async () => {
 
   // and now it's empty
   expect(await memoryLogger.pop()).length(0);
+
+  _exportsForTestingOnly.clearTestBackgroundLogger(); // can go back to normal
 });
 
 test("init validation", () => {
