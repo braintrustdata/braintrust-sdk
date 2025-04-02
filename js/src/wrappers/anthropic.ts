@@ -55,9 +55,12 @@ function createProxy(create: (params: any) => Promise<any>) {
         return Reflect.apply(target, thisArg, argArray);
       }
 
+      const span = startSpan({ name: "anthropic.create" });
+
       const promise = Reflect.apply(target, thisArg, argArray);
       if (promise instanceof Promise) {
         return promise.then((res) => {
+          span.end();
           debug("messages.create returned", res);
           return res;
         });

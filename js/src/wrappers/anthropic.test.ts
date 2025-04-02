@@ -8,7 +8,11 @@ import { configureNode } from "../node";
 // use the cheapest model for tests
 const TEST_MODEL = "claude-3-haiku-20240307";
 
-configureNode(); // set up the global state
+try {
+  configureNode();
+} catch (e) {
+  // FIXME[matt] have a better of way of initializing brainstrust state once per process.
+}
 
 test("anthropic is installed", () => {
   expect(Anthropic).toBeDefined();
@@ -16,14 +20,26 @@ test("anthropic is installed", () => {
 
 describe("anthropic client unit tests", () => {
   let client: Anthropic;
-  const logger = initLogger({ projectName: "anthropic.test.ts" });
   // FIXME[matt] I don't know how to export a type just for testing.
   // Probably not that important.
   let backgroundLogger: any;
+  let logger: Logger<false>;
 
   beforeEach(() => {
     client = wrapAnthropic(new Anthropic());
     backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+    const metadata = {
+      org_id: "test-org-id",
+      project: {
+        id: "test-id",
+        name: "test-name",
+        fullInfo: {},
+      },
+    };
+    logger = initLogger({
+      projectName: "anthropic.test.ts",
+      orgProjectMetadata: metadata,
+    });
   });
 
   afterEach(() => {

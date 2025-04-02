@@ -2206,7 +2206,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       const payload = `{"data": ${dataStr}, "attachments": ${attachmentStr}}\n`;
 
       for (const payloadDir of publishPayloadsDir) {
-        await BackgroundLogger.writePayloadToDir({ payloadDir, payload });
+        await HTTPBackgroundLogger.writePayloadToDir({ payloadDir, payload });
       }
     } catch (e) {
       console.error(e);
@@ -2832,6 +2832,7 @@ type InitLoggerOptions<IsAsyncFlush> = FullLoginOptions & {
   projectId?: string;
   setCurrent?: boolean;
   state?: BraintrustState;
+  orgProjectMetadata?: OrgProjectMetadata;
 } & AsyncFlushArg<IsAsyncFlush>;
 
 /**
@@ -2862,6 +2863,7 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
     forceLogin,
     fetch,
     state: stateArg,
+    orgProjectMetadata,
   } = options || {};
 
   const asyncFlush =
@@ -2874,6 +2876,11 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
   const state = stateArg ?? _globalState;
   const lazyMetadata: LazyValue<OrgProjectMetadata> = new LazyValue(
     async () => {
+      // This is a small hook to allow us to test the logger without logging in.
+      if (orgProjectMetadata) {
+        return orgProjectMetadata;
+      }
+      // Otherwise actually log in.
       await state.login({
         orgName,
         apiKey,
