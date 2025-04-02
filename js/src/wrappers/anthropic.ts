@@ -57,6 +57,7 @@ function createProxy(create: (params: any) => Promise<any>) {
         name: "anthropic.messages.create",
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
+          provider: "anthropic",
         },
         event: {
           input,
@@ -96,9 +97,16 @@ function handleCreateResponse(message: Message, span: Span) {
 
   const metrics = parseMetricsFromUsage(message?.usage);
 
+  const metas = ["stop_reason", "stop_sequence"];
+
+  const metadata = {
+    stop_reason: message?.stop_reason,
+    stop_sequence: message?.stop_sequence,
+  };
   const event = {
     output: output,
     metrics: metrics,
+    metadata: metadata,
   };
 
   span.log(event);

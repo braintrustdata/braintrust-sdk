@@ -21,8 +21,6 @@ test("anthropic is installed", () => {
 
 describe("anthropic client unit tests", () => {
   let client: Anthropic;
-  // FIXME[matt] I don't know how to export a type just for testing.
-  // Probably not that important.
   let backgroundLogger: any;
   let logger: Logger<false>;
 
@@ -59,7 +57,6 @@ describe("anthropic client unit tests", () => {
     expect(response.content[0].type).toBe("text");
     const content = response.content[0] as TextBlock;
     expect(content.text).toContain("16");
-    const usage = response.usage;
 
     // check that the background logger got the log
     const spans = await backgroundLogger.pop();
@@ -68,22 +65,24 @@ describe("anthropic client unit tests", () => {
     debugLog("got span", span);
     expect(span["span_attributes"].type).toBe("llm");
     expect(span["span_attributes"].name).toBe("anthropic.messages.create");
-    expect(span.metadata?.model).toBe(TEST_MODEL);
-    expect(span.metadata?.max_tokens).toBe(100);
-    expect(span.input).toBeDefined();
-    expect(span.output).toBeDefined();
+
+    const metadata = span.metadata;
+    expect(metadata?.model).toBe(TEST_MODEL);
+    expect(metadata?.max_tokens).toBe(100);
+    expect(metadata["stop_reason"]).toBe("end_turn");
+    expect(span?.input).toBeDefined();
+    expect(span?.output).toBeDefined();
     const output = span.output[0].text;
     expect(output).toContain("16");
     const metrics = span.metrics;
+    const usage = response.usage;
+    const ccit = "cache_creation_input_tokens";
+    const crit = "cache_read_input_tokens";
     expect(metrics).toBeDefined();
     expect(metrics["prompt_tokens"]).toBe(usage.input_tokens);
     expect(metrics["completion_tokens"]).toBe(usage.output_tokens);
     expect(metrics["tokens"]).toBe(usage.input_tokens + usage.output_tokens);
-    expect(metrics["cache_read_input_tokens"]).toBe(
-      usage.cache_read_input_tokens,
-    );
-    expect(metrics["cache_creation_input_tokens"]).toBe(
-      usage.cache_creation_input_tokens,
-    );
+    expect(metrics[crit]).toBe(usage[crit]);
+    expect(metrics[ccit]).toBe(usage[ccit]);
   });
 });
