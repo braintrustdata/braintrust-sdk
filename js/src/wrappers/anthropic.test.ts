@@ -4,6 +4,7 @@ import { wrapAnthropic } from "./anthropic";
 import { TextBlock } from "@anthropic-ai/sdk/resources/messages";
 import { initLogger, _exportsForTestingOnly, Logger } from "../logger";
 import { configureNode } from "../node";
+import { debugLog } from "../util";
 
 // use the cheapest model for tests
 const TEST_MODEL = "claude-3-haiku-20240307";
@@ -60,8 +61,16 @@ describe("anthropic client unit tests", () => {
     expect(content.text).toContain("16");
 
     // check that the background logger got the log
-    const logs = await backgroundLogger.pop();
-    expect(logs).toHaveLength(1);
-    expect(logs[0].message).toContain("16");
+    const spans = await backgroundLogger.pop();
+    expect(spans).toHaveLength(1);
+    const span = spans[0] as any;
+    debugLog("got span", span);
+    expect(span["span_attributes"].type).toBe("llm");
+    expect(span["span_attributes"].name).toBe("anthropic.messages.create");
+    expect(span.metadata?.model).toBe(TEST_MODEL);
+    expect(span.metadata?.max_tokens).toBe(100);
+    expect(span.input).toBeDefined();
+    expect(span.output).toBeDefined();
+    expect(span.output).toContain("16");
   });
 });

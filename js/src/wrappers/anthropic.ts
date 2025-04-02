@@ -1,5 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { startSpan } from "..";
+import { SpanTypeAttribute } from "@braintrust/core";
+import { debugLog } from "../util";
 
 const METADATA_PARAMS = [
   "model",
@@ -12,16 +14,8 @@ const METADATA_PARAMS = [
   "tools",
 ];
 
-const DEBUG = process.env.BRAINTRUST_DEBUG === "true";
-
-function debug(...args: any[]) {
-  if (DEBUG) {
-    console.log(...args);
-  }
-}
-
 export function wrapAnthropic(anthropic: Anthropic): Anthropic {
-  debug(`wrapping anthropic ${anthropic}`);
+  debugLog(`wrapping anthropic ${anthropic}`);
   return anthropicProxy(anthropic);
 }
 
@@ -55,17 +49,52 @@ function createProxy(create: (params: any) => Promise<any>) {
         return Reflect.apply(target, thisArg, argArray);
       }
 
-      const span = startSpan({ name: "anthropic.create" });
+      const args = { ...argArray[0] };
+
+      // Now actually trace messages.create.
+      const spanArgs = {
+        name: "anthropic.messages.create",
+        spanAttributes: {
+          type: SpanTypeAttribute.LLM,
+        },
+        event: {
+          input: coalesceInput(args["messages"], args["system"]),
+          metadata: filterFrom(args, ["messages", "system"]),
+        },
+      };
+
+      const span = startSpan(spanArgs);
 
       const promise = Reflect.apply(target, thisArg, argArray);
       if (promise instanceof Promise) {
         return promise.then((res) => {
+          span.log({ output: res.content });
+          debugLog("messages.create returned", res);
           span.end();
-          debug("messages.create returned", res);
           return res;
         });
       }
       return promise;
     },
   });
+}
+
+function coalesceInput(messages: any[], system: string | undefined) {
+  // convert anthropic args to the single "input" field Braintrust expects.
+  var input = (messages || []).slice();
+  if (system) {
+    input.push({ role: "system", content: system });
+  }
+  return input;
+}
+
+// Remove a copy of rec with the given keys removed.
+function filterFrom(record: Record<string, any>, keys: string[]) {
+  const out: Record<string, any> = {};
+  for (const k of Object.keys(record)) {
+    if (!keys.includes(k)) {
+      out[k] = record[k];
+    }
+  }
+  return out;
 }

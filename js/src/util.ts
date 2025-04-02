@@ -1,3 +1,5 @@
+import iso from "./isomorph";
+
 export const GLOBAL_PROJECT = "Global";
 
 // Given a function to execute, a catch handler, and a finally handler, runs the function and
@@ -127,5 +129,19 @@ export class InternalAbortError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "InternalAbortError";
+  }
+}
+
+export function isDebugEnanbled(): boolean {
+  const debug = iso.getEnv("BRAINTRUST_DEBUG") || "false";
+  return debug.toLowerCase() === "true";
+}
+
+/**
+ * Log if BRAINTRUST_DEBUG is true.
+ */
+export function debugLog(...args: any[]) {
+  if (isDebugEnanbled()) {
+    console.log(...args);
   }
 }
