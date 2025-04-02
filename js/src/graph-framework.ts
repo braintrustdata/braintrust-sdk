@@ -9,25 +9,14 @@ import { newId, Prompt } from "./logger";
 // Base interface for all node types
 export interface INode {
   readonly id: string;
+  then(...args: Array<NodeLike | TransformFn>): Node;
+  call(input: CallArgs): Node;
 }
-
-type AnyNodeImpl =
-  | InputNode
-  | OutputNode
-  | PromptNode
-  | FunctionNode<unknown, unknown>
-  | GateNode
-  | ConditionalGateNode
-  | LiteralNode<unknown>;
 
 type CallArgs = ProxyVariable | Node | Record<string, ProxyVariable | Node>;
 
-interface CallableNode extends BaseNode {
-  (input: CallArgs): Node;
-}
-
 // Type to represent node types in our graph
-export type Node = AnyNodeImpl & CallableNode;
+export type Node = INode;
 
 export type NodeLike = Node | Prompt<boolean, boolean> | ProxyVariable;
 
@@ -44,8 +33,8 @@ export class GraphBuilder {
   private nodeRegistry = new Map<string, Node>(); // XXX Remove?
 
   // Special nodes
-  public readonly IN: InputNode & CallableNode;
-  public readonly OUT: OutputNode & CallableNode;
+  public readonly IN: InputNode;
+  public readonly OUT: OutputNode;
 
   constructor() {
     // Create input and output nodes
@@ -82,7 +71,7 @@ export class GraphBuilder {
 
   public call(node: NodeLike, input: ProxyVariable): Node {
     const resolved = this.resolveNode(node);
-    return resolved.__call(input);
+    return resolved.call(input);
   }
 
   // Helper to generate node IDs
@@ -105,7 +94,7 @@ export class GraphBuilder {
   }
 
   // Create an input node
-  private createInputNode(): InputNode & CallableNode {
+  private createInputNode(): InputNode {
     const id = this.generateId();
     const node: GraphNode = {
       type: "input",
@@ -114,13 +103,13 @@ export class GraphBuilder {
     };
 
     this.nodes[id] = node;
-    const inputNode = makeNodeCallable(new InputNode(this, id));
+    const inputNode = new InputNode(this, id);
     this.nodeRegistry.set(id, inputNode);
     return inputNode;
   }
 
   // Create an output node
-  private createOutputNode(): OutputNode & CallableNode {
+  private createOutputNode(): OutputNode {
     const id = this.generateId();
     const node: GraphNode = {
       type: "output",
@@ -129,20 +118,20 @@ export class GraphBuilder {
     };
 
     this.nodes[id] = node;
-    const outputNode = makeNodeCallable(new OutputNode(this, id));
+    const outputNode = new OutputNode(this, id);
     this.nodeRegistry.set(id, outputNode);
     return outputNode;
   }
 
   // Create a prompt node from a CodePrompt
-  public createPromptNode(prompt: Prompt): PromptNode & CallableNode {
+  public createPromptNode(prompt: Prompt): PromptNode {
     const id = newId();
 
     this.nodes[id] = {
       type: "lazy",
       id,
     };
-    const promptNode = makeNodeCallable(new PromptNode(this, id, prompt));
+    const promptNode = new PromptNode(this, id, prompt);
     this.nodeRegistry.set(id, promptNode);
     return promptNode;
   }
@@ -162,9 +151,7 @@ export class GraphBuilder {
     };
 
     this.nodes[id] = node;
-    const functionNode = makeNodeCallable(
-      new FunctionNode<T, R>(this, id, func),
-    );
+    const functionNode = new FunctionNode<T, R>(this, id, func);
     this.nodeRegistry.set(id, functionNode);
     return functionNode;
   }
@@ -180,13 +167,13 @@ export class GraphBuilder {
     };
 
     this.nodes[id] = node;
-    const gateNode = makeNodeCallable(new GateNode(this, id));
+    const gateNode = new GateNode(this, id);
     this.nodeRegistry.set(id, gateNode);
     return gateNode;
   }
 
   // Create a literal node
-  public literal<T>(value: T): LiteralNode<T> & CallableNode {
+  public literal<T>(value: T): LiteralNode<T> {
     const id = this.generateId();
     const node: GraphNode = {
       type: "literal",
@@ -196,7 +183,7 @@ export class GraphBuilder {
     };
 
     this.nodes[id] = node;
-    const literalNode = makeNodeCallable(new LiteralNode<T>(this, id, value));
+    const literalNode = new LiteralNode<T>(this, id, value);
     this.nodeRegistry.set(id, literalNode);
     return literalNode;
   }
@@ -205,7 +192,7 @@ export class GraphBuilder {
     condition: NodeLike;
     true: NodeLike;
     false: NodeLike;
-  }): GateNode & CallableNode {
+  }): GateNode {
     const id = this.generateId();
     const node: GraphNode = {
       type: "gate",
@@ -213,15 +200,15 @@ export class GraphBuilder {
       position: null,
     };
     this.nodes[id] = node;
-    const gateNode = makeNodeCallable(new GateNode(this, id));
+    const gateNode = new GateNode(this, id);
     this.nodeRegistry.set(id, gateNode);
     return gateNode;
   }
 
   // Connect two nodes with an edge
   public connect(
-    source: BaseNode,
-    target: BaseNode,
+    source: Node,
+    target: Node,
     sourceVar = "value",
     targetVar = "value",
   ): void {
@@ -315,7 +302,7 @@ abstract class BaseNode implements INode {
   // Connect this node to another node
   public then(...args: Array<NodeLike | TransformFn>): Node {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    const callableThis: Node = this as unknown as Node;
+    const callableThis = this as unknown as Node;
     let lastNode: Node = callableThis;
 
     // Connect each arg to this node
@@ -336,7 +323,7 @@ abstract class BaseNode implements INode {
     return lastNode;
   }
 
-  public __call(input: CallArgs): Node {
+  public call(input: CallArgs): Node {
     if (typeof input === "object" && input !== null && "__type" in input) {
       throw new Error("Not implemented");
     } else {
@@ -345,19 +332,6 @@ abstract class BaseNode implements INode {
       return literalNode;
     }
   }
-}
-
-function makeNodeCallable<T extends BaseNode>(node: T): T & CallableNode {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return new Proxy(node, {
-    apply(target, thisArg, args) {
-      console.log("apply", target, thisArg, args);
-      return node.__call(args[0]);
-    },
-    get(target, prop, receiver) {
-      return Reflect.get(target, prop, receiver);
-    },
-  }) as T & CallableNode;
 }
 
 // Input node (entry point to the graph)
