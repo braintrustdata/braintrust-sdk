@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { vi, expect, test } from "vitest";
 import {
   _exportsForTestingOnly,
   init,
@@ -11,6 +11,7 @@ import {
   NOOP_SPAN,
   Prompt,
   permalink,
+  BraintrustState,
 } from "./logger";
 import { BackgroundLogEvent } from "@braintrust/core";
 import { configureNode } from "./node";
@@ -322,4 +323,26 @@ test("prompt.build with structured output templating", () => {
       },
     },
   });
+});
+
+test("disable logging", async () => {
+  const state = new BraintrustState({});
+  const logger = initLogger({ state });
+  const submitLogsRequestSpy = vi.spyOn(
+    state._bgLogger.get(),
+    "submitLogsRequest",
+  );
+
+  logger.log({ input: "bar", output: "foo" });
+  await logger.flush();
+  // start and end spans
+  expect(submitLogsRequestSpy).toHaveBeenCalledTimes(2);
+
+  state.disable();
+
+  for (let i = 0; i < 10; i++) {
+    logger.log({ input: "bar" + i, output: "foo" + i });
+  }
+  await logger.flush();
+  expect(submitLogsRequestSpy).toHaveBeenCalledTimes(2);
 });
