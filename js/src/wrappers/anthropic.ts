@@ -8,16 +8,6 @@ import {
   Usage,
   RawMessageStreamEvent,
 } from "@anthropic-ai/sdk/resources/messages";
-const METADATA_PARAMS = [
-  "model",
-  "max_tokens",
-  "temperature",
-  "top_k",
-  "top_p",
-  "stop_sequences",
-  "tool_choice",
-  "tools",
-];
 
 export function wrapAnthropic(anthropic: Anthropic): Anthropic {
   return anthropicProxy(anthropic);
