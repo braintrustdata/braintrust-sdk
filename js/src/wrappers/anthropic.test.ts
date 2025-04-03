@@ -43,6 +43,8 @@ describe("anthropic client unit tests", () => {
 
   afterEach(() => {
     _exportsForTestingOnly.clearTestBackgroundLogger();
+    backgroundLogger = null;
+    logger = null;
   });
 
   test("test client.messages.create with system text blocks", async (context) => {
@@ -57,6 +59,16 @@ describe("anthropic client unit tests", () => {
       },
     ],
     */
+    context.skip();
+  });
+
+  test("test client.messages.stream", async (context) => {
+    // TODO[matt]
+    context.skip();
+  });
+
+  test("test with tools", async (context) => {
+    // TODO[matt]
     context.skip();
   });
 
