@@ -45,6 +45,7 @@ export const graphNodeSchema = z.union([
   }),
   baseNodeDataSchema.extend({
     type: z.literal("gate"),
+    condition: z.string().describe("An expression to compute the condition"),
   }),
 ]);
 export type GraphNode = z.infer<typeof graphNodeSchema>;
@@ -60,6 +61,10 @@ export const graphEdgeDataSchema = z.object({
 export const graphEdgeSchema = z.object({
   source: graphEdgeDataSchema,
   target: graphEdgeDataSchema,
+  expr: z
+    .string()
+    .describe("An expression to be evaluated on the source")
+    .optional(),
 });
 
 export type GraphEdge = z.infer<typeof graphEdgeSchema>;

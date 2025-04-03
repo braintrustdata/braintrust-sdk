@@ -15,7 +15,7 @@ export interface Node {
   readonly id: string;
   __type: "node";
   then(...args: Array<NodeLike | TransformFn>): Node;
-  call(input: CallArgs): Node;
+  call(input: CallArgs, path?: string[]): Node;
   build(context: BuildContext): Promise<GraphNode>;
 }
 
@@ -30,10 +30,10 @@ export type LazyGraphNode = {
 
 // Graph builder class to convert functional chains to GraphData
 export class GraphBuilder {
-  private nodes: Record<string, GraphNode | LazyGraphNode> = {};
+  private nodes = new Map<string, Node>();
   private edges: Record<string, GraphEdge> = {};
+
   private nodeLikeNodes = new Map<unknown, Node>(); // Maps node-like objects, like prompts, to their nodes
-  private nodeRegistry = new Map<string, Node>(); // XXX Remove?
 
   // Special nodes
   public readonly IN: InputNode;
@@ -48,57 +48,63 @@ export class GraphBuilder {
   // Create the final GraphData object
   public async build(context: BuildContext): Promise<GraphData> {
     const nodes = await Promise.all(
-      Object.entries(this.nodes).map(async ([id, node]) => {
-        if (node.type === "lazy") {
-          // We should have a .build() on each of these? For prompts, we can just
-          // use .build() and use the project id + slug as a reference.
-          const built = await this.nodeRegistry.get(node.id)!.build(context);
-          return [id, built];
-        } else {
-          return [id, node];
-        }
-      }),
+      Array.from(this.nodes.values()).map(async (node) => [
+        node.id,
+        await node.build(context),
+      ]),
     );
+    console.log("nodes", nodes);
 
     return {
       type: "graph",
       nodes: Object.fromEntries(nodes), // XXX Need to resolve the lazy nodes
-      edges: {}, // this.edges,
+      edges: this.edges,
     };
   }
 
-  public resolveNode(node: NodeLike): Node {
+  public resolveNode(node: NodeLike): [Node, string[]] {
     if (node instanceof Prompt) {
       const cached = this.nodeLikeNodes.get(node);
       if (cached) {
-        return cached;
+        return [cached, []];
       }
       const promptNode = this.createPromptNode(node);
       this.nodeLikeNodes.set(node, promptNode);
-      return promptNode;
+      return [promptNode, []];
     } else if (isProxyVariable(node)) {
-      // XXX Need to propagate the path, somehow
       return proxyVariableToNode(node);
     } else {
-      return node;
+      return [node, []];
     }
   }
 
-  public call(node: NodeLike, input: ProxyVariable): Node {
-    const resolved = this.resolveNode(node);
-    return resolved.call(input);
+  // Create a literal node
+  public literal<T>(value: T): LiteralNode<T> {
+    const id = this.generateId();
+    const literalNode = new LiteralNode<T>(this, id, value);
+    this.nodes.set(id, literalNode);
+    return literalNode;
+  }
+
+  public gate(options: {
+    condition: NodeLike;
+    true: NodeLike;
+    false: NodeLike;
+  }): GateNode {
+    const id = this.generateId();
+    const gateNode = new GateNode(this, id, "");
+    this.nodes.set(id, gateNode);
+    return gateNode;
+  }
+
+  public call(node: NodeLike, input: CallArgs): Node {
+    const [resolvedNode, path] = this.resolveNode(node);
+    return resolvedNode.call(input, path);
   }
 
   // Helper to generate node IDs
   private generateId(): string {
     return newId();
-  }
-
-  // Add a node to the graph
-  private addNode(node: GraphNode): string {
-    const id = this.generateId();
-    this.nodes[id] = node;
-    return id;
   }
 
   // Add an edge to the graph
@@ -111,102 +117,42 @@ export class GraphBuilder {
   // Create an input node
   private createInputNode(): InputNode {
     const id = this.generateId();
-    const node: GraphNode = {
-      type: "input",
-      description: "Input to the graph",
-      position: null,
-    };
-
-    this.nodes[id] = node;
     const inputNode = new InputNode(this, id);
-    this.nodeRegistry.set(id, inputNode);
+    this.nodes.set(id, inputNode);
     return inputNode;
   }
 
   // Create an output node
   private createOutputNode(): OutputNode {
     const id = this.generateId();
-    const node: GraphNode = {
-      type: "output",
-      description: "Output of the graph",
-      position: null,
-    };
-
-    this.nodes[id] = node;
     const outputNode = new OutputNode(this, id);
-    this.nodeRegistry.set(id, outputNode);
+    this.nodes.set(id, outputNode);
     return outputNode;
   }
 
   // Create a prompt node from a CodePrompt
-  public createPromptNode(prompt: Prompt): PromptNode {
-    const id = newId();
+  private createPromptNode(prompt: Prompt): PromptNode {
+    const id = this.generateId();
 
-    this.nodes[id] = {
-      type: "lazy",
-      id,
-    };
     const promptNode = new PromptNode(this, id, prompt);
-    this.nodeRegistry.set(id, promptNode);
+    this.nodes.set(id, promptNode);
     return promptNode;
   }
 
-  // XXX Dead code?
-  // Create a gate node for conditional branching
-  public createGateNode(): GateNode {
-    const id = this.generateId();
-    const node: GraphNode = {
-      type: "gate",
-      description: "Conditional gate",
-      position: null,
-    };
-
-    this.nodes[id] = node;
-    const gateNode = new GateNode(this, id);
-    this.nodeRegistry.set(id, gateNode);
-    return gateNode;
-  }
-
-  // Create a literal node
-  public literal<T>(value: T): LiteralNode<T> {
-    console.log("literal", value);
-    const id = this.generateId();
-    const node: GraphNode = {
-      type: "literal",
-      value,
-      position: null,
-    };
-
-    this.nodes[id] = node;
-    const literalNode = new LiteralNode<T>(this, id, value);
-    this.nodeRegistry.set(id, literalNode);
-    return literalNode;
-  }
-
-  public gate(options: {
-    condition: NodeLike;
-    true: NodeLike;
-    false: NodeLike;
-  }): GateNode {
-    const id = this.generateId();
-    const node: GraphNode = {
-      type: "gate",
-      description: "Conditional gate",
-      position: null,
-    };
-    this.nodes[id] = node;
-    const gateNode = new GateNode(this, id);
-    this.nodeRegistry.set(id, gateNode);
-    return gateNode;
-  }
-
   // Connect two nodes with an edge
-  public connect(
-    source: Node,
-    target: Node,
+  public connect({
+    source,
     sourceVar = "value",
+    target,
     targetVar = "value",
-  ): void {
+    path,
+  }: {
+    source: Node;
+    sourceVar?: string;
+    target: Node;
+    targetVar?: string;
+    path?: string[];
+  }): void {
     const edge: GraphEdge = {
       source: {
         node: source.id,
@@ -216,20 +162,10 @@ export class GraphBuilder {
         node: target.id,
         variable: targetVar,
       },
+      expr: path ? escapePath(path) : undefined,
     };
 
     this.addEdge(edge);
-  }
-
-  // Get a node by ID
-  public getNode(id: string): Node | undefined {
-    return this.nodeRegistry.get(id);
-  }
-
-  // Register an external node
-  public registerNode(nodeId: string, node: Node, nodeObject: GraphNode): void {
-    this.nodes[nodeId] = nodeObject;
-    this.nodeRegistry.set(nodeId, node);
   }
 }
 
@@ -247,9 +183,9 @@ function isProxyVariable(node: unknown): node is ProxyVariable {
   );
 }
 
-function proxyVariableToNode(proxy: ProxyVariable): Node {
+function proxyVariableToNode(proxy: ProxyVariable): [Node, string[]] {
   // @ts-ignore
-  return proxy.__node;
+  return [proxy.__node, proxy.__path];
 }
 
 // Create a proxy handler that captures property access paths
@@ -268,6 +204,8 @@ function createVariableProxy({
           return "proxy-variable";
         } else if (prop === "__node") {
           return node;
+        } else if (prop === "__path") {
+          return path;
         }
 
         const newPath = [...path, prop];
@@ -309,30 +247,41 @@ abstract class BaseNode implements Node {
         const argsProxy = createVariableProxy({ path: [], node: callableThis });
         const result = arg(argsProxy);
         lastNode = result;
-        this.graph.connect(callableThis, result);
+        this.graph.connect({ source: callableThis, target: result });
       } else {
-        const node = this.graph.resolveNode(arg);
+        const [node, path] = this.graph.resolveNode(arg);
         lastNode = node;
-        this.graph.connect(callableThis, node);
+        this.graph.connect({
+          source: callableThis,
+          target: node,
+          path,
+        });
       }
     }
 
     return lastNode;
   }
 
-  public call(input: CallArgs): Node {
+  public call(input: CallArgs, path?: string[]): Node {
     if (isProxyVariable(input)) {
-      throw new Error("Not implemented");
+      const [sourceNode, sourcePath] = proxyVariableToNode(input);
+      this.graph.connect({
+        source: sourceNode,
+        target: this,
+        path: sourcePath,
+      });
     } else if (isNode(input)) {
-      this.graph.connect(input, this);
+      this.graph.connect({ source: input, target: this, path });
     } else {
-      for (const [targetVar, targetNode] of Object.entries(input)) {
-        this.graph.connect(
-          this.graph.resolveNode(targetNode),
-          this,
-          "value",
+      for (const [targetVar, source] of Object.entries(input)) {
+        const [sourceNode, sourcePath] = this.graph.resolveNode(source);
+        this.graph.connect({
+          source: sourceNode,
+          sourceVar: "value",
+          target: this,
           targetVar,
-        );
+          path: sourcePath,
+        });
       }
     }
     return this;
@@ -361,7 +310,6 @@ export class InputNode extends BaseNode implements Node {
     return {
       type: "input",
       description: "Input to the graph",
-      position: null,
     };
   }
 }
@@ -376,7 +324,6 @@ export class OutputNode extends BaseNode implements Node {
     return {
       type: "output",
       description: "Output of the graph",
-      position: null,
     };
   }
 }
@@ -395,14 +342,17 @@ export class PromptNode extends BaseNode implements Node {
     return {
       type: "function",
       function: await context.getFunctionId(this.prompt),
-      position: null,
     };
   }
 }
 
 // Gate node for conditional branching
 export class GateNode extends BaseNode implements Node {
-  constructor(graph: GraphBuilder, id: string) {
+  constructor(
+    graph: GraphBuilder,
+    id: string,
+    private condition: string,
+  ) {
     super(graph, id);
   }
 
@@ -410,7 +360,7 @@ export class GateNode extends BaseNode implements Node {
     return {
       type: "gate",
       description: "Conditional gate",
-      position: null,
+      condition: this.condition,
     };
   }
 }
@@ -437,6 +387,34 @@ export class LiteralNode<T> extends BaseNode implements Node {
 export function createGraph(): GraphBuilder {
   const graphBuilder = new GraphBuilder();
   return graphBuilder;
+}
+
+// XXX write tests
+export function escapePath(parts: string[]): string {
+  return parts
+    .map((part) => {
+      if (/[^\w-]/.test(part)) {
+        // Escape special characters properly
+        const escaped = part.replace(/["\\]/g, "\\$&");
+        return `"${escaped}"`;
+      }
+      return part;
+    })
+    .join(".");
+}
+
+export function unescapePath(path: string): string[] {
+  const regex = /"((?:\\["\\]|[^"\\])*)"|([^\.]+)/g;
+  const matches = path.match(regex);
+  return matches
+    ? matches.map((match) => {
+        if (match.startsWith('"')) {
+          // Remove surrounding quotes and unescape special characters
+          return match.slice(1, -1).replace(/\\(["\\])/g, "$1");
+        }
+        return match;
+      })
+    : [];
 }
 
 // Export the graph constructor
