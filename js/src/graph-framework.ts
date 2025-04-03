@@ -3,20 +3,23 @@ import type {
   GraphNode,
   GraphEdge,
 } from "@braintrust/core/typespecs/graph";
-import { CodeFunction } from "./framework2";
 import { newId, Prompt } from "./logger";
+import { FunctionId } from "@braintrust/core/typespecs";
+
+export interface BuildContext {
+  getFunctionId(functionObj: unknown): Promise<FunctionId>;
+}
 
 // Base interface for all node types
-export interface INode {
+export interface Node {
   readonly id: string;
+  __type: "node";
   then(...args: Array<NodeLike | TransformFn>): Node;
   call(input: CallArgs): Node;
+  build(context: BuildContext): Promise<GraphNode>;
 }
 
 type CallArgs = ProxyVariable | Node | Record<string, ProxyVariable | Node>;
-
-// Type to represent node types in our graph
-export type Node = INode;
 
 export type NodeLike = Node | Prompt<boolean, boolean> | ProxyVariable;
 
@@ -43,21 +46,24 @@ export class GraphBuilder {
   }
 
   // Create the final GraphData object
-  public build(): GraphData {
-    const nodes = Object.values(this.nodes).map((node) => {
-      if (node.type === "lazy") {
-        // We should have a .build() on each of these? For prompts, we can just
-        // use .build() and use the project id + slug as a reference.
-        return this.nodes[node.id];
-      }
-      return node;
-    });
+  public async build(context: BuildContext): Promise<GraphData> {
+    const nodes = await Promise.all(
+      Object.entries(this.nodes).map(async ([id, node]) => {
+        if (node.type === "lazy") {
+          // We should have a .build() on each of these? For prompts, we can just
+          // use .build() and use the project id + slug as a reference.
+          const built = await this.nodeRegistry.get(node.id)!.build(context);
+          return [id, built];
+        } else {
+          return [id, node];
+        }
+      }),
+    );
 
     return {
       type: "graph",
-      // @ts-ignore
-      nodes, // XXX Need to resolve the lazy nodes
-      edges: this.edges,
+      nodes: Object.fromEntries(nodes), // XXX Need to resolve the lazy nodes
+      edges: {}, // this.edges,
     };
   }
 
@@ -145,26 +151,6 @@ export class GraphBuilder {
     return promptNode;
   }
 
-  // Create a function node from a CodeFunction
-  public createFunctionNode<T, R>(
-    func: CodeFunction<T, R, (input: T) => Promise<R>>,
-  ): FunctionNode<T, R> {
-    const id = this.generateId();
-    // Simplified approach to avoid type issues
-    const node: GraphNode = {
-      type: "function",
-      // @ts-ignore: simplified implementation for prototype
-      function: { project_name: func.project.name || "", slug: func.slug },
-      description: func.description ?? func.name,
-      position: null,
-    };
-
-    this.nodes[id] = node;
-    const functionNode = new FunctionNode<T, R>(this, id, func);
-    this.nodeRegistry.set(id, functionNode);
-    return functionNode;
-  }
-
   // XXX Dead code?
   // Create a gate node for conditional branching
   public createGateNode(): GateNode {
@@ -183,11 +169,11 @@ export class GraphBuilder {
 
   // Create a literal node
   public literal<T>(value: T): LiteralNode<T> {
+    console.log("literal", value);
     const id = this.generateId();
     const node: GraphNode = {
       type: "literal",
       value,
-      description: "Literal value",
       position: null,
     };
 
@@ -251,7 +237,7 @@ export type ProxyVariable = {
   [key: string]: ProxyVariable;
 };
 
-function isProxyVariable(node: NodeLike): node is ProxyVariable {
+function isProxyVariable(node: unknown): node is ProxyVariable {
   return (
     typeof node === "object" &&
     node !== null &&
@@ -302,7 +288,9 @@ function createVariableProxy({
 export type TransformFn = (input: ProxyVariable) => Node;
 
 // Base Node class for common functionality
-abstract class BaseNode implements INode {
+abstract class BaseNode implements Node {
+  public readonly __type = "node";
+
   constructor(
     protected graph: GraphBuilder,
     public readonly id: string,
@@ -333,32 +321,68 @@ abstract class BaseNode implements INode {
   }
 
   public call(input: CallArgs): Node {
-    if (typeof input === "object" && input !== null && "__type" in input) {
+    if (isProxyVariable(input)) {
       throw new Error("Not implemented");
+    } else if (isNode(input)) {
+      this.graph.connect(input, this);
     } else {
-      const literalNode = this.graph.literal(input);
-      this.graph.connect(this, literalNode);
-      return literalNode;
+      for (const [targetVar, targetNode] of Object.entries(input)) {
+        this.graph.connect(
+          this.graph.resolveNode(targetNode),
+          this,
+          "value",
+          targetVar,
+        );
+      }
     }
+    return this;
   }
+
+  abstract build(context: BuildContext): Promise<GraphNode>;
+}
+
+function isNode(node: unknown): node is Node {
+  return (
+    typeof node === "object" &&
+    node !== null &&
+    "__type" in node &&
+    // @ts-ignore
+    node.__type === "node"
+  );
 }
 
 // Input node (entry point to the graph)
-export class InputNode extends BaseNode {
+export class InputNode extends BaseNode implements Node {
   constructor(graph: GraphBuilder, id: string) {
     super(graph, id);
+  }
+
+  public async build(context: BuildContext): Promise<GraphNode> {
+    return {
+      type: "input",
+      description: "Input to the graph",
+      position: null,
+    };
   }
 }
 
 // Output node (exit point from the graph)
-export class OutputNode extends BaseNode {
+export class OutputNode extends BaseNode implements Node {
   constructor(graph: GraphBuilder, id: string) {
     super(graph, id);
+  }
+
+  public async build(context: BuildContext): Promise<GraphNode> {
+    return {
+      type: "output",
+      description: "Output of the graph",
+      position: null,
+    };
   }
 }
 
 // Prompt node (wrapper for CodePrompt)
-export class PromptNode extends BaseNode {
+export class PromptNode extends BaseNode implements Node {
   constructor(
     graph: GraphBuilder,
     id: string,
@@ -366,63 +390,46 @@ export class PromptNode extends BaseNode {
   ) {
     super(graph, id);
   }
-}
 
-// Function node (wrapper for CodeFunction)
-export class FunctionNode<T, R> extends BaseNode {
-  constructor(
-    graph: GraphBuilder,
-    id: string,
-    private func: CodeFunction<T, R, (input: T) => Promise<R>>,
-  ) {
-    super(graph, id);
+  public async build(context: BuildContext): Promise<GraphNode> {
+    return {
+      type: "function",
+      function: await context.getFunctionId(this.prompt),
+      position: null,
+    };
   }
 }
 
 // Gate node for conditional branching
-export class GateNode extends BaseNode {
+export class GateNode extends BaseNode implements Node {
   constructor(graph: GraphBuilder, id: string) {
     super(graph, id);
   }
 
-  // Create a gate with condition and branches
-  public static create(
-    graph: GraphBuilder,
-    options: {
-      condition: string | boolean | ((input: unknown) => boolean);
-      true: Node;
-      false: Node;
-    },
-  ): ConditionalGateNode {
-    // Create the ConditionalGateNode directly
-    const gateNode = graph.createGateNode();
-    return new ConditionalGateNode(graph, gateNode.id, options);
-  }
-}
-
-// Conditional gate node for more complex branching
-export class ConditionalGateNode extends BaseNode {
-  constructor(
-    graph: GraphBuilder,
-    id: string,
-    private options: {
-      condition: string | boolean | ((input: unknown) => boolean);
-      true: Node;
-      false: Node;
-    },
-  ) {
-    super(graph, id);
+  public async build(context: BuildContext): Promise<GraphNode> {
+    return {
+      type: "gate",
+      description: "Conditional gate",
+      position: null,
+    };
   }
 }
 
 // Literal node for constant values
-export class LiteralNode<T> extends BaseNode {
+export class LiteralNode<T> extends BaseNode implements Node {
   constructor(
     graph: GraphBuilder,
     id: string,
     private value: T,
   ) {
     super(graph, id);
+  }
+
+  public async build(context: BuildContext): Promise<GraphNode> {
+    return {
+      type: "literal",
+      value: this.value,
+    };
   }
 }
 
