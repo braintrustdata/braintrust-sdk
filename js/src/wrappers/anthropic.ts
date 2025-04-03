@@ -2,12 +2,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import Stream from "@anthropic-ai/sdk";
 import { Span, startSpan } from "..";
 import { SpanTypeAttribute } from "@braintrust/core";
-import { getCurrentUnixTimestamp } from "../util";
+import { debugLog, getCurrentUnixTimestamp } from "../util";
 import {
   Message,
   Usage,
   RawMessageStreamEvent,
 } from "@anthropic-ai/sdk/resources/messages";
+import { MessageStream } from "@anthropic-ai/sdk/resources/messages/messages";
 
 export function wrapAnthropic(anthropic: Anthropic): Anthropic {
   return anthropicProxy(anthropic);
@@ -61,25 +62,45 @@ function createProxy(create: (params: any) => Promise<any>) {
 
       const span = startSpan(spanArgs);
 
-      const promise = Reflect.apply(target, thisArg, argArray);
-      if (promise instanceof Promise) {
-        return promise.then((msgOrStream) => {
-          // handle the sync interface
-          if (!args["stream"]) {
-            const event = parseEventFromMessage(msgOrStream);
-            span.log(event);
-            span.end();
-            return msgOrStream;
+      // Actually do the call.
+      const apiPromise = Reflect.apply(target, thisArg, argArray);
+
+      // this will be called when our promise is resolved.
+      const onThen = function (msgOrStream: any) {
+        // handle the sync interface
+        if (!args["stream"]) {
+          const event = parseEventFromMessage(msgOrStream);
+          span.log(event);
+          span.end();
+          console.log("cc");
+          return msgOrStream;
+        }
+
+        // ... or the async interface.
+        return new WrapperStream(span, getCurrentUnixTimestamp(), msgOrStream);
+      };
+
+      // We need to proxy the promise itself because it can be an APIPromise, which
+      // has other methods that can be called, like `withResponse`.
+      return new Proxy(apiPromise, {
+        get(target, prop, receiver) {
+          if (prop === "then") {
+            const then = Reflect.get(target, prop, receiver);
+            return function (onFulfilled: any, onRejected: any) {
+              return then.call(
+                target,
+                async (result: any) => {
+                  // Your existing onThen logic here
+                  const processed = onThen(result);
+                  return onFulfilled ? onFulfilled(processed) : processed;
+                },
+                onRejected,
+              );
+            };
           }
-          // ... or the async interface.
-          return new WrapperStream(
-            span,
-            getCurrentUnixTimestamp(),
-            msgOrStream,
-          );
-        });
-      }
-      return promise;
+          return Reflect.get(target, prop, receiver);
+        },
+      });
     },
   });
 }

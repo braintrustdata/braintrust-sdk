@@ -1,4 +1,4 @@
-import { test, expect, describe, beforeEach, afterEach, skip } from "vitest";
+import { test, expect, describe, beforeEach, afterEach } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { wrapAnthropic } from "./anthropic";
 import {
@@ -24,12 +24,14 @@ test("anthropic is installed", () => {
 });
 
 describe("anthropic client unit tests", () => {
-  let client: Anthropic;
+  let anthropic: Anthropic;
+  let client: any;
   let backgroundLogger: any;
   let logger: Logger<false>;
 
   beforeEach(() => {
-    client = wrapAnthropic(new Anthropic());
+    anthropic = new Anthropic();
+    client = wrapAnthropic(anthropic);
     backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
     const metadata = {
       org_id: "test-org-id",
@@ -47,8 +49,6 @@ describe("anthropic client unit tests", () => {
 
   afterEach(() => {
     _exportsForTestingOnly.clearTestBackgroundLogger();
-    backgroundLogger = null;
-    logger = null;
   });
 
   test("test client.messages.create works with system text blocks", async (context) => {
@@ -67,8 +67,6 @@ describe("anthropic client unit tests", () => {
       temperature: 0.01,
     });
     expect(response).toBeDefined();
-    // NOTE: this works, but I don't really think it's important to test
-    // every time. we just need to make sure its valid.
 
     const spans = await backgroundLogger.pop();
     expect(spans).toHaveLength(1);
@@ -87,10 +85,28 @@ describe("anthropic client unit tests", () => {
   });
 
   test("test client.messages.stream", async (context) => {
-    // TODO[matt]
-    context.skip();
+    const stream = client.messages.stream({
+      messages: [{ role: "user", content: "tell me about old pond haiku" }],
+      system: "no punctuation",
+      model: TEST_MODEL,
+      max_tokens: 200,
+      temperature: 0.01,
+    });
+
+    for await (const event of stream) {
+      // debugLog("event");
+      //
+    }
+
+    const message = await stream.finalMessage();
+    debugLog("finalMessage");
+
+    expect(message.content[0].type).toBe("text");
+    const content = message.content[0] as TextBlock;
+    expect(content.text).toContain("old pond");
   });
 
+  // TODO[matt]
   test("test with tools", async (context) => {
     // TODO[matt]
     context.skip();
