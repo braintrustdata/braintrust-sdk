@@ -67,46 +67,60 @@ describe("anthropic client unit tests", () => {
       messages: [
         {
           role: "user",
-          content: "can you write me a few paragraphs on the topic of AI?",
+          content: "What is Shakespeare's sonnet 18?",
         },
       ],
-      max_tokens: 100,
-      system: "Return the result only.",
-      temperature: 0.5,
+      max_tokens: 1000,
+      system:
+        "No punctuation, newlines or non-alphanumeric characters. Just the poem.",
+      temperature: 0.01,
       stream: true,
     });
 
+    let ttft = 0;
     for await (const event of response) {
-      //debugLog("event", event);
+      if (ttft === 0) {
+        ttft = getCurrentUnixTimestamp() - startTime;
+      }
     }
 
     const endTime = getCurrentUnixTimestamp();
-    const usage = response.usage;
 
     // check that the background logger got the log
     const spans = await backgroundLogger.pop();
     expect(spans).toHaveLength(1);
     const span = spans[0] as any;
-    debugLog("got span", span);
+    //debugLog("got span", span);
     expect(span.input).toBeDefined();
+
+    // clean up the output to make it easier to spot check
+    const output = span.output
+      .toLowerCase()
+      .replace(/\n/g, " ")
+      .replace(/'/g, "");
+    // Validate we collected all the text, so check the first, line, the last line
+    // and a few others too.
+    expect(output).toContain("shall i compare thee to a summers day");
+    expect(output).toContain("too hot the eye of heaven shines");
+    expect(output).toContain("so long as men can breathe or eyes can see");
+    expect(output).toContain("so long lives this and this gives life to thee");
 
     expect(span["span_attributes"].type).toBe("llm");
     expect(span["span_attributes"].name).toBe("anthropic.messages.create");
     const metrics = span.metrics;
     expect(metrics).toBeDefined();
-    expect(metrics["prompt_tokens"]).toBe(usage.input_tokens);
-    expect(metrics["completion_tokens"]).toBe(usage.output_tokens);
-    expect(metrics["tokens"]).toBe(usage.input_tokens + usage.output_tokens);
-    const ccit = "cache_creation_input_tokens";
-    const crit = "cache_read_input_tokens";
-    expect(metrics[crit]).toBe(usage[crit]);
-    expect(metrics[ccit]).toBe(usage[ccit]);
+
+    const pt = metrics["prompt_tokens"];
+    const ct = metrics["completion_tokens"];
+    const t = metrics["tokens"];
+
+    expect(pt).toBeGreaterThan(0);
+    expect(ct).toBeGreaterThan(0);
+    expect(t).toEqual(pt + ct);
     expect(startTime < metrics.start).toBe(true);
     expect(metrics.start < metrics.end).toBe(true);
     expect(metrics.end <= endTime).toBe(true);
-
-    expect(span.output).toBeDefined();
-    expect(span.output?.[0]?.text).toContain("25");
+    expect(ttft).toBeGreaterThanOrEqual(metrics.time_to_first_token);
   });
 
   test("test client.messages.create basics", async () => {
