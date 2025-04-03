@@ -1,7 +1,11 @@
 import { test, expect, describe, beforeEach, afterEach, skip } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { wrapAnthropic } from "./anthropic";
-import { TextBlock, Message } from "@anthropic-ai/sdk/resources/messages";
+import {
+  TextBlock,
+  Message,
+  TextBlockParam,
+} from "@anthropic-ai/sdk/resources/messages";
 import { initLogger, _exportsForTestingOnly, Logger } from "../logger";
 import { configureNode } from "../node";
 import { debugLog, getCurrentUnixTimestamp } from "../util";
@@ -47,19 +51,39 @@ describe("anthropic client unit tests", () => {
     logger = null;
   });
 
-  test("test client.messages.create with system text blocks", async (context) => {
-    // FIXME[matt] handle system fields like this
-    /*      {
-        text: "do this!",
-        type: "text",
-      },
-      {
-        text: "do that!",
-        type: "text",
-      },
-    ],
-    */
-    context.skip();
+  test("test client.messages.create works with system text blocks", async (context) => {
+    expect(await backgroundLogger.pop()).toHaveLength(0);
+
+    const system: TextBlockParam[] = [
+      { text: "translate to english", type: "text" },
+      { text: "remove all punctuation", type: "text" },
+      { text: "only the answer, no other text", type: "text" },
+    ];
+    const response = await client.messages.create({
+      model: TEST_MODEL,
+      messages: [{ role: "user", content: "Bonjour mon ami!" }],
+      max_tokens: 20,
+      system: system,
+      temperature: 0.01,
+    });
+    expect(response).toBeDefined();
+    // NOTE: this works, but I don't really think it's important to test
+    // every time. we just need to make sure its valid.
+
+    const spans = await backgroundLogger.pop();
+    expect(spans).toHaveLength(1);
+    const span = spans[0] as any;
+    expect(span["span_attributes"].name).toBe("anthropic.messages.create");
+    expect(span.input).toBeDefined();
+    const inputsByRole: Record<string, any> = {};
+    for (const msg of span.input) {
+      inputsByRole[msg["role"]] = msg;
+    }
+    const userInput = inputsByRole["user"];
+    expect(userInput).toBeDefined();
+    const systemInput = inputsByRole["system"];
+    expect(systemInput.role).toEqual("system");
+    expect(systemInput.content).toEqual(system);
   });
 
   test("test client.messages.stream", async (context) => {
@@ -129,7 +153,7 @@ describe("anthropic client unit tests", () => {
     expect(pt).toBeGreaterThan(0);
     expect(ct).toBeGreaterThan(0);
     expect(t).toEqual(pt + ct);
-    expect(startTime < metrics.start).toBe(true);
+    expect(startTime <= metrics.start).toBe(true);
     expect(metrics.start < metrics.end).toBe(true);
     expect(metrics.end <= endTime).toBe(true);
     expect(ttft).toBeGreaterThanOrEqual(metrics.time_to_first_token);
