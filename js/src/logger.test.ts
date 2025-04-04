@@ -13,7 +13,8 @@ import {
   permalink,
   BraintrustState,
 } from "./logger";
-import { BackgroundLogEvent } from "@braintrust/core";
+import { LazyValue } from "./util";
+import { BackgroundLogEvent, IS_MERGE_FIELD } from "@braintrust/core";
 import { configureNode } from "./node";
 
 configureNode();
@@ -327,22 +328,51 @@ test("prompt.build with structured output templating", () => {
 
 test("disable logging", async () => {
   const state = new BraintrustState({});
-  const logger = initLogger({ state });
-  const submitLogsRequestSpy = vi.spyOn(
-    state._bgLogger.get(),
-    "submitLogsRequest",
-  );
+  const bgLogger = state.bgLogger();
 
-  logger.log({ input: "bar", output: "foo" });
-  await logger.flush();
-  // start and end spans
-  expect(submitLogsRequestSpy).toHaveBeenCalledTimes(2);
+  let submittedItems = [];
+  const submitLogsRequestSpy = vi
+    .spyOn(bgLogger, "submitLogsRequest")
+    .mockImplementation((items: string[]) => {
+      submittedItems = items;
+      return Promise.resolve();
+    });
 
+  bgLogger.log([
+    new LazyValue(() =>
+      Promise.resolve({
+        id: "id",
+        project_id: "p",
+        log_id: "g",
+        input: "bar",
+        output: "foo",
+        [IS_MERGE_FIELD]: false,
+      }),
+    ),
+  ]);
+
+  await bgLogger.flush();
+  expect(submitLogsRequestSpy).toHaveBeenCalledTimes(1);
+  expect(submittedItems.length).toEqual(1);
+
+  submittedItems = [];
   state.disable();
 
   for (let i = 0; i < 10; i++) {
-    logger.log({ input: "bar" + i, output: "foo" + i });
+    bgLogger.log([
+      new LazyValue(() =>
+        Promise.resolve({
+          id: "id",
+          project_id: "p",
+          log_id: "g",
+          input: "bar" + i,
+          output: "foo" + i,
+          [IS_MERGE_FIELD]: false,
+        }),
+      ),
+    ]);
   }
-  await logger.flush();
-  expect(submitLogsRequestSpy).toHaveBeenCalledTimes(2);
+  await bgLogger.flush();
+  expect(submitLogsRequestSpy).toHaveBeenCalledTimes(1);
+  expect(submittedItems.length).toEqual(0);
 });
