@@ -266,7 +266,7 @@ function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
   let totals: Metrics = {};
   let span = sspan.span;
 
-  return async function (...args: any[]): Promise<IteratorResult<T>> {
+  return async function <T>(...args: [any]): Promise<IteratorResult<T>> {
     const result = await stream.next(...args);
 
     if (ttft < 0) {
