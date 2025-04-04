@@ -3129,7 +3129,7 @@ export async function loginToState(options: LoginOptions = {}) {
       },
     ];
     state.loggedIn = true;
-    state.loginToken = "__TEST_LOGIN_TOKEN__";
+    state.loginToken = TEST_API_KEY;
     _saveOrgInfo(state, testOrgInfo, testOrgInfo[0].name);
     return state;
   } else {
