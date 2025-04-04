@@ -155,6 +155,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     : await getSpanParentObject().export();
 
   const functionId = functionIdSchema.safeParse({
+    function_id: functionIdArgs.function_id,
     project_name: functionIdArgs.projectName,
     slug: functionIdArgs.slug,
     global_function: functionIdArgs.globalFunction,
