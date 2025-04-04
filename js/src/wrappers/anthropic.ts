@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import Stream from "@anthropic-ai/sdk";
-import { Span, startSpan } from "..";
+import { Span, startSpan, currentSpan } from "braintrust";
 import { SpanTypeAttribute } from "@braintrust/core";
 import { debugLog, getCurrentUnixTimestamp } from "../util";
 import {
@@ -28,10 +28,12 @@ function anthropicProxy(anthropic: Anthropic): Anthropic {
 function messagesProxy(messages: any) {
   return new Proxy(messages, {
     get(target, prop, receiver) {
-      if (prop === "create") {
-        return createProxy(target.create);
+      switch (prop) {
+        case "create":
+          return createProxy(target.create);
+        default:
+          return Reflect.get(target, prop, receiver);
       }
-      return Reflect.get(target, prop, receiver);
     },
   });
 }
@@ -62,45 +64,75 @@ function createProxy(create: (params: any) => Promise<any>) {
 
       const span = startSpan(spanArgs);
 
+      console.log("SPAN", span);
+
       // Actually do the call.
       const apiPromise = Reflect.apply(target, thisArg, argArray);
 
-      // this will be called when our promise is resolved.
-      const onThen = function (msgOrStream: any) {
-        // handle the sync interface
+      // this will be called when apiPromise is resolved.
+      const onThen: ThenFn<any> = function (msgOrStream: any) {
+        // handle the sync interface stream=False
         if (!args["stream"]) {
+          debugLog("sync");
           const event = parseEventFromMessage(msgOrStream);
           span.log(event);
           span.end();
-          console.log("cc");
+          debugLog("cc");
           return msgOrStream;
         }
 
-        // ... or the async interface.
-        return new WrapperStream(span, getCurrentUnixTimestamp(), msgOrStream);
+        // ... or the async interface when stream=True
+        debugLog("async");
+        return streamProxy(msgOrStream, span);
       };
+
+      console.log("apiPromise", apiPromise);
+      console.dir(apiPromise, { depth: null });
 
       // We need to proxy the promise itself because it can be an APIPromise, which
       // has other methods that can be called, like `withResponse`.
-      return new Proxy(apiPromise, {
-        get(target, prop, receiver) {
-          if (prop === "then") {
-            const then = Reflect.get(target, prop, receiver);
-            return function (onFulfilled: any, onRejected: any) {
-              return then.call(
-                target,
-                async (result: any) => {
-                  // Your existing onThen logic here
-                  const processed = onThen(result);
-                  return onFulfilled ? onFulfilled(processed) : processed;
-                },
-                onRejected,
-              );
-            };
-          }
-          return Reflect.get(target, prop, receiver);
-        },
-      });
+      console.log("CREATEPROXY SPAN", span);
+      return apiPromiseProxy(apiPromise, span, onThen);
+    },
+  });
+}
+
+type ThenFn<T> = Promise<T>["then"];
+
+//
+function apiPromiseProxy<T>(apiPromise: any, span: Span, onThen: ThenFn<T>) {
+  console.log("APIPROMISEPROXY SPAN", span);
+  return new Proxy(apiPromise, {
+    get(target, prop, receiver) {
+      if (prop === "then") {
+        // This path is used with messages.create(stream=True) calls.
+        const thenFunc = Reflect.get(target, prop, receiver);
+        return function (onFulfilled: any, onRejected: any) {
+          return thenFunc.call(
+            target,
+            async (result: any) => {
+              const processed = onThen(result);
+              return onFulfilled ? onFulfilled(processed) : processed;
+            },
+            onRejected, // FIXME[matt] error handling?
+          );
+        };
+      } else if (prop === "withResponse") {
+        // This path is used with messages.stream(...) calls.
+        debugLog("@withReponse");
+        const withResponseFunc = Reflect.get(target, prop, receiver);
+        return () => {
+          debugLog("@withResponseFuncCall");
+          return withResponseFunc.call(target).then((withResponse: any) => {
+            if (withResponse["data"]) {
+              const { data: stream } = withResponse;
+              withResponse.data = streamProxy(stream, span);
+            }
+            return Promise.resolve(withResponse);
+          });
+        };
+      }
+      return Reflect.get(target, prop, receiver);
     },
   });
 }
@@ -179,37 +211,131 @@ function filterFrom(record: Record<string, any>, keys: string[]) {
   return out;
 }
 
+//  item {
+//    type: 'message_start',
+//    message: {
+//      id: 'msg_01HztKSUHcjytk5L7p2qxNsK',
+//      type: 'message',
+//      role: 'assistant',
+//      model: 'claude-3-haiku-20240307',
+//      content: [],
+//      stop_reason: null,
+//      stop_sequence: null,
+//      usage: {
+//        input_tokens: 49,
+//        cache_creation_input_tokens: 0,
+//        cache_read_input_tokens: 0,
+//        output_tokens: 1
+//      }
+//    }
+//  }
+//  item {
+//    type: 'content_block_delta',
+//    index: 0,
+//    delta: { type: 'text_delta', text: 'abc123 }
+//  }
+//  item { type: 'content_block_stop', index: 0 }
+//  item {
+//    type: 'message_delta',
+//    delta: { stop_reason: 'end_turn', stop_sequence: null },
+//    usage: { output_tokens: 187 }
+//  }
+//  item { type: 'message_stop' }
+
+function streamProxy<T>(
+  stream: AsyncIterable<T>,
+  span: Span,
+): AsyncIterable<T> {
+  // Set up the scaffolding to proxy the stream. This is necessary because the stream
+  // has other things that get called (e.g. controller.signal)
+  console.log("STREAMPROXY SPAN", span);
+  return new Proxy(stream, {
+    get(target, prop, receiver) {
+      if (prop === Symbol.asyncIterator) {
+        const original = Reflect.get(target, prop, receiver);
+        return function () {
+          const iterator: AsyncIterator<T> = original.call(target);
+          return new Proxy(iterator, {
+            get(iterTarget, iterProp, iterReceiver) {
+              // Intercept the 'next' method
+              if (iterProp === "next") {
+                return streamNextProxy(iterator, span);
+              }
+              return Reflect.get(iterTarget, iterProp, iterReceiver);
+            },
+          });
+        };
+      }
+      // For other properties, just pass them through
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+}
+
+function streamNextProxy(stream: AsyncIterator<any>, span: Span) {
+  // this is where we actually do the business of iterating the message stream
+  let ttft = -1;
+  const deltas: any[] = [];
+  let metadata = {};
+  let totals: Metrics = {};
+
+  console.log("STREAMNEXT SPAN", span);
+
+  return async function (...args: any[]): Promise<IteratorResult<T>> {
+    const result = await stream.next(...args);
+
+    if (result.done) {
+      totals.tokens =
+        (totals["prompt_tokens"] || 0) + (totals["completion_tokens"] || 0);
+      const output = deltas.join("");
+      span.log({ output: output, metrics: totals, metadata: metadata });
+      span.end();
+      return result;
+    }
+
+    const item = result.value;
+    switch (item?.type) {
+      case "message_start":
+        const msg = item?.message;
+        if (msg) {
+          const event = parseEventFromMessage(msg);
+          totals = { ...totals, ...event.metrics }; // save the first copy of our metrics.
+          span.log(event);
+        }
+        break;
+      case "content_block_delta":
+        // Collect the running output.
+        if (item.delta?.type === "text_delta") {
+          const text = item?.delta?.text;
+          if (text) {
+            deltas.push(text);
+          }
+        }
+        break;
+      case "message_delta":
+        // Collect stats + metadata about the message.
+        const usage = item?.usage;
+        if (usage) {
+          const metrics = parseMetricsFromUsage(usage);
+          totals = { ...totals, ...metrics }; // update our totals.
+        }
+        const delta = item?.delta;
+        if (delta) {
+          // stop reason, etc.
+          metadata = { ...metadata, ...delta };
+        }
+        break;
+      case "message_stop":
+        break;
+    }
+
+    return result;
+  };
+}
+/*
+
 class WrapperStream<Item> implements AsyncIterable<Item> {
-  //  item {
-  //    type: 'message_start',
-  //    message: {
-  //      id: 'msg_01HztKSUHcjytk5L7p2qxNsK',
-  //      type: 'message',
-  //      role: 'assistant',
-  //      model: 'claude-3-haiku-20240307',
-  //      content: [],
-  //      stop_reason: null,
-  //      stop_sequence: null,
-  //      usage: {
-  //        input_tokens: 49,
-  //        cache_creation_input_tokens: 0,
-  //        cache_read_input_tokens: 0,
-  //        output_tokens: 1
-  //      }
-  //    }
-  //  }
-  //  item {
-  //    type: 'content_block_delta',
-  //    index: 0,
-  //    delta: { type: 'text_delta', text: 'abc123 }
-  //  }
-  //  item { type: 'content_block_stop', index: 0 }
-  //  item {
-  //    type: 'message_delta',
-  //    delta: { stop_reason: 'end_turn', stop_sequence: null },
-  //    usage: { output_tokens: 187 }
-  //  }
-  //  item { type: 'message_stop' }
+
 
   private span: Span;
   private iter: AsyncIterable<Item>;
@@ -235,6 +361,7 @@ class WrapperStream<Item> implements AsyncIterable<Item> {
     let totals: Metrics = {};
     try {
       for await (const item of this.iter) {
+        debugLog("item", item);
         // note the time to first token
         if (ttft < 0) {
           ttft = getCurrentUnixTimestamp() - this.startTime;
@@ -286,3 +413,4 @@ class WrapperStream<Item> implements AsyncIterable<Item> {
     }
   }
 }
+*/

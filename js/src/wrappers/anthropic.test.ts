@@ -85,6 +85,8 @@ describe("anthropic client unit tests", () => {
   });
 
   test("test client.messages.stream", async (context) => {
+    expect(await backgroundLogger.pop()).toHaveLength(0);
+
     const stream = client.messages.stream({
       messages: [{ role: "user", content: "tell me about old pond haiku" }],
       system: "no punctuation",
@@ -94,16 +96,29 @@ describe("anthropic client unit tests", () => {
     });
 
     for await (const event of stream) {
-      // debugLog("event");
-      //
     }
-
     const message = await stream.finalMessage();
-    debugLog("finalMessage");
+    debugLog("message", message);
 
     expect(message.content[0].type).toBe("text");
     const content = message.content[0] as TextBlock;
     expect(content.text).toContain("old pond");
+
+    const spans = await backgroundLogger.pop();
+    console.log("spans", spans);
+
+    expect(spans).toHaveLength(1);
+    const span = spans[0] as any;
+    debugLog("span", span);
+    expect(span["span_attributes"].name).toBe("anthropic.messages.create");
+    const metrics = span.metrics;
+    expect(metrics).toBeDefined();
+    expect(metrics.start).toBeDefined();
+    expect(metrics.end).toBeDefined();
+    expect(metrics.time_to_first_token).toBeDefined();
+    expect(metrics.prompt_tokens).toBeGreaterThan(0);
+    expect(metrics.completion_tokens).toBeGreaterThan(0);
+    expect(metrics.tokens).toBeDefined();
   });
 
   // TODO[matt]
