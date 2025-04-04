@@ -1,7 +1,9 @@
 #!/usr/bin/env tsx
 
 import Anthropic from "@anthropic-ai/sdk";
-import { wrapAnthropic } from "braintrust";
+import { initLogger, wrapAnthropic } from "braintrust";
+
+initLogger({ projectName: "typescript-examples" });
 
 const client = wrapAnthropic(new Anthropic());
 
