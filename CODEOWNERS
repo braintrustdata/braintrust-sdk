@@ -1,4 +1,8 @@
 # Any changes to deps / build configuration need additional scrutiny.
+#
+# For example, adding a required dependency to core or SDK will make it required
+# for all users of the SDK, so we should be extremely careful about which
+# dependencies we add.
 py/setup.py @ankrgyl @manugoyal
 core/py/setup.py @ankrgyl @manugoyal
 js/package.json @ankrgyl @manugoyal

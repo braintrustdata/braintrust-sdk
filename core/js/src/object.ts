@@ -203,26 +203,3 @@ export function ensureNewDatasetRecord(
   delete row.output;
   return row;
 }
-
-export function makeLegacyEvent(e: BackgroundLogEvent): BackgroundLogEvent {
-  if (!("dataset_id" in e) || !("expected" in e)) {
-    return e;
-  }
-
-  const event = {
-    ...e,
-    output: e.expected,
-  };
-  delete event.expected;
-
-  if (MERGE_PATHS_FIELD in event) {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    for (const path of (event[MERGE_PATHS_FIELD] || []) as string[][]) {
-      if (path.length > 0 && path[0] === "expected") {
-        path[0] = "output";
-      }
-    }
-  }
-
-  return event;
-}
