@@ -19,6 +19,46 @@ configureNode();
 
 const { extractAttachments, deepCopyEvent } = _exportsForTestingOnly;
 
+test("verify MemoryBackgroundLogger intercepts logs", async () => {
+  // Log to memory for the tests.
+  _exportsForTestingOnly.simulateLoginForTests();
+
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+
+  const logger = initLogger({
+    projectName: "test",
+    projectId: "test-project-id",
+  });
+
+  await memoryLogger.flush();
+  expect(await memoryLogger.drain()).length(0);
+
+  // make some spans
+  const span = logger.startSpan({ name: "test-name-a" });
+  span.log({ metrics: { v: 1 } });
+  span.end();
+
+  const span2 = logger.startSpan({ name: "test-name-b" });
+  span2.log({ metrics: { v: 2 } });
+  span2.end();
+
+  await memoryLogger.flush();
+
+  const events = (await memoryLogger.drain()) as any[]; // FIXME[matt] what type should this be?
+  expect(events).toHaveLength(2);
+
+  events.sort((a, b) => a["metrics"]["v"] - b["metrics"]["v"]);
+
+  // just check a couple of things, we're mostly looking to make sure the
+  expect(events[0]["span_attributes"]["name"]).toEqual("test-name-a");
+  expect(events[1]["span_attributes"]["name"]).toEqual("test-name-b");
+
+  // and now it's empty
+  expect(await memoryLogger.drain()).length(0);
+
+  _exportsForTestingOnly.clearTestBackgroundLogger(); // can go back to normal
+});
+
 test("init validation", () => {
   expect(() => init({})).toThrow(
     "Must specify at least one of project or projectId",
