@@ -21,6 +21,10 @@ function anthropicProxy(anthropic: Anthropic): Anthropic {
 function messagesProxy(messages: any) {
   return new Proxy(messages, {
     get(target, prop, receiver) {
+      // NOTE[matt] I didn't proxy `stream` because it's called by `create` under the hood. The callbacks
+      // provided by `stream().on()` would made this job much easier. But we have to trace the more
+      // primitive `create(stream=True)` anyway, so I opted to just have one (more arcane) means of
+      // tracing both calls.
       switch (prop) {
         case "create":
           return createProxy(target.create);
@@ -57,16 +61,13 @@ function createProxy(create: (params: any) => Promise<any>) {
       };
 
       const span = startSpan(spanArgs);
-      // Keep track of the start time for way down the road
-      // .
       const sspan = { span, startTime: spanArgs.startTime };
 
       // Actually do the call.
       const apiPromise = Reflect.apply(target, thisArg, argArray);
 
-      // this will be called when apiPromise is resolved.
       const onThen: ThenFn<any> = function (msgOrStream: any) {
-        // handle the sync interface stream=False
+        // handle the sync interface create(stream=False)
         if (!args["stream"]) {
           const event = parseEventFromMessage(msgOrStream);
           span.log(event);
@@ -74,12 +75,10 @@ function createProxy(create: (params: any) => Promise<any>) {
           return msgOrStream;
         }
 
-        // ... or the async interface when stream=True
+        // ... or the async interface when create(stream=True)
         return streamProxy(msgOrStream, sspan);
       };
 
-      // We need to proxy the promise itself because it can be an APIPromise, which
-      // has other methods that can be called, like `withResponse`.
       return apiPromiseProxy(apiPromise, sspan, onThen);
     },
   });
@@ -123,77 +122,6 @@ function apiPromiseProxy<T>(
       return Reflect.get(target, prop, receiver);
     },
   });
-}
-
-type Metrics = Record<string, number>;
-type MetricsOrUndefined = Metrics | undefined;
-
-// Parse the event from given anthropic Message.
-function parseEventFromMessage(message: any) {
-  // FIXME[matt] the whole content or just the text?
-  let output = message?.content || null;
-  const metrics = parseMetricsFromUsage(message?.usage);
-  const metas = ["stop_reason", "stop_sequence"];
-  const metadata: Record<string, any> = {};
-  for (const m of metas) {
-    if (message[m] !== undefined) {
-      metadata[m] = message[m];
-    }
-  }
-
-  return {
-    output: output,
-    metrics: metrics,
-    metadata: metadata,
-  };
-}
-
-// Parse the metrics from the usage object.
-function parseMetricsFromUsage(usage: any): MetricsOrUndefined {
-  if (!usage) {
-    return undefined;
-  }
-
-  const metrics: Metrics = {};
-
-  function saveIfExistsTo(source: string, target: string) {
-    const value = usage[source];
-    if (value !== undefined && value !== null) {
-      metrics[target] = value;
-    }
-  }
-
-  saveIfExistsTo("input_tokens", "prompt_tokens");
-  saveIfExistsTo("output_tokens", "completion_tokens");
-  saveIfExistsTo("cache_read_input_tokens", "cache_read_input_tokens");
-  saveIfExistsTo("cache_creation_input_tokens", "cache_creation_input_tokens");
-
-  metrics["tokens"] =
-    (metrics.prompt_tokens || 0) + (metrics.completion_tokens || 0);
-
-  return metrics;
-}
-
-function coalesceInput(messages: any[], system: string | undefined) {
-  // convert anthropic args to the single "input" field Braintrust expects.
-
-  // Make a copy because we're going to mutate it.
-  var input = (messages || []).slice();
-  if (system) {
-    input.push({ role: "system", content: system });
-  }
-  return input;
-}
-
-// Return a copy of record with the given keys removed.
-function filterFrom(record: Record<string, any>, keys: string[]) {
-  const out: Record<string, any> = {};
-  for (const k of Object.keys(record)) {
-    if (!keys.includes(k)) {
-      out[k] = record[k];
-    }
-  }
-  return out;
 }
 
 //  Here's a little example of the stream format:
@@ -327,3 +255,74 @@ type StartedSpan = {
   span: Span;
   startTime: number;
 };
+
+type Metrics = Record<string, number>;
+type MetricsOrUndefined = Metrics | undefined;
+
+// Parse the event from given anthropic Message.
+function parseEventFromMessage(message: any) {
+  // FIXME[matt] the whole content or just the text?
+  let output = message?.content || null;
+  const metrics = parseMetricsFromUsage(message?.usage);
+  const metas = ["stop_reason", "stop_sequence"];
+  const metadata: Record<string, any> = {};
+  for (const m of metas) {
+    if (message[m] !== undefined) {
+      metadata[m] = message[m];
+    }
+  }
+
+  return {
+    output: output,
+    metrics: metrics,
+    metadata: metadata,
+  };
+}
+
+// Parse the metrics from the usage object.
+function parseMetricsFromUsage(usage: any): MetricsOrUndefined {
+  if (!usage) {
+    return undefined;
+  }
+
+  const metrics: Metrics = {};
+
+  function saveIfExistsTo(source: string, target: string) {
+    const value = usage[source];
+    if (value !== undefined && value !== null) {
+      metrics[target] = value;
+    }
+  }
+
+  saveIfExistsTo("input_tokens", "prompt_tokens");
+  saveIfExistsTo("output_tokens", "completion_tokens");
+  saveIfExistsTo("cache_read_input_tokens", "cache_read_input_tokens");
+  saveIfExistsTo("cache_creation_input_tokens", "cache_creation_input_tokens");
+
+  metrics["tokens"] =
+    (metrics.prompt_tokens || 0) + (metrics.completion_tokens || 0);
+
+  return metrics;
+}
+
+function coalesceInput(messages: any[], system: string | undefined) {
+  // convert anthropic args to the single "input" field Braintrust expects.
+
+  // Make a copy because we're going to mutate it.
+  var input = (messages || []).slice();
+  if (system) {
+    input.push({ role: "system", content: system });
+  }
+  return input;
+}
+
+// Return a copy of record with the given keys removed.
+function filterFrom(record: Record<string, any>, keys: string[]) {
+  const out: Record<string, any> = {};
+  for (const k of Object.keys(record)) {
+    if (!keys.includes(k)) {
+      out[k] = record[k];
+    }
+  }
+  return out;
+}

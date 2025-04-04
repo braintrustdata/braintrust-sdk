@@ -1,5 +1,3 @@
-import iso from "./isomorph";
-
 export const GLOBAL_PROJECT = "Global";
 
 // Given a function to execute, a catch handler, and a finally handler, runs the function and

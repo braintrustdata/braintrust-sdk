@@ -203,7 +203,6 @@ describe("anthropic client unit tests", () => {
     const content = response.content[0] as TextBlock;
     expect(content.text).toContain("16");
 
-    // check that the background logger got the log
     const spans = await backgroundLogger.drain();
     expect(spans).toHaveLength(1);
     const span = spans[0] as any;
