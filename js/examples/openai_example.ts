@@ -1,4 +1,4 @@
-#!/usr/bin/env npx tsx
+#!/usr/bin/env tsx
 
 import OpenAI from "openai";
 import { wrapOpenAI } from "braintrust";
