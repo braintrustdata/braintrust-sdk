@@ -553,6 +553,12 @@ export class BraintrustState {
     return this._bgLogger.get();
   }
 
+  public httpLogger(): HTTPBackgroundLogger {
+    // this is called for configuration in some end-to-end tests so
+    // expose the http bg logger here.
+    return this._bgLogger.get() as HTTPBackgroundLogger;
+  }
+
   public setOverrideBgLogger(logger: BackgroundLogger | null) {
     this._overrideBgLogger = logger;
   }
