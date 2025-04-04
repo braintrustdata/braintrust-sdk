@@ -1827,7 +1827,7 @@ interface BackgroundLogger {
 }
 
 class TestBackgroundLogger implements BackgroundLogger {
-  private items: LazyValue<BackgroundLogEvent>[][] = [[]];
+  private items: LazyValue<BackgroundLogEvent>[][] = [];
 
   log(items: LazyValue<BackgroundLogEvent>[]): void {
     this.items.push(items);
@@ -1837,7 +1837,7 @@ class TestBackgroundLogger implements BackgroundLogger {
     return Promise.resolve();
   }
 
-  async pop(): Promise<BackgroundLogEvent[]> {
+  async drain(): Promise<BackgroundLogEvent[]> {
     const items = this.items;
     this.items = [];
 

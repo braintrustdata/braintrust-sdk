@@ -52,7 +52,7 @@ describe("anthropic client unit tests", () => {
   });
 
   test("test client.messages.create works with system text blocks", async (context) => {
-    expect(await backgroundLogger.pop()).toHaveLength(0);
+    expect(await backgroundLogger.drain()).toHaveLength(0);
 
     const system: TextBlockParam[] = [
       { text: "translate to english", type: "text" },
@@ -68,7 +68,7 @@ describe("anthropic client unit tests", () => {
     });
     expect(response).toBeDefined();
 
-    const spans = await backgroundLogger.pop();
+    const spans = await backgroundLogger.drain();
     expect(spans).toHaveLength(1);
     const span = spans[0] as any;
     expect(span["span_attributes"].name).toBe("anthropic.messages.create");
@@ -85,7 +85,7 @@ describe("anthropic client unit tests", () => {
   });
 
   test("test client.messages.stream", async (context) => {
-    expect(await backgroundLogger.pop()).toHaveLength(0);
+    expect(await backgroundLogger.drain()).toHaveLength(0);
 
     const stream = client.messages.stream({
       messages: [{ role: "user", content: "tell me about old pond haiku" }],
@@ -103,7 +103,7 @@ describe("anthropic client unit tests", () => {
     const content = message.content[0] as TextBlock;
     expect(content.text).toContain("old pond");
 
-    const spans = await backgroundLogger.pop();
+    const spans = await backgroundLogger.drain();
 
     expect(spans).toHaveLength(1);
     const span = spans[0] as any;
@@ -151,7 +151,7 @@ describe("anthropic client unit tests", () => {
     const endTime = getCurrentUnixTimestamp();
 
     // check that the background logger got the log
-    const spans = await backgroundLogger.pop();
+    const spans = await backgroundLogger.drain();
     expect(spans).toHaveLength(1);
     const span = spans[0] as any;
     expect(span.input).toBeDefined();
@@ -204,7 +204,7 @@ describe("anthropic client unit tests", () => {
     expect(content.text).toContain("16");
 
     // check that the background logger got the log
-    const spans = await backgroundLogger.pop();
+    const spans = await backgroundLogger.drain();
     expect(spans).toHaveLength(1);
     const span = spans[0] as any;
     expect(span["span_attributes"].type).toBe("llm");

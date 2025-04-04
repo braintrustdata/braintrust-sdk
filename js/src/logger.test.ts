@@ -38,7 +38,7 @@ test("verify MemoryBackgroundLogger intercepts logs", async () => {
   });
 
   await memoryLogger.flush();
-  expect(await memoryLogger.pop()).length(0);
+  expect(await memoryLogger.drain()).length(0);
 
   // make some spans
   const span = logger.startSpan({ name: "test-name-a" });
@@ -51,7 +51,7 @@ test("verify MemoryBackgroundLogger intercepts logs", async () => {
 
   await memoryLogger.flush();
 
-  const events = (await memoryLogger.pop()) as any[]; // FIXME[matt] what type should this be?
+  const events = (await memoryLogger.drain()) as any[]; // FIXME[matt] what type should this be?
   expect(events).toHaveLength(2);
 
   events.sort((a, b) => a["metrics"]["v"] - b["metrics"]["v"]);
@@ -61,7 +61,7 @@ test("verify MemoryBackgroundLogger intercepts logs", async () => {
   expect(events[1]["span_attributes"]["name"]).toEqual("test-name-b");
 
   // and now it's empty
-  expect(await memoryLogger.pop()).length(0);
+  expect(await memoryLogger.drain()).length(0);
 
   _exportsForTestingOnly.clearTestBackgroundLogger(); // can go back to normal
 });
