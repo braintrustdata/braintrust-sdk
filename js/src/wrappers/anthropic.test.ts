@@ -8,7 +8,7 @@ import {
 } from "@anthropic-ai/sdk/resources/messages";
 import { initLogger, _exportsForTestingOnly } from "../logger";
 import { configureNode } from "../node";
-import { getCurrentUnixTimestamp, debugLog } from "../util";
+import { getCurrentUnixTimestamp } from "../util";
 
 // use the cheapest model for tests
 const TEST_MODEL = "claude-3-haiku-20240307";
@@ -107,7 +107,6 @@ describe("anthropic client unit tests", () => {
 
     expect(spans).toHaveLength(1);
     const span = spans[0] as any;
-    debugLog("span", span);
     expect(span["span_attributes"].name).toBe("anthropic.messages.create");
     const metrics = span.metrics;
     expect(metrics).toBeDefined();
@@ -155,7 +154,6 @@ describe("anthropic client unit tests", () => {
     const spans = await backgroundLogger.pop();
     expect(spans).toHaveLength(1);
     const span = spans[0] as any;
-    //debugLog("got span", span);
     expect(span.input).toBeDefined();
 
     // clean up the output to make it easier to spot check
@@ -199,7 +197,6 @@ describe("anthropic client unit tests", () => {
     });
     expect(response).toBeDefined();
 
-    //debugLog("response", response);
     const endTime = getCurrentUnixTimestamp();
 
     expect(response.content[0].type).toBe("text");
@@ -210,7 +207,6 @@ describe("anthropic client unit tests", () => {
     const spans = await backgroundLogger.pop();
     expect(spans).toHaveLength(1);
     const span = spans[0] as any;
-    //debugLog("got span", span);
     expect(span["span_attributes"].type).toBe("llm");
     expect(span["span_attributes"].name).toBe("anthropic.messages.create");
     const metadata = span.metadata;

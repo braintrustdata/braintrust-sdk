@@ -131,17 +131,3 @@ export class InternalAbortError extends Error {
     this.name = "InternalAbortError";
   }
 }
-
-export function isDebugEnanbled(): boolean {
-  const debug = iso.getEnv("BRAINTRUST_DEBUG") || "false";
-  return debug.toLowerCase() === "true";
-}
-
-/**
- * Log if BRAINTRUST_DEBUG is true.
- */
-export function debugLog(...args: any[]) {
-  if (isDebugEnanbled()) {
-    console.log(...args);
-  }
-}

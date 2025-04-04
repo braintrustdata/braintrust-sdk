@@ -2,11 +2,6 @@ import Anthropic from "@anthropic-ai/sdk";
 import { Span, startSpan } from "../logger";
 import { SpanTypeAttribute } from "@braintrust/core";
 import { getCurrentUnixTimestamp } from "../util";
-import {
-  Message,
-  Usage,
-  RawMessageStreamEvent,
-} from "@anthropic-ai/sdk/resources/messages";
 
 export function wrapAnthropic(anthropic: Anthropic): Anthropic {
   return anthropicProxy(anthropic);
@@ -62,8 +57,8 @@ function createProxy(create: (params: any) => Promise<any>) {
       };
 
       const span = startSpan(spanArgs);
-      // Keep track of the start time for time to first token
-      // waaaaay down the road.
+      // Keep track of the start time for way down the road
+      // .
       const sspan = { span, startTime: spanArgs.startTime };
 
       // Actually do the call.
@@ -332,85 +327,3 @@ type StartedSpan = {
   span: Span;
   startTime: number;
 };
-
-/*
-class WrapperStream<Item> implements AsyncIterable<Item> {
-
-
-  private span: Span;
-  private iter: AsyncIterable<Item>;
-  private startTime: number;
-  private usage: Record<string, number>;
-
-  constructor(span: Span, startTime: number, iter: AsyncIterable<Item>) {
-    this.span = span;
-    this.iter = iter;
-    this.startTime = startTime;
-    this.usage = {
-      input_tokens: 0,
-      output_tokens: 0,
-      cache_read_input_tokens: 0,
-      cache_creation_input_tokens: 0,
-    };
-  }
-
-  async *[Symbol.asyncIterator](): AsyncIterator<Item, any, undefined> {
-    let ttft = -1;
-    const deltas = [];
-    let metadata = {};
-    let totals: Metrics = {};
-    try {
-      for await (const item of this.iter) {
-        debugLog("item", item);
-        // note the time to first token
-        if (ttft < 0) {
-          ttft = getCurrentUnixTimestamp() - this.startTime;
-          this.span.log({ metrics: { time_to_first_token: ttft } });
-        }
-
-        switch (item?.type) {
-          case "message_start":
-            const msg = item?.message;
-            if (msg) {
-              const event = parseEventFromMessage(msg);
-              totals = { ...totals, ...event.metrics }; // save the first copy of our metrics.
-              this.span.log(event);
-            }
-            break;
-          case "content_block_delta":
-            // Collect the running output.
-            if (item.delta?.type === "text_delta") {
-              const text = item?.delta?.text;
-              if (text) {
-                deltas.push(text);
-              }
-            }
-            break;
-          case "message_delta":
-            // Collect stats + metadata about the message.
-            const usage = item?.usage;
-            if (usage) {
-              const metrics = parseMetricsFromUsage(usage);
-              totals = { ...totals, ...metrics }; // update our totals.
-            }
-            const delta = item?.delta;
-            if (delta) {
-              // stop reason, etc.
-              metadata = { ...metadata, ...delta };
-            }
-            break;
-          case "message_stop":
-            break;
-        }
-        yield item;
-      }
-    } finally {
-      totals.tokens =
-        (totals["prompt_tokens"] || 0) + (totals["completion_tokens"] || 0);
-      const output = deltas.join("");
-      this.span.log({ output: output, metrics: totals, metadata: metadata });
-      this.span.end();
-    }
-  }
-}
-*/
