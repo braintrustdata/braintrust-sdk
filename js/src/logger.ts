@@ -352,7 +352,8 @@ export class BraintrustState {
   // This is preferable to replacing the whole logger, which would create the
   // possibility of multiple loggers floating around, which may not log in a
   // deterministic order.
-  private _bgLogger: SyncLazyValue<BackgroundLogger>;
+  private _bgLogger: SyncLazyValue<HTTPBackgroundLogger>;
+  private _overrideBgLogger: BackgroundLogger | null = null;
 
   public appUrl: string | null = null;
   public appPublicUrl: string | null = null;
@@ -387,7 +388,8 @@ export class BraintrustState {
       return this.apiConn();
     };
     this._bgLogger = new SyncLazyValue(
-      () => new BackgroundLogger(new LazyValue(defaultGetLogConn), loginParams),
+      () =>
+        new HTTPBackgroundLogger(new LazyValue(defaultGetLogConn), loginParams),
     );
 
     this.resetLoginInfo();
@@ -562,16 +564,50 @@ export class BraintrustState {
   }
 
   public bgLogger(): BackgroundLogger {
+    if (this._overrideBgLogger) {
+      return this._overrideBgLogger;
+    }
     return this._bgLogger.get();
+  }
+
+  public httpLogger(): HTTPBackgroundLogger {
+    // this is called for configuration in some end-to-end tests so
+    // expose the http bg logger here.
+    return this._bgLogger.get() as HTTPBackgroundLogger;
+  }
+
+  public setOverrideBgLogger(logger: BackgroundLogger | null) {
+    this._overrideBgLogger = logger;
   }
 
   // Should only be called by the login function.
   public loginReplaceApiConn(apiConn: HTTPConnection) {
     this._bgLogger.get().internalReplaceApiConn(apiConn);
   }
+
+  public disable() {
+    this._bgLogger.get().disable();
+  }
 }
 
 let _globalState: BraintrustState;
+
+// Return a TestBackgroundLogger that will intercept logs before they are sent to the server.
+// Used for testing only.
+function useTestBackgroundLogger(): TestBackgroundLogger {
+  const state = _internalGetGlobalState();
+  if (!state) {
+    throw new Error("global state not set yet");
+  }
+
+  const logger = new TestBackgroundLogger();
+  state.setOverrideBgLogger(logger);
+  return logger;
+}
+
+function clearTestBackgroundLogger() {
+  _internalGetGlobalState()?.setOverrideBgLogger(null);
+}
 
 /**
  * This function should be invoked exactly once after configuring the `iso`
@@ -1818,11 +1854,44 @@ export interface BackgroundLoggerOpts {
   onFlushError?: (error: unknown) => void;
 }
 
+interface BackgroundLogger {
+  log(items: LazyValue<BackgroundLogEvent>[]): void;
+  flush(): Promise<void>;
+}
+
+class TestBackgroundLogger implements BackgroundLogger {
+  private items: LazyValue<BackgroundLogEvent>[][] = [];
+
+  log(items: LazyValue<BackgroundLogEvent>[]): void {
+    this.items.push(items);
+  }
+
+  async flush(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  async drain(): Promise<BackgroundLogEvent[]> {
+    const items = this.items;
+    this.items = [];
+
+    // get all the values
+    const events: BackgroundLogEvent[] = [];
+    for (const item of items) {
+      for (const event of item) {
+        events.push(await event.get());
+      }
+    }
+
+    const batch = mergeRowBatch(events);
+    return batch.flat();
+  }
+}
+
 // We should only have one instance of this object per state object in
 // 'BraintrustState._bgLogger'. Be careful about spawning multiple
 // instances of this class, because concurrent BackgroundLoggers will not log to
 // the backend in a deterministic order.
-class BackgroundLogger {
+class HTTPBackgroundLogger implements BackgroundLogger {
   private apiConn: LazyValue<HTTPConnection>;
   private items: LazyValue<BackgroundLogEvent>[] = [];
   private activeFlush: Promise<void> = Promise.resolve();
@@ -1839,6 +1908,8 @@ class BackgroundLogger {
   public queueDropLoggingPeriod: number = 60;
   public failedPublishPayloadsDir: string | undefined = undefined;
   public allPublishPayloadsDir: string | undefined = undefined;
+
+  private _disabled = false;
 
   private queueDropLoggingState = {
     numDropped: 0,
@@ -1911,6 +1982,10 @@ class BackgroundLogger {
   }
 
   log(items: LazyValue<BackgroundLogEvent>[]) {
+    if (this._disabled) {
+      return;
+    }
+
     const [addedItems, droppedItems] = (() => {
       if (this.queueDropExceedingMaxsize === undefined) {
         return [items, []];
@@ -1949,6 +2024,11 @@ class BackgroundLogger {
   }
 
   private async flushOnce(args?: { batchSize?: number }): Promise<void> {
+    if (this._disabled) {
+      this.items = [];
+      return;
+    }
+
     const batchSize = args?.batchSize ?? this.defaultBatchSize;
 
     // Drain the queue.
@@ -2062,7 +2142,7 @@ class BackgroundLogger {
     const conn = await this.apiConn.get();
     const dataStr = constructLogs3Data(items);
     if (this.allPublishPayloadsDir) {
-      await BackgroundLogger.writePayloadToDir({
+      await HTTPBackgroundLogger.writePayloadToDir({
         payloadDir: this.allPublishPayloadsDir,
         payload: dataStr,
       });
@@ -2104,7 +2184,7 @@ class BackgroundLogger {
       }.${retryingText}\nError: ${errorText}`;
 
       if (!isRetrying && this.failedPublishPayloadsDir) {
-        await BackgroundLogger.writePayloadToDir({
+        await HTTPBackgroundLogger.writePayloadToDir({
           payloadDir: this.failedPublishPayloadsDir,
           payload: dataStr,
         });
@@ -2170,7 +2250,7 @@ class BackgroundLogger {
       const payload = `{"data": ${dataStr}, "attachments": ${attachmentStr}}\n`;
 
       for (const payloadDir of publishPayloadsDir) {
-        await BackgroundLogger.writePayloadToDir({ payloadDir, payload });
+        await HTTPBackgroundLogger.writePayloadToDir({ payloadDir, payload });
       }
     } catch (e) {
       console.error(e);
@@ -2238,6 +2318,10 @@ class BackgroundLogger {
   // Should only be called by BraintrustState.
   public internalReplaceApiConn(apiConn: HTTPConnection) {
     this.apiConn = new LazyValue(async () => apiConn);
+  }
+
+  public disable() {
+    this._disabled = true;
   }
 }
 
@@ -2796,6 +2880,7 @@ type InitLoggerOptions<IsAsyncFlush> = FullLoginOptions & {
   projectId?: string;
   setCurrent?: boolean;
   state?: BraintrustState;
+  orgProjectMetadata?: OrgProjectMetadata;
 } & AsyncFlushArg<IsAsyncFlush>;
 
 /**
@@ -2838,6 +2923,7 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
   const state = stateArg ?? _globalState;
   const lazyMetadata: LazyValue<OrgProjectMetadata> = new LazyValue(
     async () => {
+      // Otherwise actually log in.
       await state.login({
         orgName,
         apiKey,
@@ -3077,7 +3163,24 @@ export async function loginToState(options: LoginOptions = {}) {
 
   let conn = null;
 
-  if (apiKey !== undefined) {
+  if (!apiKey) {
+    throw new Error(
+      "Please specify an api key (e.g. by setting BRAINTRUST_API_KEY).",
+    );
+  } else if (apiKey === TEST_API_KEY) {
+    // This is a weird hook that lets us skip logging in and mocking out the org info.
+    const testOrgInfo = [
+      {
+        id: "test-org-id",
+        name: "test-org-name",
+        api_url: "https://braintrust.dev/fake-api-url",
+      },
+    ];
+    state.loggedIn = true;
+    state.loginToken = TEST_API_KEY;
+    _saveOrgInfo(state, testOrgInfo, testOrgInfo[0].name);
+    return state;
+  } else {
     const resp = await checkResponse(
       await fetch(_urljoin(state.appUrl, `/api/apikey/login`), {
         method: "POST",
@@ -3089,7 +3192,7 @@ export async function loginToState(options: LoginOptions = {}) {
     );
     const info = await resp.json();
 
-    _check_org_info(state, info.org_info, orgName);
+    _saveOrgInfo(state, info.org_info, orgName);
     if (!state.apiUrl) {
       if (orgName) {
         throw new Error(
@@ -3104,28 +3207,24 @@ export async function loginToState(options: LoginOptions = {}) {
 
     conn = state.apiConn();
     conn.set_token(apiKey);
-  } else {
-    throw new Error(
-      "Please specify an api key (e.g. by setting BRAINTRUST_API_KEY).",
-    );
+
+    if (!conn) {
+      throw new Error("Conn should be set at this point (a bug)");
+    }
+
+    conn.make_long_lived();
+
+    // Set the same token in the API
+    state.appConn().set_token(apiKey);
+    if (state.proxyUrl) {
+      state.proxyConn().set_token(apiKey);
+    }
+    state.loginToken = conn.token;
+    state.loggedIn = true;
+
+    // Replace the global logger's apiConn with this one.
+    state.loginReplaceApiConn(conn);
   }
-
-  if (!conn) {
-    throw new Error("Conn should be set at this point (a bug)");
-  }
-
-  conn.make_long_lived();
-
-  // Set the same token in the API
-  state.appConn().set_token(apiKey);
-  if (state.proxyUrl) {
-    state.proxyConn().set_token(apiKey);
-  }
-  state.loginToken = conn.token;
-  state.loggedIn = true;
-
-  // Relpace the global logger's apiConn with this one.
-  state.loginReplaceApiConn(conn);
 
   return state;
 }
@@ -3490,7 +3589,7 @@ export function withParent<R>(
   return (state ?? _globalState).currentParent.run(parent, () => callback());
 }
 
-function _check_org_info(
+function _saveOrgInfo(
   state: BraintrustState,
   org_info: any,
   org_name: string | undefined,
@@ -5412,4 +5511,20 @@ export interface DatasetSummary {
  * Allows accessing helper functions for testing.
  * @internal
  */
-export const _exportsForTestingOnly = { extractAttachments, deepCopyEvent };
+
+// it's used to circumvent login for testing, but won't actually work
+// on the server side.
+const TEST_API_KEY = "___TEST_API_KEY__THIS_IS_NOT_REAL___";
+
+// This is a helper function to simulate a login for testing.
+function simulateLoginForTests() {
+  return login({ apiKey: TEST_API_KEY });
+}
+
+export const _exportsForTestingOnly = {
+  extractAttachments,
+  deepCopyEvent,
+  useTestBackgroundLogger,
+  clearTestBackgroundLogger,
+  simulateLoginForTests,
+};
