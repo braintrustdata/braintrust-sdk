@@ -1,4 +1,4 @@
-import { test, expect, describe, beforeEach, afterEach } from "vitest";
+import { test, expect, describe, beforeEach, afterEach, vi } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { wrapAnthropic } from "./anthropic";
 import {
@@ -87,17 +87,24 @@ describe("anthropic client unit tests", () => {
   test("test client.messages.stream", async (context) => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
-    const stream = client.messages.stream({
-      messages: [{ role: "user", content: "tell me about old pond haiku" }],
-      system: "no punctuation",
-      model: TEST_MODEL,
-      max_tokens: 200,
-      temperature: 0.01,
-    });
+    const onMessage = vi.fn();
+
+    const stream = client.messages
+      .stream({
+        messages: [{ role: "user", content: "tell me about old pond haiku" }],
+        system: "no punctuation",
+        model: TEST_MODEL,
+        max_tokens: 200,
+        temperature: 0.01,
+      })
+      .on("message", onMessage);
 
     for await (const event of stream) {
+      // console.log(event);
     }
     const message = await stream.finalMessage();
+    // just making sure we don't break the API.
+    expect(onMessage).toHaveBeenCalledTimes(1);
 
     expect(message.content[0].type).toBe("text");
     const content = message.content[0] as TextBlock;
