@@ -2863,7 +2863,6 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
     forceLogin,
     fetch,
     state: stateArg,
-    orgProjectMetadata,
   } = options || {};
 
   const asyncFlush =
@@ -2876,10 +2875,6 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
   const state = stateArg ?? _globalState;
   const lazyMetadata: LazyValue<OrgProjectMetadata> = new LazyValue(
     async () => {
-      // This is a small hook to allow us to test the logger without logging in.
-      if (orgProjectMetadata) {
-        return orgProjectMetadata;
-      }
       // Otherwise actually log in.
       await state.login({
         orgName,
@@ -3126,14 +3121,16 @@ export async function loginToState(options: LoginOptions = {}) {
     );
   } else if (apiKey === TEST_API_KEY) {
     // This is a weird hook that lets us skip logging in and mocking out the org info.
-    const testOrgInfo = {
-      org_id: "test-org-id",
-      org_name: "test-org-name",
-      api_url: "https://braintrust.dev/fake-api-url",
-    };
+    const testOrgInfo = [
+      {
+        id: "test-org-id",
+        name: "test-org-name",
+        api_url: "https://braintrust.dev/fake-api-url",
+      },
+    ];
     state.loggedIn = true;
     state.loginToken = "__TEST_LOGIN_TOKEN__";
-    _saveOrgInfo(state, testOrgInfo, testOrgInfo.org_name);
+    _saveOrgInfo(state, testOrgInfo, testOrgInfo[0].name);
     return state;
   } else {
     const resp = await checkResponse(

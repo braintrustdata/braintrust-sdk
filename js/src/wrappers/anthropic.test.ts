@@ -6,7 +6,7 @@ import {
   Message,
   TextBlockParam,
 } from "@anthropic-ai/sdk/resources/messages";
-import { initLogger, _exportsForTestingOnly } from "../logger";
+import { initLogger, _exportsForTestingOnly, login } from "../logger";
 import { configureNode } from "../node";
 import { getCurrentUnixTimestamp } from "../util";
 
@@ -29,11 +29,15 @@ describe("anthropic client unit tests", () => {
   let backgroundLogger: any;
   let logger: any;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await login({ apiKey: _exportsForTestingOnly.TEST_API_KEY });
     anthropic = new Anthropic();
     client = wrapAnthropic(anthropic);
     backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
-    logger = initLogger({ projectName: "anthropic.test.ts" });
+    logger = initLogger({
+      projectName: "anthropic.test.ts",
+      projectId: "test-project-id",
+    });
   });
 
   afterEach(() => {
