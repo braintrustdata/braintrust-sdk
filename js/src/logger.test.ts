@@ -21,20 +21,13 @@ const { extractAttachments, deepCopyEvent } = _exportsForTestingOnly;
 
 test("verify MemoryBackgroundLogger intercepts logs", async () => {
   // Log to memory for the tests.
-  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+  _exportsForTestingOnly.simulateLoginForTests();
 
-  const metadata = {
-    org_id: "test-org-id",
-    project: {
-      id: "test-id",
-      name: "test-name",
-      fullInfo: {},
-    },
-  };
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
 
   const logger = initLogger({
     projectName: "test",
-    orgProjectMetadata: metadata,
+    projectId: "test-project-id",
   });
 
   await memoryLogger.flush();

@@ -24,16 +24,17 @@ test("anthropic is installed", () => {
 });
 
 describe("anthropic client unit tests", () => {
-  let anthropic: Anthropic;
   let client: any;
   let backgroundLogger: any;
   let logger: any;
 
+  // fake login before we test. once is enough.
+  _exportsForTestingOnly.simulateLoginForTests();
+
   beforeEach(async () => {
-    await login({ apiKey: _exportsForTestingOnly.TEST_API_KEY });
-    anthropic = new Anthropic();
-    client = wrapAnthropic(anthropic);
     backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+
+    client = wrapAnthropic(new Anthropic());
     logger = initLogger({
       projectName: "anthropic.test.ts",
       projectId: "test-project-id",

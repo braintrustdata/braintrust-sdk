@@ -5435,10 +5435,15 @@ export interface DatasetSummary {
 // on the server side.
 const TEST_API_KEY = "___TEST_API_KEY__THIS_IS_NOT_REAL___";
 
+// This is a helper function to simulate a login for testing.
+function simulateLoginForTests() {
+  return login({ apiKey: TEST_API_KEY });
+}
+
 export const _exportsForTestingOnly = {
   extractAttachments,
   deepCopyEvent,
   useTestBackgroundLogger,
   clearTestBackgroundLogger,
-  TEST_API_KEY,
+  simulateLoginForTests,
 };
