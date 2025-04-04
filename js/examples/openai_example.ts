@@ -1,10 +1,12 @@
 #!/usr/bin/env tsx
 
 import OpenAI from "openai";
-import { wrapOpenAI } from "braintrust";
+import { wrapOpenAI, initLogger } from "braintrust";
 
 // Create and wrap OpenAI client with Braintrust
 const openai = wrapOpenAI(new OpenAI());
+
+initLogger({ projectName: "typescript-examples" });
 
 async function main() {
   const result = await openai.chat.completions.create({

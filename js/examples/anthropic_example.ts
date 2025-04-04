@@ -3,8 +3,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 import { wrapAnthropic, initLogger } from "braintrust";
-initLogger({ projectName: "anthropic-typescript-example" });
 
+initLogger({ projectName: "typescript-examples" });
+
+console.log(wrapAnthropic);
 const client = wrapAnthropic(new Anthropic());
 
 async function main() {
