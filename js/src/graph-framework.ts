@@ -162,7 +162,8 @@ export class GraphBuilder {
         node: target.id,
         variable: targetVar,
       },
-      expr: path ? escapePath(path) : undefined,
+      // TODO: Figure out how to support paths properly
+      // expr: path ? escapePath(path) : undefined,
     };
 
     this.addEdge(edge);
@@ -360,7 +361,8 @@ export class GateNode extends BaseNode implements Node {
     return {
       type: "gate",
       description: "Conditional gate",
-      condition: this.condition,
+      // TODO: Figure out how to represent conditional expressions
+      // condition: this.condition,
     };
   }
 }
