@@ -1895,7 +1895,6 @@ class BackgroundLogger {
 
   log(items: LazyValue<BackgroundLogEvent>[]) {
     if (this._disabled) {
-      console.warn(`LOGGING DISABLED: Dropping ${items.length} log items`);
       return;
     }
 
@@ -1938,7 +1937,6 @@ class BackgroundLogger {
 
   private async flushOnce(args?: { batchSize?: number }): Promise<void> {
     if (this._disabled) {
-      console.warn(`LOGGING DISABLED: Dropping ${this.items.length} log items`);
       this.items = [];
       return;
     }
@@ -2235,9 +2233,6 @@ class BackgroundLogger {
   }
 
   public disable() {
-    console.warn(
-      `LOGGING DISABLED: All unflushed and new logs will be dropped.`,
-    );
     this._disabled = true;
   }
 }
