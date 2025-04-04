@@ -33,18 +33,7 @@ describe("anthropic client unit tests", () => {
     anthropic = new Anthropic();
     client = wrapAnthropic(anthropic);
     backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
-    const metadata = {
-      org_id: "test-org-id",
-      project: {
-        id: "test-id",
-        name: "test-name",
-        fullInfo: {},
-      },
-    };
-    logger = initLogger({
-      projectName: "anthropic.test.ts",
-      orgProjectMetadata: metadata,
-    });
+    logger = initLogger({ projectName: "anthropic.test.ts" });
   });
 
   afterEach(() => {

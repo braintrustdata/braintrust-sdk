@@ -3120,7 +3120,22 @@ export async function loginToState(options: LoginOptions = {}) {
 
   let conn = null;
 
-  if (apiKey !== undefined) {
+  if (!apiKey) {
+    throw new Error(
+      "Please specify an api key (e.g. by setting BRAINTRUST_API_KEY).",
+    );
+  } else if (apiKey === TEST_API_KEY) {
+    // This is a weird hook that lets us skip logging in and mocking out the org info.
+    const testOrgInfo = {
+      org_id: "test-org-id",
+      org_name: "test-org-name",
+      api_url: "https://braintrust.dev/fake-api-url",
+    };
+    state.loggedIn = true;
+    state.loginToken = "__TEST_LOGIN_TOKEN__";
+    _saveOrgInfo(state, testOrgInfo, testOrgInfo.org_name);
+    return state;
+  } else {
     const resp = await checkResponse(
       await fetch(_urljoin(state.appUrl, `/api/apikey/login`), {
         method: "POST",
@@ -3132,7 +3147,7 @@ export async function loginToState(options: LoginOptions = {}) {
     );
     const info = await resp.json();
 
-    _check_org_info(state, info.org_info, orgName);
+    _saveOrgInfo(state, info.org_info, orgName);
     if (!state.apiUrl) {
       if (orgName) {
         throw new Error(
@@ -3147,28 +3162,24 @@ export async function loginToState(options: LoginOptions = {}) {
 
     conn = state.apiConn();
     conn.set_token(apiKey);
-  } else {
-    throw new Error(
-      "Please specify an api key (e.g. by setting BRAINTRUST_API_KEY).",
-    );
+
+    if (!conn) {
+      throw new Error("Conn should be set at this point (a bug)");
+    }
+
+    conn.make_long_lived();
+
+    // Set the same token in the API
+    state.appConn().set_token(apiKey);
+    if (state.proxyUrl) {
+      state.proxyConn().set_token(apiKey);
+    }
+    state.loginToken = conn.token;
+    state.loggedIn = true;
+
+    // Replace the global logger's apiConn with this one.
+    state.loginReplaceApiConn(conn);
   }
-
-  if (!conn) {
-    throw new Error("Conn should be set at this point (a bug)");
-  }
-
-  conn.make_long_lived();
-
-  // Set the same token in the API
-  state.appConn().set_token(apiKey);
-  if (state.proxyUrl) {
-    state.proxyConn().set_token(apiKey);
-  }
-  state.loginToken = conn.token;
-  state.loggedIn = true;
-
-  // Relpace the global logger's apiConn with this one.
-  state.loginReplaceApiConn(conn);
 
   return state;
 }
@@ -3533,7 +3544,7 @@ export function withParent<R>(
   return (state ?? _globalState).currentParent.run(parent, () => callback());
 }
 
-function _check_org_info(
+function _saveOrgInfo(
   state: BraintrustState,
   org_info: any,
   org_name: string | undefined,
@@ -5422,9 +5433,15 @@ export interface DatasetSummary {
  * Allows accessing helper functions for testing.
  * @internal
  */
+
+// it's used to circumvent login for testing, but won't actually work
+// on the server side.
+const TEST_API_KEY = "___TEST_API_KEY__THIS_IS_NOT_REAL___";
+
 export const _exportsForTestingOnly = {
   extractAttachments,
   deepCopyEvent,
   useTestBackgroundLogger,
   clearTestBackgroundLogger,
+  TEST_API_KEY,
 };
