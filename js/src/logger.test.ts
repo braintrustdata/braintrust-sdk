@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { vi, expect, test } from "vitest";
 import {
   _exportsForTestingOnly,
   init,
@@ -11,8 +11,10 @@ import {
   NOOP_SPAN,
   Prompt,
   permalink,
+  BraintrustState,
 } from "./logger";
-import { BackgroundLogEvent } from "@braintrust/core";
+import { LazyValue } from "./util";
+import { BackgroundLogEvent, IS_MERGE_FIELD } from "@braintrust/core";
 import { configureNode } from "./node";
 
 configureNode();
@@ -362,4 +364,55 @@ test("prompt.build with structured output templating", () => {
       },
     },
   });
+});
+
+test("disable logging", async () => {
+  const state = new BraintrustState({});
+  const bgLogger = state.bgLogger();
+
+  let submittedItems = [];
+  const submitLogsRequestSpy = vi
+    .spyOn(bgLogger, "submitLogsRequest")
+    .mockImplementation((items: string[]) => {
+      submittedItems = items;
+      return Promise.resolve();
+    });
+
+  bgLogger.log([
+    new LazyValue(() =>
+      Promise.resolve({
+        id: "id",
+        project_id: "p",
+        log_id: "g",
+        input: "bar",
+        output: "foo",
+        [IS_MERGE_FIELD]: false,
+      }),
+    ),
+  ]);
+
+  await bgLogger.flush();
+  expect(submitLogsRequestSpy).toHaveBeenCalledTimes(1);
+  expect(submittedItems.length).toEqual(1);
+
+  submittedItems = [];
+  state.disable();
+
+  for (let i = 0; i < 10; i++) {
+    bgLogger.log([
+      new LazyValue(() =>
+        Promise.resolve({
+          id: "id",
+          project_id: "p",
+          log_id: "g",
+          input: "bar" + i,
+          output: "foo" + i,
+          [IS_MERGE_FIELD]: false,
+        }),
+      ),
+    ]);
+  }
+  await bgLogger.flush();
+  expect(submitLogsRequestSpy).toHaveBeenCalledTimes(1);
+  expect(submittedItems.length).toEqual(0);
 });

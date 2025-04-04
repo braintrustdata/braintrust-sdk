@@ -567,6 +567,10 @@ export class BraintrustState {
   public loginReplaceApiConn(apiConn: HTTPConnection) {
     this._bgLogger.get().internalReplaceApiConn(apiConn);
   }
+
+  public disable() {
+    this._bgLogger.get().disable();
+  }
 }
 
 let _globalState: BraintrustState;
@@ -1882,6 +1886,8 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public failedPublishPayloadsDir: string | undefined = undefined;
   public allPublishPayloadsDir: string | undefined = undefined;
 
+  private _disabled = false;
+
   private queueDropLoggingState = {
     numDropped: 0,
     lastLoggedTimestamp: 0,
@@ -1953,6 +1959,10 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   }
 
   log(items: LazyValue<BackgroundLogEvent>[]) {
+    if (this._disabled) {
+      return;
+    }
+
     const [addedItems, droppedItems] = (() => {
       if (this.queueDropExceedingMaxsize === undefined) {
         return [items, []];
@@ -1991,6 +2001,11 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   }
 
   private async flushOnce(args?: { batchSize?: number }): Promise<void> {
+    if (this._disabled) {
+      this.items = [];
+      return;
+    }
+
     const batchSize = args?.batchSize ?? this.defaultBatchSize;
 
     // Drain the queue.
@@ -2280,6 +2295,10 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   // Should only be called by BraintrustState.
   public internalReplaceApiConn(apiConn: HTTPConnection) {
     this.apiConn = new LazyValue(async () => apiConn);
+  }
+
+  public disable() {
+    this._disabled = true;
   }
 }
 
