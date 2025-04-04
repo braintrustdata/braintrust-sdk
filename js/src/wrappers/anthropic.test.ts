@@ -6,9 +6,9 @@ import {
   Message,
   TextBlockParam,
 } from "@anthropic-ai/sdk/resources/messages";
-import { initLogger, _exportsForTestingOnly, Logger } from "../logger";
+import { initLogger, _exportsForTestingOnly } from "../logger";
 import { configureNode } from "../node";
-import { debugLog, getCurrentUnixTimestamp } from "../util";
+import { getCurrentUnixTimestamp, debugLog } from "../util";
 
 // use the cheapest model for tests
 const TEST_MODEL = "claude-3-haiku-20240307";
@@ -27,7 +27,7 @@ describe("anthropic client unit tests", () => {
   let anthropic: Anthropic;
   let client: any;
   let backgroundLogger: any;
-  let logger: Logger<false>;
+  let logger: any;
 
   beforeEach(() => {
     anthropic = new Anthropic();
@@ -98,14 +98,12 @@ describe("anthropic client unit tests", () => {
     for await (const event of stream) {
     }
     const message = await stream.finalMessage();
-    debugLog("message", message);
 
     expect(message.content[0].type).toBe("text");
     const content = message.content[0] as TextBlock;
     expect(content.text).toContain("old pond");
 
     const spans = await backgroundLogger.pop();
-    console.log("spans", spans);
 
     expect(spans).toHaveLength(1);
     const span = spans[0] as any;
