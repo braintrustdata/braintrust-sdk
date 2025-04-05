@@ -53,13 +53,6 @@ export const promptBlockDataSchema = z.union([
       type: z.literal("chat"),
       messages: z.array(chatCompletionMessageParamSchema),
       tools: z.string().optional(),
-      // XXX REMOVE
-      extraMessages: z
-        .string()
-        .optional()
-        .describe(
-          "A template path of extra messages to append to the conversion. These messages will be appended to the end of the conversation, after the last message.",
-        ),
     })
     .openapi({ title: "chat" }),
 ]);

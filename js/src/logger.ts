@@ -82,7 +82,7 @@ import {
   SyncLazyValue,
   runCatchFinally,
 } from "./util";
-import { lintTemplate, renderExtraMessages } from "./mustache-utils";
+import { lintTemplate } from "./mustache-utils";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
