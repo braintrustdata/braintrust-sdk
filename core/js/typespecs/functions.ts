@@ -6,6 +6,7 @@ import { chatCompletionMessageParamSchema } from "./openai/messages";
 import { customTypes } from "./custom_types";
 import { gitMetadataSettingsSchema, repoInfoSchema } from "./git_types";
 import { objectReferenceSchema } from "./common_types";
+import { functionDataSchema } from "./app_types";
 
 export const validRuntimesEnum = z.enum(["node", "python"]);
 export type Runtime = z.infer<typeof validRuntimesEnum>;
@@ -83,6 +84,14 @@ export const functionIdSchema = z
       })
       .describe("Inline prompt definition")
       .openapi({ title: "inline_prompt" }),
+    z
+      .object({
+        inline_prompt: promptDataSchema.optional(),
+        inline_function: functionDataSchema,
+        name: z.string().nullish().describe("The name of the inline function"),
+      })
+      .describe("Inline function definition")
+      .openapi({ title: "inline_function" }),
   ])
   .describe("Options for identifying a function")
   .openapi("FunctionId");
