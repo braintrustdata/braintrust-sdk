@@ -5313,16 +5313,8 @@ export class Prompt<
       );
       const hasSystemPrompt = baseMessages.some((m) => m.role === "system");
 
-      // extraMessages is a path which we'll just evaluate direc
-      const extraMessages = prompt.extraMessages
-        ? renderExtraMessages(prompt.extraMessages, variables, !!options.strict)
-        : [];
-
       const messages = [
         ...baseMessages,
-        ...extraMessages.filter(
-          (m) => !(hasSystemPrompt && m.role === "system"),
-        ),
         ...(options.messages ?? []).filter(
           (m) => !(hasSystemPrompt && m.role === "system"),
         ),

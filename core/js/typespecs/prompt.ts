@@ -53,6 +53,7 @@ export const promptBlockDataSchema = z.union([
       type: z.literal("chat"),
       messages: z.array(chatCompletionMessageParamSchema),
       tools: z.string().optional(),
+      // XXX REMOVE
       extraMessages: z
         .string()
         .optional()
