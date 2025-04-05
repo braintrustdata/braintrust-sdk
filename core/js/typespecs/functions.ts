@@ -25,6 +25,75 @@ const strictParam = z
   .describe(
     "If true, throw an error if one of the variables in the prompt is not present in the input",
   );
+export const codeBundleSchema = z
+  .object({
+    runtime_context: runtimeContextSchema,
+    location: z.union([
+      z
+        .object({
+          type: z.literal("experiment"),
+          eval_name: z.string(),
+          position: z.union([
+            z.object({ type: z.literal("task") }),
+            z
+              .object({
+                type: z.literal("scorer"),
+                index: z.number().int().nonnegative(),
+              })
+              .openapi({ title: "scorer" }),
+          ]),
+        })
+        .openapi({ title: "experiment" }),
+      z
+        .object({
+          type: z.literal("function"),
+          index: z.number().int().nonnegative(),
+        })
+        .openapi({ title: "function" }),
+    ]),
+    bundle_id: z.string(),
+    preview: z.string().nullish().describe("A preview of the code"),
+  })
+  .openapi("CodeBundle");
+export type CodeBundle = z.infer<typeof codeBundleSchema>;
+
+export const functionDataSchema = z
+  .union([
+    z
+      .object({
+        type: z.literal("prompt"),
+        // For backwards compatibility reasons, the prompt definition is hoisted out and stored
+        // in the outer object
+      })
+      .openapi({ title: "prompt" }),
+    z
+      .object({
+        type: z.literal("code"),
+        data: z.union([
+          z
+            .object({
+              type: z.literal("bundle"),
+            })
+            .and(codeBundleSchema)
+            .openapi({ title: "bundle" }),
+          z
+            .object({
+              type: z.literal("inline"),
+              runtime_context: runtimeContextSchema,
+              code: z.string(),
+            })
+            .openapi({ title: "inline" }),
+        ]),
+      })
+      .openapi({ title: "code" }),
+    z
+      .object({
+        type: z.literal("global"),
+        name: z.string(),
+      })
+      .openapi({ title: "global" }),
+  ])
+  .openapi("FunctionData");
 
 export const functionIdSchema = z
   .union([
@@ -83,6 +152,14 @@ export const functionIdSchema = z
       })
       .describe("Inline prompt definition")
       .openapi({ title: "inline_prompt" }),
+    z
+      .object({
+        inline_prompt: promptDataSchema.optional(),
+        inline_function: functionDataSchema,
+        name: z.string().nullish().describe("The name of the inline function"),
+      })
+      .describe("Inline function definition")
+      .openapi({ title: "inline_function" }),
   ])
   .describe("Options for identifying a function")
   .openapi("FunctionId");
