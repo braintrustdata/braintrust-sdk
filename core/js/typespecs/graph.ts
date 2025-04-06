@@ -51,16 +51,13 @@ export type GraphNode = z.infer<typeof graphNodeSchema>;
 
 export const graphEdgeDataSchema = z.object({
   node: nodeIdSchema,
-  variable: z
-    .string()
-    .describe("The variable name for the output")
-    .default("value"),
+  variable: z.string(),
 });
 
 export const graphEdgeSchema = z.object({
   source: graphEdgeDataSchema,
   target: graphEdgeDataSchema,
-  expr: z.string().describe("A BTQL expression to be evaluated on the edge"),
+  purpose: z.enum(["control", "data"]).describe("The purpose of the edge"),
 });
 
 export type GraphEdge = z.infer<typeof graphEdgeSchema>;
