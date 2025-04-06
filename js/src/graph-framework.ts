@@ -85,9 +85,26 @@ export class GraphBuilder {
       throw new Error("Target path must be empty");
     }
     const id = this.generateId();
+
+    sourceVar = sourceVar ?? "output";
+    targetVar =
+      targetVar ?? (purpose === "data" ? "input" : this.generateId("control"));
+
+    // Make sure this variable name doesn't already exist as a target variable
+    for (const edge of Object.values(this.edges)) {
+      if (
+        edge.target.node === targetNode.id &&
+        edge.target.variable === targetVar
+      ) {
+        throw new Error(
+          `Variable name ${targetVar} already set on ${targetNode.id}`,
+        );
+      }
+    }
+
     this.edges[id] = {
-      source: { node: sourceNode.id, variable: sourceVar ?? "output" },
-      target: { node: targetNode.id, variable: targetVar ?? "input" },
+      source: { node: sourceNode.id, variable: sourceVar },
+      target: { node: targetNode.id, variable: targetVar },
       purpose,
     };
   }
@@ -110,14 +127,17 @@ export class GraphBuilder {
 
   // Create a literal node
   public literal<T>(value: T): LiteralNode<T> {
-    const id = this.generateId();
+    const preview = (
+      typeof value === "string" ? value : JSON.stringify(value)
+    ).slice(0, 16);
+    const id = this.generateId(`literal-${preview}`);
     const literalNode = new LiteralNode<T>(this, id, value);
     this.nodes.set(id, literalNode);
     return literalNode;
   }
 
   public gate(options: { condition: string }): GateNode {
-    const id = this.generateId();
+    const id = this.generateId("gate");
     const gateNode = new GateNode(this, id, options.condition);
     this.nodes.set(id, gateNode);
     return gateNode;
@@ -133,13 +153,18 @@ export class GraphBuilder {
   // }
 
   // Helper to generate node IDs
-  private generateId(): string {
-    return newId();
+  private generateId(name?: string): string {
+    const uuid = newId();
+    if (name) {
+      return `${name}-${uuid.slice(0, 8)}`;
+    } else {
+      return uuid;
+    }
   }
 
   // Create an input node
   private createInputNode(): InputNode {
-    const id = this.generateId();
+    const id = this.generateId("input");
     const inputNode = new InputNode(this, id);
     this.nodes.set(id, inputNode);
     return inputNode;
@@ -147,7 +172,7 @@ export class GraphBuilder {
 
   // Create an output node
   private createOutputNode(): OutputNode {
-    const id = this.generateId();
+    const id = this.generateId("output");
     const outputNode = new OutputNode(this, id);
     this.nodes.set(id, outputNode);
     return outputNode;
@@ -155,7 +180,7 @@ export class GraphBuilder {
 
   // Create a prompt node from a CodePrompt
   private createPromptNode(prompt: Prompt): PromptNode {
-    const id = this.generateId();
+    const id = this.generateId("prompt");
 
     const promptNode = new PromptNode(this, id, prompt);
     this.nodes.set(id, promptNode);
