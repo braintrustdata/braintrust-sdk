@@ -60,6 +60,7 @@ export const graphEdgeDataSchema = z.object({
 export const graphEdgeSchema = z.object({
   source: graphEdgeDataSchema,
   target: graphEdgeDataSchema,
+  expr: z.string().describe("A BTQL expression to be evaluated on the edge"),
 });
 
 export type GraphEdge = z.infer<typeof graphEdgeSchema>;

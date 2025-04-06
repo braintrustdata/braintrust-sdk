@@ -17,6 +17,7 @@ export interface Node {
   then(...args: Array<NodeLike | TransformFn>): Node;
   call(input: CallArgs, path?: string[]): Node;
   build(context: BuildContext): Promise<GraphNode>;
+  addDependency(dependency: Dependency): void;
 }
 
 type CallArgs = ProxyVariable | Node | Record<string, ProxyVariable | Node>;
@@ -53,7 +54,6 @@ export class GraphBuilder {
         await node.build(context),
       ]),
     );
-    console.log("nodes", nodes);
 
     return {
       type: "graph",
@@ -138,36 +138,6 @@ export class GraphBuilder {
     this.nodes.set(id, promptNode);
     return promptNode;
   }
-
-  // Connect two nodes with an edge
-  public connect({
-    source,
-    sourceVar = "value",
-    target,
-    targetVar = "value",
-    path,
-  }: {
-    source: Node;
-    sourceVar?: string;
-    target: Node;
-    targetVar?: string;
-    path?: string[];
-  }): void {
-    const edge: GraphEdge = {
-      source: {
-        node: source.id,
-        variable: sourceVar,
-      },
-      target: {
-        node: target.id,
-        variable: targetVar,
-      },
-      // TODO: Figure out how to support paths properly
-      // expr: path ? escapePath(path) : undefined,
-    };
-
-    this.addEdge(edge);
-  }
 }
 
 export type ProxyVariable = {
@@ -226,9 +196,15 @@ function createVariableProxy({
 // Type for transform functions
 export type TransformFn = (input: ProxyVariable) => Node;
 
+interface Dependency {
+  node: Node;
+  expr?: string;
+}
+
 // Base Node class for common functionality
 abstract class BaseNode implements Node {
   public readonly __type = "node";
+  public dependencies: Dependency[] = [];
 
   constructor(
     protected graph: GraphBuilder,
@@ -245,18 +221,14 @@ abstract class BaseNode implements Node {
     for (const arg of args) {
       // Handle different types of arguments
       if (typeof arg === "function") {
+        // This function is expected to take dependencies as needed on the argsProxy.
         const argsProxy = createVariableProxy({ path: [], node: callableThis });
         const result = arg(argsProxy);
         lastNode = result;
-        this.graph.connect({ source: callableThis, target: result });
       } else {
         const [node, path] = this.graph.resolveNode(arg);
         lastNode = node;
-        this.graph.connect({
-          source: callableThis,
-          target: node,
-          path,
-        });
+        node.addDependency({ node: callableThis, expr: escapePath(path) });
       }
     }
 
@@ -266,26 +238,26 @@ abstract class BaseNode implements Node {
   public call(input: CallArgs, path?: string[]): Node {
     if (isProxyVariable(input)) {
       const [sourceNode, sourcePath] = proxyVariableToNode(input);
-      this.graph.connect({
-        source: sourceNode,
-        target: this,
-        path: sourcePath,
-      });
+      this.addDependency({ node: sourceNode, expr: escapePath(sourcePath) });
     } else if (isNode(input)) {
-      this.graph.connect({ source: input, target: this, path });
+      this.addDependency({
+        node: input,
+        expr: path ? escapePath(path) : undefined,
+      });
     } else {
       for (const [targetVar, source] of Object.entries(input)) {
         const [sourceNode, sourcePath] = this.graph.resolveNode(source);
-        this.graph.connect({
-          source: sourceNode,
-          sourceVar: "value",
-          target: this,
-          targetVar,
-          path: sourcePath,
+        this.addDependency({
+          node: sourceNode,
+          expr: sourcePath ? escapePath(sourcePath) : undefined,
         });
       }
     }
     return this;
+  }
+
+  public addDependency(dependency: Dependency) {
+    this.dependencies.push(dependency);
   }
 
   abstract build(context: BuildContext): Promise<GraphNode>;
@@ -392,7 +364,10 @@ export function createGraph(): GraphBuilder {
 }
 
 // XXX write tests
-export function escapePath(parts: string[]): string {
+export function escapePath(parts: string[]): string | undefined {
+  if (parts.length === 0) {
+    return undefined;
+  }
   return parts
     .map((part) => {
       if (/[^\w-]/.test(part)) {
