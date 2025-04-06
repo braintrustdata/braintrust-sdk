@@ -19,7 +19,6 @@ import {
   IdField,
   IS_MERGE_FIELD,
   LogFeedbackFullArgs,
-  makeLegacyEvent,
   mergeDicts,
   mergeGitMetadataSettings,
   mergeRowBatch,
@@ -2130,16 +2129,8 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       let error: unknown = undefined;
       try {
         await conn.post_json("logs3", dataStr);
-      } catch {
-        // Fallback to legacy API. Remove once all API endpoints are updated.
-        try {
-          const legacyDataS = constructJsonArray(
-            items.map((r) => JSON.stringify(makeLegacyEvent(JSON.parse(r)))),
-          );
-          await conn.post_json("logs", legacyDataS);
-        } catch (e) {
-          error = e;
-        }
+      } catch (e) {
+        error = e;
       }
       if (error === undefined) {
         return;
