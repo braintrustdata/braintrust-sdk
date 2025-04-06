@@ -34,7 +34,7 @@ develop: ${VENV_PRE_COMMIT}
 fixup:
 	source env.sh && pre-commit run --all-files
 
-.PHONY: test test-py test-js nox pylint
+.PHONY: test test-py test-js nox pylint template-version
 
 test: test-py-core test-py-sdk test-js
 
@@ -53,3 +53,6 @@ nox:
 
 pylint:
 	@pylint --errors-only $(shell git ls-files 'py/**/*.py')
+
+save-git-commit-id:
+	@GIT_COMMIT=$$(git rev-parse HEAD) && sed -i '' "s/__GIT_COMMIT__/$$GIT_COMMIT/g" py/src/braintrust/version.py
