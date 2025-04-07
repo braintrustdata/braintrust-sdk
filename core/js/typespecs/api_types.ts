@@ -948,6 +948,7 @@ export const asyncScoringStateSchema = z
       status: z.literal("enabled"),
       token: z.string(),
       function_ids: z.array(functionIdSchema).nonempty(),
+      skip_logging: z.boolean().nullish(),
     }),
     // Explicitly disabled.
     z.object({

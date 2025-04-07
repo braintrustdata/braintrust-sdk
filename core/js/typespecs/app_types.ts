@@ -568,6 +568,10 @@ export const onlineScoreConfigSchema = z
       .array()
       .nullish()
       .describe("Trigger online scoring on any spans with a name in this list"),
+    skip_logging: z
+      .boolean()
+      .nullish()
+      .describe("Whether to skip adding scorer spans when computing scores"),
   })
   .refine((val) => val.apply_to_root_span || val.apply_to_span_names?.length, {
     message: "Online scoring rule does not apply to any rows",
