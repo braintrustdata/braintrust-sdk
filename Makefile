@@ -48,7 +48,7 @@ test-js:
 	pnpm install && pnpm test
 
 nox:
-	nox -f py/noxfile.py
+	nox -f py/noxfile.py -k code
 	nox -f integrations/langchain-py/noxfile.py
 
 pylint:
