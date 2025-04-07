@@ -27,18 +27,3 @@ def ensure_new_dataset_record(r: DatasetEvent) -> DatasetEvent:
     row = r.copy()
     row["expected"] = row.pop("output")
     return row
-
-
-def make_legacy_event(e: Mapping[str, Any]) -> Mapping[str, Any]:
-    if "dataset_id" not in e or "expected" not in e:
-        return e
-
-    event = {**e}
-    event["output"] = event.pop("expected")
-
-    if MERGE_PATHS_FIELD in event:
-        for path in event[MERGE_PATHS_FIELD] or []:
-            if len(path) > 0 and path[0] == "expected":
-                path[0] = "output"
-
-    return event

@@ -67,7 +67,7 @@ from .db_fields import (
 from .git_fields import GitMetadataSettings, RepoInfo
 from .gitutil import get_past_n_ancestors, get_repo_info
 from .merge_row_batch import batch_items, merge_row_batch
-from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
+from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record
 from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptMessage, PromptSchema, TextPart
 from .prompt_cache.disk_cache import DiskCache
 from .prompt_cache.lru_cache import LRUCache
@@ -831,9 +831,6 @@ class _HTTPBackgroundLogger:
         for i in range(self.num_tries):
             start_time = time.time()
             resp = conn.post("/logs3", data=dataStr)
-            if not resp.ok:
-                legacyDataS = construct_json_array([json.dumps(make_legacy_event(json.loads(r))) for r in items])
-                resp = conn.post("/logs", data=legacyDataS)
             if resp.ok:
                 return
             resp_errmsg = f"{resp.status_code}: {resp.text}"

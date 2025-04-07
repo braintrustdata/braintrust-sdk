@@ -1,10 +1,10 @@
-import type {
+import { newId, Prompt } from "./logger";
+import {
+  FunctionId,
   GraphData,
   GraphNode,
   GraphEdge,
-} from "@braintrust/core/typespecs/graph";
-import { newId, Prompt } from "./logger";
-import { FunctionId } from "@braintrust/core/typespecs";
+} from "@braintrust/core/typespecs";
 
 export interface BuildContext {
   getFunctionId(functionObj: unknown): Promise<FunctionId>;
