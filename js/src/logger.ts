@@ -634,7 +634,7 @@ export class FailedHTTPResponse extends Error {
   public data: any;
 
   constructor(status: number, text: string, data: any = null) {
-    super(`${status}: ${text}`);
+    super(`${status}: ${text} (${data})`);
     this.status = status;
     this.text = text;
     this.data = data;
