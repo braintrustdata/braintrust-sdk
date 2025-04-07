@@ -5299,9 +5299,16 @@ export class Prompt<
         });
       };
 
+      const baseMessages = (prompt.messages || []).map((m) =>
+        renderMessage(render, m),
+      );
+      const hasSystemPrompt = baseMessages.some((m) => m.role === "system");
+
       const messages = [
-        ...(prompt.messages || []).map((m) => renderMessage(render, m)),
-        ...(options.messages ?? []),
+        ...baseMessages,
+        ...(options.messages ?? []).filter(
+          (m) => !(hasSystemPrompt && m.role === "system"),
+        ),
       ];
 
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
