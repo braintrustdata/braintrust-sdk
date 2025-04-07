@@ -435,6 +435,12 @@ export const runEvalSchema = z
       ),
     strict: strictParam,
     stop_token: stopToken,
+    extra_messages: z
+      .string()
+      .optional()
+      .describe(
+        "A template path of extra messages to append to the conversion. These messages will be appended to the end of the conversation, after the last message.",
+      ),
   })
   .openapi("RunEval");
 
