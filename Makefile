@@ -56,3 +56,33 @@ pylint:
 
 save-git-commit-id:
 	@GIT_COMMIT=$$(git rev-parse HEAD) && sed -i '' "s/__GIT_COMMIT__/$$GIT_COMMIT/g" py/src/braintrust/version.py
+
+
+#----------------------
+# Python SDK
+#----------------------
+
+.PHONY: py-sdk-build py-sdk-lint py-sdk-verify py-sdk-test-code py-sdk-test-wheel py-sdk-build-and-test
+
+py-sdk-lint:
+	@pylint --errors-only py/src py/examples
+
+# Build our wheel with the current git commit hash baked in.
+py-sdk-build:
+	rm -rf dist
+	@GIT_COMMIT=$$(git rev-parse HEAD) && sed -i '' "s/__GIT_COMMIT__/$$GIT_COMMIT/g" py/src/braintrust/version.py
+	cd py && python -m build
+	git checkout py/src/braintrust/version.py
+
+# Run all tests against the current source.
+py-sdk-test-code:
+	nox -f py/noxfile.py -k code
+
+py-sdk-test-wheel:
+	nox -f py/noxfile.py -k wheel
+
+# Build the wheel and run all tests against it.
+py-sdk-build-and-test: py-sdk-build py-sdk-test-wheel
+
+# do everything the ci needs to do to check our code
+py-sdk-verify-ci: fixup py-sdk-lint py-sdk-test-code
