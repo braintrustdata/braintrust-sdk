@@ -55,7 +55,8 @@ pylint:
 	@pylint --errors-only $(shell git ls-files 'py/**/*.py')
 
 save-git-commit-id:
-	@GIT_COMMIT=$$(git rev-parse HEAD) && sed -i '' "s/__GIT_COMMIT__/$$GIT_COMMIT/g" py/src/braintrust/version.py
+	# a bit verbose but works on linux and osx
+	@REF=$$(git rev-parse HEAD) && sed -i.bak "s/__GIT_COMMIT__/$$REF/g" py/src/braintrust/version.py && rm -f py/src/braintrust/version.py.bak
 
 
 #----------------------
@@ -68,9 +69,8 @@ py-sdk-lint:
 	@pylint --errors-only py/src py/examples
 
 # Build our wheel with the current git commit hash baked in.
-py-sdk-build:
+py-sdk-build: save-git-commit-id
 	rm -rf dist
-	@GIT_COMMIT=$$(git rev-parse HEAD) && sed -i '' "s/__GIT_COMMIT__/$$GIT_COMMIT/g" py/src/braintrust/version.py
 	cd py && python -m build
 	git checkout py/src/braintrust/version.py
 
@@ -78,6 +78,7 @@ py-sdk-build:
 py-sdk-test-code:
 	nox -f py/noxfile.py -k code
 
+# Run all tests against the most recently built wheel.
 py-sdk-test-wheel:
 	nox -f py/noxfile.py -k wheel
 
