@@ -34,7 +34,7 @@ develop: ${VENV_PRE_COMMIT}
 fixup:
 	source env.sh && pre-commit run --all-files
 
-.PHONY: test test-py test-js nox pylint template-version
+.PHONY: test test-py test-js nox pylint template-version template-version-rc
 
 test: test-py-core test-py-sdk test-js
 
@@ -54,23 +54,19 @@ nox:
 pylint:
 	@pylint --errors-only $(shell git ls-files 'py/**/*.py')
 
-save-git-commit-id:
-	# a bit verbose but works on linux and osx
-	@REF=$$(git rev-parse HEAD) && sed -i.bak "s/__GIT_COMMIT__/$$REF/g" py/src/braintrust/version.py && rm -f py/src/braintrust/version.py.bak
-
-
 #----------------------
 # Python SDK
 #----------------------
 
 .PHONY: py-sdk-build py-sdk-lint py-sdk-verify py-sdk-test-code py-sdk-test-wheel py-sdk-build-and-test
+.PHONY: py-sdk-build-test-publish-testpypi py-sdk-build-test-publish-pypi update-sdk-version-py
 
 py-sdk-lint:
 	@pylint --errors-only py/src py/examples
 
 # Build our wheel with the current git commit hash baked in.
-py-sdk-build: save-git-commit-id
-	rm -rf dist
+py-sdk-build: update-sdk-version-py
+	rm -rf py/dist
 	cd py && python -m build
 	git checkout py/src/braintrust/version.py
 
@@ -82,8 +78,28 @@ py-sdk-test-code:
 py-sdk-test-wheel:
 	nox -f py/noxfile.py -k wheel
 
-# Build the wheel and run all tests against it.
-py-sdk-build-and-test: py-sdk-build py-sdk-test-wheel
-
 # do everything the ci needs to do to check our code
 py-sdk-verify-ci: fixup py-sdk-lint py-sdk-test-code
+
+py-sdk-publish:
+	@if [ -z "$$PYPI_REPO" ]; then \
+		echo "Error: PYPI_REPO environment variable must be set"; \
+		exit 1; \
+	fi
+
+	cd py && twine upload --repository ${PYPI_REPO} dist/*
+
+update-sdk-version-py:
+	@bash template-version.sh
+
+# Build test and publish the wheel.
+py-sdk-build-test-publish: py-sdk-build py-sdk-test-wheel py-sdk-publish
+
+# Build, test and publish to pypi.
+# NOTE[matt] all repos will be testpypi until this script is well
+# tested.
+py-sdk-build-test-publish-pypi: export PYPI_REPO=testpypi
+py-sdk-build-test-publish-pypi: py-sdk-build-test-publish
+
+py-sdk-build-test-publish-testpypi: export PYPI_REPO=testpypi
+py-sdk-build-test-publish-testpypi: py-sdk-build-test-publish
