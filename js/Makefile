@@ -1,9 +1,9 @@
 .PHONY: prune test-anthropic test-anthropic-@0.39.0 test-anthropic-@0.38.0 test-anthropic-latest test
 
-prune:
-	pnpm prune
+# -------------------------------------------------------------------------------------------------	#
+# Anthropic testing
+# -------------------------------------------------------------------------------------------------
 
-# A workaround to test with an without optional dependencies. There may be snazzier ways to do this.
 test-anthropic: test-anthropic-latest test-anthropic-0.39.0 test-anthropic-0.38.0
 
 test-anthropic-latest:
@@ -16,6 +16,30 @@ test-anthropic-%:
 	$(call pnpm_install_no_save,@anthropic-ai/sdk@$*)
 	pnpm test:anthropic
 
+# -------------------------------------------------------------------------------------------------
+# OpenAI testing
+# -------------------------------------------------------------------------------------------------
+
+.PHONY: test-openai test-openai-latest test-openai-%
+
+test-openai: test-openai-latest test-openai-@4.92.1 test-openai-@4.91.0
+test-openai-latest:
+	pnpm prune
+	$(call pnpm_install_no_save,openai)
+	pnpm test:openai
+
+test-openai-%:
+	pnpm prune
+	$(call pnpm_install_no_save,openai@$*)
+	pnpm test:openai
+
+
+# -------------------------------------------------------------------------------------------------
+# common things
+# -------------------------------------------------------------------------------------------------
+
+.PHONY: test-pnpm test test-latest prune
+
 # Test everything but the wrappers.
 test-pnpm:
 	pnpm prune
@@ -26,6 +50,9 @@ test: test-anthropic test-pnpm
 
 # Test the core and the latest versions of wrappers.
 test-latest: test-pnpm test-anthropic-latest
+
+prune:
+	pnpm prune
 
 
 
