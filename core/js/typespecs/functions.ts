@@ -7,6 +7,13 @@ import { customTypes } from "./custom_types";
 import { gitMetadataSettingsSchema, repoInfoSchema } from "./git_types";
 import { objectReferenceSchema } from "./common_types";
 
+// Define a placeholder for functionIdSchema
+// This approach creates a reference to the type with OpenAPI metadata
+// We can't use z.lazy directly as it's not supported by zod-to-openapi
+const functionIdRef = z.object({}).passthrough().openapi("FunctionId", {
+  description: "Options for identifying a function",
+});
+
 export const validRuntimesEnum = z.enum(["node", "python"]);
 export type Runtime = z.infer<typeof validRuntimesEnum>;
 
@@ -80,7 +87,7 @@ const baseNodeDataSchema = z.object({
 export const graphNodeSchema = z.union([
   baseNodeDataSchema.extend({
     type: z.literal("function"),
-    function: z.lazy((): z.ZodTypeAny => functionIdSchema),
+    function: functionIdRef,
   }),
   baseNodeDataSchema.extend({
     type: z.literal("input").describe("The input to the graph"),
@@ -236,7 +243,10 @@ export const functionIdSchema = z
       .openapi({ title: "inline_function" }),
   ])
   .describe("Options for identifying a function")
-  .openapi("FunctionId");
+  .openapi({
+    title: "FunctionId",
+    description: "Options for identifying a function",
+  });
 
 export type FunctionId = z.infer<typeof functionIdSchema>;
 
