@@ -22,7 +22,7 @@ test-anthropic-%:
 
 .PHONY: test-openai test-openai-latest test-openai-%
 
-test-openai: test-openai-latest test-openai-@4.92.1 test-openai-@4.91.0
+test-openai: test-openai-latest test-openai-4.92.1 test-openai-4.91.0
 test-openai-latest:
 	pnpm prune
 	$(call pnpm_install_no_save,openai)
@@ -46,7 +46,7 @@ test-pnpm:
 	pnpm test
 
 # Test everything
-test: test-anthropic test-pnpm
+test: test-anthropic test-pnpm test-openai
 
 # Test the core and the latest versions of wrappers.
 test-latest: test-pnpm test-anthropic-latest test-openai-latest
