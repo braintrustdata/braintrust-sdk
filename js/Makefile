@@ -49,7 +49,7 @@ test-pnpm:
 test: test-anthropic test-pnpm
 
 # Test the core and the latest versions of wrappers.
-test-latest: test-pnpm test-anthropic-latest
+test-latest: test-pnpm test-anthropic-latest test-openai-latest
 
 prune:
 	pnpm prune
