@@ -147,11 +147,10 @@ function responsesProxy(openai: OpenAILike) {
 function responsesCreateProxy(target: any): (params: any) => Promise<any> {
   return new Proxy(target, {
     apply(target, thisArg, argArray) {
-      if (!argArray) {
+      if (!argArray || argArray.length === 0) {
         return Reflect.apply(target, thisArg, argArray);
       }
       const params = argArray[0];
-      console.log("params", params);
 
       const spanArgs = {
         name: "openai.responses.create",
@@ -169,13 +168,10 @@ function responsesCreateProxy(target: any): (params: any) => Promise<any> {
       function onFulfilled(result: any) {
         const event = {
           output: result?.output_text || "",
-          metrics: {
-            tokens: result?.usage?.total_tokens,
-            prompt_tokens: result?.usage?.prompt_tokens,
-            completion_tokens: result?.usage?.completion_tokens,
-          },
+          metrics: parseMetricsFromUsage(result?.usage),
         };
         span.log(event);
+        span.end();
         return result;
       }
 
@@ -184,6 +180,49 @@ function responsesCreateProxy(target: any): (params: any) => Promise<any> {
       return apiPromiseProxy(apiPromise, span, onFulfilled);
     },
   });
+}
+
+function parseMetricsFromUsage(usage: any): Record<string, number> {
+  if (!usage) {
+    return {};
+  }
+
+  // example : {
+  //   input_tokens: 14,
+  //   input_tokens_details: { cached_tokens: 0 },
+  //   output_tokens: 8,
+  //   output_tokens_details: { reasoning_tokens: 0 },
+  //   total_tokens: 22
+  // }
+
+  const keys = [
+    ["input_tokens", "prompt_tokens"],
+    ["output_tokens", "completion_tokens"],
+    ["total_tokens", "tokens"],
+  ];
+
+  const metrics: Record<string, number> = {};
+  for (const [src, target] of keys) {
+    const value = usage[src];
+    if (value !== undefined && value !== null) {
+      metrics[target] = value;
+    }
+  }
+
+  const details: string[] = ["input", "output"];
+  for (const src of details) {
+    const details = usage[`${src}_tokens_details`];
+    if (details) {
+      for (const [key, value] of Object.entries(details)) {
+        const metricName = `${src}_${key}` as string;
+        if (typeof value === "number") {
+          metrics[metricName] = value;
+        }
+      }
+    }
+  }
+
+  return metrics;
 }
 
 function apiPromiseProxy(
