@@ -6,7 +6,7 @@ import {
   startSpan,
   traced,
 } from "../logger";
-import { getCurrentUnixTimestamp, isEmpty } from "../util";
+import { getCurrentUnixTimestamp, isEmpty, filterFrom } from "../util";
 import { mergeDicts } from "@braintrust/core";
 
 interface BetaLike {
@@ -27,6 +27,7 @@ interface OpenAILike {
   embeddings: any;
   moderations: any;
   beta?: BetaLike;
+  responses?: any;
 }
 
 declare global {
@@ -109,17 +110,101 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
 
   return new Proxy(openai, {
     get(target, name, receiver) {
-      if (name === "chat") {
-        return chatProxy;
+      switch (name) {
+        case "chat":
+          return chatProxy;
+        case "embeddings":
+          return embeddingProxy;
+        case "moderations":
+          return moderationProxy;
+        case "responses":
+          return responsesProxy(openai);
       }
-      if (name === "embeddings") {
-        return embeddingProxy;
-      }
-      if (name === "moderations") {
-        return moderationProxy;
-      }
+
       if (name === "beta" && betaProxy) {
         return betaProxy;
+      }
+      return Reflect.get(target, name, receiver);
+    },
+  });
+}
+
+function responsesProxy(openai: OpenAILike) {
+  // This was added in v4.87.0 of the openai-node library
+  if (!openai.responses) {
+    return openai;
+  }
+  return new Proxy(openai.responses, {
+    get(target, name, receiver) {
+      if (name === "create") {
+        return responsesCreateProxy(target.create.bind(target));
+      }
+      return Reflect.get(target, name, receiver);
+    },
+  });
+}
+
+function responsesCreateProxy(target: any): (params: any) => Promise<any> {
+  return new Proxy(target, {
+    apply(target, thisArg, argArray) {
+      if (!argArray) {
+        return Reflect.apply(target, thisArg, argArray);
+      }
+      const params = argArray[0];
+      console.log("params", params);
+
+      const spanArgs = {
+        name: "openai.responses.create",
+        spanAttributes: {
+          type: SpanTypeAttribute.LLM,
+          provider: "openai",
+        },
+        event: {
+          input: params.input,
+          metadata: filterFrom(params, ["input", "instructions"]),
+        },
+        startTime: getCurrentUnixTimestamp(),
+      };
+
+      function onFulfilled(result: any) {
+        const event = {
+          output: result?.output_text || "",
+          metrics: {
+            tokens: result?.usage?.total_tokens,
+            prompt_tokens: result?.usage?.prompt_tokens,
+            completion_tokens: result?.usage?.completion_tokens,
+          },
+        };
+        span.log(event);
+        return result;
+      }
+
+      const span = startSpan(spanArgs);
+      const apiPromise = Reflect.apply(target, thisArg, argArray);
+      return apiPromiseProxy(apiPromise, span, onFulfilled);
+    },
+  });
+}
+
+function apiPromiseProxy(
+  apiPromise: any,
+  span: Span,
+  onFulfilled: (result: any) => any,
+) {
+  return new Proxy(apiPromise, {
+    get(target, name, receiver) {
+      if (name === "then") {
+        const thenFunc = Reflect.get(target, name, receiver);
+        return function (onF: any, onR: any) {
+          return thenFunc.call(
+            target,
+            async (result: any) => {
+              const processed = onFulfilled(result);
+              return onF ? onF(processed) : processed;
+            },
+            onR, // FIXME[matt] error handling?
+          );
+        };
       }
       return Reflect.get(target, name, receiver);
     },
