@@ -385,8 +385,13 @@ def _call_user_fn_args(fn, kwargs):
     positional_args = []
     final_kwargs = {}
 
+    print("call user fn args", kwargs)
+
     for name, param in signature.parameters.items():
-        if param.kind == inspect.Parameter.VAR_KEYWORD:
+        # VAR_POSITIONAL is *args
+        # VAR_KEYWORD is **kwargs
+        # We don't want to use eithers' name
+        if param.kind == inspect.Parameter.VAR_POSITIONAL or param.kind == inspect.Parameter.VAR_KEYWORD:
             continue
 
         if name in kwargs:
@@ -398,6 +403,7 @@ def _call_user_fn_args(fn, kwargs):
     if accepts_kwargs:
         final_kwargs.update(kwargs)
 
+    print("call user fn args", positional_args, final_kwargs)
     return positional_args, final_kwargs
 
 
