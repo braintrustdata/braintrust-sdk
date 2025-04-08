@@ -6,10 +6,10 @@ import {
   startSpan,
   traced,
 } from "../logger";
-import { getCurrentUnixTimestamp, isEmpty, filterFrom } from "../util";
+import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import { mergeDicts } from "@braintrust/core";
-import { proxyCreate, TimedSpan } from "./wrapper_utils";
 import { responsesProxy } from "./oai_responses";
+
 interface BetaLike {
   chat: {
     completions: {
