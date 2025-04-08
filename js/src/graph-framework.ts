@@ -143,6 +143,13 @@ export class GraphBuilder {
     return gateNode;
   }
 
+  public aggregator(): AggregatorNode {
+    const id = this.generateId("aggregator");
+    const aggregatorNode = new AggregatorNode(this, id);
+    this.nodes.set(id, aggregatorNode);
+    return aggregatorNode;
+  }
+
   // public call(node: NodeLike, input: CallArgs): Node {
   //   const [resolvedNode, path] = this.resolveNode(node);
   //   if (resolvedNode instanceof SingleInputNode) {
@@ -389,6 +396,19 @@ export class GateNode extends BaseNode implements Node {
       type: "gate",
       description: "Conditional gate",
       condition: this.condition,
+    };
+  }
+}
+
+export class AggregatorNode extends BaseNode implements Node {
+  constructor(graph: GraphBuilder, id: string) {
+    super(graph, id);
+  }
+
+  public async build(context: BuildContext): Promise<GraphNode> {
+    return {
+      type: "aggregator",
+      description: "Aggregator",
     };
   }
 }
