@@ -342,6 +342,16 @@ class Evaluator(Generic[Input, Output]):
     A default implementation is exported as `default_error_score_handler` which will log a 0 score to the root span for any scorer that was not run.
     """
 
+    description: Optional[str] = None
+    """
+    An optional description for the experiment.
+    """
+
+    summarize_scores: bool = True
+    """
+    Whether to summarize the scores of the experiment after it has run.
+    """
+
 
 @dataclasses.dataclass
 class EvalResultWithSummary(SerializableDataClass, Generic[Input, Output]):
@@ -565,6 +575,8 @@ def _EvalCommon(
     base_experiment_id: Optional[str],
     git_metadata_settings: Optional[GitMetadataSettings],
     repo_info: Optional[RepoInfo],
+    description: Optional[str],
+    summarize_scores: bool,
     error_score_handler: Optional[ErrorScoreHandler] = None,
 ) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary[Input, Output]]]:
     """
@@ -597,6 +609,8 @@ def _EvalCommon(
         git_metadata_settings=git_metadata_settings,
         repo_info=repo_info,
         error_score_handler=error_score_handler,
+        description=description,
+        summarize_scores=summarize_scores,
     )
 
     if _lazy_load:
@@ -628,6 +642,7 @@ def _EvalCommon(
             project_name=evaluator.project_name if evaluator.project_id is None else None,
             project_id=evaluator.project_id,
             experiment_name=evaluator.experiment_name,
+            description=evaluator.description,
             metadata=evaluator.metadata,
             is_public=evaluator.is_public,
             update=evaluator.update,
@@ -667,6 +682,9 @@ async def EvalAsync(
     base_experiment_id: Optional[str] = None,
     git_metadata_settings: Optional[GitMetadataSettings] = None,
     repo_info: Optional[RepoInfo] = None,
+    error_score_handler: Optional[ErrorScoreHandler] = None,
+    description: Optional[str] = None,
+    summarize_scores: bool = True,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -711,6 +729,9 @@ async def EvalAsync(
     summarized and compared to this experiment. This takes precedence over `base_experiment_name` if specified.
     :param git_metadata_settings: Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param repo_info: Optionally explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
+    :param error_score_handler: Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
+    :param description: An optional description for the experiment.
+    :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
     f = _EvalCommon(
@@ -731,6 +752,8 @@ async def EvalAsync(
         base_experiment_id=base_experiment_id,
         git_metadata_settings=git_metadata_settings,
         repo_info=repo_info,
+        description=description,
+        summarize_scores=summarize_scores,
     )
 
     return await f()
@@ -758,6 +781,8 @@ def Eval(
     git_metadata_settings: Optional[GitMetadataSettings] = None,
     repo_info: Optional[RepoInfo] = None,
     error_score_handler: Optional[ErrorScoreHandler] = None,
+    description: Optional[str] = None,
+    summarize_scores: bool = True,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -803,6 +828,8 @@ def Eval(
     :param git_metadata_settings: Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param repo_info: Optionally explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
     :param error_score_handler: Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
+    :param description: An optional description for the experiment.
+    :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
 
@@ -825,6 +852,8 @@ def Eval(
         git_metadata_settings=git_metadata_settings,
         repo_info=repo_info,
         error_score_handler=error_score_handler,
+        description=description,
+        summarize_scores=summarize_scores,
     )
 
     # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
@@ -1038,7 +1067,7 @@ async def run_evaluator(
     )
 
     if experiment:
-        summary = experiment.summarize()
+        summary = experiment.summarize(summarize_scores=evaluator.summarize_scores)
     else:
         summary = build_local_summary(evaluator, results)
 
