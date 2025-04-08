@@ -49,6 +49,7 @@ describe("openai client unit tests", () => {
       input: "Read me a few lines of Sonnet 18",
       instructions: "the whole poem, strip punctuation",
       stream: true,
+      temperature: 0.5,
     });
 
     assert.ok(stream);
@@ -64,8 +65,14 @@ describe("openai client unit tests", () => {
     const span = spans[0] as any;
     assert.equal(span.span_attributes.name, "openai.responses.create");
     assert.equal(span.span_attributes.type, "llm");
-    assert.equal(span.input, "Read me a few lines of Sonnet 18");
+    const input = span.input as any[];
+    assert.lengthOf(input, 2);
+    assert.equal(input[0].content, "Read me a few lines of Sonnet 18");
+    assert.equal(input[0].role, "user");
+    assert.equal(input[1].content, "the whole poem, strip punctuation");
+    assert.equal(input[1].role, "system");
     assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.metadata.temperature, 0.5);
     // This line takes the output text, converts it to lowercase, and removes all characters
     // except letters, numbers and whitespace using a regex
     assert.isString(span.output);

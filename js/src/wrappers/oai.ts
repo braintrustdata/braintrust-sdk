@@ -159,6 +159,16 @@ function responsesCreateProxy(target: any): (params: any) => Promise<any> {
 
 // convert response.create params into a span
 function parseSpanFromResponseCreateParams(params: any): TimedSpan {
+  // responses.create is meant to take a single message and instruction.
+  // Convert that to the form our backend expects.
+  let input = params.input;
+  if (params.instructions) {
+    input = [
+      { role: "user", content: input },
+      { role: "system", content: params.instructions },
+    ];
+  }
+
   const spanArgs = {
     name: "openai.responses.create",
     spanAttributes: {
@@ -166,7 +176,7 @@ function parseSpanFromResponseCreateParams(params: any): TimedSpan {
       provider: "openai",
     },
     event: {
-      input: params.input,
+      input,
       metadata: filterFrom(params, ["input", "instructions"]),
     },
     startTime: getCurrentUnixTimestamp(),
