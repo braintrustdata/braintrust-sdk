@@ -22,7 +22,7 @@ test-anthropic-%:
 
 .PHONY: test-openai test-openai-latest test-openai-%
 
-test-openai: test-openai-latest test-openai-4.92.1 test-openai-4.91.0
+test-openai: test-openai-latest test-openai-4.92.1 test-openai-4.91.0 test-openai-4.86.0
 test-openai-latest:
 	pnpm prune
 	$(call pnpm_install_no_save,openai)

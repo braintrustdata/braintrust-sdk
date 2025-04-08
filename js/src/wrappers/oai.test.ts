@@ -49,7 +49,32 @@ describe("openai client unit tests", () => {
     _exportsForTestingOnly.clearTestBackgroundLogger();
   });
 
-  test("openai.responses.stream", async () => {
+  test("openai.chat.completions", async (context) => {
+    assert.lengthOf(await backgroundLogger.drain(), 0);
+
+    const result = await client.chat.completions.create({
+      messages: [
+        {
+          role: "user",
+          content: "Hello! Can you tell me a joke?",
+        },
+      ],
+      model: TEST_MODEL,
+      max_tokens: 100,
+    });
+
+    assert.ok(result);
+    const spans = await backgroundLogger.drain();
+    assert.lengthOf(spans, 1);
+    const span = spans[0] as any;
+    assert.equal(span.span_attributes.type, "llm");
+    assert.equal(span.metadata.model, TEST_MODEL);
+  });
+
+  test("openai.responses.stream", async (context) => {
+    if (!oai.responses) {
+      context.skip();
+    }
     assert.lengthOf(await backgroundLogger.drain(), 0);
 
     const onEvent = vi.fn();
@@ -95,6 +120,10 @@ describe("openai client unit tests", () => {
   });
 
   test("openai.responses.create(stream=true)", async (context) => {
+    if (!oai.responses) {
+      context.skip();
+    }
+
     assert.lengthOf(await backgroundLogger.drain(), 0);
 
     const start = getCurrentUnixTimestamp();
@@ -141,6 +170,10 @@ describe("openai client unit tests", () => {
   });
 
   test("openai.responses.create(stream=false)", async (context) => {
+    if (!oai.responses) {
+      context.skip();
+    }
+
     assert.lengthOf(await backgroundLogger.drain(), 0);
 
     const start = getCurrentUnixTimestamp();
