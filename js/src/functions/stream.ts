@@ -22,6 +22,10 @@ export const braintrustStreamChunkSchema = z.union([
     data: z.string(),
   }),
   z.object({
+    type: z.literal("tool_delta"),
+    data: z.string(),
+  }),
+  z.object({
     type: z.literal("error"),
     data: z.string(),
   }),
@@ -159,6 +163,11 @@ export class BraintrustStream {
           type: "json_delta",
           data: event.data,
         };
+      case "tool_delta":
+        return {
+          type: "tool_delta",
+          data: event.data,
+        };
       case "error":
         return {
           type: "error",
@@ -273,6 +282,7 @@ export function createFinalValuePassThroughStream<
           case "start":
           case "done":
           case "console":
+          case "tool_delta":
             break;
           default:
             const _type: never = chunkType;
