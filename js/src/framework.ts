@@ -267,6 +267,12 @@ export interface Evaluator<
    * A default implementation is exported as `defaultErrorScoreHandler` which will log a 0 score to the root span for any scorer that was not run.
    */
   errorScoreHandler?: ErrorScoreHandler;
+
+  /**
+   * Whether to summarize the scores of the experiment after it has run.
+   * Defaults to true.
+   */
+  summarizeScores?: boolean;
 }
 
 export class EvalResultWithSummary<
@@ -1059,7 +1065,7 @@ async function runEvaluatorInternal(
   }
 
   const summary = experiment
-    ? await experiment.summarize()
+    ? await experiment.summarize({ summarizeScores: evaluator.summarizeScores })
     : buildLocalSummary(evaluator, results);
 
   return new EvalResultWithSummary(summary, results);
