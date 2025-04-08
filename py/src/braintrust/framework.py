@@ -248,6 +248,11 @@ class Evaluator(Generic[Input, Output]):
     A name that describes the experiment. You do not need to change it each time the experiment runs.
     """
 
+    description: Optional[str] = None
+    """
+    An optional description for the experiment.
+    """
+
     data: EvalData[Input, Output]
     """
     Returns an iterator over the evaluation dataset. Each element of the iterator should be an `EvalCase` or a dict
@@ -625,6 +630,7 @@ def _EvalCommon(
             project_name=evaluator.project_name if evaluator.project_id is None else None,
             project_id=evaluator.project_id,
             experiment_name=evaluator.experiment_name,
+            description=evaluator.description,
             metadata=evaluator.metadata,
             is_public=evaluator.is_public,
             update=evaluator.update,

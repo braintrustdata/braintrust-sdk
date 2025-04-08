@@ -186,6 +186,11 @@ export interface Evaluator<
   experimentName?: string;
 
   /**
+   * An optional description for the experiment.
+   */
+  description?: string;
+
+  /**
    * The number of times to run the evaluator per input. This is useful for evaluating applications that
    * have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the
    * variance in the results.
@@ -529,6 +534,7 @@ export async function Eval<
             ? { projectId: evaluator.projectId }
             : { project: name }),
           experiment: evaluator.experimentName,
+          description: evaluator.description,
           metadata: evaluator.metadata,
           isPublic: evaluator.isPublic,
           update: evaluator.update,
