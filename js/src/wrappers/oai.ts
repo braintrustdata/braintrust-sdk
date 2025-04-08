@@ -8,6 +8,7 @@ import {
 } from "../logger";
 import { getCurrentUnixTimestamp, isEmpty, filterFrom } from "../util";
 import { mergeDicts } from "@braintrust/core";
+import { proxyCreate, TimedSpan } from "./wrapper_utils";
 
 interface BetaLike {
   chat: {
@@ -134,6 +135,7 @@ function responsesProxy(openai: OpenAILike) {
   if (!openai.responses) {
     return openai;
   }
+
   return new Proxy(openai.responses, {
     get(target, name, receiver) {
       if (name === "create") {
@@ -145,109 +147,93 @@ function responsesProxy(openai: OpenAILike) {
 }
 
 function responsesCreateProxy(target: any): (params: any) => Promise<any> {
-  return new Proxy(target, {
-    apply(target, thisArg, argArray) {
-      if (!argArray || argArray.length === 0) {
-        return Reflect.apply(target, thisArg, argArray);
-      }
-      const params = argArray[0];
+  const hooks = {
+    name: "openai.responses",
+    toSpanFunc: parseSpanFromResponseCreateParams,
+    resultToEventFunc: parseEventFromResponseCreateResult,
+    traceStreamFunc: traceResponseCreateStream,
+  };
 
-      const spanArgs = {
-        name: "openai.responses.create",
-        spanAttributes: {
-          type: SpanTypeAttribute.LLM,
-          provider: "openai",
-        },
-        event: {
-          input: params.input,
-          metadata: filterFrom(params, ["input", "instructions"]),
-        },
-        startTime: getCurrentUnixTimestamp(),
-      };
+  return proxyCreate(target, hooks);
+}
 
-      function onFulfilled(result: any) {
+// convert response.create params into a span
+function parseSpanFromResponseCreateParams(params: any): TimedSpan {
+  const spanArgs = {
+    name: "openai.responses.create",
+    spanAttributes: {
+      type: SpanTypeAttribute.LLM,
+      provider: "openai",
+    },
+    event: {
+      input: params.input,
+      metadata: filterFrom(params, ["input", "instructions"]),
+    },
+    startTime: getCurrentUnixTimestamp(),
+  };
+  return {
+    span: startSpan(spanArgs),
+    start: spanArgs.startTime,
+  };
+}
+
+// convert response.create result into an event
+function parseEventFromResponseCreateResult(result: any) {
+  return {
+    output: result?.output_text || "",
+    metrics: parseMetricsFromUsage(result?.usage),
+  };
+}
+
+function traceResponseCreateStream(
+  stream: AsyncIterator<any>,
+  timedSpan: TimedSpan,
+) {
+  const span = timedSpan.span;
+  let ttft = -1;
+  return async function <T>(...args: [any]): Promise<IteratorResult<T>> {
+    const result = await stream.next(...args);
+
+    if (ttft === -1) {
+      ttft = getCurrentUnixTimestamp() - timedSpan.start;
+      span.log({ metrics: { time_to_first_token: ttft } });
+    }
+
+    if (result.done) {
+      span.end();
+      return result;
+    }
+
+    const item = result.value;
+    if (!item || !item?.type || !item?.response) {
+      return result; // unexpected
+    }
+
+    const response = item.response;
+
+    switch (item.type) {
+      case "response.completed":
+        // I think there is usually only one output, but since they are arrays
+        // we'll collect them all just in case.
+        const texts = [];
+        for (const output of response?.output || []) {
+          for (const content of output?.content || []) {
+            if (content?.type === "output_text") {
+              texts.push(content.text);
+            }
+          }
+        }
         const event = {
-          output: result?.output_text || "",
-          metrics: parseMetricsFromUsage(result?.usage),
+          output: texts.join(""),
+          metrics: parseMetricsFromUsage(response?.usage),
         };
         span.log(event);
-        span.end();
-        return result;
-      }
-
-      const span = startSpan(spanArgs);
-      const apiPromise = Reflect.apply(target, thisArg, argArray);
-      return apiPromiseProxy(apiPromise, span, onFulfilled);
-    },
-  });
-}
-
-function parseMetricsFromUsage(usage: any): Record<string, number> {
-  if (!usage) {
-    return {};
-  }
-
-  // example : {
-  //   input_tokens: 14,
-  //   input_tokens_details: { cached_tokens: 0 },
-  //   output_tokens: 8,
-  //   output_tokens_details: { reasoning_tokens: 0 },
-  //   total_tokens: 22
-  // }
-
-  const keys = [
-    ["input_tokens", "prompt_tokens"],
-    ["output_tokens", "completion_tokens"],
-    ["total_tokens", "tokens"],
-  ];
-
-  const metrics: Record<string, number> = {};
-  for (const [src, target] of keys) {
-    const value = usage[src];
-    if (value !== undefined && value !== null) {
-      metrics[target] = value;
+      default:
+      // pass
     }
-  }
 
-  const details: string[] = ["input", "output"];
-  for (const src of details) {
-    const details = usage[`${src}_tokens_details`];
-    if (details) {
-      for (const [key, value] of Object.entries(details)) {
-        const metricName = `${src}_${key}` as string;
-        if (typeof value === "number") {
-          metrics[metricName] = value;
-        }
-      }
-    }
-  }
-
-  return metrics;
-}
-
-function apiPromiseProxy(
-  apiPromise: any,
-  span: Span,
-  onFulfilled: (result: any) => any,
-) {
-  return new Proxy(apiPromise, {
-    get(target, name, receiver) {
-      if (name === "then") {
-        const thenFunc = Reflect.get(target, name, receiver);
-        return function (onF: any, onR: any) {
-          return thenFunc.call(
-            target,
-            async (result: any) => {
-              const processed = onFulfilled(result);
-              return onF ? onF(processed) : processed;
-            },
-            onR, // FIXME[matt] error handling?
-          );
-        };
-      }
-      return Reflect.get(target, name, receiver);
-    },
-  });
+    return result;
+  };
 }
 
 type SpanInfo = {
@@ -712,4 +698,52 @@ class WrapperStream<Item> implements AsyncIterable<Item> {
       this.span.end();
     }
   }
+}
+
+type StartedSpan = {
+  span: Span;
+  startTime: number;
+};
+
+function parseMetricsFromUsage(usage: any): Record<string, number> {
+  if (!usage) {
+    return {};
+  }
+
+  // example : {
+  //   input_tokens: 14,
+  //   input_tokens_details: { cached_tokens: 0 },
+  //   output_tokens: 8,
+  //   output_tokens_details: { reasoning_tokens: 0 },
+  //   total_tokens: 22
+  // }
+
+  const keys = [
+    ["input_tokens", "prompt_tokens"],
+    ["output_tokens", "completion_tokens"],
+    ["total_tokens", "tokens"],
+  ];
+
+  const metrics: Record<string, number> = {};
+  for (const [src, target] of keys) {
+    const value = usage[src];
+    if (value !== undefined && value !== null) {
+      metrics[target] = value;
+    }
+  }
+
+  const details: string[] = ["input", "output"];
+  for (const src of details) {
+    const details = usage[`${src}_tokens_details`];
+    if (details) {
+      for (const [key, value] of Object.entries(details)) {
+        const metricName = `${src}_${key}` as string;
+        if (typeof value === "number") {
+          metrics[metricName] = value;
+        }
+      }
+    }
+  }
+
+  return metrics;
 }
