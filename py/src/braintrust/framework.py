@@ -270,7 +270,7 @@ class Evaluator(Generic[Input, Output]):
     Optional experiment name. If not specified, a name will be generated automatically.
     """
 
-    description: Optional[str] = None
+    description: Optional[str]
     """
     An optional description for the experiment.
     """
