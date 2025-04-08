@@ -248,11 +248,6 @@ class Evaluator(Generic[Input, Output]):
     A name that describes the experiment. You do not need to change it each time the experiment runs.
     """
 
-    description: Optional[str] = None
-    """
-    An optional description for the experiment.
-    """
-
     data: EvalData[Input, Output]
     """
     Returns an iterator over the evaluation dataset. Each element of the iterator should be an `EvalCase` or a dict
@@ -273,6 +268,11 @@ class Evaluator(Generic[Input, Output]):
     experiment_name: Optional[str]
     """
     Optional experiment name. If not specified, a name will be generated automatically.
+    """
+
+    description: Optional[str] = None
+    """
+    An optional description for the experiment.
     """
 
     metadata: Optional[Metadata]
