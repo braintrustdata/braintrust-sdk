@@ -140,6 +140,8 @@ function responsesProxy(openai: OpenAILike) {
     get(target, name, receiver) {
       if (name === "create") {
         return responsesCreateProxy(target.create.bind(target));
+      } else if (name === "stream") {
+        return responsesStreamProxy(target.stream.bind(target));
       }
       return Reflect.get(target, name, receiver);
     },
@@ -219,31 +221,70 @@ function traceResponseCreateStream(
       return result; // unexpected
     }
 
-    const response = item.response;
-
-    switch (item.type) {
-      case "response.completed":
-        // I think there is usually only one output, but since they are arrays
-        // we'll collect them all just in case.
-        const texts = [];
-        for (const output of response?.output || []) {
-          for (const content of output?.content || []) {
-            if (content?.type === "output_text") {
-              texts.push(content.text);
-            }
-          }
-        }
-        const event = {
-          output: texts.join(""),
-          metrics: parseMetricsFromUsage(response?.usage),
-        };
-        span.log(event);
-      default:
-      // pass
-    }
+    const event = parseLogFromItem(item);
+    span.log(event);
 
     return result;
   };
+}
+
+function parseLogFromItem(item: any): {} {
+  if (!item || !item?.type || !item?.response) {
+    return {};
+  }
+
+  const response = item.response;
+
+  switch (item.type) {
+    case "response.completed":
+      // I think there is usually only one output, but since they are arrays
+      // we'll collect them all just in case.
+      const texts = [];
+      for (const output of response?.output || []) {
+        for (const content of output?.content || []) {
+          if (content?.type === "output_text") {
+            texts.push(content.text);
+          }
+        }
+      }
+      return {
+        output: texts.join(""),
+        metrics: parseMetricsFromUsage(response?.usage),
+      };
+    default:
+      return {};
+  }
+}
+
+function responsesStreamProxy(target: any): (params: any) => Promise<any> {
+  return new Proxy(target, {
+    apply(target, thisArg, argArray) {
+      const responseStream: any = Reflect.apply(target, thisArg, argArray);
+      if (!argArray || argArray.length === 0) {
+        return responseStream;
+      }
+
+      const timedSpan = parseSpanFromResponseCreateParams(argArray[0]);
+      const span = timedSpan.span;
+
+      let ttft = -1;
+
+      responseStream.on("event", (event: any) => {
+        if (ttft === -1) {
+          ttft = getCurrentUnixTimestamp() - timedSpan.start;
+          span.log({ metrics: { time_to_first_token: ttft } });
+        }
+        const logEvent = parseLogFromItem(event);
+        span.log(logEvent);
+      });
+
+      responseStream.on("end", () => {
+        span.end();
+      });
+
+      return responseStream;
+    },
+  });
 }
 
 type SpanInfo = {

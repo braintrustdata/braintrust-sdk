@@ -39,7 +39,12 @@ export function proxyCreate(
       };
 
       // Return a proxy that will log the event and end the span
-      return apiPromiseProxy(apiPromise, timedSpan, onThen);
+      return apiPromiseProxy(
+        apiPromise,
+        timedSpan,
+        onThen,
+        hooks.traceStreamFunc,
+      );
     },
   });
 }
@@ -48,6 +53,7 @@ function apiPromiseProxy(
   apiPromise: any,
   span: TimedSpan,
   onThen: (result: any) => any,
+  traceStreamFunc: TraceStreamFunc,
 ) {
   return new Proxy(apiPromise, {
     get(target, name, receiver) {
@@ -62,6 +68,18 @@ function apiPromiseProxy(
             },
             onR, // FIXME[matt] error handling?
           );
+        };
+      } else if (name === "withResponse") {
+        // This path is used with messages.stream(...) calls.
+        const withResponseFunc = Reflect.get(target, name, receiver);
+        return () => {
+          return withResponseFunc.call(target).then((withResponse: any) => {
+            if (withResponse["data"]) {
+              const { data: stream } = withResponse;
+              withResponse.data = traceStreamFunc(stream, span);
+            }
+            return Promise.resolve(withResponse);
+          });
         };
       }
       return Reflect.get(target, name, receiver);
