@@ -108,6 +108,10 @@ export const graphNodeSchema = z.union([
   }),
   baseNodeDataSchema.extend({
     type: z.literal("gate"),
+    condition: z
+      .string()
+      .nullish()
+      .describe("A BTQL expression to be evaluated"),
   }),
 ]);
 export type GraphNode = z.infer<typeof graphNodeSchema>;

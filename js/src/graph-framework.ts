@@ -180,7 +180,7 @@ export class GraphBuilder {
 
   // Create a prompt node from a CodePrompt
   private createPromptNode(prompt: Prompt): PromptNode {
-    const id = this.generateId("prompt");
+    const id = this.generateId(`prompt-${prompt.slug}`);
 
     const promptNode = new PromptNode(this, id, prompt);
     this.nodes.set(id, promptNode);
@@ -388,8 +388,7 @@ export class GateNode extends BaseNode implements Node {
     return {
       type: "gate",
       description: "Conditional gate",
-      // TODO: Figure out how to represent conditional expressions
-      // condition: this.condition,
+      condition: this.condition,
     };
   }
 }
