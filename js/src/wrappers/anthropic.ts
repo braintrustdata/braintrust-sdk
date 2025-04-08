@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { Span, startSpan } from "../logger";
 import { SpanTypeAttribute } from "@braintrust/core";
-import { getCurrentUnixTimestamp } from "../util";
+import { filterFrom, getCurrentUnixTimestamp } from "../util";
 
 export function wrapAnthropic(anthropic: Anthropic): Anthropic {
   return anthropicProxy(anthropic);
