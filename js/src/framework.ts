@@ -186,6 +186,11 @@ export interface Evaluator<
   experimentName?: string;
 
   /**
+   * An optional description for the experiment.
+   */
+  description?: string;
+
+  /**
    * The number of times to run the evaluator per input. This is useful for evaluating applications that
    * have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the
    * variance in the results.
@@ -262,6 +267,12 @@ export interface Evaluator<
    * A default implementation is exported as `defaultErrorScoreHandler` which will log a 0 score to the root span for any scorer that was not run.
    */
   errorScoreHandler?: ErrorScoreHandler;
+
+  /**
+   * Whether to summarize the scores of the experiment after it has run.
+   * Defaults to true.
+   */
+  summarizeScores?: boolean;
 }
 
 export class EvalResultWithSummary<
@@ -529,6 +540,7 @@ export async function Eval<
             ? { projectId: evaluator.projectId }
             : { project: name }),
           experiment: evaluator.experimentName,
+          description: evaluator.description,
           metadata: evaluator.metadata,
           isPublic: evaluator.isPublic,
           update: evaluator.update,
@@ -1053,7 +1065,7 @@ async function runEvaluatorInternal(
   }
 
   const summary = experiment
-    ? await experiment.summarize()
+    ? await experiment.summarize({ summarizeScores: evaluator.summarizeScores })
     : buildLocalSummary(evaluator, results);
 
   return new EvalResultWithSummary(summary, results);
