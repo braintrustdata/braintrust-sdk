@@ -59,6 +59,7 @@ import {
   Tools,
   toolsSchema,
   EXTERNAL_ATTACHMENT,
+  PromptBlockData,
 } from "@braintrust/core/typespecs";
 import { waitUntil } from "@vercel/functions";
 import Mustache, { Context } from "mustache";
@@ -5338,13 +5339,75 @@ export class Prompt<
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
     };
 
+    const renderedPrompt = Prompt.renderPrompt({
+      prompt,
+      buildArgs,
+      options,
+    });
+
     if (flavor === "chat") {
-      if (prompt.type !== "chat") {
+      if (renderedPrompt.type !== "chat") {
         throw new Error(
           "Prompt is a completion prompt. Use buildCompletion() instead",
         );
       }
 
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      return {
+        ...renderPromptParams(params, variables, { strict: options.strict }),
+        ...spanInfo,
+        messages: renderedPrompt.messages,
+        ...(renderedPrompt.tools
+          ? {
+              tools: toolsSchema.parse(JSON.parse(renderedPrompt.tools)),
+            }
+          : undefined),
+      } as CompiledPrompt<Flavor>;
+    } else if (flavor === "completion") {
+      if (renderedPrompt.type !== "completion") {
+        throw new Error(`Prompt is a chat prompt. Use flavor: 'chat' instead`);
+      }
+
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      return {
+        ...renderPromptParams(params, variables, { strict: options.strict }),
+        ...spanInfo,
+        prompt: renderedPrompt.content,
+      } as CompiledPrompt<Flavor>;
+    } else {
+      throw new Error("never!");
+    }
+  }
+
+  static renderPrompt({
+    prompt,
+    buildArgs,
+    options,
+  }: {
+    prompt: PromptBlockData;
+    buildArgs: unknown;
+    options: {
+      strict?: boolean;
+      messages?: Message[];
+    };
+  }): PromptBlockData {
+    const escape = (v: unknown) => {
+      if (v === undefined) {
+        throw new Error("Missing!");
+      } else if (typeof v === "string") {
+        return v;
+      } else {
+        return JSON.stringify(v);
+      }
+    };
+
+    const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
+    const variables: Record<string, unknown> = {
+      input: buildArgs,
+      ...(dictArgParsed.success ? dictArgParsed.data : {}),
+    };
+
+    if (prompt.type === "chat") {
       const render = (template: string) => {
         if (options.strict) {
           lintTemplate(template, variables);
@@ -5360,28 +5423,23 @@ export class Prompt<
       );
       const hasSystemPrompt = baseMessages.some((m) => m.role === "system");
 
-      const messages = [
+      const messages: Message[] = [
         ...baseMessages,
         ...(options.messages ?? []).filter(
           (m) => !(hasSystemPrompt && m.role === "system"),
         ),
       ];
 
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...renderPromptParams(params, variables, { strict: options.strict }),
-        ...spanInfo,
+        type: "chat",
         messages: messages,
         ...(prompt.tools?.trim()
           ? {
-              tools: toolsSchema.parse(JSON.parse(render(prompt.tools))),
+              tools: render(prompt.tools),
             }
           : undefined),
-      } as CompiledPrompt<Flavor>;
-    } else if (flavor === "completion") {
-      if (prompt.type !== "completion") {
-        throw new Error(`Prompt is a chat prompt. Use flavor: 'chat' instead`);
-      }
+      };
+    } else if (prompt.type === "completion") {
       if (options.messages) {
         throw new Error(
           "extra messages are not supported for completion prompts",
@@ -5392,15 +5450,14 @@ export class Prompt<
         lintTemplate(prompt.content, variables);
       }
 
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...renderPromptParams(params, variables, { strict: options.strict }),
-        ...spanInfo,
-        prompt: Mustache.render(prompt.content, variables, undefined, {
+        type: "completion",
+        content: Mustache.render(prompt.content, variables, undefined, {
           escape,
         }),
-      } as CompiledPrompt<Flavor>;
+      };
     } else {
+      const _: never = prompt;
       throw new Error("never!");
     }
   }
