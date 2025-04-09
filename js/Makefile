@@ -38,7 +38,11 @@ test-openai-%:
 # common things
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-pnpm test test-latest prune
+.PHONY: test-pnpm test test-latest prune installing-optional-deps
+
+install-optional-deps:
+	npm_config_save=false npm_config_lockfile=false pnpm add "openai" "@anthropic-ai/sdk"
+
 
 # Test everything but the wrappers.
 test-pnpm:
