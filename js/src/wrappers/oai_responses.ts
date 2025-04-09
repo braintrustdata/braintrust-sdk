@@ -183,12 +183,12 @@ function parseMetricsFromUsage(usage: any): Record<string, number> {
 
   const metrics: Record<string, number> = {};
 
-  for (const [oi_name, value] of Object.entries(usage)) {
+  for (const [oai_name, value] of Object.entries(usage)) {
     if (typeof value === "number") {
-      const metricName = TOKEN_NAME_MAP[oi_name] || oi_name;
+      const metricName = TOKEN_NAME_MAP[oai_name] || oai_name;
       metrics[metricName] = value;
-    } else if (oi_name.endsWith("_tokens_details")) {
-      const rawPrefix = oi_name.slice(0, -"_tokens_details".length);
+    } else if (oai_name.endsWith("_tokens_details")) {
+      const rawPrefix = oai_name.slice(0, -"_tokens_details".length);
       const prefix = TOKEN_PREFIX_MAP[rawPrefix] || rawPrefix;
       if (typeof value !== "object") {
         continue;
