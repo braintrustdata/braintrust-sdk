@@ -157,11 +157,11 @@ function responsesStreamProxy(target: any): (params: any) => Promise<any> {
   });
 }
 
-const TOKEN_NAME_MAP = [
-  ["input_tokens", "prompt_tokens"],
-  ["output_tokens", "completion_tokens"],
-  ["total_tokens", "tokens"],
-];
+const TOKEN_NAME_MAP: Record<string, string> = {
+  input_tokens: "prompt_tokens",
+  output_tokens: "completion_tokens",
+  total_tokens: "tokens",
+};
 
 const TOKEN_PREFIX_MAP: Record<string, string> = {
   input: "prompt",
@@ -183,21 +183,22 @@ function parseMetricsFromUsage(usage: any): Record<string, number> {
 
   const metrics: Record<string, number> = {};
 
-  for (const [src, target] of TOKEN_NAME_MAP) {
-    const value = usage[src];
-    if (value !== undefined && value !== null) {
-      metrics[target] = value;
-    }
-  }
-
-  for (const [src, prefix] of Object.entries(TOKEN_PREFIX_MAP)) {
-    const details = usage[`${src}_tokens_details`];
-    if (details) {
-      for (const [key, value] of Object.entries(details)) {
-        const metricName = `${prefix}_${key}` as string;
-        if (typeof value === "number") {
-          metrics[metricName] = value;
+  for (const [oi_name, value] of Object.entries(usage)) {
+    if (typeof value === "number") {
+      const metricName = TOKEN_NAME_MAP[oi_name] || oi_name;
+      metrics[metricName] = value;
+    } else if (oi_name.endsWith("_tokens_details")) {
+      const rawPrefix = oi_name.slice(0, -"_tokens_details".length);
+      const prefix = TOKEN_PREFIX_MAP[rawPrefix] || rawPrefix;
+      if (typeof value !== "object") {
+        continue;
+      }
+      for (const [key, n] of Object.entries(value)) {
+        if (typeof n !== "number") {
+          continue;
         }
+        const metricName = `${prefix}_${key}`;
+        metrics[metricName] = n;
       }
     }
   }
