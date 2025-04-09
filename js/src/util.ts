@@ -140,3 +140,7 @@ export function filterFrom(record: Record<string, any>, keys: string[]) {
   }
   return out;
 }
+
+export function objectIsEmpty(obj: Record<string, any>): boolean {
+  return !obj || Object.keys(obj).length === 0;
+}

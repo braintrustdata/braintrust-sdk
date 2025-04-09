@@ -1,5 +1,4 @@
-import { getCurrentUnixTimestamp, startSpan } from "../util";
-import { filterFrom } from "../util";
+import { getCurrentUnixTimestamp, filterFrom, objectIsEmpty } from "../util";
 import { Span, startSpan } from "../logger";
 
 export function responsesProxy(openai: any) {
@@ -91,8 +90,9 @@ function traceResponseCreateStream(
     }
 
     const event = parseLogFromItem(item);
-    span.log(event);
-
+    if (!objectIsEmpty(event)) {
+      span.log(event);
+    }
     return result;
   };
 }
@@ -143,7 +143,9 @@ function responsesStreamProxy(target: any): (params: any) => Promise<any> {
           span.log({ metrics: { time_to_first_token: ttft } });
         }
         const logEvent = parseLogFromItem(event);
-        span.log(logEvent);
+        if (!objectIsEmpty(logEvent)) {
+          span.log(logEvent);
+        }
       });
 
       responseStream.on("end", () => {
