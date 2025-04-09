@@ -1,5 +1,6 @@
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
+import { promptBlockDataSchema } from "./prompt";
 
 extendZodWithOpenApi(z);
 
@@ -59,6 +60,10 @@ export const graphNodeSchema = z.union([
   baseNodeDataSchema.extend({
     type: z.literal("aggregator"),
   }),
+  baseNodeDataSchema.extend({
+    type: z.literal("prompt_template"),
+    prompt: promptBlockDataSchema,
+  }),
 ]);
 export type GraphNode = z.infer<typeof graphNodeSchema>;
 
@@ -70,7 +75,9 @@ export const graphEdgeDataSchema = z.object({
 export const graphEdgeSchema = z.object({
   source: graphEdgeDataSchema,
   target: graphEdgeDataSchema,
-  purpose: z.enum(["control", "data"]).describe("The purpose of the edge"),
+  purpose: z
+    .enum(["control", "data", "messages"])
+    .describe("The purpose of the edge"),
 });
 
 export type GraphEdge = z.infer<typeof graphEdgeSchema>;

@@ -4,6 +4,7 @@ import {
   GraphData,
   GraphNode,
   GraphEdge,
+  PromptBlockData,
 } from "@braintrust/core/typespecs";
 
 export interface BuildContext {
@@ -73,7 +74,7 @@ export class GraphBuilder {
     target: NodeLike;
     targetVar?: string;
     expr?: string;
-    purpose: "control" | "data";
+    purpose: GraphEdge["purpose"];
   }) {
     const [sourceNode, sourcePath] = this.resolveNode(source);
     if (sourcePath.length > 0) {
@@ -148,6 +149,15 @@ export class GraphBuilder {
     const aggregatorNode = new AggregatorNode(this, id);
     this.nodes.set(id, aggregatorNode);
     return aggregatorNode;
+  }
+
+  public promptTemplate(options: {
+    prompt: PromptBlockData;
+  }): PromptTemplateNode {
+    const id = this.generateId("prompt-template");
+    const promptTemplateNode = new PromptTemplateNode(this, id, options.prompt);
+    this.nodes.set(id, promptTemplateNode);
+    return promptTemplateNode;
   }
 
   // public call(node: NodeLike, input: CallArgs): Node {
@@ -409,6 +419,23 @@ export class AggregatorNode extends BaseNode implements Node {
     return {
       type: "aggregator",
       description: "Aggregator",
+    };
+  }
+}
+
+export class PromptTemplateNode extends BaseNode implements Node {
+  constructor(
+    graph: GraphBuilder,
+    id: string,
+    private prompt: PromptBlockData,
+  ) {
+    super(graph, id);
+  }
+
+  public async build(context: BuildContext): Promise<GraphNode> {
+    return {
+      type: "prompt_template",
+      prompt: this.prompt,
     };
   }
 }
