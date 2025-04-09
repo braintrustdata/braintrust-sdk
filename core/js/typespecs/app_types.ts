@@ -106,7 +106,7 @@ export type Organization = z.infer<typeof organizationSchema>;
 
 export const maxOverWindowSchema = z
   .object({
-    window_size_days: z.number().int().positive(),
+    window_size_days: z.number().nonnegative(),
     max_value: z.number().nonnegative(),
   })
   .openapi("MaxOverWindow");
