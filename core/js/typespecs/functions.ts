@@ -160,7 +160,7 @@ export const functionIdSchema = z
     z
       .object({
         inline_prompt: promptDataSchema.optional(),
-        inline_function: functionDataSchema,
+        inline_function: z.record(z.unknown()), // This creates a circular dependency
         name: z.string().nullish().describe("The name of the inline function"),
       })
       .describe("Inline function definition")
