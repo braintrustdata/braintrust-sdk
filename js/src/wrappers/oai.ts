@@ -8,6 +8,7 @@ import {
 } from "../logger";
 import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import { mergeDicts } from "@braintrust/core";
+import { responsesProxy } from "./oai_responses";
 
 interface BetaLike {
   chat: {
@@ -27,6 +28,7 @@ interface OpenAILike {
   embeddings: any;
   moderations: any;
   beta?: BetaLike;
+  responses?: any;
 }
 
 declare global {
@@ -109,15 +111,17 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
 
   return new Proxy(openai, {
     get(target, name, receiver) {
-      if (name === "chat") {
-        return chatProxy;
+      switch (name) {
+        case "chat":
+          return chatProxy;
+        case "embeddings":
+          return embeddingProxy;
+        case "moderations":
+          return moderationProxy;
+        case "responses":
+          return responsesProxy(openai);
       }
-      if (name === "embeddings") {
-        return embeddingProxy;
-      }
-      if (name === "moderations") {
-        return moderationProxy;
-      }
+
       if (name === "beta" && betaProxy) {
         return betaProxy;
       }
