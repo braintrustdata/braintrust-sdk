@@ -108,7 +108,7 @@ describe("openai client unit tests", () => {
     const span = spans[0] as any;
     assert.equal(span.span_attributes.name, "openai.responses.create");
     assert.equal(span.span_attributes.type, "llm");
-    assert.equal(span.input, "What is 6x6?");
+    assert.equal(span.input[0].content, "What is 6x6?");
     assert.equal(span.metadata.model, TEST_MODEL);
     expect(span.output).toContain("36");
 
@@ -191,7 +191,7 @@ describe("openai client unit tests", () => {
     const span = spans[0] as any;
     assert.equal(span.span_attributes.name, "openai.responses.create");
     assert.equal(span.span_attributes.type, "llm");
-    assert.equal(span.input, "What is the capital of France?");
+    assert.equal(span.input[0].content, "What is the capital of France?");
     assert.equal(span.metadata.model, TEST_MODEL);
     expect(span.output).toContain("Paris");
     const m = span.metrics;

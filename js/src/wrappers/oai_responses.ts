@@ -35,12 +35,9 @@ function responsesCreateProxy(target: any): (params: any) => Promise<any> {
 function parseSpanFromResponseCreateParams(params: any): TimedSpan {
   // responses.create is meant to take a single message and instruction.
   // Convert that to the form our backend expects.
-  let input = params.input;
+  const input = [{ role: "user", content: params.input }];
   if (params.instructions) {
-    input = [
-      { role: "user", content: input },
-      { role: "system", content: params.instructions },
-    ];
+    input.push({ role: "system", content: params.instructions });
   }
 
   const spanArgs = {
@@ -106,7 +103,6 @@ function parseLogFromItem(item: any): {} {
   }
 
   const response = item.response;
-
   switch (item.type) {
     case "response.completed":
       // I think there is usually only one output, but since they are arrays
