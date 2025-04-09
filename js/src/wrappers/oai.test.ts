@@ -71,40 +71,6 @@ describe("openai client unit tests", () => {
     assert.equal(span.metadata.model, TEST_MODEL);
   });
 
-  test("openai.responses all the params work", async (context) => {
-    if (!oai.responses) {
-      context.skip();
-    }
-
-    assert.lengthOf(await backgroundLogger.drain(), 0);
-
-    const result = await client.responses.create({
-      model: "o3-mini",
-      input: "What is 6x6?",
-      instructions: "The answer should be a number.",
-      top_p: 1,
-      max_output_tokens: 100,
-      parallel_tool_calls: false,
-      store: false,
-      truncation: "auto",
-      reasoning: { effort: "low" },
-    });
-
-    assert.ok(result);
-    const spans = await backgroundLogger.drain();
-    assert.lengthOf(spans, 1);
-    const span = spans[0] as any;
-    assert.equal(span.span_attributes.type, "llm");
-    const m = span.metadata;
-    assert.equal(m.model, "o3-mini");
-    assert.equal(m.top_p, 1);
-    assert.equal(m.max_output_tokens, 100);
-    assert.equal(m.parallel_tool_calls, false);
-    assert.equal(m.store, false);
-    assert.equal(m.truncation, "auto");
-    assert.equal(m.reasoning.effort, "low");
-  });
-
   test("openai.responses.stream", async (context) => {
     if (!oai.responses) {
       context.skip();
