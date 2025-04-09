@@ -1,3 +1,5 @@
+import time
+
 import openai
 import pytest
 
@@ -32,9 +34,12 @@ def test_openai_chat_metrics(memory_logger):
 
     client = wrap_openai(openai.OpenAI())
 
+    start = time.time()
     response = client.chat.completions.create(
         model=TEST_MODEL, messages=[{"role": "user", "content": "What's 12 + 12?"}]
     )
+    end = time.time()
+
     assert response
     spans = memory_logger.pop()
     assert len(spans) == 1
@@ -45,6 +50,7 @@ def test_openai_chat_metrics(memory_logger):
     assert 0 < metrics["tokens"]
     assert 0 < metrics["prompt_tokens"]
     assert 0 < metrics["completion_tokens"]
+    assert start < metrics["start"] < metrics["end"] < end
 
 
 def test_openai_responses_metrics(memory_logger):
@@ -52,11 +58,13 @@ def test_openai_responses_metrics(memory_logger):
 
     client = wrap_openai(openai.OpenAI())
 
+    start = time.time()
     response = client.responses.create(
         model=TEST_MODEL,
         input="What's 12 + 12?",
         instructions="Just the number please",
     )
+    end = time.time()
 
     assert response
 
@@ -71,3 +79,4 @@ def test_openai_responses_metrics(memory_logger):
     assert 0 < metrics["completion_tokens"]
     assert 0 <= metrics["prompt_cached_tokens"]
     assert 0 <= metrics["completion_reasoning_tokens"]
+    assert start < metrics["start"] < metrics["end"] < end
