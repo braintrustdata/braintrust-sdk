@@ -728,8 +728,8 @@ def _parse_metrics_from_usage(usage: Dict[str, Any]) -> Dict[str, Any]:
 
     metrics = {}
     for oai_name, value in usage.items():
-        # if handle `_tokens_detail` dicts
         if oai_name.endswith("_tokens_details"):
+            # handle `_tokens_detail` dicts
             raw_prefix = oai_name[: -len("_tokens_details")]
             prefix = TOKEN_PREFIX_MAP.get(raw_prefix, raw_prefix)
             if not isinstance(value, dict):
@@ -737,7 +737,7 @@ def _parse_metrics_from_usage(usage: Dict[str, Any]) -> Dict[str, Any]:
             for k, v in value.items():
                 metrics[f"{prefix}_{k}"] = v
         else:
-            # if should just be a metric
+            # handle metrics
             if not isinstance(value, (int, float)):
                 continue  # unexpected
             # store all metrics, remap names if needed
