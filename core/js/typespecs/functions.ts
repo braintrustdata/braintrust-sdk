@@ -161,6 +161,7 @@ export const functionIdSchema = z
     z
       .object({
         inline_prompt: promptDataSchema,
+        inline_function: z.undefined(),
         name: z.string().nullish().describe("The name of the inline prompt"),
       })
       .describe("Inline prompt definition")
