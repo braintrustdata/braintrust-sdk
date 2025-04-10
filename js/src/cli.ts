@@ -116,6 +116,7 @@ async function initExperiment(
       ? { projectId: evaluator.projectId }
       : { project: evaluator.projectName }),
     experiment: evaluator.experimentName,
+    description: evaluator.description,
     metadata: evaluator.metadata,
     isPublic: evaluator.isPublic,
     update: evaluator.update,
