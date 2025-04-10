@@ -117,6 +117,8 @@ describe("openai client unit tests", () => {
     assert.isTrue(m.tokens > 0);
     assert.isTrue(m.prompt_tokens > 0);
     assert.isTrue(m.time_to_first_token > 0);
+    assert.isTrue(m.prompt_cached_tokens >= 0);
+    assert.isTrue(m.completion_reasoning_tokens >= 0);
   });
 
   test("openai.responses.create(stream=true)", async (context) => {
