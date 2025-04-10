@@ -152,19 +152,19 @@ export const functionIdSchema = z
       .openapi({ title: "inline_code" }),
     z
       .object({
-        inline_prompt: promptDataSchema,
-        name: z.string().nullish().describe("The name of the inline prompt"),
-      })
-      .describe("Inline prompt definition")
-      .openapi({ title: "inline_prompt" }),
-    z
-      .object({
         inline_prompt: promptDataSchema.optional(),
         inline_function: z.record(z.unknown()), // This creates a circular dependency
         name: z.string().nullish().describe("The name of the inline function"),
       })
       .describe("Inline function definition")
       .openapi({ title: "inline_function" }),
+    z
+      .object({
+        inline_prompt: promptDataSchema,
+        name: z.string().nullish().describe("The name of the inline prompt"),
+      })
+      .describe("Inline prompt definition")
+      .openapi({ title: "inline_prompt" }),
   ])
   .describe("Options for identifying a function")
   .openapi({
