@@ -36,10 +36,29 @@ export const chatCompletionContentPartImageSchema = z
   })
   .openapi("ChatCompletionContentPartImage");
 
+const fileSchema = z.union([
+  z.object({
+    url: z.string().optional(),
+    content_type: z.string(),
+  }),
+  z.object({
+    attachment_id: z.string(),
+    content_type: z.string(),
+  }),
+]);
+
+export const chatCompletionContentPartAttachmentSchema = z
+  .object({
+    file: fileSchema,
+    type: z.literal("attachment"),
+  })
+  .openapi("ChatCompletionContentPartAttachment");
+
 export const chatCompletionContentPartSchema = z
   .union([
     chatCompletionContentPartTextSchema.openapi({ title: "text" }),
     chatCompletionContentPartImageSchema.openapi({ title: "image_url" }),
+    chatCompletionContentPartAttachmentSchema.openapi({ title: "attachment" }),
   ])
   .openapi("ChatCompletionContentPart");
 

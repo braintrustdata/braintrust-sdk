@@ -5072,6 +5072,11 @@ export function renderMessage<T extends Message>(
                           url: render(c.image_url.url),
                         },
                       };
+                    case "attachment":
+                      return {
+                        type: "attachment",
+                        file: c.file,
+                      };
                     default:
                       const _exhaustiveCheck: never = c;
                       return _exhaustiveCheck;

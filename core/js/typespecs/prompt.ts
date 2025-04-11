@@ -7,6 +7,7 @@ import {
   chatCompletionContentPartTextSchema,
   chatCompletionMessageParamSchema,
   chatCompletionOpenAIMessageParamSchema,
+  chatCompletionContentPartAttachmentSchema,
 } from "./openai/messages";
 import { savedFunctionIdSchema } from "./function_id";
 import { customTypes } from "./custom_types";
@@ -16,6 +17,7 @@ export {
   chatCompletionContentPartSchema,
   chatCompletionContentPartImageSchema,
   chatCompletionContentPartTextSchema,
+  chatCompletionContentPartAttachmentSchema,
 };
 export {
   type ToolCall,
