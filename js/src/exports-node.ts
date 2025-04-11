@@ -20,6 +20,7 @@ export {
   defaultErrorScoreHandler,
 } from "./framework";
 export * from "./framework2";
+export * as graph from "./graph-framework";
 export { LazyValue } from "./util";
 export * from "./wrappers/oai";
 export { wrapAISDKModel } from "./wrappers/ai-sdk";

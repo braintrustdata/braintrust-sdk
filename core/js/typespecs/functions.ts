@@ -6,6 +6,7 @@ import { chatCompletionMessageParamSchema } from "./openai/messages";
 import { customTypes } from "./custom_types";
 import { gitMetadataSettingsSchema, repoInfoSchema } from "./git_types";
 import { objectReferenceSchema } from "./common_types";
+import { graphDataSchema } from "./graph";
 
 export const validRuntimesEnum = z.enum(["node", "python"]);
 export type Runtime = z.infer<typeof validRuntimesEnum>;
@@ -86,6 +87,10 @@ export const functionDataSchema = z
         ]),
       })
       .openapi({ title: "code" }),
+    graphDataSchema.openapi({
+      title: "graph",
+      description: "This feature is preliminary and unsupported.",
+    }),
     z
       .object({
         type: z.literal("global"),
@@ -147,22 +152,25 @@ export const functionIdSchema = z
       .openapi({ title: "inline_code" }),
     z
       .object({
+        inline_prompt: promptDataSchema.optional(),
+        inline_function: z.record(z.unknown()), // This creates a circular dependency
+        name: z.string().nullish().describe("The name of the inline function"),
+      })
+      .describe("Inline function definition")
+      .openapi({ title: "inline_function" }),
+    z
+      .object({
         inline_prompt: promptDataSchema,
         name: z.string().nullish().describe("The name of the inline prompt"),
       })
       .describe("Inline prompt definition")
       .openapi({ title: "inline_prompt" }),
-    z
-      .object({
-        inline_prompt: promptDataSchema.optional(),
-        inline_function: functionDataSchema,
-        name: z.string().nullish().describe("The name of the inline function"),
-      })
-      .describe("Inline function definition")
-      .openapi({ title: "inline_function" }),
   ])
   .describe("Options for identifying a function")
-  .openapi("FunctionId");
+  .openapi({
+    title: "FunctionId",
+    description: "Options for identifying a function",
+  });
 
 export type FunctionId = z.infer<typeof functionIdSchema>;
 
@@ -427,11 +435,11 @@ export const sseDoneEventSchema = baseSSEEventSchema.omit({ data: true }).merge(
 );
 
 export const functionObjectTypeEnum = z
-  .enum(["prompt", "tool", "scorer", "task"])
+  .enum(["prompt", "tool", "scorer", "task", "agent"])
   .openapi("FunctionObjectType");
 export type FunctionObjectType = z.infer<typeof functionObjectTypeEnum>;
 export const functionFormatEnum = z
-  .enum(["llm", "code", "global"])
+  .enum(["llm", "code", "global", "graph"])
   .openapi("FunctionFormat");
 export type FunctionFormat = z.infer<typeof functionFormatEnum>;
 export const functionOutputTypeEnum = z

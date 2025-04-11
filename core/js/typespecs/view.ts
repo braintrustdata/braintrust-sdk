@@ -14,6 +14,7 @@ export const viewTypeEnum = z
     "tools",
     "scorers",
     "logs",
+    "agents",
   ])
   .describe("Type of table that the view corresponds to.");
 export type ViewType = z.infer<typeof viewTypeEnum>;

@@ -59,6 +59,7 @@ import {
   Tools,
   toolsSchema,
   EXTERNAL_ATTACHMENT,
+  PromptBlockData,
 } from "@braintrust/core/typespecs";
 import { waitUntil } from "@vercel/functions";
 import Mustache, { Context } from "mustache";
@@ -230,6 +231,15 @@ export interface Span extends Exportable {
   setAttributes(args: Omit<StartSpanArgs, "event">): void;
 
   /**
+   * Start a span with a specific id and parent span ids.
+   */
+  startSpanWithParents(
+    spanId: string,
+    spanParents: string[],
+    args?: StartSpanArgs,
+  ): Span;
+
+  /*
    * Gets the span's `state` value, which is usually the global logging state (this is
    * for very advanced purposes only)
    */
@@ -291,6 +301,14 @@ export class NoopSpan implements Span {
   }
 
   public setAttributes(_args: Omit<StartSpanArgs, "event">) {}
+
+  public startSpanWithParents(
+    _spanId: string,
+    _spanParents: string[],
+    _args?: StartSpanArgs,
+  ): Span {
+    return this;
+  }
 
   public state() {
     return _internalGetGlobalState();
@@ -617,7 +635,7 @@ export class FailedHTTPResponse extends Error {
   public data: any;
 
   constructor(status: number, text: string, data: any = null) {
-    super(`${status}: ${text}`);
+    super(`${status}: ${text} (${data})`);
     this.status = status;
     this.text = text;
     this.data = data;
@@ -1390,6 +1408,11 @@ interface ParentSpanIds {
   rootSpanId: string;
 }
 
+interface MultiParentSpanIds {
+  parentSpanIds: string[];
+  rootSpanId: string;
+}
+
 function spanComponentsToObjectIdLambda(
   state: BraintrustState,
   components: SpanComponentsV3,
@@ -1519,17 +1542,18 @@ function startSpanParentArgs(args: {
   parentObjectType: SpanObjectTypeV3;
   parentObjectId: LazyValue<string>;
   parentComputeObjectMetadataArgs: Record<string, any> | undefined;
-  parentSpanIds: ParentSpanIds | undefined;
+  parentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined;
   propagatedEvent: StartSpanEventArgs | undefined;
 }): {
   parentObjectType: SpanObjectTypeV3;
   parentObjectId: LazyValue<string>;
   parentComputeObjectMetadataArgs: Record<string, any> | undefined;
-  parentSpanIds: ParentSpanIds | undefined;
+  parentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined;
   propagatedEvent: StartSpanEventArgs | undefined;
 } {
   let argParentObjectId: LazyValue<string> | undefined = undefined;
-  let argParentSpanIds: ParentSpanIds | undefined = undefined;
+  let argParentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined =
+    undefined;
   let argPropagatedEvent: StartSpanEventArgs | undefined = undefined;
   if (args.parent) {
     if (args.parentSpanIds) {
@@ -4344,8 +4368,9 @@ export class SpanImpl implements Span {
       parentObjectType: SpanObjectTypeV3;
       parentObjectId: LazyValue<string>;
       parentComputeObjectMetadataArgs: Record<string, any> | undefined;
-      parentSpanIds: ParentSpanIds | undefined;
+      parentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined;
       defaultRootType?: SpanType;
+      spanId?: string;
     } & Omit<StartSpanArgs, "parent">,
   ) {
     this._state = args.state;
@@ -4399,10 +4424,13 @@ export class SpanImpl implements Span {
     };
 
     this._id = eventId ?? uuidv4();
-    this._spanId = uuidv4();
+    this._spanId = args.spanId ?? uuidv4();
     if (args.parentSpanIds) {
       this._rootSpanId = args.parentSpanIds.rootSpanId;
-      this._spanParents = [args.parentSpanIds.spanId];
+      this._spanParents =
+        "parentSpanIds" in args.parentSpanIds
+          ? args.parentSpanIds.parentSpanIds
+          : [args.parentSpanIds.spanId];
     } else {
       this._rootSpanId = this._spanId;
       this._spanParents = undefined;
@@ -4433,6 +4461,10 @@ export class SpanImpl implements Span {
 
   public setAttributes(args: Omit<StartSpanArgs, "event">): void {
     this.logInternal({ internalData: { span_attributes: args } });
+  }
+
+  public setSpanParents(parents: string[]): void {
+    this.logInternal({ internalData: { span_parents: parents } });
   }
 
   public log(event: ExperimentLogPartialArgs): void {
@@ -4534,6 +4566,31 @@ export class SpanImpl implements Span {
         parentSpanIds,
         propagatedEvent: args?.propagatedEvent ?? this.propagatedEvent,
       }),
+    });
+  }
+
+  public startSpanWithParents(
+    spanId: string,
+    spanParents: string[],
+    args?: StartSpanArgs,
+  ): Span {
+    const parentSpanIds: MultiParentSpanIds = {
+      parentSpanIds: spanParents,
+      rootSpanId: this._rootSpanId,
+    };
+    return new SpanImpl({
+      state: this._state,
+      ...args,
+      ...startSpanParentArgs({
+        state: this._state,
+        parent: args?.parent,
+        parentObjectType: this.parentObjectType,
+        parentObjectId: this.parentObjectId,
+        parentComputeObjectMetadataArgs: this.parentComputeObjectMetadataArgs,
+        parentSpanIds,
+        propagatedEvent: args?.propagatedEvent ?? this.propagatedEvent,
+      }),
+      spanId,
     });
   }
 
@@ -5282,13 +5339,75 @@ export class Prompt<
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
     };
 
+    const renderedPrompt = Prompt.renderPrompt({
+      prompt,
+      buildArgs,
+      options,
+    });
+
     if (flavor === "chat") {
-      if (prompt.type !== "chat") {
+      if (renderedPrompt.type !== "chat") {
         throw new Error(
           "Prompt is a completion prompt. Use buildCompletion() instead",
         );
       }
 
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      return {
+        ...renderPromptParams(params, variables, { strict: options.strict }),
+        ...spanInfo,
+        messages: renderedPrompt.messages,
+        ...(renderedPrompt.tools
+          ? {
+              tools: toolsSchema.parse(JSON.parse(renderedPrompt.tools)),
+            }
+          : undefined),
+      } as CompiledPrompt<Flavor>;
+    } else if (flavor === "completion") {
+      if (renderedPrompt.type !== "completion") {
+        throw new Error(`Prompt is a chat prompt. Use flavor: 'chat' instead`);
+      }
+
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      return {
+        ...renderPromptParams(params, variables, { strict: options.strict }),
+        ...spanInfo,
+        prompt: renderedPrompt.content,
+      } as CompiledPrompt<Flavor>;
+    } else {
+      throw new Error("never!");
+    }
+  }
+
+  static renderPrompt({
+    prompt,
+    buildArgs,
+    options,
+  }: {
+    prompt: PromptBlockData;
+    buildArgs: unknown;
+    options: {
+      strict?: boolean;
+      messages?: Message[];
+    };
+  }): PromptBlockData {
+    const escape = (v: unknown) => {
+      if (v === undefined) {
+        throw new Error("Missing!");
+      } else if (typeof v === "string") {
+        return v;
+      } else {
+        return JSON.stringify(v);
+      }
+    };
+
+    const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
+    const variables: Record<string, unknown> = {
+      input: buildArgs,
+      ...(dictArgParsed.success ? dictArgParsed.data : {}),
+    };
+
+    if (prompt.type === "chat") {
       const render = (template: string) => {
         if (options.strict) {
           lintTemplate(template, variables);
@@ -5304,28 +5423,23 @@ export class Prompt<
       );
       const hasSystemPrompt = baseMessages.some((m) => m.role === "system");
 
-      const messages = [
+      const messages: Message[] = [
         ...baseMessages,
         ...(options.messages ?? []).filter(
           (m) => !(hasSystemPrompt && m.role === "system"),
         ),
       ];
 
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...renderPromptParams(params, variables, { strict: options.strict }),
-        ...spanInfo,
+        type: "chat",
         messages: messages,
         ...(prompt.tools?.trim()
           ? {
-              tools: toolsSchema.parse(JSON.parse(render(prompt.tools))),
+              tools: render(prompt.tools),
             }
           : undefined),
-      } as CompiledPrompt<Flavor>;
-    } else if (flavor === "completion") {
-      if (prompt.type !== "completion") {
-        throw new Error(`Prompt is a chat prompt. Use flavor: 'chat' instead`);
-      }
+      };
+    } else if (prompt.type === "completion") {
       if (options.messages) {
         throw new Error(
           "extra messages are not supported for completion prompts",
@@ -5336,15 +5450,14 @@ export class Prompt<
         lintTemplate(prompt.content, variables);
       }
 
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...renderPromptParams(params, variables, { strict: options.strict }),
-        ...spanInfo,
-        prompt: Mustache.render(prompt.content, variables, undefined, {
+        type: "completion",
+        content: Mustache.render(prompt.content, variables, undefined, {
           escape,
         }),
-      } as CompiledPrompt<Flavor>;
+      };
     } else {
+      const _: never = prompt;
       throw new Error("never!");
     }
   }

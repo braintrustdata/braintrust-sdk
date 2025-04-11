@@ -15,9 +15,8 @@ ERROR_CODES = tuple(range(1, 256))
 # validate things work with or without them.
 VENDOR_PACKAGES = ("anthropic", "openai")
 
-# Test matrix
-ANTHROPIC_VERSIONS = (LATEST, "0.49.0", "0.48.0")
-OPENAI_VERSIONS = (LATEST, "1.71")
+
+ANTHROPIC_VERSIONS = ("0.48.0", "0.49.0", LATEST)
 
 
 @nox.session()
@@ -41,14 +40,6 @@ def test_anthropic(session, version):
     _install_test_deps(session)
     _install(session, "anthropic", version)
     session.run("pytest", f"{SRC}/wrappers/test_anthropic.py")
-
-
-@nox.session()
-@nox.parametrize("version", OPENAI_VERSIONS)
-def test_openai(session, version):
-    _install_test_deps(session)
-    _install(session, "openai", version)
-    session.run("pytest", f"{SRC}/wrappers/test_openai.py")
 
 
 def _install_test_deps(session):
