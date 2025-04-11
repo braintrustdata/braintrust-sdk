@@ -12,6 +12,7 @@ from .. import login
 from ..framework import (
     BaseExperiment,
     Evaluator,
+    EvaluatorOpts,
     EvaluatorInstance,
     ReporterDef,
     _evals,
@@ -63,19 +64,6 @@ class FileHandle:
 
     def watch(self):
         raise NotImplementedError
-
-
-@dataclass
-class EvaluatorOpts:
-    verbose: bool
-    no_send_logs: bool
-    no_progress_bars: bool
-    terminate_on_failure: bool
-    watch: bool
-    filters: List[str]
-    list: bool
-    jsonl: bool
-
 
 @dataclass
 class LoadedEvaluator:

@@ -354,6 +354,17 @@ class Evaluator(Generic[Input, Output]):
 
 
 @dataclasses.dataclass
+class EvaluatorOpts:
+    verbose: bool
+    no_send_logs: bool
+    no_progress_bars: bool
+    terminate_on_failure: bool
+    watch: bool
+    filters: List[str]
+    list: bool
+    jsonl: bool
+
+@dataclasses.dataclass
 class EvalResultWithSummary(SerializableDataClass, Generic[Input, Output]):
     summary: ExperimentSummary
     results: List[EvalResult[Input, Output]]
@@ -1353,4 +1364,4 @@ def build_local_summary(
     )
 
 
-__all__ = ["Evaluator", "Eval", "EvalAsync", "Score", "EvalCase", "EvalHooks", "BaseExperiment", "Reporter"]
+__all__ = ["Evaluator", "Eval", "EvalAsync", "EvaluatorOpts", "EvalResultWithSummary", "Experiment", "Filter", "Score", "EvalCase", "EvalHooks", "BaseExperiment", "Reporter", "run_evaluator"]
