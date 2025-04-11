@@ -81,7 +81,7 @@ def test_anthropic_messages_create_stream_true(memory_logger):
 
     logs = memory_logger.pop()
     assert len(logs) == 1
-    log = logs[0][0]
+    log = logs[0]
     assert log["metadata"]["model"] == MODEL
     assert log["metadata"]["max_tokens"] == 300
     assert start < log["metrics"]["start"] < log["metrics"]["end"] < end
@@ -115,7 +115,7 @@ def test_anthropic_messages_model_params_inputs(memory_logger):
 
         logs = memory_logger.pop()
         assert len(logs) == 1
-        log = logs[0][0]
+        log = logs[0]
         import pprint
 
         pprint.pprint(log)
@@ -156,7 +156,7 @@ def test_anthropic_messages_system_prompt_inputs(memory_logger):
 
         logs = memory_logger.pop()
         assert len(logs) == 1
-        log = logs[0][0]
+        log = logs[0]
         inputs = log["input"]
         assert len(inputs) == 2
         inputs_by_role = {m["role"]: m["content"] for m in inputs}
@@ -182,7 +182,7 @@ async def test_anthropic_messages_streaming_async(memory_logger):
 
         logs = memory_logger.pop()
         assert len(logs) == 1
-        log = logs[0][0]
+        log = logs[0]
         assert "user" in str(log["input"])
         assert "1+1" in str(log["input"])
         assert "2" in str(log["output"])
@@ -219,7 +219,7 @@ def test_anthropic_client_error(memory_logger):
 
     logs = memory_logger.pop()
     assert len(logs) == 1
-    log = logs[0][0]
+    log = logs[0]
     assert log["project_id"] == PROJECT_NAME
     assert "404" in log["error"]
 
@@ -244,7 +244,7 @@ def test_anthropic_messages_streaming_sync(memory_logger):
 
     logs = memory_logger.pop()
     assert len(logs) == 1
-    log = logs[0][0]
+    log = logs[0]
     assert "user" in str(log["input"])
     assert "2+2" in str(log["input"])
     assert "4" in str(log["output"])
@@ -277,7 +277,7 @@ def test_anthropic_messages_sync(memory_logger):
     logs = memory_logger.pop()
 
     assert len(logs) == 1
-    log = logs[0][0]
+    log = logs[0]
     assert "2+2" in str(log["input"])
     assert "4" in str(log["output"])
     assert log["project_id"] == PROJECT_NAME
