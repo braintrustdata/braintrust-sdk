@@ -737,11 +737,9 @@ def _parse_metrics_from_usage(usage: Dict[str, Any]) -> Dict[str, Any]:
             for k, v in value.items():
                 if _is_numeric(v):
                     metrics[f"{prefix}_{k}"] = v
-        else:
-            # handle metrics
-            if _is_numeric(value):
-                name = TOKEN_NAME_MAP.get(oai_name, oai_name)
-                metrics[name] = value
+        elif _is_numeric(value):
+            name = TOKEN_NAME_MAP.get(oai_name, oai_name)
+            metrics[name] = value
 
     return metrics
 
