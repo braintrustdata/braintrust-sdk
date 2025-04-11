@@ -735,13 +735,16 @@ def _parse_metrics_from_usage(usage: Dict[str, Any]) -> Dict[str, Any]:
             if not isinstance(value, dict):
                 continue  # unexpected
             for k, v in value.items():
-                metrics[f"{prefix}_{k}"] = v
+                if _is_numeric(v):
+                    metrics[f"{prefix}_{k}"] = v
         else:
             # handle metrics
-            if not isinstance(value, (int, float)):
-                continue  # unexpected
-            # store all metrics, remap names if needed
-            name = TOKEN_NAME_MAP.get(oai_name, oai_name)
-            metrics[name] = value
+            if _is_numeric(value):
+                name = TOKEN_NAME_MAP.get(oai_name, oai_name)
+                metrics[name] = value
 
     return metrics
+
+
+def _is_numeric(v):
+    return isinstance(v, (int, float, complex))
