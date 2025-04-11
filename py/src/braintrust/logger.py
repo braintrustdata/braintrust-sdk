@@ -564,7 +564,7 @@ def construct_json_array(items: Sequence[str]):
 
 def construct_logs3_data(items: Sequence[str]):
     rowsS = construct_json_array(items)
-    return '{"rows": ' + rowsS + ', "api_version": ' + str(DATA_API_VERSION) + "}"
+    return '{"rows": ' + rowsS + ', "api_version": ' + str(DATA_API_VERSION) + ', "async": true}'
 
 
 def _check_json_serializable(event):
