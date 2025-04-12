@@ -76,13 +76,10 @@ class ChatCompletionWrapper:
                 return gen()
             else:
                 log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+                metrics = _parse_metrics_from_usage(log_response.get("usage", {}))
+                metrics["time_to_first_token"] = time.time() - start
                 span.log(
-                    metrics={
-                        "time_to_first_token": time.time() - start,
-                        "tokens": log_response["usage"]["total_tokens"],
-                        "prompt_tokens": log_response["usage"]["prompt_tokens"],
-                        "completion_tokens": log_response["usage"]["completion_tokens"],
-                    },
+                    metrics=metrics,
                     output=log_response["choices"],
                 )
                 return raw_response
@@ -134,13 +131,10 @@ class ChatCompletionWrapper:
                 return gen()
             else:
                 log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+                metrics = _parse_metrics_from_usage(log_response.get("usage"))
+                metrics["time_to_first_token"] = time.time() - start
                 span.log(
-                    metrics={
-                        "tokens": log_response["usage"]["total_tokens"],
-                        "prompt_tokens": log_response["usage"]["prompt_tokens"],
-                        "completion_tokens": log_response["usage"]["completion_tokens"],
-                        "time_to_first_token": time.time() - start,
-                    },
+                    metrics=metrics,
                     output=log_response["choices"],
                 )
                 return raw_response
@@ -173,11 +167,7 @@ class ChatCompletionWrapper:
         metrics = {}
         for result in all_results:
             if "usage" in result and result["usage"] is not None:
-                metrics = {
-                    "tokens": result["usage"]["total_tokens"],
-                    "prompt_tokens": result["usage"]["prompt_tokens"],
-                    "completion_tokens": result["usage"]["completion_tokens"],
-                }
+                metrics = _parse_metrics_from_usage(result["usage"])
             choices = result["choices"]
             if not choices:
                 continue
@@ -269,13 +259,10 @@ class ResponseWrapper:
                 return gen()
             else:
                 log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+                metrics = _parse_metrics_from_usage(log_response.get("usage"))
+                metrics["time_to_first_token"] = time.time() - start
                 span.log(
-                    metrics={
-                        "time_to_first_token": time.time() - start,
-                        "tokens": log_response["usage"]["total_tokens"],
-                        "prompt_tokens": log_response["usage"]["input_tokens"],
-                        "completion_tokens": log_response["usage"]["output_tokens"],
-                    },
+                    metrics=metrics,
                     output=log_response["output"],
                 )
                 return raw_response
@@ -705,3 +692,57 @@ def wrap_openai(openai: Any):
         return OpenAIV1Wrapper(openai)
     else:
         return OpenAIV0Wrapper(openai)
+
+
+# OpenAI's representation to Braintrust's representation
+TOKEN_NAME_MAP = {
+    # chat API
+    "total_tokens": "tokens",
+    "prompt_tokens": "prompt_tokens",
+    "completion_tokens": "completion_tokens",
+    # responses API
+    "tokens": "tokens",
+    "input_tokens": "prompt_tokens",
+    "output_tokens": "completion_tokens",
+}
+
+TOKEN_PREFIX_MAP = {
+    "input": "prompt",
+    "output": "completion",
+}
+
+
+def _parse_metrics_from_usage(usage: Dict[str, Any]) -> Dict[str, Any]:
+    # For simplicity, this function handles all the different APIs
+
+    if not usage or not isinstance(usage, dict):
+        return {}
+
+    # example usage format:
+    # { 'input_tokens': 14,
+    # ' input_tokens_details': {'cached_tokens': 0},
+    # ' output_tokens_details': {'reasoning_tokens': 0},
+    # }
+    # we remap names and change detail tokens to names like
+    # input_cached_tokens.
+
+    metrics = {}
+    for oai_name, value in usage.items():
+        if oai_name.endswith("_tokens_details"):
+            # handle `_tokens_detail` dicts
+            raw_prefix = oai_name[: -len("_tokens_details")]
+            prefix = TOKEN_PREFIX_MAP.get(raw_prefix, raw_prefix)
+            if not isinstance(value, dict):
+                continue  # unexpected
+            for k, v in value.items():
+                if _is_numeric(v):
+                    metrics[f"{prefix}_{k}"] = v
+        elif _is_numeric(value):
+            name = TOKEN_NAME_MAP.get(oai_name, oai_name)
+            metrics[name] = value
+
+    return metrics
+
+
+def _is_numeric(v):
+    return isinstance(v, (int, float, complex))
