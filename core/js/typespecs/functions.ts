@@ -213,9 +213,7 @@ export const invokeParent = z.union([
 
 const fetchRowFieldsSchema = z.object({
   object_type: z.enum(["project_logs", "experiment", "playground_logs"]),
-  object_id: z
-    .string()
-    .describe("The id of the container object you are logging to"),
+  object_id: z.string().describe("The id of the object you are logging to"),
   row_id: z.string().describe("The row id to fetch"),
   fields: z.array(z.string()).describe("The fields to fetch"),
 });
