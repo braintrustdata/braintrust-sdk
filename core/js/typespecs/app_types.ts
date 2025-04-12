@@ -547,6 +547,49 @@ export const projectScoreCategory = z
   .openapi("ProjectScoreCategory");
 export type ProjectScoreCategory = z.infer<typeof projectScoreCategory>;
 
+export const automationRuleSchema = z
+  .object({
+    name: z.string().describe("Name of the automation rule"),
+    description: z
+      .string()
+      .optional()
+      .describe("Description of the automation rule"),
+    // XXX should this be "online_scoring"?
+    event_type: z
+      .enum(["log"])
+      .describe("The event which starts the automation execution"),
+    sampling_rate: z
+      .number()
+      .min(0)
+      .max(1)
+      .describe("The sampling rate for automation executions"),
+    btql_filter: z
+      .string()
+      .describe("BTQL filter for to identify rows for the automation rule"),
+    action: z
+      .object({
+        type: z
+          .enum(["webhook"])
+          .describe(
+            "The type of action to take when the automation rule is triggered",
+          ),
+        url: z.string().describe("The webhook URL to send the request to"),
+        headers: z
+          .record(z.string(), z.string())
+          .optional()
+          .describe("Headers to send with the webhook request"),
+        // XXX probably need a configurable way to send an arbitrary payload
+        body: z
+          .string()
+          .optional()
+          .describe("The body to send with the webhook request"),
+      })
+      .describe("The action to take when the automation rule is triggered"),
+  })
+  .openapi("AutomationRule");
+
+export type AutomationRule = z.infer<typeof automationRuleSchema>;
+
 export const onlineScoreConfigSchema = z
   .object({
     sampling_rate: z
@@ -572,6 +615,7 @@ export const onlineScoreConfigSchema = z
       .boolean()
       .nullish()
       .describe("Whether to skip adding scorer spans when computing scores"),
+    automations: z.array(automationRuleSchema).nullish(),
   })
   .refine((val) => val.apply_to_root_span || val.apply_to_span_names?.length, {
     message: "Online scoring rule does not apply to any rows",
