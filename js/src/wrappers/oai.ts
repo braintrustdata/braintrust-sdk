@@ -8,7 +8,7 @@ import {
 } from "../logger";
 import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import { mergeDicts } from "@braintrust/core";
-import { responsesProxy } from "./oai_responses";
+import { responsesProxy, parseMetricsFromUsage } from "./oai_responses";
 
 interface BetaLike {
   chat: {
@@ -155,14 +155,11 @@ function logCompletionResponse(
   response: NonStreamingChatResponse | StreamingChatResponse,
   span: Span,
 ) {
+  const metrics = parseMetricsFromUsage(response?.usage);
+  metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
   span.log({
     output: response.choices,
-    metrics: {
-      time_to_first_token: getCurrentUnixTimestamp() - startTime,
-      tokens: response.usage?.total_tokens,
-      prompt_tokens: response.usage?.prompt_tokens,
-      completion_tokens: response.usage?.completion_tokens,
-    },
+    metrics: metrics,
   });
 }
 
@@ -498,11 +495,11 @@ function postprocessStreamingResults(allResults: any[]): {
   let metrics = {};
   for (const result of allResults) {
     if (result.usage) {
+      // NOTE[matt] as of 2025-04-14 the usage metrics aren't return as part of a streaming
+      // response, but I'll leave this here for now..
       metrics = {
         ...metrics,
-        tokens: result.usage.total_tokens,
-        prompt_tokens: result.usage.prompt_tokens,
-        completion_tokens: result.usage.completion_tokens,
+        ...parseMetricsFromUsage(result?.usage),
       };
     }
 
