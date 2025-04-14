@@ -53,36 +53,44 @@ describe("openai client unit tests", () => {
   test("openai.chat.completions.streaming", async (context) => {
     assert.lengthOf(await backgroundLogger.drain(), 0);
 
-    const start = getCurrentUnixTimestamp();
-    const stream = await client.chat.completions.create({
-      messages: [
-        {
-          role: "user",
-          content: "Hello! Can you tell me a joke?",
+    for (const includeUsage of [false, true]) {
+      const start = getCurrentUnixTimestamp();
+      const stream = await client.chat.completions.create({
+        messages: [{ role: "user", content: "1+1" }],
+        model: TEST_MODEL,
+        stream: true,
+        stream_options: {
+          include_usage: includeUsage,
         },
-      ],
-      model: TEST_MODEL,
-      stream: true,
-    });
+      });
 
-    let ttft = -1.0;
-    for await (const event of stream) {
-      if (ttft < 0) {
-        ttft = getCurrentUnixTimestamp() - start;
+      let ttft = -1.0;
+      for await (const event of stream) {
+        if (ttft < 0) {
+          ttft = getCurrentUnixTimestamp() - start;
+        }
+        assert.ok(event);
       }
-      assert.ok(event);
-    }
-    const end = getCurrentUnixTimestamp();
+      const end = getCurrentUnixTimestamp();
 
-    const spans = await backgroundLogger.drain();
-    assert.lengthOf(spans, 1);
-    const span = spans[0] as any;
-    assert.equal(span.span_attributes.name, "Chat Completion");
-    assert.equal(span.span_attributes.type, "llm");
-    const m = span.metrics;
-    assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
-    assert.isTrue(ttft >= m.time_to_first_token);
-    // NOTE: no metrics on streaming responses in chat.completions.
+      const spans = await backgroundLogger.drain();
+      assert.lengthOf(spans, 1);
+      const span = spans[0] as any;
+      assert.equal(span.span_attributes.name, "Chat Completion");
+      assert.equal(span.span_attributes.type, "llm");
+      const m = span.metrics;
+      assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
+      assert.isTrue(ttft >= m.time_to_first_token);
+      if (includeUsage) {
+        assert.isTrue(m.tokens > 0);
+        assert.isTrue(m.prompt_tokens > 0);
+        assert.isTrue(m.time_to_first_token > 0);
+        assert.isTrue(m.prompt_cached_tokens >= 0);
+        assert.isTrue(m.completion_reasoning_tokens >= 0);
+      } else {
+        assert.isTrue(m.tokens === undefined);
+      }
+    }
   });
 
   test("openai.chat.completions", async (context) => {

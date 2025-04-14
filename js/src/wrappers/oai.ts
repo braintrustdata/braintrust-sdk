@@ -427,10 +427,7 @@ type CreateEmbeddingResponse = {
 function processEmbeddingResponse(result: CreateEmbeddingResponse, span: Span) {
   span.log({
     output: { embedding_length: result.data[0].embedding.length },
-    metrics: {
-      tokens: result.usage?.total_tokens,
-      prompt_tokens: result.usage?.prompt_tokens,
-    },
+    metrics: parseMetricsFromUsage(result?.usage),
   });
 }
 
@@ -495,8 +492,7 @@ function postprocessStreamingResults(allResults: any[]): {
   let metrics = {};
   for (const result of allResults) {
     if (result.usage) {
-      // NOTE[matt] as of 2025-04-14 the usage metrics aren't return as part of a streaming
-      // response, but I'll leave this here for now..
+      // NOTE: only included if `stream_options.include_usage` is true
       metrics = {
         ...metrics,
         ...parseMetricsFromUsage(result?.usage),
