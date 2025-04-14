@@ -179,10 +179,15 @@ export const useFunctionSchema = functionIdSchema;
 export const streamingModeEnum = z.enum(["auto", "parallel"]);
 export type StreamingMode = z.infer<typeof streamingModeEnum>;
 
+const spanParentObjectTypeSchema = z.enum([
+  "project_logs",
+  "experiment",
+  "playground_logs",
+]);
 export const invokeParent = z.union([
   z
     .object({
-      object_type: z.enum(["project_logs", "experiment", "playground_logs"]),
+      object_type: spanParentObjectTypeSchema,
       object_id: z
         .string()
         .describe("The id of the container object you are logging to"),
@@ -212,7 +217,9 @@ export const invokeParent = z.union([
 ]);
 
 const fetchRowFieldsSchema = z.object({
-  object_type: z.enum(["project_logs", "experiment", "playground_logs"]),
+  object_type: spanParentObjectTypeSchema.describe(
+    "The type of the object you are logging to",
+  ),
   object_id: z.string().describe("The id of the object you are logging to"),
   row_id: z.string().describe("The row id to fetch"),
   fields: z.array(z.string()).describe("The fields to fetch"),
