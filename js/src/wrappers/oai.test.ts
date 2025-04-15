@@ -12,6 +12,7 @@ import OpenAI from "openai";
 import { _exportsForTestingOnly, initLogger } from "../logger";
 import { wrapOpenAI } from "../exports-node";
 import { getCurrentUnixTimestamp } from "../util";
+import { parseMetricsFromUsage } from "./oai_responses";
 
 // use the cheapest model for tests
 const TEST_MODEL = "gpt-4o-mini";
@@ -49,9 +50,53 @@ describe("openai client unit tests", () => {
     _exportsForTestingOnly.clearTestBackgroundLogger();
   });
 
+  test("openai.chat.completions.streaming", async (context) => {
+    assert.lengthOf(await backgroundLogger.drain(), 0);
+
+    for (const includeUsage of [false, true]) {
+      const start = getCurrentUnixTimestamp();
+      const stream = await client.chat.completions.create({
+        messages: [{ role: "user", content: "1+1" }],
+        model: TEST_MODEL,
+        stream: true,
+        stream_options: {
+          include_usage: includeUsage,
+        },
+      });
+
+      let ttft = -1.0;
+      for await (const event of stream) {
+        if (ttft < 0) {
+          ttft = getCurrentUnixTimestamp() - start;
+        }
+        assert.ok(event);
+      }
+      const end = getCurrentUnixTimestamp();
+
+      const spans = await backgroundLogger.drain();
+      assert.lengthOf(spans, 1);
+      const span = spans[0] as any;
+      assert.equal(span.span_attributes.name, "Chat Completion");
+      assert.equal(span.span_attributes.type, "llm");
+      const m = span.metrics;
+      assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
+      assert.isTrue(ttft >= m.time_to_first_token);
+      if (includeUsage) {
+        assert.isTrue(m.tokens > 0);
+        assert.isTrue(m.prompt_tokens > 0);
+        assert.isTrue(m.time_to_first_token > 0);
+        assert.isTrue(m.prompt_cached_tokens >= 0);
+        assert.isTrue(m.completion_reasoning_tokens >= 0);
+      } else {
+        assert.isTrue(m.tokens === undefined);
+      }
+    }
+  });
+
   test("openai.chat.completions", async (context) => {
     assert.lengthOf(await backgroundLogger.drain(), 0);
 
+    const start = getCurrentUnixTimestamp();
     const result = await client.chat.completions.create({
       messages: [
         {
@@ -62,13 +107,22 @@ describe("openai client unit tests", () => {
       model: TEST_MODEL,
       max_tokens: 100,
     });
-
+    const end = getCurrentUnixTimestamp();
     assert.ok(result);
+
     const spans = await backgroundLogger.drain();
     assert.lengthOf(spans, 1);
     const span = spans[0] as any;
+    assert.ok(span);
     assert.equal(span.span_attributes.type, "llm");
     assert.equal(span.metadata.model, TEST_MODEL);
+    const m = span.metrics;
+    assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
+    assert.isTrue(m.tokens > 0);
+    assert.isTrue(m.prompt_tokens > 0);
+    assert.isTrue(m.time_to_first_token > 0);
+    assert.isTrue(m.prompt_cached_tokens >= 0);
+    assert.isTrue(m.completion_reasoning_tokens >= 0);
   });
 
   test("openai.responses.stream", async (context) => {
@@ -205,4 +259,33 @@ describe("openai client unit tests", () => {
   afterEach(() => {
     _exportsForTestingOnly.clearTestBackgroundLogger();
   });
+});
+
+test("parseMetricsFromUsage", () => {
+  const usage = {
+    input_tokens: 14,
+    output_tokens: 8,
+    input_tokens_details: { cached_tokens: 0, brand_new_token: 12 },
+  };
+  const metrics = parseMetricsFromUsage(usage);
+  assert.equal(metrics.prompt_tokens, 14);
+  assert.equal(metrics.prompt_cached_tokens, 0);
+  assert.equal(metrics.prompt_brand_new_token, 12);
+  assert.equal(metrics.completion_tokens, 8);
+  // test a bunch of error conditions
+  var totallyBadInputs = [
+    null,
+    undefined,
+    "not an object",
+    {},
+    { input_tokens: "not a number" },
+    { input_tokens_details: "not an object" },
+    { input_tokens_details: {} },
+    { input_tokens_details: { cached_tokens: "not a number" } },
+    { input_tokens_details: { cached_tokens: null } },
+    { input_tokens_details: { cached_tokens: undefined } },
+  ];
+  for (const input of totallyBadInputs) {
+    assert.deepEqual(parseMetricsFromUsage(input), {});
+  }
 });
