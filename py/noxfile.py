@@ -65,7 +65,7 @@ def test_anthropic(session, source, version):
 @nox.session()
 @nox.parametrize("version", OPENAI_VERSIONS)
 @nox.parametrize("source", BT_SOURCES)
-def test_openai(session, version):
+def test_openai(session, source, version):
     _install_test_deps(session, source)
     _install(session, "openai", version)
     session.run("pytest", f"{SRC}/wrappers/test_openai.py")
