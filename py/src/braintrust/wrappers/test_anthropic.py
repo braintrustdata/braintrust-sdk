@@ -254,6 +254,8 @@ def test_anthropic_messages_stream_errors(memory_logger):
             raise Exception("fake-error")
     except Exception:
         pass
+    else:
+        raise Exception("should have raised an exception")
 
     spans = memory_logger.pop()
     assert len(spans) == 1
