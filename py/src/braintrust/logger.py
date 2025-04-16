@@ -3337,6 +3337,13 @@ class SpanImpl(Span):
             self.end()
 
 
+def log_exc_info_to_span(
+    span: Span, exc_type: Type[BaseException], exc_value: BaseException, tb: Optional[TracebackType]
+) -> None:
+    error = stringify_exception(exc_type, exc_value, tb)
+    span.log(error=error)
+
+
 def stringify_exception(exc_type: Type[BaseException], exc_value: BaseException, tb: Optional[TracebackType]) -> str:
     return "".join(
         traceback.format_exception_only(exc_type, exc_value)
