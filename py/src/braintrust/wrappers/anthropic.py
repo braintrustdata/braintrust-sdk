@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from typing import Any
 
 from braintrust import span_types
-from braintrust.logger import NOOP_SPAN, start_span
+from braintrust.logger import NOOP_SPAN, log_exc_info_to_span, start_span
 
 log = logging.getLogger(__name__)
 
@@ -115,16 +115,29 @@ class TracedMessageStreamManager(Wrapper):
         ms = await self.__msg_stream_mgr.__aenter__()
         return TracedMessageStream(ms, self.__span)
 
-    def __aexit__(self, exc_type, exc_value, traceback):
-        return self.__msg_stream_mgr.__aexit__(exc_type, exc_value, traceback)
-
     def __enter__(self):
         ms = self.__msg_stream_mgr.__enter__()
         return TracedMessageStream(ms, self.__span)
 
+    def __aexit__(self, exc_type, exc_value, traceback):
+        try:
+            return self.__msg_stream_mgr.__aexit__(exc_type, exc_value, traceback)
+        finally:
+            with _catch_exceptions():
+                # I think you can make a case that this should be done when the iterator
+                # is exhausted, but this is safe.
+                if exc_type:
+                    log_exc_info_to_span(self.__span, exc_type, exc_value, traceback)
+                self.__span.end()
+
     def __exit__(self, exc_type, exc_value, traceback):
-        # do we need to implement __exit__? the span is ended when the iterator is exhausted
-        self.__msg_stream_mgr.__exit__(exc_type, exc_value, traceback)
+        try:
+            return self.__msg_stream_mgr.__exit__(exc_type, exc_value, traceback)
+        finally:
+            with _catch_exceptions():
+                if exc_type:
+                    log_exc_info_to_span(self.__span, exc_type, exc_value, traceback)
+                self.__span.end()
 
 
 class TracedMessageStream(Wrapper):
@@ -148,24 +161,16 @@ class TracedMessageStream(Wrapper):
         return self
 
     async def __anext__(self):
-        try:
-            m = await self.__msg_stream.__anext__()
-            with _catch_exceptions():
-                self.__process_message(m)
-            return m
-        except StopAsyncIteration:
-            self.__span.end()
-            raise
+        m = await self.__msg_stream.__anext__()
+        with _catch_exceptions():
+            self.__process_message(m)
+        return m
 
     def __next__(self):
-        try:
-            m = next(self.__msg_stream)
-            with _catch_exceptions():
-                self.__process_message(m)
-            return m
-        except StopIteration:
-            self.__span.end()
-            raise
+        m = next(self.__msg_stream)
+        with _catch_exceptions():
+            self.__process_message(m)
+        return m
 
     def __process_message(self, m):
         if m.type == "text":
@@ -220,13 +225,13 @@ def _start_span(name, kwargs):
     """Start a span with the given name, tagged with all of the relevant data from kwargs. kwargs is the dictionary of options
     passed into anthropic.messages.create or anthropic.messages.stream.
     """
-    try:
+    with _catch_exceptions():
         _input = _get_input_from_kwargs(kwargs)
         metadata = _get_metadata_from_kwargs(kwargs)
         return start_span(name=name, type="llm", metadata=metadata, input=_input)
-    except Exception as e:
-        log.warning("Error starting span: %s", e)
-        return NOOP_SPAN
+
+    # if this failed, maintain the API.
+    return NOOP_SPAN
 
 
 def _log_message_to_span(message, span):
