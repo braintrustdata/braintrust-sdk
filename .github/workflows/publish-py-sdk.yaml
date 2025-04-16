@@ -1,12 +1,36 @@
 name: publish-py-sdk
 
 on:
-  # FIXME[matt] this is only for testing and needs to be removed before we actually
-  # push to PyPI.
-  pull_request:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Select tag or branch"
+        type: choice
+        required: true
+        options: ${{ steps.get_refs.outputs.refs }}
 
 jobs:
+  # First job to get available refs
+  get_refs:
+    runs-on: ubuntu-latest
+    outputs:
+      refs: ${{ steps.set_refs.outputs.refs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: set_refs
+        run: |
+          # Get tags starting with v, sort descending
+          TAGS=$(git tag -l "v*" | sort -r)
+          # Get branches
+          BRANCHES=$(git branch -r | sed 's/origin\///')
+          # Combine and format as JSON array
+          REFS=$(echo -e "$TAGS\n$BRANCHES" | jq -R -s -c 'split("\n")[:-1]')
+          echo "refs=$REFS" >> $GITHUB_OUTPUT
+
   test:
+    needs: get_refs
     runs-on: ubuntu-latest
 
     strategy:
@@ -25,6 +49,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
@@ -36,9 +62,9 @@ jobs:
       - name: Verify the code
         run: |
           make py-sdk-verify-ci
+
   build:
     needs: test
-
     runs-on: ubuntu-latest
 
     env:
@@ -48,6 +74,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
