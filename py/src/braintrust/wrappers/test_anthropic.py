@@ -165,6 +165,23 @@ def test_anthropic_messages_system_prompt_inputs(memory_logger):
 
 
 @pytest.mark.asyncio
+async def test_anthropic_messages_create_async(memory_logger):
+    assert not memory_logger.pop()
+
+    client = wrap_anthropic(anthropic.AsyncAnthropic())
+    msg = await client.messages.create(
+        model=MODEL, max_tokens=100, messages=[{"role": "user", "content": "what is 1+1?, just return the number"}]
+    )
+    assert msg.content[0].text == "2"
+
+    logs = memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+    assert log["metadata"]["model"] == MODEL
+    assert log["metadata"]["max_tokens"] == 100
+
+
+@pytest.mark.asyncio
 async def test_anthropic_messages_streaming_async(memory_logger):
     assert not memory_logger.pop()
 
