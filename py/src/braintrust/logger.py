@@ -600,9 +600,17 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
         with self.lock:
             logs = [l.get() for l in self.logs]  # unwrap the LazyValues
             self.logs = []
+
+            if not logs:
+                return []
+
             # all the logs get merged before gettig sent to the server, so simulate that
             # here
-            return merge_row_batch(logs)
+            merged = merge_row_batch(logs)
+            first = merged[0]
+            for other in merged[1:]:
+                first.extend(other)
+            return first
 
 
 # We should only have one instance of this object in
@@ -3327,6 +3335,13 @@ class SpanImpl(Span):
                 _state.current_span.reset(self._context_token)
 
             self.end()
+
+
+def log_exc_info_to_span(
+    span: Span, exc_type: Type[BaseException], exc_value: BaseException, tb: Optional[TracebackType]
+) -> None:
+    error = stringify_exception(exc_type, exc_value, tb)
+    span.log(error=error)
 
 
 def stringify_exception(exc_type: Type[BaseException], exc_value: BaseException, tb: Optional[TracebackType]) -> str:
