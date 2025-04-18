@@ -554,18 +554,19 @@ export const automationRuleSchema = z
       .string()
       .optional()
       .describe("Description of the automation rule"),
-    // XXX should this be "online_scoring"?
     event_type: z
-      .enum(["log"])
+      .enum(["online_scoring"])
       .describe("The event which starts the automation execution"),
-    sampling_rate: z
-      .number()
-      .min(0)
-      .max(1)
-      .describe("The sampling rate for automation executions"),
     btql_filter: z
       .string()
-      .describe("BTQL filter for to identify rows for the automation rule"),
+      .describe("BTQL filter to identify rows for the automation rule"),
+    interval_seconds: z
+      .number()
+      .min(1)
+      .max(30 * 24 * 60 * 60)
+      .describe(
+        "Perform the triggered action at most once in this interval of seconds",
+      ),
     action: z
       .object({
         type: z
@@ -574,15 +575,6 @@ export const automationRuleSchema = z
             "The type of action to take when the automation rule is triggered",
           ),
         url: z.string().describe("The webhook URL to send the request to"),
-        headers: z
-          .record(z.string(), z.string())
-          .optional()
-          .describe("Headers to send with the webhook request"),
-        // XXX probably need a configurable way to send an arbitrary payload
-        body: z
-          .string()
-          .optional()
-          .describe("The body to send with the webhook request"),
       })
       .describe("The action to take when the automation rule is triggered"),
   })
