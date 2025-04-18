@@ -81,7 +81,7 @@ def test_anthropic_messages_create_stream_true(memory_logger):
 
     logs = memory_logger.pop()
     assert len(logs) == 1
-    log = logs[0][0]
+    log = logs[0]
     assert log["metadata"]["model"] == MODEL
     assert log["metadata"]["max_tokens"] == 300
     assert start < log["metrics"]["start"] < log["metrics"]["end"] < end
@@ -115,7 +115,7 @@ def test_anthropic_messages_model_params_inputs(memory_logger):
 
         logs = memory_logger.pop()
         assert len(logs) == 1
-        log = logs[0][0]
+        log = logs[0]
         import pprint
 
         pprint.pprint(log)
@@ -156,12 +156,29 @@ def test_anthropic_messages_system_prompt_inputs(memory_logger):
 
         logs = memory_logger.pop()
         assert len(logs) == 1
-        log = logs[0][0]
+        log = logs[0]
         inputs = log["input"]
         assert len(inputs) == 2
         inputs_by_role = {m["role"]: m["content"] for m in inputs}
         assert inputs_by_role["system"] == system
         assert inputs_by_role["user"] == q[0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_anthropic_messages_create_async(memory_logger):
+    assert not memory_logger.pop()
+
+    client = wrap_anthropic(anthropic.AsyncAnthropic())
+    msg = await client.messages.create(
+        model=MODEL, max_tokens=100, messages=[{"role": "user", "content": "what is 1+1?, just return the number"}]
+    )
+    assert msg.content[0].text == "2"
+
+    logs = memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+    assert log["metadata"]["model"] == MODEL
+    assert log["metadata"]["max_tokens"] == 100
 
 
 @pytest.mark.asyncio
@@ -172,34 +189,36 @@ async def test_anthropic_messages_streaming_async(memory_logger):
     msgs_in = [{"role": "user", "content": "what is 1+1?, just return the number"}]
 
     start = time.time()
+    msg_out = None
+
     async with client.messages.stream(max_tokens=1024, messages=msgs_in, model=MODEL) as stream:
         async for event in stream:
             pass
         msg_out = await stream.get_final_message()
-        end = time.time()
         assert msg_out.content[0].text == "2"
         usage = msg_out.usage
+    end = time.time()
 
-        logs = memory_logger.pop()
-        assert len(logs) == 1
-        log = logs[0][0]
-        assert "user" in str(log["input"])
-        assert "1+1" in str(log["input"])
-        assert "2" in str(log["output"])
-        assert log["project_id"] == PROJECT_NAME
-        assert log["span_attributes"]["type"] == "llm"
-        assert log["metadata"]["model"] == MODEL
-        assert log["metadata"]["max_tokens"] == 1024
-        _assert_metrics_are_valid(log["metrics"])
-        assert start < log["metrics"]["start"] < log["metrics"]["end"] < end
-        metrics = log["metrics"]
-        assert metrics["prompt_tokens"] == usage.input_tokens
-        assert metrics["completion_tokens"] == usage.output_tokens
-        assert metrics["tokens"] == usage.input_tokens + usage.output_tokens
-        assert metrics["cache_read_input_tokens"] == usage.cache_read_input_tokens
-        assert metrics["cache_creation_input_tokens"] == usage.cache_creation_input_tokens
-        assert log["metadata"]["model"] == MODEL
-        assert log["metadata"]["max_tokens"] == 1024
+    logs = memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+    assert "user" in str(log["input"])
+    assert "1+1" in str(log["input"])
+    assert "2" in str(log["output"])
+    assert log["project_id"] == PROJECT_NAME
+    assert log["span_attributes"]["type"] == "llm"
+    assert log["metadata"]["model"] == MODEL
+    assert log["metadata"]["max_tokens"] == 1024
+    _assert_metrics_are_valid(log["metrics"])
+    assert start < log["metrics"]["start"] < log["metrics"]["end"] < end
+    metrics = log["metrics"]
+    assert metrics["prompt_tokens"] == usage.input_tokens
+    assert metrics["completion_tokens"] == usage.output_tokens
+    assert metrics["tokens"] == usage.input_tokens + usage.output_tokens
+    assert metrics["cache_read_input_tokens"] == usage.cache_read_input_tokens
+    assert metrics["cache_creation_input_tokens"] == usage.cache_creation_input_tokens
+    assert log["metadata"]["model"] == MODEL
+    assert log["metadata"]["max_tokens"] == 1024
 
 
 def test_anthropic_client_error(memory_logger):
@@ -219,9 +238,30 @@ def test_anthropic_client_error(memory_logger):
 
     logs = memory_logger.pop()
     assert len(logs) == 1
-    log = logs[0][0]
+    log = logs[0]
     assert log["project_id"] == PROJECT_NAME
     assert "404" in log["error"]
+
+
+def test_anthropic_messages_stream_errors(memory_logger):
+    assert not memory_logger.pop()
+
+    client = wrap_anthropic(_get_client())
+    msg_in = {"role": "user", "content": "what is 2+2? (just the number)"}
+
+    try:
+        with client.messages.stream(model=MODEL, max_tokens=300, messages=[msg_in]) as stream:
+            raise Exception("fake-error")
+    except Exception:
+        pass
+    else:
+        raise Exception("should have raised an exception")
+
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+    assert "Exception: fake-error" in span["error"]
+    assert span["metrics"]["end"] > 0
 
 
 def test_anthropic_messages_streaming_sync(memory_logger):
@@ -244,7 +284,7 @@ def test_anthropic_messages_streaming_sync(memory_logger):
 
     logs = memory_logger.pop()
     assert len(logs) == 1
-    log = logs[0][0]
+    log = logs[0]
     assert "user" in str(log["input"])
     assert "2+2" in str(log["input"])
     assert "4" in str(log["output"])
@@ -277,7 +317,7 @@ def test_anthropic_messages_sync(memory_logger):
     logs = memory_logger.pop()
 
     assert len(logs) == 1
-    log = logs[0][0]
+    log = logs[0]
     assert "2+2" in str(log["input"])
     assert "4" in str(log["output"])
     assert log["project_id"] == PROJECT_NAME

@@ -157,7 +157,18 @@ function responsesStreamProxy(target: any): (params: any) => Promise<any> {
   });
 }
 
-function parseMetricsFromUsage(usage: any): Record<string, number> {
+const TOKEN_NAME_MAP: Record<string, string> = {
+  input_tokens: "prompt_tokens",
+  output_tokens: "completion_tokens",
+  total_tokens: "tokens",
+};
+
+const TOKEN_PREFIX_MAP: Record<string, string> = {
+  input: "prompt",
+  output: "completion",
+};
+
+export function parseMetricsFromUsage(usage: any): Record<string, number> {
   if (!usage) {
     return {};
   }
@@ -170,29 +181,24 @@ function parseMetricsFromUsage(usage: any): Record<string, number> {
   //   total_tokens: 22
   // }
 
-  const keys = [
-    ["input_tokens", "prompt_tokens"],
-    ["output_tokens", "completion_tokens"],
-    ["total_tokens", "tokens"],
-  ];
-
   const metrics: Record<string, number> = {};
-  for (const [src, target] of keys) {
-    const value = usage[src];
-    if (value !== undefined && value !== null) {
-      metrics[target] = value;
-    }
-  }
 
-  const details: string[] = ["input", "output"];
-  for (const src of details) {
-    const details = usage[`${src}_tokens_details`];
-    if (details) {
-      for (const [key, value] of Object.entries(details)) {
-        const metricName = `${src}_${key}` as string;
-        if (typeof value === "number") {
-          metrics[metricName] = value;
+  for (const [oai_name, value] of Object.entries(usage)) {
+    if (typeof value === "number") {
+      const metricName = TOKEN_NAME_MAP[oai_name] || oai_name;
+      metrics[metricName] = value;
+    } else if (oai_name.endsWith("_tokens_details")) {
+      const rawPrefix = oai_name.slice(0, -"_tokens_details".length);
+      const prefix = TOKEN_PREFIX_MAP[rawPrefix] || rawPrefix;
+      if (typeof value !== "object") {
+        continue;
+      }
+      for (const [key, n] of Object.entries(value)) {
+        if (typeof n !== "number") {
+          continue;
         }
+        const metricName = `${prefix}_${key}`;
+        metrics[metricName] = n;
       }
     }
   }
