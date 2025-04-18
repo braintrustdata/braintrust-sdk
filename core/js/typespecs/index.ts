@@ -8,3 +8,4 @@ export * from "./function_id";
 export * from "./git_types";
 export * from "./prompt";
 export * from "./view";
+export * from "./graph";

@@ -45,9 +45,11 @@
     "watch": "tsup --watch",
     "clean": "rm -r dist/*",
     "docs": "npx typedoc --options typedoc.json src/index.ts",
-    "test": "vitest run",
     "prepublishOnly": "../../scripts/node_prepublish_sdk.py",
-    "postpublish": "../../scripts/node_postpublish_sdk.py"
+    "postpublish": "../../scripts/node_postpublish_sdk.py",
+    "test": "vitest run --exclude src/wrappers/anthropic.test.ts --exclude src/wrappers/oai.test.ts",
+    "test:anthropic": "vitest run src/wrappers/anthropic.test.ts",
+    "test:openai": "vitest run src/wrappers/oai.test.ts"
   },
   "author": "",
   "license": "MIT",
@@ -87,7 +89,7 @@
     "cli-progress": "^3.12.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "esbuild": "^0.25.1",
+    "esbuild": "^0.25.2",
     "eventsource-parser": "^1.1.2",
     "express": "^4.21.2",
     "graceful-fs": "^4.2.11",

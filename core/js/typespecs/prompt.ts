@@ -18,10 +18,10 @@ export {
   chatCompletionContentPartTextSchema,
 };
 export {
-  ToolCall,
+  type ToolCall,
   messageRoleSchema,
   chatCompletionMessageToolCallSchema,
-  MessageRole,
+  type MessageRole,
 } from "./openai/messages";
 
 export { toolsSchema } from "./openai/tools";

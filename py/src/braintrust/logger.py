@@ -67,7 +67,7 @@ from .db_fields import (
 from .git_fields import GitMetadataSettings, RepoInfo
 from .gitutil import get_past_n_ancestors, get_repo_info
 from .merge_row_batch import batch_items, merge_row_batch
-from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
+from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record
 from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptMessage, PromptSchema, TextPart
 from .prompt_cache.disk_cache import DiskCache
 from .prompt_cache.lru_cache import LRUCache
@@ -600,9 +600,17 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
         with self.lock:
             logs = [l.get() for l in self.logs]  # unwrap the LazyValues
             self.logs = []
+
+            if not logs:
+                return []
+
             # all the logs get merged before gettig sent to the server, so simulate that
             # here
-            return merge_row_batch(logs)
+            merged = merge_row_batch(logs)
+            first = merged[0]
+            for other in merged[1:]:
+                first.extend(other)
+            return first
 
 
 # We should only have one instance of this object in
@@ -831,9 +839,6 @@ class _HTTPBackgroundLogger:
         for i in range(self.num_tries):
             start_time = time.time()
             resp = conn.post("/logs3", data=dataStr)
-            if not resp.ok:
-                legacyDataS = construct_json_array([json.dumps(make_legacy_event(json.loads(r))) for r in items])
-                resp = conn.post("/logs", data=legacyDataS)
             if resp.ok:
                 return
             resp_errmsg = f"{resp.status_code}: {resp.text}"
@@ -1986,6 +1991,10 @@ class ObjectIterator(Generic[T]):
         return value
 
 
+INTERNAL_BTQL_LIMIT = 1000
+MAX_BTQL_ITERATIONS = 10000
+
+
 class ObjectFetcher(ABC, Generic[TMapping]):
     def __init__(
         self,
@@ -2048,12 +2057,15 @@ class ObjectFetcher(ABC, Generic[TMapping]):
     def _refetch(self) -> List[TMapping]:
         state = self._get_state()
         if self._fetched_data is None:
-            if self._internal_btql:
+            cursor = None
+            data = None
+            iterations = 0
+            while True:
                 resp = state.api_conn().post(
                     f"btql",
                     json={
                         "query": {
-                            **self._internal_btql,
+                            **(self._internal_btql or {}),
                             "select": [{"op": "star"}],
                             "from": {
                                 "op": "function",
@@ -2068,26 +2080,25 @@ class ObjectFetcher(ABC, Generic[TMapping]):
                                     },
                                 ],
                             },
+                            "cursor": cursor,
+                            "limit": INTERNAL_BTQL_LIMIT,
                         },
+                        "use_columnstore": False,
+                        "brainstore_realtime": True,
                     },
                     headers={
                         "Accept-Encoding": "gzip",
                     },
                 )
                 response_raise_for_status(resp)
-                data = cast(List[TMapping], resp.json()["data"])
-            else:
-                resp = state.api_conn().get(
-                    f"v1/{self.object_type}/{self.id}/fetch",
-                    params={
-                        "version": self._pinned_version,
-                    },
-                    headers={
-                        "Accept-Encoding": "gzip",
-                    },
-                )
-                response_raise_for_status(resp)
-                data = cast(List[TMapping], resp.json()["events"])
+                resp_json = resp.json()
+                data = (data or []) + cast(List[TMapping], resp_json["data"])
+                if not resp_json.get("cursor", None):
+                    break
+                cursor = resp_json.get("cursor", None)
+                iterations += 1
+                if iterations > MAX_BTQL_ITERATIONS:
+                    raise RuntimeError("Too many BTQL iterations")
 
             if not isinstance(data, list):
                 raise ValueError(f"Expected a list in the response, got {type(data)}")
@@ -3324,6 +3335,13 @@ class SpanImpl(Span):
                 _state.current_span.reset(self._context_token)
 
             self.end()
+
+
+def log_exc_info_to_span(
+    span: Span, exc_type: Type[BaseException], exc_value: BaseException, tb: Optional[TracebackType]
+) -> None:
+    error = stringify_exception(exc_type, exc_value, tb)
+    span.log(error=error)
 
 
 def stringify_exception(exc_type: Type[BaseException], exc_value: BaseException, tb: Optional[TracebackType]) -> str:

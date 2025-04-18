@@ -352,8 +352,10 @@ export type PromptOpts<
 > = (Partial<Omit<BaseFnOpts, "name">> & { name: string }) &
   (HasId extends true ? PromptId : Partial<PromptId>) &
   (HasVersion extends true ? PromptVersion : Partial<PromptVersion>) &
-  (HasTools extends true ? Partial<PromptTools> : object) &
-  (HasNoTrace extends true ? Partial<PromptNoTrace> : object) &
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+  (HasTools extends true ? Partial<PromptTools> : {}) &
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+  (HasNoTrace extends true ? Partial<PromptNoTrace> : {}) &
   PromptContents & {
     model: string;
     params?: ModelParams;

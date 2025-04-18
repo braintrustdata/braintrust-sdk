@@ -34,15 +34,22 @@ develop: ${VENV_PRE_COMMIT}
 fixup:
 	source env.sh && pre-commit run --all-files
 
-.PHONY: test test-py test-js
+.PHONY: test test-py test-js nox pylint
 
 test: test-py-core test-py-sdk test-js
 
 test-py-core:
 	source env.sh && python -m unittest discover ./core/py/src
 
-test-py-sdk:
+test-py-sdk: nox
 	source env.sh && cd py && pytest
 
 test-js:
 	pnpm install && pnpm test
+
+nox:
+	nox -f py/noxfile.py
+	nox -f integrations/langchain-py/noxfile.py
+
+pylint:
+	@pylint --errors-only $(shell git ls-files 'py/**/*.py')

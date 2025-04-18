@@ -7,7 +7,7 @@ import { ObjectType, datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
-import { functionTypeEnum, runtimeContextSchema } from "./functions";
+import { functionDataSchema, functionTypeEnum } from "./functions";
 import { savedFunctionIdSchema } from "./function_id";
 import { repoInfoSchema } from "./git_types";
 extendZodWithOpenApi(z);
@@ -308,76 +308,6 @@ const promptSchemaObject = z.object({
 export const promptSchema = promptSchemaObject.openapi("Prompt");
 export type Prompt = z.infer<typeof promptSchema>;
 
-export const codeBundleSchema = z
-  .object({
-    runtime_context: runtimeContextSchema,
-    location: z.union([
-      z
-        .object({
-          type: z.literal("experiment"),
-          eval_name: z.string(),
-          position: z.union([
-            z.object({ type: z.literal("task") }),
-            z
-              .object({
-                type: z.literal("scorer"),
-                index: z.number().int().nonnegative(),
-              })
-              .openapi({ title: "scorer" }),
-          ]),
-        })
-        .openapi({ title: "experiment" }),
-      z
-        .object({
-          type: z.literal("function"),
-          index: z.number().int().nonnegative(),
-        })
-        .openapi({ title: "function" }),
-    ]),
-    bundle_id: z.string(),
-    preview: z.string().nullish().describe("A preview of the code"),
-  })
-  .openapi("CodeBundle");
-export type CodeBundle = z.infer<typeof codeBundleSchema>;
-
-export const functionDataSchema = z
-  .union([
-    z
-      .object({
-        type: z.literal("prompt"),
-        // For backwards compatibility reasons, the prompt definition is hoisted out and stored
-        // in the outer object
-      })
-      .openapi({ title: "prompt" }),
-    z
-      .object({
-        type: z.literal("code"),
-        data: z.union([
-          z
-            .object({
-              type: z.literal("bundle"),
-            })
-            .and(codeBundleSchema)
-            .openapi({ title: "bundle" }),
-          z
-            .object({
-              type: z.literal("inline"),
-              runtime_context: runtimeContextSchema,
-              code: z.string(),
-            })
-            .openapi({ title: "inline" }),
-        ]),
-      })
-      .openapi({ title: "code" }),
-    z
-      .object({
-        type: z.literal("global"),
-        name: z.string(),
-      })
-      .openapi({ title: "global" }),
-  ])
-  .openapi("FunctionData");
-
 export const functionSchema = promptSchemaObject
   .merge(
     z.object({
@@ -638,6 +568,10 @@ export const onlineScoreConfigSchema = z
       .array()
       .nullish()
       .describe("Trigger online scoring on any spans with a name in this list"),
+    skip_logging: z
+      .boolean()
+      .nullish()
+      .describe("Whether to skip adding scorer spans when computing scores"),
   })
   .refine((val) => val.apply_to_root_span || val.apply_to_span_names?.length, {
     message: "Online scoring rule does not apply to any rows",

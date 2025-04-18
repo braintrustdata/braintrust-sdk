@@ -1,0 +1,8 @@
+# Mise will automatically read and use .tool-versions files as well as this file.
+
+[env]
+# Automatically activate our virtual environment
+_.python.venv = "venv"
+
+# See env.example to configure API keys.
+_.file = ".env"

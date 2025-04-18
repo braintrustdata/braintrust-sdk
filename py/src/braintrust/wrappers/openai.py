@@ -143,12 +143,25 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
     def _generation_log_data(self, span: tracing.Span[tracing.GenerationSpanData]) -> Dict[str, Any]:
         metrics = {}
         ttft = _maybe_timestamp_elapsed(span.ended_at, span.started_at)
+
         if ttft is not None:
             metrics["time_to_first_token"] = ttft
-        if span.span_data.usage is not None:
-            metrics["tokens"] = span.span_data.usage["total_tokens"]
-            metrics["prompt_tokens"] = span.span_data.usage["prompt_tokens"]
-            metrics["completion_tokens"] = span.span_data.usage["completion_tokens"]
+
+        usage = span.span_data.usage or {}
+        if "prompt_tokens" in usage:
+            metrics["prompt_tokens"] = usage["prompt_tokens"]
+        elif "input_tokens" in usage:
+            metrics["prompt_tokens"] = usage["input_tokens"]
+
+        if "completion_tokens" in usage:
+            metrics["completion_tokens"] = usage["completion_tokens"]
+        elif "output_tokens" in usage:
+            metrics["completion_tokens"] = usage["output_tokens"]
+
+        if "total_tokens" in usage:
+            metrics["tokens"] = usage["total_tokens"]
+        elif "input_tokens" in usage and "output_tokens" in usage:
+            metrics["tokens"] = usage["input_tokens"] + usage["output_tokens"]
 
         return {
             "input": span.span_data.input,
