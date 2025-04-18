@@ -2,6 +2,8 @@ import { invokeParent } from "@braintrust/core/typespecs";
 import { z } from "zod";
 import { EvaluatorDef } from "../framework";
 import { BaseMetadata } from "../logger";
+import { EvalParameters } from "../eval-parameters";
+import zodToJsonSchema from "zod-to-json-schema";
 
 export const evalBodySchema = z.object({
   name: z.string(),
@@ -9,32 +11,35 @@ export const evalBodySchema = z.object({
   parent: invokeParent.optional(),
 });
 
-export type EvaluatorManifest = Record<string, EvaluatorSpec>;
+export type EvaluatorManifest = Record<
+  string,
+  EvaluatorDef<unknown, unknown, unknown, BaseMetadata>
+>;
 
-interface EvaluatorSpec {
-  parameters: Record<string, ParameterSpec>;
-  evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>;
+export const evalParametersSerializedSchema = z.record(
+  z.string(),
+  z.union([
+    z.literal("prompt"),
+    z.record(z.unknown()), // JSON Schema
+  ]),
+);
+
+export function makeEvalParametersSchema(
+  parameters: EvalParameters,
+): z.infer<typeof evalParametersSerializedSchema> {
+  return Object.fromEntries(
+    Object.entries(parameters).map(([name, value]) => {
+      if (value === "prompt") {
+        return [name, "prompt"];
+      }
+      return [name, zodToJsonSchema(value)];
+    }),
+  );
 }
-
-const parameterTypeSchema = z.union([
-  z.literal("string"),
-  z.literal("number"),
-  z.literal("boolean"),
-  z.literal("prompt"),
-  z.literal("unknown"),
-]);
-export type ParameterType = z.infer<typeof parameterTypeSchema>;
-
-const parameterSpecSchema = z.object({
-  type: parameterTypeSchema,
-  default: z.unknown(),
-});
-
-export type ParameterSpec = z.infer<typeof parameterSpecSchema>;
 
 export const evaluatorDefinitionsSchema = z.record(
   z.string(),
-  z.object({ parameters: z.record(z.string(), parameterSpecSchema) }),
+  z.object({ parameters: evalParametersSerializedSchema.optional() }),
 );
 
 export type EvaluatorDefinitions = z.infer<typeof evaluatorDefinitionsSchema>;

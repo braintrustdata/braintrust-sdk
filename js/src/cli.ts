@@ -255,6 +255,7 @@ function buildWatchPluginForEvaluator(
             opts.progressReporter,
             opts.filters,
             undefined,
+            undefined,
           );
           const resolvedReporter = resolveReporter(
             reporter,
@@ -543,6 +544,7 @@ async function runOnce(
         },
         opts.progressReporter,
         opts.filters,
+        undefined,
         undefined,
       );
     } finally {

@@ -34,6 +34,7 @@ import {
 } from "./logger";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import { isEmpty, InternalAbortError } from "./util";
+import { EvalParameters, InferParameters } from "./eval-parameters";
 
 export type BaseExperiment<
   Input,
@@ -86,7 +87,7 @@ export type EvalTask<
   Output,
   Expected,
   Metadata extends BaseMetadata,
-  Parameters extends Record<string, unknown>,
+  Parameters extends EvalParameters,
 > =
   | ((
       input: Input,
@@ -105,7 +106,7 @@ export type TaskProgressEvent = Omit<
 export interface EvalHooks<
   Expected,
   Metadata extends BaseMetadata,
-  Parameters extends Record<string, unknown>,
+  Parameters extends EvalParameters,
 > {
   /**
    * @deprecated Use `metadata` instead.
@@ -127,7 +128,7 @@ export interface EvalHooks<
    * The current parameters being used for this specific task execution.
    * Array parameters are converted to single values.
    */
-  parameters: SingleValueParameters<Parameters>;
+  parameters: InferParameters<Parameters>;
   /**
    * Report progress that will show up in the playground.
    */
@@ -166,68 +167,9 @@ export type EvalResult<
   error: unknown;
 };
 
-// Helper type for converting array types to their element type
-type SingleValueOf<T> = T extends Array<infer U> ? U : T;
-
-// Convert a parameter object type to use single values instead of arrays
-type SingleValueParameters<T> = {
-  [K in keyof T]: SingleValueOf<T[K]>;
-};
-
-/**
- * Converts a parameters object with potential array values into an array of parameter objects
- * representing all possible permutations of the array values.
- */
-export function getSingleValueParameters<T extends Record<string, unknown>>(
-  params: T,
-): SingleValueParameters<T>[] {
-  // Get all keys that have array values
-  const arrayKeys = Object.entries(params)
-    .filter(([_, value]) => Array.isArray(value))
-    .map(([key]) => key);
-
-  // If no array parameters, return the original object wrapped in an array
-  if (arrayKeys.length === 0) {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    return [params as SingleValueParameters<T>];
-  }
-
-  // Generate all possible combinations
-  const combinations: Record<string, unknown>[] = [{}];
-
-  for (const [key, value] of Object.entries(params)) {
-    const newCombinations: Record<string, unknown>[] = [];
-
-    if (Array.isArray(value)) {
-      // For array values, create a new combination for each array element
-      for (const combination of combinations) {
-        for (const item of value) {
-          newCombinations.push({
-            ...combination,
-            [key]: item,
-          });
-        }
-      }
-    } else {
-      // For non-array values, add the single value to all existing combinations
-      for (const combination of combinations) {
-        newCombinations.push({
-          ...combination,
-          [key]: value,
-        });
-      }
-    }
-
-    combinations.length = 0;
-    combinations.push(...newCombinations);
-  }
-
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return combinations as SingleValueParameters<T>[];
-}
-
 type ErrorScoreHandler = (args: {
   rootSpan: Span;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: EvalCase<any, any, any>;
   unhandledScores: string[];
 }) => Record<string, number> | undefined | void;
@@ -237,7 +179,7 @@ export interface Evaluator<
   Output,
   Expected,
   Metadata extends BaseMetadata = DefaultMetadataType,
-  Parameters extends Record<string, unknown> = Record<string, unknown>,
+  Parameters extends EvalParameters = EvalParameters,
 > {
   /**
    * A function that returns a list of inputs, expected outputs, and metadata.
@@ -436,7 +378,7 @@ export type EvaluatorDef<
   Output,
   Expected,
   Metadata extends BaseMetadata = DefaultMetadataType,
-  Parameters extends Record<string, unknown> = Record<string, unknown>,
+  Parameters extends EvalParameters = EvalParameters,
 > = {
   projectName: string;
   evalName: string;
@@ -451,7 +393,13 @@ export type EvaluatorFile = {
   prompts: CodePrompt[];
   evaluators: {
     [evalName: string]: {
-      evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>;
+      evaluator: EvaluatorDef<
+        unknown,
+        unknown,
+        unknown,
+        BaseMetadata,
+        EvalParameters
+      >;
       reporter?: ReporterDef<unknown> | string;
     };
   };
@@ -515,7 +463,7 @@ globalThis._evals = {
   reporters: {},
 };
 
-export interface EvalOptions<EvalReport> {
+export interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
   /**
    * A `Reporter` which you can use to summarize progress after an Eval() runs.
    */
@@ -540,9 +488,13 @@ export interface EvalOptions<EvalReport> {
   parent?: string;
   /**
    * Specify this to create a custom progress-bar style reporter. Note that this interface
-   * is somewhat outdated, and my be removed in th future.
+   * is somewhat outdated, and may be removed in the future.
    */
   progress?: ProgressReporter;
+  /**
+   * The parameters to use for the evaluator.
+   */
+  parameters?: InferParameters<Parameters>;
 }
 
 export function _initializeSpanContext() {
@@ -558,13 +510,16 @@ export async function Eval<
   Expected = void,
   Metadata extends BaseMetadata = DefaultMetadataType,
   EvalReport = boolean,
-  Parameters extends Record<string, unknown> = Record<string, unknown>,
+  Parameters extends EvalParameters = EvalParameters,
 >(
   name: string,
   evaluator: Evaluator<Input, Output, Expected, Metadata, Parameters>,
-  reporterOrOpts?: ReporterDef<EvalReport> | string | EvalOptions<EvalReport>,
+  reporterOrOpts?:
+    | ReporterDef<EvalReport>
+    | string
+    | EvalOptions<EvalReport, Parameters>,
 ): Promise<EvalResultWithSummary<Input, Output, Expected, Metadata>> {
-  const options: EvalOptions<EvalReport> = isEmpty(reporterOrOpts)
+  const options: EvalOptions<EvalReport, Parameters> = isEmpty(reporterOrOpts)
     ? {}
     : typeof reporterOrOpts === "string"
       ? { reporter: reporterOrOpts }
@@ -583,7 +538,13 @@ export async function Eval<
         evalName,
         projectName: name,
         ...evaluator,
-      } as EvaluatorDef<unknown, unknown, unknown, BaseMetadata>,
+      } as EvaluatorDef<
+        unknown,
+        unknown,
+        unknown,
+        BaseMetadata,
+        EvalParameters
+      >,
       reporter: options.reporter,
     };
 
@@ -651,7 +612,14 @@ export async function Eval<
         ret = await withParent(
           options.parent,
           () =>
-            runEvaluator(null, evalDef, progressReporter, [], options.stream),
+            runEvaluator(
+              null,
+              evalDef,
+              progressReporter,
+              [],
+              options.stream,
+              options.parameters,
+            ),
           evaluator.state,
         );
       } else {
@@ -661,6 +629,7 @@ export async function Eval<
           progressReporter,
           [],
           options.stream,
+          options.parameters,
         );
       }
       progressReporter.stop();
@@ -773,6 +742,7 @@ export async function runEvaluator(
   progressReporter: ProgressReporter,
   filters: Filter[],
   stream: ((data: SSEProgressEventData) => void) | undefined,
+  parameters: InferParameters<EvalParameters> | undefined,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   return await runEvaluatorInternal(
@@ -781,12 +751,13 @@ export async function runEvaluator(
     progressReporter,
     filters,
     stream,
+    parameters,
   );
 }
 
 export const defaultErrorScoreHandler: ErrorScoreHandler = ({
   rootSpan,
-  data,
+  data: _,
   unhandledScores,
 }) => {
   const scores = Object.fromEntries(unhandledScores.map((s) => [s, 0]));
@@ -801,6 +772,7 @@ async function runEvaluatorInternal(
   progressReporter: ProgressReporter,
   filters: Filter[],
   stream: ((data: SSEProgressEventData) => void) | undefined,
+  parameters: InferParameters<EvalParameters> | undefined,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   if (typeof evaluator.data === "string") {
@@ -923,9 +895,7 @@ async function runEvaluatorInternal(
                 metadata,
                 expected,
                 span,
-                parameters: getSingleValueParameters(
-                  evaluator.parameters ?? {},
-                )[0] /* XXX TODO */,
+                parameters: parameters ?? {},
                 reportProgress: (event: TaskProgressEvent) => {
                   stream?.({
                     ...event,

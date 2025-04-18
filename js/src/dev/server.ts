@@ -1,13 +1,6 @@
 import express, { NextFunction, Request, Response } from "express";
 import cors from "cors";
-import {
-  callEvaluatorData,
-  Eval,
-  EvalHooks,
-  EvaluatorDef,
-  getSingleValueParameters,
-} from "../framework";
-import { z } from "zod";
+import { callEvaluatorData, Eval, EvalHooks, EvaluatorDef } from "../framework";
 import { errorHandler } from "./errorHandler";
 import {
   authorizeRequest,
@@ -37,10 +30,10 @@ import {
   evalBodySchema,
   EvaluatorDefinitions,
   EvaluatorManifest,
-  ParameterSpec,
-  ParameterType,
+  makeEvalParametersSchema,
 } from "./types";
-
+import { EvalParameters, InferParameters } from "../eval-parameters";
+import { z } from "zod";
 export interface DevServerOpts {
   host: string;
   port: number;
@@ -53,26 +46,7 @@ export function runDevServer(
 ) {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   const allEvaluators: EvaluatorManifest = Object.fromEntries(
-    evaluators.map((evaluator) => [
-      evaluator.evalName,
-      {
-        parameters: Object.fromEntries(
-          Object.entries(
-            getSingleValueParameters(evaluator.parameters ?? {})[0],
-          ).map(([name, value]) => {
-            return [
-              name,
-              {
-                type: deriveParameterType(value),
-                // A little hacky...
-                default: Prompt.isPrompt(value) ? value.promptData : value,
-              },
-            ];
-          }),
-        ),
-        evaluator: evaluator,
-      },
-    ]),
+    evaluators.map((evaluator) => [evaluator.evalName, evaluator]),
   ) as EvaluatorManifest;
 
   globalThis._lazy_load = false;
@@ -119,7 +93,9 @@ export function runDevServer(
       Object.entries(allEvaluators).map(([name, evaluator]) => [
         name,
         {
-          parameters: evaluator.parameters,
+          parameters: evaluator.parameters
+            ? makeEvalParametersSchema(evaluator.parameters)
+            : undefined,
         },
       ]),
     );
@@ -135,25 +111,36 @@ export function runDevServer(
       // First, log in
       const state = await cachedLogin({ apiKey: req.ctx?.token });
 
-      const handle = allEvaluators[name];
+      const evaluator = allEvaluators[name];
 
-      if (!handle) {
+      if (!evaluator) {
         res.status(404).json({ error: `Evaluator '${name}' not found` });
         return;
       }
 
-      let parsedParameters: Record<string, unknown>;
-      try {
-        parsedParameters = validateParameters(parameters, handle.parameters);
-      } catch (e) {
-        if (e instanceof MissingParameterError) {
-          res.status(400).json({ error: e.message });
-          return;
+      let parsedParameters: Record<string, unknown> = {};
+      if (parameters && Object.keys(parameters).length > 0) {
+        try {
+          if (!evaluator.parameters) {
+            res.status(400).json({
+              error: `Evaluator '${name}' does not accept parameters`,
+            });
+            return;
+          }
+
+          parsedParameters = validateParameters(
+            parameters,
+            evaluator.parameters,
+          );
+        } catch (e) {
+          if (e instanceof z.ZodError) {
+            res.status(400).json({ error: e.message });
+            return;
+          }
+          throw e;
         }
-        throw e;
       }
 
-      const evaluator = handle.evaluator;
       const evalData = callEvaluatorData(evaluator.data);
       console.log("Starting eval", evaluator.evalName);
 
@@ -164,7 +151,7 @@ export function runDevServer(
 
       const task = async (
         input: unknown,
-        hooks: EvalHooks<unknown, BaseMetadata, Record<string, unknown>>,
+        hooks: EvalHooks<unknown, BaseMetadata, EvalParameters>,
       ) => {
         const result = await evaluator.task(input, hooks);
 
@@ -185,7 +172,6 @@ export function runDevServer(
             data: evalData.data,
             task,
             state,
-            parameters: parsedParameters,
           },
           {
             // Avoid printing the bar to the console.
@@ -213,6 +199,7 @@ export function runDevServer(
               );
             },
             parent: parseParent(parent),
+            parameters: parsedParameters,
           },
         );
 
@@ -254,58 +241,23 @@ const asyncHandler =
     Promise.resolve(fn(req, res, next)).catch(next);
   };
 
-function deriveParameterType(value: unknown): ParameterType {
-  if (Prompt.isPrompt(value)) {
-    return "prompt";
-  } else if (typeof value === "string") {
-    return "string";
-  } else if (typeof value === "number") {
-    return "number";
-  } else if (typeof value === "boolean") {
-    return "boolean";
-  }
-  return "unknown";
-}
-
-class MissingParameterError extends Error {
-  constructor(public missingParameters: string[]) {
-    super(`Missing parameters: ${missingParameters.join(", ")}`);
-  }
-}
-
-function validateParameters(
+function validateParameters<Parameters extends EvalParameters = EvalParameters>(
   parameters: Record<string, unknown>,
-  parameterSchema: Record<string, ParameterSpec>,
-): Record<string, unknown> {
-  const missingParameters: string[] = [];
-  for (const paramName of Object.keys(parameterSchema)) {
-    if (!(paramName in parameters)) {
-      missingParameters.push(paramName);
-    }
-  }
-  if (missingParameters.length > 0) {
-    throw new MissingParameterError(missingParameters);
-  }
-
+  parameterSchema: Parameters,
+): InferParameters<Parameters> {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   return Object.fromEntries(
-    Object.entries(parameters).map(([name, value]) => {
-      const spec = parameterSchema[name];
-      switch (spec.type) {
-        case "prompt":
-          const promptData = promptDataSchema.parse(value);
-          console.log(JSON.stringify(promptData, null, 2));
-          return [name, Prompt.fromPromptData(name, promptData)];
-        case "string":
-          return [name, z.string().parse(value)];
-        case "number":
-          return [name, z.number().parse(value)];
-        case "boolean":
-          return [name, z.boolean().parse(value)];
-        case "unknown":
-          return [name, value];
+    Object.entries(parameterSchema).map(([name, schema]) => {
+      const value = parameters[name];
+      if (schema === "prompt") {
+        const promptData = promptDataSchema.parse(value);
+        console.log(JSON.stringify(promptData, null, 2));
+        return [name, Prompt.fromPromptData(name, promptData)];
+      } else {
+        return [name, schema.parse(value)];
       }
     }),
-  );
+  ) as InferParameters<Parameters>;
 }
 
 const loginCache = new LRUCache<string, BraintrustState>({
