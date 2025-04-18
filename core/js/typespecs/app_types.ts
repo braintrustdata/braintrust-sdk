@@ -555,7 +555,7 @@ export const automationRuleSchema = z
       .optional()
       .describe("Description of the automation rule"),
     event_type: z
-      .enum(["online_scoring"])
+      .enum(["logs"])
       .describe("The event which starts the automation execution"),
     btql_filter: z
       .string()
