@@ -3,7 +3,8 @@ import logging
 from contextlib import contextmanager
 from typing import Any
 
-from braintrust import span_types
+from anthropic.lib.streaming._messages import accumulate_event  # TODO: Let's figure out something better...
+
 from braintrust.logger import NOOP_SPAN, log_exc_info_to_span, start_span
 
 log = logging.getLogger(__name__)
@@ -46,11 +47,24 @@ class AsyncMessages(Wrapper):
         self.__messages = messages
 
     async def create(self, *args, **kwargs):
+        # Anthropic SDK: -> Message | AsyncStream[RawMessageStreamEvent]
+        if kwargs.get("stream", False):
+            return await self.__create_stream(*args, **kwargs)
+
+        return await self.__create_non_stream(*args, **kwargs)
+
+    def stream(self, *args, **kwargs):
+        # Anthropic SDK: -> AsyncMessageStreamManager
+        span = _start_span("anthropic.messages.stream", kwargs)
+        stream = self.__messages.stream(*args, **kwargs)
+        return TracedMessageStreamManager(stream, span)
+
+    async def __create_non_stream(self, *args, **kwargs):
+        # Anthropic SDK: -> Message
         span = _start_span("anthropic.messages.create", kwargs)
         try:
             result = await self.__messages.create(*args, **kwargs)
-            with _catch_exceptions():
-                _log_message_to_span(result, span)
+            _log_message_to_span(result, span)
             return result
         except Exception as e:
             with _catch_exceptions():
@@ -59,10 +73,41 @@ class AsyncMessages(Wrapper):
         finally:
             span.end()
 
-    def stream(self, *args, **kwargs):
+    async def __create_stream(self, *args, **kwargs):
+        # Anthropic SDK: -> AsyncStream[RawMessageStreamEvent]
+
+        # Unfortunately, handling stream=True isn't as simple as reusing TracedMessageStreamManager. When using
+        # `await messages.create(stream=True)` the HTTP request is sent immediately and an AsyncStream is returned.
+        # When using `messages.stream()` the HTTP request is sent when the result is used via `async with result as x`.
+        # This has implications for handling the lifecycle of the span as well. TracedMessageStreamManager needs
+        # to close the span in `__aexit__()` while TracedMessageStreamManager needs to close the span when the iterator
+        # is closed. I honestly think that everything related to span lifecycle (init, update, close) could be shoved
+        # into the TracedMessageStream iterator however I think as-written is easier to understand.
+
         span = _start_span("anthropic.messages.stream", kwargs)
-        stream = self.__messages.stream(*args, **kwargs)
-        return TracedMessageStreamManager(stream, span)
+
+        try:
+            stream = await self.__messages.create(
+                *args,
+                **kwargs
+            )
+
+        except Exception as e:
+            with _catch_exceptions():
+                span.log(error=e)
+                span.end()
+
+            raise e
+
+        async def async_stream():
+            try:
+                async for raw_message in TracedMessageStream(stream, span, manually_accumulate_snapshot=True):
+                    yield raw_message
+
+            finally:
+                span.end()
+
+        return async_stream()
 
 
 class TracedAnthropic(Wrapper):
@@ -112,12 +157,13 @@ class TracedMessageStreamManager(Wrapper):
         self.__span = span
 
     async def __aenter__(self):
+        # Anthropic SDK: -> AsyncMessageStream
         ms = await self.__msg_stream_mgr.__aenter__()
-        return TracedMessageStream(ms, self.__span)
+        return TracedMessageStream(ms, self.__span, manually_accumulate_snapshot=False)
 
     def __enter__(self):
         ms = self.__msg_stream_mgr.__enter__()
-        return TracedMessageStream(ms, self.__span)
+        return TracedMessageStream(ms, self.__span, manually_accumulate_snapshot=False)
 
     def __aexit__(self, exc_type, exc_value, traceback):
         try:
@@ -145,11 +191,15 @@ class TracedMessageStream(Wrapper):
     makes sense at a time
     """
 
-    def __init__(self, msg_stream, span):
+    def __init__(self, msg_stream, span, manually_accumulate_snapshot):
         super().__init__(msg_stream)
         self.__msg_stream = msg_stream
         self.__span = span
         self.__metrics = {}
+        # The msg_stream used during async def create(stream=True) doesn't have the snapshot provided by
+        # the Anthropic SDK. So we need to manually do it ourselves.
+        self.__manually_accumulate_snapshot = manually_accumulate_snapshot
+        self.__final_message_snapshot = None
 
     def __await__(self):
         return self.__msg_stream.__await__()
@@ -173,11 +223,19 @@ class TracedMessageStream(Wrapper):
         return m
 
     def __process_message(self, m):
-        if m.type == "text":
-            # snapshot accumulates the whole message as it streams in. We can send the whole thing
-            # and updates will be dedup'ed downstream
-            self.__span.log(output=str(m.snapshot))
-        elif m.type in ("message_start", "message_delta", "message_stop"):
+        if self.__manually_accumulate_snapshot:
+            self.__final_message_snapshot = accumulate_event(
+                event=m,
+                current_snapshot=self.__final_message_snapshot,
+            )
+
+        # Snapshot accumulates the whole message as it streams in. We can send the whole thing
+        # and updates will be dedup'ed downstream
+        self.__span.log(
+            output=self.__final_message_snapshot.model_dump() if self.__manually_accumulate_snapshot else m.snapshot
+        )
+
+        if m.type in ("message_start", "message_delta", "message_stop"):
             # Parse the metrics from usage.
             # Note: For some messages it's on m.usage and others m.message.usage.
             usage = None
