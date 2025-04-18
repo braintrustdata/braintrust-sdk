@@ -332,11 +332,11 @@ export function createFinalValuePassThroughStream<
             break;
           default:
             const _type: never = chunkType;
-            throw new Error(`Unknown chunk type ${_type}`);
+            onError(`Unknown chunk type: ${_type}`);
         }
         controller.enqueue(chunk);
       } else {
-        throw new Error(`Unknown chunk type ${chunk}`);
+        onError(`Unknown chunk type ${JSON.stringify(chunk)}`);
       }
     },
     flush(controller) {
