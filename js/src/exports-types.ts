@@ -16,4 +16,8 @@ export type {
   EvalParamaterSerializedSchema,
   EvaluatorDefinition,
   EvaluatorDefinitions,
-} from "./dev/types";
+} from "../dev/types";
+export {
+  evaluatorDefinitionSchema,
+  evaluatorDefinitionsSchema,
+} from "../dev/types";

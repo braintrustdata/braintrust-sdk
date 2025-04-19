@@ -3,7 +3,3 @@ export * from "./functions/invoke";
 export * from "./functions/stream";
 export * from "./wrappers/oai";
 export * from "./exports-types";
-export {
-  evaluatorDefinitionSchema,
-  evaluatorDefinitionsSchema,
-} from "./dev/types";

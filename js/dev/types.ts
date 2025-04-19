@@ -5,8 +5,8 @@ import {
   promptDataSchema,
 } from "@braintrust/core/typespecs";
 import { z } from "zod";
-import { EvaluatorDef } from "../framework";
-import { BaseMetadata } from "../logger";
+import { EvaluatorDef } from "../src/framework";
+import { BaseMetadata } from "../src/logger";
 
 export const evalBodySchema = z.object({
   name: z.string(),

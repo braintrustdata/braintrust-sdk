@@ -33,11 +33,11 @@
       "module": "./dist/browser.mjs",
       "require": "./dist/browser.js"
     },
-    "./ai-sdk": {
-      "types": "./ai-sdk/dist/index.d.ts",
-      "import": "./ai-sdk/dist/index.mjs",
-      "module": "./ai-sdk/dist/index.mjs",
-      "require": "./ai-sdk/dist/index.js"
+    "./dev": {
+      "types": "./dev/dist/index.d.ts",
+      "import": "./dev/dist/index.mjs",
+      "module": "./dev/dist/index.mjs",
+      "require": "./dev/dist/index.js"
     }
   },
   "scripts": {

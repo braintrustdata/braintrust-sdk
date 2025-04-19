@@ -8,7 +8,7 @@ import {
   EvalScorer,
   EvaluatorDef,
   OneOrMoreScores,
-} from "../framework";
+} from "../src/framework";
 import { errorHandler } from "./errorHandler";
 import {
   authorizeRequest,
@@ -30,8 +30,8 @@ import {
   LoginOptions,
   loginToState,
   Prompt,
-} from "../logger";
-import { LRUCache } from "../prompt-cache/lru-cache";
+} from "../src/logger";
+import { LRUCache } from "../src/prompt-cache/lru-cache";
 import {
   BT_CURSOR_HEADER,
   BT_FOUND_EXISTING_HEADER,
@@ -44,10 +44,10 @@ import {
   EvaluatorManifest,
   evalParametersSerializedSchema,
 } from "./types";
-import { EvalParameters, InferParameters } from "../eval-parameters";
+import { EvalParameters, InferParameters } from "../src/eval-parameters";
 import { z } from "zod";
-import { invoke } from "../functions/invoke";
-import { promptDefinitionToPromptData } from "../framework2";
+import { invoke } from "../src/functions/invoke";
+import { promptDefinitionToPromptData } from "../src/framework2";
 import zodToJsonSchema from "zod-to-json-schema";
 export interface DevServerOpts {
   host: string;
