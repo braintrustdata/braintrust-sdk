@@ -276,12 +276,14 @@ function validateParameters<Parameters extends EvalParameters = EvalParameters>(
     Object.entries(parameterSchema).map(([name, schema]) => {
       const value = parameters[name];
       try {
-        if (schema === "prompt") {
+        if ("type" in schema && schema.type === "prompt") {
           const promptData = promptDataSchema.parse(value);
           console.log(JSON.stringify(promptData, null, 2));
           return [name, Prompt.fromPromptData(name, promptData)];
-        } else {
+        } else if (schema instanceof z.ZodType) {
           return [name, schema.parse(value)];
+        } else {
+          throw new Error(`Unknown parameter type: ${schema}`);
         }
       } catch (e) {
         console.error("Error validating parameter", name, e);

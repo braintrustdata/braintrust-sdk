@@ -1,11 +1,15 @@
 import { z } from "zod";
 import { Prompt } from "./logger";
+import { promptDefinitionSchema } from "./framework2";
 
 // Schema for evaluation parameters
 export const evalParametersSchema = z.record(
   z.string(),
   z.union([
-    z.literal("prompt"),
+    z.object({
+      type: z.literal("prompt"),
+      default: promptDefinitionSchema.optional(),
+    }),
     z.instanceof(z.ZodType), // For Zod schemas
   ]),
 );
@@ -13,7 +17,7 @@ export const evalParametersSchema = z.record(
 export type EvalParameters = z.infer<typeof evalParametersSchema>;
 
 // Type helper to infer the type of a parameter value
-type InferParameterValue<T> = T extends "prompt"
+type InferParameterValue<T> = T extends { type: "prompt" }
   ? Prompt
   : T extends z.ZodType
     ? z.infer<T>
