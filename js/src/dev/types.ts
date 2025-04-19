@@ -37,9 +37,14 @@ export function makeEvalParametersSchema(
   );
 }
 
+export const evaluatorDefinitionSchema = z.object({
+  parameters: evalParametersSerializedSchema.optional(),
+});
+export type EvaluatorDefinition = z.infer<typeof evaluatorDefinitionSchema>;
+
 export const evaluatorDefinitionsSchema = z.record(
   z.string(),
-  z.object({ parameters: evalParametersSerializedSchema.optional() }),
+  evaluatorDefinitionSchema,
 );
 
 export type EvaluatorDefinitions = z.infer<typeof evaluatorDefinitionsSchema>;
