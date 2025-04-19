@@ -24,6 +24,10 @@ export const evalParametersSerializedSchema = z.record(
   ]),
 );
 
+export type EvalParamaterSerializedSchema = z.infer<
+  typeof evalParametersSerializedSchema
+>;
+
 export function makeEvalParametersSchema(
   parameters: EvalParameters,
 ): z.infer<typeof evalParametersSerializedSchema> {
