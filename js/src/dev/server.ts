@@ -42,11 +42,13 @@ import {
   evalBodySchema,
   EvaluatorDefinitions,
   EvaluatorManifest,
-  makeEvalParametersSchema,
+  evalParametersSerializedSchema,
 } from "./types";
 import { EvalParameters, InferParameters } from "../eval-parameters";
 import { z } from "zod";
 import { invoke } from "../functions/invoke";
+import { promptDefinitionToPromptData } from "../framework2";
+import zodToJsonSchema from "zod-to-json-schema";
 export interface DevServerOpts {
   host: string;
   port: number;
@@ -379,4 +381,35 @@ function makeScorer(
   });
 
   return ret;
+}
+
+function makeEvalParametersSchema(
+  parameters: EvalParameters,
+): z.infer<typeof evalParametersSerializedSchema> {
+  return Object.fromEntries(
+    Object.entries(parameters).map(([name, value]) => {
+      if ("type" in value && value.type === "prompt") {
+        return [
+          name,
+          {
+            type: "prompt",
+            default: value.default
+              ? promptDefinitionToPromptData(value.default)
+              : undefined,
+          },
+        ];
+      } else if (value instanceof z.ZodType) {
+        return [
+          name,
+          {
+            type: "data",
+            schema: zodToJsonSchema(value),
+            default: value.default,
+          },
+        ];
+      } else {
+        throw new Error(`Unknown parameter type: ${value}`);
+      }
+    }),
+  );
 }

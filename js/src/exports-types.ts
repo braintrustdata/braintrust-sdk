@@ -11,4 +11,9 @@ export type {
   CommentEvent,
   DatasetRecord,
 } from "@braintrust/core";
-export * from "./dev/types";
+export type {
+  EvaluatorManifest,
+  EvalParamaterSerializedSchema,
+  EvaluatorDefinition,
+  EvaluatorDefinitions,
+} from "./dev/types";

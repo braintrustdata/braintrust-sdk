@@ -7,9 +7,6 @@ import {
 import { z } from "zod";
 import { EvaluatorDef } from "../framework";
 import { BaseMetadata } from "../logger";
-import { EvalParameters } from "../eval-parameters";
-import zodToJsonSchema from "zod-to-json-schema";
-import { promptDefinitionToPromptData } from "../framework2";
 
 export const evalBodySchema = z.object({
   name: z.string(),
@@ -49,37 +46,6 @@ export const evalParametersSerializedSchema = z.record(
 export type EvalParamaterSerializedSchema = z.infer<
   typeof evalParametersSerializedSchema
 >;
-
-export function makeEvalParametersSchema(
-  parameters: EvalParameters,
-): z.infer<typeof evalParametersSerializedSchema> {
-  return Object.fromEntries(
-    Object.entries(parameters).map(([name, value]) => {
-      if ("type" in value && value.type === "prompt") {
-        return [
-          name,
-          {
-            type: "prompt",
-            default: value.default
-              ? promptDefinitionToPromptData(value.default)
-              : undefined,
-          },
-        ];
-      } else if (value instanceof z.ZodType) {
-        return [
-          name,
-          {
-            type: "data",
-            schema: zodToJsonSchema(value),
-            default: value.default,
-          },
-        ];
-      } else {
-        throw new Error(`Unknown parameter type: ${value}`);
-      }
-    }),
-  );
-}
 
 export const evaluatorDefinitionSchema = z.object({
   parameters: evalParametersSerializedSchema.optional(),
