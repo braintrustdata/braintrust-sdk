@@ -373,6 +373,7 @@ function makeScorer(
 
   Object.defineProperties(ret, {
     name: { value: name },
+    isRemote: { value: true },
   });
 
   return ret;

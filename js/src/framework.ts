@@ -930,86 +930,87 @@ async function runEvaluatorInternal(
           const scoreResults = await Promise.all(
             evaluator.scores.map(async (score, score_idx) => {
               try {
-                const results = await rootSpan.traced(
-                  async (span: Span) => {
-                    const scoreResult = score(scoringArgs);
-                    const scoreValue =
-                      scoreResult instanceof Promise
-                        ? await scoreResult
-                        : scoreResult;
+                const runScorer = async (span: Span) => {
+                  const scoreResult = score(scoringArgs);
+                  const scoreValue =
+                    scoreResult instanceof Promise
+                      ? await scoreResult
+                      : scoreResult;
 
-                    if (scoreValue === null) {
-                      return null;
-                    }
+                  if (scoreValue === null) {
+                    return null;
+                  }
 
-                    if (Array.isArray(scoreValue)) {
-                      for (const s of scoreValue) {
-                        if (!(typeof s === "object" && !isEmpty(s))) {
-                          throw new Error(
-                            `When returning an array of scores, each score must be a non-empty object. Got: ${JSON.stringify(
-                              s,
-                            )}`,
-                          );
-                        }
+                  if (Array.isArray(scoreValue)) {
+                    for (const s of scoreValue) {
+                      if (!(typeof s === "object" && !isEmpty(s))) {
+                        throw new Error(
+                          `When returning an array of scores, each score must be a non-empty object. Got: ${JSON.stringify(
+                            s,
+                          )}`,
+                        );
                       }
                     }
+                  }
 
-                    const results = Array.isArray(scoreValue)
-                      ? scoreValue
-                      : typeof scoreValue === "object" && !isEmpty(scoreValue)
-                        ? [scoreValue]
-                        : [
-                            {
-                              name: scorerNames[score_idx],
-                              score: scoreValue,
-                            },
-                          ];
+                  const results = Array.isArray(scoreValue)
+                    ? scoreValue
+                    : typeof scoreValue === "object" && !isEmpty(scoreValue)
+                      ? [scoreValue]
+                      : [
+                          {
+                            name: scorerNames[score_idx],
+                            score: scoreValue,
+                          },
+                        ];
 
-                    const getOtherFields = (s: Score) => {
-                      const { metadata: _metadata, name: _name, ...rest } = s;
-                      return rest;
-                    };
+                  const getOtherFields = (s: Score) => {
+                    const { metadata: _metadata, name: _name, ...rest } = s;
+                    return rest;
+                  };
 
-                    const resultMetadata =
-                      results.length === 1
-                        ? results[0].metadata
-                        : results.reduce(
-                            (prev, s) =>
-                              mergeDicts(prev, {
-                                [s.name]: s.metadata,
-                              }),
-                            {},
-                          );
+                  const resultMetadata =
+                    results.length === 1
+                      ? results[0].metadata
+                      : results.reduce(
+                          (prev, s) =>
+                            mergeDicts(prev, {
+                              [s.name]: s.metadata,
+                            }),
+                          {},
+                        );
 
-                    const resultOutput =
-                      results.length === 1
-                        ? getOtherFields(results[0])
-                        : results.reduce(
-                            (prev, s) =>
-                              mergeDicts(prev, { [s.name]: getOtherFields(s) }),
-                            {},
-                          );
+                  const resultOutput =
+                    results.length === 1
+                      ? getOtherFields(results[0])
+                      : results.reduce(
+                          (prev, s) =>
+                            mergeDicts(prev, { [s.name]: getOtherFields(s) }),
+                          {},
+                        );
 
-                    const scores = results.reduce(
-                      (prev, s) => mergeDicts(prev, { [s.name]: s.score }),
-                      {},
-                    );
+                  const scores = results.reduce(
+                    (prev, s) => mergeDicts(prev, { [s.name]: s.score }),
+                    {},
+                  );
 
-                    span.log({
-                      output: resultOutput,
-                      metadata: resultMetadata,
-                      scores: scores,
-                    });
-                    return results;
-                  },
-                  {
-                    name: scorerNames[score_idx],
-                    spanAttributes: {
-                      type: SpanTypeAttribute.SCORE,
-                    },
-                    event: { input: scoringArgs },
-                  },
-                );
+                  span.log({
+                    output: resultOutput,
+                    metadata: resultMetadata,
+                    scores: scores,
+                  });
+                  return results;
+                };
+
+                const results = await ("isRemote" in score && score.isRemote
+                  ? runScorer(NOOP_SPAN)
+                  : rootSpan.traced(runScorer, {
+                      name: scorerNames[score_idx],
+                      spanAttributes: {
+                        type: SpanTypeAttribute.SCORE,
+                      },
+                      event: { input: scoringArgs },
+                    }));
                 return { kind: "score", value: results } as const;
               } catch (e) {
                 return { kind: "error", value: e } as const;
