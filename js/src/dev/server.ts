@@ -1,6 +1,12 @@
 import express, { NextFunction, Request, Response } from "express";
 import cors from "cors";
-import { callEvaluatorData, Eval, EvalHooks, EvaluatorDef } from "../framework";
+import {
+  callEvaluatorData,
+  Eval,
+  EvalData,
+  EvalHooks,
+  EvaluatorDef,
+} from "../framework";
 import { errorHandler } from "./errorHandler";
 import {
   authorizeRequest,
@@ -10,11 +16,14 @@ import {
 } from "./authorize";
 import {
   promptDataSchema,
+  RunEvalRequest,
   SSEProgressEventData,
 } from "@braintrust/core/typespecs";
 import {
   BaseMetadata,
   BraintrustState,
+  EvalCase,
+  initDataset,
   LoginOptions,
   loginToState,
   Prompt,
@@ -106,7 +115,7 @@ export function runDevServer(
     "/eval",
     checkAuthorized,
     asyncHandler(async (req, res) => {
-      const { name, parameters, parent } = evalBodySchema.parse(req.body);
+      const { name, parameters, parent, data } = evalBodySchema.parse(req.body);
 
       // First, log in
       const state = await cachedLogin({ apiKey: req.ctx?.token });
@@ -147,7 +156,8 @@ export function runDevServer(
         }
       }
 
-      const evalData = callEvaluatorData(evaluator.data);
+      const resolvedData = await getDataset(state, data);
+      const evalData = callEvaluatorData(resolvedData);
       console.log("Starting eval", evaluator.evalName);
 
       // Set up SSE headers
@@ -287,4 +297,53 @@ async function cachedLogin(options: LoginOptions): Promise<BraintrustState> {
   const state = await loginToState(options);
   loginCache.set(key, state);
   return state;
+}
+
+async function getDataset(
+  state: BraintrustState,
+  data: RunEvalRequest["data"],
+): Promise<EvalData<unknown, unknown, BaseMetadata>> {
+  if ("project_name" in data) {
+    return initDataset({
+      state,
+      project: data.project_name,
+      dataset: data.dataset_name,
+      _internal_btql: data._internal_btql ?? undefined,
+    });
+  } else if ("dataset_id" in data) {
+    const datasetInfo = await getDatasetById({
+      state,
+      datasetId: data.dataset_id,
+    });
+    return initDataset({
+      state,
+      projectId: datasetInfo.projectId,
+      dataset: datasetInfo.dataset,
+      _internal_btql: data._internal_btql ?? undefined,
+    });
+  } else {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return data.data as EvalCase<unknown, unknown, BaseMetadata>[];
+  }
+}
+
+const datasetFetchSchema = z.object({
+  project_id: z.string(),
+  name: z.string(),
+});
+async function getDatasetById({
+  state,
+  datasetId,
+}: {
+  state: BraintrustState;
+  datasetId: string;
+}): Promise<{ projectId: string; dataset: string }> {
+  const dataset = await state.appConn().post_json("api/dataset/get", {
+    id: datasetId,
+  });
+  const parsed = z.array(datasetFetchSchema).parse(dataset);
+  if (parsed.length === 0) {
+    throw new Error(`Dataset '${datasetId}' not found`);
+  }
+  return { projectId: parsed[0].project_id, dataset: parsed[0].name };
 }

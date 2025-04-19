@@ -1,4 +1,4 @@
-import { invokeParent } from "@braintrust/core/typespecs";
+import { invokeParent, runEvalSchema } from "@braintrust/core/typespecs";
 import { z } from "zod";
 import { EvaluatorDef } from "../framework";
 import { BaseMetadata } from "../logger";
@@ -8,6 +8,7 @@ import zodToJsonSchema from "zod-to-json-schema";
 export const evalBodySchema = z.object({
   name: z.string(),
   parameters: z.record(z.string(), z.unknown()).nullish(),
+  data: runEvalSchema.shape.data,
   parent: invokeParent.optional(),
 });
 
