@@ -7,7 +7,7 @@ import zodToJsonSchema from "zod-to-json-schema";
 
 export const evalBodySchema = z.object({
   name: z.string(),
-  parameters: z.record(z.string(), z.unknown()),
+  parameters: z.record(z.string(), z.unknown()).nullish(),
   parent: invokeParent.optional(),
 });
 

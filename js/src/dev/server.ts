@@ -119,7 +119,10 @@ export function runDevServer(
       }
 
       let parsedParameters: Record<string, unknown> = {};
-      if (parameters && Object.keys(parameters).length > 0) {
+      if (
+        evaluator.parameters &&
+        Object.keys(evaluator.parameters).length > 0
+      ) {
         try {
           if (!evaluator.parameters) {
             res.status(400).json({
@@ -129,12 +132,15 @@ export function runDevServer(
           }
 
           parsedParameters = validateParameters(
-            parameters,
+            parameters ?? {},
             evaluator.parameters,
           );
         } catch (e) {
-          if (e instanceof z.ZodError) {
-            res.status(400).json({ error: e.message });
+          console.error("Error validating parameters", e);
+          if (e instanceof z.ZodError || e instanceof Error) {
+            res.status(400).json({
+              error: e.message,
+            });
             return;
           }
           throw e;
@@ -249,12 +255,19 @@ function validateParameters<Parameters extends EvalParameters = EvalParameters>(
   return Object.fromEntries(
     Object.entries(parameterSchema).map(([name, schema]) => {
       const value = parameters[name];
-      if (schema === "prompt") {
-        const promptData = promptDataSchema.parse(value);
-        console.log(JSON.stringify(promptData, null, 2));
-        return [name, Prompt.fromPromptData(name, promptData)];
-      } else {
-        return [name, schema.parse(value)];
+      try {
+        if (schema === "prompt") {
+          const promptData = promptDataSchema.parse(value);
+          console.log(JSON.stringify(promptData, null, 2));
+          return [name, Prompt.fromPromptData(name, promptData)];
+        } else {
+          return [name, schema.parse(value)];
+        }
+      } catch (e) {
+        console.error("Error validating parameter", name, e);
+        throw Error(
+          `Invalid parameter '${name}': ${e instanceof Error ? e.message : String(e)}`,
+        );
       }
     }),
   ) as InferParameters<Parameters>;
