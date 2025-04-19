@@ -145,7 +145,7 @@ export type EvalScorerArgs<
   output: Output;
 };
 
-type OneOrMoreScores = Score | number | null | Array<Score>;
+export type OneOrMoreScores = Score | number | null | Array<Score>;
 
 export type EvalScorer<
   Input,

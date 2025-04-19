@@ -1,4 +1,8 @@
-import { invokeParent, runEvalSchema } from "@braintrust/core/typespecs";
+import {
+  functionIdSchema,
+  invokeParent,
+  runEvalSchema,
+} from "@braintrust/core/typespecs";
 import { z } from "zod";
 import { EvaluatorDef } from "../framework";
 import { BaseMetadata } from "../logger";
@@ -9,6 +13,14 @@ export const evalBodySchema = z.object({
   name: z.string(),
   parameters: z.record(z.string(), z.unknown()).nullish(),
   data: runEvalSchema.shape.data,
+  scores: z
+    .array(
+      z.object({
+        function_id: functionIdSchema,
+        name: z.string(),
+      }),
+    )
+    .nullish(),
   parent: invokeParent.optional(),
 });
 

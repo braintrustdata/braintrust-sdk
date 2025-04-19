@@ -5,7 +5,9 @@ import {
   Eval,
   EvalData,
   EvalHooks,
+  EvalScorer,
   EvaluatorDef,
+  OneOrMoreScores,
 } from "../framework";
 import { errorHandler } from "./errorHandler";
 import {
@@ -15,6 +17,7 @@ import {
   checkOrigin,
 } from "./authorize";
 import {
+  FunctionId,
   promptDataSchema,
   RunEvalRequest,
   SSEProgressEventData,
@@ -43,6 +46,7 @@ import {
 } from "./types";
 import { EvalParameters, InferParameters } from "../eval-parameters";
 import { z } from "zod";
+import { invoke } from "../functions/invoke";
 export interface DevServerOpts {
   host: string;
   port: number;
@@ -115,7 +119,9 @@ export function runDevServer(
     "/eval",
     checkAuthorized,
     asyncHandler(async (req, res) => {
-      const { name, parameters, parent, data } = evalBodySchema.parse(req.body);
+      const { name, parameters, parent, data, scores } = evalBodySchema.parse(
+        req.body,
+      );
 
       // First, log in
       const state = await cachedLogin({ apiKey: req.ctx?.token });
@@ -186,6 +192,10 @@ export function runDevServer(
           {
             ...evaluator,
             data: evalData.data,
+            scores:
+              scores?.map((score) =>
+                makeScorer(score.name, score.function_id),
+              ) ?? [],
             task,
             state,
           },
@@ -346,4 +356,24 @@ async function getDatasetById({
     throw new Error(`Dataset '${datasetId}' not found`);
   }
   return { projectId: parsed[0].project_id, dataset: parsed[0].name };
+}
+
+function makeScorer(
+  name: string,
+  score: FunctionId,
+): EvalScorer<unknown, unknown, unknown, BaseMetadata> {
+  const ret = async (input: EvalCase<unknown, unknown, BaseMetadata>) => {
+    const result = await invoke({
+      ...score,
+      input,
+    });
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return result as OneOrMoreScores;
+  };
+
+  Object.defineProperties(ret, {
+    name: { value: name },
+  });
+
+  return ret;
 }
