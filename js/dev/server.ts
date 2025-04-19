@@ -280,7 +280,6 @@ function validateParameters<Parameters extends EvalParameters = EvalParameters>(
       try {
         if ("type" in schema && schema.type === "prompt") {
           const promptData = promptDataSchema.parse(value);
-          console.log(JSON.stringify(promptData, null, 2));
           return [name, Prompt.fromPromptData(name, promptData)];
         } else if (schema instanceof z.ZodType) {
           return [name, schema.parse(value)];
