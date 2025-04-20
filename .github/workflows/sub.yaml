@@ -53,7 +53,7 @@ jobs:
         run: |
           cd parent-repo
           # Update the submodule to point to the branch
-          git update submodule
+          git submodule update
           cd sdk
           git fetch origin ${{ env.BRANCH_NAME }}
           git checkout origin/${{ env.BRANCH_NAME }}
