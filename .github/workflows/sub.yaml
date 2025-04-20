@@ -77,7 +77,7 @@ jobs:
         run: |
           cd parent-repo
           gh pr create \
-            --title "Update SDK submodule to latest commits from ${{ env.BRANCH_NAME }}" \
+            --title "Update SDK submodule to latest commit on ${{ env.BRANCH_NAME }}" \
             --body "This PR updates the SDK submodule to point to the latest commit from the branch ${{ env.BRANCH_NAME }}. Created automatically by GitHub Actions." \
             --base main \
             --head ${{ env.PARENT_BRANCH_NAME }}
