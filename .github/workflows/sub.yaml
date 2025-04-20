@@ -52,9 +52,9 @@ jobs:
       - name: Update submodule reference
         run: |
           cd parent-repo
-          # Update the submodule to point to the new commit
-          git -C sdk fetch
-          git -C sdk checkout ${{ env.COMMIT_HASH }}
+          # Update the submodule to point to the branch
+          git -C sdk fetch origin ${{ env.BRANCH_NAME }}
+          git -C sdk checkout origin/${{ env.BRANCH_NAME }}
           git add sdk
 
           # Only commit if there are changes
