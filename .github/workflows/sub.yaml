@@ -1,4 +1,4 @@
-name: Update Submodule in Parent Repository
+name: Open Integration Test PR
 
 on:
   pull_request:
@@ -22,7 +22,7 @@ jobs:
         run: |
           echo "BRANCH_NAME=${{ github.head_ref || github.ref_name }}" >> $GITHUB_ENV
           echo "COMMIT_HASH=$(git rev-parse HEAD)" >> $GITHUB_ENV
-          echo "PARENT_BRANCH_NAME=${{ github.head_ref || github.ref_name }}-sdk" >> $GITHUB_ENV
+          echo "PARENT_BRANCH_NAME=${{ github.head_ref || github.ref_name }}-sdk-gh-action" >> $GITHUB_ENV
 
       - name: Checkout parent repository
         uses: actions/checkout@v4
@@ -55,9 +55,8 @@ jobs:
           # Initialize and update submodules
           git submodule init
           git submodule update --init --recursive
-
-          # Explicitly configure the SDK submodule remote
           cd sdk
+          # Make sure we're tracking all remotes
           git remote set-url origin https://github.com/braintrustdata/braintrust-sdk.git
           git fetch origin
 
@@ -65,7 +64,6 @@ jobs:
           git checkout -b temp_branch
           git fetch origin ${{ env.COMMIT_HASH }}
           git checkout ${{ env.COMMIT_HASH }}
-
           cd ..
           git add sdk
 
