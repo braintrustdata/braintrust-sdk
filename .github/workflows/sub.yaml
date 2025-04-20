@@ -29,7 +29,7 @@ jobs:
         with:
           repository: braintrustdata/braintrust
           path: parent-repo
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
           fetch-depth: 0
 
       - name: Configure Git in parent repository
@@ -70,7 +70,7 @@ jobs:
           PR_EXISTS=$(gh pr list --state open --head ${{ env.PARENT_BRANCH_NAME }} --json number | jq 'length')
           echo "PR_EXISTS=$PR_EXISTS" >> $GITHUB_ENV
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
 
       - name: Create Pull Request if not exists
         if: env.PR_EXISTS == '0'
@@ -82,4 +82,4 @@ jobs:
             --base main \
             --head ${{ env.PARENT_BRANCH_NAME }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
