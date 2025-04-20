@@ -52,9 +52,12 @@ jobs:
       - name: Update submodule reference
         run: |
           cd parent-repo
-          # Update the submodule to point to the branch
-          git submodule update
+          # Initialize and update submodules
+          git submodule init
+          git submodule update --init --recursive
           cd sdk
+          # Make sure we're tracking all remotes
+          git remote set-url origin https://github.com/braintrustdata/braintrust-sdk.git
           git fetch --all
           # Use the commit hash directly instead of the branch name
           git checkout ${{ env.COMMIT_HASH }}
