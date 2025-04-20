@@ -430,7 +430,10 @@ export function promptDefinitionToPromptData(
       ? {
           type: "chat",
           messages: promptDefinition.messages,
-          tools: rawTools ? JSON.stringify(rawTools) : undefined,
+          tools:
+            rawTools && rawTools.length > 0
+              ? JSON.stringify(rawTools)
+              : undefined,
         }
       : {
           type: "completion",
