@@ -55,8 +55,9 @@ jobs:
           # Update the submodule to point to the branch
           git submodule update
           cd sdk
-          git fetch origin ${{ env.BRANCH_NAME }}
-          git checkout origin/${{ env.BRANCH_NAME }}
+          git fetch --all
+          # Use the commit hash directly instead of the branch name
+          git checkout ${{ env.COMMIT_HASH }}
           cd ..
           git add sdk
 
