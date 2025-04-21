@@ -1,11 +1,11 @@
-name: Open Braintrust Integration Test PR
+name: integration-tests
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
 
 jobs:
-  open-braintrust-pr:
+  open-pr:
     runs-on: ubuntu-latest
     permissions:
       contents: write
