@@ -26,24 +26,6 @@ class TestDiskCache(unittest.TestCase):
         except Exception:
             pass
 
-    @pytest.mark.skip(reason="flaky because of mtimes")
-    def test_eviction_works(self):
-        keys = ["a", "b", "c", "d", "e"]
-        max_size = self.cache._max_size
-        for i, k in enumerate(keys):
-            time.sleep(0.2)  # make sure the mtimes are different
-            # set the key and make sure it's still there.
-            self.cache.set(k, {"value": i})
-            assert self.cache.get(k) == {"value": i}
-            # Set the key. Make sure the 2 previous things are there, and nothing e
-            for n in range(0, len(keys)):
-                should_exist = (i - max_size) < n and n <= i
-                if should_exist:
-                    assert self.cache.get(keys[n]) == {"value": n}
-                else:
-                    with self.assertRaises(KeyError):
-                        self.cache.get(keys[n])
-
     def test_keys_with_invalid_paths(self):
         data = {"1": "2"}
         weird_keys = [
