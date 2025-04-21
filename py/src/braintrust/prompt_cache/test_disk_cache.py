@@ -20,6 +20,12 @@ class TestDiskCache(unittest.TestCase):
         except Exception:
             pass
 
+    def test_keys_with_reserved_keys(self):
+        data = {"1": "2"}
+        self.cache.set("a/b/c", data)
+        result = self.cache.get("a/b/c")
+        assert data == result
+
     def test_store_and_retrieve_values(self):
         test_data = {"foo": "bar"}
         self.cache.set("test-key", test_data)
@@ -91,7 +97,7 @@ class TestDiskCache(unittest.TestCase):
         self.cache.set("test-key", {"foo": "bar"})
 
         # Corrupt the file.
-        file_path = os.path.join(self.cache_dir, "test-key")
+        file_path = self.cache._get_entry_path("test-key")
         with open(file_path, "w") as f:
             f.write("invalid data")
 
