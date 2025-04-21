@@ -129,6 +129,37 @@ describe("PromptCache", () => {
       );
     });
 
+    it("should handle odd project names", async () => {
+      const names = [
+        ".",
+        "..",
+        "/a/b/c",
+        "normal",
+        "my\0file.txt",
+        "file*.txT",
+        "what?.txt",
+        " asdf ",
+        "invalid/name",
+        "my<file>.txt",
+      ];
+      for (const name of names) {
+        const p = new Prompt(
+          {
+            project_id: name,
+            name: "test-prompt",
+            slug: "test-prompt",
+            id: "789",
+            _xact_id: "789",
+          },
+          {},
+          false,
+        );
+        await cache.set(p, p);
+        const result = await cache.get(p);
+        expect(result).toEqual(p);
+      }
+    });
+
     it("should handle different versions of the same prompt", async () => {
       const promptV1 = new Prompt(
         {
@@ -196,13 +227,13 @@ describe("PromptCache", () => {
   });
 
   describe("error handling", () => {
-    it("should throw when disk write fails", async () => {
+    it("should throw never when disk write fails", async () => {
       // Make cache directory read-only.
       await fs.mkdir(cacheDir, { recursive: true });
       await fs.chmod(cacheDir, 0o444);
 
-      // Should throw when disk write fails.
-      await expect(cache.set(testKey, testPrompt)).rejects.toThrow();
+      // Should not throw when disk write fails.
+      await cache.set(testKey, testPrompt);
 
       // Memory cache should still be updated.
       const result = await cache.get(testKey);

@@ -1,4 +1,5 @@
 import iso from "../isomorph";
+import crypto from "crypto";
 
 export function canUseDiskCache(): boolean {
   return !!(
@@ -60,13 +61,9 @@ export class DiskCache<T> {
     this.max = options.max;
   }
 
-  /**
-   * Gets the file path for a cache entry.
-   * @param key - The cache key to get the path for.
-   * @returns The full filesystem path for the cache entry.
-   */
   private getEntryPath(key: string): string {
-    return iso.pathJoin!(this.dir, key);
+    const hashed = crypto.createHash("sha256").update(key).digest("hex");
+    return iso.pathJoin!(this.dir, hashed);
   }
 
   /**
@@ -75,7 +72,6 @@ export class DiskCache<T> {
    *
    * @param key - The key to look up in the cache.
    * @returns The cached value if found, undefined otherwise.
-   * @throws If there is an error reading from the disk cache (except for file not found).
    */
   async get(key: string): Promise<T | undefined> {
     try {
@@ -88,7 +84,8 @@ export class DiskCache<T> {
       if ((e as NodeJS.ErrnoException).code === "ENOENT") {
         return undefined;
       }
-      throw e;
+      // FIXME[matt] log any unexpected exceptions (file systems, etc)
+      return undefined;
     }
   }
 
@@ -103,31 +100,38 @@ export class DiskCache<T> {
     await iso.mkdir!(this.dir, { recursive: true });
     const filePath = this.getEntryPath(key);
     const data = await iso.gzip!(JSON.stringify(value));
-    await iso.writeFile!(filePath, data);
 
-    if (this.max) {
-      const entries = await iso.readdir!(this.dir);
-      if (entries.length > this.max) {
-        await this.evictOldest(entries);
-      }
+    try {
+      await iso.writeFile!(filePath, data);
+      await this.evictOldestIfFull();
+    } catch (e) {
+      // FIXME[matt] log any unexpected exceptions (file systems, etc)
+      return;
     }
   }
 
-  /**
-   * Evicts the oldest entries from the cache until it is under the maximum size.
-   * @param entries - List of all cache entry filenames.
-   */
-  private async evictOldest(entries: string[]): Promise<void> {
+  private async evictOldestIfFull(): Promise<void> {
+    if (!this.max) {
+      return;
+    }
+
+    const files = await iso.readdir!(this.dir);
+    const paths = files.map((file) => iso.pathJoin!(this.dir, file));
+
+    if (paths.length <= this.max) {
+      return;
+    }
+
     interface CacheEntry {
       name: string;
       mtime: number;
     }
 
     const stats = await Promise.all(
-      entries.map(async (entry): Promise<CacheEntry> => {
-        const stat = await iso.stat!(this.getEntryPath(entry));
+      paths.map(async (path): Promise<CacheEntry> => {
+        const stat = await iso.stat!(path);
         return {
-          name: entry,
+          name: path,
           mtime: stat.mtime.getTime(),
         };
       }),
@@ -136,8 +140,6 @@ export class DiskCache<T> {
     stats.sort((a, b) => a.mtime - b.mtime);
     const toRemove = stats.slice(0, stats.length - this.max!);
 
-    await Promise.all(
-      toRemove.map((stat) => iso.unlink!(this.getEntryPath(stat.name))),
-    );
+    await Promise.all(toRemove.map((stat) => iso.unlink!(stat.name)));
   }
 }
