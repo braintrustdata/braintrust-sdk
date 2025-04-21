@@ -398,18 +398,18 @@ function makeEvalParametersSchema(
             description: value.description,
           },
         ];
-      } else if (value instanceof z.ZodType) {
+      } else {
         return [
           name,
           {
             type: "data",
-            schema: zodToJsonSchema(value),
+            // Since this schema is bundled, it won't pass an instanceof check.
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            schema: zodToJsonSchema(value as z.ZodSchema),
             default: value.default,
             description: value.description,
           },
         ];
-      } else {
-        throw new Error(`Unknown parameter type: ${value}`);
       }
     }),
   );
