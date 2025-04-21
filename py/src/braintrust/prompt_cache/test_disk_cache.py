@@ -28,7 +28,7 @@ class TestDiskCache(unittest.TestCase):
         keys = ["a", "b", "c", "d", "e"]
         max_size = self.cache._max_size
         for i, k in enumerate(keys):
-            time.sleep(0.09)  # make sure the mtimes are different
+            time.sleep(0.2)  # make sure the mtimes are different
             # set the key and make sure it's still there.
             self.cache.set(k, {"value": i})
             assert self.cache.get(k) == {"value": i}
@@ -190,6 +190,7 @@ class TestDiskCache(unittest.TestCase):
             max_size=3,
             serializer=lambda x: x.as_dict(),
             deserializer=prompt.PromptSchema.from_dict_deep,
+            log_warnings=False,
         )
 
         # Create a test prompt.
@@ -215,7 +216,10 @@ class TestDiskCache(unittest.TestCase):
     def test_serializer_handles_complex_objects(self):
         """Test that serializer is used for complex nested objects."""
         cache = disk_cache.DiskCache[prompt.PromptSchema](
-            cache_dir=self.cache_dir, serializer=lambda x: x.as_dict(), deserializer=prompt.PromptSchema.from_dict_deep
+            cache_dir=self.cache_dir,
+            serializer=lambda x: x.as_dict(),
+            deserializer=prompt.PromptSchema.from_dict_deep,
+            log_warnings=False,
         )
 
         # Create a prompt with nested data.
