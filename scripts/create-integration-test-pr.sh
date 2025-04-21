@@ -82,11 +82,9 @@ PR_EXISTS=$(gh pr list --state open --head "$PARENT_BRANCH_NAME" --json number |
 
 # Create Pull Request if not exists
 if [ "$PR_EXISTS" = "0" ]; then
-  git config user.name "github-actions[bot]"
-  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
   gh pr create \
-    --title "Bot: Update SDK submodule to $BRANCH_NAME" \
+    --title "[bot] Update SDK submodule to $BRANCH_NAME" \
     --body "This PR updates the SDK submodule to point to the latest commit from the branch $BRANCH_NAME.
 
 Author: $COMMIT_AUTHOR
