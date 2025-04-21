@@ -133,7 +133,6 @@ export function runDevServer(
         return;
       }
 
-      let parsedParameters: Record<string, unknown> = {};
       if (
         evaluator.parameters &&
         Object.keys(evaluator.parameters).length > 0
@@ -146,10 +145,9 @@ export function runDevServer(
             return;
           }
 
-          parsedParameters = validateParameters(
-            parameters ?? {},
-            evaluator.parameters,
-          );
+          // This gets done again in the framework, but we do it here too to give a
+          // better error message.
+          validateParameters(parameters ?? {}, evaluator.parameters);
         } catch (e) {
           console.error("Error validating parameters", e);
           if (e instanceof z.ZodError || e instanceof Error) {
@@ -225,7 +223,7 @@ export function runDevServer(
               );
             },
             parent: parseParent(parent),
-            parameters: parsedParameters,
+            parameters: parameters ?? {},
           },
         );
 
