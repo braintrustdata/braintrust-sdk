@@ -1,11 +1,11 @@
-name: integration-test-pr
+name: integration-tests
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
 
 jobs:
-  integration-test-pr:
+  open-pr:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -25,6 +25,7 @@ jobs:
           cd braintrust
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
+          cd ..
 
       - name: Create integration test PR
         run: ./scripts/create-integration-test-pr.sh
