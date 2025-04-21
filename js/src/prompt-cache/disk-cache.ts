@@ -84,7 +84,7 @@ export class DiskCache<T> {
       if ((e as NodeJS.ErrnoException).code === "ENOENT") {
         return undefined;
       }
-      // FIXME[matt] log any unexpected exceptions (file systems, etc)
+      console.warn("Failed to read from disk cache", e);
       return undefined;
     }
   }
@@ -105,7 +105,7 @@ export class DiskCache<T> {
       await iso.writeFile!(filePath, data);
       await this.evictOldestIfFull();
     } catch (e) {
-      // FIXME[matt] log any unexpected exceptions (file systems, etc)
+      console.warn("Failed to write to disk cache", e);
       return;
     }
   }
@@ -123,7 +123,7 @@ export class DiskCache<T> {
     }
 
     interface CacheEntry {
-      name: string;
+      path: string;
       mtime: number;
     }
 
@@ -131,7 +131,7 @@ export class DiskCache<T> {
       paths.map(async (path): Promise<CacheEntry> => {
         const stat = await iso.stat!(path);
         return {
-          name: path,
+          path,
           mtime: stat.mtime.getTime(),
         };
       }),
@@ -140,6 +140,6 @@ export class DiskCache<T> {
     stats.sort((a, b) => a.mtime - b.mtime);
     const toRemove = stats.slice(0, stats.length - this.max!);
 
-    await Promise.all(toRemove.map((stat) => iso.unlink!(stat.name)));
+    await Promise.all(toRemove.map((stat) => iso.unlink!(stat.path)));
   }
 }
