@@ -37,7 +37,7 @@ jobs:
           git checkout ${{ github.event.pull_request.head.sha }}
 
       - name: Create integration test PR
-        run: ./braintrust/sdk/scripts/integration-test-pr.sh
+        run: ./braintrust/sdk/scripts/create-integration-test-pr.sh
         env:
           GH_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
           BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
