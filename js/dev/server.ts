@@ -279,12 +279,19 @@ function validateParameters<Parameters extends EvalParameters = EvalParameters>(
       const value = parameters[name];
       try {
         if ("type" in schema && schema.type === "prompt") {
-          const promptData = promptDataSchema.parse(value);
+          const promptData = value
+            ? promptDataSchema.parse(value)
+            : schema.default
+              ? promptDefinitionToPromptData(schema.default)
+              : undefined;
+          if (!promptData) {
+            throw new Error(`Parameter '${name}' is required`);
+          }
           return [name, Prompt.fromPromptData(name, promptData)];
-        } else if (schema instanceof z.ZodType) {
-          return [name, schema.parse(value)];
         } else {
-          throw new Error(`Unknown parameter type: ${schema}`);
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          const schemaCasted = schema as z.ZodSchema<unknown>;
+          return [name, schemaCasted.parse(value)];
         }
       } catch (e) {
         console.error("Error validating parameter", name, e);
