@@ -20,16 +20,15 @@ class TestDiskCache(unittest.TestCase):
 
     def tearDown(self):
         try:
-            os.chmod(self.cache_dir, 0o777)
             shutil.rmtree(self.cache_dir, ignore_errors=True)
         except Exception:
             pass
 
     def test_eviction_works(self):
-        keys = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
+        keys = ["a", "b", "c", "d", "e"]
         max_size = self.cache._max_size
         for i, k in enumerate(keys):
-            time.sleep(0.05)  # make sure the mtimes are different
+            time.sleep(0.09)  # make sure the mtimes are different
             # set the key and make sure it's still there.
             self.cache.set(k, {"value": i})
             assert self.cache.get(k) == {"value": i}

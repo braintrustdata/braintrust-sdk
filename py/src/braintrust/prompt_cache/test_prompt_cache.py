@@ -17,6 +17,7 @@ class TestPromptCache(unittest.TestCase):
             max_size=5,
             serializer=lambda x: x.as_dict(),
             deserializer=prompt.PromptSchema.from_dict_deep,
+            log_warnings=False,
         )
         self.cache = prompt_cache.PromptCache(memory_cache=mc, disk_cache=dc)
 
