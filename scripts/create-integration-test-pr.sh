@@ -91,5 +91,6 @@ SDK PR: $SDK_PR_URL
 
 Created automatically by GitHub Actions." \
     --base main \
-    --head "$PARENT_BRANCH_NAME"
+    --head "$PARENT_BRANCH_NAME" \
+    --author "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
 fi
