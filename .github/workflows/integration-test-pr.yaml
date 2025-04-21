@@ -1,0 +1,35 @@
+name: integration-test-pr
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  integration-test-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout parent repo
+        uses: actions/checkout@v4
+        with:
+          repository: braintrustdata/braintrust
+          path: braintrust
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          cd braintrust
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+
+      - name: Create integration test PR
+        run: ./scripts/create-integration-test-pr.sh
+        env:
+          GH_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+          COMMIT_HASH: ${{ github.event.pull_request.head.sha }}
+          PARENT_REPO_PATH: braintrust
