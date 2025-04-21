@@ -68,7 +68,7 @@ def test_anthropic_messages_create_stream_true(memory_logger):
     kws = {
         "model": MODEL,
         "max_tokens": 300,
-        "messages": [{"role": "user", "content": "what's the capital of Canada?"}],
+        "messages": [{"role": "user", "content": "What is 3*4?"}],
         "stream": True,
     }
 
@@ -79,12 +79,19 @@ def test_anthropic_messages_create_stream_true(memory_logger):
 
     assert msgs  # a very coarse grained check that this works
 
-    logs = memory_logger.pop()
-    assert len(logs) == 1
-    log = logs[0]
-    assert log["metadata"]["model"] == MODEL
-    assert log["metadata"]["max_tokens"] == 300
-    assert start < log["metrics"]["start"] < log["metrics"]["end"] < end
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span["metadata"]["model"] == MODEL
+    assert span["metadata"]["provider"] == "anthropic"
+    assert span["metadata"]["max_tokens"] == 300
+    assert span["metadata"]["stream"] == True
+    metrics = span["metrics"]
+    assert metrics
+    assert start < metrics["start"] < metrics["end"] < end
+    assert span["input"] == kws["messages"]
+    assert span["output"]
+    assert "12" in span["output"][0]["text"]
 
 
 def test_anthropic_messages_model_params_inputs(memory_logger):
@@ -116,9 +123,7 @@ def test_anthropic_messages_model_params_inputs(memory_logger):
         logs = memory_logger.pop()
         assert len(logs) == 1
         log = logs[0]
-        import pprint
-
-        pprint.pprint(log)
+        assert "2" in log["output"][0]["text"]
         assert log["metadata"]["model"] == MODEL
         assert log["metadata"]["max_tokens"] == 300
         assert log["metadata"]["temperature"] == 0.5
@@ -150,7 +155,6 @@ def test_anthropic_messages_system_prompt_inputs(memory_logger):
         return stream.get_final_message()
 
     for f in [_with_messages_create, _with_messages_stream]:
-        print("testing %s" % f.__name__)
         msg = f()
         assert "2024-03-27" in msg.content[0].text
 
@@ -168,17 +172,48 @@ def test_anthropic_messages_system_prompt_inputs(memory_logger):
 async def test_anthropic_messages_create_async(memory_logger):
     assert not memory_logger.pop()
 
-    client = wrap_anthropic(anthropic.AsyncAnthropic())
-    msg = await client.messages.create(
-        model=MODEL, max_tokens=100, messages=[{"role": "user", "content": "what is 1+1?, just return the number"}]
-    )
-    assert msg.content[0].text == "2"
+    params = {
+        "model": MODEL,
+        "max_tokens": 100,
+        "messages": [{"role": "user", "content": "what is 6+1?, just return the number"}],
+    }
 
-    logs = memory_logger.pop()
-    assert len(logs) == 1
-    log = logs[0]
-    assert log["metadata"]["model"] == MODEL
-    assert log["metadata"]["max_tokens"] == 100
+    client = wrap_anthropic(anthropic.AsyncAnthropic())
+    msg = await client.messages.create(**params)
+    assert "7" in msg.content[0].text
+
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span["metadata"]["model"] == MODEL
+    assert span["metadata"]["max_tokens"] == 100
+    assert span["input"] == params["messages"]
+    assert "7" in span["output"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_anthropic_messages_create_async_stream_true(memory_logger):
+    assert not memory_logger.pop()
+
+    params = {
+        "model": MODEL,
+        "max_tokens": 100,
+        "messages": [{"role": "user", "content": "what is 6+1?, just return the number"}],
+        "stream": True,
+    }
+
+    client = wrap_anthropic(anthropic.AsyncAnthropic())
+    stream = await client.messages.create(**params)
+    async for event in stream:
+        pass
+
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span["metadata"]["model"] == MODEL
+    assert span["metadata"]["max_tokens"] == 100
+    assert span["input"] == params["messages"]
+    assert "7" in span["output"][0]["text"]
 
 
 @pytest.mark.asyncio

@@ -482,7 +482,7 @@ export class BraintrustState {
     const serializedParsed = loginSchema.safeParse(serialized);
     if (!serializedParsed.success) {
       throw new Error(
-        `Cannot deserialize BraintrustState: ${serializedParsed.error.errors}`,
+        `Cannot deserialize BraintrustState: ${serializedParsed.error.message}`,
       );
     }
     const state = new BraintrustState({ ...opts });
@@ -3771,12 +3771,15 @@ function extractAttachments(
  *
  * @returns The same event instance as the input.
  */
-function enrichAttachments<T extends Record<string, any>>(event: T): T {
+function enrichAttachments<T extends Record<string, any>>(
+  event: T,
+  state: BraintrustState | undefined,
+): T {
   for (const [key, value] of Object.entries(event)) {
     // Base case: AttachmentReference.
     const parsedValue = attachmentReferenceSchema.safeParse(value);
     if (parsedValue.success) {
-      (event as any)[key] = new ReadonlyAttachment(parsedValue.data);
+      (event as any)[key] = new ReadonlyAttachment(parsedValue.data, state);
       continue;
     }
 
@@ -3786,7 +3789,7 @@ function enrichAttachments<T extends Record<string, any>>(event: T): T {
     }
 
     // Recursive case: object or array:
-    enrichAttachments(value);
+    enrichAttachments(value, state);
   }
 
   return event;
@@ -3990,7 +3993,7 @@ export class Experiment
     lazyMetadata: LazyValue<ProjectExperimentMetadata>,
     dataset?: AnyDataset,
   ) {
-    super("experiment", undefined, enrichAttachments);
+    super("experiment", undefined, (r) => enrichAttachments(r, state));
     this.lazyMetadata = lazyMetadata;
     this.dataset = dataset;
     this.lastStartTime = getCurrentUnixTimestamp();
@@ -4283,7 +4286,7 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     private state: BraintrustState,
     private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>,
   ) {
-    super("experiment", undefined, enrichAttachments);
+    super("experiment", undefined, (r) => enrichAttachments(r, state));
   }
 
   public get id(): Promise<string> {
@@ -4727,7 +4730,7 @@ export class Dataset<
       (r: AnyDatasetRecord) =>
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         ensureDatasetRecord(
-          enrichAttachments(r),
+          enrichAttachments(r, this.state),
           isLegacyDataset,
         ) as WithTransactionId<DatasetRecord<IsLegacyDataset>>,
       _internal_btql,
