@@ -47,6 +47,7 @@ describe("PromptCache", () => {
       diskCache: new DiskCache<Prompt>({
         cacheDir,
         max: 5,
+        logWarnings: false,
       }),
     });
   });
@@ -252,6 +253,7 @@ describe("PromptCache", () => {
         diskCache: new DiskCache<Prompt>({
           cacheDir,
           max: 5,
+          logWarnings: false,
         }),
       });
 
@@ -287,6 +289,7 @@ describe("PromptCache", () => {
         diskCache: new DiskCache<Prompt>({
           cacheDir,
           max: 5,
+          logWarnings: false,
         }),
       });
 

@@ -1,8 +1,8 @@
 import iso from "../isomorph";
-import crypto from "crypto";
 
 export function canUseDiskCache(): boolean {
   return !!(
+    iso.hash &&
     iso.gunzip &&
     iso.gzip &&
     iso.stat &&
@@ -30,6 +30,8 @@ interface DiskCacheOptions {
    * If not specified, the cache will grow unbounded.
    */
   max?: number;
+
+  logWarnings?: boolean;
 }
 
 /**
@@ -48,7 +50,7 @@ interface DiskCacheOptions {
 export class DiskCache<T> {
   private readonly dir: string;
   private readonly max?: number;
-
+  private readonly logWarnings: boolean;
   /**
    * Creates a new DiskCache instance.
    * @param options - Configuration options for the cache.
@@ -59,10 +61,11 @@ export class DiskCache<T> {
     }
     this.dir = options.cacheDir;
     this.max = options.max;
+    this.logWarnings = options.logWarnings ?? true;
   }
 
   private getEntryPath(key: string): string {
-    const hashed = crypto.createHash("sha256").update(key).digest("hex");
+    const hashed = iso.hash!(key);
     return iso.pathJoin!(this.dir, hashed);
   }
 
@@ -84,7 +87,9 @@ export class DiskCache<T> {
       if ((e as NodeJS.ErrnoException).code === "ENOENT") {
         return undefined;
       }
-      console.warn("Failed to read from disk cache", e);
+      if (this.logWarnings) {
+        console.warn("Failed to read from disk cache", e);
+      }
       return undefined;
     }
   }
