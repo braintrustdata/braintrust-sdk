@@ -17,6 +17,7 @@ class TestPromptCache(unittest.TestCase):
             max_size=5,
             serializer=lambda x: x.as_dict(),
             deserializer=prompt.PromptSchema.from_dict_deep,
+            log_warnings=False,
         )
         self.cache = prompt_cache.PromptCache(memory_cache=mc, disk_cache=dc)
 
@@ -37,6 +38,28 @@ class TestPromptCache(unittest.TestCase):
             shutil.rmtree(self.cache_dir, ignore_errors=True)
         except Exception:
             pass
+
+    def test_prompts_with_weird_names(self):
+        # tests BRA-2326
+        names = [
+            "a/b/c",
+            "managed/insights",
+            "a b c d",
+        ]
+        for n in names:
+            p = prompt.PromptSchema(
+                id="123",
+                project_id="456",
+                name=n,
+                description="blah",
+                tags=None,
+                slug=f"test-prompt-{n}",
+                prompt_data=prompt.PromptData(),
+                _xact_id="666666",
+            )
+            self.cache.set(n, "666666", p, project_id="456")
+            result = self.cache.get(n, version="666666", project_id="456")
+            self.assertEqual(result.as_dict(), p.as_dict())
 
     def test_store_and_retrieve_from_memory_cache(self):
         self.cache.set("test-prompt", "789", self.test_prompt, project_id="123")
@@ -97,13 +120,11 @@ class TestPromptCache(unittest.TestCase):
         with self.assertRaises(KeyError):
             memory_only_cache.get("test-prompt", version="789", project_id="123")
 
-    def test_throw_when_disk_write_fails(self):
+    def test_dont_throw_when_disk_write_fails(self):
         # Make cache directory read-only.
         os.chmod(self.cache_dir, 0o444)
 
-        # Should raise when disk write fails.
-        with self.assertRaises(RuntimeError):
-            self.cache.set("test-prompt", "789", self.test_prompt, project_id="123")
+        self.cache.set("test-prompt", "789", self.test_prompt, project_id="123")
 
         # Memory cache should still be updated despite disk failure.
         result = self.cache.get("test-prompt", version="789", project_id="123")
