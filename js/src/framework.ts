@@ -742,7 +742,7 @@ export async function runEvaluator(
   progressReporter: ProgressReporter,
   filters: Filter[],
   stream: ((data: SSEProgressEventData) => void) | undefined,
-  parameters: InferParameters<EvalParameters> | undefined,
+  parameters?: InferParameters<EvalParameters>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   return await runEvaluatorInternal(
