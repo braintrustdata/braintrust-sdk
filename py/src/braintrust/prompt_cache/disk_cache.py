@@ -10,10 +10,14 @@ and handles file system errors gracefully.
 import gzip
 import hashlib
 import json
+import logging
 import os
 from typing import Any, Callable, Generic, List, Optional, TypeVar
 
 T = TypeVar("T")
+
+
+log = logging.getLogger(__name__)
 
 
 class DiskCache(Generic[T]):
@@ -93,7 +97,10 @@ class DiskCache(Generic[T]):
         except FileNotFoundError:
             raise KeyError(f"Cache key not found: {key}")
         except Exception as e:
-            raise RuntimeError(f"Failed to read from disk cache: {e}") from e
+            # if we have any other error, it's unexpected, but we won't want to crash an app,
+            # so log and treat it like a cache miss.
+            log.warning(f"Unexpected error reading from disk cache: {e}")
+            raise KeyError(f"Cache key not found: {key}") from e
 
     def set(self, key: str, value: T) -> None:
         """
@@ -118,17 +125,14 @@ class DiskCache(Generic[T]):
 
             self._evict_if_full()
         except Exception as e:
-            raise RuntimeError(f"Failed to write to disk cache: {e}") from e
-
-    def _get_paths(self) -> List[str]:
-        """Return a list of paths to all entries in the cache."""
-        return [os.path.join(self._dir, f) for f in os.listdir(self._dir)]
+            # Swallow any cache write errors. Don't crash the app.
+            log.warning(f"Failed to write to disk cache: {e}")
 
     def _evict_if_full(self):
         if self._max_size is None or self._max_size <= 0:
             return None
 
-        paths = self._get_paths()
+        paths = [os.path.join(self._dir, f) for f in os.listdir(self._dir)]
         if len(paths) <= self._max_size:
             return
 

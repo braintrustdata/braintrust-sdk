@@ -20,11 +20,24 @@ class TestDiskCache(unittest.TestCase):
         except Exception:
             pass
 
-    def test_keys_with_reserved_keys(self):
+    def test_keys_with_invalid_paths(self):
         data = {"1": "2"}
-        self.cache.set("a/b/c", data)
-        result = self.cache.get("a/b/c")
-        assert data == result
+        weird_keys = [
+            ".",
+            "..",
+            "a/b/c",
+            "invalid/name",
+            "my\0file.txt",
+            "file*.txT",
+            "what?.txt",
+            " asdf ",
+            "my<file>.txt",
+            "a\nb",
+        ]
+        for k in weird_keys:
+            self.cache.set(k, data)
+            result = self.cache.get(k)
+            assert data == result
 
     def test_store_and_retrieve_values(self):
         test_data = {"foo": "bar"}
@@ -71,39 +84,56 @@ class TestDiskCache(unittest.TestCase):
         newer = self.cache.get("key2")
         self.assertEqual(newer, {"value": 2})
 
-    def test_throw_when_write_fails(self):
+    def test_dont_throw_when_write_fails(self):
         # Make cache directory read-only.
         os.makedirs(self.cache_dir, exist_ok=True)
         os.chmod(self.cache_dir, 0o444)
 
-        # Should raise when write fails.
-        with self.assertRaises(RuntimeError):
-            self.cache.set("test", {"foo": "bar"})
+        # Don't throw when writing fails.
+        self.cache.set("test", {"foo": "bar"})
 
-    def test_throw_when_read_fails(self):
+        try:
+            self.cache.get("test")
+        except KeyError:
+            pass
+
+    def test_dont_throw_when_read_fails(self):
         self.cache.set("test-key", {"foo": "bar"})
+        assert self.cache.get("test-key") == {"foo": "bar"}
 
         # Make cache directory unreadable.
         os.chmod(self.cache_dir, 0o000)
 
-        # Should raise when trying to read.
-        with self.assertRaises(RuntimeError):
+        try:
             self.cache.get("test-key")
+        except KeyError:
+            pass
+        else:
+            assert False, "should fail"
 
         # Restore permissions so cleanup can happen.
         os.chmod(self.cache_dir, 0o777)
 
     def test_throw_on_corrupted_data(self):
         self.cache.set("test-key", {"foo": "bar"})
+        assert self.cache.get("test-key") == {"foo": "bar"}
 
         # Corrupt the file.
         file_path = self.cache._get_entry_path("test-key")
         with open(file_path, "w") as f:
             f.write("invalid data")
 
-        # Should raise on corrupted data.
-        with self.assertRaises(RuntimeError):
+        # if the data is corrupted, pretend like its not cached
+        try:
             self.cache.get("test-key")
+        except KeyError:
+            pass
+        else:
+            assert 0
+
+        # we should be able to write and read again.
+        self.cache.set("test-key", {"foo": "bar"})
+        assert self.cache.get("test-key") == {"foo": "bar"}
 
     def test_evict_oldest_throws_on_stat_error(self):
         """Test that eviction throws when it can't get mtime."""
@@ -114,9 +144,7 @@ class TestDiskCache(unittest.TestCase):
         # Make cache directory unreadable.
         os.chmod(self.cache_dir, 0o000)
 
-        # Should raise when trying to get mtime.
-        with self.assertRaises(RuntimeError):
-            self.cache.set("key3", {"value": 3})
+        self.cache.set("key3", {"value": 3})
 
         # Restore permissions so cleanup can happen.
         os.chmod(self.cache_dir, 0o777)
@@ -131,9 +159,7 @@ class TestDiskCache(unittest.TestCase):
         # Make cache directory read-only.
         os.chmod(self.cache_dir, 0o444)
 
-        # Should raise when trying to remove oldest entry.
-        with self.assertRaises(RuntimeError):
-            self.cache.set("key3", {"value": 3})
+        self.cache.set("key3", {"value": 3})
 
     def test_store_and_retrieve_with_serialization(self):
         """Test storing and retrieving objects using custom serialization."""
@@ -215,10 +241,13 @@ class TestDiskCache(unittest.TestCase):
         )
         cache.set("test-key", test_prompt)
 
-        # Should raise when deserializer fails.
-        with self.assertRaises(RuntimeError) as cm:
+        # assert a serde error is treated like a cache miss.
+        try:
             cache.get("test-key")
-        self.assertIn("Deserialization failed", str(cm.exception))
+        except KeyError:
+            pass
+        else:
+            assert False, "should fail"
 
 
 if __name__ == "__main__":
