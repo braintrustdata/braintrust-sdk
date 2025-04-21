@@ -12,13 +12,34 @@ from braintrust.prompt_cache import disk_cache
 class TestDiskCache(unittest.TestCase):
     def setUp(self):
         self.cache_dir = tempfile.mkdtemp()
-        self.cache = disk_cache.DiskCache[dict](cache_dir=self.cache_dir, max_size=3)
+        self.cache = disk_cache.DiskCache[dict](
+            cache_dir=self.cache_dir,
+            max_size=3,
+            log_warnings=False,
+        )
 
     def tearDown(self):
         try:
+            os.chmod(self.cache_dir, 0o777)
             shutil.rmtree(self.cache_dir, ignore_errors=True)
         except Exception:
             pass
+
+    def test_eviction_works(self):
+        keys = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
+        max_size = self.cache._max_size
+        for i, k in enumerate(keys):
+            # set the key and make sure it's still there.
+            self.cache.set(k, {"value": i})
+            assert self.cache.get(k) == {"value": i}
+            # Set the key. Make sure the 2 previous things are there, and nothing e
+            for n in range(0, len(keys)):
+                should_exist = (i - max_size) < n and n <= i
+                if should_exist:
+                    assert self.cache.get(keys[n]) == {"value": n}
+                else:
+                    with self.assertRaises(KeyError):
+                        self.cache.get(keys[n])
 
     def test_keys_with_invalid_paths(self):
         data = {"1": "2"}
@@ -26,11 +47,11 @@ class TestDiskCache(unittest.TestCase):
             ".",
             "..",
             "a/b/c",
-            "invalid/name",
             "my\0file.txt",
             "file*.txT",
             "what?.txt",
             " asdf ",
+            "invalid/name",
             "my<file>.txt",
             "a\nb",
         ]
