@@ -29,6 +29,7 @@ class TestDiskCache(unittest.TestCase):
         keys = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
         max_size = self.cache._max_size
         for i, k in enumerate(keys):
+            time.sleep(0.05)  # make sure the mtimes are different
             # set the key and make sure it's still there.
             self.cache.set(k, {"value": i})
             assert self.cache.get(k) == {"value": i}
@@ -56,6 +57,7 @@ class TestDiskCache(unittest.TestCase):
             "a\nb",
         ]
         for k in weird_keys:
+            time.sleep(0.05)  # make sure the mtimes are different
             self.cache.set(k, data)
             result = self.cache.get(k)
             assert data == result
