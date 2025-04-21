@@ -395,6 +395,7 @@ function makeEvalParametersSchema(
             default: value.default
               ? promptDefinitionToPromptData(value.default)
               : undefined,
+            description: value.description,
           },
         ];
       } else if (value instanceof z.ZodType) {
@@ -404,6 +405,7 @@ function makeEvalParametersSchema(
             type: "data",
             schema: zodToJsonSchema(value),
             default: value.default,
+            description: value.description,
           },
         ];
       } else {

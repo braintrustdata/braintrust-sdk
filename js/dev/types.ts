@@ -34,11 +34,13 @@ export const evalParametersSerializedSchema = z.record(
     z.object({
       type: z.literal("prompt"),
       default: promptDataSchema.optional(),
+      description: z.string().optional(),
     }),
     z.object({
       type: z.literal("data"),
       schema: z.record(z.unknown()), // JSON Schema
       default: z.unknown().optional(),
+      description: z.string().optional(),
     }),
   ]),
 );

@@ -9,6 +9,7 @@ export const evalParametersSchema = z.record(
     z.object({
       type: z.literal("prompt"),
       default: promptDefinitionSchema.optional(),
+      description: z.string().optional(),
     }),
     z.instanceof(z.ZodType), // For Zod schemas
   ]),
