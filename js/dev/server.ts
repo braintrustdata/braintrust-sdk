@@ -18,7 +18,6 @@ import {
 } from "./authorize";
 import {
   FunctionId,
-  promptDataSchema,
   RunEvalRequest,
   SSEProgressEventData,
 } from "@braintrust/core/typespecs";
@@ -29,7 +28,6 @@ import {
   initDataset,
   LoginOptions,
   loginToState,
-  Prompt,
 } from "../src/logger";
 import { LRUCache } from "../src/prompt-cache/lru-cache";
 import {
@@ -44,7 +42,7 @@ import {
   EvaluatorManifest,
   evalParametersSerializedSchema,
 } from "./types";
-import { EvalParameters, InferParameters } from "../src/eval-parameters";
+import { EvalParameters, validateParameters } from "../src/eval-parameters";
 import { z } from "zod";
 import { invoke } from "../src/functions/invoke";
 import { promptDefinitionToPromptData } from "../src/framework2";
@@ -268,40 +266,6 @@ const asyncHandler =
   (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
-
-function validateParameters<Parameters extends EvalParameters = EvalParameters>(
-  parameters: Record<string, unknown>,
-  parameterSchema: Parameters,
-): InferParameters<Parameters> {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return Object.fromEntries(
-    Object.entries(parameterSchema).map(([name, schema]) => {
-      const value = parameters[name];
-      try {
-        if ("type" in schema && schema.type === "prompt") {
-          const promptData = value
-            ? promptDataSchema.parse(value)
-            : schema.default
-              ? promptDefinitionToPromptData(schema.default)
-              : undefined;
-          if (!promptData) {
-            throw new Error(`Parameter '${name}' is required`);
-          }
-          return [name, Prompt.fromPromptData(name, promptData)];
-        } else {
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          const schemaCasted = schema as z.ZodSchema<unknown>;
-          return [name, schemaCasted.parse(value)];
-        }
-      } catch (e) {
-        console.error("Error validating parameter", name, e);
-        throw Error(
-          `Invalid parameter '${name}': ${e instanceof Error ? e.message : String(e)}`,
-        );
-      }
-    }),
-  ) as InferParameters<Parameters>;
-}
 
 const loginCache = new LRUCache<string, BraintrustState>({
   max: 32, // TODO: Make this configurable

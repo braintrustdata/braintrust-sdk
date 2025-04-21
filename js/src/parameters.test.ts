@@ -1,7 +1,12 @@
-import { expect, test } from "vitest";
+import { expect, test, beforeAll } from "vitest";
 import { runEvaluator } from "./framework";
 import { z } from "zod";
 import { type ProgressReporter } from "./progress";
+import { configureNode } from "./node";
+
+beforeAll(() => {
+  configureNode();
+});
 
 class NoopProgressReporter implements ProgressReporter {
   public start() {}
@@ -17,7 +22,8 @@ test("parameters are passed to task", async () => {
       evalName: "test",
       data: [{ input: "hello" }],
       task: async (input: string, { parameters }) => {
-        return `${parameters.prefix}${input}${parameters.suffix}`;
+        const output = `${parameters.prefix}${input}${parameters.suffix}`;
+        return output;
       },
       scores: [],
       parameters: {
@@ -31,11 +37,12 @@ test("parameters are passed to task", async () => {
     { prefix: "start:", suffix: ":end" },
   );
 
+  expect(out.results).toHaveLength(1);
   expect(out.results[0].output).toBe("start:hello:end");
 });
 
 test("prompt parameter is passed correctly", async () => {
-  const out = await runEvaluator(
+  const result = await runEvaluator(
     null,
     {
       projectName: "test-prompt-parameter",
@@ -43,7 +50,11 @@ test("prompt parameter is passed correctly", async () => {
       data: [{ input: "test input" }],
       task: async (input: string, { parameters }) => {
         // Verify the prompt parameter has the expected structure
-        expect(parameters.main).toHaveProperty("build");
+        if (!parameters.main || typeof parameters.main.build !== "function") {
+          throw new Error(
+            "Prompt parameter 'main' is missing or does not have a build function",
+          );
+        }
         return input;
       },
       scores: [],
@@ -70,18 +81,20 @@ test("prompt parameter is passed correctly", async () => {
     undefined,
   );
 
-  expect(out.results[0].output).toBe("test input");
+  expect(result.results).toHaveLength(1);
+  expect(result.results[0].output).toBe("test input");
 });
 
 test("custom parameter values override defaults", async () => {
-  const out = await runEvaluator(
+  const result = await runEvaluator(
     null,
     {
       projectName: "test-custom-parameters",
       evalName: "test",
       data: [{ input: "hello" }],
       task: async (input: string, { parameters }) => {
-        return `${parameters.prefix}${input}${parameters.suffix}`;
+        const output = `${parameters.prefix}${input}${parameters.suffix}`;
+        return output;
       },
       scores: [],
       parameters: {
@@ -98,11 +111,12 @@ test("custom parameter values override defaults", async () => {
     },
   );
 
-  expect(out.results[0].output).toBe("custom:hello:custom");
+  expect(result.results).toHaveLength(1);
+  expect(result.results[0].output).toBe("custom:hello:custom");
 });
 
 test("array parameter is handled correctly", async () => {
-  const out = await runEvaluator(
+  const result = await runEvaluator(
     null,
     {
       projectName: "test-array-parameter",
@@ -124,11 +138,12 @@ test("array parameter is handled correctly", async () => {
     undefined,
   );
 
-  expect(out.results[0].output).toBe("test");
+  expect(result.results).toHaveLength(1);
+  expect(result.results[0].output).toBe("test");
 });
 
 test("object parameter is handled correctly", async () => {
-  const out = await runEvaluator(
+  const result = await runEvaluator(
     null,
     {
       projectName: "test-object-parameter",
@@ -160,5 +175,6 @@ test("object parameter is handled correctly", async () => {
     undefined,
   );
 
-  expect(out.results[0].output).toBe("test");
+  expect(result.results).toHaveLength(1);
+  expect(result.results[0].output).toBe("test");
 });

@@ -34,7 +34,11 @@ import {
 } from "./logger";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import { isEmpty, InternalAbortError } from "./util";
-import { EvalParameters, InferParameters } from "./eval-parameters";
+import {
+  EvalParameters,
+  InferParameters,
+  validateParameters,
+} from "./eval-parameters";
 
 export type BaseExperiment<
   Input,
@@ -780,6 +784,8 @@ async function runEvaluatorInternal(
   }
   let dataResult =
     typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
+
+  parameters = validateParameters(parameters ?? {}, evaluator.parameters ?? {});
 
   if ("_type" in dataResult) {
     if (dataResult._type !== "BaseExperiment") {
