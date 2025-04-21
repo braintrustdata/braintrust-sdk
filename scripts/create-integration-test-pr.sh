@@ -83,8 +83,8 @@ PR_EXISTS=$(gh pr list --state open --head "$PARENT_BRANCH_NAME" --json number |
 # Create Pull Request if not exists
 if [ "$PR_EXISTS" = "0" ]; then
   gh pr create \
-    --title "Bot: Update SDK submodule to $BRANCH_NAME" \
-    --body "This PR updates the SDK submodule to point to the latest commit from the branch $BRANCH_NAME.
+    --title "[bot] update SDK submodule to $BRANCH_NAME" \
+    --body "Update the SDK submodule to the latest commit on branch $BRANCH_NAME.
 
 Author: $COMMIT_AUTHOR
 SDK PR: $SDK_PR_URL
