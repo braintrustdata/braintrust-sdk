@@ -66,19 +66,9 @@ export function runDevServer(
 
   const app = express();
 
-  // TODO:
-  // - Apply appropriate request body size, response body size, and CORS headers
-  // - Auth, can use the token from the incoming request (if specified) to override
-  //   whatever is in the environment.
-  //    - Maybe allow the user to explicitly opt into authenticating via local credentials.
-  // - Allow the task function to return a BraintrustStream, and therefore stream its results
-  //   to the client instead. If we do this, maybe we can simplify/remove the progress stuff
-  //   from the task function.
   app.use(express.json({ limit: "1gb" }));
-
   console.log("Starting server");
   app.use(
-    // These should match the settings in api/app.py.
     cors({
       origin: checkOrigin,
       methods: ["GET", "PATCH", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -123,11 +113,9 @@ export function runDevServer(
         req.body,
       );
 
-      // First, log in
       const state = await cachedLogin({ apiKey: req.ctx?.token });
 
       const evaluator = allEvaluators[name];
-
       if (!evaluator) {
         res.status(404).json({ error: `Evaluator '${name}' not found` });
         return;
