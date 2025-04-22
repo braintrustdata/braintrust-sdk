@@ -8,6 +8,7 @@ import {
   EvalScorer,
   EvaluatorDef,
   OneOrMoreScores,
+  scorerName,
 } from "../src/framework";
 import { errorHandler } from "./errorHandler";
 import {
@@ -99,6 +100,9 @@ export function runDevServer(
           parameters: evaluator.parameters
             ? makeEvalParametersSchema(evaluator.parameters)
             : undefined,
+          scores: evaluator.scores.map((score, idx) => ({
+            name: scorerName(score, idx),
+          })),
         },
       ]),
     );
@@ -178,10 +182,11 @@ export function runDevServer(
           {
             ...evaluator,
             data: evalData.data,
-            scores:
+            scores: evaluator.scores.concat(
               scores?.map((score) =>
                 makeScorer(score.name, score.function_id),
               ) ?? [],
+            ),
             task,
             state,
           },
@@ -332,8 +337,7 @@ function makeScorer(
   };
 
   Object.defineProperties(ret, {
-    name: { value: name },
-    isRemote: { value: true },
+    name: { value: `Remote eval scorer (${name})` },
   });
 
   return ret;

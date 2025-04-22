@@ -1008,15 +1008,13 @@ async function runEvaluatorInternal(
                   return results;
                 };
 
-                const results = await ("isRemote" in score && score.isRemote
-                  ? runScorer(NOOP_SPAN)
-                  : rootSpan.traced(runScorer, {
-                      name: scorerNames[score_idx],
-                      spanAttributes: {
-                        type: SpanTypeAttribute.SCORE,
-                      },
-                      event: { input: scoringArgs },
-                    }));
+                const results = await rootSpan.traced(runScorer, {
+                  name: scorerNames[score_idx],
+                  spanAttributes: {
+                    type: SpanTypeAttribute.SCORE,
+                  },
+                  event: { input: scoringArgs },
+                });
                 return { kind: "score", value: results } as const;
               } catch (e) {
                 return { kind: "error", value: e } as const;
