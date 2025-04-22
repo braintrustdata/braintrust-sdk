@@ -3,6 +3,9 @@ ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 VENV_PRE_COMMIT := ${ROOT_DIR}/venv/.pre_commit
 VENV_DOCS_REBUILD := ${ROOT_DIR}/venv/.docs_rebuild
 
+
+
+
 .PHONY: all
 all: ${VENV_PRE_COMMIT}
 
