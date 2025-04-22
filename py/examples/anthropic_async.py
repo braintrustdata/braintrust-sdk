@@ -31,7 +31,7 @@ async def stream():
 
         # Get the final message within the context manager
         msg = await stream.get_final_message()
-        return msg.to_json()
+        print(msg.to_json())
 
 
 async def create():
@@ -42,18 +42,31 @@ async def create():
             {"role": "user", "content": "Write me a haiku about creation."},
         ],
     )
-    return msg.to_json()
+    print(msg.to_json())
+
+
+async def create_with_stream():
+    stream = await client.messages.create(
+        model="claude-3-5-sonnet-latest",
+        max_tokens=1024,
+        messages=[
+            {"role": "user", "content": "Write me a haiku about creation."},
+        ],
+        stream=True,
+    )
+
+    async for event in stream:
+        print(event.to_json())
 
 
 async def main() -> None:
     promises = []
-    for target in [stream, create]:
+    for target in [stream, create, create_with_stream]:
         print(f"Running {target.__name__}")
         promises.append(target())
 
     for promise in promises:
         msg = await promise
-        print(msg)
 
 
 if __name__ == "__main__":

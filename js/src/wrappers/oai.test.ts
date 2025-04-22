@@ -16,6 +16,7 @@ import { parseMetricsFromUsage } from "./oai_responses";
 
 // use the cheapest model for tests
 const TEST_MODEL = "gpt-4o-mini";
+const TEST_SUITE_OPTIONS = { timeout: 10000 };
 
 try {
   configureNode();
@@ -27,7 +28,7 @@ test("openai is installed", () => {
   assert.ok(OpenAI);
 });
 
-describe("openai client unit tests", () => {
+describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
   let oai: OpenAI;
   let client: OpenAI;
   let backgroundLogger: any;
@@ -254,10 +255,6 @@ describe("openai client unit tests", () => {
     assert.isTrue(m.tokens > 0);
     assert.isTrue(m.prompt_tokens > 0);
     assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
-  });
-
-  afterEach(() => {
-    _exportsForTestingOnly.clearTestBackgroundLogger();
   });
 });
 
