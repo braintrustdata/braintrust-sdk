@@ -547,40 +547,47 @@ export const projectScoreCategory = z
   .openapi("ProjectScoreCategory");
 export type ProjectScoreCategory = z.infer<typeof projectScoreCategory>;
 
-export const automationRuleSchema = z
+const projectAutomationBaseSchema =
+  generateBaseTableSchema("project automation");
+export const projectAutomationSchema = z
   .object({
-    name: z.string().describe("Name of the automation rule"),
-    description: z
-      .string()
-      .optional()
-      .describe("Description of the automation rule"),
-    event_type: z
-      .enum(["logs"])
-      .describe("The event which starts the automation execution"),
-    btql_filter: z
-      .string()
-      .describe("BTQL filter to identify rows for the automation rule"),
-    interval_seconds: z
-      .number()
-      .min(1)
-      .max(30 * 24 * 60 * 60)
-      .describe(
-        "Perform the triggered action at most once in this interval of seconds",
-      ),
-    action: z
+    id: projectAutomationBaseSchema.shape.id,
+    project_id: projectAutomationBaseSchema.shape.project_id,
+    user_id: projectAutomationBaseSchema.shape.user_id,
+    created: projectAutomationBaseSchema.shape.created,
+    name: projectAutomationBaseSchema.shape.name,
+    description: projectAutomationBaseSchema.shape.description,
+    config: z
       .object({
-        type: z
-          .enum(["webhook"])
+        event_type: z
+          .enum(["logs"])
+          .describe("The event which starts the automation execution"),
+        btql_filter: z
+          .string()
+          .describe("BTQL filter to identify rows for the automation rule"),
+        interval_seconds: z
+          .number()
+          .min(1)
+          .max(30 * 24 * 60 * 60)
           .describe(
-            "The type of action to take when the automation rule is triggered",
+            "Perform the triggered action at most once in this interval of seconds",
           ),
-        url: z.string().describe("The webhook URL to send the request to"),
+        action: z
+          .object({
+            type: z
+              .enum(["webhook"])
+              .describe(
+                "The type of action to take when the automation rule is triggered",
+              ),
+            url: z.string().describe("The webhook URL to send the request to"),
+          })
+          .describe("The action to take when the automation rule is triggered"),
       })
-      .describe("The action to take when the automation rule is triggered"),
+      .describe("The configuration for the automation rule"),
   })
-  .openapi("AutomationRule");
+  .openapi("ProjectAutomation");
 
-export type AutomationRule = z.infer<typeof automationRuleSchema>;
+export type ProjectAutomation = z.infer<typeof projectAutomationSchema>;
 
 export const onlineScoreConfigSchema = z
   .object({
@@ -607,7 +614,6 @@ export const onlineScoreConfigSchema = z
       .boolean()
       .nullish()
       .describe("Whether to skip adding scorer spans when computing scores"),
-    automations: z.array(automationRuleSchema).nullish(),
   })
   .refine((val) => val.apply_to_root_span || val.apply_to_span_names?.length, {
     message: "Online scoring rule does not apply to any rows",
@@ -1063,6 +1069,21 @@ export const aclBatchUpdateResponseSchema = z
 export type AclBatchUpdateResponse = z.infer<
   typeof aclBatchUpdateResponseSchema
 >;
+
+export const createProjectAutomationSchema = projectAutomationSchema
+  .pick({
+    project_id: true,
+    name: true,
+    description: true,
+    config: true,
+  })
+  .openapi("CreateProjectAutomation");
+
+export const patchProjectAutomationSchema = objectNullish(
+  createProjectAutomationSchema,
+)
+  .omit({ project_id: true })
+  .openapi("PatchProjectAutomation");
 
 export const createProjectScoreSchema = projectScoreSchema
   .pick({
