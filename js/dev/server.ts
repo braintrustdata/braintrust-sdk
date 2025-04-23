@@ -263,6 +263,7 @@ export function runDevServer(
         } else {
           res.status(500).json({ error: e });
         }
+      } finally {
         res.end();
       }
     }),
