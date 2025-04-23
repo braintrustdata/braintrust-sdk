@@ -484,7 +484,7 @@ async function runAndWatch({
   await new Promise(() => {});
 }
 
-export async function buildEvalautors(
+export async function buildEvaluators(
   handles: Record<string, FileHandle>,
   opts: EvaluatorOpts,
 ): Promise<{ evaluators: EvaluatorState; buildResults: BtBuildResult[] }> {
