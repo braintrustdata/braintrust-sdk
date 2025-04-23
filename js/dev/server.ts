@@ -19,6 +19,7 @@ import {
 } from "./authorize";
 import {
   FunctionId,
+  InvokeFunctionRequest,
   RunEvalRequest,
   SSEProgressEventData,
 } from "@braintrust/core/typespecs";
@@ -26,6 +27,7 @@ import {
   BaseMetadata,
   BraintrustState,
   EvalCase,
+  getSpanParentObject,
   initDataset,
   LoginOptions,
   loginToState,
@@ -187,7 +189,7 @@ export function runDevServer(
             data: evalData.data,
             scores: evaluator.scores.concat(
               scores?.map((score) =>
-                makeScorer(score.name, score.function_id),
+                makeScorer(state, score.name, score.function_id),
               ) ?? [],
             ),
             task,
@@ -339,16 +341,28 @@ async function getDatasetById({
 }
 
 function makeScorer(
+  state: BraintrustState,
   name: string,
   score: FunctionId,
 ): EvalScorer<unknown, unknown, unknown, BaseMetadata> {
   const ret = async (input: EvalCase<unknown, unknown, BaseMetadata>) => {
-    const result = await invoke({
+    const request: InvokeFunctionRequest = {
       ...score,
       input,
+      parent: await getSpanParentObject().export(),
+      stream: false,
+      mode: "auto",
+      strict: true,
+    };
+    const result = await state.proxyConn().post(`function/invoke`, request, {
+      headers: {
+        Accept: "application/json",
+      },
     });
+    const data = await result.json();
+    // NOTE: Ideally we can parse this value with a zod schema.
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    return result as OneOrMoreScores;
+    return data as OneOrMoreScores;
   };
 
   Object.defineProperties(ret, {
