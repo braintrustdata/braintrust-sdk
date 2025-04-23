@@ -47,7 +47,6 @@ import {
 } from "./types";
 import { EvalParameters, validateParameters } from "../src/eval-parameters";
 import { z } from "zod";
-import { invoke } from "../src/functions/invoke";
 import { promptDefinitionToPromptData } from "../src/framework2";
 import zodToJsonSchema from "zod-to-json-schema";
 export interface DevServerOpts {
@@ -71,6 +70,13 @@ export function runDevServer(
 
   app.use(express.json({ limit: "1gb" }));
   console.log("Starting server");
+  app.use((req, res, next) => {
+    if (req.headers["access-control-request-private-network"]) {
+      res.setHeader("Access-Control-Allow-Private-Network", "true");
+    }
+    next();
+  });
+
   app.use(
     cors({
       origin: checkOrigin,
