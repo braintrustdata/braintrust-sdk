@@ -13,7 +13,7 @@ export type {
 } from "@braintrust/core";
 export type {
   EvaluatorManifest,
-  EvalParamaterSerializedSchema,
+  EvalParameterSerializedSchema,
   EvaluatorDefinition,
   EvaluatorDefinitions,
 } from "../dev/types";
