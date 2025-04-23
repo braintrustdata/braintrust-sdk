@@ -21,6 +21,7 @@ export const evalBodySchema = z.object({
     )
     .nullish(),
   parent: invokeParent.optional(),
+  stream: z.boolean().optional(),
 });
 
 export type EvaluatorManifest = Record<

@@ -113,9 +113,8 @@ export function runDevServer(
     "/eval",
     checkAuthorized,
     asyncHandler(async (req, res) => {
-      const { name, parameters, parent, data, scores } = evalBodySchema.parse(
-        req.body,
-      );
+      const { name, parameters, parent, data, scores, stream } =
+        evalBodySchema.parse(req.body);
 
       const state = await cachedLogin({ apiKey: req.ctx?.token });
 
@@ -157,9 +156,13 @@ export function runDevServer(
       console.log("Starting eval", evaluator.evalName);
 
       // Set up SSE headers
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
+      if (stream) {
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache");
+        res.setHeader("Connection", "keep-alive");
+      } else {
+        res.setHeader("Content-Type", "application/json");
+      }
 
       const task = async (
         input: unknown,
@@ -200,48 +203,60 @@ export function runDevServer(
               increment: (name) => {},
             },
             stream: (data: SSEProgressEventData) => {
-              res.write(
-                serializeSSEEvent({
-                  event: "progress",
-                  data: JSON.stringify(data),
-                }),
-              );
+              if (stream) {
+                res.write(
+                  serializeSSEEvent({
+                    event: "progress",
+                    data: JSON.stringify(data),
+                  }),
+                );
+              }
             },
             onStart: (metadata) => {
-              res.write(
-                serializeSSEEvent({
-                  event: "start",
-                  data: JSON.stringify(metadata),
-                }),
-              );
+              if (stream) {
+                res.write(
+                  serializeSSEEvent({
+                    event: "start",
+                    data: JSON.stringify(metadata),
+                  }),
+                );
+              }
             },
             parent: parseParent(parent),
             parameters: parameters ?? {},
           },
         );
 
-        res.write(
-          serializeSSEEvent({
-            event: "summary",
-            data: JSON.stringify(summary),
-          }),
-        );
-        res.write(
-          serializeSSEEvent({
-            event: "done",
-            data: "",
-          }),
-        );
+        if (stream) {
+          res.write(
+            serializeSSEEvent({
+              event: "summary",
+              data: JSON.stringify(summary.summary),
+            }),
+          );
+          res.write(
+            serializeSSEEvent({
+              event: "done",
+              data: "",
+            }),
+          );
+        } else {
+          res.json(summary.summary);
+        }
       } catch (e) {
         console.error("Error running eval", e);
-        res.write(
-          serializeSSEEvent({
-            event: "error",
-            data: JSON.stringify(e),
-          }),
-        );
+        if (stream) {
+          res.write(
+            serializeSSEEvent({
+              event: "error",
+              data: JSON.stringify(e),
+            }),
+          );
+        } else {
+          res.status(500).json({ error: e });
+        }
+        res.end();
       }
-      res.end();
     }),
   );
 
