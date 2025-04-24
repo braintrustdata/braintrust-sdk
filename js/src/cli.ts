@@ -515,7 +515,7 @@ async function runOnce(
       )
     : null;
 
-  const { evaluators, buildResults } = await buildEvalautors(handles, opts);
+  const { evaluators, buildResults } = await buildEvaluators(handles, opts);
 
   if (opts.list) {
     for (const evaluator of evaluators.evaluators) {
@@ -934,7 +934,7 @@ async function run(args: RunArgs) {
 
   if (args.dev) {
     // XXX We should watch these files (or support a --watch flag).
-    const { evaluators } = await buildEvalautors(handles, evaluatorOpts);
+    const { evaluators } = await buildEvaluators(handles, evaluatorOpts);
     const allEvaluators = Object.values(evaluators.evaluators).map(
       (e) => e.evaluator,
     );
