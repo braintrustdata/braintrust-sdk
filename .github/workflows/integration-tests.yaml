@@ -6,6 +6,8 @@ on:
 
 jobs:
   open-pr:
+    # Add this label to a PR to skip running these jobs.
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-integration-tests') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

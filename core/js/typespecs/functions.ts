@@ -58,6 +58,14 @@ export const codeBundleSchema = z
   .openapi("CodeBundle");
 export type CodeBundle = z.infer<typeof codeBundleSchema>;
 
+export const remoteEvalDataSchema = z.object({
+  type: z.literal("remote_eval"),
+  endpoint: z.string(),
+  eval_name: z.string(),
+  parameters: z.record(z.string(), z.unknown()),
+});
+export type RemoteEvalData = z.infer<typeof remoteEvalDataSchema>;
+
 export const functionDataSchema = z
   .union([
     z
@@ -90,6 +98,10 @@ export const functionDataSchema = z
     graphDataSchema.openapi({
       title: "graph",
       description: "This feature is preliminary and unsupported.",
+    }),
+    remoteEvalDataSchema.openapi({
+      title: "remote_eval",
+      description: "A remote eval to run",
     }),
     z
       .object({

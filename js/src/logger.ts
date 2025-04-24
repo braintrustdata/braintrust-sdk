@@ -5206,6 +5206,7 @@ export class Prompt<
 > {
   private parsedPromptData: PromptData | undefined;
   private hasParsedPromptData = false;
+  private readonly __braintrust_prompt_marker = true;
 
   constructor(
     private metadata: PromptRowWithId<HasId, HasVersion> | PromptSessionEvent,
@@ -5214,6 +5215,7 @@ export class Prompt<
   ) {}
 
   public get id(): HasId extends true ? string : string | undefined {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return this.metadata.id as HasId extends true ? string : string | undefined;
   }
 
@@ -5238,6 +5240,7 @@ export class Prompt<
   public get version(): HasId extends true
     ? TransactionId
     : TransactionId | undefined {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return this.metadata[TRANSACTION_ID_FIELD] as HasId extends true
       ? TransactionId
       : TransactionId | undefined;
@@ -5245,6 +5248,10 @@ export class Prompt<
 
   public get options(): NonNullable<PromptData["options"]> {
     return this.getParsedPromptData()?.options || {};
+  }
+
+  public get promptData(): PromptData {
+    return this.getParsedPromptData()!;
   }
 
   /**
@@ -5471,6 +5478,28 @@ export class Prompt<
       this.hasParsedPromptData = true;
     }
     return this.parsedPromptData!;
+  }
+
+  public static isPrompt(data: unknown): data is Prompt<boolean, boolean> {
+    return (
+      typeof data === "object" &&
+      data !== null &&
+      "__braintrust_prompt_marker" in data
+    );
+  }
+  public static fromPromptData(
+    name: string,
+    promptData: PromptData,
+  ): Prompt<false, false> {
+    return new Prompt(
+      {
+        name: name,
+        slug: name,
+        prompt_data: promptData,
+      },
+      {},
+      false,
+    );
   }
 }
 
