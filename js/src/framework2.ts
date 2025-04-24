@@ -5,13 +5,13 @@ import { z } from "zod";
 import {
   FunctionType,
   IfExists,
-  Message,
-  ModelParams,
   SavedFunctionId,
   PromptBlockData,
   PromptData,
   toolFunctionDefinitionSchema,
   type ToolFunctionDefinition,
+  chatCompletionMessageParamSchema,
+  modelParamsSchema,
 } from "@braintrust/core/typespecs";
 import { TransactionId } from "@braintrust/core";
 import { Prompt, PromptRowWithId } from "./logger";
@@ -336,13 +336,23 @@ interface PromptNoTrace {
 }
 
 // This roughly maps to promptBlockDataSchema, but is more ergonomic for the user.
-type PromptContents =
-  | {
-      prompt: string;
-    }
-  | {
-      messages: Message[];
-    };
+export const promptContentsSchema = z.union([
+  z.object({
+    prompt: z.string(),
+  }),
+  z.object({
+    messages: z.array(chatCompletionMessageParamSchema),
+  }),
+]);
+
+export const promptDefinitionSchema = promptContentsSchema.and(
+  z.object({
+    model: z.string(),
+    params: modelParamsSchema.optional(),
+  }),
+);
+
+export type PromptDefinition = z.infer<typeof promptDefinitionSchema>;
 
 export type PromptOpts<
   HasId extends boolean,
@@ -356,10 +366,8 @@ export type PromptOpts<
   (HasTools extends true ? Partial<PromptTools> : {}) &
   // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   (HasNoTrace extends true ? Partial<PromptNoTrace> : {}) &
-  PromptContents & {
-    model: string;
-    params?: ModelParams;
-  };
+  PromptDefinition;
+
 export class PromptBuilder {
   constructor(private readonly project: Project) {}
 
@@ -380,31 +388,10 @@ export class PromptBuilder {
       }
     }
 
-    const promptBlock: PromptBlockData =
-      "messages" in opts
-        ? {
-            type: "chat",
-            messages: opts.messages,
-            tools:
-              rawTools && rawTools.length > 0
-                ? JSON.stringify(rawTools)
-                : undefined,
-          }
-        : {
-            type: "completion",
-            content: opts.prompt,
-          };
-
     const slug =
       opts.slug ?? slugifyLib(opts.name, { lower: true, strict: true });
 
-    const promptData: PromptData = {
-      prompt: promptBlock,
-      options: {
-        model: opts.model,
-        params: opts.params,
-      },
-    };
+    const promptData: PromptData = promptDefinitionToPromptData(opts, rawTools);
 
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const promptRow: PromptRowWithId<HasId, HasVersion> = {
@@ -432,4 +419,32 @@ export class PromptBuilder {
 
     return prompt;
   }
+}
+
+export function promptDefinitionToPromptData(
+  promptDefinition: PromptDefinition,
+  rawTools?: ToolFunctionDefinition[],
+): PromptData {
+  const promptBlock: PromptBlockData =
+    "messages" in promptDefinition
+      ? {
+          type: "chat",
+          messages: promptDefinition.messages,
+          tools:
+            rawTools && rawTools.length > 0
+              ? JSON.stringify(rawTools)
+              : undefined,
+        }
+      : {
+          type: "completion",
+          content: promptDefinition.prompt,
+        };
+
+  return {
+    prompt: promptBlock,
+    options: {
+      model: promptDefinition.model,
+      params: promptDefinition.params,
+    },
+  };
 }
