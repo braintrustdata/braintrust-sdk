@@ -34,6 +34,11 @@ import {
 } from "./logger";
 import { BarProgressReporter, ProgressReporter } from "./progress";
 import { isEmpty, InternalAbortError } from "./util";
+import {
+  EvalParameters,
+  InferParameters,
+  validateParameters,
+} from "./eval-parameters";
 
 export type BaseExperiment<
   Input,
@@ -85,10 +90,17 @@ export type EvalTask<
   Input,
   Output,
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType,
+  Metadata extends BaseMetadata,
+  Parameters extends EvalParameters,
 > =
-  | ((input: Input, hooks: EvalHooks<Expected, Metadata>) => Promise<Output>)
-  | ((input: Input, hooks: EvalHooks<Expected, Metadata>) => Output);
+  | ((
+      input: Input,
+      hooks: EvalHooks<Expected, Metadata, Parameters>,
+    ) => Promise<Output>)
+  | ((
+      input: Input,
+      hooks: EvalHooks<Expected, Metadata, Parameters>,
+    ) => Output);
 
 export type TaskProgressEvent = Omit<
   SSEProgressEventData,
@@ -97,7 +109,8 @@ export type TaskProgressEvent = Omit<
 
 export interface EvalHooks<
   Expected,
-  Metadata extends BaseMetadata = DefaultMetadataType,
+  Metadata extends BaseMetadata,
+  Parameters extends EvalParameters,
 > {
   /**
    * @deprecated Use `metadata` instead.
@@ -116,6 +129,11 @@ export interface EvalHooks<
    */
   span: Span;
   /**
+   * The current parameters being used for this specific task execution.
+   * Array parameters are converted to single values.
+   */
+  parameters: InferParameters<Parameters>;
+  /**
    * Report progress that will show up in the playground.
    */
   reportProgress: (progress: TaskProgressEvent) => void;
@@ -131,7 +149,7 @@ export type EvalScorerArgs<
   output: Output;
 };
 
-type OneOrMoreScores = Score | number | null | Array<Score>;
+export type OneOrMoreScores = Score | number | null | Array<Score>;
 
 export type EvalScorer<
   Input,
@@ -155,6 +173,7 @@ export type EvalResult<
 
 type ErrorScoreHandler = (args: {
   rootSpan: Span;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: EvalCase<any, any, any>;
   unhandledScores: string[];
 }) => Record<string, number> | undefined | void;
@@ -164,6 +183,7 @@ export interface Evaluator<
   Output,
   Expected,
   Metadata extends BaseMetadata = DefaultMetadataType,
+  Parameters extends EvalParameters = EvalParameters,
 > {
   /**
    * A function that returns a list of inputs, expected outputs, and metadata.
@@ -173,12 +193,19 @@ export interface Evaluator<
   /**
    * A function that takes an input and returns an output.
    */
-  task: EvalTask<Input, Output, Expected, Metadata>;
+  task: EvalTask<Input, Output, Expected, Metadata, Parameters>;
 
   /**
    * A set of functions that take an input, output, and expected value and return a score.
    */
   scores: EvalScorer<Input, Output, Expected, Metadata>[];
+
+  /**
+   * A set of parameters that will be passed to the evaluator.
+   * Can contain array values that will be converted to single values in the task.
+   */
+
+  parameters?: Parameters;
 
   /**
    * An optional name for the experiment.
@@ -322,7 +349,7 @@ export interface ReporterBody<EvalReport> {
     // These any's are required because these function specifications don't know
     // or need to know the types of the input/output/etc for the evaluator.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    evaluator: EvaluatorDef<any, any, any, any>,
+    evaluator: EvaluatorDef<any, any, any, any, any>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     result: EvalResultWithSummary<any, any, any, any>,
     opts: ReporterOpts,
@@ -355,10 +382,11 @@ export type EvaluatorDef<
   Output,
   Expected,
   Metadata extends BaseMetadata = DefaultMetadataType,
+  Parameters extends EvalParameters = EvalParameters,
 > = {
   projectName: string;
   evalName: string;
-} & Evaluator<Input, Output, Expected, Metadata>;
+} & Evaluator<Input, Output, Expected, Metadata, Parameters>;
 
 export type EvaluatorFile = {
   functions: CodeFunction<
@@ -369,7 +397,13 @@ export type EvaluatorFile = {
   prompts: CodePrompt[];
   evaluators: {
     [evalName: string]: {
-      evaluator: EvaluatorDef<unknown, unknown, unknown, BaseMetadata>;
+      evaluator: EvaluatorDef<
+        unknown,
+        unknown,
+        unknown,
+        BaseMetadata,
+        EvalParameters
+      >;
       reporter?: ReporterDef<unknown> | string;
     };
   };
@@ -433,7 +467,7 @@ globalThis._evals = {
   reporters: {},
 };
 
-export interface EvalOptions<EvalReport> {
+export interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
   /**
    * A `Reporter` which you can use to summarize progress after an Eval() runs.
    */
@@ -458,9 +492,13 @@ export interface EvalOptions<EvalReport> {
   parent?: string;
   /**
    * Specify this to create a custom progress-bar style reporter. Note that this interface
-   * is somewhat outdated, and my be removed in th future.
+   * is somewhat outdated, and may be removed in the future.
    */
   progress?: ProgressReporter;
+  /**
+   * The parameters to use for the evaluator.
+   */
+  parameters?: InferParameters<Parameters>;
 }
 
 export function _initializeSpanContext() {
@@ -476,12 +514,16 @@ export async function Eval<
   Expected = void,
   Metadata extends BaseMetadata = DefaultMetadataType,
   EvalReport = boolean,
+  Parameters extends EvalParameters = EvalParameters,
 >(
   name: string,
-  evaluator: Evaluator<Input, Output, Expected, Metadata>,
-  reporterOrOpts?: ReporterDef<EvalReport> | string | EvalOptions<EvalReport>,
+  evaluator: Evaluator<Input, Output, Expected, Metadata, Parameters>,
+  reporterOrOpts?:
+    | ReporterDef<EvalReport>
+    | string
+    | EvalOptions<EvalReport, Parameters>,
 ): Promise<EvalResultWithSummary<Input, Output, Expected, Metadata>> {
-  const options: EvalOptions<EvalReport> = isEmpty(reporterOrOpts)
+  const options: EvalOptions<EvalReport, Parameters> = isEmpty(reporterOrOpts)
     ? {}
     : typeof reporterOrOpts === "string"
       ? { reporter: reporterOrOpts }
@@ -500,7 +542,13 @@ export async function Eval<
         evalName,
         projectName: name,
         ...evaluator,
-      } as EvaluatorDef<unknown, unknown, unknown, BaseMetadata>,
+      } as EvaluatorDef<
+        unknown,
+        unknown,
+        unknown,
+        BaseMetadata,
+        EvalParameters
+      >,
       reporter: options.reporter,
     };
 
@@ -568,7 +616,14 @@ export async function Eval<
         ret = await withParent(
           options.parent,
           () =>
-            runEvaluator(null, evalDef, progressReporter, [], options.stream),
+            runEvaluator(
+              null,
+              evalDef,
+              progressReporter,
+              [],
+              options.stream,
+              options.parameters,
+            ),
           evaluator.state,
         );
       } else {
@@ -578,6 +633,7 @@ export async function Eval<
           progressReporter,
           [],
           options.stream,
+          options.parameters,
         );
       }
       progressReporter.stop();
@@ -686,10 +742,11 @@ export function scorerName(
 export async function runEvaluator(
   experiment: Experiment | null,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  evaluator: EvaluatorDef<any, any, any, any>,
+  evaluator: EvaluatorDef<any, any, any, any, any>,
   progressReporter: ProgressReporter,
   filters: Filter[],
   stream: ((data: SSEProgressEventData) => void) | undefined,
+  parameters?: InferParameters<EvalParameters>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   return await runEvaluatorInternal(
@@ -698,12 +755,13 @@ export async function runEvaluator(
     progressReporter,
     filters,
     stream,
+    parameters,
   );
 }
 
 export const defaultErrorScoreHandler: ErrorScoreHandler = ({
   rootSpan,
-  data,
+  data: _,
   unhandledScores,
 }) => {
   const scores = Object.fromEntries(unhandledScores.map((s) => [s, 0]));
@@ -718,6 +776,7 @@ async function runEvaluatorInternal(
   progressReporter: ProgressReporter,
   filters: Filter[],
   stream: ((data: SSEProgressEventData) => void) | undefined,
+  parameters: InferParameters<EvalParameters> | undefined,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   if (typeof evaluator.data === "string") {
@@ -725,6 +784,8 @@ async function runEvaluatorInternal(
   }
   let dataResult =
     typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
+
+  parameters = validateParameters(parameters ?? {}, evaluator.parameters ?? {});
 
   if ("_type" in dataResult) {
     if (dataResult._type !== "BaseExperiment") {
@@ -840,6 +901,7 @@ async function runEvaluatorInternal(
                 metadata,
                 expected,
                 span,
+                parameters: parameters ?? {},
                 reportProgress: (event: TaskProgressEvent) => {
                   stream?.({
                     ...event,
@@ -874,86 +936,85 @@ async function runEvaluatorInternal(
           const scoreResults = await Promise.all(
             evaluator.scores.map(async (score, score_idx) => {
               try {
-                const results = await rootSpan.traced(
-                  async (span: Span) => {
-                    const scoreResult = score(scoringArgs);
-                    const scoreValue =
-                      scoreResult instanceof Promise
-                        ? await scoreResult
-                        : scoreResult;
+                const runScorer = async (span: Span) => {
+                  const scoreResult = score(scoringArgs);
+                  const scoreValue =
+                    scoreResult instanceof Promise
+                      ? await scoreResult
+                      : scoreResult;
 
-                    if (scoreValue === null) {
-                      return null;
-                    }
+                  if (scoreValue === null) {
+                    return null;
+                  }
 
-                    if (Array.isArray(scoreValue)) {
-                      for (const s of scoreValue) {
-                        if (!(typeof s === "object" && !isEmpty(s))) {
-                          throw new Error(
-                            `When returning an array of scores, each score must be a non-empty object. Got: ${JSON.stringify(
-                              s,
-                            )}`,
-                          );
-                        }
+                  if (Array.isArray(scoreValue)) {
+                    for (const s of scoreValue) {
+                      if (!(typeof s === "object" && !isEmpty(s))) {
+                        throw new Error(
+                          `When returning an array of scores, each score must be a non-empty object. Got: ${JSON.stringify(
+                            s,
+                          )}`,
+                        );
                       }
                     }
+                  }
 
-                    const results = Array.isArray(scoreValue)
-                      ? scoreValue
-                      : typeof scoreValue === "object" && !isEmpty(scoreValue)
-                        ? [scoreValue]
-                        : [
-                            {
-                              name: scorerNames[score_idx],
-                              score: scoreValue,
-                            },
-                          ];
+                  const results = Array.isArray(scoreValue)
+                    ? scoreValue
+                    : typeof scoreValue === "object" && !isEmpty(scoreValue)
+                      ? [scoreValue]
+                      : [
+                          {
+                            name: scorerNames[score_idx],
+                            score: scoreValue,
+                          },
+                        ];
 
-                    const getOtherFields = (s: Score) => {
-                      const { metadata: _metadata, name: _name, ...rest } = s;
-                      return rest;
-                    };
+                  const getOtherFields = (s: Score) => {
+                    const { metadata: _metadata, name: _name, ...rest } = s;
+                    return rest;
+                  };
 
-                    const resultMetadata =
-                      results.length === 1
-                        ? results[0].metadata
-                        : results.reduce(
-                            (prev, s) =>
-                              mergeDicts(prev, {
-                                [s.name]: s.metadata,
-                              }),
-                            {},
-                          );
+                  const resultMetadata =
+                    results.length === 1
+                      ? results[0].metadata
+                      : results.reduce(
+                          (prev, s) =>
+                            mergeDicts(prev, {
+                              [s.name]: s.metadata,
+                            }),
+                          {},
+                        );
 
-                    const resultOutput =
-                      results.length === 1
-                        ? getOtherFields(results[0])
-                        : results.reduce(
-                            (prev, s) =>
-                              mergeDicts(prev, { [s.name]: getOtherFields(s) }),
-                            {},
-                          );
+                  const resultOutput =
+                    results.length === 1
+                      ? getOtherFields(results[0])
+                      : results.reduce(
+                          (prev, s) =>
+                            mergeDicts(prev, { [s.name]: getOtherFields(s) }),
+                          {},
+                        );
 
-                    const scores = results.reduce(
-                      (prev, s) => mergeDicts(prev, { [s.name]: s.score }),
-                      {},
-                    );
+                  const scores = results.reduce(
+                    (prev, s) => mergeDicts(prev, { [s.name]: s.score }),
+                    {},
+                  );
 
-                    span.log({
-                      output: resultOutput,
-                      metadata: resultMetadata,
-                      scores: scores,
-                    });
-                    return results;
+                  span.log({
+                    output: resultOutput,
+                    metadata: resultMetadata,
+                    scores: scores,
+                  });
+                  return results;
+                };
+
+                const results = await rootSpan.traced(runScorer, {
+                  name: scorerNames[score_idx],
+                  spanAttributes: {
+                    type: SpanTypeAttribute.SCORE,
                   },
-                  {
-                    name: scorerNames[score_idx],
-                    spanAttributes: {
-                      type: SpanTypeAttribute.SCORE,
-                    },
-                    event: { input: scoringArgs },
-                  },
-                );
+                  event: { input: scoringArgs },
+                });
                 return { kind: "score", value: results } as const;
               } catch (e) {
                 return { kind: "error", value: e } as const;

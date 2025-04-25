@@ -24,6 +24,7 @@ export * as graph from "./graph-framework";
 export { LazyValue } from "./util";
 export * from "./wrappers/oai";
 export { wrapAISDKModel } from "./wrappers/ai-sdk";
+export * from "./exports-types";
 export type {
   ParentExperimentIds,
   ParentProjectLogIds,
@@ -47,7 +48,7 @@ try {
   if (require.resolve("@anthropic-ai/sdk")) {
     wrapAnthropic = require("./wrappers/anthropic").wrapAnthropic;
   }
-} catch (e) {
+} catch {
   // do nothing
 }
 
