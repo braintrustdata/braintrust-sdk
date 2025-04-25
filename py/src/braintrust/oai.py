@@ -148,7 +148,7 @@ class ChatCompletionWrapper:
         ret = params.pop("span_info", {})
 
         # Then, copy the rest of the params
-        params = {**params}
+        params = prettify_params(params)
         messages = params.pop("messages", None)
         return merge_dicts(
             ret,
@@ -332,7 +332,7 @@ class ResponseWrapper:
         ret = params.pop("span_info", {})
 
         # Then, copy the rest of the params
-        params = {**params}
+        params = prettify_params(params)
         input = params.pop("input", None)
         return merge_dicts(
             ret,
@@ -449,7 +449,7 @@ class BaseWrapper(abc.ABC):
         # First, destructively remove span_info
         ret = params.pop("span_info", {})
 
-        params = {**params}
+        params = prettify_params(params)
         input = params.pop("input", None)
 
         return merge_dicts(
@@ -746,3 +746,28 @@ def _parse_metrics_from_usage(usage: Dict[str, Any]) -> Dict[str, Any]:
 
 def _is_numeric(v):
     return isinstance(v, (int, float, complex))
+
+
+def prettify_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    ret = {**params}
+    if "response_format" in ret:
+        ret["response_format"] = serialize_response_format(ret["response_format"])
+    return ret
+
+
+def serialize_response_format(response_format: Any) -> Any:
+    try:
+        from pydantic import BaseModel
+    except ImportError:
+        return response_format
+
+    if isinstance(response_format, type) and issubclass(response_format, BaseModel):
+        return dict(
+            type="json_schema",
+            json_schema=dict(
+                name=response_format.__name__,
+                schema=response_format.model_json_schema(),
+            ),
+        )
+    else:
+        return response_format
