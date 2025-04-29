@@ -101,6 +101,10 @@ const chatCompletionAssistantMessageParamSchema = z.object({
     .array(chatCompletionMessageToolCallSchema)
     .nullish()
     .transform((x) => x ?? undefined),
+  reasoning: z
+    .string()
+    .nullish()
+    .transform((x) => x ?? undefined),
 });
 const chatCompletionFallbackMessageParamSchema = z.object({
   role: messageRoleSchema.exclude([
