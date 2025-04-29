@@ -4196,9 +4196,9 @@ export class Experiment
 
         scores = results["scores"];
         metrics = results["metrics"];
-      } catch {
+      } catch (e) {
         console.warn(
-          "Failed to fetch experiment scores and metrics, view results in Braintrust or rerun experiment.summarize()",
+          `Failed to fetch experiment scores and metrics: ${e}\n\nView complete results in Braintrust or run experiment.summarize() again.`,
         );
         scores = {};
         metrics = {};

@@ -2967,9 +2967,9 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
                     },
                     retries=3,
                 )
-            except Exception:
+            except Exception as e:
                 _logger.warning(
-                    f"Failed to fetch experiment scores and metrics, view results in Braintrust or run experiment.summarize() again"
+                    f"Failed to fetch experiment scores and metrics: {e}\n\nView complete results in Braintrust or run experiment.summarize() again."
                 )
                 summary_items = {}
 
