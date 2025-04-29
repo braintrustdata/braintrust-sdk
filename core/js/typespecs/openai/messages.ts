@@ -87,6 +87,19 @@ export const chatCompletionMessageToolCallSchema = z
   })
   .openapi("ChatCompletionMessageToolCall");
 
+// NOTE: This is not part of the OpenAI API spec, but we use it to store
+// a generalized reasoning object for the assistant's response.
+export const reasoningSchema = z.object({
+  id: z
+    .string()
+    .nullish()
+    .transform((x) => x ?? undefined),
+  content: z
+    .string()
+    .nullish()
+    .transform((x) => x ?? undefined),
+});
+
 const chatCompletionAssistantMessageParamSchema = z.object({
   role: z.literal("assistant"),
   content: z.string().nullish(),
@@ -102,7 +115,7 @@ const chatCompletionAssistantMessageParamSchema = z.object({
     .nullish()
     .transform((x) => x ?? undefined),
   reasoning: z
-    .string()
+    .array(reasoningSchema)
     .nullish()
     .transform((x) => x ?? undefined),
 });
