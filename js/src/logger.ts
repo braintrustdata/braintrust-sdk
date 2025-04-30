@@ -4184,17 +4184,25 @@ export class Experiment
         }
       }
 
-      const results = await state.apiConn().get_json(
-        "/experiment-comparison2",
-        {
-          experiment_id: await this.id,
-          base_experiment_id: comparisonExperimentId,
-        },
-        3,
-      );
+      try {
+        const results = await state.apiConn().get_json(
+          "/experiment-comparison2",
+          {
+            experiment_id: await this.id,
+            base_experiment_id: comparisonExperimentId,
+          },
+          3,
+        );
 
-      scores = results["scores"];
-      metrics = results["metrics"];
+        scores = results["scores"];
+        metrics = results["metrics"];
+      } catch (e) {
+        console.warn(
+          `Failed to fetch experiment scores and metrics: ${e}\n\nView complete results in Braintrust or run experiment.summarize() again.`,
+        );
+        scores = {};
+        metrics = {};
+      }
     }
 
     return {
@@ -4206,7 +4214,7 @@ export class Experiment
       experimentUrl: experimentUrl,
       comparisonExperimentName: comparisonExperimentName,
       scores: scores ?? {},
-      metrics: metrics,
+      metrics: metrics ?? {},
     };
   }
 
