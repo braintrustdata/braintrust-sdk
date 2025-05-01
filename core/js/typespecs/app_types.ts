@@ -549,6 +549,7 @@ export type ProjectScoreCategory = z.infer<typeof projectScoreCategory>;
 
 const projectAutomationBaseSchema =
   generateBaseTableSchema("project automation");
+export const automationActionTypes = z.enum(["webhook", "slack"]);
 export const projectAutomationSchema = z
   .object({
     id: projectAutomationBaseSchema.shape.id,
@@ -573,14 +574,28 @@ export const projectAutomationSchema = z
             "Perform the triggered action at most once in this interval of seconds",
           ),
         action: z
-          .object({
-            type: z
-              .enum(["webhook"])
-              .describe(
-                "The type of action to take when the automation rule is triggered",
-              ),
-            url: z.string().describe("The webhook URL to send the request to"),
-          })
+          .union([
+            z.object({
+              type: z
+                .literal("webhook")
+                .describe(
+                  "The type of action to take when the automation rule is triggered",
+                ),
+              url: z
+                .string()
+                .describe("The webhook URL to send the request to"),
+            }),
+            z.object({
+              type: z
+                .literal("slack")
+                .describe(
+                  "The type of action to take when the automation rule is triggered",
+                ),
+              url: z
+                .string()
+                .describe("The Slack webhook URL to send the request to"),
+            }),
+          ])
           .describe("The action to take when the automation rule is triggered"),
       })
       .describe("The configuration for the automation rule"),
