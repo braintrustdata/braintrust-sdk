@@ -713,6 +713,14 @@ export const spanIframeSchema = z
   .openapi("SpanIFrame");
 export type SpanIFrame = z.infer<typeof spanIframeSchema>;
 
+export const remoteEvalSourceSchema = z
+  .object({
+    id: z.string().uuid(),
+    url: z.string().describe("The URL of the remote eval source"),
+  })
+  .openapi("RemoteEvalSource");
+export type RemoteEvalSource = z.infer<typeof remoteEvalSourceSchema>;
+
 const viewBaseSchema = generateBaseTableSchema("view");
 export const viewSchema = z
   .object({
