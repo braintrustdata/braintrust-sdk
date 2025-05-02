@@ -13,11 +13,12 @@ ERROR_CODES = tuple(range(1, 256))
 
 # List your package here if it's not guaranteed to be installed. We'll (try to)
 # validate things work with or without them.
-VENDOR_PACKAGES = ("anthropic", "openai")
+VENDOR_PACKAGES = ("anthropic", "openai", "pydantic_ai")
 
 # Test matrix
 ANTHROPIC_VERSIONS = (LATEST, "0.49.0", "0.48.0")
 OPENAI_VERSIONS = (LATEST, "1.71")
+PYDANTIC_AI_VERSIONS = (LATEST, "0.1.9")
 
 
 @nox.session()
@@ -33,6 +34,14 @@ def test_no_deps(session):
 
     session.run("python", "-c", "import braintrust")
     session.run("pytest", SRC, f"--ignore={SRC}/wrappers")
+
+
+@nox.session()
+@nox.parametrize("pydantic_ai_version", PYDANTIC_AI_VERSIONS)
+def test_pydantic_ai(session, pydantic_ai_version):
+    _install_test_deps(session)
+    _install(session, "pydantic_ai", pydantic_ai_version)
+    session.run("pytest", f"{SRC}/wrappers/test_pydantic_ai.py")
 
 
 @nox.session()

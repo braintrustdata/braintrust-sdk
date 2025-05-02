@@ -18,6 +18,35 @@ class NamedWrapper:
         return getattr(self.__wrapped, name)
 
 
+class AsyncResponseWrapper:
+    """Wrapper that properly preserves async context manager behavior for OpenAI responses."""
+
+    def __init__(self, response: Any):
+        self._response = response
+
+    async def __aenter__(self):
+        if hasattr(self._response, "__aenter__"):
+            return await self._response.__aenter__()
+        return self._response
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if hasattr(self._response, "__aexit__"):
+            return await self._response.__aexit__(exc_type, exc_val, exc_tb)
+
+    def __aiter__(self):
+        if hasattr(self._response, "__aiter__"):
+            return self._response.__aiter__()
+        raise TypeError("Response object is not an async iterator")
+
+    async def __anext__(self):
+        if hasattr(self._response, "__anext__"):
+            return await self._response.__anext__()
+        raise StopAsyncIteration
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._response, name)
+
+
 def log_headers(response: Any, span: Span):
     cached_value = response.headers.get(X_CACHED_HEADER) or response.headers.get(X_LEGACY_CACHED_HEADER)
 
@@ -128,7 +157,8 @@ class ChatCompletionWrapper:
                         span.end()
 
                 should_end = False
-                return gen()
+                streamer = gen()
+                return AsyncResponseWrapper(streamer)
             else:
                 log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
                 metrics = _parse_metrics_from_usage(log_response.get("usage"))
@@ -309,7 +339,8 @@ class ResponseWrapper:
                         span.end()
 
                 should_end = False
-                return gen()
+                streamer = gen()
+                return AsyncResponseWrapper(streamer)
             else:
                 log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
                 span.log(
@@ -565,7 +596,10 @@ class AsyncCompletionsV1Wrapper(NamedWrapper):
         super().__init__(completions)
 
     async def create(self, *args: Any, **kwargs: Any) -> Any:
-        return await ChatCompletionWrapper(None, self.__completions.with_raw_response.create).acreate(*args, **kwargs)
+        response = await ChatCompletionWrapper(None, self.__completions.with_raw_response.create).acreate(
+            *args, **kwargs
+        )
+        return AsyncResponseWrapper(response)
 
 
 class AsyncEmbeddingV1Wrapper(NamedWrapper):
@@ -574,7 +608,8 @@ class AsyncEmbeddingV1Wrapper(NamedWrapper):
         super().__init__(embedding)
 
     async def create(self, *args: Any, **kwargs: Any) -> Any:
-        return await EmbeddingWrapper(None, self.__embedding.with_raw_response.create).acreate(*args, **kwargs)
+        response = await EmbeddingWrapper(None, self.__embedding.with_raw_response.create).acreate(*args, **kwargs)
+        return AsyncResponseWrapper(response)
 
 
 class AsyncModerationV1Wrapper(NamedWrapper):
@@ -583,7 +618,8 @@ class AsyncModerationV1Wrapper(NamedWrapper):
         super().__init__(moderation)
 
     async def create(self, *args: Any, **kwargs: Any) -> Any:
-        return await ModerationWrapper(None, self.__moderation.with_raw_response.create).acreate(*args, **kwargs)
+        response = await ModerationWrapper(None, self.__moderation.with_raw_response.create).acreate(*args, **kwargs)
+        return AsyncResponseWrapper(response)
 
 
 class ChatV1Wrapper(NamedWrapper):
@@ -613,7 +649,8 @@ class AsyncResponsesV1Wrapper(NamedWrapper):
         super().__init__(responses)
 
     async def create(self, *args: Any, **kwargs: Any) -> Any:
-        return await ResponseWrapper(None, self.__responses.with_raw_response.create).acreate(*args, **kwargs)
+        response = await ResponseWrapper(None, self.__responses.with_raw_response.create).acreate(*args, **kwargs)
+        return AsyncResponseWrapper(response)
 
 
 class BetaCompletionsV1Wrapper(NamedWrapper):
@@ -631,7 +668,8 @@ class AsyncBetaCompletionsV1Wrapper(NamedWrapper):
         super().__init__(completions)
 
     async def parse(self, *args: Any, **kwargs: Any) -> Any:
-        return await ChatCompletionWrapper(None, self.__completions.parse).acreate(*args, **kwargs)
+        response = await ChatCompletionWrapper(None, self.__completions.parse).acreate(*args, **kwargs)
+        return AsyncResponseWrapper(response)
 
 
 class BetaChatV1Wrapper(NamedWrapper):
