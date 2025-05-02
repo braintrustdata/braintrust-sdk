@@ -58,11 +58,14 @@ jobs:
         run: |
           pylint --errors-only $(git ls-files '*.py')
       - name: Run tests
+        # FIXME[matt] eventually all of these should run through nox. Skip
+        # wrapper tests because they have 3p dependencies and will run in nox
+        # tests.
         run: |
           python -m unittest discover ./core/py/src
-          python -m unittest discover ./py/src
           pytest ./integrations/langchain-py/src
-          pytest ./py/src
+          python -m unittest discover ./py/src --ignore-dir=wrappers
+          pytest ./py/src --ignore=py/src/braintrust/wrappers
       - name: Run nox tests
         run: |
           make nox
