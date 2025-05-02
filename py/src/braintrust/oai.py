@@ -13,12 +13,10 @@ X_CACHED_HEADER = "x-bt-cached"
 class AsyncGeneratorContextManager:
     def __init__(self, gen_func, *args, **kwargs):
         self.gen_func = gen_func
-        self.args = args
-        self.kwargs = kwargs
         self.gen = None
 
     async def __aenter__(self):
-        self.gen = self.gen_func(*self.args, **self.kwargs)
+        self.gen = self.gen_func()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -30,7 +28,7 @@ class AsyncGeneratorContextManager:
 
     async def __anext__(self):
         if self.gen is None:
-            self.gen = self.gen_func(*self.args, **self.kwargs)
+            self.gen = self.gen_func()
         try:
             return await self.gen.__anext__()
         except StopAsyncIteration:
