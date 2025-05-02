@@ -4,9 +4,9 @@ from typing import Any, Dict, List, cast
 
 import pytest
 from openai import AsyncOpenAI, OpenAI
-from pydantic_ai import Agent
-from pydantic_ai.models.openai import OpenAIModel
-from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai import Agent  # pylint: disable=import-error
+from pydantic_ai.models.openai import OpenAIModel  # pylint: disable=import-error
+from pydantic_ai.providers.openai import OpenAIProvider  # pylint: disable=import-error
 
 from braintrust import logger, wrap_openai
 from braintrust.logger import ObjectMetadata, OrgProjectMetadata
