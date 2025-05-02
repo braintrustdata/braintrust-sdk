@@ -10,6 +10,33 @@ X_LEGACY_CACHED_HEADER = "x-cached"
 X_CACHED_HEADER = "x-bt-cached"
 
 
+class AsyncGeneratorContextManager:
+    def __init__(self, gen_func, *args, **kwargs):
+        self.gen_func = gen_func
+        self.args = args
+        self.kwargs = kwargs
+        self.gen = None
+
+    async def __aenter__(self):
+        self.gen = self.gen_func(*self.args, **self.kwargs)
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if hasattr(self.gen, "aclose"):
+            await self.gen.aclose()
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self.gen is None:
+            self.gen = self.gen_func(*self.args, **self.kwargs)
+        try:
+            return await self.gen.__anext__()
+        except StopAsyncIteration:
+            raise
+
+
 class NamedWrapper:
     def __init__(self, wrapped: Any):
         self.__wrapped = wrapped
@@ -53,7 +80,7 @@ class ChatCompletionWrapper:
                 raw_response = create_response
             if stream:
 
-                def gen():
+                def _gen():
                     try:
                         first = True
                         all_results = []
@@ -73,7 +100,7 @@ class ChatCompletionWrapper:
                         span.end()
 
                 should_end = False
-                return gen()
+                return _gen()
             else:
                 log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
                 metrics = _parse_metrics_from_usage(log_response.get("usage", {}))
@@ -108,7 +135,7 @@ class ChatCompletionWrapper:
 
             if stream:
 
-                async def gen():
+                async def _gen():
                     try:
                         first = True
                         all_results = []
@@ -128,7 +155,7 @@ class ChatCompletionWrapper:
                         span.end()
 
                 should_end = False
-                return gen()
+                return AsyncGeneratorContextManager(_gen)
             else:
                 log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
                 metrics = _parse_metrics_from_usage(log_response.get("usage"))
@@ -236,7 +263,7 @@ class ResponseWrapper:
                 raw_response = create_response
             if stream:
 
-                def gen():
+                def _gen():
                     try:
                         first = True
                         all_results = []
@@ -256,7 +283,7 @@ class ResponseWrapper:
                         span.end()
 
                 should_end = False
-                return gen()
+                return _gen()
             else:
                 log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
                 metrics = _parse_metrics_from_usage(log_response.get("usage"))
@@ -289,7 +316,7 @@ class ResponseWrapper:
                 raw_response = create_response
             if stream:
 
-                async def gen():
+                async def _gen():
                     try:
                         first = True
                         all_results = []
@@ -309,7 +336,7 @@ class ResponseWrapper:
                         span.end()
 
                 should_end = False
-                return gen()
+                return AsyncGeneratorContextManager(_gen)
             else:
                 log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
                 span.log(
