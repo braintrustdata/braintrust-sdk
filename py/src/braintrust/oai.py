@@ -196,7 +196,7 @@ class ChatCompletionWrapper:
         finish_reason = None
         metrics = {}
         for result in all_results:
-            usage = result.get("usage", None)
+            usage = result.get("usage")
             if usage:
                 metrics.update(_parse_metrics_from_usage(usage))
 
@@ -346,13 +346,10 @@ class ResponseWrapper:
                 return AsyncResponseWrapper(streamer)
             else:
                 log_response = _try_to_dict(raw_response)
+                metrics = _parse_metrics_from_usage(log_response.get("usage"))
+                metrics["time_to_first_token"] = time.time() - start
                 span.log(
-                    metrics={
-                        "time_to_first_token": time.time() - start,
-                        "tokens": log_response["usage"]["total_tokens"],
-                        "prompt_tokens": log_response["usage"]["input_tokens"],
-                        "completion_tokens": log_response["usage"]["output_tokens"],
-                    },
+                    metrics=metrics,
                     output=log_response["output"],
                 )
                 return raw_response
@@ -387,13 +384,12 @@ class ResponseWrapper:
         for result in all_results:
             usage = None
             if hasattr(result, "usage"):
-                usage = getattr(result, "usage", None)
+                usage = getattr(result, "usage")
             elif result.type == "response.completed" and hasattr(result, "response"):
-                usage = getattr(result.response, "usage", None)
+                usage = getattr(result.response, "usage")
 
             if usage:
                 parsed_metrics = _parse_metrics_from_usage(usage)
-                # Update metrics to accumulate values from all chunks
                 metrics.update(parsed_metrics)
 
             if result.type == "response.output_item.added":
@@ -504,11 +500,10 @@ class EmbeddingWrapper(BaseWrapper):
         super().__init__(create_fn, acreate_fn, "Embedding")
 
     def process_output(self, response: Dict[str, Any], span: Span):
+        usage = response.get("usage")
+        metrics = _parse_metrics_from_usage(usage)
         span.log(
-            metrics={
-                "tokens": response["usage"]["total_tokens"],
-                "prompt_tokens": response["usage"]["prompt_tokens"],
-            },
+            metrics=metrics,
             # TODO: Add a flag to control whether to log the full embedding vector,
             # possibly w/ JSON compression.
             output={"embedding_length": len(response["data"][0]["embedding"])},
@@ -764,8 +759,11 @@ def _parse_metrics_from_usage(usage: Any) -> Dict[str, Any]:
     if not usage:
         return metrics
 
+    # This might be a dict or a Usage object that can be cast to a dict
+    # to a dict
+    usage = _try_to_dict(usage)
     if not isinstance(usage, dict):
-        usage = _try_to_dict(usage)
+        return metrics  # unexpected
 
     for oai_name, value in usage.items():
         if oai_name.endswith("_tokens_details"):
@@ -798,6 +796,7 @@ def prettify_params(params: Dict[str, Any]) -> Dict[str, Any]:
 def _try_to_dict(obj: Any) -> Dict[str, Any]:
     if isinstance(obj, dict):
         return obj
+    # convert a pydantic object to a dict
     if hasattr(obj, "model_dump") and callable(obj.model_dump):
         try:
             return obj.model_dump()
