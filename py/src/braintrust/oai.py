@@ -94,7 +94,7 @@ class ChatCompletionWrapper:
                                     }
                                 )
                                 first = False
-                            all_results.append(item if isinstance(item, dict) else item.dict())
+                            all_results.append(_try_to_dict(item))
                             yield item
 
                         span.log(**self._postprocess_streaming_results(all_results))
@@ -104,7 +104,7 @@ class ChatCompletionWrapper:
                 should_end = False
                 return gen()
             else:
-                log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+                log_response = _try_to_dict(raw_response)
                 metrics = _parse_metrics_from_usage(log_response.get("usage", {}))
                 metrics["time_to_first_token"] = time.time() - start
                 span.log(
@@ -149,7 +149,7 @@ class ChatCompletionWrapper:
                                     }
                                 )
                                 first = False
-                            all_results.append(item if isinstance(item, dict) else item.dict())
+                            all_results.append(_try_to_dict(item))
                             yield item
 
                         span.log(**self._postprocess_streaming_results(all_results))
@@ -160,7 +160,7 @@ class ChatCompletionWrapper:
                 streamer = gen()
                 return AsyncResponseWrapper(streamer)
             else:
-                log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+                log_response = _try_to_dict(raw_response)
                 metrics = _parse_metrics_from_usage(log_response.get("usage"))
                 metrics["time_to_first_token"] = time.time() - start
                 span.log(
@@ -196,8 +196,10 @@ class ChatCompletionWrapper:
         finish_reason = None
         metrics = {}
         for result in all_results:
-            if "usage" in result and result["usage"] is not None:
-                metrics = _parse_metrics_from_usage(result["usage"])
+            usage = result.get("usage", None)
+            if usage:
+                metrics.update(_parse_metrics_from_usage(usage))
+
             choices = result["choices"]
             if not choices:
                 continue
@@ -287,8 +289,9 @@ class ResponseWrapper:
 
                 should_end = False
                 return gen()
+
             else:
-                log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+                log_response = _try_to_dict(raw_response)
                 metrics = _parse_metrics_from_usage(log_response.get("usage"))
                 metrics["time_to_first_token"] = time.time() - start
                 span.log(
@@ -342,7 +345,7 @@ class ResponseWrapper:
                 streamer = gen()
                 return AsyncResponseWrapper(streamer)
             else:
-                log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+                log_response = _try_to_dict(raw_response)
                 span.log(
                     metrics={
                         "time_to_first_token": time.time() - start,
@@ -382,12 +385,16 @@ class ResponseWrapper:
         metrics = {}
         output = []
         for result in all_results:
+            usage = None
             if hasattr(result, "usage"):
-                metrics = {
-                    "tokens": result.usage.total_tokens,
-                    "prompt_tokens": result.usage.input_tokens,
-                    "completion_tokens": result.usage.output_tokens,
-                }
+                usage = getattr(result, "usage", None)
+            elif result.type == "response.completed" and hasattr(result, "response"):
+                usage = getattr(result.response, "usage", None)
+
+            if usage:
+                parsed_metrics = _parse_metrics_from_usage(usage)
+                # Update metrics to accumulate values from all chunks
+                metrics.update(parsed_metrics)
 
             if result.type == "response.output_item.added":
                 output.append({"id": result.item.id, "type": result.item.type})
@@ -422,7 +429,7 @@ class ResponseWrapper:
                         current_content["annotations"] = []
                     if annotation_index == len(current_content["annotations"]):
                         current_content["annotations"].append({})
-                    current_content["annotations"][annotation_index] = result.annotation.dict()
+                    current_content["annotations"][annotation_index] = _try_to_dict(result.annotation)
 
         return {
             "metrics": metrics,
@@ -455,7 +462,7 @@ class BaseWrapper(abc.ABC):
             else:
                 raw_response = create_response
 
-            log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+            log_response = _try_to_dict(raw_response)
             self.process_output(log_response, span)
             return raw_response
 
@@ -471,7 +478,7 @@ class BaseWrapper(abc.ABC):
                 log_headers(create_response, span)
             else:
                 raw_response = create_response
-            log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+            log_response = _try_to_dict(raw_response)
             self.process_output(log_response, span)
             return raw_response
 
@@ -750,28 +757,22 @@ TOKEN_PREFIX_MAP = {
 }
 
 
-def _parse_metrics_from_usage(usage: Dict[str, Any]) -> Dict[str, Any]:
+def _parse_metrics_from_usage(usage: Any) -> Dict[str, Any]:
     # For simplicity, this function handles all the different APIs
-
-    if not usage or not isinstance(usage, dict):
-        return {}
-
-    # example usage format:
-    # { 'input_tokens': 14,
-    # ' input_tokens_details': {'cached_tokens': 0},
-    # ' output_tokens_details': {'reasoning_tokens': 0},
-    # }
-    # we remap names and change detail tokens to names like
-    # input_cached_tokens.
-
     metrics = {}
+
+    if not usage:
+        return metrics
+
+    if not isinstance(usage, dict):
+        usage = _try_to_dict(usage)
+
     for oai_name, value in usage.items():
         if oai_name.endswith("_tokens_details"):
             # handle `_tokens_detail` dicts
             raw_prefix = oai_name[: -len("_tokens_details")]
             prefix = TOKEN_PREFIX_MAP.get(raw_prefix, raw_prefix)
-            if not isinstance(value, dict):
-                continue  # unexpected
+
             for k, v in value.items():
                 if _is_numeric(v):
                     metrics[f"{prefix}_{k}"] = v
@@ -791,6 +792,22 @@ def prettify_params(params: Dict[str, Any]) -> Dict[str, Any]:
     if "response_format" in ret:
         ret["response_format"] = serialize_response_format(ret["response_format"])
     return ret
+
+
+def _try_to_dict(obj: Any) -> Dict[str, Any]:
+    if isinstance(obj, dict):
+        return obj
+    if hasattr(obj, "model_dump") and callable(obj.model_dump):
+        try:
+            return obj.model_dump()
+        except Exception:
+            pass
+    if hasattr(obj, "dict") and callable(obj.dict):
+        try:
+            return obj.dict()
+        except Exception:
+            pass
+    return obj
 
 
 def serialize_response_format(response_format: Any) -> Any:

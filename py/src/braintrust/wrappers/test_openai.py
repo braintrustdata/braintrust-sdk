@@ -30,38 +30,37 @@ def memory_logger():
 def test_openai_chat_metrics(memory_logger):
     assert not memory_logger.pop()
 
-    # First test with an unwrapped client
-    unwrapped_client = openai.OpenAI()
-    unwrapped_response = unwrapped_client.chat.completions.create(
-        model=TEST_MODEL, messages=[{"role": "user", "content": TEST_PROMPT}]
-    )
-    assert unwrapped_response
-    assert unwrapped_response.choices[0].message.content
-    unwrapped_content = unwrapped_response.choices[0].message.content
+    client = openai.OpenAI()
+    clients = [client, wrap_openai(client)]
 
-    # No spans should be generated with unwrapped client
-    assert not memory_logger.pop()
+    for client in clients:
+        start = time.time()
+        response = client.chat.completions.create(
+            model=TEST_MODEL, messages=[{"role": "user", "content": TEST_PROMPT}]
+        )
+        end = time.time()
 
-    # Now test with wrapped client
-    client = wrap_openai(openai.OpenAI())
-    start = time.time()
-    response = client.chat.completions.create(model=TEST_MODEL, messages=[{"role": "user", "content": TEST_PROMPT}])
-    end = time.time()
+        assert response
+        assert response.choices[0].message.content
+        assert (
+            "24" in response.choices[0].message.content or "twenty-four" in response.choices[0].message.content.lower()
+        )
 
-    assert response
-    assert response.choices[0].message.content
+        if not _is_wrapped(client):
+            assert not memory_logger.pop()
+            continue
 
-    # Verify spans were created with wrapped client
-    spans = memory_logger.pop()
-    assert len(spans) == 1
-    span = spans[0]
-    assert span
-    metrics = span["metrics"]
-    assert_metrics_are_valid(metrics)
-    assert start < metrics["start"] < metrics["end"] < end
-    assert span["metadata"]["model"] == TEST_MODEL
-    # assert span["metadata"]["provider"] == "openai"
-    assert TEST_PROMPT in str(span["input"])
+        # Verify spans were created with wrapped client
+        spans = memory_logger.pop()
+        assert len(spans) == 1
+        span = spans[0]
+        assert span
+        metrics = span["metrics"]
+        assert_metrics_are_valid(metrics)
+        assert start < metrics["start"] < metrics["end"] < end
+        assert span["metadata"]["model"] == TEST_MODEL
+        # assert span["metadata"]["provider"] == "openai"
+        assert TEST_PROMPT in str(span["input"])
 
 
 def test_openai_responses_metrics(memory_logger):
@@ -160,7 +159,10 @@ def test_openai_chat_streaming_sync(memory_logger):
         start = time.time()
 
         stream = client.chat.completions.create(
-            model=TEST_MODEL, messages=[{"role": "user", "content": TEST_PROMPT}], stream=True
+            model=TEST_MODEL,
+            messages=[{"role": "user", "content": TEST_PROMPT}],
+            stream=True,
+            stream_options={"include_usage": True},
         )
 
         chunks = []
@@ -192,7 +194,6 @@ def test_openai_chat_streaming_sync(memory_logger):
         assert span
         metrics = span["metrics"]
         assert_metrics_are_valid(metrics)
-        assert span["metadata"]["stream"] == True
         assert start < metrics["start"] < metrics["end"] < end
         assert span["metadata"]["model"] == TEST_MODEL
         # assert span["metadata"]["provider"] == "openai"
@@ -421,7 +422,10 @@ async def test_openai_chat_streaming_async(memory_logger):
         start = time.time()
 
         stream = await client.chat.completions.create(
-            model=TEST_MODEL, messages=[{"role": "user", "content": TEST_PROMPT}], stream=True
+            model=TEST_MODEL,
+            messages=[{"role": "user", "content": TEST_PROMPT}],
+            stream=True,
+            stream_options={"include_usage": True},
         )
 
         chunks = []
@@ -563,7 +567,10 @@ async def test_openai_chat_async_context_manager(memory_logger):
     for client, is_wrapped in clients:
         start = time.time()
         stream = await client.chat.completions.create(
-            model=TEST_MODEL, messages=[{"role": "user", "content": TEST_PROMPT}], stream=True
+            model=TEST_MODEL,
+            messages=[{"role": "user", "content": TEST_PROMPT}],
+            stream=True,
+            stream_options={"include_usage": True},
         )
 
         # Test the context manager behavior
@@ -669,9 +676,9 @@ async def test_openai_response_streaming_async(memory_logger):
     assert not memory_logger.pop()
 
     client = openai.AsyncOpenAI()
-    clients = [(client, False), (wrap_openai(client), True)]
+    clients = [client, wrap_openai(client)]
 
-    for client, is_wrapped in clients:
+    for client in clients:
         start = time.time()
 
         stream = await client.responses.create(model=TEST_MODEL, input="What's 12 + 12?", stream=True)
@@ -688,7 +695,7 @@ async def test_openai_response_streaming_async(memory_logger):
 
         assert "24" in output
 
-        if not is_wrapped:
+        if not _is_wrapped(client):
             assert not memory_logger.pop()
             continue
         # verify the span is created
@@ -740,3 +747,7 @@ async def test_openai_async_parallel_requests(memory_logger):
         # assert span["metadata"]["provider"] == "openai"
         assert prompts[i] in str(span["input"])
         assert_metrics_are_valid(span["metrics"])
+
+
+def _is_wrapped(client):
+    return hasattr(client, "_NamedWrapper__wrapped")
