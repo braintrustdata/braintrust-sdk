@@ -16,8 +16,8 @@ ERROR_CODES = tuple(range(1, 256))
 VENDOR_PACKAGES = ("anthropic", "openai", "pydantic_ai")
 
 # Test matrix
-ANTHROPIC_VERSIONS = (LATEST, "0.49.0", "0.48.0")
-OPENAI_VERSIONS = (LATEST, "1.71")
+ANTHROPIC_VERSIONS = (LATEST, "0.50.0", "0.49.0", "0.48.0")
+OPENAI_VERSIONS = (LATEST, "1.77.0", "1.71")
 PYDANTIC_AI_VERSIONS = (LATEST, "0.1.9")
 
 
