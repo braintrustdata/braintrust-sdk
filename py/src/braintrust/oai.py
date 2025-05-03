@@ -803,6 +803,7 @@ def _try_to_dict(obj: Any) -> Dict[str, Any]:
             return obj.model_dump()
         except Exception:
             pass
+    # deprecated pydantic method, try model_dump first.
     if hasattr(obj, "dict") and callable(obj.dict):
         try:
             return obj.dict()
