@@ -215,6 +215,11 @@ export const spanFieldOrderItem = z.object({
 });
 export type SpanFieldOrderItem = z.infer<typeof spanFieldOrderItem>;
 
+export const remoteEvalSourceSchema = z.object({
+  url: z.string(),
+});
+export type RemoteEvalSource = z.infer<typeof remoteEvalSourceSchema>;
+
 export const projectSettingsSchema = z
   .object({
     comparison_key: z
@@ -232,6 +237,10 @@ export const projectSettingsSchema = z
       .array(spanFieldOrderItem)
       .nullish()
       .describe("The order of the fields to display in the trace view"),
+    remote_eval_sources: z
+      .array(remoteEvalSourceSchema)
+      .nullish()
+      .describe("The remote eval sources to use for the project"),
   })
   .openapi("ProjectSettings");
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
