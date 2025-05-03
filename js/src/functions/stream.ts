@@ -18,6 +18,10 @@ export const braintrustStreamChunkSchema = z.union([
     data: z.string(),
   }),
   z.object({
+    type: z.literal("reasoning_delta"),
+    data: z.string(),
+  }),
+  z.object({
     type: z.literal("json_delta"),
     data: z.string(),
   }),
@@ -164,6 +168,11 @@ export class BraintrustStream {
       case "text_delta":
         return {
           type: "text_delta",
+          data: JSON.parse(event.data),
+        };
+      case "reasoning_delta":
+        return {
+          type: "reasoning_delta",
           data: JSON.parse(event.data),
         };
       case "json_delta":
