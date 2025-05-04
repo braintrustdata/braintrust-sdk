@@ -25,7 +25,7 @@ install_requires = [
 ]
 
 extras_require = {
-    "cli": ["boto3", "psycopg2-binary", "uv"],
+    "cli": ["boto3", "psycopg2-binary", "uv", "fastapi", "uvicorn", "pydantic"],
     "dev": [
         "black",
         "build",
