@@ -547,6 +547,48 @@ export const projectScoreCategory = z
   .openapi("ProjectScoreCategory");
 export type ProjectScoreCategory = z.infer<typeof projectScoreCategory>;
 
+const projectAutomationBaseSchema =
+  generateBaseTableSchema("project automation");
+export const projectAutomationSchema = z
+  .object({
+    id: projectAutomationBaseSchema.shape.id,
+    project_id: projectAutomationBaseSchema.shape.project_id,
+    user_id: projectAutomationBaseSchema.shape.user_id,
+    created: projectAutomationBaseSchema.shape.created,
+    name: projectAutomationBaseSchema.shape.name,
+    description: projectAutomationBaseSchema.shape.description,
+    config: z
+      .object({
+        event_type: z
+          .enum(["logs"])
+          .describe("The event which starts the automation execution"),
+        btql_filter: z
+          .string()
+          .describe("BTQL filter to identify rows for the automation rule"),
+        interval_seconds: z
+          .number()
+          .min(1)
+          .max(30 * 24 * 60 * 60)
+          .describe(
+            "Perform the triggered action at most once in this interval of seconds",
+          ),
+        action: z
+          .object({
+            type: z
+              .enum(["webhook"])
+              .describe(
+                "The type of action to take when the automation rule is triggered",
+              ),
+            url: z.string().describe("The webhook URL to send the request to"),
+          })
+          .describe("The action to take when the automation rule is triggered"),
+      })
+      .describe("The configuration for the automation rule"),
+  })
+  .openapi("ProjectAutomation");
+
+export type ProjectAutomation = z.infer<typeof projectAutomationSchema>;
+
 export const onlineScoreConfigSchema = z
   .object({
     sampling_rate: z
@@ -1028,6 +1070,21 @@ export type AclBatchUpdateResponse = z.infer<
   typeof aclBatchUpdateResponseSchema
 >;
 
+export const createProjectAutomationSchema = projectAutomationSchema
+  .pick({
+    project_id: true,
+    name: true,
+    description: true,
+    config: true,
+  })
+  .openapi("CreateProjectAutomation");
+
+export const patchProjectAutomationSchema = objectNullish(
+  createProjectAutomationSchema,
+)
+  .omit({ project_id: true })
+  .openapi("PatchProjectAutomation");
+
 export const createProjectScoreSchema = projectScoreSchema
   .pick({
     project_id: true,
@@ -1329,6 +1386,11 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
     object: userSchema,
   },
   prompt_session: {},
+  project_automation: {
+    object: projectAutomationSchema,
+    create: createProjectAutomationSchema,
+    patch_id: patchProjectAutomationSchema,
+  },
   project_score: {
     object: projectScoreSchema,
     create: createProjectScoreSchema,
