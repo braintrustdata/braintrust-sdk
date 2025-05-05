@@ -217,6 +217,8 @@ export type SpanFieldOrderItem = z.infer<typeof spanFieldOrderItem>;
 
 export const remoteEvalSourceSchema = z.object({
   url: z.string(),
+  name: z.string(),
+  description: z.string().nullish(),
 });
 export type RemoteEvalSource = z.infer<typeof remoteEvalSourceSchema>;
 
