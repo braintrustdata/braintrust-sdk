@@ -60,9 +60,7 @@ jobs:
       - name: Run tests
         run: |
           python -m unittest discover ./core/py/src
-          python -m unittest discover ./py/src
           pytest ./integrations/langchain-py/src
-          pytest ./py/src
       - name: Run nox tests
         run: |
           make nox
