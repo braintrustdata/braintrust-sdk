@@ -1,4 +1,12 @@
-import { test, expect, describe, beforeEach, afterEach, vi } from "vitest";
+import {
+  test,
+  expect,
+  describe,
+  beforeEach,
+  afterEach,
+  vi,
+  assert,
+} from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { wrapAnthropic } from "./anthropic";
 import {
@@ -24,6 +32,7 @@ test("anthropic is installed", () => {
 });
 
 describe("anthropic client unit tests", () => {
+  let anthropic: Anthropic;
   let client: any;
   let backgroundLogger: any;
   let logger: any;
@@ -34,7 +43,9 @@ describe("anthropic client unit tests", () => {
   beforeEach(async () => {
     backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
 
-    client = wrapAnthropic(new Anthropic());
+    anthropic = new Anthropic();
+    client = wrapAnthropic(anthropic);
+
     logger = initLogger({
       projectName: "anthropic.test.ts",
       projectId: "test-project-id",
@@ -232,4 +243,93 @@ describe("anthropic client unit tests", () => {
     expect(metrics.start < metrics.end).toBe(true);
     expect(metrics.end <= endTime).toBe(true);
   });
+
+  test("test client.beta.messages.create", async () => {
+    let startTime: number = -1;
+    let endTime: number = -1;
+
+    // wrapped has to be last so the timing test works
+    const clients = [anthropic, client];
+    const responses = await Promise.all(
+      clients.map(async (c) => {
+        startTime = getCurrentUnixTimestamp();
+
+        const response = await c.beta.messages.create({
+          model: TEST_MODEL,
+          messages: [{ role: "user", content: "What's 4*4?" }],
+          max_tokens: 100,
+          system: "Return the result only.",
+          temperature: 0.1,
+        });
+        endTime = getCurrentUnixTimestamp();
+        return response;
+      }),
+    );
+
+    // validate that the wrapped and unwrapped clients product the same response
+    assertAnthropicResponsesEqual(responses);
+
+    // validate we traced the second request
+    const spans = await backgroundLogger.drain();
+    expect(spans).toHaveLength(1);
+    const span = spans[0] as any;
+
+    expect(span).toMatchObject({
+      project_id: expect.any(String),
+      log_id: expect.any(String),
+      created: expect.any(String),
+      span_id: expect.any(String),
+      root_span_id: expect.any(String),
+      span_attributes: {
+        type: "llm",
+        name: "anthropic.messages.create",
+      },
+      metadata: {
+        model: TEST_MODEL,
+        max_tokens: 100,
+        temperature: 0.1,
+      },
+      input: [
+        { role: "user", content: "What's 4*4?" },
+        { role: "system", content: "Return the result only." },
+      ],
+      output: [{ type: "text", text: "16" }],
+      metrics: {
+        prompt_tokens: expect.any(Number),
+        completion_tokens: expect.any(Number),
+        tokens: expect.any(Number),
+        start: expect.any(Number),
+        end: expect.any(Number),
+      },
+    });
+
+    const { metrics } = span;
+    assertValidMetrics(metrics, startTime, endTime);
+  });
 });
+
+function assertAnthropicResponsesEqual(responses: Message[]) {
+  expect(responses.length).toBe(2);
+  const parsed = responses.map((r) => JSON.parse(JSON.stringify(r)));
+  for (const p of parsed) {
+    delete p.id;
+  }
+  expect(parsed[0]).toEqual(parsed[1]);
+}
+
+function assertValidMetrics(metrics: any, start: number, end: number) {
+  expect(metrics).toBeDefined();
+  expect(metrics.start).toBeDefined();
+  expect(metrics.end).toBeDefined();
+  //expect(metrics.time_to_first_token).toBeDefined();
+  for (const [key, value] of Object.entries(metrics)) {
+    expect(value).toBeDefined();
+    // if "tokens" is in key, it should be greater than 0
+    if (key.includes("tokens")) {
+      expect(value).toBeGreaterThanOrEqual(0);
+    }
+  }
+  expect(start).toBeLessThanOrEqual(metrics.start);
+  expect(metrics.start).toBeLessThanOrEqual(metrics.end);
+  expect(metrics.end).toBeLessThanOrEqual(end);
+}

@@ -10,6 +10,21 @@ export function wrapAnthropic(anthropic: Anthropic): Anthropic {
 function anthropicProxy(anthropic: Anthropic): Anthropic {
   return new Proxy(anthropic, {
     get(target, prop, receiver) {
+      switch (prop) {
+        case "beta":
+          return betaProxy(target.beta);
+        case "messages":
+          return messagesProxy(target.messages);
+        default:
+          return Reflect.get(target, prop, receiver);
+      }
+    },
+  });
+}
+
+function betaProxy(beta: any) {
+  return new Proxy(beta, {
+    get(target, prop, receiver) {
       if (prop === "messages") {
         return messagesProxy(target.messages);
       }
