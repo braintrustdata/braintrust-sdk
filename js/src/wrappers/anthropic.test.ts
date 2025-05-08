@@ -17,6 +17,7 @@ import {
 import { initLogger, _exportsForTestingOnly, login } from "../logger";
 import { configureNode } from "../node";
 import { getCurrentUnixTimestamp } from "../util";
+import { L } from "vitest/dist/chunks/reporters.nr4dxCkA";
 
 // use the cheapest model for tests
 const TEST_MODEL = "claude-3-haiku-20240307";
@@ -327,27 +328,30 @@ describe("anthropic client unit tests", () => {
         });
 
         let ttft = 0;
-        let outputText = "";
+        const chunks = [];
         for await (const event of response) {
           if (ttft === 0) {
             ttft = getCurrentUnixTimestamp() - startTime;
           }
-          if (
-            event.type === "content_block_delta" &&
-            event.delta.type === "text_delta"
-          ) {
-            outputText += event.delta.text;
-          }
+          chunks.push(event);
         }
-
         endTime = getCurrentUnixTimestamp();
-        return outputText;
+        return chunks;
       }),
     );
 
     // validate that the wrapped and unwrapped clients produce the same output
-    expect(responses.length).toBe(2);
-    expect(responses[0]).toBe(responses[1]);
+    const messages = [];
+    const chunks = [];
+    for (const resp of responses) {
+      assert(resp.length >= 1);
+      const msg = resp[0]["message"];
+      assert(msg);
+      messages.push(msg);
+      chunks.push(resp.slice(1));
+    }
+    assertAnthropicResponsesEqual(messages);
+    expect(chunks[0]).toEqual(chunks[1]);
 
     // validate we traced the second request
     const spans = await backgroundLogger.drain();
@@ -407,27 +411,29 @@ describe("anthropic client unit tests", () => {
         });
 
         let ttft = 0;
-        let outputText = "";
+        let chunks = [];
         for await (const event of stream) {
           if (ttft === 0) {
             ttft = getCurrentUnixTimestamp() - startTime;
           }
-          if (
-            event.type === "content_block_delta" &&
-            event.delta.type === "text_delta"
-          ) {
-            outputText += event.delta.text;
-          }
+          chunks.push(event);
         }
 
         endTime = getCurrentUnixTimestamp();
-        return outputText;
+        return chunks;
       }),
     );
 
     // validate that the wrapped and unwrapped clients produce the same output
-    expect(responses.length).toBe(2);
-    expect(responses[0]).toBe(responses[1]);
+    const respRaw = responses[0];
+    const respWrapped = responses[1];
+
+    assertAnthropicResponsesEqual([
+      respRaw[0]["message"],
+      respWrapped[0]["message"],
+    ]);
+
+    expect(respRaw.slice(1)).toEqual(respWrapped.slice(1));
 
     // validate we traced the second request
     const spans = await backgroundLogger.drain();
