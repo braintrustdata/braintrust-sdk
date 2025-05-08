@@ -6,7 +6,6 @@ import { wrapAnthropic, initLogger } from "braintrust";
 
 initLogger({ projectName: "typescript-examples" });
 
-console.log(wrapAnthropic);
 const client = wrapAnthropic(new Anthropic());
 
 async function main() {
