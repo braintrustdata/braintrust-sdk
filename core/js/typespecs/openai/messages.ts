@@ -87,6 +87,22 @@ export const chatCompletionMessageToolCallSchema = z
   })
   .openapi("ChatCompletionMessageToolCall");
 
+export const chatCompletionMessageReasoningSchema = z
+  .object({
+    id: z
+      .string()
+      .nullish()
+      .transform((x) => x ?? undefined),
+    content: z
+      .string()
+      .nullish()
+      .transform((x) => x ?? undefined),
+  })
+  .describe(
+    "Note: This is not part of the OpenAI API spec, but we added it for interoperability with multiple reasoning models.",
+  )
+  .openapi("ChatCompletionMessageReasoning");
+
 const chatCompletionAssistantMessageParamSchema = z.object({
   role: z.literal("assistant"),
   content: z.string().nullish(),
@@ -99,6 +115,10 @@ const chatCompletionAssistantMessageParamSchema = z.object({
     .transform((x) => x ?? undefined),
   tool_calls: z
     .array(chatCompletionMessageToolCallSchema)
+    .nullish()
+    .transform((x) => x ?? undefined),
+  reasoning: z
+    .array(chatCompletionMessageReasoningSchema)
     .nullish()
     .transform((x) => x ?? undefined),
 });

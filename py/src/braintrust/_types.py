@@ -452,6 +452,11 @@ class ChatCompletionMessageToolCall(TypedDict):
     type: Literal["function"]
 
 
+class ChatCompletionMessageReasoning(TypedDict):
+    id: NotRequired[Optional[str]]
+    content: NotRequired[Optional[str]]
+
+
 class ChatCompletionMessageParam1(TypedDict):
     content: NotRequired[Optional[str]]
     role: Literal["system"]
@@ -475,6 +480,7 @@ class ChatCompletionMessageParam3(TypedDict):
     function_call: NotRequired[Optional[FunctionCall1]]
     name: NotRequired[Optional[str]]
     tool_calls: NotRequired[Optional[Sequence[ChatCompletionMessageToolCall]]]
+    reasoning: NotRequired[Optional[Sequence[ChatCompletionMessageReasoning]]]
 
 
 class ChatCompletionMessageParam4(TypedDict):
