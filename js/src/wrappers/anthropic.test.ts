@@ -3,6 +3,7 @@ import {
   expect,
   describe,
   beforeEach,
+  beforeAll,
   afterEach,
   vi,
   assert,
@@ -39,7 +40,9 @@ describe("anthropic client unit tests", () => {
   let logger: any;
 
   // fake login before we test. once is enough.
-  _exportsForTestingOnly.simulateLoginForTests();
+  beforeAll(async () => {
+    await _exportsForTestingOnly.simulateLoginForTests();
+  });
 
   beforeEach(async () => {
     backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();

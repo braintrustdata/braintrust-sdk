@@ -216,6 +216,18 @@ export interface Span extends Exportable {
   permalink(): Promise<string>;
 
   /**
+   * Format a link to the Braintrust application for viewing this span.
+   *
+   * Similar to permalink() but synchronous (no Promise).
+   *
+   * Links can be generated at any time, but they will only become viewable
+   * after the span and its root have been flushed to the server and ingested.
+   *
+   * @returns A link to the span.
+   */
+  link(): string;
+
+  /**
    * Flush any pending rows to the server.
    */
   flush(): Promise<void>;
@@ -291,6 +303,10 @@ export class NoopSpan implements Span {
   }
 
   public async permalink(): Promise<string> {
+    return NOOP_SPAN_PERMALINK;
+  }
+
+  public link(): string {
     return NOOP_SPAN_PERMALINK;
   }
 
@@ -4638,6 +4654,62 @@ export class SpanImpl implements Span {
     });
   }
 
+  public link(): string {
+    if (!this.id) {
+      return NOOP_SPAN_PERMALINK;
+    }
+
+    const orgName = this._state.orgName;
+    if (!orgName) {
+      throw new Error("Must log in or provide orgName");
+    }
+
+    const appUrl = this._state.appUrl || "https://www.braintrust.dev";
+    const baseUrl = `${appUrl}/app/${orgName}`;
+
+    // NOTE[matt]: I believe lazy values should not exist in the span or the logger.
+    // Nothing in this module should have the possibility of blocking with the lone exception of
+    // flush() which should be a clear exception. We shouldn't build on it and
+    // plan to remove it in the future.
+    const args = this.parentComputeObjectMetadataArgs;
+
+    switch (this.parentObjectType) {
+      case SpanObjectTypeV3.PROJECT_LOGS: {
+        // Links to spans require a project id or name. We might not either, so use whatever
+        // we can to make a link without making a roundtrip to the server.
+        const projectID =
+          args?.project_id || this.parentObjectId.getSync().value;
+        const projectName = args?.project_name;
+        if (projectID) {
+          return `${baseUrl}/object?object_type=project_logs&object_id=${projectID}&id=${this._id}`;
+        } else if (projectName) {
+          return `${baseUrl}/p/${projectName}/logs?oid=${this._id}`;
+        } else {
+          // FIXME[matt] we could throw an error here
+          return `${baseUrl}/missing-project-name-or-id`;
+        }
+      }
+      case SpanObjectTypeV3.EXPERIMENT: {
+        // Experiment links require an id, so the sync version will only work after the experiment is
+        // resolved.
+        let expID =
+          args?.experiment_id || this.parentObjectId?.getSync()?.value;
+        if (!expID) {
+          return `${baseUrl}/missing-experiment-name-or-id`;
+        } else {
+          return `${baseUrl}/object?object_type=experiment&object_id=${expID}&id=${this._id}`;
+        }
+      }
+      case SpanObjectTypeV3.PLAYGROUND_LOGS: {
+        // FIXME[matt] I dontbelieve these are used, but someday we can implement them.
+        return NOOP_SPAN_PERMALINK;
+      }
+      default: {
+        return NOOP_SPAN_PERMALINK;
+      }
+    }
+  }
+
   async flush(): Promise<void> {
     return await this._state.bgLogger().flush();
   }
@@ -5612,8 +5684,18 @@ export interface DatasetSummary {
 const TEST_API_KEY = "___TEST_API_KEY__THIS_IS_NOT_REAL___";
 
 // This is a helper function to simulate a login for testing.
-function simulateLoginForTests() {
-  return login({ apiKey: TEST_API_KEY });
+async function simulateLoginForTests() {
+  return await login({
+    apiKey: TEST_API_KEY,
+    appUrl: "https://braintrust.dev",
+  });
+}
+
+// This is a helper function to simulate a logout for testing.
+function simulateLogoutForTests() {
+  _globalState.resetLoginInfo();
+  _globalState.appUrl = "https://www.braintrust.dev";
+  return _globalState;
 }
 
 export const _exportsForTestingOnly = {
@@ -5622,4 +5704,5 @@ export const _exportsForTestingOnly = {
   useTestBackgroundLogger,
   clearTestBackgroundLogger,
   simulateLoginForTests,
+  simulateLogoutForTests,
 };
