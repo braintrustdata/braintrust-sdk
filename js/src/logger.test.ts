@@ -456,7 +456,7 @@ describe("span.link", () => {
     expect(link).toBe("https://braintrust.dev/noop-span");
   });
 
-  test("regular span link follows expected format", async () => {
+  test("span.link same when logged in and have project id", async () => {
     // Mock the state for testing - must be done before creating the span
     const state = await _exportsForTestingOnly.simulateLoginForTests();
 
@@ -477,9 +477,30 @@ describe("span.link", () => {
     const link1 = span.link();
     const link2 = await span.permalink();
 
-    console.log("link1", link1);
-    console.log("link2", link2);
-
     expect(link1).toBe(link2);
+  });
+
+  test("span.link same when logged in and have project name", async () => {
+    // Mock the state for testing - must be done before creating the span
+    const state = await _exportsForTestingOnly.simulateLoginForTests();
+
+    // Verify the login was successful
+    expect(state.orgName).toBeDefined();
+    expect(state.appUrl).toBeDefined();
+
+    // Create a test span
+    const logger = initLogger({
+      projectName: "test-project",
+    });
+
+    const span = logger.startSpan({ name: "test-span" });
+    span.end();
+
+    // Get the link
+    const link1 = span.link();
+
+    expect(link1).toBe(
+      `https://braintrust.dev/app/test-org-name/p/test-project/logs?oid=${span._id}`,
+    );
   });
 });
