@@ -416,6 +416,12 @@ export const sseDataEventSchema = baseSSEEventSchema.merge(
   }),
 );
 
+export const sseToolEventSchema = baseSSEEventSchema.merge(
+  z.object({
+    event: z.literal("tool_delta"),
+  }),
+);
+
 export const sseErrorEventSchema = baseSSEEventSchema.merge(
   z.object({
     event: z.literal("error"),
@@ -496,6 +502,7 @@ export const callEventSchema = z
   .union([
     sseTextEventSchema.openapi({ title: "text_delta" }),
     sseDataEventSchema.openapi({ title: "json_delta" }),
+    sseToolEventSchema.openapi({ title: "tool_delta" }),
     sseProgressEventSchema.openapi({ title: "progress" }),
     sseErrorEventSchema.openapi({ title: "error" }),
     sseConsoleEventSchema.openapi({ title: "console" }),
