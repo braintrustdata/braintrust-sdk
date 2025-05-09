@@ -11,10 +11,16 @@ import {
   NOOP_SPAN,
   Prompt,
   permalink,
+  link,
   BraintrustState,
 } from "./logger";
 import { LazyValue } from "./util";
-import { BackgroundLogEvent, IS_MERGE_FIELD } from "@braintrust/core";
+import {
+  BackgroundLogEvent,
+  IS_MERGE_FIELD,
+  SpanComponentsV3,
+  SpanObjectTypeV3,
+} from "@braintrust/core";
 import { configureNode } from "./node";
 
 configureNode();
@@ -290,6 +296,68 @@ test("noop span permalink #BRA-1837", async () => {
 
   const link2 = await permalink(slug);
   expect(link2).toBe("https://braintrust.dev/noop-span");
+});
+
+test("noop span sync link", () => {
+  const span = NOOP_SPAN;
+  const linkSync = span.link();
+  expect(linkSync).toBe("https://braintrust.dev/noop-span");
+});
+
+test("link function with empty slug", () => {
+  const emptySlug = "";
+  const result = link(emptySlug);
+  expect(result).toBe("https://braintrust.dev/noop-span");
+});
+
+test("link function with invalid slug", () => {
+  const invalidSlug = "not-a-valid-slug";
+  const result = link(invalidSlug);
+  expect(result).toBe("https://braintrust.dev/invalid-span-format");
+});
+
+test("link function with explicit parameters", () => {
+  // Mock a valid slug but without state info
+  const mockComponents = new SpanComponentsV3({
+    object_type: SpanObjectTypeV3.EXPERIMENT,
+    object_id: "test-id",
+    row_id: "row-id",
+    span_id: "span-id",
+    root_span_id: "root-span-id",
+  });
+
+  const validSlug = mockComponents.toStr();
+
+  // Test with explicitly provided org name and app URL
+  const linkWithOrgAndApp = link(validSlug, {
+    orgName: "test-org",
+    appUrl: "https://example.com",
+  });
+  expect(linkWithOrgAndApp).toBe(
+    "https://example.com/app/test-org/object?object_type=experiment&object_id=test-id&id=row-id",
+  );
+});
+
+test("link function with simulated login state", () => {
+  // Simulate login to set up state
+  _exportsForTestingOnly.simulateLoginForTests();
+
+  // Create a slug with valid components
+  const mockComponents = new SpanComponentsV3({
+    object_type: SpanObjectTypeV3.EXPERIMENT,
+    object_id: "test-id",
+    row_id: "row-id",
+    span_id: "span-id",
+    root_span_id: "root-span-id",
+  });
+
+  const validSlug = mockComponents.toStr();
+
+  // Link should use the values from state - using fake URL from simulateLoginForTests
+  const result = link(validSlug);
+  expect(result).toBe(
+    "https://www.braintrust.dev/app/test-org-name/object?object_type=experiment&object_id=test-id&id=row-id",
+  );
 });
 
 test("prompt.build with structured output templating", () => {

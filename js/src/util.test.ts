@@ -52,3 +52,39 @@ test("LazyValue caches successful result", async () => {
   expect(result2).toBe("test value");
   expect(lazy.hasSucceeded).toBe(true);
 });
+
+test("LazyValue getSync returns correct status through lifecycle", async () => {
+  const lazy = new LazyValue(async () => "test value");
+
+  // Before calling get()
+  const resultBefore = lazy.getSync();
+  expect(resultBefore.resolved).toBe(false);
+  expect(resultBefore.value).toBeUndefined();
+
+  // After calling get() but before resolution
+  const promise = lazy.get();
+  const resultDuring = lazy.getSync();
+  expect(resultDuring.resolved).toBe(false);
+  expect(resultDuring.value).toBeUndefined();
+
+  // After resolution
+  await promise;
+  const resultAfter = lazy.getSync();
+  expect(resultAfter.resolved).toBe(true);
+  expect(resultAfter.value).toBe("test value");
+});
+
+test("LazyValue getSync works with objects", async () => {
+  const testObj = { prop1: "value1", prop2: 42 };
+  const lazy = new LazyValue(async () => testObj);
+
+  // Get the promise and wait for it to resolve
+  await lazy.get();
+
+  // After resolution
+  const resultAfter = lazy.getSync();
+  expect(resultAfter.resolved).toBe(true);
+  expect(resultAfter.value).toBe(testObj); // Same object reference
+  expect(resultAfter.value?.prop1).toBe("value1");
+  expect(resultAfter.value?.prop2).toBe(42);
+});

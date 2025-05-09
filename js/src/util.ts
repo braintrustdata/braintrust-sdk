@@ -43,7 +43,7 @@ export function isEmpty(a: unknown): a is null | undefined {
 export class LazyValue<T> {
   private callable: () => Promise<T>;
   private value:
-    | { computedState: "succeeded"; val: Promise<T> }
+    | { computedState: "succeeded"; val: Promise<T>; resolvedValue: T }
     | { computedState: "in_progress"; val: Promise<T> }
     | { computedState: "uninitialized" } = {
     computedState: "uninitialized",
@@ -65,20 +65,48 @@ export class LazyValue<T> {
     //
     // Once the callable completes successfully, we update the computedState to
     // "succeeded".
+    const promise = this.callable().then((x) => {
+      // Store the resolved value for synchronous access
+      this.value = {
+        computedState: "succeeded",
+        val: Promise.resolve(x),
+        resolvedValue: x,
+      };
+      return x;
+    });
+
     this.value = {
       computedState: "in_progress",
-      val: this.callable().then((x) => {
-        this.value.computedState = "succeeded";
-        return x;
-      }),
+      val: promise,
     };
-    return this.value.val;
+
+    return promise;
   }
 
   // If this is true, the caller should be able to obtain the LazyValue without
   // it throwing.
   public get hasSucceeded(): boolean {
     return this.value.computedState === "succeeded";
+  }
+
+  /**
+   * Get the value synchronously if available, along with a flag indicating if it was resolved.
+   *
+   * @returns An object with 'value' (the resolved value, or undefined if not resolved)
+   * and 'resolved' (boolean indicating if the value was resolved)
+   */
+  getSync(): { value: T | undefined; resolved: boolean } {
+    if (this.value.computedState === "succeeded") {
+      return {
+        value: this.value.resolvedValue,
+        resolved: true,
+      };
+    }
+
+    return {
+      value: undefined,
+      resolved: false,
+    };
   }
 }
 
@@ -108,6 +136,19 @@ export class SyncLazyValue<T> {
   // it throwing.
   public get hasSucceeded(): boolean {
     return this.value.computedState === "succeeded";
+  }
+
+  /**
+   * Get the value synchronously. This will throw if the value has not been computed yet.
+   * Use `hasSucceeded` to check if the value is available.
+   */
+  getSync(): T {
+    if (!this.hasSucceeded) {
+      throw new Error(
+        "Cannot get value synchronously before it has been computed",
+      );
+    }
+    return this.value.val;
   }
 }
 

@@ -151,6 +151,17 @@ export interface Span extends Exportable {
   logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void;
 
   /**
+   * Format a permalink to the Braintrust application for viewing this span.
+   * This function is synchronous and will never block.
+   *
+   * If the required data is not available, it returns a hardcoded URL that
+   * will be valid once the data is available.
+   *
+   * @returns A permalink to the span.
+   */
+  link(): string;
+
+  /**
    * Create a new span and run the provided callback. This is useful if you want to log more detailed trace information beyond the scope of a single log event. Data logged over several calls to `Span.log` will be merged into one logical row.
    *
    * Spans created within `traced` are ended automatically. By default, the span is marked as current, so they can be accessed using `braintrust.currentSpan`.
@@ -291,6 +302,10 @@ export class NoopSpan implements Span {
   }
 
   public async permalink(): Promise<string> {
+    return NOOP_SPAN_PERMALINK;
+  }
+
+  public link(): string {
     return NOOP_SPAN_PERMALINK;
   }
 
@@ -1468,10 +1483,74 @@ export async function spanComponentsToObjectId({
  * Format a permalink to the Braintrust application for viewing the span
  * represented by the provided `slug`.
  *
+ * If the required data is not available, it returns a hardcoded URL that
+ * will be valid once the data is available.
+ */
+export function link(
+  slug: string,
+  opts?: {
+    state?: BraintrustState;
+    orgName?: string;
+    appUrl?: string;
+  },
+): string {
+  // Noop spans have an empty slug, so return a dummy permalink.
+  if (slug === "") {
+    return NOOP_SPAN_PERMALINK;
+  }
+
+  const state = opts?.state ?? _globalState;
+
+  // Use provided values or those from state if available
+  const orgName = opts?.orgName ?? state.orgName;
+  const appUrl = opts?.appUrl ?? state.appUrl;
+
+  try {
+    const components = SpanComponentsV3.fromStr(slug);
+    const object_type = spanObjectTypeV3ToString(components.data.object_type);
+    const id = components.data.row_id;
+
+    if (!id) {
+      // If no row_id, we can't create a valid permalink
+      return "https://braintrust.dev/invalid-permalink-no-id";
+    }
+
+    // If we have an object_id directly, use it
+    if (components.data.object_id && orgName && appUrl) {
+      const object_id = components.data.object_id;
+      const urlParams = new URLSearchParams({ object_type, object_id, id });
+      return `${appUrl}/app/${orgName}/object?${urlParams}`;
+    }
+
+    // If we have compute_object_metadata_args but no object_id, we need to return a placeholder
+    // as this would require an async call to compute
+    if (components.data.compute_object_metadata_args) {
+      // Return a placeholder URL that indicates the link needs computation
+      return "https://braintrust.dev/span-needs-computation";
+    }
+
+    // If we're missing org name or app URL we can't generate the full link
+    if (!orgName || !appUrl) {
+      return "https://braintrust.dev/invalid-link-need-to-login";
+    }
+
+    // This should be unreachable based on the checks above, but including for completeness
+    return "https://braintrust.dev/invalid-span";
+  } catch (e) {
+    // If we fail to parse the slug or any other error, return a fallback
+    return "https://braintrust.dev/invalid-span-format";
+  }
+}
+
+/**
+ * Format a permalink to the Braintrust application for viewing the span
+ * represented by the provided `slug`.
+ *
  * Links can be generated at any time, but they will only become viewable after
  * the span and its root have been flushed to the server and ingested.
  *
- * If you have a `Span` object, use {@link Span.permalink} instead.
+ * This function will block if you have not logged in or are passing in an unresolved
+ * span or experiment. For production tracing, call {@link Span.permalink} instead.
  *
  * @param slug The identifier generated from {@link Span.export}.
  * @param opts Optional arguments.
@@ -4636,6 +4715,36 @@ export class SpanImpl implements Span {
     return await permalink(await this.export(), {
       state: this._state,
     });
+  }
+
+  public link(): string {
+    // Use a synchronous export instead of waiting for the async export
+    try {
+      // Get the object_id synchronously if available
+      const objectIdResult = this.parentObjectId.getSync();
+
+      // We need to get the same slug as the async export, but synchronously
+      const slug = new SpanComponentsV3({
+        object_type: this.parentObjectType,
+        ...(objectIdResult.resolved
+          ? { object_id: objectIdResult.value }
+          : {
+              compute_object_metadata_args:
+                this.parentComputeObjectMetadataArgs,
+            }),
+        row_id: this.id,
+        span_id: this._spanId,
+        root_span_id: this._rootSpanId,
+        propagated_event: this.propagatedEvent,
+      }).toStr();
+
+      return link(slug, {
+        state: this._state,
+      });
+    } catch (e) {
+      // If we fail to generate the slug synchronously, return a fallback
+      return "https://braintrust.dev/span-export-failed";
+    }
   }
 
   async flush(): Promise<void> {
