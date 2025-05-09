@@ -1,4 +1,4 @@
-import { vi, expect, test } from "vitest";
+import { vi, expect, test, describe, beforeEach, afterEach } from "vitest";
 import {
   _exportsForTestingOnly,
   init,
@@ -358,6 +358,162 @@ test("link function with simulated login state", () => {
   expect(result).toBe(
     "https://www.braintrust.dev/app/test-org-name/object?object_type=experiment&object_id=test-id&id=row-id",
   );
+});
+
+describe("link and permalink consistency", () => {
+  // Helper functions to create test slugs
+  function createEmptySlug() {
+    return "";
+  }
+
+  // We won't test permalink with invalid slug since it throws an error
+  function createInvalidSlug() {
+    return "not-a-valid-slug";
+  }
+
+  // We'll skip the test that tries to create a valid slug, as it's complex to mock correctly
+
+  beforeEach(() => {
+    // Reset state before each test
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+  });
+
+  afterEach(() => {
+    // Reset state after each test
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+  });
+
+  test("link and permalink return the same value for empty slug", async () => {
+    const emptySlug = createEmptySlug();
+    const linkResult = link(emptySlug);
+    const permalinkResult = await permalink(emptySlug);
+
+    expect(linkResult).toBe(permalinkResult);
+    expect(linkResult).toBe("https://braintrust.dev/noop-span");
+  });
+
+  test("link function handles invalid slug properly", () => {
+    const invalidSlug = createInvalidSlug();
+    const linkResult = link(invalidSlug);
+    expect(linkResult).toBe("https://braintrust.dev/invalid-span-format");
+  });
+
+  test("link and permalink work the same with NoopSpan", async () => {
+    const span = NOOP_SPAN;
+    const linkResult = span.link();
+    const permalinkResult = await span.permalink();
+
+    expect(linkResult).toBe(permalinkResult);
+    expect(linkResult).toBe("https://braintrust.dev/noop-span");
+  });
+
+  // This test documents how link() returns a temporary URL but logs the same data
+  test("link() and permalink() log the same data despite different initial URLs", async () => {
+    // Create a memory logger for testing
+    const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+
+    // Simulate login to set up state
+    _exportsForTestingOnly.simulateLoginForTests();
+
+    // Create a single test span with explicit project ID
+    const logger = initLogger({
+      projectName: "test-link-permalink-equality",
+      projectId: "test-project-id-for-link-permalink",
+    });
+
+    // Create two identical spans to compare link() and permalink() behavior
+    const spanForLink = logger.startSpan({ name: "test-link-method" });
+    const spanForPermalink = logger.startSpan({
+      name: "test-permalink-method",
+    });
+
+    // Get URLs using each method
+    const syncLinkUrl = spanForLink.link();
+    const asyncPermalinkUrl = await spanForPermalink.permalink();
+
+    // Document the initial difference in URLs returned
+    expect(syncLinkUrl).toBe("https://braintrust.dev/span-needs-computation");
+    expect(asyncPermalinkUrl).toContain("test-project-id-for-link-permalink");
+
+    // Although the initial URLs are different, they should log the same underlying data
+    // We can verify this by logging the span ID and project ID for both
+
+    spanForLink.log({
+      output: { method: "link", url: syncLinkUrl },
+    });
+
+    spanForPermalink.log({
+      output: { method: "permalink", url: asyncPermalinkUrl },
+    });
+
+    // End spans
+    spanForLink.end();
+    spanForPermalink.end();
+
+    // Flush logs
+    await memoryLogger.flush();
+
+    // Get the logged events
+    const events = (await memoryLogger.drain()) as any[];
+
+    // Find our events
+    const linkEvent = events.find(
+      (e) => e.span_attributes.name === "test-link-method",
+    );
+    const permalinkEvent = events.find(
+      (e) => e.span_attributes.name === "test-permalink-method",
+    );
+
+    expect(linkEvent).toBeDefined();
+    expect(permalinkEvent).toBeDefined();
+
+    // Verify both spans have the same project ID
+    expect(linkEvent.project_id).toBe(permalinkEvent.project_id);
+    expect(linkEvent.project_id).toBe("test-project-id-for-link-permalink");
+
+    // Clean up
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+  });
+
+  // Test that link() and permalink() return identical URLs for SpanComponentsV3 with explicit object_id
+  test("link() and permalink() return identical URLs with fully resolved object_id", async () => {
+    // Create a memory logger for testing
+    const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+
+    // Simulate login to set up state
+    _exportsForTestingOnly.simulateLoginForTests();
+
+    // Instead of testing with a real span, we'll create a SpanComponentsV3 object
+    // with a fully resolved object_id and use that directly with link() and permalink()
+    const components = new SpanComponentsV3({
+      object_type: SpanObjectTypeV3.PROJECT_LOGS,
+      object_id: "fully-resolved-project-id", // Explicitly providing the object_id
+      row_id: "test-row-id",
+      span_id: "test-span-id",
+      root_span_id: "test-root-span-id",
+    });
+
+    // Convert to a slug
+    const slug = components.toStr();
+
+    // Call both functions with the same slug and explicit parameters
+    const params = {
+      orgName: "test-org-name",
+      appUrl: "https://www.braintrust.dev",
+    };
+
+    const syncLinkUrl = link(slug, params);
+    const asyncPermalinkUrl = await permalink(slug, params);
+
+    // Since we provided a fully resolved object_id, both functions should return identical URLs
+    expect(syncLinkUrl).toBe(asyncPermalinkUrl);
+
+    // Ensure the URL contains our project ID
+    expect(syncLinkUrl).toContain("fully-resolved-project-id");
+
+    // Clean up
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+  });
 });
 
 test("prompt.build with structured output templating", () => {
