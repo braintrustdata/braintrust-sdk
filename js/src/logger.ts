@@ -4671,8 +4671,11 @@ export class SpanImpl implements Span {
 
     const appUrl = this._state.appUrl || "https://www.braintrust.dev";
     const baseUrl = `${appUrl}/app/${orgName}`;
-    const params = `r=${this.rootSpanId}&s=${this.spanId}`;
 
+    // NOTE[matt]: I believe lazy values should not exist in the span or the logger.
+    // Nothing in this module should have the possibility of blocking with the lone exception of
+    // flush() which should be a clear exception. We shouldn't build on it and
+    // plan to remove it in the future.
     const args = this.parentComputeObjectMetadataArgs;
 
     switch (this.parentObjectType) {
@@ -4687,13 +4690,29 @@ export class SpanImpl implements Span {
         } else if (projectName) {
           return `${baseUrl}/p/${projectName}/logs?oid=${this._id}`;
         } else {
-          throw new Error("No project ID or name found");
+          // FIXME[matt] we could throw an error here
+          return `${baseUrl}/missing-project-name-or-id`;
         }
       }
-      case SpanObjectTypeV3.EXPERIMENT:
-        break;
+      case SpanObjectTypeV3.EXPERIMENT: {
+        // Experiment links require an id, so the sync version will only work after the experiment is
+        // resolved.
+        let expID =
+          args?.experiment_id || this.parentObjectId?.getSync()?.value;
+        if (!expID) {
+          return `${baseUrl}/missing-experiment-name-or-id`;
+        } else {
+          return `${baseUrl}/object?object_type=experiment&object_id=${expID}&id=${this._id}`;
+        }
+      }
+      case SpanObjectTypeV3.PLAYGROUND_LOGS: {
+        // FIXME[matt] I dontbelieve these are used, but someday we can implement them.
+        return NOOP_SPAN_PERMALINK;
+      }
+      default: {
+        return NOOP_SPAN_PERMALINK;
+      }
     }
-    return NOOP_SPAN_PERMALINK;
   }
 
   async flush(): Promise<void> {
