@@ -456,7 +456,7 @@ describe("span.link", () => {
     expect(link).toBe("https://braintrust.dev/noop-span");
   });
 
-  test("span.link same when logged in and have project id", async () => {
+  test("span.link works with project id", async () => {
     // Mock the state for testing - must be done before creating the span
     const state = await _exportsForTestingOnly.simulateLoginForTests();
 
@@ -480,27 +480,64 @@ describe("span.link", () => {
     expect(link1).toBe(link2);
   });
 
-  test("span.link same when logged in and have project name", async () => {
+  test("span.link works with project name", async () => {
     // Mock the state for testing - must be done before creating the span
     const state = await _exportsForTestingOnly.simulateLoginForTests();
-
     // Verify the login was successful
     expect(state.orgName).toBeDefined();
     expect(state.appUrl).toBeDefined();
-
     // Create a test span
     const logger = initLogger({
       projectName: "test-project",
     });
-
     const span = logger.startSpan({ name: "test-span" });
     span.end();
-
     // Get the link
     const link1 = span.link();
-
     expect(link1).toBe(
       `https://braintrust.dev/app/test-org-name/p/test-project/logs?oid=${span._id}`,
+    );
+  });
+
+  test("span.link handles missing project name or id", async () => {
+    // Mock the state for testing - must be done before creating the span
+    const state = await _exportsForTestingOnly.simulateLoginForTests();
+    // Verify the login was successful
+    expect(state.orgName).toBeDefined();
+    expect(state.appUrl).toBeDefined();
+    // Create a test span
+    const logger = initLogger({});
+    const span = logger.startSpan({ name: "test-span" });
+    span.end();
+    // Get the link
+    const link1 = span.link();
+    expect(link1).toBe(
+      `https://braintrust.dev/app/test-org-name/missing-project-name-or-id`,
+    );
+  });
+
+  test("span.link works with experiment id", async () => {
+    // Mock the state for testing - must be done before creating the span
+    const state = await _exportsForTestingOnly.simulateLoginForTests();
+    // Verify the login was successful
+    expect(state.orgName).toBeDefined();
+    expect(state.appUrl).toBeDefined();
+
+    // Create a test experiment
+    const experiment = initExperiment("test-experiment");
+
+    // Get a span within the experiment context
+    const span = experiment.startSpan({
+      name: "test-span",
+    });
+
+    span.end();
+
+    const link = span.link();
+
+    // Link should contain experiment ID
+    expect(link).toEqual(
+      "https://braintrust.dev/app/test-org-name/missing-experiment-name-or-id",
     );
   });
 });
