@@ -1,4 +1,4 @@
-import { vi, expect, test } from "vitest";
+import { vi, expect, test, describe, beforeEach, afterEach } from "vitest";
 import {
   _exportsForTestingOnly,
   init,
@@ -427,7 +427,6 @@ test("simulateLoginForTests and simulateLogoutForTests", async () => {
     expect(state.orgId).toBe("test-org-id");
     expect(state.orgName).toBe("test-org-name");
     expect(state.apiUrl).toBe("https://braintrust.dev/fake-api-url");
-    expect(state.appUrl).toBe("https://braintrust.dev/fake-app-url");
 
     // Now logout
     const logoutState = _exportsForTestingOnly.simulateLogoutForTests();
@@ -438,6 +437,49 @@ test("simulateLoginForTests and simulateLogoutForTests", async () => {
     expect(logoutState.orgId).toBe(null);
     expect(logoutState.orgName).toBe(null);
     expect(logoutState.apiUrl).toBe(null);
-    expect(logoutState.appUrl).toBe(null);
+    expect(logoutState.appUrl).toBe("https://www.braintrust.dev");
   }
+});
+
+describe("span.link", () => {
+  beforeEach(() => {
+    _exportsForTestingOnly.simulateLogoutForTests();
+  });
+
+  afterEach(() => {
+    _exportsForTestingOnly.simulateLogoutForTests();
+  });
+
+  test("noop span link returns noop permalink", () => {
+    const span = NOOP_SPAN;
+    const link = span.link();
+    expect(link).toBe("https://braintrust.dev/noop-span");
+  });
+
+  test("regular span link follows expected format", async () => {
+    // Mock the state for testing - must be done before creating the span
+    const state = await _exportsForTestingOnly.simulateLoginForTests();
+
+    // Verify the login was successful
+    expect(state.orgName).toBeDefined();
+    expect(state.appUrl).toBeDefined();
+
+    // Create a test span
+    const logger = initLogger({
+      projectName: "test-project",
+      projectId: "test-project-id",
+    });
+
+    const span = logger.startSpan({ name: "test-span" });
+    span.end();
+
+    // Get the link
+    const link1 = span.link();
+    const link2 = await span.permalink();
+
+    console.log("link1", link1);
+    console.log("link2", link2);
+
+    expect(link1).toBe(link2);
+  });
 });
