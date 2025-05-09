@@ -5617,8 +5617,17 @@ export interface DatasetSummary {
 const TEST_API_KEY = "___TEST_API_KEY__THIS_IS_NOT_REAL___";
 
 // This is a helper function to simulate a login for testing.
-function simulateLoginForTests() {
-  return login({ apiKey: TEST_API_KEY });
+async function simulateLoginForTests() {
+  return await login({
+    apiKey: TEST_API_KEY,
+    appUrl: "https://braintrust.dev/fake-app-url",
+  });
+}
+
+// This is a helper function to simulate a logout for testing.
+function simulateLogoutForTests() {
+  _globalState.resetLoginInfo();
+  return _globalState;
 }
 
 export const _exportsForTestingOnly = {
@@ -5627,4 +5636,5 @@ export const _exportsForTestingOnly = {
   useTestBackgroundLogger,
   clearTestBackgroundLogger,
   simulateLoginForTests,
+  simulateLogoutForTests,
 };
