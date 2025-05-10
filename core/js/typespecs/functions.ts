@@ -532,7 +532,7 @@ export const toolFunctionDefinitionSchema = z.object({
     name: z.string(),
     description: z.string().optional(),
     parameters: z.record(z.unknown()).optional(),
-    strict: z.boolean().optional(),
+    strict: z.boolean().nullish(),
   }),
 });
 export type ToolFunctionDefinition = z.infer<

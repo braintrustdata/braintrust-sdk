@@ -6,6 +6,7 @@ export {
   Evaluator,
   EvalTask,
   Eval,
+  EvalHooks,
   EvalResult,
   EvalScorerArgs,
   EvalScorer,

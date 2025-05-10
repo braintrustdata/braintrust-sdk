@@ -342,6 +342,7 @@ export const promptContentsSchema = z.union([
   }),
   z.object({
     messages: z.array(chatCompletionMessageParamSchema),
+    tools: z.array(toolFunctionDefinitionSchema).optional(),
   }),
 ]);
 
@@ -433,7 +434,9 @@ export function promptDefinitionToPromptData(
           tools:
             rawTools && rawTools.length > 0
               ? JSON.stringify(rawTools)
-              : undefined,
+              : promptDefinition.tools
+                ? JSON.stringify(promptDefinition.tools)
+                : undefined,
         }
       : {
           type: "completion",
