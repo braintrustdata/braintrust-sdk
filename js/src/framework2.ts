@@ -342,9 +342,10 @@ export const promptContentsSchema = z.union([
   }),
   z.object({
     messages: z.array(chatCompletionMessageParamSchema),
-    tools: z.array(toolFunctionDefinitionSchema).optional(),
   }),
 ]);
+
+export type PromptContents = z.infer<typeof promptContentsSchema>;
 
 export const promptDefinitionSchema = promptContentsSchema.and(
   z.object({
@@ -354,6 +355,16 @@ export const promptDefinitionSchema = promptContentsSchema.and(
 );
 
 export type PromptDefinition = z.infer<typeof promptDefinitionSchema>;
+
+export const promptDefinitionWithToolsSchema = promptDefinitionSchema.and(
+  z.object({
+    tools: z.array(toolFunctionDefinitionSchema),
+  }),
+);
+
+export type PromptDefinitionWithTools = z.infer<
+  typeof promptDefinitionWithToolsSchema
+>;
 
 export type PromptOpts<
   HasId extends boolean,
@@ -434,9 +445,7 @@ export function promptDefinitionToPromptData(
           tools:
             rawTools && rawTools.length > 0
               ? JSON.stringify(rawTools)
-              : promptDefinition.tools
-                ? JSON.stringify(promptDefinition.tools)
-                : undefined,
+              : undefined,
         }
       : {
           type: "completion",
