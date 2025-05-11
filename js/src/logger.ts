@@ -1745,8 +1745,8 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
 
   private startSpanImpl(args?: StartSpanArgs): Span {
     return new SpanImpl({
-      state: this.state,
       ...args,
+      state: this.state,
       ...startSpanParentArgs({
         state: this.state,
         parent: args?.parent,
@@ -4107,8 +4107,8 @@ export class Experiment
 
   private startSpanImpl(args?: StartSpanArgs): Span {
     return new SpanImpl({
-      state: this.state,
       ...args,
+      state: this.state,
       ...startSpanParentArgs({
         state: this.state,
         parent: args?.parent,
