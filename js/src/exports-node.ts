@@ -8,6 +8,7 @@ export {
   Eval,
   EvalHooks,
   EvalResult,
+  EvalResultWithSummary,
   EvalScorerArgs,
   EvalScorer,
   EvaluatorDef,
