@@ -358,7 +358,7 @@ export type PromptDefinition = z.infer<typeof promptDefinitionSchema>;
 
 export const promptDefinitionWithToolsSchema = promptDefinitionSchema.and(
   z.object({
-    tools: z.array(toolFunctionDefinitionSchema),
+    tools: z.array(toolFunctionDefinitionSchema).optional(),
   }),
 );
 
