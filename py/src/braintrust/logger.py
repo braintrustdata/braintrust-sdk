@@ -707,7 +707,9 @@ class _HTTPBackgroundLogger:
             self._register_dropped_item_count(len(dropped_items))
             if self.all_publish_payloads_dir or self.failed_publish_payloads_dir:
                 try:
-                    HTTP_REQUEST_THREAD_POOL.submit(self._dump_dropped_events, dropped_items)
+                    HTTP_REQUEST_THREAD_POOL.submit(
+                        self._dump_dropped_events, dropped_items, event_timestamp=time.time()
+                    )
                 except Exception as e:
                     traceback.print_exc(file=self.outfile)
 
@@ -763,14 +765,16 @@ class _HTTPBackgroundLogger:
             for batch_set in batch_sets:
                 post_promises = []
                 try:
+                    event_timestamp = time.time()
                     post_promises = [
-                        HTTP_REQUEST_THREAD_POOL.submit(self._submit_logs_request, batch) for batch in batch_set
+                        HTTP_REQUEST_THREAD_POOL.submit(self._submit_logs_request, batch, event_timestamp)
+                        for batch in batch_set
                     ]
                 except RuntimeError:
                     # If the thread pool has shut down, e.g. because the process
                     # is terminating, run the requests the old fashioned way.
                     for batch in batch_set:
-                        self._submit_logs_request(batch)
+                        self._submit_logs_request(batch, event_timestamp=time.time())
 
                 concurrent.futures.wait(post_promises)
                 # Raise any exceptions from the promises as one group.
@@ -831,11 +835,13 @@ class _HTTPBackgroundLogger:
         )
         return [], []
 
-    def _submit_logs_request(self, items: Sequence[str]):
+    def _submit_logs_request(self, items: Sequence[str], event_timestamp: float):
         conn = self.api_conn.get()
         dataStr = construct_logs3_data(items)
         if self.all_publish_payloads_dir:
-            _HTTPBackgroundLogger._write_payload_to_dir(payload_dir=self.all_publish_payloads_dir, payload=dataStr)
+            self._write_payload_to_dir(
+                payload_dir=self.all_publish_payloads_dir, payload=dataStr, event_timestamp=event_timestamp
+            )
         for i in range(self.num_tries):
             start_time = time.time()
             resp = conn.post("/logs3", data=dataStr)
@@ -848,8 +854,8 @@ class _HTTPBackgroundLogger:
             errmsg = f"log request failed. Elapsed time: {time.time() - start_time} seconds. Payload size: {len(dataStr)}.{retrying_text}\nError: {resp_errmsg}"
 
             if not is_retrying and self.failed_publish_payloads_dir:
-                _HTTPBackgroundLogger._write_payload_to_dir(
-                    payload_dir=self.failed_publish_payloads_dir, payload=dataStr
+                self._write_payload_to_dir(
+                    payload_dir=self.failed_publish_payloads_dir, payload=dataStr, event_timestamp=event_timestamp
                 )
                 self._log_failed_payloads_dir()
 
@@ -862,7 +868,7 @@ class _HTTPBackgroundLogger:
 
         print(f"log request failed after {self.num_tries} retries. Dropping batch", file=self.outfile)
 
-    def _dump_dropped_events(self, wrapped_items):
+    def _dump_dropped_events(self, wrapped_items, event_timestamp: float):
         publish_payloads_dir = [x for x in [self.all_publish_payloads_dir, self.failed_publish_payloads_dir] if x]
         if not (wrapped_items and publish_payloads_dir):
             return
@@ -874,7 +880,7 @@ class _HTTPBackgroundLogger:
             for output_dir in publish_payloads_dir:
                 if not output_dir:
                     continue
-                _HTTPBackgroundLogger._write_payload_to_dir(payload_dir=output_dir, payload=payload)
+                self._write_payload_to_dir(payload_dir=output_dir, payload=payload, event_timestamp=event_timestamp)
         except Exception as e:
             traceback.print_exc(file=self.outfile)
 
@@ -894,15 +900,59 @@ class _HTTPBackgroundLogger:
                 self._queue_drop_logging_state["num_dropped"] = 0
                 self._queue_drop_logging_state["last_logged_timestamp"] = time_now
 
-    @staticmethod
-    def _write_payload_to_dir(payload_dir, payload, debug_logging_adjective=None):
-        payload_file = os.path.join(payload_dir, f"payload_{time.time()}_{str(uuid.uuid4())[:8]}.json")
+    def _write_payload_to_dir(self, payload_dir: str, payload: str, event_timestamp: float):
+        payload_uuid = str(uuid.uuid4())[:8]
+        payload_file_basename = f"payload_{event_timestamp}_{payload_uuid}"
+        payload_data_file = os.path.join(payload_dir, f"{payload_file_basename}.full_data.json")
+        payload_redacted_data_file = os.path.join(payload_dir, f"{payload_file_basename}.redacted_data.json")
+        payload_metadata_file = os.path.join(payload_dir, f"{payload_file_basename}.meta.json")
         try:
             os.makedirs(payload_dir, exist_ok=True)
-            with open(payload_file, "w") as f:
+            with open(payload_data_file, "w") as f:
                 f.write(payload)
+            with open(payload_metadata_file, "w") as f:
+                f.write(
+                    json.dumps(
+                        dict(
+                            event_timestamp=event_timestamp,
+                            payload_uuid=payload_uuid,
+                            logger_object_id=id(self),
+                            thread_id=threading.get_ident(),
+                            process_id=os.getpid(),
+                        )
+                    )
+                )
+            try:
+                logs3_data = json.loads(payload)
+                for row in logs3_data["rows"]:
+                    for field in [
+                        "input",
+                        "output",
+                        "expected",
+                        "tags",
+                        "scores",
+                        "metadata",
+                        "prompt_session_data",
+                        "object_data",
+                        "prompt_data",
+                        "function_data",
+                    ]:
+                        if field in row:
+                            row[field] = "REDACTED"
+                with open(payload_redacted_data_file, "w") as f:
+                    f.write(json.dumps(logs3_data))
+            except Exception as e:
+                eprint(
+                    f"Failed to redact payload data for {payload_data_file}:\n",
+                    e,
+                    file=self.outfile,
+                )
         except Exception as e:
-            eprint(f"Failed to write failed payload to output file {payload_file}:\n", e)
+            eprint(
+                f"Failed to write payload to output files {payload_data_file} and {payload_metadata_file}:\n",
+                e,
+                file=self.outfile,
+            )
 
     def _log_failed_payloads_dir(self):
         print(f"Logging failed payloads to {self.failed_publish_payloads_dir}", file=self.outfile)
