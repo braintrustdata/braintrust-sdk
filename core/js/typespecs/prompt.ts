@@ -7,6 +7,7 @@ import {
   chatCompletionContentPartTextSchema,
   chatCompletionMessageParamSchema,
   chatCompletionOpenAIMessageParamSchema,
+  chatCompletionMessageReasoningSchema,
 } from "./openai/messages";
 import { savedFunctionIdSchema } from "./function_id";
 import { customTypes } from "./custom_types";
@@ -20,6 +21,7 @@ export {
 export {
   type ToolCall,
   messageRoleSchema,
+  chatCompletionMessageReasoningSchema,
   chatCompletionMessageToolCallSchema,
   type MessageRole,
 } from "./openai/messages";
@@ -31,6 +33,8 @@ export type OpenAIMessage = z.infer<
   typeof chatCompletionOpenAIMessageParamSchema
 >;
 export type Message = z.infer<typeof chatCompletionMessageParamSchema>;
+
+export type Reasoning = z.infer<typeof chatCompletionMessageReasoningSchema>;
 
 export type Content = Message["content"];
 export type ContentPartText = z.infer<
