@@ -610,3 +610,50 @@ describe("span.link", () => {
     expect(link).toBe("https://braintrust.dev/noop-span");
   });
 });
+
+test("span.export handles unauthenticated state", async () => {
+  // Create a span without logging in
+  const logger = initLogger({});
+  const span = logger.startSpan({ name: "test-span" });
+  span.end();
+
+  // Export should still work and return a valid string
+  let exported: string | undefined = undefined;
+  let error;
+  try {
+    exported = await span.export();
+  } catch (e) {
+    error = e;
+  }
+  expect(error).toBeUndefined();
+  expect(exported).toBeDefined();
+  expect(typeof exported).toBe("string");
+  expect((exported as string).length).toBeGreaterThan(0);
+});
+
+test("span.export handles unresolved parent object ID", async () => {
+  // Create a span with a parent object ID that hasn't been resolved
+  const logger = initLogger({});
+  const span = logger.startSpan({
+    name: "test-span",
+    event: {
+      metadata: {
+        project_id: "test-project-id",
+      },
+    },
+  });
+  span.end();
+
+  // Export should still work and return a valid string
+  let exported: string | undefined = undefined;
+  let error;
+  try {
+    exported = await span.export();
+  } catch (e) {
+    error = e;
+  }
+  expect(error).toBeUndefined();
+  expect(exported).toBeDefined();
+  expect(typeof exported).toBe("string");
+  expect((exported as string).length).toBeGreaterThan(0);
+});
