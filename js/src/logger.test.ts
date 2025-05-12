@@ -12,6 +12,7 @@ import {
   Prompt,
   permalink,
   BraintrustState,
+  FailedHTTPResponse,
 } from "./logger";
 import { LazyValue } from "./util";
 import { BackgroundLogEvent, IS_MERGE_FIELD } from "@braintrust/core";
@@ -512,7 +513,7 @@ describe("span.link", () => {
     // Get the link
     const link1 = span.link();
     expect(link1).toBe(
-      `https://braintrust.dev/app/test-org-name/missing-project-name-or-id`,
+      "https://braintrust.dev/error-generating-link?msg=provide-project-name-or-id",
     );
   });
 
@@ -537,7 +538,75 @@ describe("span.link", () => {
 
     // Link should contain experiment ID
     expect(link).toEqual(
-      "https://braintrust.dev/app/test-org-name/missing-experiment-name-or-id",
+      "https://braintrust.dev/error-generating-link?msg=provide-experiment-id",
     );
+  });
+
+  test("permalink doesn't error if logged out", async () => {
+    _exportsForTestingOnly.simulateLogoutForTests();
+
+    const apiKey = process.env.BRAINTRUST_API_KEY;
+    try {
+      process.env.BRAINTRUST_API_KEY = "this-is-a-nonsense-api-key";
+      // Get a span within the experiment context
+      const logger = initLogger({
+        projectName: "test-project",
+      });
+      const span = logger.startSpan({
+        name: "test-span",
+      });
+      span.end();
+
+      const link2 = await span.permalink();
+      expect(link2).toBe(
+        "https://braintrust.dev/error-generating-link?msg=http-error-401",
+      );
+    } finally {
+      process.env.BRAINTRUST_API_KEY = apiKey;
+    }
+  });
+
+  test("handles invalid slug format in permalink", async () => {
+    const state = await _exportsForTestingOnly.simulateLoginForTests();
+    const result = await permalink("invalid-slug", { state });
+    expect(result).toContain("https://braintrust.dev/error-generating-link");
+  });
+
+  test("span.link handles missing experiment id", async () => {
+    const state = await _exportsForTestingOnly.simulateLoginForTests();
+    const experiment = initExperiment("test-experiment");
+    const span = experiment.startSpan({ name: "test-span" });
+    span.end();
+    // Force parentObjectId to be undefined
+    (span as any).parentObjectId = { getSync: () => ({ value: undefined }) };
+    const link = span.link();
+    expect(link).toBe(
+      "https://braintrust.dev/error-generating-link?msg=provide-experiment-id",
+    );
+  });
+
+  test("span.link handles missing project id and name", async () => {
+    const state = await _exportsForTestingOnly.simulateLoginForTests();
+    const logger = initLogger({});
+    const span = logger.startSpan({ name: "test-span" });
+    span.end();
+    // Force parentObjectId to be undefined and remove project metadata
+    (span as any).parentObjectId = { getSync: () => ({ value: undefined }) };
+    (span as any).parentComputeObjectMetadataArgs = {};
+    const link = span.link();
+    expect(link).toBe(
+      "https://braintrust.dev/error-generating-link?msg=provide-project-name-or-id",
+    );
+  });
+
+  test("span.link handles playground logs", async () => {
+    const state = await _exportsForTestingOnly.simulateLoginForTests();
+    const logger = initLogger({});
+    const span = logger.startSpan({ name: "test-span" });
+    span.end();
+    // Force parentObjectType to be PLAYGROUND_LOGS
+    (span as any).parentObjectType = "playground_logs";
+    const link = span.link();
+    expect(link).toBe("https://braintrust.dev/noop-span");
   });
 });
