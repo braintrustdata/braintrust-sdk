@@ -30,7 +30,7 @@ def test_no_deps(session):
 
     # verify we haven't installed our 3p deps.
     for p in VENDOR_PACKAGES:
-        session.run("python", "-c", f"import {p}", success_codes=ERROR_CODES)
+        session.run("python", "-c", f"import {p}", success_codes=ERROR_CODES, silent=True)
 
     session.run("python", "-c", "import braintrust")
     session.run("pytest", SRC, f"--ignore={SRC}/wrappers")
