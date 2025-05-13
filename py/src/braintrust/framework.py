@@ -32,7 +32,6 @@ from typing import (
 
 import exceptiongroup
 from braintrust_core.score import Score, Scorer
-from braintrust_core.serializable_data_class import SerializableDataClass
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 from typing_extensions import NotRequired, TypedDict
@@ -51,6 +50,7 @@ from .logger import (
 )
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
+from .serializable_data_class import SerializableDataClass
 from .span_types import SpanTypeAttribute
 from .util import bt_iscoroutinefunction, eprint
 
