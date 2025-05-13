@@ -125,6 +125,8 @@ async def test_run_evaluator_with_many_scorers():
 
         scorers.append(Levenshtein())
         scorer_names.append("Levenshtein")
+        scorers.append(Levenshtein)
+        scorer_names.append("Levenshtein")
     except ImportError:
         pass
 
