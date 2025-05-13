@@ -1,9 +1,18 @@
 import dataclasses
+import inspect
 import sys
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
 from .serializable_data_class import SerializableDataClass
+
+# =========================================================================
+#  !!!!!!!!!!!!!!!! READ THIS BEFORE CHANGING THIS FILE !!!!!!!!!!!!!!!!
+#
+#  Scores and Scorer classes can be defined in autoevals, braintrust_core
+#  or this library or potentially user code. If you make changes here,
+#  ensure they are backwards compatible with the existing interfaces.
+# =========================================================================
 
 
 @dataclasses.dataclass
@@ -39,6 +48,11 @@ class Score(SerializableDataClass):
             )
 
 
+def is_score(obj):
+    """Return true if the object satisfies the Score interface, false otherwise."""
+    return hasattr(obj, "name") and hasattr(obj, "score") and hasattr(obj, "metadata") and hasattr(obj, "as_dict")
+
+
 class Scorer(ABC):
     async def eval_async(self, output: Any, expected: Any = None, **kwargs: Any) -> Score:
         return await self._run_eval_async(output, expected, **kwargs)
@@ -61,4 +75,24 @@ class Scorer(ABC):
         ...
 
 
-__all__ = ["Score", "Scorer"]
+def is_scorer(obj):
+    """
+    Duck-typing check to see if an object is a valid scorer.
+    Works with scorers from braintrust_core, autoevals, or this library.
+    """
+    # For class objects, check for appropriate methods
+    if inspect.isclass(obj):
+        return (
+            hasattr(obj, "eval")
+            or hasattr(obj, "eval_async")
+            or hasattr(obj, "_run_eval_sync")
+            or hasattr(obj, "_run_eval_async")
+        )
+    # For instances, check for appropriate methods
+    elif hasattr(obj, "eval") or hasattr(obj, "eval_async"):
+        return True
+    # For functions/callables, we rely on the type system
+    return callable(obj)
+
+
+__all__ = ["Score", "Scorer", "is_score", "is_scorer"]

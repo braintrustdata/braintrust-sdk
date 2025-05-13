@@ -31,7 +31,6 @@ from typing import (
 )
 
 import exceptiongroup
-from braintrust_core.score import Scorer
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 from typing_extensions import NotRequired, TypedDict
@@ -50,7 +49,7 @@ from .logger import (
 )
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
-from .score import Score
+from .score import Score, is_score, is_scorer
 from .serializable_data_class import SerializableDataClass
 from .span_types import SpanTypeAttribute
 from .util import bt_iscoroutinefunction, eprint
@@ -180,9 +179,12 @@ class EvalScorerArgs(SerializableDataClass, Generic[Input, Output]):
 
 OneOrMoreScores = Union[float, int, bool, None, Score, List[Score]]
 
+# Type representing a scorer-like object with eval_async method
+ScorerLike = Any  # Any object with appropriate eval methods
+
 EvalScorer = Union[
-    Scorer,
-    Type[Scorer],
+    ScorerLike,
+    Type[ScorerLike],
     Callable[[Input, Output, Output], OneOrMoreScores],
     Callable[[Input, Output, Output], Awaitable[OneOrMoreScores]],
 ]
@@ -1092,7 +1094,9 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
         with root_span.start_span(
             name=name, span_attributes={"type": SpanTypeAttribute.SCORE}, input=dict(**kwargs)
         ) as span:
-            score = scorer.eval_async if isinstance(scorer, Scorer) else scorer
+            score = scorer
+            if hasattr(scorer, "eval_async"):
+                score = scorer.eval_async
 
             scorer_args = kwargs
 
@@ -1105,12 +1109,12 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
 
             if isinstance(result, Iterable):
                 for s in result:
-                    if not _is_valid_score(s):
+                    if not is_score(s):
                         raise ValueError(
                             f"When returning an array of scores, each score must be a valid Score object. Got: {s}"
                         )
                 result = list(result)
-            elif _is_valid_score(result):
+            elif is_score(result):
                 result = [result]
             else:
                 result = [Score(name=name, score=result)]
@@ -1128,9 +1132,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             return result
 
     # First, resolve the scorers if they are classes
-    scorers = [
-        scorer() if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer for scorer in evaluator.scores
-    ]
+    scorers = [scorer() if inspect.isclass(scorer) and is_scorer(scorer) else scorer for scorer in evaluator.scores]
     scorer_names = [_scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
     unhandled_scores = scorer_names
 
@@ -1352,12 +1354,6 @@ def build_local_summary(
         scores=avg_scores,
         metrics={},
     )
-
-
-def _is_valid_score(obj):
-    # Score objects can come from this library, autoevals or from the deprecated braintrust_core. This is
-    # a duck type test if the object behaves like we want it to.
-    return hasattr(obj, "name") and hasattr(obj, "score") and hasattr(obj, "metadata") and hasattr(obj, "as_dict")
 
 
 __all__ = ["Evaluator", "Eval", "EvalAsync", "Score", "EvalCase", "EvalHooks", "BaseExperiment", "Reporter"]

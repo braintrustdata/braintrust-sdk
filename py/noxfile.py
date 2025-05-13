@@ -18,7 +18,7 @@ VENDOR_PACKAGES = (
     "openai",
     "pydantic_ai",
     "autoevals",
-    # "braintrust_core",
+    "braintrust_core",
 )
 
 # Test matrix
@@ -29,15 +29,12 @@ AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 
 
 @nox.session()
-def test(session):
-    """Ensure that with no dependencies, we can still import and use the
-    library.
-    """
+def test_core(session):
+    """Test the core library with no optional dependencies installed."""
     _install_test_deps(session)
     # verify we haven't installed our 3p deps.
     for p in VENDOR_PACKAGES:
         session.run("python", "-c", f"import {p}", success_codes=ERROR_CODES, silent=True)
-
     session.run("python", "-c", "import braintrust")
     _run_common_tests(session)
 
