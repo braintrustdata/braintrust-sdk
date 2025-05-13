@@ -3,15 +3,6 @@ from typing import List, Optional
 
 import pytest
 
-try:
-    from autoevals import Score as AutoevalsScore
-except ImportError:
-    # Use local Score if autoevals is not available
-    from .score import Score as AutoevalsScore
-try:
-    from braintrust_core.score import Score as BraintrustCoreScore
-except ImportError:
-    from .score import Score as BraintrustCoreScore
 from .framework import (
     EvalCase,
     EvalResultWithSummary,
@@ -78,6 +69,18 @@ async def test_run_evaluator_basic():
 @pytest.mark.asyncio
 async def test_run_evaluator_with_both_score_classes():
     """Test that run_evaluator works with scorers that return both Score class types."""
+
+    # This test validates that we can process scores from any sources. It is nox's job
+    # to ensure this test runs with and without autoevals and braintrust_core installed.
+    try:
+        from autoevals import Score as AutoevalsScore
+    except ImportError:
+        from .score import Score as AutoevalsScore
+    try:
+        from braintrust_core.score import Score as BraintrustCoreScore
+    except ImportError:
+        from .score import Score as BraintrustCoreScore
+
     # Define test data
     data = [
         EvalCase(input="Calculate 2+2", expected="4"),
@@ -92,19 +95,20 @@ async def test_run_evaluator_with_both_score_classes():
             return "The capital of France is Paris"
         return "I don't know"
 
-    # Define a scorer that returns an autoevals Score object
-    def autoevals_scorer(input_value, output, expected):
-        contains_expected = expected.lower() in output.lower()
-        return AutoevalsScore(name="autoevals_scorer", score=1.0 if contains_expected else 0.0)
+    def dict_scorer(input_value, output, expected):
+        return {"name": "dict_scorer", "score": 1.0}
 
-    # Define a scorer that returns a braintrust_core Score object
+    def autoevals_scorer(input_value, output, expected):
+        return AutoevalsScore(name="autoevals_scorer", score=1.0)
+
     def core_scorer(input_value, output, expected):
-        contains_expected = expected.lower() in output.lower()
-        return BraintrustCoreScore(name="core_scorer", score=1.0 if contains_expected else 0.0)
+        return BraintrustCoreScore(name="core_scorer", score=1.0)
 
     def scorer(input_value, output, expected):
-        contains_expected = expected.lower() in output.lower()
-        return Score(name="scorer", score=1.0 if contains_expected else 0.0)
+        return Score(name="scorer", score=1.0)
+
+    scorers = [autoevals_scorer, core_scorer, scorer, dict_scorer]
+    scorer_names = [scorer.__name__ for scorer in scorers]
 
     # Create evaluator with all three scorers
     evaluator = Evaluator(
@@ -112,7 +116,7 @@ async def test_run_evaluator_with_both_score_classes():
         eval_name="test-multiple-score-classes",
         data=data,
         task=simple_task,
-        scores=[autoevals_scorer, core_scorer, scorer],
+        scores=scorers,
         experiment_name=None,
         metadata=None,
     )
@@ -126,18 +130,10 @@ async def test_run_evaluator_with_both_score_classes():
 
     # Both scorers should produce the same scores
     for eval_result in result.results:
-        assert "autoevals_scorer" in eval_result.scores
-        assert "core_scorer" in eval_result.scores
-        assert "scorer" in eval_result.scores
-        assert eval_result.scores["autoevals_scorer"] == 1.0
-        assert eval_result.scores["core_scorer"] == 1.0
-        assert eval_result.scores["scorer"] == 1.0
+        for scorer_name in scorer_names:
+            assert eval_result.scores[scorer_name] == 1.0
 
     # Verify summary
     assert result.summary.project_name == "test-project"
-    assert "autoevals_scorer" in result.summary.scores
-    assert "core_scorer" in result.summary.scores
-    assert "scorer" in result.summary.scores
-    assert result.summary.scores["autoevals_scorer"].score == 1.0
-    assert result.summary.scores["core_scorer"].score == 1.0
-    assert result.summary.scores["scorer"].score == 1.0
+    for scorer_name in scorer_names:
+        assert result.summary.scores[scorer_name].score == 1.0
