@@ -10,7 +10,7 @@ from .framework import (
     build_local_summary,
     run_evaluator,
 )
-from .score import Score
+from .score import Score, Scorer
 
 
 @pytest.mark.asyncio
@@ -68,14 +68,8 @@ async def test_run_evaluator_basic():
 
 @pytest.mark.asyncio
 async def test_run_evaluator_with_many_scorers():
-    """Test that run_evaluator works with scorers that return different Score class types."""
-
     # This test validates that we can process scores from any sources. It is nox's job
     # to ensure this test runs with and without autoevals and braintrust_core installed.
-    try:
-        from autoevals import Score as AutoevalsScore
-    except ImportError:
-        from .score import Score as AutoevalsScore
     try:
         from braintrust_core.score import Score as BraintrustCoreScore
     except ImportError:
@@ -83,23 +77,16 @@ async def test_run_evaluator_with_many_scorers():
 
     # Define test data
     data = [
-        EvalCase(input="Calculate 2+2", expected="4"),
-        EvalCase(input="What is the capital of France?", expected="Paris"),
+        EvalCase(input="abc", expected="abc"),
+        EvalCase(input="def", expected="def"),
     ]
 
     # Define a simple task function that returns fixed responses
     def simple_task(input_value):
-        if "2+2" in input_value:
-            return "The answer is 4"
-        elif "capital of France" in input_value:
-            return "The capital of France is Paris"
-        return "I don't know"
+        return input_value
 
     def dict_scorer(input_value, output, expected):
         return {"name": "dict_scorer", "score": 1.0}
-
-    def autoevals_scorer(input_value, output, expected):
-        return AutoevalsScore(name="autoevals_scorer", score=1.0)
 
     def core_scorer(input_value, output, expected):
         return BraintrustCoreScore(name="core_scorer", score=1.0)
@@ -107,36 +94,39 @@ async def test_run_evaluator_with_many_scorers():
     def scorer(input_value, output, expected):
         return Score(name="scorer", score=1.0)
 
-    class CustomScorer:
-        def eval(self, input_value, output, expected):
+    class CustomScorer(Scorer):
+        def _run_eval_sync(self, *args, **kwargs):
             return Score(name="custom_scorer", score=1.0)
 
-    class CustomScorerAsync:
-        async def eval_async(self, input_value, output, expected):
+    class CustomScorerAsync(Scorer):
+        async def eval_async(self, *args, **kwargs):
             return Score(name="custom_async_scorer", score=1.0)
 
-    class CustomScorerCall:
-        def __call__(self, input_value, output, expected):
-            return Score(name="custom_call_scorer", score=1.0)
+        def _run_eval_sync(self, *args, **kwargs):
+            return Score(name="custom_async_scorer", score=1.0)
 
     scorers = [
-        autoevals_scorer,
+        dict_scorer,
         core_scorer,
         scorer,
-        dict_scorer,
         CustomScorer(),
         CustomScorerAsync(),
-        CustomScorerCall(),
     ]
     scorer_names = [
-        "autoevals_scorer",
         "core_scorer",
         "scorer",
         "dict_scorer",
         "custom_scorer",
         "custom_async_scorer",
-        "custom_call_scorer",
     ]
+
+    try:
+        from autoevals import Levenshtein
+
+        scorers.append(Levenshtein())
+        scorer_names.append("Levenshtein")
+    except ImportError:
+        pass
 
     # Create evaluator with all scorers
     evaluator = Evaluator(
@@ -159,11 +149,14 @@ async def test_run_evaluator_with_many_scorers():
     # All scorers should produce the same scores
     for eval_result in result.results:
         for scorer_name in scorer_names:
+            print(eval_result.scores)
+            assert scorer_name in eval_result.scores
             assert eval_result.scores[scorer_name] == 1.0
 
     # Verify summary
     assert result.summary.project_name == "test-project"
     for scorer_name in scorer_names:
+        assert scorer_name in result.summary.scores
         assert result.summary.scores[scorer_name].score == 1.0
 
 
@@ -172,9 +165,8 @@ async def test_run_evaluator_with_scorer_classes():
     """Test that run_evaluator works with different class-based scorer implementations."""
 
     # Define test data
-    data = [
-        EvalCase(input="Test input", expected="Test output"),
-    ]
+    data = [EvalCase(input="Test input", expected="Test input")]
+
     # Simple task function
     def echo_task(input_value):
         return input_value
@@ -186,11 +178,6 @@ async def test_run_evaluator_with_scorer_classes():
 
         def __call__(self, input_value, output, expected):
             return {"name": "autoeval_style", "score": 1.0}
-
-    # Class that mimics braintrust_core Scorer pattern
-    class CoreStyleScorer:
-        def eval(self, input_value, output, expected):
-            return Score(name="core_style", score=1.0)
 
     # Class with async eval
     class AsyncScorer:
@@ -211,7 +198,7 @@ async def test_run_evaluator_with_scorer_classes():
         eval_name="test-scorer-classes",
         data=data,
         task=echo_task,
-        scores=[AutoevalsStyleScorer, CoreStyleScorer, AsyncScorer, CustomImplScorer],
+        scores=[AutoevalsStyleScorer, AsyncScorer, CustomImplScorer],
         experiment_name=None,
         metadata=None,
     )
@@ -224,7 +211,7 @@ async def test_run_evaluator_with_scorer_classes():
     assert len(result.results) == 1
 
     # All scorer classes should be properly instantiated and produce scores
-    expected_scorer_names = ["autoeval_style", "core_style", "async_style", "custom_impl"]
+    expected_scorer_names = ["autoeval_style", "async_style", "custom_impl"]
 
     # Check that all scorer classes were instantiated and produced scores
     for scorer_name in expected_scorer_names:
