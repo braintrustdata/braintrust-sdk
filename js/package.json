@@ -1,6 +1,6 @@
 {
   "name": "braintrust",
-  "version": "0.0.160",
+  "version": "0.0.161",
   "description": "SDK for integrating Braintrust",
   "repository": {
     "type": "git",
@@ -89,7 +89,7 @@
     "cli-progress": "^3.12.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "esbuild": "^0.25.3",
+    "esbuild": "^0.25.4",
     "eventsource-parser": "^1.1.2",
     "express": "^4.21.2",
     "graceful-fs": "^4.2.11",

@@ -53,7 +53,7 @@ jobs:
       - name: Type check the Python SDK with Pyright
         # TODO: Make Pyright errors fail the build.
         run: |
-          pnpx pyright@1.1.388 --level error $(git ls-files '*.py') || true
+          pnpm dlx pyright@1.1.388 --level error $(git ls-files '*.py') || true
       - name: Lint the Python SDK
         run: |
           pylint --errors-only $(git ls-files '*.py')
