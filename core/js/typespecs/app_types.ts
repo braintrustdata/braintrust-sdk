@@ -563,7 +563,7 @@ const webhookAutomationActionSchema = z.object({
   url: z.string().describe("The webhook URL to send the request to"),
 });
 
-const logAutomationConfigSchema = z.object({
+export const logAutomationConfigSchema = z.object({
   event_type: z
     .literal("logs")
     .describe("The event which starts the automation execution"),
@@ -618,15 +618,18 @@ export const projectAutomationSchema = z
     name: projectAutomationBaseSchema.shape.name,
     description: projectAutomationBaseSchema.shape.description,
     config: z
-      .discriminatedUnion("event_type", [
-        logAutomationConfigSchema,
-        retentionAutomationConfigSchema,
-      ])
+      .union([logAutomationConfigSchema, retentionAutomationConfigSchema])
       .describe("The configuration for the automation rule"),
   })
   .openapi("ProjectAutomation");
 
 export type ProjectAutomation = z.infer<typeof projectAutomationSchema>;
+export const logAutomationSchema = projectAutomationSchema.merge(
+  z.object({
+    config: logAutomationConfigSchema,
+  }),
+);
+export type LogAutomation = z.infer<typeof logAutomationSchema>;
 
 export const onlineScoreConfigSchema = z
   .object({
