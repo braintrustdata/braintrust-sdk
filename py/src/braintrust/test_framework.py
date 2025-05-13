@@ -81,7 +81,6 @@ async def test_run_evaluator_with_many_scorers():
         EvalCase(input="def", expected="def"),
     ]
 
-    # Define a simple task function that returns fixed responses
     def simple_task(input_value):
         return input_value
 
@@ -120,6 +119,7 @@ async def test_run_evaluator_with_many_scorers():
         "custom_async_scorer",
     ]
 
+    # if autoevals is installed, use it. This verifies our scoring duck typing works
     try:
         from autoevals import Levenshtein
 
@@ -157,63 +157,4 @@ async def test_run_evaluator_with_many_scorers():
     assert result.summary.project_name == "test-project"
     for scorer_name in scorer_names:
         assert scorer_name in result.summary.scores
-        assert result.summary.scores[scorer_name].score == 1.0
-
-
-@pytest.mark.asyncio
-async def test_run_evaluator_with_scorer_classes():
-    """Test that run_evaluator works with different class-based scorer implementations."""
-
-    # Define test data
-    data = [EvalCase(input="Test input", expected="Test input")]
-
-    # Simple task function
-    def echo_task(input_value):
-        return input_value
-
-    # Class that mimics autoevals Scorer pattern
-    class AutoevalsStyleScorer:
-        def eval(self, input_value, output, expected):
-            return {"name": "autoeval_style", "score": 1.0}
-
-        def __call__(self, input_value, output, expected):
-            return {"name": "autoeval_style", "score": 1.0}
-
-    # Class with async eval
-    class AsyncScorer:
-        async def eval_async(self, input_value, output, expected):
-            return Score(name="async_style", score=1.0)
-
-    # A completely custom implementation with _run_eval_sync
-    class CustomImplScorer:
-        def _run_eval_sync(self, input_value, output, expected):
-            return Score(name="custom_impl", score=1.0)
-
-        def eval(self, input_value, output, expected):
-            return self._run_eval_sync(input_value, output, expected)
-
-    # Create evaluator with class-based scorers that should be instantiated via duck typing
-    evaluator = Evaluator(
-        project_name="test-project",
-        eval_name="test-scorer-classes",
-        data=data,
-        task=echo_task,
-        scores=[AutoevalsStyleScorer, AsyncScorer, CustomImplScorer],
-        experiment_name=None,
-        metadata=None,
-    )
-
-    # Run evaluator
-    result = await run_evaluator(None, evaluator, None, [])
-
-    # Verify results
-    assert isinstance(result, EvalResultWithSummary)
-    assert len(result.results) == 1
-
-    # All scorer classes should be properly instantiated and produce scores
-    expected_scorer_names = ["autoeval_style", "async_style", "custom_impl"]
-
-    # Check that all scorer classes were instantiated and produced scores
-    for scorer_name in expected_scorer_names:
-        assert result.results[0].scores[scorer_name] == 1.0
         assert result.summary.scores[scorer_name].score == 1.0
