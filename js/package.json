@@ -40,10 +40,14 @@
       "require": "./dev/dist/index.js"
     }
   },
+  "files": [
+    "dist/**/*",
+    "dev/dist/**/*"
+  ],
   "scripts": {
     "build": "tsup",
     "watch": "tsup --watch",
-    "clean": "rm -r dist/*",
+    "clean": "rm -r dist/* && rm -r dev/dist/*",
     "docs": "npx typedoc --options typedoc.json src/index.ts",
     "prepublishOnly": "../../scripts/node_prepublish_sdk.py",
     "postpublish": "../../scripts/node_postpublish_sdk.py",
