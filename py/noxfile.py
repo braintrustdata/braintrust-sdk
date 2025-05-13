@@ -79,7 +79,7 @@ def test_with_autoevals(session, version):
 
 @nox.session()
 def test_with_braintrust_core(session):
-    # Some tests to specific things if braintrust_core is installed, so run our
+    # Some tests do specific things if braintrust_core is installed, so run our
     # common tests with it installed. Testing the latest (aka the last ever version)
     # is enough.
     _install_test_deps(session)
