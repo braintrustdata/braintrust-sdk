@@ -1,6 +1,7 @@
 import dataclasses
 import inspect
 import sys
+import warnings
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
@@ -42,9 +43,9 @@ class Score(SerializableDataClass):
         if self.score is not None and (self.score < 0 or self.score > 1):
             raise ValueError(f"score ({self.score}) must be between 0 and 1")
         if self.error is not None:
-            print(
-                "The error field is deprecated, as errors are now propagated to the caller. The field will be removed in a future version of the library",
-                sys.stderr,
+            warnings.warn(
+                "The error field is deprecated, as errors are now propagated to the caller."
+                " The field will be removed in a future version of the library"
             )
 
 
