@@ -563,6 +563,7 @@ const webhookAutomationActionSchema = z.object({
   url: z.string().describe("The webhook URL to send the request to"),
 });
 
+export const automationEventTypeEnum = z.enum(["logs", "retention"]);
 export const logAutomationConfigSchema = z.object({
   event_type: z
     .literal("logs")
