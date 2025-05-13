@@ -8,6 +8,7 @@ import nox
 LATEST = "__latest__"
 SRC = "src/braintrust"
 
+SILENT_INSTALLS = True
 
 ERROR_CODES = tuple(range(1, 256))
 
@@ -102,4 +103,4 @@ def _install(session, package, version=LATEST):
     cmd = f"{package}=={version}"
     if version == LATEST or not version:
         cmd = package
-    session.run("pip", "install", cmd)
+    session.run("pip", "install", cmd, silent=SILENT_INSTALLS)
