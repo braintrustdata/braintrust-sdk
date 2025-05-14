@@ -1,6 +1,7 @@
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import {
   GitMetadataSettings,
+  ObjectReference,
   RepoInfo,
   SSEProgressEventData,
 } from "@braintrust/core/typespecs";
@@ -169,6 +170,7 @@ export type EvalResult<
   output: Output;
   scores: Record<string, number | null>;
   error: unknown;
+  origin?: ObjectReference;
 };
 
 type ErrorScoreHandler = (args: {
@@ -846,6 +848,7 @@ async function runEvaluatorInternal(
     metadata: Record<string, unknown>;
     scores: Record<string, number | null>;
     error: unknown;
+    origin?: ObjectReference;
   }
   const results: EvalResult[] = [];
   const q = queue(
@@ -1080,6 +1083,7 @@ async function runEvaluatorInternal(
             ...scores,
           },
           error,
+          origin: baseEvent.event?.origin,
         });
       };
 

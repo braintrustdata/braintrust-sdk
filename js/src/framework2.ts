@@ -345,6 +345,8 @@ export const promptContentsSchema = z.union([
   }),
 ]);
 
+export type PromptContents = z.infer<typeof promptContentsSchema>;
+
 export const promptDefinitionSchema = promptContentsSchema.and(
   z.object({
     model: z.string(),
@@ -353,6 +355,16 @@ export const promptDefinitionSchema = promptContentsSchema.and(
 );
 
 export type PromptDefinition = z.infer<typeof promptDefinitionSchema>;
+
+export const promptDefinitionWithToolsSchema = promptDefinitionSchema.and(
+  z.object({
+    tools: z.array(toolFunctionDefinitionSchema).optional(),
+  }),
+);
+
+export type PromptDefinitionWithTools = z.infer<
+  typeof promptDefinitionWithToolsSchema
+>;
 
 export type PromptOpts<
   HasId extends boolean,
