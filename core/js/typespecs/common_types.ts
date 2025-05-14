@@ -125,3 +125,5 @@ export const objectReferenceSchema = z
   })
   .describe("Reference to the original object and event this was copied from.")
   .openapi("ObjectReference");
+
+export type ObjectReference = z.infer<typeof objectReferenceSchema>;
