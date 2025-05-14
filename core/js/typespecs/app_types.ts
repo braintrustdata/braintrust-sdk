@@ -584,7 +584,7 @@ export const logAutomationConfigSchema = z.object({
 });
 
 export const retentionObjectTypeEnum = z
-  .enum(["project_log", "experiment", "dataset"])
+  .enum(["project_logs", "experiment", "dataset"])
   .describe("The object type that the retention policy applies to")
   .openapi("RetentionObjectType");
 export type RetentionObjectType = z.infer<typeof retentionObjectTypeEnum>;
@@ -631,6 +631,13 @@ export const logAutomationSchema = projectAutomationSchema.merge(
   }),
 );
 export type LogAutomation = z.infer<typeof logAutomationSchema>;
+
+export const retentionAutomationSchema = projectAutomationSchema.merge(
+  z.object({
+    config: retentionAutomationConfigSchema,
+  }),
+);
+export type RetentionAutomation = z.infer<typeof retentionAutomationSchema>;
 
 export const onlineScoreConfigSchema = z
   .object({
