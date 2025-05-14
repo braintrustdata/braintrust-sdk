@@ -4,31 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Select tag or branch"
-        type: choice
+        description: "Enter tag or branch name (e.g., 'v1.2.3', 'main')"
+        type: string
         required: true
-        options: ${{ steps.get_refs.outputs.refs }}
 
 jobs:
-  # First job to get available refs
-  get_refs:
-    runs-on: ubuntu-latest
-    outputs:
-      refs: ${{ steps.set_refs.outputs.refs }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - id: set_refs
-        run: |
-          # Get tags starting with v, sort descending
-          TAGS=$(git tag -l "v*" | sort -r)
-          # Get branches
-          BRANCHES=$(git branch -r | sed 's/origin\///')
-          # Combine and format as JSON array
-          REFS=$(echo -e "$TAGS\n$BRANCHES" | jq -R -s -c 'split("\n")[:-1]')
-          echo "refs=$REFS" >> $GITHUB_OUTPUT
-
   test:
     needs: get_refs
     runs-on: ubuntu-latest
@@ -45,7 +25,7 @@ jobs:
           - "3.13"
 
     env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY}}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY}}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       TWINE_USERNAME: __token__
       TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
 
