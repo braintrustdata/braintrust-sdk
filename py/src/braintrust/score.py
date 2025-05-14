@@ -50,7 +50,6 @@ class Score(SerializableDataClass):
 
 
 def is_score(obj):
-    """Return true if the object satisfies the Score interface, false otherwise."""
     return hasattr(obj, "name") and hasattr(obj, "score") and hasattr(obj, "metadata") and hasattr(obj, "as_dict")
 
 
@@ -77,10 +76,6 @@ class Scorer(ABC):
 
 
 def is_scorer(obj):
-    """
-    Duck-typing check to see if an object is a valid scorer.
-    Works with scorers from braintrust_core, autoevals, or this library.
-    """
     # For class objects, check for appropriate methods
     if inspect.isclass(obj):
         return (

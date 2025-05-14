@@ -144,7 +144,6 @@ async def test_run_evaluator_with_many_scorers():
     # Run evaluator
     result = await run_evaluator(None, evaluator, None, [])
 
-    # Verify results
     assert isinstance(result, EvalResultWithSummary)
     assert len(result.results) == 2
 
@@ -155,7 +154,6 @@ async def test_run_evaluator_with_many_scorers():
             assert scorer_name in eval_result.scores
             assert eval_result.scores[scorer_name] == 1.0
 
-    # Verify summary
     assert result.summary.project_name == "test-project"
     for scorer_name in scorer_names:
         assert scorer_name in result.summary.scores

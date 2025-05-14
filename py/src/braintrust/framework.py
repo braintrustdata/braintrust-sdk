@@ -33,7 +33,7 @@ from typing import (
 import exceptiongroup
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
-from typing_extensions import NotRequired, TypedDict
+from typing_extensions import NotRequired, Protocol, TypedDict
 
 from .git_fields import GitMetadataSettings, RepoInfo
 from .logger import (
@@ -179,12 +179,36 @@ class EvalScorerArgs(SerializableDataClass, Generic[Input, Output]):
 
 OneOrMoreScores = Union[float, int, bool, None, Score, List[Score]]
 
-# Type representing a scorer-like object with eval_async method
-ScorerLike = Any  # Any object with appropriate eval methods
+# Synchronous scorer interface - implements callable
+class SyncScorerLike(Protocol, Generic[Input, Output]):
+    """
+    Protocol for synchronous scorers that implement the callable interface.
+    This is the most common interface and is used when no async version is available.
+    """
+
+    def __call__(
+        self, input: Input, output: Output, expected: Optional[Output] = None, **kwargs: Any
+    ) -> OneOrMoreScores:
+        ...
+
+
+# Asynchronous scorer interface
+class AsyncScorerLike(Protocol, Generic[Input, Output]):
+    """
+    Protocol for asynchronous scorers that implement the eval_async interface.
+    The framework will prefer this interface if available.
+    """
+
+    async def eval_async(self, output: Output, expected: Optional[Output] = None, **kwargs: Any) -> OneOrMoreScores:
+        ...
+
+
+# Union type for any kind of scorer (for typing)
+ScorerLike = Union[SyncScorerLike[Input, Output], AsyncScorerLike[Input, Output]]
 
 EvalScorer = Union[
-    ScorerLike,
-    Type[ScorerLike],
+    ScorerLike[Input, Output],
+    Type[ScorerLike[Input, Output]],
     Callable[[Input, Output, Output], OneOrMoreScores],
     Callable[[Input, Output, Output], Awaitable[OneOrMoreScores]],
 ]
