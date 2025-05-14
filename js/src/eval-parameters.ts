@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { Prompt } from "./logger";
 import {
-  promptDefinitionSchema,
+  promptDefinitionWithToolsSchema,
   promptDefinitionToPromptData,
 } from "./framework2";
 import { promptDataSchema } from "@braintrust/core/typespecs";
@@ -12,7 +12,7 @@ export const evalParametersSchema = z.record(
   z.union([
     z.object({
       type: z.literal("prompt"),
-      default: promptDefinitionSchema.optional(),
+      default: promptDefinitionWithToolsSchema.optional(),
       description: z.string().optional(),
     }),
     z.instanceof(z.ZodType), // For Zod schemas
@@ -48,7 +48,10 @@ export function validateParameters<
           const promptData = value
             ? promptDataSchema.parse(value)
             : schema.default
-              ? promptDefinitionToPromptData(schema.default)
+              ? promptDefinitionToPromptData(
+                  schema.default,
+                  schema.default.tools,
+                )
               : undefined;
           if (!promptData) {
             throw new Error(`Parameter '${name}' is required`);
