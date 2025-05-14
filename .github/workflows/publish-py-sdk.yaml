@@ -10,7 +10,6 @@ on:
 
 jobs:
   test:
-    needs: get_refs
     runs-on: ubuntu-latest
 
     strategy:
@@ -25,7 +24,8 @@ jobs:
           - "3.13"
 
     env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY}}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY}}
 
     steps:
       - uses: actions/checkout@v4
