@@ -410,6 +410,12 @@ export const sseTextEventSchema = baseSSEEventSchema.merge(
   }),
 );
 
+export const sseReasoningEventSchema = baseSSEEventSchema.merge(
+  z.object({
+    event: z.literal("reasoning_delta"),
+  }),
+);
+
 export const sseDataEventSchema = baseSSEEventSchema.merge(
   z.object({
     event: z.literal("json_delta"),
@@ -473,6 +479,7 @@ export const sseProgressEventDataSchema = z
     output_type: functionOutputTypeEnum,
     name: z.string(),
     event: z.enum([
+      "reasoning_delta",
       "text_delta",
       "json_delta",
       "error",
@@ -495,6 +502,7 @@ export type SSEConsoleEventData = z.infer<typeof sseConsoleEventDataSchema>;
 export const callEventSchema = z
   .union([
     sseTextEventSchema.openapi({ title: "text_delta" }),
+    sseReasoningEventSchema.openapi({ title: "reasoning_delta" }),
     sseDataEventSchema.openapi({ title: "json_delta" }),
     sseProgressEventSchema.openapi({ title: "progress" }),
     sseErrorEventSchema.openapi({ title: "error" }),
