@@ -72,11 +72,11 @@ py-sdk-build: update-sdk-version-py
 
 # Run all tests against the current source.
 py-sdk-test-code:
-	nox -f py/noxfile.py -k code
+	nox -f py/noxfile.py
 
 # Run all tests against the most recently built wheel.
 py-sdk-test-wheel:
-	nox -f py/noxfile.py -k wheel
+	nox -f py/noxfile.py -- --wheel
 
 # do everything the ci needs to do to check our code
 py-sdk-verify-ci: fixup py-sdk-lint py-sdk-test-code

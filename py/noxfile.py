@@ -1,6 +1,12 @@
 """
-Define our tests to run against different combinations of
-Python & library versions.
+Nox scripts the environment our tests run in and it used to verify our library
+works with and without different dependencies. A few commands to check out:
+
+    nox                        Run all sessions.
+    nox -l                     List all sessions.
+    nox -s <session>           Run a specific session.
+    nox ... -- --wheel         Run tests against the wheel in dist.
+    nox -h                     Get help.
 """
 
 import glob
@@ -14,12 +20,6 @@ DIST = "dist"
 SILENT_INSTALLS = True
 
 ERROR_CODES = tuple(range(1, 256))
-
-# The source of the braintrust package. We can test it against source code
-# or a built wheel. Run `nox -k code` for your normal dev flow.
-CODE = "code"
-WHEEL = "wheel"
-BT_SOURCES = (CODE, WHEEL)
 
 # List your package here if it's not guaranteed to be installed. We'll (try to)
 # validate things work with or without them.
@@ -39,31 +39,18 @@ AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 
 
 @nox.session()
-@nox.parametrize("source", BT_SOURCES)
-def test_core(session, source):
-    """Test the core library with no optional dependencies installed."""
-    _install_test_deps(session, source)
-
-    if source == WHEEL:
-        # sanity check we have installed from the wheel.
-        lines = [
-            "import sys, braintrust as b",
-            "sys.exit(0 if 'site-packages' in b.__file__ else 1)",
-        ]
-        session.run("python", "-c", ";".join(lines), silent=True)
-
+def test_core(session):
+    _install_test_deps(session)
     # verify we haven't installed our 3p deps.
     for p in VENDOR_PACKAGES:
         session.run("python", "-c", f"import {p}", success_codes=ERROR_CODES, silent=True)
-    session.run("python", "-c", "import braintrust")
     _run_common_tests(session)
 
 
 @nox.session()
 @nox.parametrize("pydantic_ai_version", PYDANTIC_AI_VERSIONS)
-@nox.parametrize("source", BT_SOURCES)
-def test_with_pydantic_ai(session, pydantic_ai_version, source):
-    _install_test_deps(session, source)
+def test_with_pydantic_ai(session, pydantic_ai_version):
+    _install_test_deps(session)
     _install(session, "pydantic_ai", pydantic_ai_version)
     session.run("pytest", f"{SRC}/wrappers/test_pydantic_ai.py")
     _run_common_tests(session)
@@ -71,9 +58,8 @@ def test_with_pydantic_ai(session, pydantic_ai_version, source):
 
 @nox.session()
 @nox.parametrize("version", ANTHROPIC_VERSIONS)
-@nox.parametrize("source", BT_SOURCES)
-def test_with_anthropic(session, version, source):
-    _install_test_deps(session, source)
+def test_with_anthropic(session, version):
+    _install_test_deps(session)
     _install(session, "anthropic", version)
     session.run("pytest", f"{SRC}/wrappers/test_anthropic.py")
     _run_common_tests(session)
@@ -81,9 +67,8 @@ def test_with_anthropic(session, version, source):
 
 @nox.session()
 @nox.parametrize("version", OPENAI_VERSIONS)
-@nox.parametrize("source", BT_SOURCES)
-def test_with_openai(session, version, source):
-    _install_test_deps(session, source)
+def test_with_openai(session, version):
+    _install_test_deps(session)
     _install(session, "openai", version)
     session.run("pytest", f"{SRC}/wrappers/test_openai.py")
     _run_common_tests(session)
@@ -91,37 +76,47 @@ def test_with_openai(session, version, source):
 
 @nox.session()
 @nox.parametrize("version", AUTOEVALS_VERSIONS)
-@nox.parametrize("source", BT_SOURCES)
-def test_with_autoevals(session, version, source):
+def test_with_autoevals(session, version):
     # Run all of our core tests with autoevals installed. Some tests
     # specifically validate scores from autoevals work properly, so
     # we need some tests with it installed.
-    _install_test_deps(session, source)
+    _install_test_deps(session)
     _install(session, "autoevals", version)
     _run_common_tests(session)
 
 
 @nox.session()
-@nox.parametrize("source", BT_SOURCES)
-def test_with_braintrust_core(session, source):
+def test_with_braintrust_core(session):
     # Some tests do specific things if braintrust_core is installed, so run our
     # common tests with it installed. Testing the latest (aka the last ever version)
     # is enough.
-    _install_test_deps(session, source)
+    _install_test_deps(session)
     _install(session, "braintrust_core")
     _run_common_tests(session)
 
 
-def _install_test_deps(session, source):
+def _install_test_deps(session):
+    # verify braintrust isn't installed yet
+    session.run("python", "-c", "import braintrust", success_codes=ERROR_CODES, silent=True)
+
+    install_wheel = "--wheel" in session.posargs
+
     session.install("pytest")
     session.install("pytest-asyncio")
-    if source == CODE:
-        session.install("-e", ".[test]")
-    elif source == WHEEL:
+    if install_wheel:
         wheel_path = _get_braintrust_wheel()
         session.install(wheel_path)
     else:
-        raise Exception(f"Invalid source: {source}")
+        session.install("-e", ".[test]")
+
+    # Sanity check we have installed braintrust (and that it is from a wheel if needed)
+    session.run("python", "-c", "import braintrust")
+    if install_wheel:
+        lines = [
+            "import sys, braintrust as b",
+            "sys.exit(0 if 'site-packages' in b.__file__ else 1)",
+        ]
+        session.run("python", "-c", ";".join(lines), silent=True)
 
 
 def _get_braintrust_wheel():
