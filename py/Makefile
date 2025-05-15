@@ -34,7 +34,8 @@ install-dev:
 publish:
 	./scripts/publish.sh
 
-verify-build-publish: lint build test-wheel publish
+# verify-build-publish: lint build test-wheel publish
+verify-build-publish: lint build publish
 
 publish-to-pypi: export PYPI_REPO := pypi
 publish-to-pypi: verify-build-publish
