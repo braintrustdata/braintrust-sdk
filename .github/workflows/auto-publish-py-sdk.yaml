@@ -81,9 +81,10 @@ jobs:
           python -m pip install -e "py[all]"
           python -m pip install --upgrade pip setuptools build twine pylint nox pre-commit
       - name: Verify the code
+        working-directory: py
         run: |
           cat Makefile
-          cd py && make verify
+          make verify
 
   build-and-publish:
     needs: [test, validate]
