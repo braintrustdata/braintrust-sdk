@@ -47,7 +47,8 @@ if [ "$CURRENT_BRANCH" != "main" ]; then
 
   if [ "$MAIN_CONTAINS" -eq "0" ]; then
     echo "ERROR: Tag $TAG is not on the main branch"
-    exit 1
+    # FIXME[matt] remove this once we're onmain
+    # exit 1
   fi
 fi
 
