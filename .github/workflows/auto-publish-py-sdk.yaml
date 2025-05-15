@@ -83,6 +83,7 @@ jobs:
       - name: Verify the code
         working-directory: py
         run: |
+          ls -la
           cat Makefile
           make verify
 
