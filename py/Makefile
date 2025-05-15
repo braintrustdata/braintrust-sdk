@@ -6,7 +6,7 @@ clean:
 
 fixup:
 	# just run the whole repos fixup (aka pre-commit hooks)
-	cd .. && make new-fixup
+	cd .. && make fixup
 
 lint: fixup
 	@pylint --errors-only $(shell git ls-files '**/*.py')

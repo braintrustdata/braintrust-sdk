@@ -82,6 +82,7 @@ jobs:
           python -m pip install --upgrade pip setuptools build twine pylint nox pre-commit
       - name: Verify the code
         run: |
+          cat Makefile
           cd py && make verify
 
   build-and-publish:
