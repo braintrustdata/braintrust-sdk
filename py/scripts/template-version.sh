@@ -2,7 +2,7 @@
 
 set -e
 
-VERSION_FILE="py/src/braintrust/version.py"
+VERSION_FILE="src/braintrust/version.py"
 
 GIT_COMMIT=$(git rev-parse HEAD)
 

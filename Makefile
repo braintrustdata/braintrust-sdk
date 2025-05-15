@@ -59,7 +59,10 @@ pylint:
 #----------------------
 
 .PHONY: py-sdk-build py-sdk-lint py-sdk-verify py-sdk-test-code py-sdk-test-wheel py-sdk-build-and-test
-.PHONY: py-sdk-build-test-publish-testpypi py-sdk-build-test-publish-pypi update-sdk-version-py
+.PHONY: py-sdk-build-test-publish-testpypi py-sdk-build-test-publish-pypi update-sdk-version-py new-fixup
+
+new-fixup:
+	pre-commit run --all-files
 
 py-sdk-lint:
 	@pylint --errors-only py/src py/examples
@@ -90,7 +93,7 @@ py-sdk-publish:
 	cd py && twine upload --repository ${PYPI_REPO} dist/*
 
 update-sdk-version-py:
-	@bash template-version.sh
+	@bash py/scripts/template-version.sh
 
 # Build test and publish the wheel.
 py-sdk-build-test-publish: py-sdk-build py-sdk-test-wheel py-sdk-publish
