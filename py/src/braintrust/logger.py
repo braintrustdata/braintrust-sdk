@@ -47,7 +47,6 @@ import chevron
 import exceptiongroup
 import requests
 import urllib3
-from braintrust_core.serializable_data_class import SerializableDataClass
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -72,6 +71,7 @@ from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptMessage
 from .prompt_cache.disk_cache import DiskCache
 from .prompt_cache.lru_cache import LRUCache
 from .prompt_cache.prompt_cache import PromptCache
+from .serializable_data_class import SerializableDataClass
 from .span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from .span_types import SpanTypeAttribute
 from .types import AttachmentReference, AttachmentStatus, DatasetEvent, ExperimentEvent, PromptOptions, SpanAttributes

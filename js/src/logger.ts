@@ -1745,8 +1745,10 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
 
   private startSpanImpl(args?: StartSpanArgs): Span {
     return new SpanImpl({
-      state: this.state,
       ...args,
+      // Sometimes `args` gets passed directly into this function, and it contains an undefined value for `state`.
+      // To ensure that we always use this logger's state, we override the `state` argument no matter what.
+      state: this.state,
       ...startSpanParentArgs({
         state: this.state,
         parent: args?.parent,
@@ -4107,8 +4109,10 @@ export class Experiment
 
   private startSpanImpl(args?: StartSpanArgs): Span {
     return new SpanImpl({
-      state: this.state,
       ...args,
+      // Sometimes `args` gets passed directly into this function, and it contains an undefined value for `state`.
+      // To ensure that we always use this experiment's state, we override the `state` argument no matter what.
+      state: this.state,
       ...startSpanParentArgs({
         state: this.state,
         parent: args?.parent,
