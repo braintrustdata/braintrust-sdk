@@ -51,7 +51,7 @@ echo ""
 echo "Are you ready to release version ${VERSION}? Type 'YOLO' to continue:"
 read -r CONFIRMATION
 
-if [ "$CONFIRMATION" != "yolo" ]; then
+if [ "$CONFIRMATION" != "YOLO" ]; then
   echo "Release cancelled."
   exit 1
 fi
