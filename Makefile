@@ -34,7 +34,7 @@ develop: ${VENV_PRE_COMMIT}
 fixup:
 	source env.sh && pre-commit run --all-files
 
-.PHONY: test test-py test-js nox pylint template-version template-version-rc
+.PHONY: test test-py test-js nox pylint
 
 test: test-py-core test-py-sdk test-js
 
