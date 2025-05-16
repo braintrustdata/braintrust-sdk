@@ -12,17 +12,17 @@ lint: fixup
 	@pylint --errors-only $(shell git ls-files '**/*.py')
 
 test:
-	nox
+	nox -s test_core
 
-test-wheel:
-	nox -- --wheel
+test-wheel: build
+	nox -s test_core -- --wheel
 
 template-version:
 	@bash scripts/template-version.sh
 
 build: clean template-version
 	python -m build
-	# remove the git commit from the version file
+	# Restore the original version file after the build
 	git checkout src/braintrust/version.py
 
 verify: lint test
