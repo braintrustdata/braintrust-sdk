@@ -5,24 +5,32 @@
 
 set -e
 
-# Fetch the latest tags to ensure we're up to date
-echo "Fetching latest tags..."
-git fetch --tags
-
 # Get the tag from the RELEASE_TAG environment variable
 if [ -z "$RELEASE_TAG" ]; then
   echo "ERROR: RELEASE_TAG environment variable not set"
   exit 1
 fi
 
+
+ROOT_DIR=$(git rev-parse --show-toplevel)
+
+# Fetch the latest tags to ensure we're up to date
+echo "Fetching latest tags..."
+git fetch --tags
+
 TAG=$RELEASE_TAG
 echo "Validating release for tag: $TAG"
 
-# Extract version without the 'v' prefix
-VERSION=${TAG#v}
+# Check if tag starts with py-sdk-v
+if [[ ! "$TAG" =~ ^py-sdk-v ]]; then
+  echo "ERROR: Tag must start with 'py-sdk-v'"
+  exit 1
+fi
 
-# Get the package version from the version.py file
-PACKAGE_VERSION=$(cd py && bash scripts/get_version.sh)
+# Extract version without the 'py-sdk-v' prefix
+VERSION=${TAG#py-sdk-v}
+
+PACKAGE_VERSION=$(bash "$ROOT_DIR/py/scripts/get_version.sh")
 
 # Check if the tag version matches the package version
 if [ "$VERSION" != "$PACKAGE_VERSION" ]; then
@@ -30,9 +38,6 @@ if [ "$VERSION" != "$PACKAGE_VERSION" ]; then
   exit 1
 fi
 
-echo "✅ Tag version matches package version: $VERSION"
-
-# Check if we're on the main branch
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 if [ "$CURRENT_BRANCH" != "main" ]; then
   # If we're in detached HEAD state (which is likely in GitHub Actions with a tag),
@@ -52,8 +57,5 @@ if [ "$CURRENT_BRANCH" != "main" ]; then
   fi
 fi
 
-echo "✅ Tag is on the main branch"
-
 # All checks passed
-echo "✅ All validation checks passed"
 exit 0

@@ -22,7 +22,7 @@ done
 git fetch --tags
 
 REPO_URL="https://github.com/braintrustdata/braintrust-sdk"
-TAG_PREFIX="v"
+TAG_PREFIX="py-sdk-v"
 COMMIT=$(git rev-parse --short HEAD)
 VERSION=$(grep -o 'VERSION = "[^"]*"' src/braintrust/version.py | cut -d'"' -f2)
 TAG="${TAG_PREFIX}${VERSION}"

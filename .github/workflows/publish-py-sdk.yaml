@@ -3,11 +3,11 @@ name: Publish Python SDK
 on:
   push:
     tags:
-      - "v*.*.*" # Trigger on version tags like v0.1.0, v1.2.3, etc.
+      - "py-sdk-v*.*.*" # Trigger on version tags like py-sdk-v0.1.0, py-sdk-v1.2.3, etc.
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to publish (e.g., v0.1.0)"
+        description: "Tag to publish (e.g., py-sdk-v0.1.0)"
         required: true
         type: string
 
