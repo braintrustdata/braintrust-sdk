@@ -558,6 +558,56 @@ export const projectScoreCategory = z
   .openapi("ProjectScoreCategory");
 export type ProjectScoreCategory = z.infer<typeof projectScoreCategory>;
 
+const webhookAutomationActionSchema = z.object({
+  type: z.literal("webhook").describe("The type of action to take"),
+  url: z.string().describe("The webhook URL to send the request to"),
+});
+
+export const automationEventTypeEnum = z.enum(["logs", "retention"]);
+export const logAutomationConfigSchema = z.object({
+  event_type: z
+    .literal("logs")
+    .describe("The event which starts the automation execution"),
+  btql_filter: z
+    .string()
+    .describe("BTQL filter to identify rows for the automation rule"),
+  interval_seconds: z
+    .number()
+    .min(1)
+    .max(30 * 24 * 60 * 60)
+    .describe(
+      "Perform the triggered action at most once in this interval of seconds",
+    ),
+  action: z
+    .discriminatedUnion("type", [webhookAutomationActionSchema])
+    .describe("The action to take when the automation rule is triggered"),
+});
+
+export const retentionObjectTypeEnum = z
+  .enum(["project_logs", "experiment", "dataset"])
+  .describe("The object type that the retention policy applies to")
+  .openapi("RetentionObjectType");
+export type RetentionObjectType = z.infer<typeof retentionObjectTypeEnum>;
+
+const retentionAutomationConfigSchema = z.object({
+  event_type: z
+    .literal("retention")
+    .describe("The event which starts the automation execution"),
+  object_type: retentionObjectTypeEnum.describe(
+    "The object type that the retention policy applies to",
+  ),
+  object_id: z
+    .string()
+    .uuid()
+    .nullable()
+    .describe("The object id that the retention policy applies to"),
+  retention_days: z
+    .number()
+    .min(1)
+    .max(365)
+    .describe("The number of days to retain the object"),
+});
+
 const projectAutomationBaseSchema =
   generateBaseTableSchema("project automation");
 export const projectAutomationSchema = z
@@ -569,36 +619,25 @@ export const projectAutomationSchema = z
     name: projectAutomationBaseSchema.shape.name,
     description: projectAutomationBaseSchema.shape.description,
     config: z
-      .object({
-        event_type: z
-          .enum(["logs"])
-          .describe("The event which starts the automation execution"),
-        btql_filter: z
-          .string()
-          .describe("BTQL filter to identify rows for the automation rule"),
-        interval_seconds: z
-          .number()
-          .min(1)
-          .max(30 * 24 * 60 * 60)
-          .describe(
-            "Perform the triggered action at most once in this interval of seconds",
-          ),
-        action: z
-          .object({
-            type: z
-              .enum(["webhook"])
-              .describe(
-                "The type of action to take when the automation rule is triggered",
-              ),
-            url: z.string().describe("The webhook URL to send the request to"),
-          })
-          .describe("The action to take when the automation rule is triggered"),
-      })
+      .union([logAutomationConfigSchema, retentionAutomationConfigSchema])
       .describe("The configuration for the automation rule"),
   })
   .openapi("ProjectAutomation");
 
 export type ProjectAutomation = z.infer<typeof projectAutomationSchema>;
+export const logAutomationSchema = projectAutomationSchema.merge(
+  z.object({
+    config: logAutomationConfigSchema,
+  }),
+);
+export type LogAutomation = z.infer<typeof logAutomationSchema>;
+
+export const retentionAutomationSchema = projectAutomationSchema.merge(
+  z.object({
+    config: retentionAutomationConfigSchema,
+  }),
+);
+export type RetentionAutomation = z.infer<typeof retentionAutomationSchema>;
 
 export const onlineScoreConfigSchema = z
   .object({
