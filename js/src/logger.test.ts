@@ -14,6 +14,7 @@ import {
   BraintrustState,
   FailedHTTPResponse,
 } from "./logger";
+import { SpanObjectTypeV3 } from "@braintrust/core";
 import { LazyValue } from "./util";
 import { BackgroundLogEvent, IS_MERGE_FIELD } from "@braintrust/core";
 import { configureNode } from "./node";
@@ -605,7 +606,7 @@ describe("span.link", () => {
     const span = logger.startSpan({ name: "test-span" });
     span.end();
     // Force parentObjectType to be PLAYGROUND_LOGS
-    (span as any).parentObjectType = "playground_logs";
+    (span as any).parentObjectType = SpanObjectTypeV3.PLAYGROUND_LOGS;
     const link = span.link();
     expect(link).toBe("https://braintrust.dev/noop-span");
   });
