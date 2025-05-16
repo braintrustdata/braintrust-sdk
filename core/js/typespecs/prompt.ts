@@ -25,7 +25,6 @@ export {
   chatCompletionMessageToolCallSchema,
   type MessageRole,
 } from "./openai/messages";
-export { expandedMessageSchema, type ExpandedMessage } from "./openai/expanded";
 
 export { toolsSchema } from "./openai/tools";
 export type { Tools } from "./openai/tools";
