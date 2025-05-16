@@ -12,10 +12,10 @@ lint: fixup
 	@pylint --errors-only $(shell git ls-files '**/*.py')
 
 test:
-	nox -s test_core
+	nox
 
 test-wheel: build
-	nox -s test_core -- --wheel
+	nox -- --wheel
 
 template-version:
 	@bash scripts/template-version.sh
