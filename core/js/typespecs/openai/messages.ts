@@ -75,7 +75,7 @@ const chatCompletionToolMessageParamSchema = z.object({
   tool_call_id: z.string().default(""),
 });
 const chatCompletionFunctionMessageParamSchema = z.object({
-  content: z.string().default(""),
+  content: z.string().nullable(),
   name: z.string(),
   role: z.literal("function"),
 });
