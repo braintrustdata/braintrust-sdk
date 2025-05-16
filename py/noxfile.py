@@ -57,6 +57,7 @@ def test_with_pydantic_ai(session, pydantic_ai_version):
     _install_test_deps(session)
     _install(session, "pydantic_ai", pydantic_ai_version)
     _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai.py")
+    _run_core_tests(session)
 
 
 @nox.session()
@@ -65,6 +66,7 @@ def test_with_anthropic(session, version):
     _install_test_deps(session)
     _install(session, "anthropic", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_anthropic.py")
+    _run_core_tests(session)
 
 
 @nox.session()
@@ -73,6 +75,7 @@ def test_with_openai(session, version):
     _install_test_deps(session)
     _install(session, "openai", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
+    _run_core_tests(session)
 
 
 @nox.session()
@@ -135,12 +138,6 @@ def _get_braintrust_wheel():
     return wheels[0]
 
 
-def _run_core_and_optional_test(session, optional_test_path):
-    # a little helper since all of our wrappers want to run all tests plus one
-    _run_tests(session, optional_test_path)
-    _run_core_tests(session)
-
-
 def _run_core_tests(session):
     """Run all tests which don't require optional dependencies."""
     _run_tests(session, SRC_DIR, ignore_path=WRAPPER_DIR)
@@ -160,7 +157,7 @@ def _run_tests(session, test_path, ignore_path=""):
     # First, we need to absolute paths to all the binaries and libs in our venv that we'll see.
     py = os.path.join(session.bin, "python")
     site_packages = session.run(py, "-c", "import site; print(site.getsitepackages()[0])", silent=True).strip()
-    test_path = os.path.abspath(os.path.join(site_packages, "braintrust"))
+    abs_test_path = os.path.abspath(os.path.join(site_packages, test_path))
     ignore_path = os.path.abspath(os.path.join(site_packages, ignore_path))
     pytest_path = os.path.join(session.bin, "pytest")
     ignore = f"--ignore={ignore_path}" if ignore_path else ""
@@ -172,7 +169,7 @@ def _run_tests(session, test_path, ignore_path=""):
         # It proved very helpful because it's very easy
         # to accidentally import local modules from the source directory.
         env = {"BRAINTRUST_TESTING_WHEEL": "1"}
-        session.run(pytest_path, test_path, ignore, env=env)
+        session.run(pytest_path, abs_test_path, ignore, env=env)
 
     # And a final note ... if it's not clear from above, we include test files in our wheel, which
     # is perhaps not ideal?
