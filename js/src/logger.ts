@@ -4728,7 +4728,9 @@ export class SpanImpl implements Span {
           return NOOP_SPAN_PERMALINK;
         }
         default: {
-          return NOOP_SPAN_PERMALINK;
+          // trigger a compile-time error if we add a new object type
+          const _exhaustive: never = this.parentObjectType;
+          return _exhaustive;
         }
       }
     } catch (e) {
