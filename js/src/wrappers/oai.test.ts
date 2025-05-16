@@ -2,6 +2,7 @@ import {
   test,
   assert,
   beforeEach,
+  beforeAll,
   afterEach,
   describe,
   expect,
@@ -35,7 +36,9 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
   let logger: any;
 
   // fake login before we test. once is enough.
-  _exportsForTestingOnly.simulateLoginForTests();
+  beforeAll(async () => {
+    await _exportsForTestingOnly.simulateLoginForTests();
+  });
 
   beforeEach(() => {
     backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();

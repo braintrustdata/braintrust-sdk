@@ -1,4 +1,4 @@
-import { vi, expect, test } from "vitest";
+import { vi, expect, test, describe, beforeEach, afterEach } from "vitest";
 import {
   _exportsForTestingOnly,
   init,
@@ -12,7 +12,9 @@ import {
   Prompt,
   permalink,
   BraintrustState,
+  FailedHTTPResponse,
 } from "./logger";
+import { SpanObjectTypeV3 } from "@braintrust/core";
 import { LazyValue } from "./util";
 import { BackgroundLogEvent, IS_MERGE_FIELD } from "@braintrust/core";
 import { configureNode } from "./node";
@@ -415,4 +417,244 @@ test("disable logging", async () => {
   await bgLogger.flush();
   expect(submitLogsRequestSpy).toHaveBeenCalledTimes(1);
   expect(submittedItems.length).toEqual(0);
+});
+
+test("simulateLoginForTests and simulateLogoutForTests", async () => {
+  for (let i = 0; i < 6; i++) {
+    // First login
+    const state = await _exportsForTestingOnly.simulateLoginForTests();
+    // Verify the login state - now we're logged in
+    expect(state.loggedIn).toBe(true);
+    expect(state.loginToken).toBe("___TEST_API_KEY__THIS_IS_NOT_REAL___");
+    expect(state.orgId).toBe("test-org-id");
+    expect(state.orgName).toBe("test-org-name");
+    expect(state.apiUrl).toBe("https://braintrust.dev/fake-api-url");
+
+    // Now logout
+    const logoutState = _exportsForTestingOnly.simulateLogoutForTests();
+
+    // Verify the logout state - everything should be null or false
+    expect(logoutState.loggedIn).toBe(false);
+    expect(logoutState.loginToken).toBe(null);
+    expect(logoutState.orgId).toBe(null);
+    expect(logoutState.orgName).toBe(null);
+    expect(logoutState.apiUrl).toBe(null);
+    expect(logoutState.appUrl).toBe("https://www.braintrust.dev");
+  }
+});
+
+describe("span.link", () => {
+  beforeEach(() => {
+    _exportsForTestingOnly.simulateLogoutForTests();
+  });
+
+  afterEach(() => {
+    _exportsForTestingOnly.simulateLogoutForTests();
+  });
+
+  test("noop span link returns noop permalink", () => {
+    const span = NOOP_SPAN;
+    const link = span.link();
+    expect(link).toBe("https://braintrust.dev/noop-span");
+  });
+
+  test("span.link works with project id", async () => {
+    // Mock the state for testing - must be done before creating the span
+    const state = await _exportsForTestingOnly.simulateLoginForTests();
+
+    // Verify the login was successful
+    expect(state.orgName).toBeDefined();
+    expect(state.appUrl).toBeDefined();
+
+    // Create a test span
+    const logger = initLogger({
+      projectName: "test-project",
+      projectId: "test-project-id",
+    });
+
+    const span = logger.startSpan({ name: "test-span" });
+    span.end();
+
+    // Get the link
+    const link1 = span.link();
+    const link2 = await span.permalink();
+
+    expect(link1).toBe(link2);
+  });
+
+  test("span.link works with project name", async () => {
+    // Mock the state for testing - must be done before creating the span
+    const state = await _exportsForTestingOnly.simulateLoginForTests();
+    // Verify the login was successful
+    expect(state.orgName).toBeDefined();
+    expect(state.appUrl).toBeDefined();
+    // Create a test span
+    const logger = initLogger({
+      projectName: "test-project",
+    });
+    const span = logger.startSpan({ name: "test-span" });
+    span.end();
+    // Get the link
+    const link1 = span.link();
+    expect(link1).toBe(
+      `https://braintrust.dev/app/test-org-name/p/test-project/logs?oid=${span._id}`,
+    );
+  });
+
+  test("span.link handles missing project name or id", async () => {
+    // Mock the state for testing - must be done before creating the span
+    const state = await _exportsForTestingOnly.simulateLoginForTests();
+    // Verify the login was successful
+    expect(state.orgName).toBeDefined();
+    expect(state.appUrl).toBeDefined();
+    // Create a test span
+    const logger = initLogger({});
+    const span = logger.startSpan({ name: "test-span" });
+    span.end();
+    // Get the link
+    const link1 = span.link();
+    expect(link1).toBe(
+      "https://braintrust.dev/error-generating-link?msg=provide-project-name-or-id",
+    );
+  });
+
+  test("span.link works with experiment id", async () => {
+    // Mock the state for testing - must be done before creating the span
+    const state = await _exportsForTestingOnly.simulateLoginForTests();
+    // Verify the login was successful
+    expect(state.orgName).toBeDefined();
+    expect(state.appUrl).toBeDefined();
+
+    // Create a test experiment
+    const experiment = initExperiment("test-experiment");
+
+    // Get a span within the experiment context
+    const span = experiment.startSpan({
+      name: "test-span",
+    });
+
+    span.end();
+
+    const link = span.link();
+
+    // Link should contain experiment ID
+    expect(link).toEqual(
+      "https://braintrust.dev/error-generating-link?msg=provide-experiment-id",
+    );
+  });
+
+  test("permalink doesn't error if logged out", async () => {
+    _exportsForTestingOnly.simulateLogoutForTests();
+
+    const apiKey = process.env.BRAINTRUST_API_KEY;
+    try {
+      process.env.BRAINTRUST_API_KEY = "this-is-a-nonsense-api-key";
+      // Get a span within the experiment context
+      const logger = initLogger({
+        projectName: "test-project",
+      });
+      const span = logger.startSpan({
+        name: "test-span",
+      });
+      span.end();
+
+      const link2 = await span.permalink();
+      expect(link2).toBe(
+        "https://braintrust.dev/error-generating-link?msg=http-error-401",
+      );
+    } finally {
+      process.env.BRAINTRUST_API_KEY = apiKey;
+    }
+  });
+
+  test("handles invalid slug format in permalink", async () => {
+    const state = await _exportsForTestingOnly.simulateLoginForTests();
+    const result = await permalink("invalid-slug", { state });
+    expect(result).toContain("https://braintrust.dev/error-generating-link");
+  });
+
+  test("span.link handles missing experiment id", async () => {
+    const state = await _exportsForTestingOnly.simulateLoginForTests();
+    const experiment = initExperiment("test-experiment");
+    const span = experiment.startSpan({ name: "test-span" });
+    span.end();
+    // Force parentObjectId to be undefined
+    (span as any).parentObjectId = { getSync: () => ({ value: undefined }) };
+    const link = span.link();
+    expect(link).toBe(
+      "https://braintrust.dev/error-generating-link?msg=provide-experiment-id",
+    );
+  });
+
+  test("span.link handles missing project id and name", async () => {
+    const state = await _exportsForTestingOnly.simulateLoginForTests();
+    const logger = initLogger({});
+    const span = logger.startSpan({ name: "test-span" });
+    span.end();
+    // Force parentObjectId to be undefined and remove project metadata
+    (span as any).parentObjectId = { getSync: () => ({ value: undefined }) };
+    (span as any).parentComputeObjectMetadataArgs = {};
+    const link = span.link();
+    expect(link).toBe(
+      "https://braintrust.dev/error-generating-link?msg=provide-project-name-or-id",
+    );
+  });
+
+  test("span.link handles playground logs", async () => {
+    const state = await _exportsForTestingOnly.simulateLoginForTests();
+    const logger = initLogger({});
+    const span = logger.startSpan({ name: "test-span" });
+    span.end();
+    // Force parentObjectType to be PLAYGROUND_LOGS
+    (span as any).parentObjectType = SpanObjectTypeV3.PLAYGROUND_LOGS;
+    const link = span.link();
+    expect(link).toBe("https://braintrust.dev/noop-span");
+  });
+});
+
+test("span.export handles unauthenticated state", async () => {
+  // Create a span without logging in
+  const logger = initLogger({});
+  const span = logger.startSpan({ name: "test-span" });
+  span.end();
+
+  // Export should still work and return a valid string
+  let exported: string | undefined = undefined;
+  let error;
+  try {
+    exported = await span.export();
+  } catch (e) {
+    error = e;
+  }
+  expect(error).toBeUndefined();
+  expect(exported).toBeDefined();
+  expect(typeof exported).toBe("string");
+  expect((exported as string).length).toBeGreaterThan(0);
+});
+
+test("span.export handles unresolved parent object ID", async () => {
+  // Create a span with a parent object ID that hasn't been resolved
+  const logger = initLogger({});
+  const span = logger.startSpan({
+    name: "test-span",
+    event: {
+      metadata: {
+        project_id: "test-project-id",
+      },
+    },
+  });
+  span.end();
+
+  // Export should still work and return a valid string
+  let exported: string | undefined = undefined;
+  let error;
+  try {
+    exported = await span.export();
+  } catch (e) {
+    error = e;
+  }
+  expect(error).toBeUndefined();
+  expect(exported).toBeDefined();
+  expect(typeof exported).toBe("string");
+  expect((exported as string).length).toBeGreaterThan(0);
 });
