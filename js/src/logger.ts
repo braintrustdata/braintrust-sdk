@@ -211,17 +211,22 @@ export interface Span extends Exportable {
    * Links can be generated at any time, but they will only become viewable
    * after the span and its root have been flushed to the server and ingested.
    *
-   * @returns A permalink to the span.
+   * This function can block resolving data with the server. For production
+   * applications it's preferable to call {@link Span.link} instead.
+   *
+   * @returns A promise which resolves to a permalink to the span.
    */
   permalink(): Promise<string>;
 
   /**
    * Format a link to the Braintrust application for viewing this span.
    *
-   * Similar to permalink() but synchronous (no Promise).
-   *
    * Links can be generated at any time, but they will only become viewable
    * after the span and its root have been flushed to the server and ingested.
+   *
+   * There are certain conditions that a Span doesn'thave enough information
+   * to return a stable link (e.g. during an unresolved experiment). In this case
+   * or if there's an error generating link, we'll return a placeholder link.
    *
    * @returns A link to the span.
    */
@@ -1487,7 +1492,7 @@ function getErrPermlink(msg: string) {
   if (msg == "") {
     return ERR_PERMALINK;
   }
-  return `${ERR_PERMALINK}?msg=${msg}`;
+  return `${ERR_PERMALINK}?msg=${encodeURIComponent(msg)}`;
 }
 
 /**
@@ -1497,7 +1502,7 @@ function getErrPermlink(msg: string) {
  * Links can be generated at any time, but they will only become viewable after
  * the span and its root have been flushed to the server and ingested.
  *
- * If you have a `Span` object, use {@link Span.link} or {@link Span.permalink} instead.
+ * If you have a `Span` object, use {@link Span.link} instead.
  *
  * @param slug The identifier generated from {@link Span.export}.
  * @param opts Optional arguments.
@@ -4672,18 +4677,6 @@ export class SpanImpl implements Span {
       state: this._state,
     });
   }
-
-  /**
-   * Return a link to view this span in the Braintrust application.
-   *
-   * Links can be generated at any time, but they will only become viewable
-   * after the span and its root have been flushed to the server and ingested.
-   *
-   * There are certain cases where the span doesn't have enough information to generate a link.
-   * In these cases, `link()` will return a placeholder link and not block or throw an error.
-   *
-   * @returns A link to the span in the Braintrust UI
-   */
 
   public link(): string {
     if (!this.id) {
