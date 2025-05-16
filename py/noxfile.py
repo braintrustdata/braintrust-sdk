@@ -56,7 +56,7 @@ def test_core(session):
 def test_with_pydantic_ai(session, pydantic_ai_version):
     _install_test_deps(session)
     _install(session, "pydantic_ai", pydantic_ai_version)
-    _run_tests(session, f"{WRAPPERS}/test_pydantic_ai.py")
+    _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai.py")
 
 
 @nox.session()
@@ -64,7 +64,7 @@ def test_with_pydantic_ai(session, pydantic_ai_version):
 def test_with_anthropic(session, version):
     _install_test_deps(session)
     _install(session, "anthropic", version)
-    _run_tests(session, f"{WRAPPERS}/test_anthropic.py")
+    _run_tests(session, f"{WRAPPER_DIR}/test_anthropic.py")
 
 
 @nox.session()
@@ -72,7 +72,7 @@ def test_with_anthropic(session, version):
 def test_with_openai(session, version):
     _install_test_deps(session)
     _install(session, "openai", version)
-    _run_tests(session, f"{WRAPPERS}/test_openai.py")
+    _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
 
 
 @nox.session()
