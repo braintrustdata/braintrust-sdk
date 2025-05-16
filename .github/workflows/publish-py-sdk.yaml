@@ -1,9 +1,6 @@
-name: Auto Publish Python SDK
+name: Publish Python SDK
 
 on:
-  pull_request:
-    branches:
-      - main # Trigger on pull requests to main branch for testing
   push:
     tags:
       - "v*.*.*" # Trigger on version tags like v0.1.0, v1.2.3, etc.
