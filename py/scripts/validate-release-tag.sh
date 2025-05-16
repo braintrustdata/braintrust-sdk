@@ -15,11 +15,9 @@ fi
 ROOT_DIR=$(git rev-parse --show-toplevel)
 
 # Fetch the latest tags to ensure we're up to date
-echo "Fetching latest tags..."
-git fetch --tags
+git fetch --tags -q -q -q -q
 
 TAG=$RELEASE_TAG
-echo "Validating release for tag: $TAG"
 
 # Check if tag starts with py-sdk-v
 if [[ ! "$TAG" =~ ^py-sdk-v ]]; then
@@ -50,11 +48,11 @@ if [ "$CURRENT_BRANCH" != "main" ]; then
   TAG_COMMIT=$(git rev-parse "$TAG")
   MAIN_CONTAINS=$(git branch --contains $TAG_COMMIT | grep -c "main" || true)
 
-  if [ "$MAIN_CONTAINS" -eq "0" ]; then
-    echo "ERROR: Tag $TAG is not on the main branch"
-    # FIXME[matt] remove this once we're onmain
-    # exit 1
-  fi
+  # FIXME[matt] remove this once we're onmain
+  # if [ "$MAIN_CONTAINS" -eq "0" ]; then
+  #   # echo "ERROR: Tag $TAG is not on the main branch"
+  #   # exit 1
+  # fi
 fi
 
 # All checks passed
