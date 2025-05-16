@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+ROOT_DIR=$(git rev-parse --show-toplevel)
+
 # Parse command line arguments
 DRY_RUN=false
 
@@ -19,12 +21,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Fetch latest tags
-git fetch --tags
+git fetch --tags --prune
 
 REPO_URL="https://github.com/braintrustdata/braintrust-sdk"
 TAG_PREFIX="py-sdk-v"
 COMMIT=$(git rev-parse --short HEAD)
-VERSION=$(grep -o 'VERSION = "[^"]*"' src/braintrust/version.py | cut -d'"' -f2)
+VERSION=$(bash "$ROOT_DIR/py/scripts/get_version.sh")
 TAG="${TAG_PREFIX}${VERSION}"
 
 if git rev-parse "$TAG" >/dev/null 2>&1; then
@@ -57,10 +59,13 @@ if [ "$CONFIRMATION" != "YOLO" ]; then
 fi
 
 # Create and push the tag
+echo ""
 echo "Creating and pushing tag ${TAG}"
-echo git tag "$TAG" "$COMMIT"
-echo git push origin "$TAG"
+echo ""
 
-echo "Tag ${TAG} has been created and pushed to origin"
-echo "Release job should trigger automatically"
-echo "   Check GitHub Actions for build progress"
+git tag "$TAG" "$COMMIT"
+git push origin "$TAG"
+
+echo ""
+echo "Tag ${TAG} has been created and pushed to origin. Check GitHub Actions for build progress."
+echo ""
