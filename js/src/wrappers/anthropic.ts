@@ -1,13 +1,36 @@
-import Anthropic from "@anthropic-ai/sdk";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Span, startSpan } from "../logger";
 import { SpanTypeAttribute } from "@braintrust/core";
 import { filterFrom, getCurrentUnixTimestamp } from "../util";
 
-export function wrapAnthropic(anthropic: Anthropic): Anthropic {
-  return anthropicProxy(anthropic);
+/**
+ * Wrap an `Anthropic` object (created with `new Anthropic(...)`) to add tracing. If Braintrust is
+ * not configured, this is a no-op
+ *
+ * Currently, this only supports the `v4` API.
+ *
+ * @param anthropic
+ * @returns The wrapped `Anthropic` object.
+ */
+export function wrapAnthropic<T extends object>(anthropic: T): T {
+  const anthropicUnknown: unknown = anthropic;
+  if (
+    anthropicUnknown &&
+    typeof anthropicUnknown === "object" &&
+    "messages" in anthropicUnknown &&
+    typeof anthropicUnknown.messages === "object" &&
+    anthropicUnknown.messages &&
+    "create" in anthropicUnknown.messages
+  ) {
+    return anthropicProxy(anthropicUnknown);
+  } else {
+    console.warn("Unsupported Anthropic library. Not wrapping.");
+    return anthropic;
+  }
 }
 
-function anthropicProxy(anthropic: Anthropic): Anthropic {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function anthropicProxy(anthropic: any): any {
   return new Proxy(anthropic, {
     get(target, prop, receiver) {
       switch (prop) {
