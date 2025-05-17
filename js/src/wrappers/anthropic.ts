@@ -229,8 +229,7 @@ function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
     }
 
     if (result.done) {
-      totals.tokens =
-        (totals["prompt_tokens"] || 0) + (totals["completion_tokens"] || 0);
+      totals = finalizeMetrics(totals);
       const output = deltas.join("");
       span.log({ output: output, metrics: totals, metadata: metadata });
       span.end();
@@ -301,7 +300,7 @@ function parseEventFromMessage(message: any) {
 
   return {
     output: output,
-    metrics: metrics,
+    metrics: metrics ? finalizeMetrics(metrics) : undefined,
     metadata: metadata,
   };
 }
@@ -327,16 +326,20 @@ function parseMetricsFromUsage(usage: any): MetricsOrUndefined {
   saveIfExistsTo("cache_read_input_tokens", "prompt_cached_tokens");
   saveIfExistsTo("cache_creation_input_tokens", "prompt_cache_creation_tokens");
 
-  // Anthropic's `input_tokens` does not include cache creation or cached read tokens.
-  metrics.prompt_tokens =
+  return metrics;
+}
+
+function finalizeMetrics(metrics: Metrics): Metrics {
+  const prompt_tokens =
     (metrics.prompt_tokens || 0) +
     (metrics.prompt_cached_tokens || 0) +
     (metrics.prompt_cache_creation_tokens || 0);
-
-  metrics["tokens"] =
-    (metrics.prompt_tokens || 0) + (metrics.completion_tokens || 0);
-
-  return metrics;
+  return {
+    ...metrics,
+    // Anthropic's `input_tokens` does not include cache creation or cached read tokens.
+    prompt_tokens,
+    tokens: prompt_tokens + (metrics.completion_tokens || 0),
+  };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
