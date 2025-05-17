@@ -28,6 +28,7 @@ export {
 
 export { toolsSchema } from "./openai/tools";
 export type { Tools } from "./openai/tools";
+export { type CompletionUsage, completionUsageSchema } from "./openai/usage";
 
 export type OpenAIMessage = z.infer<
   typeof chatCompletionOpenAIMessageParamSchema
