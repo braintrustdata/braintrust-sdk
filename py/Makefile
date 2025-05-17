@@ -1,5 +1,5 @@
 .PHONY: lint test test-wheel template-version clean fixup build verify help
-.PHONY: publish-to-pypi publish-to-testpypi verify-build-publish
+.PHONY: publish-to-pypi publish-to-testpypi verify-build-publish install-build-deps
 
 clean:
 	rm -rf build dist
@@ -27,6 +27,12 @@ build: clean template-version
 
 verify: lint test
 
+install-build-deps:
+	# FIXME[matt] build dependencies should be pinned (e.g. build,
+	# setuptools, twine) to ensure reproducible builds.
+	python -m pip install -e .[all]
+	python -m pip install --upgrade pip setuptools build twine pylint nox pre-commit
+
 install-dev:
 	pip install -e .[all]
 	pip install pylint
@@ -48,6 +54,7 @@ help:
 	@echo "  build               - Build Python package"
 	@echo "  clean               - Remove build artifacts"
 	@echo "  help                - Show this help message"
+	@echo "  install-build-deps  - Install build dependencies for CI"
 	@echo "  install-dev         - Install package in development mode with all dependencies"
 	@echo "  lint                - Run pylint checks"
 	@echo "  test                - Run all tests"
