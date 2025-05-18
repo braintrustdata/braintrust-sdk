@@ -8,6 +8,7 @@ import {
 } from "../logger";
 import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import { mergeDicts } from "@braintrust/core";
+import { responsesProxy, parseMetricsFromUsage } from "./oai_responses";
 
 interface BetaLike {
   chat: {
@@ -27,6 +28,7 @@ interface OpenAILike {
   embeddings: any;
   moderations: any;
   beta?: BetaLike;
+  responses?: any;
 }
 
 declare global {
@@ -109,15 +111,17 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
 
   return new Proxy(openai, {
     get(target, name, receiver) {
-      if (name === "chat") {
-        return chatProxy;
+      switch (name) {
+        case "chat":
+          return chatProxy;
+        case "embeddings":
+          return embeddingProxy;
+        case "moderations":
+          return moderationProxy;
+        case "responses":
+          return responsesProxy(openai);
       }
-      if (name === "embeddings") {
-        return embeddingProxy;
-      }
-      if (name === "moderations") {
-        return moderationProxy;
-      }
+
       if (name === "beta" && betaProxy) {
         return betaProxy;
       }
@@ -151,14 +155,11 @@ function logCompletionResponse(
   response: NonStreamingChatResponse | StreamingChatResponse,
   span: Span,
 ) {
+  const metrics = parseMetricsFromUsage(response?.usage);
+  metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
   span.log({
     output: response.choices,
-    metrics: {
-      time_to_first_token: getCurrentUnixTimestamp() - startTime,
-      tokens: response.usage?.total_tokens,
-      prompt_tokens: response.usage?.prompt_tokens,
-      completion_tokens: response.usage?.completion_tokens,
-    },
+    metrics: metrics,
   });
 }
 
@@ -426,10 +427,7 @@ type CreateEmbeddingResponse = {
 function processEmbeddingResponse(result: CreateEmbeddingResponse, span: Span) {
   span.log({
     output: { embedding_length: result.data[0].embedding.length },
-    metrics: {
-      tokens: result.usage?.total_tokens,
-      prompt_tokens: result.usage?.prompt_tokens,
-    },
+    metrics: parseMetricsFromUsage(result?.usage),
   });
 }
 
@@ -494,11 +492,10 @@ function postprocessStreamingResults(allResults: any[]): {
   let metrics = {};
   for (const result of allResults) {
     if (result.usage) {
+      // NOTE: only included if `stream_options.include_usage` is true
       metrics = {
         ...metrics,
-        tokens: result.usage.total_tokens,
-        prompt_tokens: result.usage.prompt_tokens,
-        completion_tokens: result.usage.completion_tokens,
+        ...parseMetricsFromUsage(result?.usage),
       };
     }
 

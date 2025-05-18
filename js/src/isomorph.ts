@@ -34,6 +34,9 @@ export interface Common {
   newAsyncLocalStorage: <T>() => IsoAsyncLocalStorage<T>;
   processOn: (event: string, handler: (code: any) => void) => void;
 
+  // hash a string. not guaranteed to be crypto safe.
+  hash?: (data: string) => string;
+
   // Filesystem operations.
   pathJoin?: (...args: string[]) => string;
   pathDirname?: (path: string) => string;

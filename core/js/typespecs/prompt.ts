@@ -7,6 +7,7 @@ import {
   chatCompletionContentPartTextSchema,
   chatCompletionMessageParamSchema,
   chatCompletionOpenAIMessageParamSchema,
+  chatCompletionMessageReasoningSchema,
 } from "./openai/messages";
 import { savedFunctionIdSchema } from "./function_id";
 import { customTypes } from "./custom_types";
@@ -18,10 +19,11 @@ export {
   chatCompletionContentPartTextSchema,
 };
 export {
-  ToolCall,
+  type ToolCall,
   messageRoleSchema,
+  chatCompletionMessageReasoningSchema,
   chatCompletionMessageToolCallSchema,
-  MessageRole,
+  type MessageRole,
 } from "./openai/messages";
 
 export { toolsSchema } from "./openai/tools";
@@ -31,6 +33,8 @@ export type OpenAIMessage = z.infer<
   typeof chatCompletionOpenAIMessageParamSchema
 >;
 export type Message = z.infer<typeof chatCompletionMessageParamSchema>;
+
+export type Reasoning = z.infer<typeof chatCompletionMessageReasoningSchema>;
 
 export type Content = Message["content"];
 export type ContentPartText = z.infer<
@@ -92,6 +96,30 @@ export const responseFormatSchema = z.union([
       json_schema: responseFormatJsonSchemaSchema,
     })
     .openapi({ title: "json_schema" }),
+  z.object({ type: z.literal("text") }).openapi({ title: "text" }),
+]);
+
+export const responsesAPIJsonSchemaSchema = z.object({
+  type: z.literal("json_schema"),
+  name: z.string(),
+  description: z.string().optional(),
+  schema: z
+    .union([
+      z.record(customTypes.unknown).openapi({ title: "object" }),
+      z.string().openapi({ title: "string" }),
+    ])
+    .optional(),
+  strict: z.boolean().nullish(),
+});
+export type ResponsesAPIJsonSchema = z.infer<
+  typeof responsesAPIJsonSchemaSchema
+>;
+
+export const responsesAPIFormatSchema = z.union([
+  z
+    .object({ type: z.literal("json_object") })
+    .openapi({ title: "json_object" }),
+  responsesAPIJsonSchemaSchema.openapi({ title: "json_schema" }),
   z.object({ type: z.literal("text") }).openapi({ title: "text" }),
 ]);
 

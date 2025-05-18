@@ -47,7 +47,6 @@ import chevron
 import exceptiongroup
 import requests
 import urllib3
-from braintrust_core.serializable_data_class import SerializableDataClass
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -67,11 +66,12 @@ from .db_fields import (
 from .git_fields import GitMetadataSettings, RepoInfo
 from .gitutil import get_past_n_ancestors, get_repo_info
 from .merge_row_batch import batch_items, merge_row_batch
-from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record, make_legacy_event
+from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record
 from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptMessage, PromptSchema, TextPart
 from .prompt_cache.disk_cache import DiskCache
 from .prompt_cache.lru_cache import LRUCache
 from .prompt_cache.prompt_cache import PromptCache
+from .serializable_data_class import SerializableDataClass
 from .span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from .span_types import SpanTypeAttribute
 from .types import AttachmentReference, AttachmentStatus, DatasetEvent, ExperimentEvent, PromptOptions, SpanAttributes
@@ -600,9 +600,17 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
         with self.lock:
             logs = [l.get() for l in self.logs]  # unwrap the LazyValues
             self.logs = []
+
+            if not logs:
+                return []
+
             # all the logs get merged before gettig sent to the server, so simulate that
             # here
-            return merge_row_batch(logs)
+            merged = merge_row_batch(logs)
+            first = merged[0]
+            for other in merged[1:]:
+                first.extend(other)
+            return first
 
 
 # We should only have one instance of this object in
@@ -831,9 +839,6 @@ class _HTTPBackgroundLogger:
         for i in range(self.num_tries):
             start_time = time.time()
             resp = conn.post("/logs3", data=dataStr)
-            if not resp.ok:
-                legacyDataS = construct_json_array([json.dumps(make_legacy_event(json.loads(r))) for r in items])
-                resp = conn.post("/logs", data=legacyDataS)
             if resp.ok:
                 return
             resp_errmsg = f"{resp.status_code}: {resp.text}"
@@ -2052,59 +2057,48 @@ class ObjectFetcher(ABC, Generic[TMapping]):
     def _refetch(self) -> List[TMapping]:
         state = self._get_state()
         if self._fetched_data is None:
-            if self._internal_btql is not None:
-                cursor = None
-                data = None
-                iterations = 0
-                while True:
-                    resp = state.api_conn().post(
-                        f"btql",
-                        json={
-                            "query": {
-                                **self._internal_btql,
-                                "select": [{"op": "star"}],
-                                "from": {
-                                    "op": "function",
-                                    "name": {
-                                        "op": "ident",
-                                        "name": [self.object_type],
-                                    },
-                                    "args": [
-                                        {
-                                            "op": "literal",
-                                            "value": self.id,
-                                        },
-                                    ],
+            cursor = None
+            data = None
+            iterations = 0
+            while True:
+                resp = state.api_conn().post(
+                    f"btql",
+                    json={
+                        "query": {
+                            **(self._internal_btql or {}),
+                            "select": [{"op": "star"}],
+                            "from": {
+                                "op": "function",
+                                "name": {
+                                    "op": "ident",
+                                    "name": [self.object_type],
                                 },
-                                "cursor": cursor,
-                                "limit": INTERNAL_BTQL_LIMIT,
+                                "args": [
+                                    {
+                                        "op": "literal",
+                                        "value": self.id,
+                                    },
+                                ],
                             },
+                            "cursor": cursor,
+                            "limit": INTERNAL_BTQL_LIMIT,
                         },
-                        headers={
-                            "Accept-Encoding": "gzip",
-                        },
-                    )
-                    response_raise_for_status(resp)
-                    resp_json = resp.json()
-                    data = (data or []) + cast(List[TMapping], resp_json["data"])
-                    if not resp_json.get("cursor", None):
-                        break
-                    cursor = resp_json.get("cursor", None)
-                    iterations += 1
-                    if iterations > MAX_BTQL_ITERATIONS:
-                        raise RuntimeError("Too many BTQL iterations")
-            else:
-                resp = state.api_conn().get(
-                    f"v1/{self.object_type}/{self.id}/fetch",
-                    params={
-                        "version": self._pinned_version,
+                        "use_columnstore": False,
+                        "brainstore_realtime": True,
                     },
                     headers={
                         "Accept-Encoding": "gzip",
                     },
                 )
                 response_raise_for_status(resp)
-                data = cast(List[TMapping], resp.json()["events"])
+                resp_json = resp.json()
+                data = (data or []) + cast(List[TMapping], resp_json["data"])
+                if not resp_json.get("cursor", None):
+                    break
+                cursor = resp_json.get("cursor", None)
+                iterations += 1
+                if iterations > MAX_BTQL_ITERATIONS:
+                    raise RuntimeError("Too many BTQL iterations")
 
             if not isinstance(data, list):
                 raise ValueError(f"Expected a list in the response, got {type(data)}")
@@ -2964,14 +2958,21 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
                     comparison_experiment_id = base_experiment.id
                     comparison_experiment_name = base_experiment.name
 
-            summary_items = state.api_conn().get_json(
-                "experiment-comparison2",
-                args={
-                    "experiment_id": self.id,
-                    "base_experiment_id": comparison_experiment_id,
-                },
-                retries=3,
-            )
+            try:
+                summary_items = state.api_conn().get_json(
+                    "experiment-comparison2",
+                    args={
+                        "experiment_id": self.id,
+                        "base_experiment_id": comparison_experiment_id,
+                    },
+                    retries=3,
+                )
+            except Exception as e:
+                _logger.warning(
+                    f"Failed to fetch experiment scores and metrics: {e}\n\nView complete results in Braintrust or run experiment.summarize() again."
+                )
+                summary_items = {}
+
             score_items = summary_items.get("scores", {})
             metric_items = summary_items.get("metrics", {})
 
@@ -3341,6 +3342,13 @@ class SpanImpl(Span):
                 _state.current_span.reset(self._context_token)
 
             self.end()
+
+
+def log_exc_info_to_span(
+    span: Span, exc_type: Type[BaseException], exc_value: BaseException, tb: Optional[TracebackType]
+) -> None:
+    error = stringify_exception(exc_type, exc_value, tb)
+    span.log(error=error)
 
 
 def stringify_exception(exc_type: Type[BaseException], exc_value: BaseException, tb: Optional[TracebackType]) -> str:

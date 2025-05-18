@@ -7,7 +7,7 @@ import { ObjectType, datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
-import { functionTypeEnum, runtimeContextSchema } from "./functions";
+import { functionDataSchema, functionTypeEnum } from "./functions";
 import { savedFunctionIdSchema } from "./function_id";
 import { repoInfoSchema } from "./git_types";
 extendZodWithOpenApi(z);
@@ -215,6 +215,13 @@ export const spanFieldOrderItem = z.object({
 });
 export type SpanFieldOrderItem = z.infer<typeof spanFieldOrderItem>;
 
+export const remoteEvalSourceSchema = z.object({
+  url: z.string(),
+  name: z.string(),
+  description: z.string().nullish(),
+});
+export type RemoteEvalSource = z.infer<typeof remoteEvalSourceSchema>;
+
 export const projectSettingsSchema = z
   .object({
     comparison_key: z
@@ -232,6 +239,10 @@ export const projectSettingsSchema = z
       .array(spanFieldOrderItem)
       .nullish()
       .describe("The order of the fields to display in the trace view"),
+    remote_eval_sources: z
+      .array(remoteEvalSourceSchema)
+      .nullish()
+      .describe("The remote eval sources to use for the project"),
   })
   .openapi("ProjectSettings");
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
@@ -307,76 +318,6 @@ const promptSchemaObject = z.object({
 
 export const promptSchema = promptSchemaObject.openapi("Prompt");
 export type Prompt = z.infer<typeof promptSchema>;
-
-export const codeBundleSchema = z
-  .object({
-    runtime_context: runtimeContextSchema,
-    location: z.union([
-      z
-        .object({
-          type: z.literal("experiment"),
-          eval_name: z.string(),
-          position: z.union([
-            z.object({ type: z.literal("task") }),
-            z
-              .object({
-                type: z.literal("scorer"),
-                index: z.number().int().nonnegative(),
-              })
-              .openapi({ title: "scorer" }),
-          ]),
-        })
-        .openapi({ title: "experiment" }),
-      z
-        .object({
-          type: z.literal("function"),
-          index: z.number().int().nonnegative(),
-        })
-        .openapi({ title: "function" }),
-    ]),
-    bundle_id: z.string(),
-    preview: z.string().nullish().describe("A preview of the code"),
-  })
-  .openapi("CodeBundle");
-export type CodeBundle = z.infer<typeof codeBundleSchema>;
-
-export const functionDataSchema = z
-  .union([
-    z
-      .object({
-        type: z.literal("prompt"),
-        // For backwards compatibility reasons, the prompt definition is hoisted out and stored
-        // in the outer object
-      })
-      .openapi({ title: "prompt" }),
-    z
-      .object({
-        type: z.literal("code"),
-        data: z.union([
-          z
-            .object({
-              type: z.literal("bundle"),
-            })
-            .and(codeBundleSchema)
-            .openapi({ title: "bundle" }),
-          z
-            .object({
-              type: z.literal("inline"),
-              runtime_context: runtimeContextSchema,
-              code: z.string(),
-            })
-            .openapi({ title: "inline" }),
-        ]),
-      })
-      .openapi({ title: "code" }),
-    z
-      .object({
-        type: z.literal("global"),
-        name: z.string(),
-      })
-      .openapi({ title: "global" }),
-  ])
-  .openapi("FunctionData");
 
 export const functionSchema = promptSchemaObject
   .merge(
@@ -617,6 +558,48 @@ export const projectScoreCategory = z
   .openapi("ProjectScoreCategory");
 export type ProjectScoreCategory = z.infer<typeof projectScoreCategory>;
 
+const projectAutomationBaseSchema =
+  generateBaseTableSchema("project automation");
+export const projectAutomationSchema = z
+  .object({
+    id: projectAutomationBaseSchema.shape.id,
+    project_id: projectAutomationBaseSchema.shape.project_id,
+    user_id: projectAutomationBaseSchema.shape.user_id,
+    created: projectAutomationBaseSchema.shape.created,
+    name: projectAutomationBaseSchema.shape.name,
+    description: projectAutomationBaseSchema.shape.description,
+    config: z
+      .object({
+        event_type: z
+          .enum(["logs"])
+          .describe("The event which starts the automation execution"),
+        btql_filter: z
+          .string()
+          .describe("BTQL filter to identify rows for the automation rule"),
+        interval_seconds: z
+          .number()
+          .min(1)
+          .max(30 * 24 * 60 * 60)
+          .describe(
+            "Perform the triggered action at most once in this interval of seconds",
+          ),
+        action: z
+          .object({
+            type: z
+              .enum(["webhook"])
+              .describe(
+                "The type of action to take when the automation rule is triggered",
+              ),
+            url: z.string().describe("The webhook URL to send the request to"),
+          })
+          .describe("The action to take when the automation rule is triggered"),
+      })
+      .describe("The configuration for the automation rule"),
+  })
+  .openapi("ProjectAutomation");
+
+export type ProjectAutomation = z.infer<typeof projectAutomationSchema>;
+
 export const onlineScoreConfigSchema = z
   .object({
     sampling_rate: z
@@ -638,6 +621,10 @@ export const onlineScoreConfigSchema = z
       .array()
       .nullish()
       .describe("Trigger online scoring on any spans with a name in this list"),
+    skip_logging: z
+      .boolean()
+      .nullish()
+      .describe("Whether to skip adding scorer spans when computing scores"),
   })
   .refine((val) => val.apply_to_root_span || val.apply_to_span_names?.length, {
     message: "Online scoring rule does not apply to any rows",
@@ -1094,6 +1081,21 @@ export type AclBatchUpdateResponse = z.infer<
   typeof aclBatchUpdateResponseSchema
 >;
 
+export const createProjectAutomationSchema = projectAutomationSchema
+  .pick({
+    project_id: true,
+    name: true,
+    description: true,
+    config: true,
+  })
+  .openapi("CreateProjectAutomation");
+
+export const patchProjectAutomationSchema = objectNullish(
+  createProjectAutomationSchema,
+)
+  .omit({ project_id: true })
+  .openapi("PatchProjectAutomation");
+
 export const createProjectScoreSchema = projectScoreSchema
   .pick({
     project_id: true,
@@ -1395,6 +1397,11 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
     object: userSchema,
   },
   prompt_session: {},
+  project_automation: {
+    object: projectAutomationSchema,
+    create: createProjectAutomationSchema,
+    patch_id: patchProjectAutomationSchema,
+  },
   project_score: {
     object: projectScoreSchema,
     create: createProjectScoreSchema,

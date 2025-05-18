@@ -6,6 +6,7 @@ import { chatCompletionMessageParamSchema } from "./openai/messages";
 import { customTypes } from "./custom_types";
 import { gitMetadataSettingsSchema, repoInfoSchema } from "./git_types";
 import { objectReferenceSchema } from "./common_types";
+import { graphDataSchema } from "./graph";
 
 export const validRuntimesEnum = z.enum(["node", "python"]);
 export type Runtime = z.infer<typeof validRuntimesEnum>;
@@ -18,6 +19,98 @@ export const runtimeContextSchema = z.object({
   version: z.string(),
 });
 export type RuntimeContext = z.infer<typeof runtimeContextSchema>;
+
+const strictParam = z
+  .boolean()
+  .nullish()
+  .describe(
+    "If true, throw an error if one of the variables in the prompt is not present in the input",
+  );
+export const codeBundleSchema = z
+  .object({
+    runtime_context: runtimeContextSchema,
+    location: z.union([
+      z
+        .object({
+          type: z.literal("experiment"),
+          eval_name: z.string(),
+          position: z.union([
+            z.object({ type: z.literal("task") }),
+            z
+              .object({
+                type: z.literal("scorer"),
+                index: z.number().int().nonnegative(),
+              })
+              .openapi({ title: "scorer" }),
+          ]),
+        })
+        .openapi({ title: "experiment" }),
+      z
+        .object({
+          type: z.literal("function"),
+          index: z.number().int().nonnegative(),
+        })
+        .openapi({ title: "function" }),
+    ]),
+    bundle_id: z.string(),
+    preview: z.string().nullish().describe("A preview of the code"),
+  })
+  .openapi("CodeBundle");
+export type CodeBundle = z.infer<typeof codeBundleSchema>;
+
+export const remoteEvalDataSchema = z.object({
+  type: z.literal("remote_eval"),
+  endpoint: z.string(),
+  eval_name: z.string(),
+  parameters: z.record(z.string(), z.unknown()),
+});
+export type RemoteEvalData = z.infer<typeof remoteEvalDataSchema>;
+
+export const functionDataSchema = z
+  .union([
+    z
+      .object({
+        type: z.literal("prompt"),
+        // For backwards compatibility reasons, the prompt definition is hoisted out and stored
+        // in the outer object
+      })
+      .openapi({ title: "prompt" }),
+    z
+      .object({
+        type: z.literal("code"),
+        data: z.union([
+          z
+            .object({
+              type: z.literal("bundle"),
+            })
+            .and(codeBundleSchema)
+            .openapi({ title: "bundle" }),
+          z
+            .object({
+              type: z.literal("inline"),
+              runtime_context: runtimeContextSchema,
+              code: z.string(),
+            })
+            .openapi({ title: "inline" }),
+        ]),
+      })
+      .openapi({ title: "code" }),
+    graphDataSchema.openapi({
+      title: "graph",
+      description: "This feature is preliminary and unsupported.",
+    }),
+    remoteEvalDataSchema.openapi({
+      title: "remote_eval",
+      description: "A remote eval to run",
+    }),
+    z
+      .object({
+        type: z.literal("global"),
+        name: z.string(),
+      })
+      .openapi({ title: "global" }),
+  ])
+  .openapi("FunctionData");
 
 export const functionIdSchema = z
   .union([
@@ -71,6 +164,14 @@ export const functionIdSchema = z
       .openapi({ title: "inline_code" }),
     z
       .object({
+        inline_prompt: promptDataSchema.optional(),
+        inline_function: z.record(z.unknown()), // This creates a circular dependency
+        name: z.string().nullish().describe("The name of the inline function"),
+      })
+      .describe("Inline function definition")
+      .openapi({ title: "inline_function" }),
+    z
+      .object({
         inline_prompt: promptDataSchema,
         name: z.string().nullish().describe("The name of the inline prompt"),
       })
@@ -78,7 +179,10 @@ export const functionIdSchema = z
       .openapi({ title: "inline_prompt" }),
   ])
   .describe("Options for identifying a function")
-  .openapi("FunctionId");
+  .openapi({
+    title: "FunctionId",
+    description: "Options for identifying a function",
+  });
 
 export type FunctionId = z.infer<typeof functionIdSchema>;
 
@@ -87,10 +191,15 @@ export const useFunctionSchema = functionIdSchema;
 export const streamingModeEnum = z.enum(["auto", "parallel"]);
 export type StreamingMode = z.infer<typeof streamingModeEnum>;
 
+const spanParentObjectTypeSchema = z.enum([
+  "project_logs",
+  "experiment",
+  "playground_logs",
+]);
 export const invokeParent = z.union([
   z
     .object({
-      object_type: z.enum(["project_logs", "experiment", "playground_logs"]),
+      object_type: spanParentObjectTypeSchema,
       object_id: z
         .string()
         .describe("The id of the container object you are logging to"),
@@ -119,12 +228,24 @@ export const invokeParent = z.union([
     ),
 ]);
 
+const fetchRowFieldsSchema = z.object({
+  object_type: spanParentObjectTypeSchema.describe(
+    "The type of the object you are logging to",
+  ),
+  object_id: z.string().describe("The id of the object you are logging to"),
+  row_id: z.string().describe("The row id to fetch"),
+  fields: z.array(z.string()).describe("The fields to fetch"),
+});
+
 export const invokeFunctionNonIdArgsSchema = z.object({
   input: customTypes.unknown
     .optional()
     .describe(
       "Argument to the function, which can be any JSON serializable value",
     ),
+  fetch_row_fields: fetchRowFieldsSchema
+    .nullish()
+    .describe("If provided, the row id and fields to fetch before invoke"),
   expected: customTypes.unknown
     .optional()
     .describe("The expected output of the function"),
@@ -148,6 +269,7 @@ export const invokeFunctionNonIdArgsSchema = z.object({
   mode: streamingModeEnum
     .nullish()
     .describe("The mode format of the returned value (defaults to 'auto')"),
+  strict: strictParam,
 });
 
 export const invokeFunctionSchema = functionIdSchema
@@ -163,6 +285,8 @@ export const invokeApiSchema = invokeFunctionNonIdArgsSchema
   )
   .describe("The request to invoke a function")
   .openapi("InvokeApi");
+
+const stopToken = z.string().nullish().describe("The token to stop the run");
 
 export const runEvalSchema = z
   .object({
@@ -262,6 +386,14 @@ export const runEvalSchema = z
       .describe(
         "Optionally explicitly specify the git metadata for this experiment. This takes precedence over `gitMetadataSettings` if specified.",
       ),
+    strict: strictParam,
+    stop_token: stopToken,
+    extra_messages: z
+      .string()
+      .optional()
+      .describe(
+        "A template path of extra messages to append to the conversion. These messages will be appended to the end of the conversation, after the last message.",
+      ),
   })
   .openapi("RunEval");
 
@@ -275,6 +407,12 @@ export const baseSSEEventSchema = z.object({
 export const sseTextEventSchema = baseSSEEventSchema.merge(
   z.object({
     event: z.literal("text_delta"),
+  }),
+);
+
+export const sseReasoningEventSchema = baseSSEEventSchema.merge(
+  z.object({
+    event: z.literal("reasoning_delta"),
   }),
 );
 
@@ -319,18 +457,12 @@ export const sseDoneEventSchema = baseSSEEventSchema.omit({ data: true }).merge(
   }),
 );
 
-export const sseMetaEventSchema = baseSSEEventSchema.merge(
-  z.object({
-    event: z.literal("meta"),
-  }),
-);
-
 export const functionObjectTypeEnum = z
-  .enum(["prompt", "tool", "scorer", "task"])
+  .enum(["prompt", "tool", "scorer", "task", "agent"])
   .openapi("FunctionObjectType");
 export type FunctionObjectType = z.infer<typeof functionObjectTypeEnum>;
 export const functionFormatEnum = z
-  .enum(["llm", "code", "global"])
+  .enum(["llm", "code", "global", "graph"])
   .openapi("FunctionFormat");
 export type FunctionFormat = z.infer<typeof functionFormatEnum>;
 export const functionOutputTypeEnum = z
@@ -347,6 +479,7 @@ export const sseProgressEventDataSchema = z
     output_type: functionOutputTypeEnum,
     name: z.string(),
     event: z.enum([
+      "reasoning_delta",
       "text_delta",
       "json_delta",
       "error",
@@ -366,16 +499,10 @@ export const sseConsoleEventDataSchema = z.object({
 });
 export type SSEConsoleEventData = z.infer<typeof sseConsoleEventDataSchema>;
 
-export const sseMetaEventDataSchema = z
-  .object({
-    stop_token: z.string().describe("The token to stop the run"),
-  })
-  .openapi("SSEMetaEventData");
-export type SSEMetaEventData = z.infer<typeof sseMetaEventDataSchema>;
-
 export const callEventSchema = z
   .union([
     sseTextEventSchema.openapi({ title: "text_delta" }),
+    sseReasoningEventSchema.openapi({ title: "reasoning_delta" }),
     sseDataEventSchema.openapi({ title: "json_delta" }),
     sseProgressEventSchema.openapi({ title: "progress" }),
     sseErrorEventSchema.openapi({ title: "error" }),
@@ -413,7 +540,7 @@ export const toolFunctionDefinitionSchema = z.object({
     name: z.string(),
     description: z.string().optional(),
     parameters: z.record(z.unknown()).optional(),
-    strict: z.boolean().optional(),
+    strict: z.boolean().nullish(),
   }),
 });
 export type ToolFunctionDefinition = z.infer<
