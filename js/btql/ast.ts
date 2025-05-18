@@ -115,7 +115,7 @@ export interface Function {
   args: Expr[];
   loc?: NullableLoc;
 }
-export const functionSchema: z.ZodType<Function> = z.strictObject({
+export const functionSchema: z.ZodType<Function> = z.object({
   op: z.literal("function"),
   name: identSchema,
   args: z.array(z.lazy(() => exprSchema)),
@@ -165,14 +165,16 @@ export const booleanOps = ["and", "or"] as const;
 export type BooleanOp = (typeof booleanOps)[number];
 export interface BooleanExpr {
   op: BooleanOp;
-  left: Expr;
-  right: Expr;
+  left?: Expr;
+  right?: Expr;
+  children?: Expr[];
   loc?: NullableLoc;
 }
 export const booleanExprSchema: z.ZodType<BooleanExpr> = z.strictObject({
   op: z.enum(booleanOps),
-  left: z.lazy(() => exprSchema),
-  right: z.lazy(() => exprSchema),
+  left: z.lazy(() => exprSchema).optional(),
+  right: z.lazy(() => exprSchema).optional(),
+  children: z.array(z.lazy(() => exprSchema)).optional(),
   loc,
 });
 
@@ -306,7 +308,9 @@ export const sortExpr = z.strictObject({
 
 export type SortExpr = z.infer<typeof sortExpr>;
 
-export const shapeSchema = z.enum(["spans", "traces"]);
+export const shapeSchema = z.enum(["spans", "traces", "summary"]);
+export type Shape = z.infer<typeof shapeSchema>;
+
 export const fromFunctionSchema = functionSchema.and(
   z.object({
     shape: shapeSchema.nullish(),
@@ -319,10 +323,15 @@ export const parsedQuerySchema = z.strictObject({
   unpivot: z.array(unpivotAliasExpr).nullish(),
   measures: z.array(aliasExpr).nullish(),
   select: z.array(z.union([aliasExpr, starSchema])).nullish(),
+  infer: z.array(z.union([identSchema, starSchema])).nullish(),
   filter: exprSchema.nullish(),
   from: z.union([identSchema, fromFunctionSchema]).nullish(),
   sort: z.array(sortExpr).nullish(),
   limit: z.number().int().nullish(),
   cursor: z.string().nullish(),
+  comparison_key: exprSchema.nullish(),
+  weighted_scores: z.array(aliasExpr).nullish(),
+  custom_columns: z.array(aliasExpr).nullish(),
+  preview_length: z.number().int().nullish(),
 });
 export type ParsedQuery = z.infer<typeof parsedQuerySchema>;
