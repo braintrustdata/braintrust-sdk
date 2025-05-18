@@ -7,53 +7,64 @@ The BTQL Expression Builder provides a fluent API for building BTQL query expres
 <CodeTabs items={["TypeScript", "Python"]}>
 
 ```typescript
-import { Query } from "braintrust/btql";
-import { field, and, or, literal } from "braintrust/btql/expr"; // Or from "braintrust/btql" if re-exported
+import { Query, btql, field } from "braintrust/btql";
 
-// Create a new query
-const query = Query.from("experiment", "<experiment id>")
-  .filter(field("age").gt(30)) // field() returns an Expression object
+// Build a query with fluent filters
+const query = Query.experiment("<experiment id>")
+  // Call .filter() as many times as you like – they are merged with AND
+  .filter(field("age").gt(30))
   .filter(
-    and(
-      // and() takes Expression objects and returns one
-      field("status").eq("active"),
-      field("user").name.eq("John"), // .name on an Expression object returns a new one for the nested path
-      or(field("role").includes("admin"), field("isVerified").eq(true)),
-    ),
+    field("status")
+      .eq("active")
+      .and(field("user").name.eq("John"))
+      .and(field("role").includes("admin").or(field("isVerified").eq(true))),
   );
+
+// Embed raw BTQL safely with the tagged‑template helper
+const highTokenQuery = Query.project_logs("<project>").filter(
+  btql`metrics.tokens * 2`.gt(1000),
+);
 ```
 
 ```python
-from braintrust.btql import Query, Expr
+from braintrust.btql import Query, Expr, literal
 
-# Create a new query
-query = (Query.from_("experiment", "<experiment id>")
-  .filter(Expr.field("age").gt(30))
-  .filter(
-    Expr.and_(
-      Expr.field("status").eq("active"),
-      Expr.field("user").name.eq("John"), # Assumes .name on an Expr returns a new Expr
-      Expr.or_(
-        Expr.field("role").includes("admin"),
-        Expr.field("is_verified").eq(True)
-      ),
-    ),
-  ))
+# Build a query with fluent filters
+query = (
+    Query.experiment("<experiment id>")
+      # Call .filter() as many times as you like – they are merged with AND
+      .filter(Expr.field("age") > 30)
+      .filter(
+          (Expr.field("status") == "active")
+          & (Expr.field("user").name == "John")
+          & (
+              Expr.field("role").includes("admin")
+              | (Expr.field("is_verified") == True)
+          )
+      )
+)
+
+# Embed raw BTQL safely with Expr.raw()
+high_token_query = Query.project_logs("<project>").filter(
+  Expr.raw("metrics.tokens * 2") > 1000
+)
 ```
 
 </CodeTabs>
 
 ## Field References
 
-In TypeScript, the `field()` function (from the `expr` module) creates a reference to a field. In Python, this is `Expr.field()`. These support simple fields and nested properties through attribute access or indexing on the returned Expression object.
+In TypeScript and Python, the `field()` function (from the `expr` module) creates a reference to a field. `field` generates an `Expr` object. You can also call
+`Expr.field` to achieve the same.
 
 <CodeTabs items={["TypeScript", "Python"]}>
 
 ```typescript
-import { field } from "braintrust/btql/expr";
+import { Expr, field } from "braintrust/btql";
 
 // Simple field
 field("name");
+Expr.field("name");
 
 // Nested property access
 field("user").name; // Returns a new Expression object for "user.name"
@@ -65,25 +76,27 @@ field("metadata", "tags", 0);
 ```
 
 ```python
-from braintrust.btql import Expr
+from braintrust.btql import Expr, field
 
 # Simple field
+field("name")
 Expr.field("name")
 
 # Nested property access
-Expr.field("user").name  # Returns a new Expr for "user.name"
-Expr.field("metadata").tags[0]  # Returns a new Expr for "metadata.tags[0]"
+field("user").name  # Returns a new Expr for "user.name"
+field("metadata").tags[0]  # Returns a new Expr for "metadata.tags[0]"
 
 # Alternative syntax for nested fields (initial creation)
-Expr.field("user", "name")
-Expr.field("metadata", "tags", 0)
+field("user", "name")  # Returns a new Expr for "user.name"
+field("user", "name")
+field("metadata", "tags", 0)
 ```
 
 </CodeTabs>
 
 ## Literals
 
-Use the `literal()` function (TS) or `Expr.literal()` (Python) to create literal values within expressions.
+Use the `literal()` function to create literal values within expressions.
 
 <CodeTabs items={["TypeScript", "Python"]}>
 
@@ -96,11 +109,11 @@ field("name").eq(literal("John"));
 ```
 
 ```python
-from braintrust.btql import Expr
+from braintrust.btql import field, literal
 
-Expr.field("verified").eq(Expr.literal(True))
-Expr.field("count").eq(Expr.literal(0))
-Expr.field("name").eq(Expr.literal("John"))
+field("verified").eq(literal(True))
+field("count").eq(literal(0))
+field("name").eq(literal("John"))
 ```
 
 </CodeTabs>
@@ -135,25 +148,25 @@ field("discountedTotal").eq(
 ```
 
 ```python
-from braintrust.btql import Expr
+from braintrust.btql import field, literal
 
 // Basic arithmetic
-Expr.field("price").add(10)
-Expr.field("quantity").subtract(5)
-Expr.field("total").multiply(1.2)
-Expr.field("amount").divide(2)
+field("price").add(10)
+field("quantity").subtract(5)
+field("total").multiply(1.2)
+field("amount").divide(2)
 
 // Chaining arithmetic operations
-Expr.field("price").add(5).multiply(1.1)
+field("price").add(5).multiply(1.1)
 
 // Arithmetic with other fields
-Expr.field("total").eq(Expr.field("price").multiply(Expr.field("quantity")))
+field("total").eq(field("price").multiply(field("quantity")))
 
 // Complex calculations
-Expr.field("discounted_total").eq(
-  Expr.field("price")
-    .multiply(Expr.field("quantity"))
-    .multiply(Expr.literal(1).subtract(Expr.field("discount_rate")))
+field("discounted_total").eq(
+  field("price")
+    .multiply(field("quantity"))
+    .multiply(literal(1).subtract(field("discount_rate")))
 )
 ```
 
@@ -198,35 +211,35 @@ field("type").is("customer");
 ```
 
 ```python
-from braintrust.btql import Expr
+from braintrust.btql import field
 
 // Equality
-Expr.field("status").eq("active")  # .eq() can take a literal directly
-Expr.field("status").ne("deleted")
+field("status").eq("active")  # .eq() can take a literal directly
+field("status").ne("deleted")
 
 // Numeric comparisons
-Expr.field("age").gt(30)
-Expr.field("age").lt(50)
-Expr.field("age").ge(18)
-Expr.field("age").le(65)
+field("age").gt(30)
+field("age").lt(50)
+field("age").ge(18)
+field("age").le(65)
 
 // Arithmetic comparisons
-Expr.field("total").gt(Expr.field("price").multiply(Expr.field("quantity")))
-Expr.field("discounted_price").lt(Expr.field("original_price").multiply(0.8))
-Expr.field("margin").ge(Expr.field("price").subtract(Expr.field("cost")))
+field("total").gt(field("price").multiply(field("quantity")))
+field("discounted_price").lt(field("original_price").multiply(0.8))
+field("margin").ge(field("price").subtract(field("cost")))
 
 // String comparisons
-Expr.field("name").like("J%")  # SQL LIKE pattern matching
-Expr.field("name").ilike("%john%")  # Case-insensitive LIKE
-Expr.field("name").match("John")  # Exact match
+field("name").like("J%")  # SQL LIKE pattern matching
+field("name").ilike("%john%")  # Case-insensitive LIKE
+field("name").match("John")  # Exact match
 
 // NULL checks
-Expr.field("email").is_null()
-Expr.field("email").is_not_null()
+field("email").is_null()
+field("email").is_not_null()
 
 // Custom comparisons
-Expr.field("tags").includes("admin")
-Expr.field("type").is_("customer")
+field("tags").includes("admin")
+field("type").is_("customer")
 ```
 
 </CodeTabs>
@@ -238,7 +251,7 @@ Combine Expression objects with logical operator functions (`and`, `or`, `not` i
 <CodeTabs items={["TypeScript", "Python"]}>
 
 ```typescript
-import { field, and, or, not } from "braintrust/btql/expr";
+import { field, and, or, not } from "braintrust/btql";
 
 // AND - all conditions must be true
 and(field("status").eq("active"), field("age").gt(21));
@@ -278,46 +291,43 @@ field("total")
 ```
 
 ```python
-from braintrust.btql import Expr
+from braintrust.btql import field, and_, or_, not_
 
 // AND - all conditions must be true
-Expr.and_(Expr.field("status").eq("active"), Expr.field("age").gt(21))
+and_(field("status").eq("active"), field("age").gt(21))
 
 // OR - at least one condition must be true
-Expr.or_(Expr.field("role").eq("admin"), Expr.field("role").eq("moderator"))
+or_(field("role").eq("admin"), field("role").eq("moderator"))
 
 // NOT - negates a condition
-Expr.not_(Expr.field("status").eq("deleted"))
+not_(field("status").eq("deleted"))
 
 // Complex combinations
-Expr.and_(
-  Expr.field("status").eq("active"),
-  Expr.not_(Expr.field("role").eq("guest")),
-  Expr.or_(
-    Expr.field("subscription").eq("premium"),
-    Expr.field("trial_days").gt(0)
+and_(
+  field("status").eq("active"),
+  not_(field("role").eq("guest")),
+  or_(
+    field("subscription").eq("premium"),
+    field("trial_days").gt(0)
   )
 )
 
 // Using chainable .and_() method on an Expr instance
-Expr.field("status").eq("active").and_(Expr.field("age").gt(21))
+field("status").eq("active").and(field("age").gt(21))
 
 // Combining chainable .and_() with other operators
-(Expr.field("price")
-  .gt(100)
-  .and_(Expr.field("in_stock").eq(True))
-  .and_(
-    Expr.or_(
-      Expr.field("category").eq("electronics"),
-      Expr.field("category").eq("accessories")
+(field
+    or_(
+      field("category").eq("electronics"),
+      field("category").eq("accessories")
     )
   ))
 
 // Complex arithmetic with chainable .and_()
-(Expr.field("total")
+(field("total")
   .gt(1000)
-  .and_(Expr.field("margin").ge(Expr.field("price").multiply(0.2)))
-  .and_(Expr.field("quantity").gt(0)))
+  .and_(field("margin").ge(field("price").multiply(0.2)))
+  .and_(field("quantity").gt(0)))
 ```
 
 </CodeTabs>
@@ -329,7 +339,7 @@ You can compare Expression objects to other Expression objects:
 <CodeTabs items={["TypeScript", "Python"]}>
 
 ```typescript
-import { field } from "braintrust/btql/expr";
+import { field } from "braintrust/btql";
 
 // Check if endDate is after startDate
 field("endDate").gt(field("startDate"));
@@ -339,26 +349,25 @@ field("actualAmount").eq(field("expectedAmount"));
 ```
 
 ```python
-from braintrust.btql import Expr
+from braintrust.btql import field
 
 // Check if end_date is after start_date
-Expr.field("end_date").gt(Expr.field("start_date"))
+field("end_date").gt(field("start_date"))
 
 // Check if actual_amount equals expected_amount
-Expr.field("actual_amount").eq(Expr.field("expected_amount"))
+field("actual_amount").eq(field("expected_amount"))
 ```
 
 </CodeTabs>
 
 ## Direct BTQL Queries
 
-You can initialize a `Query` from a full BTQL string. For embedding raw BTQL expressions within the builder, use the `raw()` function (TS) or `Expr.raw()` (Python).
+You can initialize a `Query` from a full BTQL string using `Query.fromString()`. For embedding raw BTQL expressions within the builder, use the `raw()` function (TS) or `Expr.raw()`/`raw()` (Python).
 
 <CodeTabs items={["TypeScript", "Python"]}>
 
 ```typescript
-import { Query } from "braintrust/btql";
-import { field, and, raw, literal } from "braintrust/btql/expr";
+import { Query, field, and, raw } from "braintrust/btql";
 
 // Direct BTQL query string for the whole query
 const directQuery = Query.fromString(`
@@ -369,13 +378,13 @@ const directQuery = Query.fromString(`
 `);
 
 // Mix BTQL expressions (raw) with builder syntax
-const mixedQuery = Query.from("experiment", "<experiment id>").filter(
+const mixedQuery = Query.experiment("<experiment id>").filter(
   raw("metrics.tokens * 2").gt(1000), // raw() creates an Expression object
   raw("scores.Factuality + scores.Coherence").gt(1.5),
 );
 
 // Combine builder syntax with raw BTQL expressions
-const combinedQuery = Query.from("experiment", "<experiment id>").filter(
+const combinedQuery = Query.experiment("<experiment id>").filter(
   and(
     field("status").eq("active"),
     raw("metrics.latency < avg(metrics.latency)"),
@@ -385,9 +394,9 @@ const combinedQuery = Query.from("experiment", "<experiment id>").filter(
 ```
 
 ```python
-from braintrust.btql import Query, Expr
+from braintrust.btql import Query, field, and_, raw, literal, Expr
 
-// Direct BTQL query string for the whole query
+# Direct BTQL query string for the whole query
 direct_query = Query.from_string("""
   select: metadata.model as model, scores.Factuality as score
   from: project_logs('<PROJECT_ID>')
@@ -395,21 +404,17 @@ direct_query = Query.from_string("""
   sort: score desc
 """)
 
-// Mix BTQL expressions (Expr.raw) with builder syntax
-mixed_query = (Query.from_("experiment", "<experiment id>")
-  .filter(
-    Expr.raw("metrics.tokens * 2").gt(1000),  # Expr.raw creates an Expr from a string
-    Expr.raw("scores.Factuality + scores.Coherence").gt(1.5),
-  ))
+# Mix BTQL expressions with builder syntax, using Python operators
+mixed_query = (Query.experiment("<experiment id>")
+  .filter(raw("metrics.tokens * 2") > 1000)
+  .filter(raw("scores.Factuality + scores.Coherence") > 1.5))
 
-// Combine builder syntax with raw BTQL expressions
-combined_query = (Query.from_("experiment", "<experiment id>")
+# Combine builder syntax with raw BTQL expressions, using Python operators
+combined_query = (Query.experiment("<experiment id>")
   .filter(
-    Expr.and_(
-      Expr.field("status").eq("active"),
-      Expr.raw("metrics.latency < avg(metrics.latency)"),
-      Expr.field("score").gt(Expr.raw("percentile(scores.Factuality, 0.95)")),
-    ),
+      (field("status") == "active")
+      & raw("metrics.latency < avg(metrics.latency)")
+      & (field("score") > raw("percentile(scores.Factuality, 0.95)"))
   ))
 ```
 
@@ -417,16 +422,15 @@ combined_query = (Query.from_("experiment", "<experiment id>")
 
 ## Query Execution and Response Format
 
-When you execute a `Query` (e.g., by calling `.execute()`), it returns an object containing an async iterator for the data, schema information, and other metadata. The async iterator automatically handles pagination for you.
+When you execute a `Query` by calling `.execute()`, it returns an object containing an async iterator for the data, schema information, and other metadata. The async iterator automatically handles pagination for you.
 
 <CodeTabs items={["TypeScript", "Python"]}>
 
 ```typescript
-import { Query } from "braintrust/btql";
-import { field } from "braintrust/btql/expr";
+import { Query, field } from "braintrust/btql";
 
 // Build and execute a query
-const query = Query.from("experiment", "<experiment id>")
+const query = Query.experiment("<experiment id>")
   .filter(field("status").eq("active"))
   .sort("created", "desc") // Assuming sort takes field name and optional direction
   .limit(100);
@@ -476,7 +480,7 @@ async function fetchData() {
 
 ```python
 from typing import AsyncIterator, Generic, TypeVar, List, Optional, Dict, Any
-from braintrust.btql import Query, Expr # Ensure Expr is imported if field() is used within Query calls indirectly
+from braintrust.btql import Query, field, Expr
 
 T = TypeVar('T')
 
@@ -508,8 +512,8 @@ class BTQLResponse(Generic[T]):
         self.metadata = metadata
 
 # Build and execute a query
-query = (Query.from_("experiment", "<experiment id>")
-  .filter(Expr.field("status").eq("active")) # Python still uses Expr.field here
+query = (Query.experiment("<experiment id>")
+  .filter(field("status").eq("active"))
   .sort("created", "desc")
   .limit(100))
 
