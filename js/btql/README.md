@@ -422,7 +422,7 @@ combined_query = (Query.experiment("<experiment id>")
 
 ## Query Execution and Response Format
 
-When you execute a `Query` by calling `.execute()`, it returns an object containing an async iterator for the data, schema information, and other metadata. The async iterator automatically handles pagination for you.
+When you execute a `Query`, you can do so synchronously using `.execute()` or asynchronously using `.execute_async()` (recommended for JavaScript/TypeScript). Both methods return a `BTQLResponse` object which contains an async iterator for the data (`response.data`), schema information (`response.schema`), and a method to get the current page of results (`response.currentPage()`). The `response.data` async iterator automatically handles pagination for you when iterating through all results.
 
 <CodeTabs items={["TypeScript", "Python"]}>
 
@@ -435,81 +435,75 @@ const query = Query.experiment("<experiment id>")
   .sort("created", "desc") // Assuming sort takes field name and optional direction
   .limit(100);
 
+interface JSONSchema {
+  type?: string;
+  format?: string;
+  items?: JSONSchema;
+  properties?: { [key: string]: JSONSchema };
+  // Add other JSON Schema fields as needed
+}
+
 // Response format (conceptual)
-interface BTQLResponse<T> {
+interface BTQLResponse<T extends Record<string, unknown>> {
   // Iterator for the actual data rows - automatically handles pagination
   data: AsyncIterator<T>;
 
-  // Schema information describing the data structure
+  // Schema information describing the data structure in JSON Schema format
   schema: {
-    // This would be a more structured Schema object
-    fields: Array<{
-      name: string;
-      type: string;
-      nullable: boolean;
-    }>;
+    type: "array";
+    items: {
+      type: "object";
+      properties: {
+        [key: string]: JSONSchema;
+      };
+    };
   };
 
-  // Additional metadata
-  metadata?: {
-    [key: string]: any;
-  };
+  // The response object automatically iterates through pages, but you can
+  // use currentPage() to access just the current one.
+  currentPage(): Promise<T[]>;
 }
 
-// Example usage
-async function fetchData() {
-  const response: BTQLResponse<any> = await query.execute();
+const response: BTQLResponse<any> = await query.execute_async();
+console.log("Response schema:");
+console.log(response.schema);
 
-  // Iterate through ALL results - pagination is handled automatically
-  for await (const row of response.data) {
-    console.log(row);
-  }
-
-  // Access schema information
-  console.log(response.schema);
-  // Example:
-  // {
-  //   fields: [
-  //     { name: "id", type: "string", nullable: false },
-  //     { name: "status", type: "string", nullable: true },
-  //     // ...
-  //   ]
-  // }
+// Iterate through ALL results - pagination is handled automatically
+console.log("All rows:");
+for await (const row of response.data) {
+  console.log(row);
 }
 ```
 
 ```python
-from typing import AsyncIterator, Generic, TypeVar, List, Optional, Dict, Any
-from braintrust.btql import Query, field, Expr
+from typing import AsyncIterator, Generic, TypeVar, List, Dict, Any, Coroutine, Optional, TypedDict
+from braintrust.btql import Query, field
+import asyncio # For running async code from sync in examples
 
-T = TypeVar('T')
+T = TypeVar('T') # T is expected to be a dict-like object, e.g., Dict[str, Any]
 
-class FieldSchema:
-    name: str
-    type: str
-    nullable: bool
+JSONSchema = Dict[str, Any] # Can contain keys like 'type', 'format', 'items', 'properties', etc.
 
-    def __init__(self, name: str, type: str, nullable: bool):
-        self.name = name
-        self.type = type
-        self.nullable = nullable
+class ItemsSchema(TypedDict):
+    type: str # Expected to be "object"
+    properties: Dict[str, JSONSchema]
 
-class QuerySchema:
-    fields: List[FieldSchema]
-
-    def __init__(self, fields: List[FieldSchema]):
-        self.fields = fields
+class RootSchemaStructure(TypedDict):
+    type: str # Expected to be "array"
+    items: ItemsSchema
 
 class BTQLResponse(Generic[T]):
     """Response from a BTQL query execution."""
     data: AsyncIterator[T]
-    schema: QuerySchema
-    metadata: Optional[Dict[str, Any]]
+    schema: RootSchemaStructure
 
-    def __init__(self, data: AsyncIterator[T], schema: QuerySchema, metadata: Optional[Dict[str, Any]] = None):
+    def __init__(self, data: AsyncIterator[T], schema: RootSchemaStructure):
         self.data = data
         self.schema = schema
-        self.metadata = metadata
+
+    async def current_page(self) -> List[T]:
+        """Fetches and returns only the current page of results."""
+        pass # Actual implementation would fetch/return a page
 
 # Build and execute a query
 query = (Query.experiment("<experiment id>")
@@ -517,22 +511,28 @@ query = (Query.experiment("<experiment id>")
   .sort("created", "desc")
   .limit(100))
 
-# Example usage
-async def fetch_data():
-    response: BTQLResponse[Any] = await query.execute()
+# Asynchronous execution example
+async def fetch_data_async():
+    response: BTQLResponse[Any] = await query.execute_async()
+
+    print("Response schema:")
+    print(response.schema)
 
     # Iterate through ALL results - pagination is handled automatically
+    print("All rows:")
     async for row in response.data:
         print(row)
 
-    # Access schema information
-    # Example: print(response.schema.fields[0].name)
-    # print(response.schema)
-    # QuerySchema(fields=[
-    #     FieldSchema(name="id", type="string", nullable=False),
-    #     FieldSchema(name="status", type="string", nullable=True),
-    #     # ...
-    # ])
+# Synchronous execution example
+def fetch_data_sync():
+    response: BTQLResponse[Any] = query.execute() # Synchronous call, blocks until initial response/schema is ready
+    print("Response schema:")
+    print(response.schema)
+
+    # Iterate through ALL results - pagination is handled automatically
+    print("All rows:")
+    async for row in response.data:
+        print(row)
 ```
 
 </CodeTabs>
