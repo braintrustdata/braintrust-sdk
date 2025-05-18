@@ -5,7 +5,8 @@ import { filterFrom, getCurrentUnixTimestamp } from "../util";
 
 /**
  * Wrap an `Anthropic` object (created with `new Anthropic(...)`) to add tracing. If Braintrust is
- * not configured, this is a no-op
+ * not configured, nothing will be traced. If this is not an `Anthropic` object, this function is
+ * a no-op.
  *
  * Currently, this only supports the `v4` API.
  *
@@ -13,16 +14,16 @@ import { filterFrom, getCurrentUnixTimestamp } from "../util";
  * @returns The wrapped `Anthropic` object.
  */
 export function wrapAnthropic<T extends object>(anthropic: T): T {
-  const anthropicUnknown: unknown = anthropic;
+  const au: unknown = anthropic;
   if (
-    anthropicUnknown &&
-    typeof anthropicUnknown === "object" &&
-    "messages" in anthropicUnknown &&
-    typeof anthropicUnknown.messages === "object" &&
-    anthropicUnknown.messages &&
-    "create" in anthropicUnknown.messages
+    au &&
+    typeof au === "object" &&
+    "messages" in au &&
+    typeof au.messages === "object" &&
+    au.messages &&
+    "create" in au.messages
   ) {
-    return anthropicProxy(anthropicUnknown);
+    return anthropicProxy(au);
   } else {
     console.warn("Unsupported Anthropic library. Not wrapping.");
     return anthropic;

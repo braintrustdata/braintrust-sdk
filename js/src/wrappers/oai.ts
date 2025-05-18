@@ -39,7 +39,8 @@ declare global {
 
 /**
  * Wrap an `OpenAI` object (created with `new OpenAI(...)`) to add tracing. If Braintrust is
- * not configured, this is a no-op
+ * not configured, nothing will be traced. If this is not an `OpenAI` object, this function is
+ * a no-op.
  *
  * Currently, this only supports the `v4` API.
  *
@@ -47,20 +48,20 @@ declare global {
  * @returns The wrapped `OpenAI` object.
  */
 export function wrapOpenAI<T extends object>(openai: T): T {
-  const openaiUnknown: unknown = openai;
+  const oai: unknown = openai;
   if (
-    openaiUnknown &&
-    typeof openaiUnknown === "object" &&
-    "chat" in openaiUnknown &&
-    typeof openaiUnknown.chat === "object" &&
-    openaiUnknown.chat &&
-    "completions" in openaiUnknown.chat &&
-    typeof openaiUnknown.chat.completions === "object" &&
-    openaiUnknown.chat.completions &&
-    "create" in openaiUnknown.chat.completions
+    oai &&
+    typeof oai === "object" &&
+    "chat" in oai &&
+    typeof oai.chat === "object" &&
+    oai.chat &&
+    "completions" in oai.chat &&
+    typeof oai.chat.completions === "object" &&
+    oai.chat.completions &&
+    "create" in oai.chat.completions
   ) {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    return wrapOpenAIv4(openaiUnknown as OpenAILike) as T;
+    return wrapOpenAIv4(oai as OpenAILike) as T;
   } else {
     console.warn("Unsupported OpenAI library (potentially v3). Not wrapping.");
     return openai;
