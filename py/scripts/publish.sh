@@ -21,8 +21,7 @@ if [ -z "$VERSION" ]; then
     exit 1
 fi
 
-echo "Publishing version $VERSION to testpypi (eventually $PYPI_REPO)"
-#
-# test pypi is hardcoded for now
-#
-twine upload --repository testpypi dist/*"$VERSION"*
+echo "Publishing version $VERSION to $PYPI_REPO"
+
+# Upload to the specified repository (either pypi or testpypi)
+twine upload --repository "$PYPI_REPO" dist/*"$VERSION"*

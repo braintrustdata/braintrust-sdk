@@ -41,13 +41,10 @@ publish:
 	./scripts/publish.sh
 
 check-git-clean:
-	@echo "Checking for clean git working directory..."
 	@if [ -n "$$(git status --porcelain)" ]; then \
-		echo "Error: Git working directory is not clean. Won't run publish if git status isn't clean."; \
-		git status; \
+		echo "Error: Git working directory is not clean. Won't run publish."; \
 		exit 1; \
 	fi
-	@echo "Git working directory is clean."
 
 verify-build-publish: check-git-clean lint build test-wheel publish
 
