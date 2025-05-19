@@ -292,16 +292,16 @@ field("total")
 ```python
 from braintrust.btql import field, and_, or_, not_
 
-// AND - all conditions must be true
+# AND - all conditions must be true
 and_(field("status").eq("active"), field("age").gt(21))
 
-// OR - at least one condition must be true
+# OR - at least one condition must be true
 or_(field("role").eq("admin"), field("role").eq("moderator"))
 
-// NOT - negates a condition
+# NOT - negates a condition
 not_(field("status").eq("deleted"))
 
-// Complex combinations
+# Complex combinations
 and_(
   field("status").eq("active"),
   not_(field("role").eq("guest")),
@@ -311,10 +311,8 @@ and_(
   )
 )
 
-// Using chainable .and_() method on an Expr instance
-field("status").eq("active").and(field("age").gt(21))
-
-// Combining chainable .and_() with other operators
+# Using chainable .and_() method on an Expr instance
+field("status").eq("active").and_(field("age").gt(21))
 
 # Combining chainable .and_() with other operators
 field("status").eq("active").and_(
@@ -326,8 +324,7 @@ field("status").eq("active").and_(
     )
 )
 
-
-// Complex arithmetic with chainable .and_()
+# Complex arithmetic with chainable .and_()
 (field("total")
   .gt(1000)
   .and_(field("margin").ge(field("price").multiply(0.2)))
