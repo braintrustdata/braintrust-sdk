@@ -113,7 +113,10 @@ function createProxy(create: (params: any) => Promise<any>) {
         // handle the sync interface create(stream=False)
         if (!args["stream"]) {
           const event = parseEventFromMessage(msgOrStream);
-          span.log(event);
+          span.log({
+            ...event,
+            metrics: event.metrics ? finalizeMetrics(event.metrics) : undefined,
+          });
           span.end();
           return msgOrStream;
         }
@@ -253,9 +256,12 @@ function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
     }
 
     if (result.done) {
-      totals = finalizeMetrics(totals);
       const output = deltas.join("");
-      span.log({ output: output, metrics: totals, metadata: metadata });
+      span.log({
+        output: output,
+        metrics: finalizeMetrics(totals),
+        metadata: metadata,
+      });
       span.end();
       return result;
     }
@@ -324,7 +330,7 @@ function parseEventFromMessage(message: any) {
 
   return {
     output: output,
-    metrics: metrics ? finalizeMetrics(metrics) : undefined,
+    metrics: metrics,
     metadata: metadata,
   };
 }
