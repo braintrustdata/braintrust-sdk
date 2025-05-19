@@ -641,6 +641,7 @@ export class FailedHTTPResponse extends Error {
     this.data = data;
   }
 }
+
 async function checkResponse(resp: Response) {
   if (resp.ok) {
     return resp;
