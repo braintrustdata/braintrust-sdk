@@ -13,7 +13,6 @@ if [ "$PYPI_REPO" != "pypi" ] && [ "$PYPI_REPO" != "testpypi" ]; then
     exit 1
 fi
 
-echo "Running version script..."
 VERSION=$(bash scripts/get_version.sh)
 
 if [ -z "$VERSION" ]; then
