@@ -1,4 +1,4 @@
-.PHONY: lint test test-wheel template-version clean fixup build verify help
+.PHONY: lint test test-wheel template-version clean fixup build verify help check-git-clean
 .PHONY: publish-to-pypi publish-to-testpypi verify-build-publish install-build-deps
 
 clean:
@@ -40,7 +40,16 @@ install-dev:
 publish:
 	./scripts/publish.sh
 
-verify-build-publish: lint build test-wheel publish
+check-git-clean:
+	@echo "Checking for clean git working directory..."
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		echo "Error: Git working directory is not clean. Won't run publish if git status isn't clean."; \
+		git status; \
+		exit 1; \
+	fi
+	@echo "Git working directory is clean."
+
+verify-build-publish: check-git-clean lint build test-wheel publish
 
 publish-to-pypi: export PYPI_REPO := pypi
 publish-to-pypi: verify-build-publish
