@@ -149,19 +149,19 @@ field("discountedTotal").eq(
 ```python
 from braintrust.btql import field, literal
 
-// Basic arithmetic
+# Basic arithmetic
 field("price").add(10)
 field("quantity").subtract(5)
 field("total").multiply(1.2)
 field("amount").divide(2)
 
-// Chaining arithmetic operations
+# Chaining arithmetic operations
 field("price").add(5).multiply(1.1)
 
-// Arithmetic with other fields
+# Arithmetic with other fields
 field("total").eq(field("price").multiply(field("quantity")))
 
-// Complex calculations
+# Complex calculations
 field("discounted_total").eq(
   field("price")
     .multiply(field("quantity"))
@@ -212,31 +212,31 @@ field("type").is("customer");
 ```python
 from braintrust.btql import field
 
-// Equality
+# Equality
 field("status").eq("active")  # .eq() can take a literal directly
 field("status").ne("deleted")
 
-// Numeric comparisons
+# Numeric comparisons
 field("age").gt(30)
 field("age").lt(50)
 field("age").ge(18)
 field("age").le(65)
 
-// Arithmetic comparisons
+# Arithmetic comparisons
 field("total").gt(field("price").multiply(field("quantity")))
 field("discounted_price").lt(field("original_price").multiply(0.8))
 field("margin").ge(field("price").subtract(field("cost")))
 
-// String comparisons
+# String comparisons
 field("name").like("J%")  # SQL LIKE pattern matching
 field("name").ilike("%john%")  # Case-insensitive LIKE
 field("name").match("John")  # Exact match
 
-// NULL checks
+# NULL checks
 field("email").is_null()
 field("email").is_not_null()
 
-// Custom comparisons
+# Custom comparisons
 field("tags").includes("admin")
 field("type").is_("customer")
 ```
