@@ -149,8 +149,13 @@ function apiPromiseProxy<T>(
             target,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             async (result: any) => {
-              const processed = onThen(result);
-              return onFulfilled ? onFulfilled(processed) : processed;
+              try {
+                const processed = onThen(result);
+                return onFulfilled ? onFulfilled(processed) : processed;
+              } catch (error) {
+                return onRejected ? onRejected(error) : Promise.reject(error);
+              }
+            },
             },
             onRejected, // FIXME[matt] error handling?
           );
