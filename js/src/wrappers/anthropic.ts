@@ -156,8 +156,7 @@ function apiPromiseProxy<T>(
                 return onRejected ? onRejected(error) : Promise.reject(error);
               }
             },
-            },
-            onRejected, // FIXME[matt] error handling?
+            onRejected,
           );
         };
       } else if (prop === "withResponse") {
