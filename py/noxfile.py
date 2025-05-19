@@ -12,6 +12,7 @@ works with and without different dependencies. A few commands to check out:
 import glob
 import os
 import site
+import subprocess
 import tempfile
 
 import nox
@@ -100,6 +101,20 @@ def test_with_braintrust_core(session):
     _install_test_deps(session)
     _install(session, "braintrust_core")
     _run_core_tests(session)
+
+
+@nox.session()
+def pylint(session):
+    # pylint needs everything so we don't trigger missing import errors
+    session.install(".[all]")
+    session.install("-r", "requirements-dev.txt")
+    session.install(*VENDOR_PACKAGES)
+
+    result = session.run("git", "ls-files", "**/*.py", silent=True, log=False)
+    files = result.strip().splitlines()
+    if not files:
+        return
+    session.run("pylint", "--errors-only", *files)
 
 
 def _install_test_deps(session):

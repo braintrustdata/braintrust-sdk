@@ -9,7 +9,7 @@ fixup:
 	cd .. && make fixup
 
 lint: fixup
-	@pylint --errors-only $(shell git ls-files '**/*.py')
+	nox -s pylint
 
 test:
 	nox -x
