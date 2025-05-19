@@ -6,6 +6,7 @@ import { chatCompletionMessageParamSchema } from "./openai/messages";
 import { customTypes } from "./custom_types";
 import { gitMetadataSettingsSchema, repoInfoSchema } from "./git_types";
 import { objectReferenceSchema } from "./common_types";
+import { graphDataSchema } from "./graph";
 
 export const validRuntimesEnum = z.enum(["node", "python"]);
 export type Runtime = z.infer<typeof validRuntimesEnum>;
@@ -57,6 +58,14 @@ export const codeBundleSchema = z
   .openapi("CodeBundle");
 export type CodeBundle = z.infer<typeof codeBundleSchema>;
 
+export const remoteEvalDataSchema = z.object({
+  type: z.literal("remote_eval"),
+  endpoint: z.string(),
+  eval_name: z.string(),
+  parameters: z.record(z.string(), z.unknown()),
+});
+export type RemoteEvalData = z.infer<typeof remoteEvalDataSchema>;
+
 export const functionDataSchema = z
   .union([
     z
@@ -86,6 +95,14 @@ export const functionDataSchema = z
         ]),
       })
       .openapi({ title: "code" }),
+    graphDataSchema.openapi({
+      title: "graph",
+      description: "This feature is preliminary and unsupported.",
+    }),
+    remoteEvalDataSchema.openapi({
+      title: "remote_eval",
+      description: "A remote eval to run",
+    }),
     z
       .object({
         type: z.literal("global"),
@@ -147,22 +164,25 @@ export const functionIdSchema = z
       .openapi({ title: "inline_code" }),
     z
       .object({
+        inline_prompt: promptDataSchema.optional(),
+        inline_function: z.record(z.unknown()), // This creates a circular dependency
+        name: z.string().nullish().describe("The name of the inline function"),
+      })
+      .describe("Inline function definition")
+      .openapi({ title: "inline_function" }),
+    z
+      .object({
         inline_prompt: promptDataSchema,
         name: z.string().nullish().describe("The name of the inline prompt"),
       })
       .describe("Inline prompt definition")
       .openapi({ title: "inline_prompt" }),
-    z
-      .object({
-        inline_prompt: promptDataSchema.optional(),
-        inline_function: functionDataSchema,
-        name: z.string().nullish().describe("The name of the inline function"),
-      })
-      .describe("Inline function definition")
-      .openapi({ title: "inline_function" }),
   ])
   .describe("Options for identifying a function")
-  .openapi("FunctionId");
+  .openapi({
+    title: "FunctionId",
+    description: "Options for identifying a function",
+  });
 
 export type FunctionId = z.infer<typeof functionIdSchema>;
 
@@ -171,10 +191,15 @@ export const useFunctionSchema = functionIdSchema;
 export const streamingModeEnum = z.enum(["auto", "parallel"]);
 export type StreamingMode = z.infer<typeof streamingModeEnum>;
 
+const spanParentObjectTypeSchema = z.enum([
+  "project_logs",
+  "experiment",
+  "playground_logs",
+]);
 export const invokeParent = z.union([
   z
     .object({
-      object_type: z.enum(["project_logs", "experiment", "playground_logs"]),
+      object_type: spanParentObjectTypeSchema,
       object_id: z
         .string()
         .describe("The id of the container object you are logging to"),
@@ -203,12 +228,24 @@ export const invokeParent = z.union([
     ),
 ]);
 
+const fetchRowFieldsSchema = z.object({
+  object_type: spanParentObjectTypeSchema.describe(
+    "The type of the object you are logging to",
+  ),
+  object_id: z.string().describe("The id of the object you are logging to"),
+  row_id: z.string().describe("The row id to fetch"),
+  fields: z.array(z.string()).describe("The fields to fetch"),
+});
+
 export const invokeFunctionNonIdArgsSchema = z.object({
   input: customTypes.unknown
     .optional()
     .describe(
       "Argument to the function, which can be any JSON serializable value",
     ),
+  fetch_row_fields: fetchRowFieldsSchema
+    .nullish()
+    .describe("If provided, the row id and fields to fetch before invoke"),
   expected: customTypes.unknown
     .optional()
     .describe("The expected output of the function"),
@@ -351,6 +388,12 @@ export const runEvalSchema = z
       ),
     strict: strictParam,
     stop_token: stopToken,
+    extra_messages: z
+      .string()
+      .optional()
+      .describe(
+        "A template path of extra messages to append to the conversion. These messages will be appended to the end of the conversation, after the last message.",
+      ),
   })
   .openapi("RunEval");
 
@@ -364,6 +407,12 @@ export const baseSSEEventSchema = z.object({
 export const sseTextEventSchema = baseSSEEventSchema.merge(
   z.object({
     event: z.literal("text_delta"),
+  }),
+);
+
+export const sseReasoningEventSchema = baseSSEEventSchema.merge(
+  z.object({
+    event: z.literal("reasoning_delta"),
   }),
 );
 
@@ -409,11 +458,11 @@ export const sseDoneEventSchema = baseSSEEventSchema.omit({ data: true }).merge(
 );
 
 export const functionObjectTypeEnum = z
-  .enum(["prompt", "tool", "scorer", "task"])
+  .enum(["prompt", "tool", "scorer", "task", "agent"])
   .openapi("FunctionObjectType");
 export type FunctionObjectType = z.infer<typeof functionObjectTypeEnum>;
 export const functionFormatEnum = z
-  .enum(["llm", "code", "global"])
+  .enum(["llm", "code", "global", "graph"])
   .openapi("FunctionFormat");
 export type FunctionFormat = z.infer<typeof functionFormatEnum>;
 export const functionOutputTypeEnum = z
@@ -430,6 +479,7 @@ export const sseProgressEventDataSchema = z
     output_type: functionOutputTypeEnum,
     name: z.string(),
     event: z.enum([
+      "reasoning_delta",
       "text_delta",
       "json_delta",
       "error",
@@ -452,6 +502,7 @@ export type SSEConsoleEventData = z.infer<typeof sseConsoleEventDataSchema>;
 export const callEventSchema = z
   .union([
     sseTextEventSchema.openapi({ title: "text_delta" }),
+    sseReasoningEventSchema.openapi({ title: "reasoning_delta" }),
     sseDataEventSchema.openapi({ title: "json_delta" }),
     sseProgressEventSchema.openapi({ title: "progress" }),
     sseErrorEventSchema.openapi({ title: "error" }),
@@ -489,7 +540,7 @@ export const toolFunctionDefinitionSchema = z.object({
     name: z.string(),
     description: z.string().optional(),
     parameters: z.record(z.unknown()).optional(),
-    strict: z.boolean().optional(),
+    strict: z.boolean().nullish(),
   }),
 });
 export type ToolFunctionDefinition = z.infer<

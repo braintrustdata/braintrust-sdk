@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { Span, startSpan } from "../logger";
 import { SpanTypeAttribute } from "@braintrust/core";
-import { getCurrentUnixTimestamp } from "../util";
+import { filterFrom, getCurrentUnixTimestamp } from "../util";
 
 export function wrapAnthropic(anthropic: Anthropic): Anthropic {
   return anthropicProxy(anthropic);
@@ -9,6 +9,21 @@ export function wrapAnthropic(anthropic: Anthropic): Anthropic {
 
 function anthropicProxy(anthropic: Anthropic): Anthropic {
   return new Proxy(anthropic, {
+    get(target, prop, receiver) {
+      switch (prop) {
+        case "beta":
+          return betaProxy(target.beta);
+        case "messages":
+          return messagesProxy(target.messages);
+        default:
+          return Reflect.get(target, prop, receiver);
+      }
+    },
+  });
+}
+
+function betaProxy(beta: any) {
+  return new Proxy(beta, {
     get(target, prop, receiver) {
       if (prop === "messages") {
         return messagesProxy(target.messages);
@@ -314,15 +329,4 @@ function coalesceInput(messages: any[], system: string | undefined) {
     input.push({ role: "system", content: system });
   }
   return input;
-}
-
-// Return a copy of record with the given keys removed.
-function filterFrom(record: Record<string, any>, keys: string[]) {
-  const out: Record<string, any> = {};
-  for (const k of Object.keys(record)) {
-    if (!keys.includes(k)) {
-      out[k] = record[k];
-    }
-  }
-  return out;
 }

@@ -54,9 +54,7 @@ def ask_anthropic():
 
 
 def main():
-    for _ in range(3):
-        ask_anthropic()
-        time.sleep(3)
+    ask_anthropic()
 
 
 if __name__ == "__main__":

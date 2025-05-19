@@ -47,7 +47,6 @@ import chevron
 import exceptiongroup
 import requests
 import urllib3
-from braintrust_core.serializable_data_class import SerializableDataClass
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -72,6 +71,7 @@ from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptMessage
 from .prompt_cache.disk_cache import DiskCache
 from .prompt_cache.lru_cache import LRUCache
 from .prompt_cache.prompt_cache import PromptCache
+from .serializable_data_class import SerializableDataClass
 from .span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from .span_types import SpanTypeAttribute
 from .types import AttachmentReference, AttachmentStatus, DatasetEvent, ExperimentEvent, PromptOptions, SpanAttributes
@@ -600,9 +600,17 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
         with self.lock:
             logs = [l.get() for l in self.logs]  # unwrap the LazyValues
             self.logs = []
+
+            if not logs:
+                return []
+
             # all the logs get merged before gettig sent to the server, so simulate that
             # here
-            return merge_row_batch(logs)
+            merged = merge_row_batch(logs)
+            first = merged[0]
+            for other in merged[1:]:
+                first.extend(other)
+            return first
 
 
 # We should only have one instance of this object in
@@ -2950,14 +2958,21 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
                     comparison_experiment_id = base_experiment.id
                     comparison_experiment_name = base_experiment.name
 
-            summary_items = state.api_conn().get_json(
-                "experiment-comparison2",
-                args={
-                    "experiment_id": self.id,
-                    "base_experiment_id": comparison_experiment_id,
-                },
-                retries=3,
-            )
+            try:
+                summary_items = state.api_conn().get_json(
+                    "experiment-comparison2",
+                    args={
+                        "experiment_id": self.id,
+                        "base_experiment_id": comparison_experiment_id,
+                    },
+                    retries=3,
+                )
+            except Exception as e:
+                _logger.warning(
+                    f"Failed to fetch experiment scores and metrics: {e}\n\nView complete results in Braintrust or run experiment.summarize() again."
+                )
+                summary_items = {}
+
             score_items = summary_items.get("scores", {})
             metric_items = summary_items.get("metrics", {})
 
@@ -3327,6 +3342,13 @@ class SpanImpl(Span):
                 _state.current_span.reset(self._context_token)
 
             self.end()
+
+
+def log_exc_info_to_span(
+    span: Span, exc_type: Type[BaseException], exc_value: BaseException, tb: Optional[TracebackType]
+) -> None:
+    error = stringify_exception(exc_type, exc_value, tb)
+    span.log(error=error)
 
 
 def stringify_exception(exc_type: Type[BaseException], exc_value: BaseException, tb: Optional[TracebackType]) -> str:

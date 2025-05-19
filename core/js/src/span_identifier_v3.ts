@@ -8,6 +8,7 @@ import {
 } from "./object";
 import { SpanComponentsV2 } from "./span_identifier_v2";
 import { z } from "zod";
+import { InvokeFunctionRequest } from "typespecs";
 
 function tryMakeUuid(
   s: string,
@@ -232,4 +233,34 @@ export class SpanComponentsV3 {
   private static fromJsonObj(jsonObj: unknown): SpanComponentsV3 {
     return new SpanComponentsV3(spanComponentsV3Schema.parse(jsonObj));
   }
+}
+
+export function parseParent(
+  parent: InvokeFunctionRequest["parent"],
+): string | undefined {
+  return typeof parent === "string"
+    ? parent
+    : parent
+      ? new SpanComponentsV3({
+          object_type:
+            parent.object_type === "experiment"
+              ? SpanObjectTypeV3.EXPERIMENT
+              : parent.object_type === "playground_logs"
+                ? SpanObjectTypeV3.PLAYGROUND_LOGS
+                : SpanObjectTypeV3.PROJECT_LOGS,
+          object_id: parent.object_id,
+          ...(parent.row_ids
+            ? {
+                row_id: parent.row_ids.id,
+                span_id: parent.row_ids.span_id,
+                root_span_id: parent.row_ids.root_span_id,
+              }
+            : {
+                row_id: undefined,
+                span_id: undefined,
+                root_span_id: undefined,
+              }),
+          propagated_event: parent.propagated_event,
+        }).toStr()
+      : undefined;
 }

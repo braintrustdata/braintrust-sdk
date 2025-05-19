@@ -68,7 +68,7 @@ def test_anthropic_messages_create_stream_true(memory_logger):
     kws = {
         "model": MODEL,
         "max_tokens": 300,
-        "messages": [{"role": "user", "content": "what's the capital of Canada?"}],
+        "messages": [{"role": "user", "content": "What is 3*4?"}],
         "stream": True,
     }
 
@@ -79,12 +79,19 @@ def test_anthropic_messages_create_stream_true(memory_logger):
 
     assert msgs  # a very coarse grained check that this works
 
-    logs = memory_logger.pop()
-    assert len(logs) == 1
-    log = logs[0][0]
-    assert log["metadata"]["model"] == MODEL
-    assert log["metadata"]["max_tokens"] == 300
-    assert start < log["metrics"]["start"] < log["metrics"]["end"] < end
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span["metadata"]["model"] == MODEL
+    assert span["metadata"]["provider"] == "anthropic"
+    assert span["metadata"]["max_tokens"] == 300
+    assert span["metadata"]["stream"] == True
+    metrics = span["metrics"]
+    assert metrics
+    assert start < metrics["start"] < metrics["end"] < end
+    assert span["input"] == kws["messages"]
+    assert span["output"]
+    assert "12" in span["output"][0]["text"]
 
 
 def test_anthropic_messages_model_params_inputs(memory_logger):
@@ -115,10 +122,8 @@ def test_anthropic_messages_model_params_inputs(memory_logger):
 
         logs = memory_logger.pop()
         assert len(logs) == 1
-        log = logs[0][0]
-        import pprint
-
-        pprint.pprint(log)
+        log = logs[0]
+        assert "2" in log["output"][0]["text"]
         assert log["metadata"]["model"] == MODEL
         assert log["metadata"]["max_tokens"] == 300
         assert log["metadata"]["temperature"] == 0.5
@@ -150,18 +155,65 @@ def test_anthropic_messages_system_prompt_inputs(memory_logger):
         return stream.get_final_message()
 
     for f in [_with_messages_create, _with_messages_stream]:
-        print("testing %s" % f.__name__)
         msg = f()
         assert "2024-03-27" in msg.content[0].text
 
         logs = memory_logger.pop()
         assert len(logs) == 1
-        log = logs[0][0]
+        log = logs[0]
         inputs = log["input"]
         assert len(inputs) == 2
         inputs_by_role = {m["role"]: m["content"] for m in inputs}
         assert inputs_by_role["system"] == system
         assert inputs_by_role["user"] == q[0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_anthropic_messages_create_async(memory_logger):
+    assert not memory_logger.pop()
+
+    params = {
+        "model": MODEL,
+        "max_tokens": 100,
+        "messages": [{"role": "user", "content": "what is 6+1?, just return the number"}],
+    }
+
+    client = wrap_anthropic(anthropic.AsyncAnthropic())
+    msg = await client.messages.create(**params)
+    assert "7" in msg.content[0].text
+
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span["metadata"]["model"] == MODEL
+    assert span["metadata"]["max_tokens"] == 100
+    assert span["input"] == params["messages"]
+    assert "7" in span["output"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_anthropic_messages_create_async_stream_true(memory_logger):
+    assert not memory_logger.pop()
+
+    params = {
+        "model": MODEL,
+        "max_tokens": 100,
+        "messages": [{"role": "user", "content": "what is 6+1?, just return the number"}],
+        "stream": True,
+    }
+
+    client = wrap_anthropic(anthropic.AsyncAnthropic())
+    stream = await client.messages.create(**params)
+    async for event in stream:
+        pass
+
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span["metadata"]["model"] == MODEL
+    assert span["metadata"]["max_tokens"] == 100
+    assert span["input"] == params["messages"]
+    assert "7" in span["output"][0]["text"]
 
 
 @pytest.mark.asyncio
@@ -172,34 +224,36 @@ async def test_anthropic_messages_streaming_async(memory_logger):
     msgs_in = [{"role": "user", "content": "what is 1+1?, just return the number"}]
 
     start = time.time()
+    msg_out = None
+
     async with client.messages.stream(max_tokens=1024, messages=msgs_in, model=MODEL) as stream:
         async for event in stream:
             pass
         msg_out = await stream.get_final_message()
-        end = time.time()
         assert msg_out.content[0].text == "2"
         usage = msg_out.usage
+    end = time.time()
 
-        logs = memory_logger.pop()
-        assert len(logs) == 1
-        log = logs[0][0]
-        assert "user" in str(log["input"])
-        assert "1+1" in str(log["input"])
-        assert "2" in str(log["output"])
-        assert log["project_id"] == PROJECT_NAME
-        assert log["span_attributes"]["type"] == "llm"
-        assert log["metadata"]["model"] == MODEL
-        assert log["metadata"]["max_tokens"] == 1024
-        _assert_metrics_are_valid(log["metrics"])
-        assert start < log["metrics"]["start"] < log["metrics"]["end"] < end
-        metrics = log["metrics"]
-        assert metrics["prompt_tokens"] == usage.input_tokens
-        assert metrics["completion_tokens"] == usage.output_tokens
-        assert metrics["tokens"] == usage.input_tokens + usage.output_tokens
-        assert metrics["cache_read_input_tokens"] == usage.cache_read_input_tokens
-        assert metrics["cache_creation_input_tokens"] == usage.cache_creation_input_tokens
-        assert log["metadata"]["model"] == MODEL
-        assert log["metadata"]["max_tokens"] == 1024
+    logs = memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+    assert "user" in str(log["input"])
+    assert "1+1" in str(log["input"])
+    assert "2" in str(log["output"])
+    assert log["project_id"] == PROJECT_NAME
+    assert log["span_attributes"]["type"] == "llm"
+    assert log["metadata"]["model"] == MODEL
+    assert log["metadata"]["max_tokens"] == 1024
+    _assert_metrics_are_valid(log["metrics"])
+    assert start < log["metrics"]["start"] < log["metrics"]["end"] < end
+    metrics = log["metrics"]
+    assert metrics["prompt_tokens"] == usage.input_tokens
+    assert metrics["completion_tokens"] == usage.output_tokens
+    assert metrics["tokens"] == usage.input_tokens + usage.output_tokens
+    assert metrics["cache_read_input_tokens"] == usage.cache_read_input_tokens
+    assert metrics["cache_creation_input_tokens"] == usage.cache_creation_input_tokens
+    assert log["metadata"]["model"] == MODEL
+    assert log["metadata"]["max_tokens"] == 1024
 
 
 def test_anthropic_client_error(memory_logger):
@@ -219,9 +273,30 @@ def test_anthropic_client_error(memory_logger):
 
     logs = memory_logger.pop()
     assert len(logs) == 1
-    log = logs[0][0]
+    log = logs[0]
     assert log["project_id"] == PROJECT_NAME
     assert "404" in log["error"]
+
+
+def test_anthropic_messages_stream_errors(memory_logger):
+    assert not memory_logger.pop()
+
+    client = wrap_anthropic(_get_client())
+    msg_in = {"role": "user", "content": "what is 2+2? (just the number)"}
+
+    try:
+        with client.messages.stream(model=MODEL, max_tokens=300, messages=[msg_in]) as stream:
+            raise Exception("fake-error")
+    except Exception:
+        pass
+    else:
+        raise Exception("should have raised an exception")
+
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+    assert "Exception: fake-error" in span["error"]
+    assert span["metrics"]["end"] > 0
 
 
 def test_anthropic_messages_streaming_sync(memory_logger):
@@ -244,7 +319,7 @@ def test_anthropic_messages_streaming_sync(memory_logger):
 
     logs = memory_logger.pop()
     assert len(logs) == 1
-    log = logs[0][0]
+    log = logs[0]
     assert "user" in str(log["input"])
     assert "2+2" in str(log["input"])
     assert "4" in str(log["output"])
@@ -277,7 +352,7 @@ def test_anthropic_messages_sync(memory_logger):
     logs = memory_logger.pop()
 
     assert len(logs) == 1
-    log = logs[0][0]
+    log = logs[0]
     assert "2+2" in str(log["input"])
     assert "4" in str(log["output"])
     assert log["project_id"] == PROJECT_NAME

@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import {
+  BraintrustStream,
   BraintrustStreamChunk,
   createFinalValuePassThroughStream,
 } from "./stream";
@@ -52,4 +53,21 @@ test("final value passthrough", async () => {
     expect(finalValue).toBe(expected);
     expect(sinkChunks.map((c) => c.data).join("")).toEqual(expected);
   }
+});
+
+test("final value passthrough with abort", async () => {
+  const inputStream = new ReadableStream({
+    start(controller) {},
+  });
+
+  const controller = new AbortController();
+  const stream = new BraintrustStream(inputStream, {
+    signal: controller.signal,
+  });
+
+  controller.abort();
+
+  await expect(stream.finalValue()).rejects.toThrow(
+    "This operation was aborted",
+  );
 });

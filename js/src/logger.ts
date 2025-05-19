@@ -59,6 +59,7 @@ import {
   Tools,
   toolsSchema,
   EXTERNAL_ATTACHMENT,
+  PromptBlockData,
 } from "@braintrust/core/typespecs";
 import { waitUntil } from "@vercel/functions";
 import Mustache, { Context } from "mustache";
@@ -230,6 +231,15 @@ export interface Span extends Exportable {
   setAttributes(args: Omit<StartSpanArgs, "event">): void;
 
   /**
+   * Start a span with a specific id and parent span ids.
+   */
+  startSpanWithParents(
+    spanId: string,
+    spanParents: string[],
+    args?: StartSpanArgs,
+  ): Span;
+
+  /*
    * Gets the span's `state` value, which is usually the global logging state (this is
    * for very advanced purposes only)
    */
@@ -291,6 +301,14 @@ export class NoopSpan implements Span {
   }
 
   public setAttributes(_args: Omit<StartSpanArgs, "event">) {}
+
+  public startSpanWithParents(
+    _spanId: string,
+    _spanParents: string[],
+    _args?: StartSpanArgs,
+  ): Span {
+    return this;
+  }
 
   public state() {
     return _internalGetGlobalState();
@@ -464,7 +482,7 @@ export class BraintrustState {
     const serializedParsed = loginSchema.safeParse(serialized);
     if (!serializedParsed.success) {
       throw new Error(
-        `Cannot deserialize BraintrustState: ${serializedParsed.error.errors}`,
+        `Cannot deserialize BraintrustState: ${serializedParsed.error.message}`,
       );
     }
     const state = new BraintrustState({ ...opts });
@@ -1390,6 +1408,11 @@ interface ParentSpanIds {
   rootSpanId: string;
 }
 
+interface MultiParentSpanIds {
+  parentSpanIds: string[];
+  rootSpanId: string;
+}
+
 function spanComponentsToObjectIdLambda(
   state: BraintrustState,
   components: SpanComponentsV3,
@@ -1519,17 +1542,18 @@ function startSpanParentArgs(args: {
   parentObjectType: SpanObjectTypeV3;
   parentObjectId: LazyValue<string>;
   parentComputeObjectMetadataArgs: Record<string, any> | undefined;
-  parentSpanIds: ParentSpanIds | undefined;
+  parentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined;
   propagatedEvent: StartSpanEventArgs | undefined;
 }): {
   parentObjectType: SpanObjectTypeV3;
   parentObjectId: LazyValue<string>;
   parentComputeObjectMetadataArgs: Record<string, any> | undefined;
-  parentSpanIds: ParentSpanIds | undefined;
+  parentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined;
   propagatedEvent: StartSpanEventArgs | undefined;
 } {
   let argParentObjectId: LazyValue<string> | undefined = undefined;
-  let argParentSpanIds: ParentSpanIds | undefined = undefined;
+  let argParentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined =
+    undefined;
   let argPropagatedEvent: StartSpanEventArgs | undefined = undefined;
   if (args.parent) {
     if (args.parentSpanIds) {
@@ -1721,8 +1745,10 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
 
   private startSpanImpl(args?: StartSpanArgs): Span {
     return new SpanImpl({
-      state: this.state,
       ...args,
+      // Sometimes `args` gets passed directly into this function, and it contains an undefined value for `state`.
+      // To ensure that we always use this logger's state, we override the `state` argument no matter what.
+      state: this.state,
       ...startSpanParentArgs({
         state: this.state,
         parent: args?.parent,
@@ -3747,12 +3773,15 @@ function extractAttachments(
  *
  * @returns The same event instance as the input.
  */
-function enrichAttachments<T extends Record<string, any>>(event: T): T {
+function enrichAttachments<T extends Record<string, any>>(
+  event: T,
+  state: BraintrustState | undefined,
+): T {
   for (const [key, value] of Object.entries(event)) {
     // Base case: AttachmentReference.
     const parsedValue = attachmentReferenceSchema.safeParse(value);
     if (parsedValue.success) {
-      (event as any)[key] = new ReadonlyAttachment(parsedValue.data);
+      (event as any)[key] = new ReadonlyAttachment(parsedValue.data, state);
       continue;
     }
 
@@ -3762,7 +3791,7 @@ function enrichAttachments<T extends Record<string, any>>(event: T): T {
     }
 
     // Recursive case: object or array:
-    enrichAttachments(value);
+    enrichAttachments(value, state);
   }
 
   return event;
@@ -3966,7 +3995,7 @@ export class Experiment
     lazyMetadata: LazyValue<ProjectExperimentMetadata>,
     dataset?: AnyDataset,
   ) {
-    super("experiment", undefined, enrichAttachments);
+    super("experiment", undefined, (r) => enrichAttachments(r, state));
     this.lazyMetadata = lazyMetadata;
     this.dataset = dataset;
     this.lastStartTime = getCurrentUnixTimestamp();
@@ -4080,8 +4109,10 @@ export class Experiment
 
   private startSpanImpl(args?: StartSpanArgs): Span {
     return new SpanImpl({
-      state: this.state,
       ...args,
+      // Sometimes `args` gets passed directly into this function, and it contains an undefined value for `state`.
+      // To ensure that we always use this experiment's state, we override the `state` argument no matter what.
+      state: this.state,
       ...startSpanParentArgs({
         state: this.state,
         parent: args?.parent,
@@ -4157,17 +4188,25 @@ export class Experiment
         }
       }
 
-      const results = await state.apiConn().get_json(
-        "/experiment-comparison2",
-        {
-          experiment_id: await this.id,
-          base_experiment_id: comparisonExperimentId,
-        },
-        3,
-      );
+      try {
+        const results = await state.apiConn().get_json(
+          "/experiment-comparison2",
+          {
+            experiment_id: await this.id,
+            base_experiment_id: comparisonExperimentId,
+          },
+          3,
+        );
 
-      scores = results["scores"];
-      metrics = results["metrics"];
+        scores = results["scores"];
+        metrics = results["metrics"];
+      } catch (e) {
+        console.warn(
+          `Failed to fetch experiment scores and metrics: ${e}\n\nView complete results in Braintrust or run experiment.summarize() again.`,
+        );
+        scores = {};
+        metrics = {};
+      }
     }
 
     return {
@@ -4179,7 +4218,7 @@ export class Experiment
       experimentUrl: experimentUrl,
       comparisonExperimentName: comparisonExperimentName,
       scores: scores ?? {},
-      metrics: metrics,
+      metrics: metrics ?? {},
     };
   }
 
@@ -4259,7 +4298,7 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     private state: BraintrustState,
     private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>,
   ) {
-    super("experiment", undefined, enrichAttachments);
+    super("experiment", undefined, (r) => enrichAttachments(r, state));
   }
 
   public get id(): Promise<string> {
@@ -4344,8 +4383,9 @@ export class SpanImpl implements Span {
       parentObjectType: SpanObjectTypeV3;
       parentObjectId: LazyValue<string>;
       parentComputeObjectMetadataArgs: Record<string, any> | undefined;
-      parentSpanIds: ParentSpanIds | undefined;
+      parentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined;
       defaultRootType?: SpanType;
+      spanId?: string;
     } & Omit<StartSpanArgs, "parent">,
   ) {
     this._state = args.state;
@@ -4399,10 +4439,13 @@ export class SpanImpl implements Span {
     };
 
     this._id = eventId ?? uuidv4();
-    this._spanId = uuidv4();
+    this._spanId = args.spanId ?? uuidv4();
     if (args.parentSpanIds) {
       this._rootSpanId = args.parentSpanIds.rootSpanId;
-      this._spanParents = [args.parentSpanIds.spanId];
+      this._spanParents =
+        "parentSpanIds" in args.parentSpanIds
+          ? args.parentSpanIds.parentSpanIds
+          : [args.parentSpanIds.spanId];
     } else {
       this._rootSpanId = this._spanId;
       this._spanParents = undefined;
@@ -4433,6 +4476,10 @@ export class SpanImpl implements Span {
 
   public setAttributes(args: Omit<StartSpanArgs, "event">): void {
     this.logInternal({ internalData: { span_attributes: args } });
+  }
+
+  public setSpanParents(parents: string[]): void {
+    this.logInternal({ internalData: { span_parents: parents } });
   }
 
   public log(event: ExperimentLogPartialArgs): void {
@@ -4534,6 +4581,31 @@ export class SpanImpl implements Span {
         parentSpanIds,
         propagatedEvent: args?.propagatedEvent ?? this.propagatedEvent,
       }),
+    });
+  }
+
+  public startSpanWithParents(
+    spanId: string,
+    spanParents: string[],
+    args?: StartSpanArgs,
+  ): Span {
+    const parentSpanIds: MultiParentSpanIds = {
+      parentSpanIds: spanParents,
+      rootSpanId: this._rootSpanId,
+    };
+    return new SpanImpl({
+      state: this._state,
+      ...args,
+      ...startSpanParentArgs({
+        state: this._state,
+        parent: args?.parent,
+        parentObjectType: this.parentObjectType,
+        parentObjectId: this.parentObjectId,
+        parentComputeObjectMetadataArgs: this.parentComputeObjectMetadataArgs,
+        parentSpanIds,
+        propagatedEvent: args?.propagatedEvent ?? this.propagatedEvent,
+      }),
+      spanId,
     });
   }
 
@@ -4670,7 +4742,7 @@ export class Dataset<
       (r: AnyDatasetRecord) =>
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         ensureDatasetRecord(
-          enrichAttachments(r),
+          enrichAttachments(r, this.state),
           isLegacyDataset,
         ) as WithTransactionId<DatasetRecord<IsLegacyDataset>>,
       _internal_btql,
@@ -5146,6 +5218,7 @@ export class Prompt<
 > {
   private parsedPromptData: PromptData | undefined;
   private hasParsedPromptData = false;
+  private readonly __braintrust_prompt_marker = true;
 
   constructor(
     private metadata: PromptRowWithId<HasId, HasVersion> | PromptSessionEvent,
@@ -5154,6 +5227,7 @@ export class Prompt<
   ) {}
 
   public get id(): HasId extends true ? string : string | undefined {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return this.metadata.id as HasId extends true ? string : string | undefined;
   }
 
@@ -5178,6 +5252,7 @@ export class Prompt<
   public get version(): HasId extends true
     ? TransactionId
     : TransactionId | undefined {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return this.metadata[TRANSACTION_ID_FIELD] as HasId extends true
       ? TransactionId
       : TransactionId | undefined;
@@ -5185,6 +5260,10 @@ export class Prompt<
 
   public get options(): NonNullable<PromptData["options"]> {
     return this.getParsedPromptData()?.options || {};
+  }
+
+  public get promptData(): PromptData {
+    return this.getParsedPromptData()!;
   }
 
   /**
@@ -5282,13 +5361,75 @@ export class Prompt<
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
     };
 
+    const renderedPrompt = Prompt.renderPrompt({
+      prompt,
+      buildArgs,
+      options,
+    });
+
     if (flavor === "chat") {
-      if (prompt.type !== "chat") {
+      if (renderedPrompt.type !== "chat") {
         throw new Error(
           "Prompt is a completion prompt. Use buildCompletion() instead",
         );
       }
 
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      return {
+        ...renderPromptParams(params, variables, { strict: options.strict }),
+        ...spanInfo,
+        messages: renderedPrompt.messages,
+        ...(renderedPrompt.tools
+          ? {
+              tools: toolsSchema.parse(JSON.parse(renderedPrompt.tools)),
+            }
+          : undefined),
+      } as CompiledPrompt<Flavor>;
+    } else if (flavor === "completion") {
+      if (renderedPrompt.type !== "completion") {
+        throw new Error(`Prompt is a chat prompt. Use flavor: 'chat' instead`);
+      }
+
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      return {
+        ...renderPromptParams(params, variables, { strict: options.strict }),
+        ...spanInfo,
+        prompt: renderedPrompt.content,
+      } as CompiledPrompt<Flavor>;
+    } else {
+      throw new Error("never!");
+    }
+  }
+
+  static renderPrompt({
+    prompt,
+    buildArgs,
+    options,
+  }: {
+    prompt: PromptBlockData;
+    buildArgs: unknown;
+    options: {
+      strict?: boolean;
+      messages?: Message[];
+    };
+  }): PromptBlockData {
+    const escape = (v: unknown) => {
+      if (v === undefined) {
+        throw new Error("Missing!");
+      } else if (typeof v === "string") {
+        return v;
+      } else {
+        return JSON.stringify(v);
+      }
+    };
+
+    const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
+    const variables: Record<string, unknown> = {
+      input: buildArgs,
+      ...(dictArgParsed.success ? dictArgParsed.data : {}),
+    };
+
+    if (prompt.type === "chat") {
       const render = (template: string) => {
         if (options.strict) {
           lintTemplate(template, variables);
@@ -5299,26 +5440,28 @@ export class Prompt<
         });
       };
 
-      const messages = [
-        ...(prompt.messages || []).map((m) => renderMessage(render, m)),
-        ...(options.messages ?? []),
+      const baseMessages = (prompt.messages || []).map((m) =>
+        renderMessage(render, m),
+      );
+      const hasSystemPrompt = baseMessages.some((m) => m.role === "system");
+
+      const messages: Message[] = [
+        ...baseMessages,
+        ...(options.messages ?? []).filter(
+          (m) => !(hasSystemPrompt && m.role === "system"),
+        ),
       ];
 
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...renderPromptParams(params, variables, { strict: options.strict }),
-        ...spanInfo,
+        type: "chat",
         messages: messages,
         ...(prompt.tools?.trim()
           ? {
-              tools: toolsSchema.parse(JSON.parse(render(prompt.tools))),
+              tools: render(prompt.tools),
             }
           : undefined),
-      } as CompiledPrompt<Flavor>;
-    } else if (flavor === "completion") {
-      if (prompt.type !== "completion") {
-        throw new Error(`Prompt is a chat prompt. Use flavor: 'chat' instead`);
-      }
+      };
+    } else if (prompt.type === "completion") {
       if (options.messages) {
         throw new Error(
           "extra messages are not supported for completion prompts",
@@ -5329,15 +5472,14 @@ export class Prompt<
         lintTemplate(prompt.content, variables);
       }
 
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...renderPromptParams(params, variables, { strict: options.strict }),
-        ...spanInfo,
-        prompt: Mustache.render(prompt.content, variables, undefined, {
+        type: "completion",
+        content: Mustache.render(prompt.content, variables, undefined, {
           escape,
         }),
-      } as CompiledPrompt<Flavor>;
+      };
     } else {
+      const _: never = prompt;
       throw new Error("never!");
     }
   }
@@ -5348,6 +5490,28 @@ export class Prompt<
       this.hasParsedPromptData = true;
     }
     return this.parsedPromptData!;
+  }
+
+  public static isPrompt(data: unknown): data is Prompt<boolean, boolean> {
+    return (
+      typeof data === "object" &&
+      data !== null &&
+      "__braintrust_prompt_marker" in data
+    );
+  }
+  public static fromPromptData(
+    name: string,
+    promptData: PromptData,
+  ): Prompt<false, false> {
+    return new Prompt(
+      {
+        name: name,
+        slug: name,
+        prompt_data: promptData,
+      },
+      {},
+      false,
+    );
   }
 }
 
