@@ -632,9 +632,9 @@ export const _internalGetGlobalState = () => _globalState;
 export class FailedHTTPResponse extends Error {
   public status: number;
   public text: string;
-  public data: any;
+  public data: string;
 
-  constructor(status: number, text: string, data: any = null) {
+  constructor(status: number, text: string, data: string) {
     super(`${status}: ${text} (${data})`);
     this.status = status;
     this.text = text;
