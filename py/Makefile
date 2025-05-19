@@ -47,7 +47,6 @@ _check-git-clean:
 	fi
 
 _verify-build-publish: _check-git-clean lint build test-wheel _publish
-
 publish-to-pypi: export PYPI_REPO := pypi
 publish-to-pypi: _verify-build-publish
 
