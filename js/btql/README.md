@@ -316,12 +316,17 @@ and_(
 field("status").eq("active").and(field("age").gt(21))
 
 // Combining chainable .and_() with other operators
-(field
-    or_(
-      field("category").eq("electronics"),
-      field("category").eq("accessories")
+
+# Combining chainable .and_() with other operators
+field("status").eq("active").and_(
+    field("age").gt(21).and_(
+        or_(
+            field("category").eq("electronics"),
+            field("category").eq("accessories")
+        )
     )
-  ))
+)
+
 
 // Complex arithmetic with chainable .and_()
 (field("total")
