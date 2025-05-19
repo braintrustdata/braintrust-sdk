@@ -1,5 +1,5 @@
 .PHONY: lint test test-wheel _template-version clean fixup build verify help _check-git-clean
-.PHONY: publish-to-pypi publish-to-testpypi _verify-build-publish install-build-deps _publish
+.PHONY: publish-to-pypi publish-to-testpypi _verify-build-publish install-build-deps install-dev _publish
 
 clean:
 	rm -rf build dist
@@ -28,14 +28,16 @@ build: clean _template-version
 verify: lint test
 
 install-build-deps:
-	# FIXME[matt] build dependencies should be pinned (e.g. build,
-	# setuptools, twine) to ensure reproducible builds.
-	python -m pip install -e .[all]
-	python -m pip install --upgrade pip setuptools build twine pylint nox pre-commit
+	# Ensure pip is at a known version first for reproducible builds
+	python -m pip install pip==25.1.1
+	# Use 'python -m pip' to ensure we're using python's pip
+	# https://pip.pypa.io/en/latest/user_guide/
+	python -m pip install -e .
+	python -m pip install -r requirements-build.txt
 
 install-dev:
-	pip install -e .[all]
-	pip install pylint
+	pip install -e .
+	pip install -r requirements-dev.txt
 
 _publish:
 	./scripts/publish.sh

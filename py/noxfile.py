@@ -16,14 +16,17 @@ import tempfile
 
 import nox
 
-LATEST = "__latest__"
-
 SRC_DIR = "braintrust"
 WRAPPER_DIR = "braintrust/wrappers"
 
-SILENT_INSTALLS = True
 
+SILENT_INSTALLS = True
+LATEST = "__latest__"
 ERROR_CODES = tuple(range(1, 256))
+
+
+# The minimal set of dependencies we need to run tests.
+BASE_TEST_DEPS = ("pytest", "pytest-asyncio")
 
 # List your package here if it's not guaranteed to be installed. We'll (try to)
 # validate things work with or without them.
@@ -103,20 +106,15 @@ def _install_test_deps(session):
     # verify braintrust isn't installed yet
     session.run("python", "-c", "import braintrust", success_codes=ERROR_CODES, silent=True)
 
-    install_wheel = "--wheel" in session.posargs
+    # Install _only_ the dependencies we need for testing (not lint, black,
+    # ipython, whatever). We want to carefully control the base
+    # testing environment so it should be truly minimal.
+    session.install(*BASE_TEST_DEPS)
 
-    session.install("pytest")
-    session.install("pytest-asyncio")
-    if install_wheel:
-        wheel_path = _get_braintrust_wheel()
-        # When testing the wheel, do NOT install in editable mode
-        # to ensure we test the wheel and not the local source code
-        session.install(wheel_path)
-        # Install test dependencies separately since we're not using .[test]
-        session.install("pytest-mock")
-        session.install("responses")
-    else:
-        session.install("-e", ".[test]")
+    # Choose the way we'll install braintrust ... wheel or source.
+    install_wheel = "--wheel" in session.posargs
+    bt = _get_braintrust_wheel() if install_wheel else "."
+    session.install(bt)
 
     # Sanity check we have installed braintrust (and that it is from a wheel if needed)
     session.run("python", "-c", "import braintrust")
@@ -176,7 +174,7 @@ def _run_tests(session, test_path, ignore_path=""):
 
 
 def _install(session, package, version=LATEST):
-    cmd = f"{package}=={version}"
+    pkg_version = f"{package}=={version}"
     if version == LATEST or not version:
-        cmd = package
-    session.run("pip", "install", cmd, silent=SILENT_INSTALLS)
+        pkg_version = package
+    session.install(pkg_version, silent=SILENT_INSTALLS)
