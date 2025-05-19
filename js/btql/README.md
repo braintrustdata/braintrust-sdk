@@ -88,7 +88,6 @@ field("metadata").tags[0]  # Returns a new Expr for "metadata.tags[0]"
 
 # Alternative syntax for nested fields (initial creation)
 field("user", "name")  # Returns a new Expr for "user.name"
-field("user", "name")
 field("metadata", "tags", 0)
 ```
 
