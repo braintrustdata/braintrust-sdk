@@ -1,5 +1,7 @@
 import unittest
-from typing import List
+from typing import List, Optional, Tuple
+
+import pytest
 
 from .util import LazyValue
 
@@ -102,3 +104,52 @@ class TestLazyValue(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_get_sync():
+    call_count = 0
+
+    def compute_value():
+        nonlocal call_count
+        call_count += 1
+        return "test"
+
+    lazy = LazyValue(compute_value, use_mutex=True)
+
+    # Before resolution
+    is_resolved, value = lazy.get_sync()
+    assert is_resolved is False
+    assert value is None
+    assert call_count == 0  # Should not call the function
+
+    # Resolve with get()
+    result = lazy.get()
+    assert result == "test"
+    assert call_count == 1
+
+    # After resolution
+    is_resolved, value = lazy.get_sync()
+    assert is_resolved is True
+    assert value == "test"
+    assert call_count == 1  # Should not call the function again
+
+
+def test_get_sync_error():
+    def failing_compute():
+        raise ValueError("test error")
+
+    lazy = LazyValue(failing_compute, use_mutex=True)
+
+    # Before attempting to resolve
+    is_resolved, value = lazy.get_sync()
+    assert is_resolved is False
+    assert value is None
+
+    # Try to resolve with get() (which should fail)
+    with pytest.raises(ValueError, match="test error"):
+        lazy.get()
+
+    # get_sync() should still return unresolved after failed resolution
+    is_resolved, value = lazy.get_sync()
+    assert is_resolved is False
+    assert value is None

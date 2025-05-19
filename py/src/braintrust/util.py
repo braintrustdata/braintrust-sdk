@@ -161,6 +161,13 @@ class LazyValue(Generic[T]):
             if self.mutex:
                 self.mutex.release()
 
+    def get_sync(self) -> Tuple[bool, Optional[T]]:
+        """Returns a tuple of (has_succeeded, value) without triggering evaluation."""
+        if self._state.has_succeeded:
+            # should be fine without the mutex check
+            return (True, self._state.value)
+        return (False, None)
+
 
 _MARK_ASYNC_WRAPPER_UNDERLYING_CALLABLE_ATTRIBUTE = "_MarkAsyncWrapper_underlying_callable"
 
