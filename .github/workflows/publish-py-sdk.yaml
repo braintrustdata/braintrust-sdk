@@ -1,18 +1,15 @@
+#
+# This workflow is used to publish the Python SDK to PyPI.
+# It is triggered by a tag push, and will only publish if the tag is valid.
+# The tag must match the format py-sdk-v*.*.*
+#
+
 name: Publish Python SDK
 
 on:
   push:
     tags:
       - "py-sdk-v*.*.*" # Trigger on version tags like py-sdk-v0.1.0, py-sdk-v1.2.3, etc.
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "Tag to publish (e.g., py-sdk-v0.1.0)"
-        required: true
-        type: string
-
-env:
-  CHECKOUT_REF: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || (github.event_name == 'pull_request' && github.event.pull_request.head.sha) || github.ref }}
 
 jobs:
   validate:
@@ -23,30 +20,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Fetch all history for checking branch
-          ref: ${{ env.CHECKOUT_REF }}
       - name: Set release tag
         id: set_release_tag
+        # ensure the tag is valid (matches code, is on main, etc)
         run: |
-          # If triggered by a workflow_dispatch
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            RELEASE_TAG="${{ github.event.inputs.tag }}"
-            echo "Using manually specified tag: $RELEASE_TAG"
-          # If triggered by a tag push
-          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            RELEASE_TAG=${GITHUB_REF#refs/tags/}
-            echo "Using tag: $RELEASE_TAG"
-          else
-            # If triggered by a PR, use the current version from the code
-            cd py
-            VERSION=$(bash scripts/get_version.sh)
-            RELEASE_TAG="v$VERSION"
-            echo "Using current version: $RELEASE_TAG"
-          fi
+          RELEASE_TAG=${GITHUB_REF#refs/tags/}
+          echo "Using tag: $RELEASE_TAG"
+          ./py/scripts/validate-release-tag.sh "$RELEASE_TAG"
           echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
           echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
-      - name: Validate release tag
-        run: |
-          ./py/scripts/validate-release-tag.sh "$RELEASE_TAG"
 
   build-and-publish:
     needs: validate
@@ -56,22 +38,27 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       TWINE_USERNAME: __token__
-      TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
+      TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
       RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.CHECKOUT_REF }}
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Install build dependencies
-        run: |
-          python -m pip install -e "py[all]"
-          python -m pip install --upgrade pip setuptools build twine pylint nox pre-commit
-      - name: Verify, build and publish to TestPyPI
+      - name: Build, Verify and Publish
         working-directory: py
         run: |
-          make publish-to-testpypi
+          make install-build-deps
+          make build
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-sdk-dist
+          path: py/dist/
+          retention-days: 5
+      - name: Publish to PyPI
+        working-directory: py
+        run: |
+          make publish-to-pypi
