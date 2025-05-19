@@ -1,5 +1,5 @@
-.PHONY: lint test test-wheel template-version clean fixup build verify help check-git-clean
-.PHONY: publish-to-pypi publish-to-testpypi verify-build-publish install-build-deps
+.PHONY: lint test test-wheel _template-version clean fixup build verify help _check-git-clean
+.PHONY: publish-to-pypi publish-to-testpypi _verify-build-publish install-build-deps _publish
 
 clean:
 	rm -rf build dist
@@ -17,10 +17,10 @@ test:
 test-wheel: build
 	nox -x -- --wheel
 
-template-version:
+_template-version:
 	@bash scripts/template-version.sh
 
-build: clean template-version
+build: clean _template-version
 	python -m build
 	# Restore the original version file after the build
 	git checkout src/braintrust/version.py
@@ -37,22 +37,22 @@ install-dev:
 	pip install -e .[all]
 	pip install pylint
 
-publish:
+_publish:
 	./scripts/publish.sh
 
-check-git-clean:
+_check-git-clean:
 	@if [ -n "$$(git status --porcelain)" ]; then \
 		echo "Error: Git working directory is not clean. Won't run publish."; \
 		exit 1; \
 	fi
 
-verify-build-publish: check-git-clean lint build test-wheel publish
+_verify-build-publish: _check-git-clean lint build test-wheel _publish
 
 publish-to-pypi: export PYPI_REPO := pypi
-publish-to-pypi: verify-build-publish
+publish-to-pypi: _verify-build-publish
 
 publish-to-testpypi: export PYPI_REPO := testpypi
-publish-to-testpypi: verify-build-publish
+publish-to-testpypi: _verify-build-publish
 
 .DEFAULT_GOAL := help
 help:
