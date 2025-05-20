@@ -274,7 +274,7 @@ def _start_span(name, kwargs):
 def _log_message_to_span(message, span):
     """Log telemetry from the given anthropic.Message to the given span."""
     with _catch_exceptions():
-        metrics = _extract_metrics(getattr(message, "usage", {}))
+        metrics = _finalize_metrics(_extract_metrics(getattr(message, "usage", {})))
         content = getattr(message, "content", None)
         span.log(output=content, metrics=metrics)
 
@@ -291,11 +291,23 @@ def _extract_metrics(usage):
 
     _save_if_exists_to("input_tokens", "prompt_tokens")
     _save_if_exists_to("output_tokens", "completion_tokens")
-    _save_if_exists_to("cache_read_input_tokens")
-    _save_if_exists_to("cache_creation_input_tokens")
-    metrics["tokens"] = metrics.get("prompt_tokens", 0) + metrics.get("completion_tokens", 0)
+    _save_if_exists_to("cache_read_input_tokens", "prompt_cached_tokens")
+    _save_if_exists_to("cache_creation_input_tokens", "prompt_cache_creation_tokens")
 
     return metrics
+
+
+def _finalize_metrics(metrics):
+    prompt_tokens = (
+        metrics.get("prompt_tokens", 0)
+        + metrics.get("prompt_cached_tokens", 0)
+        + metrics.get("prompt_cache_creation_tokens", 0)
+    )
+    return {
+        **metrics,
+        "prompt_tokens": prompt_tokens,
+        "tokens": prompt_tokens + metrics.get("completion_tokens", 0),
+    }
 
 
 @contextmanager
@@ -307,6 +319,10 @@ def _catch_exceptions():
 
 
 def wrap_anthropic(client):
+    """Wrap an `Anthropic` object (or AsyncAnthropic) to add tracing. If Braintrust
+    is not configured, this is a no-op. If this is not an `Anthropic` object, this
+    function is a no-op.
+    """
     type_name = getattr(type(client), "__name__")
     # We use 'in' because it could be AsyncAnthropicBedrock
     if "AsyncAnthropic" in type_name:
