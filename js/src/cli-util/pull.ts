@@ -14,7 +14,7 @@ import util from "util";
 import slugify from "slugify";
 import path from "path";
 import { currentRepo } from "../gitutil";
-import { isEmpty, loadPrettyXact } from "@braintrust/core";
+import { isEmpty, loadPrettyXact, prettifyXact } from "@braintrust/core";
 import {
   ToolFunctionDefinition,
   toolFunctionDefinitionSchema,
@@ -263,7 +263,8 @@ function makeFunctionDefinition({
   return `export const ${varName} = project.${pluralize(objectType)}.create({
   id: ${doubleQuote(func.id)},
   name: ${doubleQuote(func.name)},
-  slug: ${doubleQuote(func.slug)},${printOptionalField("description", func.description)}${printOptionalField("model", model)}
+  slug: ${doubleQuote(func.slug)},
+  version: ${doubleQuote(prettifyXact(func._xact_id))}, ${printOptionalField("description", func.description)}${printOptionalField("model", model)}
 ${indent(promptContents, 2)},
 ${indent(paramsString, 2)}
 ${indent(toolsString, 2)}

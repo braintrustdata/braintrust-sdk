@@ -13,7 +13,7 @@ import {
   chatCompletionMessageParamSchema,
   modelParamsSchema,
 } from "@braintrust/core/typespecs";
-import { TransactionId } from "@braintrust/core";
+import { loadPrettyXact, TransactionId } from "@braintrust/core";
 import { Prompt, PromptRowWithId } from "./logger";
 import { GenericFunction } from "./framework-types";
 
@@ -408,7 +408,7 @@ export class PromptBuilder {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const promptRow: PromptRowWithId<HasId, HasVersion> = {
       id: opts.id,
-      _xact_id: opts.version,
+      _xact_id: opts.version ? loadPrettyXact(opts.version) : undefined,
       name: opts.name,
       slug: slug,
       prompt_data: promptData,
