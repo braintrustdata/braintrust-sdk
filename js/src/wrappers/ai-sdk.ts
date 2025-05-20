@@ -25,10 +25,17 @@ import {
  * Wrap an ai-sdk model (created with `.chat()`, `.completion()`, etc.) to add tracing. If Braintrust is
  * not configured, this is a no-op
  *
- * @param model
+ * @param model The AI SDK model to wrap.
+ * @param overrideSpan Optional. A Braintrust Span object to use for tracing this model's operations.
+ *                     If provided, this span will be used instead of creating a new one internally.
+ *                     The lifecycle of this span (e.g., calling .end()) should be managed by the caller
+ *                     if it's passed here.
  * @returns The wrapped object.
  */
-export function wrapAISDKModel<T extends object>(model: T): T {
+export function wrapAISDKModel<T extends object>(
+  model: T,
+  overrideSpan?: Span,
+): T {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
   const m = model as any;
   if (
@@ -37,7 +44,10 @@ export function wrapAISDKModel<T extends object>(model: T): T {
     typeof m?.modelId === "string"
   ) {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-    return new BraintrustLanguageModelWrapper(m as LanguageModelV1) as any as T;
+    return new BraintrustLanguageModelWrapper(
+      m as LanguageModelV1,
+      overrideSpan,
+    ) as any as T;
   } else {
     console.warn("Unsupported AI SDK model. Not wrapping.");
     return model;
@@ -45,7 +55,7 @@ export function wrapAISDKModel<T extends object>(model: T): T {
 }
 
 class BraintrustLanguageModelWrapper implements LanguageModelV1 {
-  constructor(private model: LanguageModelV1) {}
+  constructor(private model: LanguageModelV1, private instanceSpan?: Span) {}
 
   get specificationVersion() {
     return this.model.specificationVersion;
@@ -77,24 +87,20 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
 
   // For the first cut, do not support custom span_info arguments. We can
   // propagate those via async local storage
-  async doGenerate(
-    options: LanguageModelV1CallOptions & { overrideSpan?: Span },
-  ) {
-    const { overrideSpan, ...originalModelOptions } = options;
-
+  async doGenerate(options: LanguageModelV1CallOptions) {
     const span =
-      overrideSpan ||
+      this.instanceSpan ??
       startSpan({
         name: "Chat Completion",
         spanAttributes: {
           type: "llm",
         },
       });
-    const { prompt, mode, ...rest } = originalModelOptions;
+    const { prompt, mode, ...rest } = options;
     const startTime = getCurrentUnixTimestamp();
 
     try {
-      const ret = await this.model.doGenerate(originalModelOptions);
+      const ret = await this.model.doGenerate(options);
       span.log({
         input: postProcessPrompt(prompt),
         metadata: {
@@ -122,21 +128,18 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
       });
       return ret;
     } finally {
-      if (!overrideSpan) {
+      if (!this.instanceSpan) {
         span.end();
       }
     }
   }
 
-  async doStream(
-    options: LanguageModelV1CallOptions & { overrideSpan?: Span },
-  ) {
-    const { overrideSpan, ...originalModelOptions } = options;
-    const { prompt, mode, ...rest } = originalModelOptions;
+  async doStream(options: LanguageModelV1CallOptions) {
+    const { prompt, mode, ...rest } = options;
     const startTime = getCurrentUnixTimestamp();
 
     const span =
-      overrideSpan ||
+      this.instanceSpan ??
       startSpan({
         name: "Chat Completion",
         spanAttributes: {
@@ -159,16 +162,19 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
 
     let ended = false;
     const end = () => {
-      if (!ended) {
-        if (!overrideSpan) {
-          span.end();
-        }
-        ended = true;
+      if (ended) {
+      	return;
       }
+      
+      if (!this.instanceSpan) {
+        span.end();
+      }
+      
+      ended = true;
     };
 
     try {
-      const ret = await this.model.doStream(originalModelOptions);
+      const ret = await this.model.doStream(options);
 
       let time_to_first_token: number | undefined = undefined;
       let usage:
