@@ -35,9 +35,8 @@ install-build-deps:
 	python -m pip install -e .
 	python -m pip install -r requirements-build.txt
 
-install-dev:
-	pip install -e .
-	pip install -r requirements-dev.txt
+install-dev: install-build-deps
+	python -m pip install -r requirements-dev.txt
 
 _publish:
 	./scripts/publish.sh
