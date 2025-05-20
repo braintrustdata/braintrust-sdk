@@ -52,4 +52,5 @@ nox:
 	nox -f integrations/langchain-py/noxfile.py
 
 pylint:
-	@pylint --errors-only $(shell git ls-files 'py/**/*.py')
+
+	cd py && make lint
