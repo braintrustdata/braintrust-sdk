@@ -56,9 +56,10 @@ jobs:
         # TODO: Make Pyright errors fail the build.
         run: |
           pnpm dlx pyright@1.1.388 --level error $(git ls-files '*.py') || true
-      - name: Lint the Python SDK
+      - name: Lint Other stuff
+        # lint everything other than the SDK (that's linted in make nox)
         run: |
-          pylint --errors-only $(git ls-files '*.py')
+          pylint --errors-only $(git ls-files '**/*.py' | grep -v '^py\/')
       - name: Run tests
         run: |
           python -m unittest discover ./core/py/src
