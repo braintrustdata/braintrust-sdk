@@ -232,14 +232,14 @@ describe("anthropic client unit tests", () => {
     expect(output).toContain("16");
     const metrics = span.metrics;
     const usage = response.usage;
-    const ccit = "cache_creation_input_tokens";
-    const crit = "cache_read_input_tokens";
     expect(metrics).toBeDefined();
     expect(metrics["prompt_tokens"]).toBe(usage.input_tokens);
     expect(metrics["completion_tokens"]).toBe(usage.output_tokens);
     expect(metrics["tokens"]).toBe(usage.input_tokens + usage.output_tokens);
-    expect(metrics[crit]).toBe(usage[crit]);
-    expect(metrics[ccit]).toBe(usage[ccit]);
+    expect(metrics.prompt_cache_creation_tokens).toBe(
+      usage.cache_creation_input_tokens,
+    );
+    expect(metrics.prompt_cached_tokens).toBe(usage.cache_read_input_tokens);
     expect(startTime <= metrics.start).toBe(true);
     expect(metrics.start < metrics.end).toBe(true);
     expect(metrics.end <= endTime).toBe(true);

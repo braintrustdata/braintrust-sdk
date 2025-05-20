@@ -1,0 +1,4 @@
+# Build and packaging tools with pinned versions for reproducible builds
+build==1.2.2.post1
+setuptools==80.7.1
+twine==5.0.0
