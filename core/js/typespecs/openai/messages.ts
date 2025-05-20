@@ -7,11 +7,6 @@ export const messageRoleSchema = z
   .openapi("MessageRole");
 export type MessageRole = z.infer<typeof messageRoleSchema>;
 
-const chatCompletionSystemMessageParamSchema = z.object({
-  content: z.string().default(""),
-  role: z.literal("system"),
-  name: z.string().optional(),
-});
 export const chatCompletionContentPartTextSchema = z
   .object({
     text: z.string().default(""),
@@ -55,6 +50,15 @@ export const chatCompletionContentSchema = z
       .openapi({ title: "array" }),
   ])
   .openapi("ChatCompletionContent");
+
+const chatCompletionSystemMessageParamSchema = z.object({
+  content: z.union([
+    z.string().default(""),
+    z.array(chatCompletionContentPartTextSchema),
+  ]),
+  role: z.literal("system"),
+  name: z.string().optional(),
+});
 
 const chatCompletionUserMessageParamSchema = z.object({
   content: chatCompletionContentSchema,
