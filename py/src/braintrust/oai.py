@@ -724,7 +724,8 @@ class OpenAIV1Wrapper(NamedWrapper):
 def wrap_openai(openai: Any):
     """
     Wrap the openai module (pre v1) or OpenAI instance (post v1) to add tracing.
-    If Braintrust is not configured, this is a no-op.
+    If Braintrust is not configured, nothing will be traced. If this is not an
+    `OpenAI` object, this function is a no-op.
 
     :param openai: The openai module or OpenAI object
     """

@@ -250,8 +250,8 @@ async def test_anthropic_messages_streaming_async(memory_logger):
     assert metrics["prompt_tokens"] == usage.input_tokens
     assert metrics["completion_tokens"] == usage.output_tokens
     assert metrics["tokens"] == usage.input_tokens + usage.output_tokens
-    assert metrics["cache_read_input_tokens"] == usage.cache_read_input_tokens
-    assert metrics["cache_creation_input_tokens"] == usage.cache_creation_input_tokens
+    assert metrics["prompt_cached_tokens"] == usage.cache_read_input_tokens
+    assert metrics["prompt_cache_creation_tokens"] == usage.cache_creation_input_tokens
     assert log["metadata"]["model"] == MODEL
     assert log["metadata"]["max_tokens"] == 1024
 
@@ -330,8 +330,8 @@ def test_anthropic_messages_streaming_sync(memory_logger):
     assert log["metrics"]["prompt_tokens"] == usage.input_tokens
     assert log["metrics"]["completion_tokens"] == usage.output_tokens
     assert log["metrics"]["tokens"] == usage.input_tokens + usage.output_tokens
-    assert log["metrics"]["cache_read_input_tokens"] == usage.cache_read_input_tokens
-    assert log["metrics"]["cache_creation_input_tokens"] == usage.cache_creation_input_tokens
+    assert log["metrics"]["prompt_cached_tokens"] == usage.cache_read_input_tokens
+    assert log["metrics"]["prompt_cache_creation_tokens"] == usage.cache_creation_input_tokens
 
 
 def test_anthropic_messages_sync(memory_logger):
