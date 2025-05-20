@@ -124,6 +124,7 @@ export async function pullCommand(args: PullArgs) {
 
     const projectFileContents = await makeProjectFile({
       projectName,
+      projectId: await projectNameIdMap.getId(projectName),
       fileName: projectFile,
       functions: projectNameToFunctions[projectName],
       hasSpecifiedFunction: !!args.slug || !!args.id,
@@ -135,11 +136,13 @@ export async function pullCommand(args: PullArgs) {
 
 async function makeProjectFile({
   projectName,
+  projectId,
   fileName,
   functions,
   hasSpecifiedFunction,
 }: {
   projectName: string;
+  projectId: string;
   fileName: string;
   functions: FunctionObject[];
   hasSpecifiedFunction: boolean;
@@ -160,6 +163,7 @@ async function makeProjectFile({
 import braintrust from "braintrust";
 
 const project = braintrust.projects.create({
+  id: ${doubleQuote(projectId)},
   name: ${doubleQuote(projectName)},
 });
 
@@ -257,6 +261,7 @@ function makeFunctionDefinition({
       : "";
 
   return `export const ${varName} = project.${pluralize(objectType)}.create({
+  id: ${doubleQuote(func.id)},
   name: ${doubleQuote(func.name)},
   slug: ${doubleQuote(func.slug)},${printOptionalField("description", func.description)}${printOptionalField("model", model)}
 ${indent(promptContents, 2)},

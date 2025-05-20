@@ -412,6 +412,7 @@ export class PromptBuilder {
       name: opts.name,
       slug: slug,
       prompt_data: promptData,
+      ...(this.project.id !== undefined ? { project_id: this.project.id } : {}),
     } as PromptRowWithId<HasId, HasVersion>;
 
     const prompt = new Prompt<HasId, HasVersion>(
