@@ -458,7 +458,7 @@ class ChatCompletionMessageReasoning(TypedDict):
 
 
 class ChatCompletionMessageParam1(TypedDict):
-    content: NotRequired[Optional[str]]
+    content: NotRequired[Optional[Union[str, Sequence[ChatCompletionContentPartText]]]]
     role: Literal["system"]
     name: NotRequired[Optional[str]]
 
