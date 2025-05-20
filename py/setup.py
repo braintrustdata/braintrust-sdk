@@ -15,27 +15,33 @@ install_requires = [
     "GitPython",
     "requests",
     "chevron",
-    "braintrust_core",
     "tqdm",
-    "exceptiongroup==1.2.0",
+    "exceptiongroup>=1.2.0",
     "python-dotenv",
     "sseclient-py",
+    "python-slugify",
+    "typing_extensions>=4.1.0",
 ]
 
 extras_require = {
-    "cli": ["boto3", "psycopg2-binary"],
+    "cli": ["boto3", "psycopg2-binary", "uv"],
     "dev": [
         "black",
         "build",
         "flake8",
         "flake8-isort",
         "IPython",
-        "isort==5.10.1",
+        "isort==5.12.0",
         "pre-commit",
         "pytest",
         "twine",
+        "pytest-asyncio",
+        "nox",
     ],
     "doc": ["pydoc-markdown"],
+    "openai-agents": ["openai-agents"],
+    # These should only be installed for linting import errors, not for tests.
+    "lint": ["anthropic"],
 }
 
 extras_require["all"] = sorted({package for packages in extras_require.values() for package in packages})
@@ -49,15 +55,17 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://www.braintrust.dev",
-    # project_urls={
-    #    "Bug Tracker": "https://github.com/TODO/issues",
-    # },
+    project_urls={
+        "Source Code": "https://github.com/braintrustdata/braintrust-sdk",
+        "Bug Tracker": "https://github.com/braintrustdata/braintrust-sdk/issues",
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
     ],
     package_dir={"": "src"},
     packages=setuptools.find_packages(where="src"),
+    package_data={"braintrust": ["py.typed"]},
     python_requires=">=3.8.0",
     entry_points={"console_scripts": ["braintrust = braintrust.cli.__main__:main"]},
     install_requires=install_requires,

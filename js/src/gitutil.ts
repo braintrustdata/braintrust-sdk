@@ -1,4 +1,4 @@
-import { GitMetadataSettings, RepoInfo } from "@braintrust/core";
+import { GitMetadataSettings, RepoInfo } from "@braintrust/core/typespecs";
 import { simpleGit } from "simple-git";
 
 const COMMON_BASE_BRANCHES = ["main", "master", "develop"];
@@ -202,7 +202,7 @@ async function repoInfo() {
 
   if (dirty) {
     git_diff = await attempt(async () =>
-      truncateToByteLimit(await git.raw(["diff", "HEAD"])),
+      truncateToByteLimit(await git.raw(["--no-ext-diff", "diff", "HEAD"])),
     );
   }
 

@@ -33,7 +33,52 @@ class BraintrustJsonChunk:
     type: Literal["json_delta"] = "json_delta"
 
 
-BraintrustStreamChunk = Union[BraintrustTextChunk, BraintrustJsonChunk]
+@dataclasses.dataclass
+class BraintrustErrorChunk:
+    """
+    An error chunk from a Braintrust stream.
+    """
+
+    data: str
+    type: Literal["error"] = "error"
+
+
+@dataclasses.dataclass
+class BraintrustConsoleChunk:
+    """
+    A console chunk from a Braintrust stream.
+    """
+
+    message: str
+    stream: Literal["stderr", "stdout"]
+    type: Literal["console"] = "console"
+
+
+@dataclasses.dataclass
+class BraintrustProgressChunk:
+    """
+    A progress chunk from a Braintrust stream.
+    """
+
+    data: str
+    id: str
+    object_type: str
+    format: str
+    output_type: str
+    name: str
+    event: Literal["json_delta", "text_delta", "reasoning_delta"]
+    type: Literal["progress"] = "progress"
+
+
+class BraintrustInvokeError(ValueError):
+    """
+    An error that occurs during a Braintrust stream.
+    """
+
+    pass
+
+
+BraintrustStreamChunk = Union[BraintrustTextChunk, BraintrustJsonChunk, BraintrustErrorChunk]
 
 
 class BraintrustStream:
@@ -70,6 +115,25 @@ class BraintrustStream:
                 yield BraintrustTextChunk(data=json.loads(event.data))
             elif event.event == "json_delta":
                 yield BraintrustJsonChunk(data=event.data)
+            elif event.event == "error":
+                yield BraintrustErrorChunk(data=json.loads(event.data))
+            elif event.event == "console":
+                event_data = json.loads(event.data)
+                yield BraintrustConsoleChunk(
+                    message=event_data["message"],
+                    stream=event_data["stream"],
+                )
+            elif event.event == "progress":
+                event_data = json.loads(event.data)
+                yield BraintrustProgressChunk(
+                    data=event_data["data"],
+                    id=event_data["id"],
+                    object_type=event_data["object_type"],
+                    format=event_data["format"],
+                    output_type=event_data["output_type"],
+                    name=event_data["name"],
+                    event=event_data["event"],
+                )
 
     def copy(self):
         """
@@ -128,6 +192,12 @@ def parse_stream(stream: BraintrustStream):
             text_chunks.append(chunk.data)
         elif isinstance(chunk, BraintrustJsonChunk):
             json_chunks.append(chunk.data)
+        elif isinstance(chunk, BraintrustErrorChunk):
+            raise BraintrustInvokeError(chunk.data)
+        elif isinstance(chunk, BraintrustProgressChunk) or isinstance(chunk, BraintrustConsoleChunk):
+            pass
+        else:
+            raise ValueError(f"Unknown chunk type (you may need to update the SDK): {type(chunk)}")
 
     if json_chunks:
         return json.loads("".join(json_chunks))

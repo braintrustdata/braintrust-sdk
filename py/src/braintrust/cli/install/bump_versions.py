@@ -2,6 +2,7 @@ import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+# pylint: disable=no-name-in-module
 from ...aws import LazyClient, cloudformation
 
 _logger = logging.getLogger("braintrust.install.logs")

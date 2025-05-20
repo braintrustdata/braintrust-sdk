@@ -25,8 +25,11 @@ repos:
           (?x)^(
               .*\.(json|prisma|svg)
               |.*pnpm-lock.yaml
+              |.*deno.lock
           )$
-        args: ["-L rouge,coo,couldn,unsecure,ontext"]
+        args:
+          - "-L"
+          - "rouge,coo,couldn,unsecure,ontext,afterall"
   - repo: https://github.com/rbubley/mirrors-prettier
     rev: v3.3.2
     hooks:

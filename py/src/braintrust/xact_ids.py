@@ -17,6 +17,9 @@ def prettify_xact(value) -> str:
 
 
 def load_pretty_xact(encoded_hex: str) -> str:
+    if len(encoded_hex) != 16:
+        return encoded_hex
+
     value = int(encoded_hex, 16)
     multiplied_inverse = modular_multiply(value, COPRIME_INVERSE)
     with_top_bits = TOP_BITS | multiplied_inverse

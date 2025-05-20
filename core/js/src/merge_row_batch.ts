@@ -1,4 +1,4 @@
-// Mirror of the functions in core/py/src/braintrust_core/merge_row_batch.py.
+// Mirror of the functions in py/src/braintrust/merge_row_batch.py.
 
 import { IS_MERGE_FIELD, PARENT_ID_FIELD } from "./db_fields";
 import { mapAt, mergeDicts } from "./object_util";
@@ -25,12 +25,49 @@ function generateMergedRowKey(
   );
 }
 
+// These fields will be retained as-is when merging rows.
+const MERGE_ROW_SKIP_FIELDS = [
+  "created",
+  "span_id",
+  "root_span_id",
+  "span_parents",
+  "_parent_id",
+  // TODO: handle merge paths.
+] as const;
+type MergeRowSkipField = (typeof MERGE_ROW_SKIP_FIELDS)[number];
+type MergeRowSkipFieldObj = { [K in MergeRowSkipField]?: unknown };
+
+function popMergeRowSkipFields<T extends MergeRowSkipFieldObj>(
+  row: T,
+): MergeRowSkipFieldObj {
+  const popped: MergeRowSkipFieldObj = {};
+  for (const field of MERGE_ROW_SKIP_FIELDS) {
+    if (field in row) {
+      popped[field] = row[field];
+      delete row[field];
+    }
+  }
+  return popped;
+}
+
+function restoreMergeRowSkipFields<T extends MergeRowSkipFieldObj>(
+  row: T,
+  skipFields: MergeRowSkipFieldObj,
+) {
+  for (const field of MERGE_ROW_SKIP_FIELDS) {
+    delete row[field];
+    if (field in skipFields) {
+      row[field] = skipFields[field];
+    }
+  }
+}
+
 export function mergeRowBatch<
   T extends {
     id: string;
     [IS_MERGE_FIELD]?: boolean | null;
     [PARENT_ID_FIELD]?: string | null;
-  },
+  } & MergeRowSkipFieldObj,
 >(rows: T[]): T[][] {
   for (const row of rows) {
     if (row.id === undefined) {
@@ -45,8 +82,10 @@ export function mergeRowBatch<
     const key = generateMergedRowKey(row);
     const existingRow = rowGroups.get(key);
     if (existingRow !== undefined && row[IS_MERGE_FIELD]) {
+      const skipFields = popMergeRowSkipFields(existingRow);
       const preserveNoMerge = !existingRow[IS_MERGE_FIELD];
       mergeDicts(existingRow, row);
+      restoreMergeRowSkipFields(existingRow, skipFields);
       if (preserveNoMerge) {
         delete existingRow[IS_MERGE_FIELD];
       }

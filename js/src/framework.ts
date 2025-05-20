@@ -1,25 +1,45 @@
-import chalk from "chalk";
+import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import {
-  NOOP_SPAN,
+  GitMetadataSettings,
+  ObjectReference,
+  RepoInfo,
+  SSEProgressEventData,
+} from "@braintrust/core/typespecs";
+import { queue } from "async";
+import chalk from "chalk";
+import pluralize from "pluralize";
+import { GenericFunction } from "./framework-types";
+import { CodeFunction, CodePrompt } from "./framework2";
+import {
+  BaseMetadata,
+  BraintrustState,
+  Dataset,
+  DefaultMetadataType,
+  EvalCase,
   Experiment,
   ExperimentSummary,
-  Span,
-  init as _initExperiment,
-  EvalCase,
-  BaseMetadata,
-  DefaultMetadataType,
-  ScoreSummary,
-  MetricSummary,
-  currentSpan,
   FullInitOptions,
-  BraintrustState,
+  MetricSummary,
+  NOOP_SPAN,
+  ScoreSummary,
+  Span,
+  StartSpanArgs,
+  init as _initExperiment,
+  currentSpan,
+  flush,
   logError as logSpanError,
+  startSpan,
+  traced,
+  withCurrent,
+  withParent,
 } from "./logger";
-import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import { BarProgressReporter, ProgressReporter } from "./progress";
-import pluralize from "pluralize";
-import { isEmpty } from "./util";
-import { queue } from "async";
+import { isEmpty, InternalAbortError } from "./util";
+import {
+  EvalParameters,
+  InferParameters,
+  validateParameters,
+} from "./eval-parameters";
 
 export type BaseExperiment<
   Input,
@@ -67,13 +87,57 @@ export type EvalData<
   | BaseExperiment<Input, Expected, Metadata>
   | (() => BaseExperiment<Input, Expected, Metadata>);
 
-export type EvalTask<Input, Output> =
-  | ((input: Input, hooks: EvalHooks) => Promise<Output>)
-  | ((input: Input, hooks: EvalHooks) => Output);
+export type EvalTask<
+  Input,
+  Output,
+  Expected,
+  Metadata extends BaseMetadata,
+  Parameters extends EvalParameters,
+> =
+  | ((
+      input: Input,
+      hooks: EvalHooks<Expected, Metadata, Parameters>,
+    ) => Promise<Output>)
+  | ((
+      input: Input,
+      hooks: EvalHooks<Expected, Metadata, Parameters>,
+    ) => Output);
 
-export interface EvalHooks {
-  meta: (info: Record<string, unknown>) => void;
+export type TaskProgressEvent = Omit<
+  SSEProgressEventData,
+  "id" | "origin" | "object_type" | "name"
+>;
+
+export interface EvalHooks<
+  Expected,
+  Metadata extends BaseMetadata,
+  Parameters extends EvalParameters,
+> {
+  /**
+   * @deprecated Use `metadata` instead.
+   */
+  meta: (info: Metadata) => void;
+  /**
+   * The metadata object for the current evaluation. You can mutate this object to add or remove metadata.
+   */
+  metadata: Metadata extends void ? Record<string, unknown> : Metadata;
+  /**
+   * The expected output for the current evaluation.
+   */
+  expected: Expected;
+  /**
+   * The task's span.
+   */
   span: Span;
+  /**
+   * The current parameters being used for this specific task execution.
+   * Array parameters are converted to single values.
+   */
+  parameters: InferParameters<Parameters>;
+  /**
+   * Report progress that will show up in the playground.
+   */
+  reportProgress: (progress: TaskProgressEvent) => void;
 }
 
 // This happens to be compatible with ScorerArgs defined in @braintrust/core.
@@ -86,7 +150,7 @@ export type EvalScorerArgs<
   output: Output;
 };
 
-type OneOrMoreScores = Score | number | null | Array<Score>;
+export type OneOrMoreScores = Score | number | null | Array<Score>;
 
 export type EvalScorer<
   Input,
@@ -106,13 +170,22 @@ export type EvalResult<
   output: Output;
   scores: Record<string, number | null>;
   error: unknown;
+  origin?: ObjectReference;
 };
+
+type ErrorScoreHandler = (args: {
+  rootSpan: Span;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: EvalCase<any, any, any>;
+  unhandledScores: string[];
+}) => Record<string, number> | undefined | void;
 
 export interface Evaluator<
   Input,
   Output,
   Expected,
   Metadata extends BaseMetadata = DefaultMetadataType,
+  Parameters extends EvalParameters = EvalParameters,
 > {
   /**
    * A function that returns a list of inputs, expected outputs, and metadata.
@@ -122,7 +195,7 @@ export interface Evaluator<
   /**
    * A function that takes an input and returns an output.
    */
-  task: EvalTask<Input, Output>;
+  task: EvalTask<Input, Output, Expected, Metadata, Parameters>;
 
   /**
    * A set of functions that take an input, output, and expected value and return a score.
@@ -130,9 +203,21 @@ export interface Evaluator<
   scores: EvalScorer<Input, Output, Expected, Metadata>[];
 
   /**
+   * A set of parameters that will be passed to the evaluator.
+   * Can contain array values that will be converted to single values in the task.
+   */
+
+  parameters?: Parameters;
+
+  /**
    * An optional name for the experiment.
    */
   experimentName?: string;
+
+  /**
+   * An optional description for the experiment.
+   */
+  description?: string;
 
   /**
    * The number of times to run the evaluator per input. This is useful for evaluating applications that
@@ -163,6 +248,11 @@ export interface Evaluator<
   timeout?: number;
 
   /**
+   * An abort signal that can be used to stop the evaluation.
+   */
+  signal?: AbortSignal;
+
+  /**
    * The maximum number of tasks/scorers that will be run concurrently.
    * Defaults to undefined, in which case there is no max concurrency.
    */
@@ -190,6 +280,28 @@ export interface Evaluator<
    * and compared to this experiment. This takes precedence over `baseExperimentName` if specified.
    */
   baseExperimentId?: string;
+
+  /**
+   * Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
+   */
+  gitMetadataSettings?: GitMetadataSettings;
+
+  /**
+   * Optionally explicitly specify the git metadata for this experiment. This takes precedence over `gitMetadataSettings` if specified.
+   */
+  repoInfo?: RepoInfo;
+
+  /**
+   * Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
+   * A default implementation is exported as `defaultErrorScoreHandler` which will log a 0 score to the root span for any scorer that was not run.
+   */
+  errorScoreHandler?: ErrorScoreHandler;
+
+  /**
+   * Whether to summarize the scores of the experiment after it has run.
+   * Defaults to true.
+   */
+  summarizeScores?: boolean;
 }
 
 export class EvalResultWithSummary<
@@ -236,7 +348,11 @@ export interface ReporterBody<EvalReport> {
    * @param opts
    */
   reportEval(
-    evaluator: EvaluatorDef<any, any, any, any>,
+    // These any's are required because these function specifications don't know
+    // or need to know the types of the input/output/etc for the evaluator.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    evaluator: EvaluatorDef<any, any, any, any, any>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     result: EvalResultWithSummary<any, any, any, any>,
     opts: ReporterOpts,
   ): Promise<EvalReport> | EvalReport;
@@ -268,15 +384,28 @@ export type EvaluatorDef<
   Output,
   Expected,
   Metadata extends BaseMetadata = DefaultMetadataType,
+  Parameters extends EvalParameters = EvalParameters,
 > = {
   projectName: string;
   evalName: string;
-} & Evaluator<Input, Output, Expected, Metadata>;
+} & Evaluator<Input, Output, Expected, Metadata, Parameters>;
 
 export type EvaluatorFile = {
+  functions: CodeFunction<
+    unknown,
+    unknown,
+    GenericFunction<unknown, unknown>
+  >[];
+  prompts: CodePrompt[];
   evaluators: {
     [evalName: string]: {
-      evaluator: EvaluatorDef<any, any, any, any>;
+      evaluator: EvaluatorDef<
+        unknown,
+        unknown,
+        unknown,
+        BaseMetadata,
+        EvalParameters
+      >;
       reporter?: ReporterDef<unknown> | string;
     };
   };
@@ -304,7 +433,7 @@ export function callEvaluatorData<
   data: EvalData<Input, Expected, Metadata>;
   baseExperiment: string | undefined;
 } {
-  let dataResult = typeof data === "function" ? data() : data;
+  const dataResult = typeof data === "function" ? data() : data;
 
   let baseExperiment: string | undefined = undefined;
   if ("_type" in dataResult && dataResult._type === "BaseExperiment") {
@@ -319,23 +448,66 @@ export function callEvaluatorData<
 
 export type SpanContext = {
   currentSpan: typeof currentSpan;
+  startSpan: typeof startSpan;
+  withCurrent: typeof withCurrent;
   NOOP_SPAN: typeof NOOP_SPAN;
 };
 
 declare global {
+  // eslint-disable-next-line no-var
   var _evals: EvaluatorFile;
+  // eslint-disable-next-line no-var
   var _spanContext: SpanContext | undefined;
+  // eslint-disable-next-line no-var
   var _lazy_load: boolean;
 }
 
 globalThis._evals = {
+  functions: [],
+  prompts: [],
   evaluators: {},
   reporters: {},
 };
 
-export interface EvalOptions<EvalReport> {
+export interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
+  /**
+   * A `Reporter` which you can use to summarize progress after an Eval() runs.
+   */
   reporter?: ReporterDef<EvalReport> | string;
+  /**
+   * A callback function that will be called when an experiment is started with
+   * information about its project, experiment id, name, and other useful information.
+   * @param metadata
+   */
   onStart?: (metadata: Omit<ExperimentSummary, "scores" | "metrics">) => void;
+  /**
+   * A function that will be called with progress events, which can be used to
+   * display intermediate progress.
+   *
+   * @param data
+   */
+  stream?: (data: SSEProgressEventData) => void;
+  /**
+   * If specified, instead of creating a new experiment object, the Eval() will populate
+   * the object or span specified by this parent.
+   */
+  parent?: string;
+  /**
+   * Specify this to create a custom progress-bar style reporter. Note that this interface
+   * is somewhat outdated, and may be removed in the future.
+   */
+  progress?: ProgressReporter;
+  /**
+   * The parameters to use for the evaluator.
+   */
+  parameters?: InferParameters<Parameters>;
+}
+
+export function _initializeSpanContext() {
+  // This only needs to be set once, but Eval(), Task(), etc. are the only time
+  // we get to run code while importing a module, so use it to
+  // grab these values.
+  globalThis._spanContext = { currentSpan, withCurrent, startSpan, NOOP_SPAN };
 }
 
 export async function Eval<
@@ -344,12 +516,16 @@ export async function Eval<
   Expected = void,
   Metadata extends BaseMetadata = DefaultMetadataType,
   EvalReport = boolean,
+  Parameters extends EvalParameters = EvalParameters,
 >(
   name: string,
-  evaluator: Evaluator<Input, Output, Expected, Metadata>,
-  reporterOrOpts?: ReporterDef<EvalReport> | string | EvalOptions<EvalReport>,
+  evaluator: Evaluator<Input, Output, Expected, Metadata, Parameters>,
+  reporterOrOpts?:
+    | ReporterDef<EvalReport>
+    | string
+    | EvalOptions<EvalReport, Parameters>,
 ): Promise<EvalResultWithSummary<Input, Output, Expected, Metadata>> {
-  const options: EvalOptions<EvalReport> = isEmpty(reporterOrOpts)
+  const options: EvalOptions<EvalReport, Parameters> = isEmpty(reporterOrOpts)
     ? {}
     : typeof reporterOrOpts === "string"
       ? { reporter: reporterOrOpts }
@@ -363,14 +539,22 @@ export async function Eval<
   }
   if (globalThis._lazy_load) {
     globalThis._evals.evaluators[evalName] = {
-      evaluator: { evalName, projectName: name, ...evaluator },
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      evaluator: {
+        evalName,
+        projectName: name,
+        ...evaluator,
+      } as EvaluatorDef<
+        unknown,
+        unknown,
+        unknown,
+        BaseMetadata,
+        EvalParameters
+      >,
       reporter: options.reporter,
     };
 
-    // This only needs to be set once, but Eval() is the only time
-    // we get to run code while importing a module, so use it to
-    // grab these values.
-    globalThis._spanContext = { currentSpan, NOOP_SPAN };
+    _initializeSpanContext();
 
     // Better to return this empty object than have an annoying-to-use signature
     return new EvalResultWithSummary(
@@ -384,7 +568,7 @@ export async function Eval<
     );
   }
 
-  const progressReporter = new BarProgressReporter();
+  const progressReporter = options.progress ?? new BarProgressReporter();
 
   if (typeof options.reporter === "string") {
     throw new Error(
@@ -397,20 +581,29 @@ export async function Eval<
     const { data, baseExperiment: defaultBaseExperiment } = callEvaluatorData(
       evaluator.data,
     );
-    const experiment = initExperiment(evaluator.state, {
-      ...(evaluator.projectId
-        ? { projectId: evaluator.projectId }
-        : { project: name }),
-      experiment: evaluator.experimentName,
-      metadata: evaluator.metadata,
-      isPublic: evaluator.isPublic,
-      update: evaluator.update,
-      baseExperiment: evaluator.baseExperimentName ?? defaultBaseExperiment,
-      baseExperimentId: evaluator.baseExperimentId,
-    });
+    // NOTE: This code is duplicated with initExperiment in js/src/cli.ts. Make sure
+    // to update that if you change this.
+    const experiment = options.parent
+      ? null
+      : initExperiment(evaluator.state, {
+          ...(evaluator.projectId
+            ? { projectId: evaluator.projectId }
+            : { project: name }),
+          experiment: evaluator.experimentName,
+          description: evaluator.description,
+          metadata: evaluator.metadata,
+          isPublic: evaluator.isPublic,
+          update: evaluator.update,
+          baseExperiment: evaluator.baseExperimentName ?? defaultBaseExperiment,
+          baseExperimentId: evaluator.baseExperimentId,
+          gitMetadataSettings: evaluator.gitMetadataSettings,
+          repoInfo: evaluator.repoInfo,
+          dataset: Dataset.isDataset(data) ? data : undefined,
+        });
 
-    if (options.onStart) {
-      experiment.summarize({ summarizeScores: false }).then(options.onStart);
+    if (experiment && options.onStart) {
+      const summary = await experiment.summarize({ summarizeScores: false });
+      options.onStart(summary);
     }
 
     try {
@@ -420,7 +613,31 @@ export async function Eval<
         ...evaluator,
         data,
       };
-      const ret = await runEvaluator(experiment, evalDef, progressReporter, []);
+      let ret;
+      if (options.parent) {
+        ret = await withParent(
+          options.parent,
+          () =>
+            runEvaluator(
+              null,
+              evalDef,
+              progressReporter,
+              [],
+              options.stream,
+              options.parameters,
+            ),
+          evaluator.state,
+        );
+      } else {
+        ret = await runEvaluator(
+          experiment,
+          evalDef,
+          progressReporter,
+          [],
+          options.stream,
+          options.parameters,
+        );
+      }
       progressReporter.stop();
       resolvedReporter.reportEval(evalDef, ret, {
         verbose: true,
@@ -428,7 +645,11 @@ export async function Eval<
       });
       return ret;
     } finally {
-      experiment.flush();
+      if (experiment) {
+        experiment.flush().catch(console.error);
+      } else if (options.parent) {
+        flush().catch(console.error);
+      }
     }
   } finally {
     progressReporter.stop();
@@ -460,7 +681,7 @@ export interface Filter {
   pattern: RegExp;
 }
 
-export function serializeJSONWithPlainString(v: any) {
+export function serializeJSONWithPlainString(v: unknown) {
   if (typeof v === "string") {
     return v;
   } else {
@@ -496,9 +717,16 @@ export function parseFilters(filters: string[]): Filter[] {
   return result;
 }
 
-function evaluateFilter(object: any, filter: Filter) {
+function evaluateFilter(object: unknown, filter: Filter) {
   const { path, pattern } = filter;
-  const key = path.reduce((acc, p) => acc?.[p], object);
+  const key = path.reduce(
+    (acc, p) =>
+      typeof acc === "object" && acc !== null
+        ? // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          (acc as Record<string, unknown>)[p]
+        : undefined,
+    object,
+  );
   if (key === undefined) {
     return false;
   }
@@ -506,6 +734,7 @@ function evaluateFilter(object: any, filter: Filter) {
 }
 
 export function scorerName(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   scorer: EvalScorer<any, any, any, any>,
   scorer_idx: number,
 ) {
@@ -514,44 +743,51 @@ export function scorerName(
 
 export async function runEvaluator(
   experiment: Experiment | null,
-  evaluator: EvaluatorDef<any, any, any, any>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  evaluator: EvaluatorDef<any, any, any, any, any>,
   progressReporter: ProgressReporter,
   filters: Filter[],
+  stream: ((data: SSEProgressEventData) => void) | undefined,
+  parameters?: InferParameters<EvalParameters>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
-  let result = runEvaluatorInternal(
+  return await runEvaluatorInternal(
     experiment,
     evaluator,
     progressReporter,
     filters,
+    stream,
+    parameters,
   );
-  let timer = async () => {
-    await new Promise((_, reject) => {
-      if (evaluator.timeout) {
-        setTimeout(() => {
-          reject("evaluator timed out");
-        }, evaluator.timeout);
-      }
-    });
-    return null;
-  };
-  let winner = await Promise.race([result, timer()]);
-  if (!winner) {
-    throw new Error("unreachable");
-  }
-  return winner;
 }
+
+export const defaultErrorScoreHandler: ErrorScoreHandler = ({
+  rootSpan,
+  data: _,
+  unhandledScores,
+}) => {
+  const scores = Object.fromEntries(unhandledScores.map((s) => [s, 0]));
+  rootSpan.log({ scores });
+  return scores;
+};
 
 async function runEvaluatorInternal(
   experiment: Experiment | null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evaluator: EvaluatorDef<any, any, any, any>,
   progressReporter: ProgressReporter,
   filters: Filter[],
+  stream: ((data: SSEProgressEventData) => void) | undefined,
+  parameters: InferParameters<EvalParameters> | undefined,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<EvalResultWithSummary<any, any, any, any>> {
   if (typeof evaluator.data === "string") {
     throw new Error("Unimplemented: string data paths");
   }
   let dataResult =
     typeof evaluator.data === "function" ? evaluator.data() : evaluator.data;
+
+  parameters = validateParameters(parameters ?? {}, evaluator.parameters ?? {});
 
   if ("_type" in dataResult) {
     if (dataResult._type !== "BaseExperiment") {
@@ -581,6 +817,7 @@ async function runEvaluatorInternal(
     }).asDataset();
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let data: EvalCase<any, any, any>[] = [];
   if (dataResult instanceof Promise) {
     data = await dataResult;
@@ -603,30 +840,81 @@ async function runEvaluatorInternal(
 
   progressReporter.start(evaluator.evalName, data.length);
   interface EvalResult {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     input: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     output: any;
     tags?: string[];
     metadata: Record<string, unknown>;
     scores: Record<string, number | null>;
     error: unknown;
+    origin?: ObjectReference;
   }
-  let results: EvalResult[] = [];
-  let q = queue(
+  const results: EvalResult[] = [];
+  const q = queue(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async (datum: EvalCase<any, any, any>) => {
+      const eventDataset: Dataset | undefined = experiment
+        ? experiment.dataset
+        : Dataset.isDataset(evaluator.data)
+          ? evaluator.data
+          : undefined;
+
+      const baseEvent: StartSpanArgs = {
+        name: "eval",
+        spanAttributes: {
+          type: SpanTypeAttribute.EVAL,
+        },
+        event: {
+          input: datum.input,
+          expected: "expected" in datum ? datum.expected : undefined,
+          tags: datum.tags,
+          origin:
+            eventDataset && datum.id && datum._xact_id
+              ? {
+                  object_type: "dataset",
+                  object_id: await eventDataset.id,
+                  id: datum.id,
+                  created: datum.created,
+                  _xact_id: datum._xact_id,
+                }
+              : undefined,
+          ...(datum.upsert_id ? { id: datum.upsert_id } : {}),
+        },
+      };
+
       const callback = async (rootSpan: Span) => {
         let metadata: Record<string, unknown> = {
           ...("metadata" in datum ? datum.metadata : {}),
         };
-        let output: any = undefined;
+        const expected = "expected" in datum ? datum.expected : undefined;
+        let output: unknown = undefined;
         let error: unknown | undefined = undefined;
-        let scores: Record<string, number | null> = {};
+        const scores: Record<string, number | null> = {};
+        const scorerNames = evaluator.scores.map(scorerName);
+        let unhandledScores: string[] | null = scorerNames;
         try {
           const meta = (o: Record<string, unknown>) =>
             (metadata = { ...metadata, ...o });
 
           await rootSpan.traced(
             async (span: Span) => {
-              const outputResult = evaluator.task(datum.input, { meta, span });
+              const outputResult = evaluator.task(datum.input, {
+                meta,
+                metadata,
+                expected,
+                span,
+                parameters: parameters ?? {},
+                reportProgress: (event: TaskProgressEvent) => {
+                  stream?.({
+                    ...event,
+                    id: rootSpan.id,
+                    origin: baseEvent.event?.origin,
+                    name: evaluator.evalName,
+                    object_type: "task",
+                  });
+                },
+              });
               if (outputResult instanceof Promise) {
                 output = await outputResult;
               } else {
@@ -640,93 +928,96 @@ async function runEvaluatorInternal(
               event: { input: datum.input },
             },
           );
-          rootSpan.log({ output, metadata });
+          rootSpan.log({ output, metadata, expected });
 
-          const scoringArgs = { ...datum, metadata, output };
-          const scorerNames = evaluator.scores.map(scorerName);
+          const scoringArgs = {
+            input: datum.input,
+            expected: "expected" in datum ? datum.expected : undefined,
+            metadata,
+            output,
+          };
           const scoreResults = await Promise.all(
             evaluator.scores.map(async (score, score_idx) => {
               try {
-                const results = await rootSpan.traced(
-                  async (span: Span) => {
-                    const scoreResult = score(scoringArgs);
-                    const scoreValue =
-                      scoreResult instanceof Promise
-                        ? await scoreResult
-                        : scoreResult;
+                const runScorer = async (span: Span) => {
+                  const scoreResult = score(scoringArgs);
+                  const scoreValue =
+                    scoreResult instanceof Promise
+                      ? await scoreResult
+                      : scoreResult;
 
-                    if (scoreValue === null) {
-                      return null;
-                    }
+                  if (scoreValue === null) {
+                    return null;
+                  }
 
-                    if (Array.isArray(scoreValue)) {
-                      for (const s of scoreValue) {
-                        if (!(typeof s === "object" && !isEmpty(s))) {
-                          throw new Error(
-                            `When returning an array of scores, each score must be a non-empty object. Got: ${JSON.stringify(
-                              s,
-                            )}`,
-                          );
-                        }
+                  if (Array.isArray(scoreValue)) {
+                    for (const s of scoreValue) {
+                      if (!(typeof s === "object" && !isEmpty(s))) {
+                        throw new Error(
+                          `When returning an array of scores, each score must be a non-empty object. Got: ${JSON.stringify(
+                            s,
+                          )}`,
+                        );
                       }
                     }
+                  }
 
-                    const results = Array.isArray(scoreValue)
-                      ? scoreValue
-                      : typeof scoreValue === "object" && !isEmpty(scoreValue)
-                        ? [scoreValue]
-                        : [
-                            {
-                              name: scorerNames[score_idx],
-                              score: scoreValue,
-                            },
-                          ];
+                  const results = Array.isArray(scoreValue)
+                    ? scoreValue
+                    : typeof scoreValue === "object" && !isEmpty(scoreValue)
+                      ? [scoreValue]
+                      : [
+                          {
+                            name: scorerNames[score_idx],
+                            score: scoreValue,
+                          },
+                        ];
 
-                    const getOtherFields = (s: Score) => {
-                      const { metadata, name, ...rest } = s;
-                      return rest;
-                    };
+                  const getOtherFields = (s: Score) => {
+                    const { metadata: _metadata, name: _name, ...rest } = s;
+                    return rest;
+                  };
 
-                    const resultMetadata =
-                      results.length === 1
-                        ? results[0].metadata
-                        : results.reduce(
-                            (prev, s) =>
-                              mergeDicts(prev, {
-                                [s.name]: s.metadata,
-                              }),
-                            {},
-                          );
+                  const resultMetadata =
+                    results.length === 1
+                      ? results[0].metadata
+                      : results.reduce(
+                          (prev, s) =>
+                            mergeDicts(prev, {
+                              [s.name]: s.metadata,
+                            }),
+                          {},
+                        );
 
-                    const resultOutput =
-                      results.length === 1
-                        ? getOtherFields(results[0])
-                        : results.reduce(
-                            (prev, s) =>
-                              mergeDicts(prev, { [s.name]: getOtherFields(s) }),
-                            {},
-                          );
+                  const resultOutput =
+                    results.length === 1
+                      ? getOtherFields(results[0])
+                      : results.reduce(
+                          (prev, s) =>
+                            mergeDicts(prev, { [s.name]: getOtherFields(s) }),
+                          {},
+                        );
 
-                    const scores = results.reduce(
-                      (prev, s) => mergeDicts(prev, { [s.name]: s.score }),
-                      {},
-                    );
+                  const scores = results.reduce(
+                    (prev, s) => mergeDicts(prev, { [s.name]: s.score }),
+                    {},
+                  );
 
-                    span.log({
-                      output: resultOutput,
-                      metadata: resultMetadata,
-                      scores: scores,
-                    });
-                    return results;
+                  span.log({
+                    output: resultOutput,
+                    metadata: resultMetadata,
+                    scores: scores,
+                  });
+                  return results;
+                };
+
+                const results = await rootSpan.traced(runScorer, {
+                  name: scorerNames[score_idx],
+                  spanAttributes: {
+                    type: SpanTypeAttribute.SCORE,
                   },
-                  {
-                    name: scorerNames[score_idx],
-                    spanAttributes: {
-                      type: SpanTypeAttribute.SCORE,
-                    },
-                    event: { input: scoringArgs },
-                  },
-                );
+                  event: { input: scoringArgs },
+                });
                 return { kind: "score", value: results } as const;
               } catch (e) {
                 return { kind: "error", value: e } as const;
@@ -735,20 +1026,12 @@ async function runEvaluatorInternal(
           );
           // Resolve each promise on its own so that we can separate the passing
           // from the failing ones.
-          const passingScorersAndResults: {
-            name: string;
-            score: Score | null;
-          }[] = [];
           const failingScorersAndResults: { name: string; error: unknown }[] =
             [];
           scoreResults.forEach((results, i) => {
             const name = scorerNames[i];
             if (results.kind === "score") {
               (results.value || []).forEach((result) => {
-                passingScorersAndResults.push({
-                  name: result.name,
-                  score: result,
-                });
                 scores[result.name] = result.score;
               });
             } else {
@@ -756,6 +1039,7 @@ async function runEvaluatorInternal(
             }
           });
 
+          unhandledScores = null;
           if (failingScorersAndResults.length) {
             const scorerErrors = Object.fromEntries(
               failingScorersAndResults.map(({ name, error }) => [
@@ -764,12 +1048,15 @@ async function runEvaluatorInternal(
               ]),
             );
             metadata["scorer_errors"] = scorerErrors;
-            rootSpan.log({ metadata: { scorer_errors: scorerErrors } });
+            rootSpan.log({
+              metadata: { scorer_errors: scorerErrors },
+            });
             const names = Object.keys(scorerErrors).join(", ");
             const errors = failingScorersAndResults.map((item) => item.error);
-            throw new AggregateError(
-              errors,
+            unhandledScores = Object.keys(scorerErrors);
+            console.warn(
               `Found exceptions for the following scorers: ${names}`,
+              errors,
             );
           }
         } catch (e) {
@@ -785,33 +1072,65 @@ async function runEvaluatorInternal(
           output,
           tags: datum.tags,
           metadata,
-          scores,
+          scores: {
+            ...(evaluator.errorScoreHandler && unhandledScores
+              ? evaluator.errorScoreHandler({
+                  rootSpan,
+                  data: datum,
+                  unhandledScores,
+                })
+              : undefined),
+            ...scores,
+          },
           error,
+          origin: baseEvent.event?.origin,
         });
       };
 
       if (!experiment) {
-        return await callback(NOOP_SPAN);
-      } else {
-        return await experiment.traced(callback, {
-          name: "eval",
-          spanAttributes: {
-            type: SpanTypeAttribute.EVAL,
-          },
-          event: {
-            input: datum.input,
-            expected: "expected" in datum ? datum.expected : undefined,
-            tags: datum.tags,
-          },
+        // This will almost always be a no-op span, but it means that if the Eval
+        // is run in the context of a different type of span, it will be logged.
+        return await traced(callback, {
+          ...baseEvent,
+          state: evaluator.state,
         });
+      } else {
+        return await experiment.traced(callback, baseEvent);
       }
     },
     Math.max(evaluator.maxConcurrency ?? data.length, 1),
   );
   q.push(data);
-  await q.drain();
+
+  const cancel = async () => {
+    await new Promise((_, reject) => {
+      if (evaluator.timeout) {
+        setTimeout(() => {
+          reject(new InternalAbortError("Evaluator timed out"));
+        }, evaluator.timeout);
+      }
+      if (evaluator.signal) {
+        evaluator.signal.addEventListener("abort", () => {
+          reject(new InternalAbortError("Evaluator aborted"));
+        });
+      }
+    });
+  };
+
+  // wait for tasks to be completed or the evaluator to be cancelled
+  // if the evaluator is cancelled, the remaining tasks that have not been started will be killed
+  try {
+    await Promise.race([q.drain(), cancel()]);
+  } catch (e) {
+    if (e instanceof InternalAbortError) {
+      q.kill();
+    }
+
+    throw e;
+  }
+
   const summary = experiment
-    ? await experiment.summarize()
+    ? await experiment.summarize({ summarizeScores: evaluator.summarizeScores })
     : buildLocalSummary(evaluator, results);
 
   return new EvalResultWithSummary(summary, results);
@@ -829,7 +1148,9 @@ export function logError(e: unknown, verbose: boolean) {
 }
 
 export function buildLocalSummary(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evaluator: EvaluatorDef<any, any, any, any>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   results: EvalResult<any, any, any, any>[],
 ): ExperimentSummary {
   const scoresByName: { [name: string]: { total: number; count: number } } = {};
@@ -913,7 +1234,9 @@ export function reportFailures<
 export const defaultReporter: ReporterDef<boolean> = {
   name: "Braintrust default reporter",
   async reportEval(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     evaluator: EvaluatorDef<any, any, any, any>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     result: EvalResultWithSummary<any, any, any, any>,
     { verbose, jsonl }: ReporterOpts,
   ) {
@@ -981,11 +1304,9 @@ function formatMetricSummary(
   summary: MetricSummary,
   longestMetricName: number,
 ) {
-  const diffString = isEmpty(summary.diff)
-    ? ""
-    : ` (${summary.diff > 0 ? "+" : ""}${(summary.diff * 100).toFixed(2)}%)`;
+  const fractionDigits = Number.isInteger(summary.metric) ? 0 : 2;
   const metricName = `'${summary.name}'`.padEnd(longestMetricName + 2);
-  return `${summary.metric.toFixed(2)}${summary.unit} ${metricName}\t(${
+  return `${summary.metric.toFixed(fractionDigits)}${summary.unit} ${metricName}\t(${
     summary.improvements
   } improvements, ${summary.regressions} regressions)`;
 }

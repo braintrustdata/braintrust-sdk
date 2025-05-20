@@ -1,6 +1,6 @@
 {
   "name": "braintrust",
-  "version": "0.0.141",
+  "version": "0.0.161",
   "description": "SDK for integrating Braintrust",
   "repository": {
     "type": "git",
@@ -28,21 +28,32 @@
       "module": "./dist/index.mjs",
       "require": "./dist/index.js"
     },
-    "./ai-sdk": {
-      "types": "./ai-sdk/dist/index.d.ts",
-      "import": "./ai-sdk/dist/index.mjs",
-      "module": "./ai-sdk/dist/index.mjs",
-      "require": "./ai-sdk/dist/index.js"
+    "./browser": {
+      "import": "./dist/browser.mjs",
+      "module": "./dist/browser.mjs",
+      "require": "./dist/browser.js"
+    },
+    "./dev": {
+      "types": "./dev/dist/index.d.ts",
+      "import": "./dev/dist/index.mjs",
+      "module": "./dev/dist/index.mjs",
+      "require": "./dev/dist/index.js"
     }
   },
+  "files": [
+    "dist/**/*",
+    "dev/dist/**/*"
+  ],
   "scripts": {
     "build": "tsup",
     "watch": "tsup --watch",
-    "clean": "rm -r dist/*",
+    "clean": "rm -r dist/* && rm -r dev/dist/*",
     "docs": "npx typedoc --options typedoc.json src/index.ts",
-    "test": "vitest run",
     "prepublishOnly": "../../scripts/node_prepublish_sdk.py",
-    "postpublish": "../../scripts/node_postpublish_sdk.py"
+    "postpublish": "../../scripts/node_postpublish_sdk.py",
+    "test": "vitest run --exclude src/wrappers/anthropic.test.ts --exclude src/wrappers/oai.test.ts",
+    "test:anthropic": "vitest run src/wrappers/anthropic.test.ts",
+    "test:openai": "vitest run src/wrappers/oai.test.ts"
   },
   "author": "",
   "license": "MIT",
@@ -52,7 +63,10 @@
     "@types/argparse": "^2.0.14",
     "@types/async": "^3.2.24",
     "@types/cli-progress": "^3.11.5",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
     "@types/graceful-fs": "^4.1.9",
+    "@types/http-errors": "^2.0.4",
     "@types/mustache": "^4.2.5",
     "@types/node": "^20.10.5",
     "@types/pluralize": "^0.0.30",
@@ -61,15 +75,15 @@
     "autoevals": "^0.0.69",
     "npm-run-all": "^4.1.5",
     "ts-jest": "^29.1.4",
-    "tsup": "^8.0.1",
+    "tsup": "^8.3.5",
     "typedoc": "^0.25.4",
     "typedoc-plugin-markdown": "^3.17.1",
     "typescript": "^5.3.3",
     "vite-tsconfig-paths": "^4.3.2",
-    "vitest": "^1.6.0"
+    "vitest": "^2.1.9"
   },
   "dependencies": {
-    "@ai-sdk/provider": "^0.0.11",
+    "@ai-sdk/provider": "^1.0.1",
     "@braintrust/core": "workspace:*",
     "@next/env": "^14.2.3",
     "@vercel/functions": "^1.0.2",
@@ -77,17 +91,22 @@
     "argparse": "^2.0.1",
     "chalk": "^4.1.2",
     "cli-progress": "^3.12.0",
+    "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "esbuild": "^0.18.20",
+    "esbuild": "^0.25.4",
     "eventsource-parser": "^1.1.2",
+    "express": "^4.21.2",
     "graceful-fs": "^4.2.11",
+    "http-errors": "^2.0.0",
     "minimatch": "^9.0.3",
     "mustache": "^4.2.0",
     "pluralize": "^8.0.0",
     "simple-git": "^3.21.0",
+    "slugify": "^1.6.6",
     "source-map": "^0.7.4",
     "uuid": "^9.0.1",
-    "zod": "^3.22.4"
+    "zod": "^3.22.4",
+    "zod-to-json-schema": "^3.22.5"
   },
   "peerDependencies": {
     "zod": "^3.0.0"

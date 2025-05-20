@@ -54,12 +54,16 @@ export const objectTypes = z.enum([
   "group",
   "acl",
   "user",
+  "project_automation",
   "project_score",
   "project_tag",
+  "span_iframe",
   "function",
   "view",
   "organization",
   "api_key",
+  "ai_secret",
+  "env_var",
 ]);
 export type ObjectType = z.infer<typeof objectTypes>;
 
@@ -73,15 +77,53 @@ export const objectTypesWithEvent = z.enum([
 ]);
 export type ObjectTypeWithEvent = z.infer<typeof objectTypesWithEvent>;
 
-export function getEventObjectType(objectType: ObjectTypeWithEvent) {
+export const eventObjectType = objectTypesWithEvent
+  .exclude(["project"])
+  .or(z.enum(["project_logs"]));
+export type EventObjectType = z.infer<typeof eventObjectType>;
+
+export function getEventObjectType(
+  objectType: ObjectTypeWithEvent,
+): EventObjectType {
   return objectType === "project" ? "project_logs" : objectType;
 }
-export type EventObjectType = ReturnType<typeof getEventObjectType>;
 
 export function getEventObjectDescription(objectType: ObjectTypeWithEvent) {
   return getEventObjectType(objectType).replace("_", " ");
 }
 
 export function getObjectArticle(objectType: ObjectType) {
-  return ["acl", "api_key", "experiment"].includes(objectType) ? "an" : "a";
+  return [
+    "acl",
+    "api_key",
+    "experiment",
+    "organization",
+    "ai_secret",
+    "env_var",
+  ].includes(objectType)
+    ? "an"
+    : "a";
 }
+
+export const objectReferenceSchema = z
+  .object({
+    object_type: eventObjectType.describe(
+      "Type of the object the event is originating from.",
+    ),
+    object_id: z
+      .string()
+      .uuid()
+      .describe("ID of the object the event is originating from."),
+    id: z.string().describe("ID of the original event."),
+    _xact_id: z.string().describe("Transaction ID of the original event."),
+    created: z
+      .string()
+      .nullish()
+      .describe(
+        "Created timestamp of the original event. Used to help sort in the UI",
+      ),
+  })
+  .describe("Reference to the original object and event this was copied from.")
+  .openapi("ObjectReference");
+
+export type ObjectReference = z.infer<typeof objectReferenceSchema>;

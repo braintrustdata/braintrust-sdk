@@ -16,6 +16,11 @@
     "test": "turbo run test"
   },
   "devDependencies": {
-    "turbo": "^1.11.2"
-  }
+    "turbo": "^2.3.3",
+    "pyright": "^1.1.388"
+  },
+  "overrides": {
+    "zod": "^3.22.4"
+  },
+  "packageManager": "pnpm@8.15.5"
 }

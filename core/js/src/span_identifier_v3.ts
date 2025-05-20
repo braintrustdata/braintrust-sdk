@@ -1,9 +1,14 @@
 // Mirror of core/py/src/braintrust_core/span_identifier_v3.py.
 
 import * as uuid from "uuid";
-import { ParentExperimentIds, ParentProjectLogIds } from "./object";
+import {
+  ParentExperimentIds,
+  ParentProjectLogIds,
+  ParentPlaygroundLogIds,
+} from "./object";
 import { SpanComponentsV2 } from "./span_identifier_v2";
 import { z } from "zod";
+import { InvokeFunctionRequest } from "typespecs";
 
 function tryMakeUuid(
   s: string,
@@ -14,7 +19,7 @@ function tryMakeUuid(
       throw new Error();
     }
     return { bytes: Buffer.from(ret), isUUID: true };
-  } catch (e) {
+  } catch {
     return { bytes: undefined, isUUID: false };
   }
 }
@@ -26,9 +31,24 @@ const INVALID_ENCODING_ERRMSG = `SpanComponents string is not properly encoded. 
 export enum SpanObjectTypeV3 {
   EXPERIMENT = 1,
   PROJECT_LOGS = 2,
+  PLAYGROUND_LOGS = 3,
 }
 
 export const spanObjectTypeV3EnumSchema = z.nativeEnum(SpanObjectTypeV3);
+
+export function spanObjectTypeV3ToString(objectType: SpanObjectTypeV3): string {
+  switch (objectType) {
+    case SpanObjectTypeV3.EXPERIMENT:
+      return "experiment";
+    case SpanObjectTypeV3.PROJECT_LOGS:
+      return "project_logs";
+    case SpanObjectTypeV3.PLAYGROUND_LOGS:
+      return "playground_logs";
+    default:
+      const x: never = objectType;
+      throw new Error(`Unknown SpanObjectTypeV3: ${x}`);
+  }
+}
 
 enum InternalSpanComponentUUIDFields {
   OBJECT_ID = 1,
@@ -183,12 +203,15 @@ export class SpanComponentsV3 {
         }
       }
       return SpanComponentsV3.fromJsonObj(jsonObj);
-    } catch (e) {
+    } catch {
       throw new Error(INVALID_ENCODING_ERRMSG);
     }
   }
 
-  public objectIdFields(): ParentExperimentIds | ParentProjectLogIds {
+  public objectIdFields():
+    | ParentExperimentIds
+    | ParentProjectLogIds
+    | ParentPlaygroundLogIds {
     if (!this.data.object_id) {
       throw new Error(
         "Impossible: cannot invoke `objectIdFields` unless SpanComponentsV3 is initialized with an `object_id`",
@@ -199,7 +222,10 @@ export class SpanComponentsV3 {
         return { experiment_id: this.data.object_id };
       case SpanObjectTypeV3.PROJECT_LOGS:
         return { project_id: this.data.object_id, log_id: "g" };
+      case SpanObjectTypeV3.PLAYGROUND_LOGS:
+        return { prompt_session_id: this.data.object_id, log_id: "x" };
       default:
+        const _: never = this.data.object_type;
         throw new Error("Impossible");
     }
   }
@@ -207,4 +233,34 @@ export class SpanComponentsV3 {
   private static fromJsonObj(jsonObj: unknown): SpanComponentsV3 {
     return new SpanComponentsV3(spanComponentsV3Schema.parse(jsonObj));
   }
+}
+
+export function parseParent(
+  parent: InvokeFunctionRequest["parent"],
+): string | undefined {
+  return typeof parent === "string"
+    ? parent
+    : parent
+      ? new SpanComponentsV3({
+          object_type:
+            parent.object_type === "experiment"
+              ? SpanObjectTypeV3.EXPERIMENT
+              : parent.object_type === "playground_logs"
+                ? SpanObjectTypeV3.PLAYGROUND_LOGS
+                : SpanObjectTypeV3.PROJECT_LOGS,
+          object_id: parent.object_id,
+          ...(parent.row_ids
+            ? {
+                row_id: parent.row_ids.id,
+                span_id: parent.row_ids.span_id,
+                root_span_id: parent.row_ids.root_span_id,
+              }
+            : {
+                row_id: undefined,
+                span_id: undefined,
+                root_span_id: undefined,
+              }),
+          propagated_event: parent.propagated_event,
+        }).toStr()
+      : undefined;
 }

@@ -3,68 +3,86 @@
 import { v4 as uuidv4 } from "uuid";
 
 import {
-  IS_MERGE_FIELD,
-  TRANSACTION_ID_FIELD,
-  mergeDicts,
-  mergeRowBatch,
-  VALID_SOURCES,
-  AUDIT_SOURCE_FIELD,
-  AUDIT_METADATA_FIELD,
-  GitMetadataSettings,
-  RepoInfo,
-  mergeGitMetadataSettings,
-  TransactionId,
-  IdField,
-  ExperimentLogPartialArgs,
-  ExperimentLogFullArgs,
-  LogFeedbackFullArgs,
-  SanitizedExperimentLogPartialArgs,
-  ExperimentEvent,
-  BackgroundLogEvent,
+  _urljoin,
   AnyDatasetRecord,
-  DEFAULT_IS_LEGACY_DATASET,
-  DatasetRecord,
-  ensureDatasetRecord,
-  makeLegacyEvent,
-  constructJsonArray,
-  SpanTypeAttribute,
-  SpanType,
+  AUDIT_METADATA_FIELD,
+  AUDIT_SOURCE_FIELD,
+  BackgroundLogEvent,
   batchItems,
+  constructJsonArray,
+  DatasetRecord,
+  DEFAULT_IS_LEGACY_DATASET,
+  ensureDatasetRecord,
+  ExperimentEvent,
+  ExperimentLogFullArgs,
+  ExperimentLogPartialArgs,
+  IdField,
+  IS_MERGE_FIELD,
+  LogFeedbackFullArgs,
+  mergeDicts,
+  mergeGitMetadataSettings,
+  mergeRowBatch,
+  SanitizedExperimentLogPartialArgs,
   SpanComponentsV3,
   SpanObjectTypeV3,
-  gitMetadataSettingsSchema,
-  _urljoin,
+  spanObjectTypeV3ToString,
+  SpanType,
+  SpanTypeAttribute,
+  TRANSACTION_ID_FIELD,
+  TransactionId,
+  VALID_SOURCES,
+  isArray,
+  isObject,
 } from "@braintrust/core";
 import {
   AnyModelParam,
+  AttachmentReference,
+  BraintrustAttachmentReference,
+  ExternalAttachmentReference,
+  attachmentReferenceSchema,
+  ModelParams,
+  responseFormatJsonSchemaSchema,
+  AttachmentStatus,
+  attachmentStatusSchema,
+  BRAINTRUST_ATTACHMENT,
   BRAINTRUST_PARAMS,
-  PromptData,
-  Tools,
-  promptDataSchema,
-  promptSchema,
-  Prompt as PromptRow,
-  toolsSchema,
-  PromptSessionEvent,
-  OpenAIMessage,
+  GitMetadataSettings,
+  gitMetadataSettingsSchema,
   Message,
+  OpenAIMessage,
+  PromptData,
+  promptDataSchema,
+  Prompt as PromptRow,
+  promptSchema,
+  PromptSessionEvent,
+  RepoInfo,
+  Tools,
+  toolsSchema,
+  EXTERNAL_ATTACHMENT,
+  PromptBlockData,
 } from "@braintrust/core/typespecs";
-
-import iso, { IsoAsyncLocalStorage } from "./isomorph";
-import {
-  runCatchFinally,
-  GLOBAL_PROJECT,
-  getCurrentUnixTimestamp,
-  isEmpty,
-  LazyValue,
-} from "./util";
-import Mustache from "mustache";
-import { z } from "zod";
+import { waitUntil } from "@vercel/functions";
+import Mustache, { Context } from "mustache";
+import { z, ZodError } from "zod";
 import {
   BraintrustStream,
   createFinalValuePassThroughStream,
   devNullWritableStream,
 } from "./functions/stream";
-import { waitUntil } from "@vercel/functions";
+import iso, { IsoAsyncLocalStorage } from "./isomorph";
+import { canUseDiskCache, DiskCache } from "./prompt-cache/disk-cache";
+import { LRUCache } from "./prompt-cache/lru-cache";
+import { PromptCache } from "./prompt-cache/prompt-cache";
+import {
+  addAzureBlobHeaders,
+  getCurrentUnixTimestamp,
+  GLOBAL_PROJECT,
+  isEmpty,
+  LazyValue,
+  SyncLazyValue,
+  runCatchFinally,
+} from "./util";
+import { lintTemplate } from "./mustache-utils";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -73,6 +91,7 @@ type StartSpanEventArgs = ExperimentLogPartialArgs & Partial<IdField>;
 export type StartSpanArgs = {
   name?: string;
   type?: SpanType;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   spanAttributes?: Record<any, any>;
   startTime?: number;
   parent?: string;
@@ -86,7 +105,7 @@ export type EndSpanArgs = {
 
 export interface Exportable {
   /**
-   * Return a serialized representation of the object that can be used to start subspans in other places. See `Span.traced` for more details.
+   * Return a serialized representation of the object that can be used to start subspans in other places. See {@link Span.traced} for more details.
    */
   export(): Promise<string>;
 }
@@ -94,9 +113,7 @@ export interface Exportable {
 /**
  * A Span encapsulates logged data and metrics for a unit of work. This interface is shared by all span implementations.
  *
- * We suggest using one of the various `traced` methods, instead of creating Spans directly.
- *
- * See `Span.traced` for full details.
+ * We suggest using one of the various `traced` methods, instead of creating Spans directly. See {@link Span.traced} for full details.
  */
 export interface Span extends Exportable {
   /**
@@ -105,16 +122,31 @@ export interface Span extends Exportable {
   id: string;
 
   /**
+   * Span ID of the span.
+   */
+  spanId: string;
+
+  /**
+   * Root span ID of the span.
+   */
+  rootSpanId: string;
+
+  /**
+   * Parent span IDs of the span.
+   */
+  spanParents: string[];
+
+  /**
    * Incrementally update the current span with new data. The event will be batched and uploaded behind the scenes.
    *
-   * @param event: Data to be logged. See `Experiment.log` for full details.
+   * @param event: Data to be logged. See {@link Experiment.log} for full details.
    */
   log(event: ExperimentLogPartialArgs): void;
 
   /**
    * Add feedback to the current span. Unlike `Experiment.logFeedback` and `Logger.logFeedback`, this method does not accept an id parameter, because it logs feedback to the current span.
    *
-   * @param event: Data to be logged. See `Experiment.logFeedback` for full details.
+   * @param event: Data to be logged. See {@link Experiment.logFeedback} for full details.
    */
   logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void;
 
@@ -130,8 +162,8 @@ export interface Span extends Exportable {
    * @param args.start_time Optional start time of the span, as a timestamp in seconds.
    * @param args.setCurrent If true (the default), the span will be marked as the currently-active span for the duration of the callback.
    * @param args.parent Optional parent info string for the span. The string can be generated from `[Span,Experiment,Logger].export`. If not provided, the current span will be used (depending on context). This is useful for adding spans to an existing trace.
-   * @param args.event Data to be logged. See `Experiment.log` for full details.
-   * @Returns The result of running `callback`.
+   * @param args.event Data to be logged. See {@link Experiment.log} for full details.
+   * @returns The result of running `callback`.
    */
   traced<R>(
     callback: (span: Span) => R,
@@ -143,7 +175,7 @@ export interface Span extends Exportable {
    * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
    * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
    *
-   * See `traced` for full details.
+   * See {@link Span.traced} for full details.
    *
    * @returns The newly-created `Span`
    */
@@ -160,6 +192,30 @@ export interface Span extends Exportable {
   end(args?: EndSpanArgs): number;
 
   /**
+   * Serialize the identifiers of this span. The return value can be used to
+   * identify this span when starting a subspan elsewhere, such as another
+   * process or service, without needing to access this `Span` object. See the
+   * parameters of {@link Span.startSpan} for usage details.
+   *
+   * Callers should treat the return value as opaque. The serialization format
+   * may change from time to time. If parsing is needed, use
+   * `SpanComponentsV3.fromStr`.
+   *
+   * @returns Serialized representation of this span's identifiers.
+   */
+  export(): Promise<string>;
+
+  /**
+   * Format a permalink to the Braintrust application for viewing this span.
+   *
+   * Links can be generated at any time, but they will only become viewable
+   * after the span and its root have been flushed to the server and ingested.
+   *
+   * @returns A permalink to the span.
+   */
+  permalink(): Promise<string>;
+
+  /**
    * Flush any pending rows to the server.
    */
   flush(): Promise<void>;
@@ -174,6 +230,21 @@ export interface Span extends Exportable {
    */
   setAttributes(args: Omit<StartSpanArgs, "event">): void;
 
+  /**
+   * Start a span with a specific id and parent span ids.
+   */
+  startSpanWithParents(
+    spanId: string,
+    spanParents: string[],
+    args?: StartSpanArgs,
+  ): Span;
+
+  /*
+   * Gets the span's `state` value, which is usually the global logging state (this is
+   * for very advanced purposes only)
+   */
+  state(): BraintrustState;
+
   // For type identification.
   kind: "span";
 }
@@ -183,10 +254,17 @@ export interface Span extends Exportable {
  */
 export class NoopSpan implements Span {
   public id: string;
+  public spanId: string;
+  public rootSpanId: string;
+  public spanParents: string[];
+
   public kind: "span" = "span";
 
   constructor() {
     this.id = "";
+    this.spanId = "";
+    this.rootSpanId = "";
+    this.spanParents = [];
   }
 
   public log(_: ExperimentLogPartialArgs) {}
@@ -212,6 +290,10 @@ export class NoopSpan implements Span {
     return "";
   }
 
+  public async permalink(): Promise<string> {
+    return NOOP_SPAN_PERMALINK;
+  }
+
   public async flush(): Promise<void> {}
 
   public close(args?: EndSpanArgs): number {
@@ -219,9 +301,22 @@ export class NoopSpan implements Span {
   }
 
   public setAttributes(_args: Omit<StartSpanArgs, "event">) {}
+
+  public startSpanWithParents(
+    _spanId: string,
+    _spanParents: string[],
+    _args?: StartSpanArgs,
+  ): Span {
+    return this;
+  }
+
+  public state() {
+    return _internalGetGlobalState();
+  }
 }
 
 export const NOOP_SPAN = new NoopSpan();
+export const NOOP_SPAN_PERMALINK = "https://braintrust.dev/noop-span";
 
 // In certain situations (e.g. the cli), we want separately-compiled modules to
 // use the same state as the toplevel module. This global variable serves as a
@@ -251,12 +346,14 @@ export class BraintrustState {
   // Note: the value of IsAsyncFlush doesn't really matter here, since we
   // (safely) dynamically cast it whenever retrieving the logger.
   public currentLogger: Logger<false> | undefined;
+  public currentParent: IsoAsyncLocalStorage<string>;
   public currentSpan: IsoAsyncLocalStorage<Span>;
   // Any time we re-log in, we directly update the apiConn inside the logger.
   // This is preferable to replacing the whole logger, which would create the
   // possibility of multiple loggers floating around, which may not log in a
   // deterministic order.
-  private _bgLogger: BackgroundLogger;
+  private _bgLogger: SyncLazyValue<HTTPBackgroundLogger>;
+  private _overrideBgLogger: BackgroundLogger | null = null;
 
   public appUrl: string | null = null;
   public appPublicUrl: string | null = null;
@@ -273,10 +370,13 @@ export class BraintrustState {
   private _apiConn: HTTPConnection | null = null;
   private _proxyConn: HTTPConnection | null = null;
 
+  public promptCache: PromptCache;
+
   constructor(private loginParams: LoginOptions) {
     this.id = `${new Date().toLocaleString()}-${stateNonce++}`; // This is for debugging. uuidv4() breaks on platforms like Cloudflare.
     this.currentExperiment = undefined;
     this.currentLogger = undefined;
+    this.currentParent = iso.newAsyncLocalStorage();
     this.currentSpan = iso.newAsyncLocalStorage();
 
     if (loginParams.fetch) {
@@ -287,12 +387,26 @@ export class BraintrustState {
       await this.login({});
       return this.apiConn();
     };
-    this._bgLogger = new BackgroundLogger(
-      new LazyValue(defaultGetLogConn),
-      loginParams,
+    this._bgLogger = new SyncLazyValue(
+      () =>
+        new HTTPBackgroundLogger(new LazyValue(defaultGetLogConn), loginParams),
     );
 
     this.resetLoginInfo();
+
+    const memoryCache = new LRUCache<string, Prompt>({
+      max: Number(iso.getEnv("BRAINTRUST_PROMPT_CACHE_MEMORY_MAX")) ?? 1 << 10,
+    });
+    const diskCache = canUseDiskCache()
+      ? new DiskCache<Prompt>({
+          cacheDir:
+            iso.getEnv("BRAINTRUST_PROMPT_CACHE_DIR") ??
+            `${iso.getEnv("HOME") ?? iso.homedir!()}/.braintrust/prompt_cache`,
+          max:
+            Number(iso.getEnv("BRAINTRUST_PROMPT_CACHE_DISK_MAX")) ?? 1 << 20,
+        })
+      : undefined;
+    this.promptCache = new PromptCache({ memoryCache, diskCache });
   }
 
   public resetLoginInfo() {
@@ -324,6 +438,7 @@ export class BraintrustState {
 
     this._appConn = other._appConn;
     this._apiConn = other._apiConn;
+    this.loginReplaceApiConn(this.apiConn());
     this._proxyConn = other._proxyConn;
   }
 
@@ -367,7 +482,7 @@ export class BraintrustState {
     const serializedParsed = loginSchema.safeParse(serialized);
     if (!serializedParsed.success) {
       throw new Error(
-        `Cannot deserialize BraintrustState: ${serializedParsed.error.errors}`,
+        `Cannot deserialize BraintrustState: ${serializedParsed.error.message}`,
       );
     }
     const state = new BraintrustState({ ...opts });
@@ -408,7 +523,9 @@ export class BraintrustState {
     }
     const newState = await loginToState({
       ...this.loginParams,
-      ...loginParams,
+      ...Object.fromEntries(
+        Object.entries(loginParams).filter(([k, v]) => !isEmpty(v)),
+      ),
     });
     this.copyLoginInfo(newState);
   }
@@ -447,19 +564,56 @@ export class BraintrustState {
   }
 
   public bgLogger(): BackgroundLogger {
-    return this._bgLogger;
+    if (this._overrideBgLogger) {
+      return this._overrideBgLogger;
+    }
+    return this._bgLogger.get();
+  }
+
+  public httpLogger(): HTTPBackgroundLogger {
+    // this is called for configuration in some end-to-end tests so
+    // expose the http bg logger here.
+    return this._bgLogger.get() as HTTPBackgroundLogger;
+  }
+
+  public setOverrideBgLogger(logger: BackgroundLogger | null) {
+    this._overrideBgLogger = logger;
   }
 
   // Should only be called by the login function.
   public loginReplaceApiConn(apiConn: HTTPConnection) {
-    this._bgLogger.internalReplaceApiConn(apiConn);
+    this._bgLogger.get().internalReplaceApiConn(apiConn);
+  }
+
+  public disable() {
+    this._bgLogger.get().disable();
   }
 }
 
 let _globalState: BraintrustState;
 
-// This function should be invoked exactly once after configuring the `iso`
-// object based on the platform. See js/src/node.ts for an example.
+// Return a TestBackgroundLogger that will intercept logs before they are sent to the server.
+// Used for testing only.
+function useTestBackgroundLogger(): TestBackgroundLogger {
+  const state = _internalGetGlobalState();
+  if (!state) {
+    throw new Error("global state not set yet");
+  }
+
+  const logger = new TestBackgroundLogger();
+  state.setOverrideBgLogger(logger);
+  return logger;
+}
+
+function clearTestBackgroundLogger() {
+  _internalGetGlobalState()?.setOverrideBgLogger(null);
+}
+
+/**
+ * This function should be invoked exactly once after configuring the `iso`
+ * object based on the platform. See js/src/node.ts for an example.
+ * @internal
+ */
 export function _internalSetInitialState() {
   if (_globalState) {
     throw new Error("Cannot set initial state more than once");
@@ -470,20 +624,24 @@ export function _internalSetInitialState() {
       /*empty login options*/
     });
 }
+/**
+ * @internal
+ */
 export const _internalGetGlobalState = () => _globalState;
 
-class FailedHTTPResponse extends Error {
+export class FailedHTTPResponse extends Error {
   public status: number;
   public text: string;
-  public data: any;
+  public data: string;
 
-  constructor(status: number, text: string, data: any = null) {
-    super(`${status}: ${text}`);
+  constructor(status: number, text: string, data: string) {
+    super(`${status}: ${text} (${data})`);
     this.status = status;
     this.text = text;
     this.data = data;
   }
 }
+
 async function checkResponse(resp: Response) {
   if (resp.ok) {
     return resp;
@@ -549,24 +707,37 @@ class HTTPConnection {
 
   async get(
     path: string,
-    params: Record<string, string | undefined> | undefined = undefined,
+    params:
+      | Record<string, string | string[] | undefined>
+      | undefined = undefined,
     config?: RequestInit,
   ) {
     const { headers, ...rest } = config || {};
     const url = new URL(_urljoin(this.base_url, path));
     url.search = new URLSearchParams(
       params
-        ? (Object.fromEntries(
-            Object.entries(params).filter(([_, v]) => v !== undefined),
-          ) as Record<string, string>)
-        : {},
+        ? Object.entries(params)
+            .filter(([_, v]) => v !== undefined)
+            .flatMap(([k, v]) =>
+              v !== undefined
+                ? typeof v === "string"
+                  ? [[k, v]]
+                  : v.map((x) => [k, x])
+                : [],
+            )
+        : [],
     ).toString();
+
+    // On platforms like Cloudflare, we lose "this" when we make an async call,
+    // so we need to bind it again.
+    const this_fetch = this.fetch;
+    const this_headers = this.headers;
     return await checkResponse(
       // Using toString() here makes it work with isomorphic fetch
-      await this.fetch(url.toString(), {
+      await this_fetch(url.toString(), {
         headers: {
           Accept: "application/json",
-          ...this.headers,
+          ...this_headers,
           ...headers,
         },
         keepalive: true,
@@ -581,13 +752,19 @@ class HTTPConnection {
     config?: RequestInit,
   ) {
     const { headers, ...rest } = config || {};
+    // On platforms like Cloudflare, we lose "this" when we make an async call,
+    // so we need to bind it again.
+    const this_fetch = this.fetch;
+    const this_base_url = this.base_url;
+    const this_headers = this.headers;
+
     return await checkResponse(
-      await this.fetch(_urljoin(this.base_url, path), {
+      await this_fetch(_urljoin(this_base_url, path), {
         method: "POST",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          ...this.headers,
+          ...this_headers,
           ...headers,
         },
         body:
@@ -604,7 +781,7 @@ class HTTPConnection {
 
   async get_json(
     object_type: string,
-    args: Record<string, string | undefined> | undefined = undefined,
+    args: Record<string, string | string[] | undefined> | undefined = undefined,
     retries: number = 0,
   ) {
     const tries = retries + 1;
@@ -665,6 +842,415 @@ export interface LogOptions<IsAsyncFlush> {
 
 export type PromiseUnless<B, R> = B extends true ? R : Promise<Awaited<R>>;
 
+export interface AttachmentParams {
+  data: string | Blob | ArrayBuffer;
+  filename: string;
+  contentType: string;
+  state?: BraintrustState;
+}
+
+export interface ExternalAttachmentParams {
+  url: string;
+  filename: string;
+  contentType: string;
+  state?: BraintrustState;
+}
+
+export abstract class BaseAttachment {
+  readonly reference!: AttachmentReference;
+  abstract upload(): Promise<AttachmentStatus>;
+  abstract data(): Promise<Blob>;
+  abstract debugInfo(): Record<string, unknown>;
+}
+
+/**
+ * Represents an attachment to be uploaded and the associated metadata.
+ * `Attachment` objects can be inserted anywhere in an event, allowing you to
+ * log arbitrary file data. The SDK will asynchronously upload the file to
+ * object storage and replace the `Attachment` object with an
+ * `AttachmentReference`.
+ */
+export class Attachment extends BaseAttachment {
+  /**
+   * The object that replaces this `Attachment` at upload time.
+   */
+  readonly reference: BraintrustAttachmentReference;
+
+  private readonly uploader: LazyValue<AttachmentStatus>;
+  private readonly _data: LazyValue<Blob>;
+  private readonly state?: BraintrustState;
+  // For debug logging only.
+  private readonly dataDebugString: string;
+
+  /**
+   * Construct an attachment.
+   *
+   * @param param A parameter object with:
+   *
+   * `data`: A string representing the path of the file on disk, or a
+   * `Blob`/`ArrayBuffer` with the file's contents. The caller is responsible
+   * for ensuring the file/blob/buffer is not modified until upload is complete.
+   *
+   * `filename`: The desired name of the file in Braintrust after uploading.
+   * This parameter is for visualization purposes only and has no effect on
+   * attachment storage.
+   *
+   * `contentType`: The MIME type of the file.
+   *
+   * `state`: (Optional) For internal use.
+   */
+  constructor({ data, filename, contentType, state }: AttachmentParams) {
+    super();
+    this.reference = {
+      type: BRAINTRUST_ATTACHMENT,
+      filename,
+      content_type: contentType,
+      key: newId(),
+    };
+    this.state = state;
+    this.dataDebugString = typeof data === "string" ? data : "<in-memory data>";
+
+    this._data = this.initData(data);
+    this.uploader = this.initUploader();
+  }
+
+  /**
+   * On first access, (1) reads the attachment from disk if needed, (2)
+   * authenticates with the data plane to request a signed URL, (3) uploads to
+   * object store, and (4) updates the attachment.
+   *
+   * @returns The attachment status.
+   */
+  async upload() {
+    return await this.uploader.get();
+  }
+
+  /**
+   * The attachment contents. This is a lazy value that will read the attachment contents from disk or memory on first access.
+   */
+  async data() {
+    return this._data.get();
+  }
+
+  /**
+   * A human-readable description for logging and debugging.
+   *
+   * @returns The debug object. The return type is not stable and may change in
+   * a future release.
+   */
+  debugInfo(): Record<string, unknown> {
+    return {
+      inputData: this.dataDebugString,
+      reference: this.reference,
+      state: this.state,
+    };
+  }
+
+  private initUploader(): LazyValue<AttachmentStatus> {
+    const doUpload = async (conn: HTTPConnection, orgId: string) => {
+      const requestParams = {
+        key: this.reference.key,
+        filename: this.reference.filename,
+        content_type: this.reference.content_type,
+        org_id: orgId,
+      };
+      const [metadataPromiseResult, dataPromiseResult] =
+        await Promise.allSettled([
+          conn.post("/attachment", requestParams),
+          this._data.get(),
+        ]);
+      if (metadataPromiseResult.status === "rejected") {
+        const errorStr = JSON.stringify(metadataPromiseResult.reason);
+        throw new Error(
+          `Failed to request signed URL from API server: ${errorStr}`,
+        );
+      }
+      if (dataPromiseResult.status === "rejected") {
+        const errorStr = JSON.stringify(dataPromiseResult.reason);
+        throw new Error(`Failed to read file: ${errorStr}`);
+      }
+      const metadataResponse = metadataPromiseResult.value;
+      const data = dataPromiseResult.value;
+
+      let signedUrl: string | undefined;
+      let headers: Record<string, string>;
+      try {
+        ({ signedUrl, headers } = z
+          .object({
+            signedUrl: z.string().url(),
+            headers: z.record(z.string()),
+          })
+          .parse(await metadataResponse.json()));
+      } catch (error) {
+        if (error instanceof ZodError) {
+          const errorStr = JSON.stringify(error.flatten());
+          throw new Error(`Invalid response from API server: ${errorStr}`);
+        }
+        throw error;
+      }
+
+      addAzureBlobHeaders(headers, signedUrl);
+
+      // TODO multipart upload.
+      let objectStoreResponse: Response | undefined;
+      try {
+        objectStoreResponse = await checkResponse(
+          await fetch(signedUrl, {
+            method: "PUT",
+            headers,
+            body: data,
+          }),
+        );
+      } catch (error) {
+        if (error instanceof FailedHTTPResponse) {
+          throw new Error(
+            `Failed to upload attachment to object store: ${error.status} ${error.text} ${error.data}`,
+          );
+        }
+        throw error;
+      }
+
+      return { signedUrl, metadataResponse, objectStoreResponse };
+    };
+
+    // Catches error messages and updates the attachment status.
+    const errorWrapper = async () => {
+      const status: AttachmentStatus = { upload_status: "done" };
+
+      const state = this.state ?? _globalState;
+      await state.login({});
+
+      const conn = state.apiConn();
+      const orgId = state.orgId ?? "";
+
+      try {
+        await doUpload(conn, orgId);
+      } catch (error) {
+        status.upload_status = "error";
+        status.error_message =
+          error instanceof Error ? error.message : JSON.stringify(error);
+      }
+
+      const requestParams = {
+        key: this.reference.key,
+        org_id: orgId,
+        status,
+      };
+      const statusResponse = await conn.post(
+        "/attachment/status",
+        requestParams,
+      );
+      if (!statusResponse.ok) {
+        const errorStr = JSON.stringify(statusResponse);
+        throw new Error(`Couldn't log attachment status: ${errorStr}`);
+      }
+
+      return status;
+    };
+
+    return new LazyValue(errorWrapper);
+  }
+
+  private initData(data: string | Blob | ArrayBuffer): LazyValue<Blob> {
+    if (typeof data === "string") {
+      const readFile = iso.readFile;
+      if (!readFile) {
+        throw new Error(
+          `This platform does not support reading the filesystem. Construct the Attachment
+with a Blob/ArrayBuffer, or run the program on Node.js.`,
+        );
+      }
+      // This could stream the file in the future.
+      return new LazyValue(async () => new Blob([await readFile(data)]));
+    } else {
+      return new LazyValue(async () => new Blob([data]));
+    }
+  }
+}
+
+/**
+ * Represents an attachment that resides in an external object store and the associated metadata.
+ *
+ * `ExternalAttachment` objects can be inserted anywhere in an event, similar to
+ * `Attachment` objects, but they reference files that already exist in an external
+ * object store rather than requiring upload. The SDK will replace the `ExternalAttachment`
+ * object with an `AttachmentReference` during logging.
+ */
+export class ExternalAttachment extends BaseAttachment {
+  /**
+   * The object that replaces this `ExternalAttachment` at upload time.
+   */
+  readonly reference: ExternalAttachmentReference;
+
+  private readonly _data: LazyValue<Blob>;
+  private readonly state?: BraintrustState;
+
+  /**
+   * Construct an external attachment.
+   *
+   * @param param A parameter object with:
+   *
+   * `url`: The fully qualified URL of the file in the external object store.
+   *
+   * `filename`: The desired name of the file in Braintrust after uploading.
+   * This parameter is for visualization purposes only and has no effect on
+   * attachment storage.
+   *
+   * `contentType`: The MIME type of the file.
+   *
+   * `state`: (Optional) For internal use.
+   */
+  constructor({ url, filename, contentType, state }: ExternalAttachmentParams) {
+    super();
+    this.reference = {
+      type: EXTERNAL_ATTACHMENT,
+      filename,
+      content_type: contentType,
+      url,
+    };
+
+    this._data = this.initData();
+  }
+
+  /**
+   * For ExternalAttachment, this is a no-op since the data already resides
+   * in the external object store. It marks the attachment as already uploaded.
+   *
+   * @returns The attachment status, which will always indicate success.
+   */
+  async upload() {
+    return { upload_status: "done" as const };
+  }
+
+  /**
+   * The attachment contents. This is a lazy value that will read the attachment contents from the external object store on first access.
+   */
+  async data() {
+    return this._data.get();
+  }
+
+  /**
+   * A human-readable description for logging and debugging.
+   *
+   * @returns The debug object. The return type is not stable and may change in
+   * a future release.
+   */
+  debugInfo(): Record<string, unknown> {
+    return {
+      url: this.reference.url,
+      reference: this.reference,
+      state: this.state,
+    };
+  }
+
+  private initData(): LazyValue<Blob> {
+    return new LazyValue(async () => {
+      const readonly = new ReadonlyAttachment(this.reference, this.state);
+      return await readonly.data();
+    });
+  }
+}
+
+const attachmentMetadataSchema = z.object({
+  downloadUrl: z.string(),
+  status: attachmentStatusSchema,
+});
+
+type AttachmentMetadata = z.infer<typeof attachmentMetadataSchema>;
+
+/**
+ * A readonly alternative to `Attachment`, which can be used for fetching
+ * already-uploaded Attachments.
+ */
+export class ReadonlyAttachment {
+  /**
+   * Attachment metadata.
+   */
+  readonly reference: AttachmentReference;
+
+  private readonly _data: LazyValue<Blob>;
+  private readonly state?: BraintrustState;
+
+  /**
+   * Construct a ReadonlyAttachment.
+   *
+   * @param reference The `AttachmentReference` that should be read by the
+   * `ReadonlyAttachment` object.
+   * @param state (Optional) For internal use.
+   * @returns The new `ReadonlyAttachment` object.
+   */
+  constructor(reference: AttachmentReference, state?: BraintrustState) {
+    this.reference = reference;
+    this.state = state;
+    this._data = this.initDownloader();
+  }
+
+  /**
+   * The attachment contents. This is a lazy value that will read the attachment
+   * contents from the object store on first access.
+   */
+  async data() {
+    return this._data.get();
+  }
+
+  /**
+   * Fetch the attachment metadata, which includes a downloadUrl and a status.
+   * This will re-fetch the status each time in case it changes over time.
+   */
+  async metadata(): Promise<AttachmentMetadata> {
+    const state = this.state ?? _globalState;
+    await state.login({});
+
+    const params: Record<string, string> = {
+      filename: this.reference.filename,
+      content_type: this.reference.content_type,
+      org_id: state.orgId || "",
+    };
+    if (this.reference.type === "braintrust_attachment") {
+      params.key = this.reference.key;
+    } else if (this.reference.type === "external_attachment") {
+      params.url = this.reference.url;
+    }
+    const resp = await state.apiConn().get("/attachment", params);
+    if (!resp.ok) {
+      const errorStr = JSON.stringify(resp);
+      throw new Error(`Invalid response from API server: ${errorStr}`);
+    }
+
+    return attachmentMetadataSchema.parse(await resp.json());
+  }
+
+  /**
+   * Fetch the attachment upload status. This will re-fetch the status each time
+   * in case it changes over time.
+   */
+  async status(): Promise<AttachmentStatus> {
+    return (await this.metadata()).status;
+  }
+
+  private initDownloader(): LazyValue<Blob> {
+    const download = async () => {
+      const { downloadUrl, status } = await this.metadata();
+
+      if (status.upload_status !== "done") {
+        throw new Error(
+          `Expected attachment status "done", got "${status.upload_status}"`,
+        );
+      }
+
+      const objResponse = await fetch(downloadUrl);
+      if (objResponse.status !== 200) {
+        const error = await objResponse.text();
+        throw new Error(`Couldn't download attachment: ${error}`);
+      }
+
+      return await objResponse.blob();
+    };
+
+    return new LazyValue(download);
+  }
+}
+
 function logFeedbackImpl(
   state: BraintrustState,
   parentObjectType: SpanObjectTypeV3,
@@ -703,7 +1289,7 @@ function logFeedbackImpl(
     tags,
   });
 
-  let { metadata, ...updateEvent } = validatedEvent;
+  let { metadata, ...updateEvent } = deepCopyEvent(validatedEvent);
   updateEvent = Object.fromEntries(
     Object.entries(updateEvent).filter(([_, v]) => !isEmpty(v)),
   );
@@ -763,10 +1349,12 @@ function updateSpanImpl({
   id: string;
   event: Omit<Partial<ExperimentEvent>, "id">;
 }): void {
-  const updateEvent = validateAndSanitizeExperimentLogPartialArgs({
-    id,
-    ...event,
-  } as Partial<ExperimentEvent>);
+  const updateEvent = deepCopyEvent(
+    validateAndSanitizeExperimentLogPartialArgs({
+      id,
+      ...event,
+    } as Partial<ExperimentEvent>),
+  );
 
   const parentIds = async () =>
     new SpanComponentsV3({
@@ -789,7 +1377,7 @@ function updateSpanImpl({
  * the span may conflict with the original span.
  *
  * @param exported The output of `span.export()`.
- * @param event The event data to update the span with. See `Experiment.log` for a full list of valid fields.
+ * @param event The event data to update the span with. See {@link Experiment.log} for a full list of valid fields.
  * @param state (optional) Login state to use. If not provided, the global state will be used.
  */
 export function updateSpan({
@@ -821,6 +1409,11 @@ interface ParentSpanIds {
   rootSpanId: string;
 }
 
+interface MultiParentSpanIds {
+  parentSpanIds: string[];
+  rootSpanId: string;
+}
+
 function spanComponentsToObjectIdLambda(
   state: BraintrustState,
   components: SpanComponentsV3,
@@ -839,6 +1432,10 @@ function spanComponentsToObjectIdLambda(
       throw new Error(
         "Impossible: computeObjectMetadataArgs not supported for experiments",
       );
+    case SpanObjectTypeV3.PLAYGROUND_LOGS:
+      throw new Error(
+        "Impossible: computeObjectMetadataArgs not supported for prompt sessions",
+      );
     case SpanObjectTypeV3.PROJECT_LOGS:
       return async () =>
         (
@@ -852,6 +1449,90 @@ function spanComponentsToObjectIdLambda(
   }
 }
 
+// Utility function to resolve the object ID of a SpanComponentsV3 object. This
+// function may trigger a login to braintrust if the object ID is encoded
+// "lazily".
+export async function spanComponentsToObjectId({
+  components,
+  state,
+}: {
+  components: SpanComponentsV3;
+  state?: BraintrustState;
+}): Promise<string> {
+  return await spanComponentsToObjectIdLambda(
+    state ?? _globalState,
+    components,
+  )();
+}
+
+/**
+ * Format a permalink to the Braintrust application for viewing the span
+ * represented by the provided `slug`.
+ *
+ * Links can be generated at any time, but they will only become viewable after
+ * the span and its root have been flushed to the server and ingested.
+ *
+ * If you have a `Span` object, use {@link Span.permalink} instead.
+ *
+ * @param slug The identifier generated from {@link Span.export}.
+ * @param opts Optional arguments.
+ * @param opts.state The login state to use. If not provided, the global state will be used.
+ * @param opts.orgName The org name to use. If not provided, the org name will be inferred from the state.
+ * @param opts.appUrl The app URL to use. If not provided, the app URL will be inferred from the state.
+ * @returns A permalink to the exported span.
+ */
+export async function permalink(
+  slug: string,
+  opts?: {
+    state?: BraintrustState;
+    orgName?: string;
+    appUrl?: string;
+  },
+): Promise<string> {
+  // Noop spans have an empty slug, so return a dummy permalink.
+  if (slug === "") {
+    return NOOP_SPAN_PERMALINK;
+  }
+
+  const state = opts?.state ?? _globalState;
+  const getOrgName = async () => {
+    if (opts?.orgName) {
+      return opts.orgName;
+    }
+    await state.login({});
+    if (!state.orgName) {
+      throw new Error(
+        "Must either provide orgName explicitly or be logged in to a specific org",
+      );
+    }
+    return state.orgName;
+  };
+  const getAppUrl = async () => {
+    if (opts?.appUrl) {
+      return opts.appUrl;
+    }
+    await state.login({});
+    if (!state.appUrl) {
+      throw new Error("Must either provide appUrl explicitly or be logged in");
+    }
+    return state.appUrl;
+  };
+
+  const components = SpanComponentsV3.fromStr(slug);
+  const object_type = spanObjectTypeV3ToString(components.data.object_type);
+  const [orgName, appUrl, object_id] = await Promise.all([
+    getOrgName(),
+    getAppUrl(),
+    spanComponentsToObjectId({ components, state }),
+  ]);
+  const id = components.data.row_id;
+  if (!id) {
+    throw new Error("Span slug does not refer to an individual row");
+  }
+  const urlParams = new URLSearchParams({ object_type, object_id, id });
+  return `${appUrl}/app/${orgName}/object?${urlParams}`;
+}
+
 // IMPORTANT NOTE: This function may pass arguments which override those in the
 // main argument set, so if using this in a spread, like `SpanImpl({ ...args,
 // ...startSpanParentArgs(...)})`, make sure to put startSpanParentArgs after
@@ -862,17 +1543,18 @@ function startSpanParentArgs(args: {
   parentObjectType: SpanObjectTypeV3;
   parentObjectId: LazyValue<string>;
   parentComputeObjectMetadataArgs: Record<string, any> | undefined;
-  parentSpanIds: ParentSpanIds | undefined;
+  parentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined;
   propagatedEvent: StartSpanEventArgs | undefined;
 }): {
   parentObjectType: SpanObjectTypeV3;
   parentObjectId: LazyValue<string>;
   parentComputeObjectMetadataArgs: Record<string, any> | undefined;
-  parentSpanIds: ParentSpanIds | undefined;
+  parentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined;
   propagatedEvent: StartSpanEventArgs | undefined;
 } {
   let argParentObjectId: LazyValue<string> | undefined = undefined;
-  let argParentSpanIds: ParentSpanIds | undefined = undefined;
+  let argParentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined =
+    undefined;
   let argPropagatedEvent: StartSpanEventArgs | undefined = undefined;
   if (args.parent) {
     if (args.parentSpanIds) {
@@ -985,7 +1667,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
    * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
    * @param options Additional logging options
    * @param options.allowConcurrentWithSpans in rare cases where you need to log at the top level separately from spans on the logger elsewhere, set this to true.
-   * :returns: The `id` of the logged event.
+   * @returns The `id` of the logged event.
    */
   public log(
     event: Readonly<StartSpanEventArgs>,
@@ -1014,7 +1696,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   /**
    * Create a new toplevel span underneath the logger. The name defaults to "root".
    *
-   * See `Span.traced` for full details.
+   * See {@link Span.traced} for full details.
    */
   public traced<R>(
     callback: (span: Span) => R,
@@ -1055,7 +1737,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
    * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
    * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
    *
-   * See `traced` for full details.
+   * See {@link traced} for full details.
    */
   public startSpan(args?: StartSpanArgs): Span {
     this.calledStartSpan = true;
@@ -1064,8 +1746,10 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
 
   private startSpanImpl(args?: StartSpanArgs): Span {
     return new SpanImpl({
-      state: this.state,
       ...args,
+      // Sometimes `args` gets passed directly into this function, and it contains an undefined value for `state`.
+      // To ensure that we always use this logger's state, we override the `state` argument no matter what.
+      state: this.state,
       ...startSpanParentArgs({
         state: this.state,
         parent: args?.parent,
@@ -1087,7 +1771,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
    * @param event.scores (Optional) a dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the event.
    * @param event.expected (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not.
    * @param event.comment (Optional) an optional comment string to log about the event.
-   * @param event.metadata (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
+   * @param event.metadata (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI. Note, this metadata does not correspond to the main event itself, but rather the audit log attached to the event.
    * @param event.source (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
    */
   public logFeedback(event: LogFeedbackFullArgs): void {
@@ -1098,7 +1782,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
    * Update a span in the experiment using its id. It is important that you only update a span once the original span has been fully written and flushed,
    * since otherwise updates to the span may conflict with the original span.
    *
-   * @param event The event data to update the span with. Must include `id`. See `Experiment.log` for a full list of valid fields.
+   * @param event The event data to update the span with. Must include `id`. See {@link Experiment.log} for a full list of valid fields.
    */
   public updateSpan(
     event: Omit<Partial<ExperimentEvent>, "id"> &
@@ -1118,7 +1802,9 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
   }
 
   /**
-   * Return a serialized representation of the logger that can be used to start subspans in other places. See `Span.start_span` for more details.
+   * Return a serialized representation of the logger that can be used to start subspans in other places.
+   *
+   * See {@link Span.startSpan} for more details.
    */
   public async export(): Promise<string> {
     // Note: it is important that the object id we are checking for
@@ -1127,7 +1813,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
     // `_lazy_id` object specifically will also be marked as computed.
     return new SpanComponentsV3({
       object_type: this.parentObjectType(),
-      ...(this.computeMetadataArgs && !this.lazyId.hasComputed
+      ...(this.computeMetadataArgs && !this.lazyId.hasSucceeded
         ? { compute_object_metadata_args: this.computeMetadataArgs }
         : { object_id: await this.lazyId.get() }),
     }).toStr();
@@ -1168,18 +1854,53 @@ function now() {
 
 export interface BackgroundLoggerOpts {
   noExitFlush?: boolean;
+  onFlushError?: (error: unknown) => void;
+}
+
+interface BackgroundLogger {
+  log(items: LazyValue<BackgroundLogEvent>[]): void;
+  flush(): Promise<void>;
+}
+
+class TestBackgroundLogger implements BackgroundLogger {
+  private items: LazyValue<BackgroundLogEvent>[][] = [];
+
+  log(items: LazyValue<BackgroundLogEvent>[]): void {
+    this.items.push(items);
+  }
+
+  async flush(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  async drain(): Promise<BackgroundLogEvent[]> {
+    const items = this.items;
+    this.items = [];
+
+    // get all the values
+    const events: BackgroundLogEvent[] = [];
+    for (const item of items) {
+      for (const event of item) {
+        events.push(await event.get());
+      }
+    }
+
+    const batch = mergeRowBatch(events);
+    return batch.flat();
+  }
 }
 
 // We should only have one instance of this object per state object in
 // 'BraintrustState._bgLogger'. Be careful about spawning multiple
 // instances of this class, because concurrent BackgroundLoggers will not log to
 // the backend in a deterministic order.
-class BackgroundLogger {
+class HTTPBackgroundLogger implements BackgroundLogger {
   private apiConn: LazyValue<HTTPConnection>;
   private items: LazyValue<BackgroundLogEvent>[] = [];
   private activeFlush: Promise<void> = Promise.resolve();
   private activeFlushResolved = true;
   private activeFlushError: unknown = undefined;
+  private onFlushError?: (error: unknown) => void;
 
   public syncFlush: boolean = false;
   // 6 MB for the AWS lambda gateway (from our own testing).
@@ -1190,6 +1911,8 @@ class BackgroundLogger {
   public queueDropLoggingPeriod: number = 60;
   public failedPublishPayloadsDir: string | undefined = undefined;
   public allPublishPayloadsDir: string | undefined = undefined;
+
+  private _disabled = false;
 
   private queueDropLoggingState = {
     numDropped: 0,
@@ -1258,9 +1981,14 @@ class BackgroundLogger {
         await this.flush();
       });
     }
+    this.onFlushError = opts.onFlushError;
   }
 
   log(items: LazyValue<BackgroundLogEvent>[]) {
+    if (this._disabled) {
+      return;
+    }
+
     const [addedItems, droppedItems] = (() => {
       if (this.queueDropExceedingMaxsize === undefined) {
         return [items, []];
@@ -1292,18 +2020,25 @@ class BackgroundLogger {
     if (this.activeFlushError) {
       const err = this.activeFlushError;
       this.activeFlushError = undefined;
-      throw err;
+      if (this.syncFlush) {
+        throw err;
+      }
     }
   }
 
   private async flushOnce(args?: { batchSize?: number }): Promise<void> {
+    if (this._disabled) {
+      this.items = [];
+      return;
+    }
+
     const batchSize = args?.batchSize ?? this.defaultBatchSize;
 
     // Drain the queue.
     const wrappedItems = this.items;
     this.items = [];
 
-    const allItems = await this.unwrapLazyValues(wrappedItems);
+    const [allItems, attachments] = await this.unwrapLazyValues(wrappedItems);
     if (allItems.length === 0) {
       return;
     }
@@ -1341,6 +2076,27 @@ class BackgroundLogger {
       }
     }
 
+    const attachmentErrors: unknown[] = [];
+    // For now, upload attachments serially.
+    for (const attachment of attachments) {
+      try {
+        const result = await attachment.upload();
+        if (result.upload_status === "error") {
+          throw new Error(result.error_message);
+        }
+      } catch (error) {
+        attachmentErrors.push(error);
+      }
+    }
+    if (attachmentErrors.length === 1) {
+      throw attachmentErrors[0];
+    } else if (attachmentErrors.length > 1) {
+      throw new AggregateError(
+        attachmentErrors,
+        `Encountered the following errors while uploading attachments:`,
+      );
+    }
+
     // If more items were added while we were flushing, flush again
     if (this.items.length > 0) {
       await this.flushOnce(args);
@@ -1349,11 +2105,20 @@ class BackgroundLogger {
 
   private async unwrapLazyValues(
     wrappedItems: LazyValue<BackgroundLogEvent>[],
-  ): Promise<BackgroundLogEvent[][]> {
+  ): Promise<[BackgroundLogEvent[][], Attachment[]]> {
     for (let i = 0; i < this.numTries; ++i) {
       try {
-        const itemPromises = wrappedItems.map((x) => x.get());
-        return mergeRowBatch(await Promise.all(itemPromises));
+        const items = await Promise.all(wrappedItems.map((x) => x.get()));
+
+        // TODO(kevin): `extractAttachments` should ideally come after
+        // `mergeRowBatch`, since merge-overwriting could result in some
+        // attachments that no longer need to be uploaded. This would require
+        // modifying the merge logic to treat the Attachment object as a "leaf"
+        // rather than attempting to merge the keys of the Attachment.
+        const attachments: Attachment[] = [];
+        items.forEach((item) => extractAttachments(item, attachments));
+
+        return [mergeRowBatch(items), attachments];
       } catch (e) {
         let errmsg = "Encountered error when constructing records to flush";
         const isRetrying = i + 1 < this.numTries;
@@ -1362,7 +2127,10 @@ class BackgroundLogger {
         }
 
         console.warn(errmsg);
-        if (!isRetrying && this.syncFlush) {
+        if (!isRetrying) {
+          console.warn(
+            `Failed to construct log records to flush after ${this.numTries} attempts. Dropping batch`,
+          );
           throw e;
         } else {
           console.warn(e);
@@ -1370,17 +2138,14 @@ class BackgroundLogger {
         }
       }
     }
-    console.warn(
-      `Failed to construct log records to flush after ${this.numTries} attempts. Dropping batch`,
-    );
-    return [];
+    throw new Error("Impossible");
   }
 
   private async submitLogsRequest(items: string[]): Promise<void> {
     const conn = await this.apiConn.get();
     const dataStr = constructLogs3Data(items);
     if (this.allPublishPayloadsDir) {
-      await BackgroundLogger.writePayloadToDir({
+      await HTTPBackgroundLogger.writePayloadToDir({
         payloadDir: this.allPublishPayloadsDir,
         payload: dataStr,
       });
@@ -1392,17 +2157,7 @@ class BackgroundLogger {
       try {
         await conn.post_json("logs3", dataStr);
       } catch (e) {
-        // Fallback to legacy API. Remove once all API endpoints are updated.
-        try {
-          const legacyDataS = constructJsonArray(
-            items.map((r: any) =>
-              JSON.stringify(makeLegacyEvent(JSON.parse(r))),
-            ),
-          );
-          await conn.post_json("logs", legacyDataS);
-        } catch (e) {
-          error = e;
-        }
+        error = e;
       }
       if (error === undefined) {
         return;
@@ -1424,14 +2179,17 @@ class BackgroundLogger {
       }.${retryingText}\nError: ${errorText}`;
 
       if (!isRetrying && this.failedPublishPayloadsDir) {
-        await BackgroundLogger.writePayloadToDir({
+        await HTTPBackgroundLogger.writePayloadToDir({
           payloadDir: this.failedPublishPayloadsDir,
           payload: dataStr,
         });
         this.logFailedPayloadsDir();
       }
 
-      if (!isRetrying && this.syncFlush) {
+      if (!isRetrying) {
+        console.warn(
+          `log request failed after ${this.numTries} retries. Dropping batch`,
+        );
         throw new Error(errMsg);
       } else {
         console.warn(errMsg);
@@ -1440,11 +2198,6 @@ class BackgroundLogger {
         }
       }
     }
-
-    console.warn(
-      `log request failed after ${this.numTries} retries. Dropping batch`,
-    );
-    return;
   }
 
   private registerDroppedItemCount(numItems: number) {
@@ -1479,15 +2232,20 @@ class BackgroundLogger {
       return;
     }
     try {
-      const allItems = await this.unwrapLazyValues(wrappedItems);
+      const [allItems, allAttachments] =
+        await this.unwrapLazyValues(wrappedItems);
+
       const dataStr = constructLogs3Data(
         allItems.map((x) => JSON.stringify(x)),
       );
+      const attachmentStr = JSON.stringify(
+        allAttachments.map((a) => a.debugInfo()),
+      );
+
+      const payload = `{"data": ${dataStr}, "attachments": ${attachmentStr}}\n`;
+
       for (const payloadDir of publishPayloadsDir) {
-        await BackgroundLogger.writePayloadToDir({
-          payloadDir,
-          payload: dataStr,
-        });
+        await HTTPBackgroundLogger.writePayloadToDir({ payloadDir, payload });
       }
     } catch (e) {
       console.error(e);
@@ -1530,6 +2288,14 @@ class BackgroundLogger {
         try {
           await this.flushOnce();
         } catch (err) {
+          if (err instanceof AggregateError) {
+            for (const e of err.errors) {
+              this.onFlushError?.(e);
+            }
+          } else {
+            this.onFlushError?.(err);
+          }
+
           this.activeFlushError = err;
         } finally {
           this.activeFlushResolved = true;
@@ -1547,6 +2313,10 @@ class BackgroundLogger {
   // Should only be called by BraintrustState.
   public internalReplaceApiConn(apiConn: HTTPConnection) {
     this.apiConn = new LazyValue(async () => apiConn);
+  }
+
+  public disable() {
+    this._disabled = true;
   }
 }
 
@@ -1655,6 +2425,10 @@ export function init<IsOpen extends boolean = false>(
     repoInfo,
     state: stateArg,
   } = options;
+
+  if (!project && !projectId) {
+    throw new Error("Must specify at least one of project or projectId");
+  }
 
   if (open && update) {
     throw new Error("Cannot open and update an experiment at the same time");
@@ -1803,6 +2577,7 @@ export function init<IsOpen extends boolean = false>(
         experiment: {
           id: response.experiment.id,
           name: response.experiment.name,
+          created: response.experiment.created,
           fullInfo: response.experiment,
         },
       };
@@ -1856,7 +2631,7 @@ export function initExperiment<IsOpen extends boolean = false>(
 }
 
 /**
- * This function is deprecated. Use `init` instead.
+ * @deprecated Use {@link init} instead.
  */
 export function withExperiment<R>(
   project: string,
@@ -1871,7 +2646,7 @@ export function withExperiment<R>(
 }
 
 /**
- * This function is deprecated. Use `initLogger` instead.
+ * @deprecated Use {@link initLogger} instead.
  */
 export function withLogger<IsAsyncFlush extends boolean = false, R = void>(
   callback: (logger: Logger<IsAsyncFlush>) => R,
@@ -1893,7 +2668,9 @@ type InitDatasetOptions<IsLegacyDataset extends boolean> = FullLoginOptions & {
   description?: string;
   version?: string;
   projectId?: string;
+  metadata?: Record<string, unknown>;
   state?: BraintrustState;
+  _internal_btql?: Record<string, unknown>;
 } & UseOutputOption<IsLegacyDataset>;
 
 type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
@@ -1911,6 +2688,7 @@ type FullInitDatasetOptions<IsLegacyDataset extends boolean> = {
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API key is specified, will prompt the user to login.
  * @param options.orgName (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
  * @param options.projectId The id of the project to create the dataset in. This takes precedence over `project` if specified.
+ * @param options.metadata A dictionary with additional data about the dataset. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
  * @param options.useOutput (Deprecated) If true, records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This option will be removed in a future version of Braintrust.
  * @returns The newly created Dataset.
  */
@@ -1922,8 +2700,9 @@ export function initDataset<
 
 /**
  * Legacy form of `initDataset` which accepts the project name as the first
- * parameter, separately from the remaining options. See
- * `initDataset(options)` for full details.
+ * parameter, separately from the remaining options.
+ *
+ * See `initDataset(options)` for full details.
  */
 export function initDataset<
   IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET,
@@ -1967,8 +2746,10 @@ export function initDataset<
     fetch,
     forceLogin,
     projectId,
+    metadata,
     useOutput: legacy,
     state: stateArg,
+    _internal_btql,
   } = options;
 
   const state = stateArg ?? _globalState;
@@ -1989,6 +2770,7 @@ export function initDataset<
         project_id: projectId,
         dataset_name: dataset,
         description,
+        metadata,
       };
       const response = await state
         .appConn()
@@ -2009,11 +2791,17 @@ export function initDataset<
     },
   );
 
-  return new Dataset(stateArg ?? _globalState, lazyMetadata, version, legacy);
+  return new Dataset(
+    stateArg ?? _globalState,
+    lazyMetadata,
+    version,
+    legacy,
+    _internal_btql,
+  );
 }
 
 /**
- * This function is deprecated. Use `initDataset` instead.
+ * @deprecated Use {@link initDataset} instead.
  */
 export function withDataset<
   R,
@@ -2087,6 +2875,7 @@ type InitLoggerOptions<IsAsyncFlush> = FullLoginOptions & {
   projectId?: string;
   setCurrent?: boolean;
   state?: BraintrustState;
+  orgProjectMetadata?: OrgProjectMetadata;
 } & AsyncFlushArg<IsAsyncFlush>;
 
 /**
@@ -2095,7 +2884,7 @@ type InitLoggerOptions<IsAsyncFlush> = FullLoginOptions & {
  * @param options Additional options for configuring init().
  * @param options.projectName The name of the project to log into. If unspecified, will default to the Global project.
  * @param options.projectId The id of the project to log into. This takes precedence over projectName if specified.
- * @param options.asyncFlush If true, will log asynchronously in the background. Otherwise, will log synchronously. (false by default, to support serverless environments)
+ * @param options.asyncFlush If true, will log asynchronously in the background. Otherwise, will log synchronously. (true by default)
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
  * @param options.apiKey The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
  * key is specified, will prompt the user to login.
@@ -2104,13 +2893,13 @@ type InitLoggerOptions<IsAsyncFlush> = FullLoginOptions & {
  * @param setCurrent If true (the default), set the global current-experiment to the newly-created one.
  * @returns The newly created Logger.
  */
-export function initLogger<IsAsyncFlush extends boolean = false>(
+export function initLogger<IsAsyncFlush extends boolean = true>(
   options: Readonly<InitLoggerOptions<IsAsyncFlush>> = {},
 ) {
   const {
     projectName,
     projectId,
-    asyncFlush,
+    asyncFlush: asyncFlushArg,
     appUrl,
     apiKey,
     orgName,
@@ -2119,6 +2908,9 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
     state: stateArg,
   } = options || {};
 
+  const asyncFlush =
+    asyncFlushArg === undefined ? (true as IsAsyncFlush) : asyncFlushArg;
+
   const computeMetadataArgs = {
     project_name: projectName,
     project_id: projectId,
@@ -2126,6 +2918,7 @@ export function initLogger<IsAsyncFlush extends boolean = false>(
   const state = stateArg ?? _globalState;
   const lazyMetadata: LazyValue<OrgProjectMetadata> = new LazyValue(
     async () => {
+      // Otherwise actually log in.
       await state.login({
         orgName,
         apiKey,
@@ -2206,23 +2999,36 @@ export async function loadPrompt({
   }
 
   const state = stateArg ?? _globalState;
-
-  await state.login({
-    orgName,
-    apiKey,
-    appUrl,
-    fetch,
-    forceLogin,
-  });
-
-  const args: Record<string, string | undefined> = {
-    project_name: projectName,
-    project_id: projectId,
-    slug,
-    version,
-  };
-
-  const response = await state.apiConn().get_json("v1/prompt", args);
+  let response;
+  try {
+    await state.login({
+      orgName,
+      apiKey,
+      appUrl,
+      fetch,
+      forceLogin,
+    });
+    response = await state.apiConn().get_json("v1/prompt", {
+      project_name: projectName,
+      project_id: projectId,
+      slug,
+      version,
+    });
+  } catch (e) {
+    console.warn("Failed to load prompt, attempting to fall back to cache:", e);
+    const prompt = await state.promptCache.get({
+      slug,
+      projectId,
+      projectName,
+      version: version ?? "latest",
+    });
+    if (!prompt) {
+      throw new Error(
+        `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[projectName ?? projectId]} (not found on server or in local cache): ${e}`,
+      );
+    }
+    return prompt;
+  }
 
   if (!("objects" in response) || response.objects.length === 0) {
     throw new Error(
@@ -2237,8 +3043,16 @@ export async function loadPrompt({
   }
 
   const metadata = promptSchema.parse(response["objects"][0]);
-
-  return new Prompt(metadata, defaults || {}, noTrace);
+  const prompt = new Prompt(metadata, defaults || {}, noTrace);
+  try {
+    await state.promptCache.set(
+      { slug, projectId, projectName, version: version ?? "latest" },
+      prompt,
+    );
+  } catch (e) {
+    console.warn("Failed to set prompt in cache:", e);
+  }
+  return prompt;
 }
 
 /**
@@ -2268,6 +3082,10 @@ export interface LoginOptions {
    * If true, this event handler will _not_ be installed.
    */
   noExitFlush?: boolean;
+  /**
+   * Calls this function if there's an error in the background flusher.
+   */
+  onFlushError?: (error: unknown) => void;
 }
 
 export type FullLoginOptions = LoginOptions & {
@@ -2340,7 +3158,24 @@ export async function loginToState(options: LoginOptions = {}) {
 
   let conn = null;
 
-  if (apiKey !== undefined) {
+  if (!apiKey) {
+    throw new Error(
+      "Please specify an api key (e.g. by setting BRAINTRUST_API_KEY).",
+    );
+  } else if (apiKey === TEST_API_KEY) {
+    // This is a weird hook that lets us skip logging in and mocking out the org info.
+    const testOrgInfo = [
+      {
+        id: "test-org-id",
+        name: "test-org-name",
+        api_url: "https://braintrust.dev/fake-api-url",
+      },
+    ];
+    state.loggedIn = true;
+    state.loginToken = TEST_API_KEY;
+    _saveOrgInfo(state, testOrgInfo, testOrgInfo[0].name);
+    return state;
+  } else {
     const resp = await checkResponse(
       await fetch(_urljoin(state.appUrl, `/api/apikey/login`), {
         method: "POST",
@@ -2352,32 +3187,39 @@ export async function loginToState(options: LoginOptions = {}) {
     );
     const info = await resp.json();
 
-    _check_org_info(state, info.org_info, orgName);
+    _saveOrgInfo(state, info.org_info, orgName);
+    if (!state.apiUrl) {
+      if (orgName) {
+        throw new Error(
+          `Unable to log into organization '${orgName}'. Are you sure this credential is scoped to the organization?`,
+        );
+      } else {
+        throw new Error(
+          "Unable to log into any organization with the provided credential.",
+        );
+      }
+    }
 
     conn = state.apiConn();
     conn.set_token(apiKey);
-  } else {
-    throw new Error(
-      "Please specify an api key (e.g. by setting BRAINTRUST_API_KEY).",
-    );
+
+    if (!conn) {
+      throw new Error("Conn should be set at this point (a bug)");
+    }
+
+    conn.make_long_lived();
+
+    // Set the same token in the API
+    state.appConn().set_token(apiKey);
+    if (state.proxyUrl) {
+      state.proxyConn().set_token(apiKey);
+    }
+    state.loginToken = conn.token;
+    state.loggedIn = true;
+
+    // Replace the global logger's apiConn with this one.
+    state.loginReplaceApiConn(conn);
   }
-
-  if (!conn) {
-    throw new Error("Conn should be set at this point (a bug)");
-  }
-
-  conn.make_long_lived();
-
-  // Set the same token in the API
-  state.appConn().set_token(apiKey);
-  if (state.proxyUrl) {
-    state.proxyConn().set_token(apiKey);
-  }
-  state.loginToken = conn.token;
-  state.loggedIn = true;
-
-  // Relpace the global logger's apiConn with this one.
-  state.loginReplaceApiConn(conn);
 
   return state;
 }
@@ -2386,7 +3228,7 @@ export async function loginToState(options: LoginOptions = {}) {
 /**
  * Log a single event to the current experiment. The event will be batched and uploaded behind the scenes.
  *
- * @param event The event to log. See `Experiment.log` for full details.
+ * @param event The event to log. See {@link Experiment.log} for full details.
  * @returns The `id` of the logged event.
  */
 export function log(event: ExperimentLogFullArgs): string {
@@ -2429,7 +3271,7 @@ type OptionalStateArg = {
 };
 
 /**
- * Returns the currently-active experiment (set by `braintrust.init`). Returns undefined if no current experiment has been set.
+ * Returns the currently-active experiment (set by {@link init}). Returns undefined if no current experiment has been set.
  */
 export function currentExperiment(
   options?: OptionalStateArg,
@@ -2439,7 +3281,7 @@ export function currentExperiment(
 }
 
 /**
- * Returns the currently-active logger (set by `braintrust.initLogger`). Returns undefined if no current logger has been set.
+ * Returns the currently-active logger (set by {@link initLogger}). Returns undefined if no current logger has been set.
  */
 export function currentLogger<IsAsyncFlush extends boolean>(
   options?: AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
@@ -2451,7 +3293,7 @@ export function currentLogger<IsAsyncFlush extends boolean>(
 /**
  * Return the currently-active span for logging (set by one of the `traced` methods). If there is no active span, returns a no-op span object, which supports the same interface as spans but does no logging.
  *
- * See `Span` for full details.
+ * See {@link Span} for full details.
  */
 export function currentSpan(options?: OptionalStateArg): Span {
   const state = options?.state ?? _globalState;
@@ -2500,9 +3342,9 @@ export function logError(span: Span, error: unknown) {
  *
  * and creates a span under the first one that is active. Alternatively, if `parent` is specified, it creates a span under the specified parent row. If none of these are active, it returns a no-op span object.
  *
- * See `Span.traced` for full details.
+ * See {@link Span.traced} for full details.
  */
-export function traced<IsAsyncFlush extends boolean = false, R = void>(
+export function traced<IsAsyncFlush extends boolean = true, R = void>(
   callback: (span: Span) => R,
   args?: StartSpanArgs &
     SetCurrentArg &
@@ -2528,7 +3370,7 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
 
   type Ret = PromiseUnless<IsAsyncFlush, R>;
 
-  if (args?.asyncFlush) {
+  if (args?.asyncFlush === undefined || args?.asyncFlush) {
     return ret as Ret;
   } else {
     return (async () => {
@@ -2565,7 +3407,7 @@ export function traced<IsAsyncFlush extends boolean = false, R = void>(
  */
 export function wrapTraced<
   F extends (...args: any[]) => any,
-  IsAsyncFlush extends boolean = false,
+  IsAsyncFlush extends boolean = true,
 >(
   fn: F,
   args?: StartSpanArgs & SetCurrentArg & AsyncFlushArg<IsAsyncFlush>,
@@ -2641,9 +3483,9 @@ export const traceable = wrapTraced;
  * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
  * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
  *
- * See `traced` for full details.
+ * See {@link traced} for full details.
  */
-export function startSpan<IsAsyncFlush extends boolean = false>(
+export function startSpan<IsAsyncFlush extends boolean = true>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
 ): Span {
   return startSpanAndIsLogger(args).span;
@@ -2667,12 +3509,18 @@ export function setFetch(fetch: typeof globalThis.fetch): void {
   _globalState.setFetch(fetch);
 }
 
-function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
+function startSpanAndIsLogger<IsAsyncFlush extends boolean = true>(
   args?: StartSpanArgs & AsyncFlushArg<IsAsyncFlush> & OptionalStateArg,
 ): { span: Span; isSyncFlushLogger: boolean } {
   const state = args?.state ?? _globalState;
-  if (args?.parent) {
-    const components = SpanComponentsV3.fromStr(args?.parent);
+
+  const parentStr = args?.parent ?? state.currentParent.getStore();
+
+  const components: SpanComponentsV3 | undefined = parentStr
+    ? SpanComponentsV3.fromStr(parentStr)
+    : undefined;
+
+  if (components) {
     const parentSpanIds: ParentSpanIds | undefined = components.data.row_id
       ? {
           spanId: components.data.span_id,
@@ -2691,6 +3539,7 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
       parentSpanIds,
       propagatedEvent:
         args?.propagatedEvent ??
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         ((components.data.propagated_event ?? undefined) as
           | StartSpanEventArgs
           | undefined),
@@ -2701,7 +3550,7 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
         components.data.object_type === SpanObjectTypeV3.PROJECT_LOGS &&
         // Since there's no parent logger here, we're free to choose the async flush
         // behavior, and therefore propagate along whatever we get from the arguments
-        !args?.asyncFlush,
+        args?.asyncFlush === false,
     };
   } else {
     const parentObject = getSpanParentObject<IsAsyncFlush>({
@@ -2711,7 +3560,7 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
     return {
       span,
       isSyncFlushLogger:
-        parentObject.kind === "logger" && !parentObject.asyncFlush,
+        parentObject.kind === "logger" && parentObject.asyncFlush === false,
     };
   }
 }
@@ -2722,12 +3571,20 @@ function startSpanAndIsLogger<IsAsyncFlush extends boolean = false>(
 export function withCurrent<R>(
   span: Span,
   callback: (span: Span) => R,
-  state: BraintrustState = _globalState,
+  state: BraintrustState | undefined = undefined,
 ): R {
-  return state.currentSpan.run(span, () => callback(span));
+  return (state ?? _globalState).currentSpan.run(span, () => callback(span));
 }
 
-function _check_org_info(
+export function withParent<R>(
+  parent: string,
+  callback: () => R,
+  state: BraintrustState | undefined = undefined,
+): R {
+  return (state ?? _globalState).currentParent.run(parent, () => callback());
+}
+
+function _saveOrgInfo(
   state: BraintrustState,
   org_info: any,
   org_name: string | undefined,
@@ -2837,6 +3694,110 @@ function validateAndSanitizeExperimentLogPartialArgs(
   }
 }
 
+/**
+ * Creates a deep copy of the given event. Replaces references to user objects
+ * with placeholder strings to ensure serializability, except for
+ * {@link Attachment} and {@link ExternalAttachment} objects, which are preserved
+ * and not deep-copied.
+ */
+function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
+  const attachments: BaseAttachment[] = [];
+  const IDENTIFIER = "_bt_internal_saved_attachment";
+  const savedAttachmentSchema = z.strictObject({ [IDENTIFIER]: z.number() });
+
+  // We both check for serializability and round-trip `event` through JSON in
+  // order to create a "deep copy". This has the benefit of cutting out any
+  // reference to user objects when the object is logged asynchronously, so that
+  // in case the objects are modified, the logging is unaffected. In the future,
+  // this could be changed to a "real" deep copy so that immutable types (long
+  // strings) do not have to be copied.
+  const serialized = JSON.stringify(event, (_k, v) => {
+    if (v instanceof SpanImpl || v instanceof NoopSpan) {
+      return `<span>`;
+    } else if (v instanceof Experiment) {
+      return `<experiment>`;
+    } else if (v instanceof Dataset) {
+      return `<dataset>`;
+    } else if (v instanceof Logger) {
+      return `<logger>`;
+    } else if (v instanceof BaseAttachment) {
+      const idx = attachments.push(v);
+      return { [IDENTIFIER]: idx - 1 };
+    } else if (v instanceof ReadonlyAttachment) {
+      return v.reference;
+    }
+    return v;
+  });
+  const x = JSON.parse(serialized, (_k, v) => {
+    const parsedAttachment = savedAttachmentSchema.safeParse(v);
+    if (parsedAttachment.success) {
+      return attachments[parsedAttachment.data[IDENTIFIER]];
+    }
+    return v;
+  });
+  return x;
+}
+
+/**
+ * Helper function for uploading attachments. Recursively extracts `Attachment`
+ * and `ExternalAttachment` objects and replaces them with their associated
+ * `AttachmentReference` objects.
+ *
+ * @param event The event to filter. Will be modified in-place.
+ * @param attachments Flat array of extracted attachments (output parameter).
+ */
+function extractAttachments(
+  event: Record<string, any>,
+  attachments: BaseAttachment[],
+): void {
+  for (const [key, value] of Object.entries(event)) {
+    // Base case: Attachment or ExternalAttachment.
+    if (value instanceof BaseAttachment) {
+      attachments.push(value);
+      event[key] = value.reference;
+      continue; // Attachment cannot be nested.
+    }
+
+    // Base case: non-object.
+    if (!(value instanceof Object)) {
+      continue; // Nothing to explore recursively.
+    }
+
+    // Recursive case: object or array.
+    extractAttachments(value, attachments);
+  }
+}
+
+/**
+ * Recursively hydrates any `AttachmentReference` into `Attachment` by modifying
+ * the input in-place.
+ *
+ * @returns The same event instance as the input.
+ */
+function enrichAttachments<T extends Record<string, any>>(
+  event: T,
+  state: BraintrustState | undefined,
+): T {
+  for (const [key, value] of Object.entries(event)) {
+    // Base case: AttachmentReference.
+    const parsedValue = attachmentReferenceSchema.safeParse(value);
+    if (parsedValue.success) {
+      (event as any)[key] = new ReadonlyAttachment(parsedValue.data, state);
+      continue;
+    }
+
+    // Base case: non-object.
+    if (!(value instanceof Object)) {
+      continue;
+    }
+
+    // Recursive case: object or array:
+    enrichAttachments(value, state);
+  }
+
+  return event;
+}
+
 // Note that this only checks properties that are expected of a complete event.
 // validateAndSanitizeExperimentLogPartialArgs should still be invoked (after
 // handling special fields like 'id').
@@ -2878,6 +3839,9 @@ export type WithTransactionId<R> = R & {
   [TRANSACTION_ID_FIELD]: TransactionId;
 };
 
+export const INTERNAL_BTQL_LIMIT = 1000;
+const MAX_BTQL_ITERATIONS = 10000;
+
 class ObjectFetcher<RecordType>
   implements AsyncIterable<WithTransactionId<RecordType>>
 {
@@ -2886,7 +3850,9 @@ class ObjectFetcher<RecordType>
   constructor(
     private objectType: "dataset" | "experiment",
     private pinnedVersion: string | undefined,
-    private mutateRecord?: (r: any) => RecordType,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private mutateRecord?: (r: any) => WithTransactionId<RecordType>,
+    private _internal_btql?: Record<string, unknown>,
   ) {}
 
   public get id(): Promise<string> {
@@ -2911,14 +3877,52 @@ class ObjectFetcher<RecordType>
   async fetchedData() {
     if (this._fetchedData === undefined) {
       const state = await this.getState();
-      const resp = await state.apiConn().get(
-        `v1/${this.objectType}/${await this.id}/fetch`,
-        {
-          version: this.pinnedVersion,
-        },
-        { headers: { "Accept-Encoding": "gzip" } },
-      );
-      const data = (await resp.json()).events;
+      let data: WithTransactionId<RecordType>[] | undefined = undefined;
+      let cursor = undefined;
+      let iterations = 0;
+      while (true) {
+        const resp = await state.apiConn().post(
+          `btql`,
+          {
+            query: {
+              ...this._internal_btql,
+              select: [
+                {
+                  op: "star",
+                },
+              ],
+              from: {
+                op: "function",
+                name: {
+                  op: "ident",
+                  name: [this.objectType],
+                },
+                args: [
+                  {
+                    op: "literal",
+                    value: await this.id,
+                  },
+                ],
+              },
+              cursor,
+              limit: INTERNAL_BTQL_LIMIT,
+            },
+            use_columnstore: false,
+            brainstore_realtime: true,
+          },
+          { headers: { "Accept-Encoding": "gzip" } },
+        );
+        const respJson = await resp.json();
+        data = (data ?? []).concat(respJson.data);
+        if (!respJson.cursor) {
+          break;
+        }
+        cursor = respJson.cursor;
+        iterations++;
+        if (iterations > MAX_BTQL_ITERATIONS) {
+          throw new Error("Too many BTQL iterations");
+        }
+      }
       this._fetchedData = this.mutateRecord
         ? data?.map(this.mutateRecord)
         : data;
@@ -2952,8 +3956,14 @@ export type DefaultMetadataType = void;
 export type EvalCase<Input, Expected, Metadata> = {
   input: Input;
   tags?: string[];
-} & (Expected extends void ? {} : { expected: Expected }) &
-  (Metadata extends void ? {} : { metadata: Metadata });
+  // These fields are only set if the EvalCase is part of a Dataset.
+  id?: string;
+  _xact_id?: TransactionId;
+  created?: string | null;
+  // This field is used to help re-run a particular experiment row.
+  upsert_id?: string;
+} & (Expected extends void ? object : { expected: Expected }) &
+  (Metadata extends void ? object : { metadata: Metadata });
 
 /**
  * An experiment is a collection of logged events, such as model inputs and outputs, which represent
@@ -2979,14 +3989,14 @@ export class Experiment
   private state: BraintrustState;
 
   // For type identification.
-  public kind: "experiment" = "experiment";
+  public kind = "experiment" as const;
 
   constructor(
     state: BraintrustState,
     lazyMetadata: LazyValue<ProjectExperimentMetadata>,
     dataset?: AnyDataset,
   ) {
-    super("experiment", undefined);
+    super("experiment", undefined, (r) => enrichAttachments(r, state));
     this.lazyMetadata = lazyMetadata;
     this.dataset = dataset;
     this.lastStartTime = getCurrentUnixTimestamp();
@@ -3035,11 +4045,10 @@ export class Experiment
    * @param event.metadata: (Optional) a dictionary with additional data about the test example, model outputs, or just about anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
    * @param event.metrics: (Optional) a dictionary of metrics to log. The following keys are populated automatically: "start", "end".
    * @param event.id: (Optional) a unique identifier for the event. If you don't provide one, BrainTrust will generate one for you.
-   * @param event.dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset.
-   * @param event.inputs: (Deprecated) the same as `input` (will be removed in a future version).
+   * @param event.dataset_record_id: (Optional) the id of the dataset record that this event is associated with. This field is required if and only if the experiment is associated with a dataset. This field is unused and will be removed in a future version.
    * @param options Additional logging options
    * @param options.allowConcurrentWithSpans in rare cases where you need to log at the top level separately from spans on the experiment elsewhere, set this to true.
-   * :returns: The `id` of the logged event.
+   * @returns The `id` of the logged event.
    */
   public log(
     event: Readonly<ExperimentLogFullArgs>,
@@ -3060,7 +4069,7 @@ export class Experiment
   /**
    * Create a new toplevel span underneath the experiment. The name defaults to "root".
    *
-   * See `Span.traced` for full details.
+   * See {@link Span.traced} for full details.
    */
   public traced<R>(
     callback: (span: Span) => R,
@@ -3092,7 +4101,7 @@ export class Experiment
    * where you cannot use callbacks. However, spans started with `startSpan` will not be marked as the "current span",
    * so `currentSpan()` and `traced()` will be no-ops. If you want to mark a span as current, use `traced` instead.
    *
-   * See `traced` for full details.
+   * See {@link traced} for full details.
    */
   public startSpan(args?: StartSpanArgs): Span {
     this.calledStartSpan = true;
@@ -3101,8 +4110,10 @@ export class Experiment
 
   private startSpanImpl(args?: StartSpanArgs): Span {
     return new SpanImpl({
-      state: this.state,
       ...args,
+      // Sometimes `args` gets passed directly into this function, and it contains an undefined value for `state`.
+      // To ensure that we always use this experiment's state, we override the `state` argument no matter what.
+      state: this.state,
       ...startSpanParentArgs({
         state: this.state,
         parent: args?.parent,
@@ -3157,7 +4168,6 @@ export class Experiment
     let { summarizeScores = true, comparisonExperimentId = undefined } =
       options || {};
 
-    await this.flush();
     const state = await this.getState();
     const projectUrl = `${state.appPublicUrl}/app/${encodeURIComponent(
       state.orgName!,
@@ -3170,6 +4180,7 @@ export class Experiment
     let metrics: Record<string, MetricSummary> | undefined = undefined;
     let comparisonExperimentName = undefined;
     if (summarizeScores) {
+      await this.flush();
       if (comparisonExperimentId === undefined) {
         const baseExperiment = await this.fetchBaseExperiment();
         if (baseExperiment !== null) {
@@ -3178,17 +4189,25 @@ export class Experiment
         }
       }
 
-      const results = await state.apiConn().get_json(
-        "/experiment-comparison2",
-        {
-          experiment_id: await this.id,
-          base_experiment_id: comparisonExperimentId,
-        },
-        3,
-      );
+      try {
+        const results = await state.apiConn().get_json(
+          "/experiment-comparison2",
+          {
+            experiment_id: await this.id,
+            base_experiment_id: comparisonExperimentId,
+          },
+          3,
+        );
 
-      scores = results["scores"];
-      metrics = results["metrics"];
+        scores = results["scores"];
+        metrics = results["metrics"];
+      } catch (e) {
+        console.warn(
+          `Failed to fetch experiment scores and metrics: ${e}\n\nView complete results in Braintrust or run experiment.summarize() again.`,
+        );
+        scores = {};
+        metrics = {};
+      }
     }
 
     return {
@@ -3200,7 +4219,7 @@ export class Experiment
       experimentUrl: experimentUrl,
       comparisonExperimentName: comparisonExperimentName,
       scores: scores ?? {},
-      metrics: metrics,
+      metrics: metrics ?? {},
     };
   }
 
@@ -3212,7 +4231,7 @@ export class Experiment
    * @param event.scores (Optional) a dictionary of numeric values (between 0 and 1) to log. These scores will be merged into the existing scores for the event.
    * @param event.expected (Optional) the ground truth value (an arbitrary, JSON serializable object) that you'd compare to `output` to determine if your `output` value is correct or not.
    * @param event.comment (Optional) an optional comment string to log about the event.
-   * @param event.metadata (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI.
+   * @param event.metadata (Optional) a dictionary with additional data about the feedback. If you have a `user_id`, you can log it here and access it in the Braintrust UI. Note, this metadata does not correspond to the main event itself, but rather the audit log attached to the event.
    * @param event.source (Optional) the source of the feedback. Must be one of "external" (default), "app", or "api".
    */
   public logFeedback(event: LogFeedbackFullArgs): void {
@@ -3223,7 +4242,7 @@ export class Experiment
    * Update a span in the experiment using its id. It is important that you only update a span once the original span has been fully written and flushed,
    * since otherwise updates to the span may conflict with the original span.
    *
-   * @param event The event data to update the span with. Must include `id`. See `Experiment.log` for a full list of valid fields.
+   * @param event The event data to update the span with. Must include `id`. See {@link Experiment.log} for a full list of valid fields.
    */
   public updateSpan(
     event: Omit<Partial<ExperimentEvent>, "id"> &
@@ -3243,7 +4262,9 @@ export class Experiment
   }
 
   /**
-   * Return a serialized representation of the experiment that can be used to start subspans in other places. See `Span.start_span` for more details.
+   * Return a serialized representation of the experiment that can be used to start subspans in other places.
+   *
+   * See {@link Span.startSpan} for more details.
    */
   public async export(): Promise<string> {
     return new SpanComponentsV3({
@@ -3260,7 +4281,7 @@ export class Experiment
   }
 
   /**
-   * This function is deprecated. You can simply remove it from your code.
+   * @deprecated This function is deprecated. You can simply remove it from your code.
    */
   public async close(): Promise<string> {
     console.warn(
@@ -3278,7 +4299,7 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     private state: BraintrustState,
     private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>,
   ) {
-    super("experiment", undefined);
+    super("experiment", undefined, (r) => enrichAttachments(r, state));
   }
 
   public get id(): Promise<string> {
@@ -3303,6 +4324,7 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     EvalCase<Input, Expected, void>
   > {
     const records = this.fetch();
+
     for await (const record of records) {
       if (record.root_span_id !== record.span_id) {
         continue;
@@ -3334,12 +4356,12 @@ export function newId() {
 }
 
 /**
- * Primary implementation of the `Span` interface. See the `Span` interface for full details on each method.
+ * Primary implementation of the `Span` interface. See {@link Span} for full details on each method.
  *
- * We suggest using one of the various `traced` methods, instead of creating Spans directly. See `Span.startSpan` for full details.
+ * We suggest using one of the various `traced` methods, instead of creating Spans directly. See {@link Span.startSpan} for full details.
  */
 export class SpanImpl implements Span {
-  private state: BraintrustState;
+  private _state: BraintrustState;
 
   private isMerge: boolean;
   private loggedEndTime: number | undefined;
@@ -3350,9 +4372,9 @@ export class SpanImpl implements Span {
   private parentObjectId: LazyValue<string>;
   private parentComputeObjectMetadataArgs: Record<string, any> | undefined;
   private _id: string;
-  private spanId: string;
-  private rootSpanId: string;
-  private spanParents: string[] | undefined;
+  private _spanId: string;
+  private _rootSpanId: string;
+  private _spanParents: string[] | undefined;
 
   public kind: "span" = "span";
 
@@ -3362,11 +4384,12 @@ export class SpanImpl implements Span {
       parentObjectType: SpanObjectTypeV3;
       parentObjectId: LazyValue<string>;
       parentComputeObjectMetadataArgs: Record<string, any> | undefined;
-      parentSpanIds: ParentSpanIds | undefined;
+      parentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined;
       defaultRootType?: SpanType;
+      spanId?: string;
     } & Omit<StartSpanArgs, "parent">,
   ) {
-    this.state = args.state;
+    this._state = args.state;
 
     const spanAttributes = args.spanAttributes ?? {};
     const rawEvent = args.event ?? {};
@@ -3417,13 +4440,16 @@ export class SpanImpl implements Span {
     };
 
     this._id = eventId ?? uuidv4();
-    this.spanId = uuidv4();
+    this._spanId = args.spanId ?? uuidv4();
     if (args.parentSpanIds) {
-      this.rootSpanId = args.parentSpanIds.rootSpanId;
-      this.spanParents = [args.parentSpanIds.spanId];
+      this._rootSpanId = args.parentSpanIds.rootSpanId;
+      this._spanParents =
+        "parentSpanIds" in args.parentSpanIds
+          ? args.parentSpanIds.parentSpanIds
+          : [args.parentSpanIds.spanId];
     } else {
-      this.rootSpanId = this.spanId;
-      this.spanParents = undefined;
+      this._rootSpanId = this._spanId;
+      this._spanParents = undefined;
     }
 
     // The first log is a replacement, but subsequent logs to the same span
@@ -3437,8 +4463,24 @@ export class SpanImpl implements Span {
     return this._id;
   }
 
+  public get spanId(): string {
+    return this._spanId;
+  }
+
+  public get rootSpanId(): string {
+    return this._rootSpanId;
+  }
+
+  public get spanParents(): string[] {
+    return this._spanParents ?? [];
+  }
+
   public setAttributes(args: Omit<StartSpanArgs, "event">): void {
     this.logInternal({ internalData: { span_attributes: args } });
+  }
+
+  public setSpanParents(parents: string[]): void {
+    this.logInternal({ internalData: { span_parents: parents } });
   }
 
   public log(event: ExperimentLogPartialArgs): void {
@@ -3459,37 +4501,21 @@ export class SpanImpl implements Span {
       internalData,
     });
 
-    // We both check for serializability and round-trip `partialRecord` through
-    // JSON in order to create a "deep copy". This has the benefit of cutting
-    // out any reference to user objects when the object is logged
-    // asynchronously, so that in case the objects are modified, the logging is
-    // unaffected.
-    let partialRecord = {
+    // Deep copy mutable user data.
+    const partialRecord = deepCopyEvent({
       id: this.id,
-      span_id: this.spanId,
-      root_span_id: this.rootSpanId,
-      span_parents: this.spanParents,
+      span_id: this._spanId,
+      root_span_id: this._rootSpanId,
+      span_parents: this._spanParents,
       ...serializableInternalData,
       [IS_MERGE_FIELD]: this.isMerge,
-    };
-    const serializedPartialRecord = JSON.stringify(partialRecord, (_k, v) => {
-      if (v instanceof SpanImpl) {
-        return `<span>`;
-      } else if (v instanceof Experiment) {
-        return `<experiment>`;
-      } else if (v instanceof Dataset) {
-        return `<dataset>`;
-      } else if (v instanceof Logger) {
-        return `<logger>`;
-      }
-      return v;
     });
-    partialRecord = JSON.parse(serializedPartialRecord);
+
     if (partialRecord.metrics?.end) {
       this.loggedEndTime = partialRecord.metrics?.end as number;
     }
 
-    if ((partialRecord.tags ?? []).length > 0 && this.spanParents?.length) {
+    if ((partialRecord.tags ?? []).length > 0 && this._spanParents?.length) {
       throw new Error("Tags can only be logged to the root span");
     }
 
@@ -3508,11 +4534,11 @@ export class SpanImpl implements Span {
         object_id: await this.parentObjectId.get(),
       }).objectIdFields(),
     });
-    this.state.bgLogger().log([new LazyValue(computeRecord)]);
+    this._state.bgLogger().log([new LazyValue(computeRecord)]);
   }
 
   public logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void {
-    logFeedbackImpl(this.state, this.parentObjectType, this.parentObjectId, {
+    logFeedbackImpl(this._state, this.parentObjectType, this.parentObjectId, {
       ...event,
       id: this.id,
     });
@@ -3543,12 +4569,12 @@ export class SpanImpl implements Span {
   public startSpan(args?: StartSpanArgs): Span {
     const parentSpanIds: ParentSpanIds | undefined = args?.parent
       ? undefined
-      : { spanId: this.spanId, rootSpanId: this.rootSpanId };
+      : { spanId: this._spanId, rootSpanId: this._rootSpanId };
     return new SpanImpl({
-      state: this.state,
+      state: this._state,
       ...args,
       ...startSpanParentArgs({
-        state: this.state,
+        state: this._state,
         parent: args?.parent,
         parentObjectType: this.parentObjectType,
         parentObjectId: this.parentObjectId,
@@ -3556,6 +4582,31 @@ export class SpanImpl implements Span {
         parentSpanIds,
         propagatedEvent: args?.propagatedEvent ?? this.propagatedEvent,
       }),
+    });
+  }
+
+  public startSpanWithParents(
+    spanId: string,
+    spanParents: string[],
+    args?: StartSpanArgs,
+  ): Span {
+    const parentSpanIds: MultiParentSpanIds = {
+      parentSpanIds: spanParents,
+      rootSpanId: this._rootSpanId,
+    };
+    return new SpanImpl({
+      state: this._state,
+      ...args,
+      ...startSpanParentArgs({
+        state: this._state,
+        parent: args?.parent,
+        parentObjectType: this.parentObjectType,
+        parentObjectId: this.parentObjectId,
+        parentComputeObjectMetadataArgs: this.parentComputeObjectMetadataArgs,
+        parentSpanIds,
+        propagatedEvent: args?.propagatedEvent ?? this.propagatedEvent,
+      }),
+      spanId,
     });
   }
 
@@ -3576,22 +4627,32 @@ export class SpanImpl implements Span {
     return new SpanComponentsV3({
       object_type: this.parentObjectType,
       ...(this.parentComputeObjectMetadataArgs &&
-      !this.parentObjectId.hasComputed
+      !this.parentObjectId.hasSucceeded
         ? { compute_object_metadata_args: this.parentComputeObjectMetadataArgs }
         : { object_id: await this.parentObjectId.get() }),
       row_id: this.id,
-      span_id: this.spanId,
-      root_span_id: this.rootSpanId,
+      span_id: this._spanId,
+      root_span_id: this._rootSpanId,
       propagated_event: this.propagatedEvent,
     }).toStr();
   }
 
+  public async permalink(): Promise<string> {
+    return await permalink(await this.export(), {
+      state: this._state,
+    });
+  }
+
   async flush(): Promise<void> {
-    return await this.state.bgLogger().flush();
+    return await this._state.bgLogger().flush();
   }
 
   public close(args?: EndSpanArgs): number {
     return this.end(args);
+  }
+
+  public state(): BraintrustState {
+    return this._state;
   }
 }
 
@@ -3624,18 +4685,18 @@ function splitLoggingData({
     if (value instanceof BraintrustStream) {
       const streamCopy = value.copy();
       lazyInternalData[key] = new LazyValue(async () => {
-        return await new Promise((resolve) => {
+        return await new Promise((resolve, reject) => {
           streamCopy
             .toReadableStream()
-            .pipeThrough(createFinalValuePassThroughStream(resolve))
+            .pipeThrough(createFinalValuePassThroughStream(resolve, reject))
             .pipeTo(devNullWritableStream());
         });
       });
     } else if (value instanceof ReadableStream) {
       lazyInternalData[key] = new LazyValue(async () => {
-        return await new Promise((resolve) => {
+        return await new Promise((resolve, reject) => {
           value
-            .pipeThrough(createFinalValuePassThroughStream(resolve))
+            .pipeThrough(createFinalValuePassThroughStream(resolve, reject))
             .pipeTo(devNullWritableStream());
         });
       });
@@ -3658,13 +4719,17 @@ export class Dataset<
   IsLegacyDataset extends boolean = typeof DEFAULT_IS_LEGACY_DATASET,
 > extends ObjectFetcher<DatasetRecord<IsLegacyDataset>> {
   private readonly lazyMetadata: LazyValue<ProjectDatasetMetadata>;
+  private readonly __braintrust_dataset_marker = true;
+  private newRecords = 0;
 
   constructor(
     private state: BraintrustState,
     lazyMetadata: LazyValue<ProjectDatasetMetadata>,
     pinnedVersion?: string,
     legacy?: IsLegacyDataset,
+    _internal_btql?: Record<string, unknown>,
   ) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const isLegacyDataset = (legacy ??
       DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
     if (isLegacyDataset) {
@@ -3672,8 +4737,16 @@ export class Dataset<
         `Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use \`braintrust.initDataset()\` with \`{ useOutput: false }\`, which will become the default in a future version of Braintrust.`,
       );
     }
-    super("dataset", pinnedVersion, (r: AnyDatasetRecord) =>
-      ensureDatasetRecord(r, isLegacyDataset),
+    super(
+      "dataset",
+      pinnedVersion,
+      (r: AnyDatasetRecord) =>
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        ensureDatasetRecord(
+          enrichAttachments(r, this.state),
+          isLegacyDataset,
+        ) as WithTransactionId<DatasetRecord<IsLegacyDataset>>,
+      _internal_btql,
     );
     this.lazyMetadata = lazyMetadata;
   }
@@ -3700,6 +4773,76 @@ export class Dataset<
     // Ensure the login state is populated by awaiting lazyMetadata.
     await this.lazyMetadata.get();
     return this.state;
+  }
+
+  private validateEvent({
+    metadata,
+    expected,
+    output,
+    tags,
+  }: {
+    metadata?: Record<string, unknown>;
+    expected?: unknown;
+    output?: unknown;
+    tags?: string[];
+  }) {
+    if (metadata !== undefined) {
+      for (const key of Object.keys(metadata)) {
+        if (typeof key !== "string") {
+          throw new Error("metadata keys must be strings");
+        }
+      }
+    }
+
+    if (expected !== undefined && output !== undefined) {
+      throw new Error(
+        "Only one of expected or output (deprecated) can be specified. Prefer expected.",
+      );
+    }
+
+    if (tags) {
+      validateTags(tags);
+    }
+  }
+
+  private createArgs({
+    id,
+    input,
+    expected,
+    metadata,
+    tags,
+    output,
+    isMerge,
+  }: {
+    id: string;
+    input?: unknown;
+    expected?: unknown;
+    metadata?: Record<string, unknown>;
+    tags?: string[];
+    output?: unknown;
+    isMerge?: boolean;
+  }): LazyValue<BackgroundLogEvent> {
+    return new LazyValue(async () => {
+      const dataset_id = await this.id;
+      const expectedValue = expected === undefined ? output : expected;
+
+      const args: BackgroundLogEvent = {
+        id,
+        input,
+        expected: expectedValue,
+        tags,
+        dataset_id,
+        created: !isMerge ? new Date().toISOString() : undefined, //if we're merging/updating an event we will not add this ts
+        metadata,
+        ...(!!isMerge
+          ? {
+              [IS_MERGE_FIELD]: true,
+            }
+          : {}),
+      };
+
+      return args;
+    });
   }
 
   /**
@@ -3733,37 +4876,67 @@ export class Dataset<
     readonly id?: string;
     readonly output?: unknown;
   }): string {
-    if (metadata !== undefined) {
-      for (const key of Object.keys(metadata)) {
-        if (typeof key !== "string") {
-          throw new Error("metadata keys must be strings");
-        }
-      }
-    }
-
-    if (expected && output) {
-      throw new Error(
-        "Only one of expected or output (deprecated) can be specified. Prefer expected.",
-      );
-    }
-
-    if (tags) {
-      validateTags(tags);
-    }
+    this.validateEvent({ metadata, expected, output, tags });
 
     const rowId = id || uuidv4();
-    const args = new LazyValue(async () => ({
-      id: rowId,
-      input,
-      expected: expected === undefined ? output : expected,
-      tags,
-      dataset_id: await this.id,
-      created: new Date().toISOString(),
-      metadata,
-    }));
+    const args = this.createArgs(
+      deepCopyEvent({
+        id: rowId,
+        input,
+        expected,
+        metadata,
+        tags,
+        output,
+        isMerge: false,
+      }),
+    );
 
     this.state.bgLogger().log([args]);
+    this.newRecords++;
     return rowId;
+  }
+
+  /**
+   * Update fields of a single record in the dataset. The updated fields will be batched and uploaded behind the scenes.
+   * You must pass in an `id` of the record to update. Only the fields provided will be updated; other fields will remain unchanged.
+   *
+   * @param event The fields to update in the record.
+   * @param event.id The unique identifier of the record to update.
+   * @param event.input (Optional) The new input value for the record (an arbitrary, JSON serializable object).
+   * @param event.expected (Optional) The new expected output value for the record (an arbitrary, JSON serializable object).
+   * @param event.tags (Optional) A list of strings to update the tags of the record.
+   * @param event.metadata (Optional) A dictionary to update the metadata of the record. The values in `metadata` can be any
+   * JSON-serializable type, but its keys must be strings.
+   * @returns The `id` of the updated record.
+   */
+  public update({
+    input,
+    expected,
+    metadata,
+    tags,
+    id,
+  }: {
+    readonly id: string;
+    readonly input?: unknown;
+    readonly expected?: unknown;
+    readonly tags?: string[];
+    readonly metadata?: Record<string, unknown>;
+  }): string {
+    this.validateEvent({ metadata, expected, tags });
+
+    const args = this.createArgs(
+      deepCopyEvent({
+        id,
+        input,
+        expected,
+        metadata,
+        tags,
+        isMerge: true,
+      }),
+    );
+
+    this.state.bgLogger().log([args]);
+    return id;
   }
 
   public delete(id: string): string {
@@ -3798,15 +4971,25 @@ export class Dataset<
       await this.name,
     )}`;
 
-    let dataSummary = undefined;
+    let dataSummary: DataSummary | undefined;
     if (summarizeData) {
-      dataSummary = await state.apiConn().get_json(
-        "dataset-summary",
-        {
-          dataset_id: await this.id,
-        },
-        3,
-      );
+      const rawDataSummary = z
+        .object({
+          total_records: z.number(),
+        })
+        .parse(
+          await state.apiConn().get_json(
+            "dataset-summary",
+            {
+              dataset_id: await this.id,
+            },
+            3,
+          ),
+        );
+      dataSummary = {
+        newRecords: this.newRecords,
+        totalRecords: rawDataSummary.total_records,
+      };
     }
 
     return {
@@ -3826,13 +5009,21 @@ export class Dataset<
   }
 
   /**
-   * This function is deprecated. You can simply remove it from your code.
+   * @deprecated This function is deprecated. You can simply remove it from your code.
    */
   public async close(): Promise<string> {
     console.warn(
       "close is deprecated and will be removed in a future version of braintrust. It is now a no-op and can be removed",
     );
     return this.id;
+  }
+
+  public static isDataset(data: unknown): data is Dataset {
+    return (
+      typeof data === "object" &&
+      data !== null &&
+      "__braintrust_dataset_marker" in data
+    );
   }
 }
 
@@ -3904,24 +5095,144 @@ export function renderMessage<T extends Message>(
                 }),
         }
       : {}),
+    ...("tool_calls" in message
+      ? {
+          tool_calls: isEmpty(message.tool_calls)
+            ? undefined
+            : message.tool_calls.map((t) => {
+                return {
+                  type: t.type,
+                  id: render(t.id),
+                  function: {
+                    name: render(t.function.name),
+                    arguments: render(t.function.arguments),
+                  },
+                };
+              }),
+        }
+      : {}),
+    ...("tool_call_id" in message
+      ? {
+          tool_call_id: render(message.tool_call_id),
+        }
+      : {}),
   };
 }
 
-export class Prompt {
+export type PromptRowWithId<
+  HasId extends boolean = true,
+  HasVersion extends boolean = true,
+> = Omit<PromptRow, "log_id" | "org_id" | "project_id" | "id" | "_xact_id"> &
+  Partial<Pick<PromptRow, "project_id">> &
+  (HasId extends true
+    ? Pick<PromptRow, "id">
+    : Partial<Pick<PromptRow, "id">>) &
+  (HasVersion extends true
+    ? Pick<PromptRow, "_xact_id">
+    : Partial<Pick<PromptRow, "_xact_id">>);
+
+export function deserializePlainStringAsJSON(s: string) {
+  if (s.trim() === "") {
+    return { value: null, error: undefined };
+  }
+
+  try {
+    return { value: JSON.parse(s), error: undefined };
+  } catch (e) {
+    return { value: s, error: e };
+  }
+}
+
+function renderTemplatedObject(
+  obj: unknown,
+  args: Record<string, unknown>,
+  options: { strict?: boolean },
+): unknown {
+  if (typeof obj === "string") {
+    if (options.strict) {
+      lintTemplate(obj, args);
+    }
+    return Mustache.render(obj, args, undefined, {
+      escape: (value) => {
+        if (typeof value === "string") {
+          return value;
+        } else {
+          return JSON.stringify(value);
+        }
+      },
+    });
+  } else if (isArray(obj)) {
+    return obj.map((item) => renderTemplatedObject(item, args, options));
+  } else if (isObject(obj)) {
+    return Object.fromEntries(
+      Object.entries(obj).map(([key, value]) => [
+        key,
+        renderTemplatedObject(value, args, options),
+      ]),
+    );
+  }
+  return obj;
+}
+
+export function renderPromptParams(
+  params: ModelParams | undefined,
+  args: Record<string, unknown>,
+  options: { strict?: boolean },
+): ModelParams | undefined {
+  const schemaParsed = z
+    .object({
+      response_format: z.object({
+        type: z.literal("json_schema"),
+        json_schema: responseFormatJsonSchemaSchema
+          .omit({ schema: true })
+          .extend({
+            schema: z.unknown(),
+          }),
+      }),
+    })
+    .safeParse(params);
+  if (schemaParsed.success) {
+    const rawSchema = schemaParsed.data.response_format.json_schema.schema;
+    const templatedSchema = renderTemplatedObject(rawSchema, args, options);
+    const parsedSchema =
+      typeof templatedSchema === "string"
+        ? deserializePlainStringAsJSON(templatedSchema).value
+        : templatedSchema;
+
+    return {
+      ...params,
+      response_format: {
+        ...schemaParsed.data.response_format,
+        json_schema: {
+          ...schemaParsed.data.response_format.json_schema,
+          schema: parsedSchema,
+        },
+      },
+    };
+  }
+  return params;
+}
+
+export class Prompt<
+  HasId extends boolean = true,
+  HasVersion extends boolean = true,
+> {
   private parsedPromptData: PromptData | undefined;
   private hasParsedPromptData = false;
+  private readonly __braintrust_prompt_marker = true;
 
   constructor(
-    private metadata: Omit<PromptRow, "log_id"> | PromptSessionEvent,
+    private metadata: PromptRowWithId<HasId, HasVersion> | PromptSessionEvent,
     private defaults: DefaultPromptArgs,
     private noTrace: boolean,
   ) {}
 
-  public get id(): string {
-    return this.metadata.id;
+  public get id(): HasId extends true ? string : string | undefined {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return this.metadata.id as HasId extends true ? string : string | undefined;
   }
 
-  public get projectId(): string {
+  public get projectId(): string | undefined {
     return this.metadata.project_id;
   }
 
@@ -3939,12 +5250,21 @@ export class Prompt {
     return this.getParsedPromptData()?.prompt;
   }
 
-  public get version(): TransactionId {
-    return this.metadata[TRANSACTION_ID_FIELD];
+  public get version(): HasId extends true
+    ? TransactionId
+    : TransactionId | undefined {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return this.metadata[TRANSACTION_ID_FIELD] as HasId extends true
+      ? TransactionId
+      : TransactionId | undefined;
   }
 
   public get options(): NonNullable<PromptData["options"]> {
     return this.getParsedPromptData()?.options || {};
+  }
+
+  public get promptData(): PromptData {
+    return this.getParsedPromptData()!;
   }
 
   /**
@@ -3958,10 +5278,15 @@ export class Prompt {
     buildArgs: unknown,
     options: {
       flavor?: Flavor;
+      messages?: Message[];
+      strict?: boolean;
     } = {},
   ): CompiledPrompt<Flavor> {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return this.runBuild(buildArgs, {
       flavor: options.flavor ?? "chat",
+      messages: options.messages,
+      strict: options.strict,
     }) as CompiledPrompt<Flavor>;
   }
 
@@ -3969,6 +5294,8 @@ export class Prompt {
     buildArgs: unknown,
     options: {
       flavor: Flavor;
+      messages?: Message[];
+      strict?: boolean;
     },
   ): CompiledPrompt<Flavor> {
     const { flavor } = options;
@@ -3998,15 +5325,17 @@ export class Prompt {
       : {
           span_info: {
             metadata: {
-              prompt: {
-                variables: buildArgs,
-                id: this.id,
-                project_id: this.projectId,
-                version: this.version,
-                ...("prompt_session_id" in this.metadata
-                  ? { prompt_session_id: this.metadata.prompt_session_id }
-                  : {}),
-              },
+              prompt: this.id
+                ? {
+                    variables: buildArgs,
+                    id: this.id,
+                    project_id: this.projectId,
+                    version: this.version,
+                    ...("prompt_session_id" in this.metadata
+                      ? { prompt_session_id: this.metadata.prompt_session_id }
+                      : {}),
+                  }
+                : undefined,
             },
           },
         };
@@ -4017,51 +5346,141 @@ export class Prompt {
       throw new Error("Empty prompt");
     }
 
+    const escape = (v: unknown) => {
+      if (v === undefined) {
+        throw new Error("Missing!");
+      } else if (typeof v === "string") {
+        return v;
+      } else {
+        return JSON.stringify(v);
+      }
+    };
+
     const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
     const variables: Record<string, unknown> = {
       input: buildArgs,
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
     };
 
+    const renderedPrompt = Prompt.renderPrompt({
+      prompt,
+      buildArgs,
+      options,
+    });
+
     if (flavor === "chat") {
-      if (prompt.type !== "chat") {
+      if (renderedPrompt.type !== "chat") {
         throw new Error(
           "Prompt is a completion prompt. Use buildCompletion() instead",
         );
       }
 
-      const render = (template: string) =>
-        Mustache.render(template, variables, undefined, {
-          escape: (v: any) => (typeof v === "string" ? v : JSON.stringify(v)),
-        });
-
-      const messages = (prompt.messages || []).map((m) =>
-        renderMessage(render, m),
-      );
-
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...params,
+        ...renderPromptParams(params, variables, { strict: options.strict }),
         ...spanInfo,
-        messages: messages,
-        ...(prompt.tools?.trim()
+        messages: renderedPrompt.messages,
+        ...(renderedPrompt.tools
           ? {
-              tools: toolsSchema.parse(
-                JSON.parse(Mustache.render(prompt.tools, variables)),
-              ),
+              tools: toolsSchema.parse(JSON.parse(renderedPrompt.tools)),
             }
           : undefined),
       } as CompiledPrompt<Flavor>;
     } else if (flavor === "completion") {
-      if (prompt.type !== "completion") {
-        throw new Error("Prompt is a chat prompt. Use buildChat() instead");
+      if (renderedPrompt.type !== "completion") {
+        throw new Error(`Prompt is a chat prompt. Use flavor: 'chat' instead`);
+      }
+
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      return {
+        ...renderPromptParams(params, variables, { strict: options.strict }),
+        ...spanInfo,
+        prompt: renderedPrompt.content,
+      } as CompiledPrompt<Flavor>;
+    } else {
+      throw new Error("never!");
+    }
+  }
+
+  static renderPrompt({
+    prompt,
+    buildArgs,
+    options,
+  }: {
+    prompt: PromptBlockData;
+    buildArgs: unknown;
+    options: {
+      strict?: boolean;
+      messages?: Message[];
+    };
+  }): PromptBlockData {
+    const escape = (v: unknown) => {
+      if (v === undefined) {
+        throw new Error("Missing!");
+      } else if (typeof v === "string") {
+        return v;
+      } else {
+        return JSON.stringify(v);
+      }
+    };
+
+    const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
+    const variables: Record<string, unknown> = {
+      input: buildArgs,
+      ...(dictArgParsed.success ? dictArgParsed.data : {}),
+    };
+
+    if (prompt.type === "chat") {
+      const render = (template: string) => {
+        if (options.strict) {
+          lintTemplate(template, variables);
+        }
+
+        return Mustache.render(template, variables, undefined, {
+          escape,
+        });
+      };
+
+      const baseMessages = (prompt.messages || []).map((m) =>
+        renderMessage(render, m),
+      );
+      const hasSystemPrompt = baseMessages.some((m) => m.role === "system");
+
+      const messages: Message[] = [
+        ...baseMessages,
+        ...(options.messages ?? []).filter(
+          (m) => !(hasSystemPrompt && m.role === "system"),
+        ),
+      ];
+
+      return {
+        type: "chat",
+        messages: messages,
+        ...(prompt.tools?.trim()
+          ? {
+              tools: render(prompt.tools),
+            }
+          : undefined),
+      };
+    } else if (prompt.type === "completion") {
+      if (options.messages) {
+        throw new Error(
+          "extra messages are not supported for completion prompts",
+        );
+      }
+
+      if (options.strict) {
+        lintTemplate(prompt.content, variables);
       }
 
       return {
-        ...params,
-        ...spanInfo,
-        prompt: Mustache.render(prompt.content, variables),
-      } as CompiledPrompt<Flavor>;
+        type: "completion",
+        content: Mustache.render(prompt.content, variables, undefined, {
+          escape,
+        }),
+      };
     } else {
+      const _: never = prompt;
       throw new Error("never!");
     }
   }
@@ -4072,6 +5491,28 @@ export class Prompt {
       this.hasParsedPromptData = true;
     }
     return this.parsedPromptData!;
+  }
+
+  public static isPrompt(data: unknown): data is Prompt<boolean, boolean> {
+    return (
+      typeof data === "object" &&
+      data !== null &&
+      "__braintrust_prompt_marker" in data
+    );
+  }
+  public static fromPromptData(
+    name: string,
+    promptData: PromptData,
+  ): Prompt<false, false> {
+    return new Prompt(
+      {
+        name: name,
+        slug: name,
+        prompt_data: promptData,
+      },
+      {},
+      false,
+    );
   }
 }
 
@@ -4136,11 +5577,16 @@ export interface ExperimentSummary {
 /**
  * Summary of a dataset's data.
  *
- * @property newRecords New or updated records added in this session.
  * @property totalRecords Total records in the dataset.
  */
 export interface DataSummary {
+  /**
+   * New or updated records added in this session.
+   */
   newRecords: number;
+  /**
+   * Total records in the dataset.
+   */
   totalRecords: number;
 }
 
@@ -4158,5 +5604,27 @@ export interface DatasetSummary {
   datasetName: string;
   projectUrl: string;
   datasetUrl: string;
-  dataSummary: DataSummary;
+  dataSummary: DataSummary | undefined;
 }
+
+/**
+ * Allows accessing helper functions for testing.
+ * @internal
+ */
+
+// it's used to circumvent login for testing, but won't actually work
+// on the server side.
+const TEST_API_KEY = "___TEST_API_KEY__THIS_IS_NOT_REAL___";
+
+// This is a helper function to simulate a login for testing.
+function simulateLoginForTests() {
+  return login({ apiKey: TEST_API_KEY });
+}
+
+export const _exportsForTestingOnly = {
+  extractAttachments,
+  deepCopyEvent,
+  useTestBackgroundLogger,
+  clearTestBackgroundLogger,
+  simulateLoginForTests,
+};

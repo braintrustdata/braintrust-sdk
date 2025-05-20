@@ -1,19 +1,4 @@
-import { repoInfoSchema } from "typespecs";
-import { z } from "zod";
-
-export type RepoInfo = z.infer<typeof repoInfoSchema>;
-
-export const gitFieldsSchema = repoInfoSchema.keyof();
-export type GitFields = z.infer<typeof gitFieldsSchema>;
-
-const collectMetadataEnum = z.enum(["all", "none", "some"]);
-export type CollectMetadata = z.infer<typeof collectMetadataEnum>;
-
-export const gitMetadataSettingsSchema = z.strictObject({
-  collect: collectMetadataEnum,
-  fields: z.array(gitFieldsSchema).optional(),
-});
-export type GitMetadataSettings = z.infer<typeof gitMetadataSettingsSchema>;
+import { GitMetadataSettings } from "typespecs";
 
 export function mergeGitMetadataSettings(
   s1: GitMetadataSettings,

@@ -1,4 +1,9 @@
-import { callEventSchema } from "@braintrust/core/typespecs";
+import {
+  CallEventSchema,
+  callEventSchema,
+  sseConsoleEventDataSchema,
+  sseProgressEventDataSchema,
+} from "@braintrust/core/typespecs";
 import {
   createParser,
   EventSourceParser,
@@ -13,7 +18,31 @@ export const braintrustStreamChunkSchema = z.union([
     data: z.string(),
   }),
   z.object({
+    type: z.literal("reasoning_delta"),
+    data: z.string(),
+  }),
+  z.object({
     type: z.literal("json_delta"),
+    data: z.string(),
+  }),
+  z.object({
+    type: z.literal("error"),
+    data: z.string(),
+  }),
+  z.object({
+    type: z.literal("console"),
+    data: sseConsoleEventDataSchema,
+  }),
+  z.object({
+    type: z.literal("progress"),
+    data: sseProgressEventDataSchema,
+  }),
+  z.object({
+    type: z.literal("start"),
+    data: z.string(),
+  }),
+  z.object({
+    type: z.literal("done"),
     data: z.string(),
   }),
 ]);
@@ -31,17 +60,26 @@ export type BraintrustStreamChunk = z.infer<typeof braintrustStreamChunkSchema>;
 export class BraintrustStream {
   private stream: ReadableStream<BraintrustStreamChunk>;
   private memoizedFinalValue: Promise<unknown> | undefined;
+  private signal: AbortSignal | undefined;
 
-  constructor(baseStream: ReadableStream<Uint8Array>);
-  constructor(stream: ReadableStream<string>);
-  constructor(stream: ReadableStream<BraintrustStreamChunk>);
+  constructor(
+    baseStream: ReadableStream<Uint8Array>,
+    opts?: { signal?: AbortSignal },
+  );
+  constructor(stream: ReadableStream<string>, opts?: { signal?: AbortSignal });
+  constructor(
+    stream: ReadableStream<BraintrustStreamChunk>,
+    opts?: { signal?: AbortSignal },
+  );
   constructor(
     baseStream:
       | ReadableStream<Uint8Array>
       | ReadableStream<string>
       | ReadableStream<BraintrustStreamChunk>,
+    { signal }: { signal?: AbortSignal } = {},
   ) {
-    this.stream = baseStream.pipeThrough(btStreamParser());
+    this.signal = signal;
+    this.stream = baseStream.pipeThrough(btStreamParser(), { signal });
   }
 
   /**
@@ -56,7 +94,7 @@ export class BraintrustStream {
     // copy of it.
     const [newStream, copyStream] = this.stream.tee();
     this.stream = copyStream;
-    return new BraintrustStream(newStream);
+    return new BraintrustStream(newStream, { signal: this.signal });
   }
 
   /**
@@ -89,7 +127,7 @@ export class BraintrustStream {
         reader.releaseLock();
         return { done: true, value: undefined };
       },
-      async throw(error: any) {
+      async throw(error: unknown) {
         reader.releaseLock();
         throw error;
       },
@@ -115,11 +153,112 @@ export class BraintrustStream {
       return this.memoizedFinalValue;
     }
     this.memoizedFinalValue = new Promise((resolve, reject) => {
-      const stream = this.stream
-        .pipeThrough(createFinalValuePassThroughStream(resolve))
-        .pipeTo(devNullWritableStream());
+      this.stream
+        .pipeThrough(createFinalValuePassThroughStream(resolve, reject), {
+          signal: this.signal,
+        })
+        .pipeTo(devNullWritableStream(), { signal: this.signal })
+        .catch(reject);
     });
     return this.memoizedFinalValue;
+  }
+
+  static parseRawEvent(event: CallEventSchema): BraintrustStreamChunk {
+    switch (event.event) {
+      case "text_delta":
+        return {
+          type: "text_delta",
+          data: JSON.parse(event.data),
+        };
+      case "reasoning_delta":
+        return {
+          type: "reasoning_delta",
+          data: JSON.parse(event.data),
+        };
+      case "json_delta":
+        return {
+          type: "json_delta",
+          data: event.data,
+        };
+      case "error":
+        return {
+          type: "error",
+          data: JSON.parse(event.data),
+        };
+      case "progress":
+        return {
+          type: "progress",
+          data: sseProgressEventDataSchema.parse(JSON.parse(event.data)),
+        };
+      case "console":
+        return {
+          type: "console",
+          data: sseConsoleEventDataSchema.parse(JSON.parse(event.data)),
+        };
+      case "start":
+        return {
+          type: "start",
+          data: "",
+        };
+      case "done":
+        return {
+          type: "done",
+          data: "",
+        };
+      default: {
+        const _event: never = event;
+        throw new Error(`Unknown event type ${JSON.stringify(_event)}`);
+      }
+    }
+  }
+
+  static serializeRawEvent(event: BraintrustStreamChunk): CallEventSchema {
+    switch (event.type) {
+      case "text_delta":
+        return {
+          event: "text_delta",
+          data: JSON.stringify(event.data),
+        };
+      case "reasoning_delta":
+        return {
+          event: "reasoning_delta",
+          data: JSON.stringify(event.data),
+        };
+      case "json_delta":
+        return {
+          event: "json_delta",
+          data: event.data,
+        };
+      case "error":
+        return {
+          event: "error",
+          data: JSON.stringify(event.data),
+        };
+      case "progress":
+        return {
+          event: "progress",
+          data: JSON.stringify(event.data),
+        };
+      case "console":
+        return {
+          event: "console",
+          data: JSON.stringify(event.data),
+        };
+      case "start":
+        return {
+          event: "start",
+          data: "",
+        };
+      case "done":
+        return {
+          event: "done",
+          data: "",
+        };
+      default: {
+        const _event: never = event;
+        throw new Error(`Unknown event type ${JSON.stringify(_event)}`);
+      }
+    }
   }
 }
 
@@ -139,23 +278,7 @@ function btStreamParser() {
         if (!parsed.success) {
           throw new Error(`Failed to parse event: ${parsed.error}`);
         }
-        switch (event.event) {
-          case "text_delta":
-            controller.enqueue({
-              type: "text_delta",
-              data: JSON.parse(event.data),
-            });
-            break;
-          case "json_delta":
-            controller.enqueue({
-              type: "json_delta",
-              data: event.data,
-            });
-            break;
-          case "done":
-            // Do nothing
-            break;
-        }
+        controller.enqueue(BraintrustStream.parseRawEvent(parsed.data));
       });
     },
     async transform(chunk, controller) {
@@ -184,11 +307,12 @@ export function createFinalValuePassThroughStream<
   T extends BraintrustStreamChunk | string | Uint8Array,
 >(
   onFinal: (result: unknown) => void,
+  onError: (error: unknown) => void,
 ): TransformStream<T, BraintrustStreamChunk> {
   const decoder = new TextDecoder();
   const textChunks: string[] = [];
   const jsonChunks: string[] = [];
-
+  const reasoningChunks: string[] = [];
   const transformStream = new TransformStream<T, BraintrustStreamChunk>({
     transform(chunk, controller) {
       if (typeof chunk === "string") {
@@ -212,13 +336,24 @@ export function createFinalValuePassThroughStream<
           case "json_delta":
             jsonChunks.push(chunk.data);
             break;
+          case "reasoning_delta":
+            reasoningChunks.push(chunk.data);
+            break;
+          case "error":
+            onError(chunk.data);
+            break;
+          case "progress":
+          case "start":
+          case "done":
+          case "console":
+            break;
           default:
             const _type: never = chunkType;
-            throw new Error(`Unknown chunk type ${_type}`);
+            onError(`Unknown chunk type: ${_type}`);
         }
         controller.enqueue(chunk);
       } else {
-        throw new Error(`Unknown chunk type ${chunk}`);
+        onError(`Unknown chunk type ${JSON.stringify(chunk)}`);
       }
     },
     flush(controller) {
@@ -228,6 +363,8 @@ export function createFinalValuePassThroughStream<
         onFinal(JSON.parse(jsonChunks.join("")));
       } else if (textChunks.length > 0) {
         onFinal(textChunks.join(""));
+      } else if (reasoningChunks.length > 0) {
+        onFinal(reasoningChunks.join(""));
       } else {
         onFinal(undefined);
       }

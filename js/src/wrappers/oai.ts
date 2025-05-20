@@ -8,6 +8,7 @@ import {
 } from "../logger";
 import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import { mergeDicts } from "@braintrust/core";
+import { responsesProxy, parseMetricsFromUsage } from "./oai_responses";
 
 interface BetaLike {
   chat: {
@@ -17,6 +18,7 @@ interface BetaLike {
   };
   embeddings: any;
 }
+
 interface ChatLike {
   completions: any;
 }
@@ -24,7 +26,9 @@ interface ChatLike {
 interface OpenAILike {
   chat: ChatLike;
   embeddings: any;
+  moderations: any;
   beta?: BetaLike;
+  responses?: any;
 }
 
 declare global {
@@ -51,16 +55,12 @@ export function wrapOpenAI<T extends object>(openai: T): T {
 globalThis.__inherited_braintrust_wrap_openai = wrapOpenAI;
 
 export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
-  let completionProxy = new Proxy(openai.chat.completions, {
-    get(target, name, receiver) {
-      const baseVal = Reflect.get(target, name, receiver);
-      if (name === "create") {
-        return wrapChatCompletion(baseVal.bind(target));
-      }
-      return baseVal;
-    },
-  });
-  let chatProxy = new Proxy(openai.chat, {
+  const completionProxy = createEndpointProxy(
+    openai.chat.completions,
+    wrapChatCompletion,
+  );
+
+  const chatProxy = new Proxy(openai.chat, {
     get(target, name, receiver) {
       if (name === "completions") {
         return completionProxy;
@@ -69,19 +69,18 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
     },
   });
 
-  let embeddingProxy = new Proxy(openai.embeddings, {
-    get(target, name, receiver) {
-      const baseVal = Reflect.get(target, name, receiver);
-      if (name === "create") {
-        return wrapEmbeddings(baseVal.bind(target));
-      }
-      return baseVal;
-    },
-  });
+  const embeddingProxy = createEndpointProxy<
+    EmbeddingCreateParams,
+    CreateEmbeddingResponse
+  >(openai.embeddings, wrapEmbeddings);
+  const moderationProxy = createEndpointProxy<
+    ModerationCreateParams,
+    CreateModerationResponse
+  >(openai.moderations, wrapModerations);
 
-  let betaProxy: OpenAILike;
+  let betaProxy: BetaLike;
   if (openai.beta?.chat?.completions?.stream) {
-    let betaChatCompletionProxy = new Proxy(openai?.beta?.chat.completions, {
+    const betaChatCompletionProxy = new Proxy(openai?.beta?.chat.completions, {
       get(target, name, receiver) {
         const baseVal = Reflect.get(target, name, receiver);
         if (name === "parse") {
@@ -92,7 +91,7 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
         return baseVal;
       },
     });
-    let betaChatProxy = new Proxy(openai.beta.chat, {
+    const betaChatProxy = new Proxy(openai.beta.chat, {
       get(target, name, receiver) {
         if (name === "completions") {
           return betaChatCompletionProxy;
@@ -109,22 +108,26 @@ export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
       },
     });
   }
-  let proxy = new Proxy(openai, {
+
+  return new Proxy(openai, {
     get(target, name, receiver) {
-      if (name === "chat") {
-        return chatProxy;
+      switch (name) {
+        case "chat":
+          return chatProxy;
+        case "embeddings":
+          return embeddingProxy;
+        case "moderations":
+          return moderationProxy;
+        case "responses":
+          return responsesProxy(openai);
       }
-      if (name === "embeddings") {
-        return embeddingProxy;
-      }
+
       if (name === "beta" && betaProxy) {
         return betaProxy;
       }
       return Reflect.get(target, name, receiver);
     },
   });
-
-  return proxy;
 }
 
 type SpanInfo = {
@@ -152,14 +155,11 @@ function logCompletionResponse(
   response: NonStreamingChatResponse | StreamingChatResponse,
   span: Span,
 ) {
+  const metrics = parseMetricsFromUsage(response?.usage);
+  metrics.time_to_first_token = getCurrentUnixTimestamp() - startTime;
   span.log({
     output: response.choices,
-    metrics: {
-      time_to_first_token: getCurrentUnixTimestamp() - startTime,
-      tokens: response.usage?.total_tokens,
-      prompt_tokens: response.usage?.prompt_tokens,
-      completion_tokens: response.usage?.completion_tokens,
-    },
+    metrics: metrics,
   });
 }
 
@@ -337,8 +337,9 @@ function wrapChatCompletion<
   };
 }
 
-function parseChatCompletionParams<P extends ChatParams>(
-  allParams: P & SpanInfo,
+function parseBaseParams<T extends Record<string, any>>(
+  allParams: T & SpanInfo,
+  inputField: string,
 ): StartSpanArgs {
   const { span_info, ...params } = allParams;
   const { metadata: spanInfoMetadata, ...spanInfoRest } = span_info ?? {};
@@ -348,8 +349,65 @@ function parseChatCompletionParams<P extends ChatParams>(
       metadata: spanInfoMetadata,
     },
   };
-  const { messages, ...paramsRest } = params;
-  return mergeDicts(ret, { event: { input: messages, metadata: paramsRest } });
+  const input = params[inputField];
+  const paramsRest = { ...params };
+  delete paramsRest[inputField];
+  return mergeDicts(ret, { event: { input, metadata: paramsRest } });
+}
+
+function createApiWrapper<T, R>(
+  name: string,
+  create: (
+    params: Omit<T & SpanInfo, "span_info">,
+    options?: unknown,
+  ) => APIPromise<R>,
+  processResponse: (result: R, span: Span) => void,
+  parseParams: (params: T & SpanInfo) => StartSpanArgs,
+): (params: T & SpanInfo, options?: unknown) => Promise<any> {
+  return async (allParams: T & SpanInfo, options?: unknown) => {
+    const { span_info: _, ...params } = allParams;
+    return traced(
+      async (span) => {
+        const { data: result, response } = await create(
+          params,
+          options,
+        ).withResponse();
+        logHeaders(response, span);
+        processResponse(result, span);
+        return result;
+      },
+      mergeDicts(
+        {
+          name,
+          spanAttributes: {
+            type: SpanTypeAttribute.LLM,
+          },
+        },
+        parseParams(allParams),
+      ),
+    );
+  };
+}
+
+function createEndpointProxy<T, R>(
+  target: any,
+  wrapperFn: (
+    create: (params: T, options?: unknown) => APIPromise<R>,
+  ) => Function,
+) {
+  return new Proxy(target, {
+    get(target, name, receiver) {
+      const baseVal = Reflect.get(target, name, receiver);
+      if (name === "create") {
+        return wrapperFn(baseVal.bind(target));
+      }
+      return baseVal;
+    },
+  });
+}
+
+function parseChatCompletionParams(params: ChatParams): StartSpanArgs {
+  return parseBaseParams(params, "messages");
 }
 
 type EmbeddingCreateParams = {
@@ -366,64 +424,55 @@ type CreateEmbeddingResponse = {
     | undefined;
 };
 
-function wrapEmbeddings<
-  P extends EmbeddingCreateParams,
-  C extends CreateEmbeddingResponse,
->(
-  create: (params: P, options?: unknown) => APIPromise<C>,
-): (params: P & SpanInfo, options?: unknown) => Promise<any> {
-  return async (allParams: P & SpanInfo, options?: unknown) => {
-    const { span_info: _, ...params } = allParams;
-    return traced(
-      async (span) => {
-        // We could get rid of this type coercion if we could somehow enforce
-        // that `P extends EmbeddingCreateParams` BUT does not have the property
-        // `span_info`.
-        const { data: result, response } = await create(
-          params as P,
-          options,
-        ).withResponse();
-        logHeaders(response, span);
-        const embedding_length = result.data[0].embedding.length;
-        span.log({
-          // TODO: Add a flag to control whether to log the full embedding vector,
-          // possibly w/ JSON compression.
-          output: { embedding_length },
-          metrics: {
-            tokens: result.usage?.total_tokens,
-            prompt_tokens: result.usage?.prompt_tokens,
-          },
-        });
-
-        return result;
-      },
-      mergeDicts(
-        {
-          name: "Embedding",
-          spanAttributes: {
-            type: SpanTypeAttribute.LLM,
-          },
-        },
-        parseEmbeddingParams(allParams),
-      ),
-    );
-  };
+function processEmbeddingResponse(result: CreateEmbeddingResponse, span: Span) {
+  span.log({
+    output: { embedding_length: result.data[0].embedding.length },
+    metrics: parseMetricsFromUsage(result?.usage),
+  });
 }
 
-function parseEmbeddingParams<P extends EmbeddingCreateParams>(
-  allParams: P & SpanInfo,
-): StartSpanArgs {
-  const { span_info, ...params } = allParams;
-  const { metadata: spanInfoMetadata, ...spanInfoRest } = span_info ?? {};
-  let ret: StartSpanArgs = {
-    ...spanInfoRest,
-    event: {
-      metadata: spanInfoMetadata,
-    },
-  };
-  const { input, ...paramsRest } = params;
-  return mergeDicts(ret, { event: { input, metadata: paramsRest } });
+type ModerationCreateParams = {
+  input: string;
+};
+
+type CreateModerationResponse = {
+  results: Array<any>;
+};
+
+function processModerationResponse(
+  result: CreateModerationResponse,
+  span: Span,
+) {
+  span.log({
+    output: result.results,
+  });
 }
+
+const wrapEmbeddings = (
+  create: (
+    params: EmbeddingCreateParams,
+    options?: unknown,
+  ) => APIPromise<CreateEmbeddingResponse>,
+) =>
+  createApiWrapper<EmbeddingCreateParams, CreateEmbeddingResponse>(
+    "Embedding",
+    create,
+    processEmbeddingResponse,
+    (params) => parseBaseParams(params, "input"),
+  );
+
+const wrapModerations = (
+  create: (
+    params: ModerationCreateParams,
+    options?: unknown,
+  ) => APIPromise<CreateModerationResponse>,
+) =>
+  createApiWrapper<ModerationCreateParams, CreateModerationResponse>(
+    "Moderation",
+    create,
+    processModerationResponse,
+    (params) => parseBaseParams(params, "input"),
+  );
 
 function postprocessStreamingResults(allResults: any[]): {
   output: [
@@ -443,11 +492,10 @@ function postprocessStreamingResults(allResults: any[]): {
   let metrics = {};
   for (const result of allResults) {
     if (result.usage) {
+      // NOTE: only included if `stream_options.include_usage` is true
       metrics = {
         ...metrics,
-        tokens: result.usage.total_tokens,
-        prompt_tokens: result.usage.prompt_tokens,
-        completion_tokens: result.usage.completion_tokens,
+        ...parseMetricsFromUsage(result?.usage),
       };
     }
 

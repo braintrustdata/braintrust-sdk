@@ -2,14 +2,15 @@
 
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
-extendZodWithOpenApi(z);
-
+import { objectNullish } from "../src/zod_util";
 import { ObjectType, datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
-import { functionIdSchema, runtimeContextSchema } from "./functions";
+import { functionDataSchema, functionTypeEnum } from "./functions";
 import { savedFunctionIdSchema } from "./function_id";
+import { repoInfoSchema } from "./git_types";
+extendZodWithOpenApi(z);
 
 // Section: App DB table schemas
 
@@ -43,6 +44,9 @@ function generateBaseTableSchema(
       .describe(
         `Date of ${objectName} deletion, or null if the ${objectName} is still active`,
       ),
+    updated_at: datetimeStringSchema
+      .nullish()
+      .describe(`Date of last ${objectName} update`),
     user_id: z
       .string()
       .uuid()
@@ -69,7 +73,8 @@ export const aclObjectTypeEnum = z
     "project_log",
     "org_project",
   ])
-  .describe("The object type that the ACL applies to");
+  .describe("The object type that the ACL applies to")
+  .openapi("AclObjectType");
 export type AclObjectType = z.infer<typeof aclObjectTypeEnum>;
 
 const userBaseSchema = generateBaseTableSchema("user");
@@ -131,20 +136,63 @@ export const memberSchema = z
   .openapi("Member");
 export type Member = z.infer<typeof memberSchema>;
 
-const orgSecretsBaseSchema = generateBaseTableSchema("org secrets");
-export const orgSecretsSchema = z
+const aiSecretBaseSchema = generateBaseTableSchema("AI secret");
+export const aiSecretSchema = z
   .object({
-    id: orgSecretsBaseSchema.shape.id,
-    created: orgSecretsBaseSchema.shape.created,
-    key_id: z.string().uuid(),
+    id: aiSecretBaseSchema.shape.id,
+    created: aiSecretBaseSchema.shape.created,
+    updated_at: aiSecretBaseSchema.shape.updated_at,
     org_id: organizationSchema.shape.id,
-    name: orgSecretsBaseSchema.shape.name,
-    secret: z.string().nullish(),
+    name: aiSecretBaseSchema.shape.name,
     type: z.string().nullish(),
-    metadata: z.record(z.unknown()).nullish(),
+    metadata: z.record(customTypes.unknown).nullish(),
+    preview_secret: z.string().nullish(),
   })
-  .openapi("OrgSecrets");
-export type OrgSecrets = z.infer<typeof orgSecretsSchema>;
+  .openapi("AISecret");
+export type AISecret = z.infer<typeof aiSecretSchema>;
+
+export const envVarObjectTypeEnum = z
+  .enum(["organization", "project", "function"])
+  .describe("The type of the object the environment variable is scoped for");
+
+const envVarBaseSchema = generateBaseTableSchema("environment variable");
+export const envVarSchema = z
+  .object({
+    id: envVarBaseSchema.shape.id,
+    object_type: envVarObjectTypeEnum,
+    object_id: z
+      .string()
+      .uuid()
+      .describe("The id of the object the environment variable is scoped for"),
+    name: z.string().describe("The name of the environment variable"),
+    created: envVarBaseSchema.shape.created,
+    used: datetimeStringSchema
+      .nullish()
+      .describe(`Date the environment variable was last used`),
+  })
+  .openapi("EnvVar");
+export type EnvVar = z.infer<typeof envVarSchema>;
+
+const customColumnBaseSchema = generateBaseTableSchema("custom columns");
+export const customColumnSchema = z
+  .object({
+    id: customColumnBaseSchema.shape.id,
+    object_type: aclObjectTypeEnum,
+    object_id: z
+      .string()
+      .uuid()
+      .describe("The id of the object the custom column is scoped for"),
+    subtype: aclObjectTypeEnum.nullable(),
+    name: z.string().describe("The name of the custom column"),
+    expr: z
+      .string()
+      .describe(
+        "The expression used to extract the value for the custom column",
+      ),
+    created: customColumnBaseSchema.shape.created,
+  })
+  .openapi("CustomColumn");
+export type CustomColumn = z.infer<typeof customColumnSchema>;
 
 const apiKeyBaseSchema = generateBaseTableSchema("api key");
 export const apiKeySchema = z
@@ -159,12 +207,44 @@ export const apiKeySchema = z
   .openapi("ApiKey");
 export type ApiKey = z.infer<typeof apiKeySchema>;
 
-export const projectSettingsSchema = z.object({
-  comparison_key: z
-    .string()
-    .nullish()
-    .describe("The key used to join two experiments (defaults to `input`)."),
+export const spanFieldOrderItem = z.object({
+  object_type: z.string(),
+  column_id: z.string(),
+  position: z.string(),
+  layout: z.literal("full").or(z.literal("two_column")).nullish(),
 });
+export type SpanFieldOrderItem = z.infer<typeof spanFieldOrderItem>;
+
+export const remoteEvalSourceSchema = z.object({
+  url: z.string(),
+  name: z.string(),
+  description: z.string().nullish(),
+});
+export type RemoteEvalSource = z.infer<typeof remoteEvalSourceSchema>;
+
+export const projectSettingsSchema = z
+  .object({
+    comparison_key: z
+      .string()
+      .nullish()
+      .describe("The key used to join two experiments (defaults to `input`)"),
+    baseline_experiment_id: z
+      .string()
+      .uuid()
+      .nullish()
+      .describe(
+        "The id of the experiment to use as the default baseline for comparisons",
+      ),
+    spanFieldOrder: z
+      .array(spanFieldOrderItem)
+      .nullish()
+      .describe("The order of the fields to display in the trace view"),
+    remote_eval_sources: z
+      .array(remoteEvalSourceSchema)
+      .nullish()
+      .describe("The remote eval sources to use for the project"),
+  })
+  .openapi("ProjectSettings");
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
 
 const projectBaseSchema = generateBaseTableSchema("project");
@@ -192,7 +272,7 @@ const datasetBaseSchema = generateBaseTableSchema("dataset", {
 export const datasetSchema = z
   .object({
     id: datasetBaseSchema.shape.id,
-    project_id: datasetBaseSchema.shape.project_id.nullish(),
+    project_id: datasetBaseSchema.shape.project_id,
     name: datasetBaseSchema.shape.name,
     description: datasetBaseSchema.shape.description,
     created: datasetBaseSchema.shape.created,
@@ -206,6 +286,10 @@ export type Dataset = z.infer<typeof datasetSchema>;
 export const promptLogIdLiteralSchema = z
   .literal("p")
   .describe("A literal 'p' which identifies the object as a project prompt");
+
+export const playgroundLogsLogIdLiteralSchema = z
+  .literal("x")
+  .describe("A literal 'x' which identifies the object as a playground log");
 
 export const promptBaseSchema = generateBaseTableSchema("prompt");
 const promptSchemaObject = z.object({
@@ -228,62 +312,12 @@ const promptSchemaObject = z.object({
     .describe("The prompt, model, and its parameters"),
   tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
   metadata: promptBaseSchema.shape.metadata,
-  // An empty (unspecified) function_type is equivalent to "dynamic".
-  function_type: z.enum(["task", "llm", "scorer"]).nullish(),
+  // An empty (unspecified) function_type is equivalent to "task".
+  function_type: functionTypeEnum.nullish(),
 });
 
 export const promptSchema = promptSchemaObject.openapi("Prompt");
 export type Prompt = z.infer<typeof promptSchema>;
-
-export const codeBundleSchema = z.object({
-  runtime_context: runtimeContextSchema,
-  location: z.object({
-    type: z.literal("experiment"),
-    eval_name: z.string(),
-    position: z.union([
-      z.object({ type: z.literal("task") }),
-      z
-        .object({ type: z.literal("scorer"), index: z.number() })
-        .openapi({ title: "scorer" }),
-    ]),
-  }),
-  bundle_id: z.string(),
-  preview: z.string().nullish().describe("A preview of the code"),
-});
-export type CodeBundle = z.infer<typeof codeBundleSchema>;
-
-export const functionDataSchema = z.union([
-  z
-    .object({
-      type: z.literal("prompt"),
-      // For backwards compatibility reasons, the prompt definition is hoisted out and stored
-      // in the outer object
-    })
-    .openapi({ title: "prompt" }),
-  z
-    .object({
-      type: z.literal("code"),
-      data: z.union([
-        z
-          .object({
-            type: z.literal("bundle"),
-          })
-          .and(codeBundleSchema),
-        z.object({
-          type: z.literal("inline"),
-          runtime_context: runtimeContextSchema,
-          code: z.string(),
-        }),
-      ]),
-    })
-    .openapi({ title: "code" }),
-  z
-    .object({
-      type: z.literal("global"),
-      name: z.string(),
-    })
-    .openapi({ title: "global" }),
-]);
 
 export const functionSchema = promptSchemaObject
   .merge(
@@ -304,54 +338,19 @@ export const functionSchema = promptSchemaObject
             ),
         })
         .nullish(),
+      function_schema: z
+        .object({
+          parameters: customTypes.unknown,
+          returns: customTypes.unknown.optional(),
+        })
+        .nullish()
+        .describe("JSON schema for the function's parameters and return type"),
     }),
   )
   .openapi("Function");
 
 // NOTE: suffix "Object" helps avoid a name conflict with the built-in `Function` type
 export type FunctionObject = z.infer<typeof functionSchema>;
-
-export const repoInfoSchema = z
-  .object({
-    commit: z.string().nullish().describe("SHA of most recent commit"),
-    branch: z
-      .string()
-      .nullish()
-      .describe("Name of the branch the most recent commit belongs to"),
-    tag: z
-      .string()
-      .nullish()
-      .describe("Name of the tag on the most recent commit"),
-    dirty: z
-      .boolean()
-      .nullish()
-      .describe(
-        "Whether or not the repo had uncommitted changes when snapshotted",
-      ),
-    author_name: z
-      .string()
-      .nullish()
-      .describe("Name of the author of the most recent commit"),
-    author_email: z
-      .string()
-      .nullish()
-      .describe("Email of the author of the most recent commit"),
-    commit_message: z.string().nullish().describe("Most recent commit message"),
-    commit_time: z
-      .string()
-      .nullish()
-      .describe("Time of the most recent commit"),
-    git_diff: z
-      .string()
-      .nullish()
-      .describe(
-        "If the repo was dirty when run, this includes the diff between the current state of the repo and the most recent commit.",
-      ),
-  })
-  .describe(
-    "Metadata about the state of the repo when the experiment was created",
-  )
-  .openapi("RepoInfo");
 
 const experimentBaseSchema = generateBaseTableSchema("experiment", {
   uniqueName: true,
@@ -437,7 +436,8 @@ export const permissionEnum = z
       "Each permission permits a certain type of operation on an object in the system",
       "Permissions can be assigned to to objects on an individual basis, or grouped into roles",
     ].join("\n\n"),
-  );
+  )
+  .openapi("Permission");
 export type Permission = z.infer<typeof permissionEnum>;
 
 const roleBaseSchema = generateBaseTableSchema("role");
@@ -532,8 +532,17 @@ export const groupSchema = z
 export type Group = z.infer<typeof groupSchema>;
 
 export const projectScoreTypeEnum = z
-  .enum(["slider", "categorical", "weighted", "minimum", "online"])
-  .describe("The type of the configured score");
+  .enum([
+    "slider",
+    "categorical",
+    "weighted",
+    "minimum",
+    "maximum",
+    "online",
+    "free-form",
+  ])
+  .describe("The type of the configured score")
+  .openapi("ProjectScoreType");
 export type ProjectScoreType = z.infer<typeof projectScoreTypeEnum>;
 
 export const projectScoreCategory = z
@@ -548,6 +557,48 @@ export const projectScoreCategory = z
   .describe("For categorical-type project scores, defines a single category")
   .openapi("ProjectScoreCategory");
 export type ProjectScoreCategory = z.infer<typeof projectScoreCategory>;
+
+const projectAutomationBaseSchema =
+  generateBaseTableSchema("project automation");
+export const projectAutomationSchema = z
+  .object({
+    id: projectAutomationBaseSchema.shape.id,
+    project_id: projectAutomationBaseSchema.shape.project_id,
+    user_id: projectAutomationBaseSchema.shape.user_id,
+    created: projectAutomationBaseSchema.shape.created,
+    name: projectAutomationBaseSchema.shape.name,
+    description: projectAutomationBaseSchema.shape.description,
+    config: z
+      .object({
+        event_type: z
+          .enum(["logs"])
+          .describe("The event which starts the automation execution"),
+        btql_filter: z
+          .string()
+          .describe("BTQL filter to identify rows for the automation rule"),
+        interval_seconds: z
+          .number()
+          .min(1)
+          .max(30 * 24 * 60 * 60)
+          .describe(
+            "Perform the triggered action at most once in this interval of seconds",
+          ),
+        action: z
+          .object({
+            type: z
+              .enum(["webhook"])
+              .describe(
+                "The type of action to take when the automation rule is triggered",
+              ),
+            url: z.string().describe("The webhook URL to send the request to"),
+          })
+          .describe("The action to take when the automation rule is triggered"),
+      })
+      .describe("The configuration for the automation rule"),
+  })
+  .openapi("ProjectAutomation");
+
+export type ProjectAutomation = z.infer<typeof projectAutomationSchema>;
 
 export const onlineScoreConfigSchema = z
   .object({
@@ -570,10 +621,15 @@ export const onlineScoreConfigSchema = z
       .array()
       .nullish()
       .describe("Trigger online scoring on any spans with a name in this list"),
+    skip_logging: z
+      .boolean()
+      .nullish()
+      .describe("Whether to skip adding scorer spans when computing scores"),
   })
   .refine((val) => val.apply_to_root_span || val.apply_to_span_names?.length, {
     message: "Online scoring rule does not apply to any rows",
-  });
+  })
+  .openapi("OnlineScoreConfig");
 export type OnlineScoreConfig = z.infer<typeof onlineScoreConfigSchema>;
 
 const projectScoreBaseSchema = generateBaseTableSchema("project score");
@@ -607,14 +663,16 @@ export const projectScoreSchema = z
           )
           .openapi({ title: "minimum" }),
       ])
-      .nullish(),
+      .nullish()
+      .openapi("ProjectScoreCategories"),
     config: z
       .object({
         multi_select: z.boolean().nullish(),
-        destination: z.literal("expected").nullish(),
+        destination: z.string().nullish(),
         online: onlineScoreConfigSchema.nullish(),
       })
-      .nullish(),
+      .nullish()
+      .openapi("ProjectScoreConfig"),
     position: z
       .string()
       .nullish()
@@ -644,6 +702,27 @@ export const projectTagSchema = z
   )
   .openapi("ProjectTag");
 export type ProjectTag = z.infer<typeof projectTagSchema>;
+
+export const spanIframeBaseSchema = generateBaseTableSchema("span iframe");
+export const spanIframeSchema = z
+  .object({
+    id: spanIframeBaseSchema.shape.id,
+    project_id: spanIframeBaseSchema.shape.project_id,
+    user_id: spanIframeBaseSchema.shape.user_id,
+    created: spanIframeBaseSchema.shape.created,
+    deleted_at: spanIframeBaseSchema.shape.deleted_at,
+    name: spanIframeBaseSchema.shape.name,
+    description: spanIframeBaseSchema.shape.description,
+    url: z.string().describe("URL to embed the project viewer in an iframe"),
+    post_message: z
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether to post messages to the iframe containing the span's data. This is useful when you want to render more data than fits in the URL.",
+      ),
+  })
+  .openapi("SpanIFrame");
+export type SpanIFrame = z.infer<typeof spanIframeSchema>;
 
 const viewBaseSchema = generateBaseTableSchema("view");
 export const viewSchema = z
@@ -725,11 +804,12 @@ export type Acl = z.infer<typeof aclSchema>;
 
 // Section: Schemas for REST operations on app DB tables
 
-export const appLimitSchema = z
+export const appLimitParamSchema = z.coerce
   .number()
   .int()
   .nonnegative()
-  .describe("Limit the number of objects to return");
+  .describe("Limit the number of objects to return")
+  .openapi("AppLimit");
 
 function generateBaseTableOpSchema(objectName: string) {
   return z.object({
@@ -777,10 +857,14 @@ export function makeObjectIdsFilterSchema(objectName: string) {
     .openapi(`${objectName}IdsFilter`);
 }
 
+function makeNonempty(s: z.ZodString): z.ZodString {
+  return (s.minLength ?? 0) > 0 ? s : s.min(1);
+}
+
 const createProjectBaseSchema = generateBaseTableOpSchema("project");
-const createProjectSchema = z
+export const createProjectSchema = z
   .object({
-    name: projectSchema.shape.name,
+    name: makeNonempty(projectSchema.shape.name),
     org_name: createProjectBaseSchema.shape.org_name,
   })
   .openapi("CreateProject");
@@ -796,10 +880,10 @@ export const patchProjectSchema = z
   })
   .openapi("PatchProject");
 
-const createExperimentSchema = z
+export const createExperimentSchema = z
   .object({
     project_id: experimentSchema.shape.project_id,
-    name: experimentSchema.shape.name.nullish(),
+    name: makeNonempty(experimentSchema.shape.name).nullish(),
     description: experimentSchema.shape.description,
     repo_info: experimentSchema.shape.repo_info,
     base_exp_id: experimentSchema.shape.base_exp_id,
@@ -818,13 +902,15 @@ const createExperimentSchema = z
 
 export const patchExperimentSchema = createExperimentSchema
   .omit({ project_id: true, ensure_new: true })
+  .extend({ name: experimentSchema.shape.name.nullish() })
   .openapi("PatchExperiment");
 
-const createDatasetSchema = z
+export const createDatasetSchema = z
   .object({
     project_id: datasetSchema.shape.project_id,
-    name: datasetSchema.shape.name,
+    name: makeNonempty(datasetSchema.shape.name),
     description: datasetSchema.shape.description,
+    metadata: datasetSchema.shape.metadata,
   })
   .openapi("CreateDataset");
 
@@ -836,7 +922,7 @@ export const patchDatasetSchema = z
   })
   .openapi("PatchDataset");
 
-const createPromptSchema = promptSchema
+export const createPromptSchema = promptSchema
   .omit({
     id: true,
     _xact_id: true,
@@ -844,6 +930,10 @@ const createPromptSchema = promptSchema
     log_id: true,
     created: true,
     metadata: true,
+  })
+  .extend({
+    name: makeNonempty(promptSchema.shape.name),
+    slug: makeNonempty(promptSchema.shape.slug),
   })
   .openapi("CreatePrompt");
 
@@ -855,6 +945,10 @@ export const createFunctionSchema = functionSchema
     log_id: true,
     created: true,
     metadata: true,
+  })
+  .extend({
+    name: makeNonempty(promptSchema.shape.name),
+    slug: makeNonempty(promptSchema.shape.slug),
   })
   .openapi("CreateFunction");
 
@@ -873,7 +967,9 @@ const patchFunctionSchema = z
     name: functionSchema.shape.name.nullish(),
     description: functionSchema.shape.description.nullish(),
     prompt_data: functionSchema.shape.prompt_data.nullish(),
-    function_data: functionSchema.shape.function_data.nullish(),
+    function_data: functionSchema.shape.function_data
+      .nullish()
+      .openapi("FunctionDataNullish"),
     tags: functionSchema.shape.tags.nullish(),
   })
   .openapi("PatchFunction");
@@ -881,7 +977,7 @@ const patchFunctionSchema = z
 const createRoleBaseSchema = generateBaseTableOpSchema("role");
 const createRoleSchema = z
   .object({
-    name: roleSchema.shape.name,
+    name: makeNonempty(roleSchema.shape.name),
     description: roleSchema.shape.description,
     member_permissions: roleSchema.shape.member_permissions,
     member_roles: roleSchema.shape.member_roles,
@@ -920,9 +1016,9 @@ export const patchRoleSchema = createRoleSchema
   .openapi("PatchRole");
 
 const createGroupBaseSchema = generateBaseTableOpSchema("group");
-const createGroupSchema = z
+export const createGroupSchema = z
   .object({
-    name: groupSchema.shape.name,
+    name: makeNonempty(groupSchema.shape.name),
     description: groupSchema.shape.description,
     member_users: groupSchema.shape.member_users,
     member_groups: groupSchema.shape.member_groups,
@@ -965,42 +1061,57 @@ export const aclItemSchema = aclSchema
 
 export type AclItem = z.infer<typeof aclItemSchema>;
 
-export const aclBatchUpdateRequestSchema = z.object({
-  add_acls: aclItemSchema.array().nullish(),
-  remove_acls: aclItemSchema.array().nullish(),
-});
+export const aclBatchUpdateRequestSchema = z
+  .object({
+    add_acls: aclItemSchema.array().nullish(),
+    remove_acls: aclItemSchema.array().nullish(),
+  })
+  .openapi("AclBatchUpdateRequest");
 
 export type AclBatchUpdateRequest = z.infer<typeof aclBatchUpdateRequestSchema>;
 
-export const aclBatchUpdateResponseSchema = z.object({
-  added_acls: aclSchema.array(),
-  removed_acls: aclSchema.array(),
-});
+export const aclBatchUpdateResponseSchema = z
+  .object({
+    added_acls: aclSchema.array(),
+    removed_acls: aclSchema.array(),
+  })
+  .openapi("AclBatchUpdateResponse");
 
 export type AclBatchUpdateResponse = z.infer<
   typeof aclBatchUpdateResponseSchema
 >;
 
-const createProjectScoreSchema = z
-  .object({
-    project_id: projectScoreSchema.shape.project_id,
-    name: projectScoreSchema.shape.name,
-    description: projectScoreSchema.shape.description,
-    score_type: projectScoreSchema.shape.score_type,
-    categories: projectScoreSchema.shape.categories,
+export const createProjectAutomationSchema = projectAutomationSchema
+  .pick({
+    project_id: true,
+    name: true,
+    description: true,
+    config: true,
+  })
+  .openapi("CreateProjectAutomation");
+
+export const patchProjectAutomationSchema = objectNullish(
+  createProjectAutomationSchema,
+)
+  .omit({ project_id: true })
+  .openapi("PatchProjectAutomation");
+
+export const createProjectScoreSchema = projectScoreSchema
+  .pick({
+    project_id: true,
+    name: true,
+    description: true,
+    score_type: true,
+    categories: true,
+    config: true,
   })
   .openapi("CreateProjectScore");
 
-export const patchProjectScoreSchema = z
-  .object({
-    name: projectScoreSchema.shape.name.nullish(),
-    description: projectScoreSchema.shape.description,
-    score_type: projectScoreSchema.shape.score_type.nullish(),
-    categories: projectScoreSchema.shape.categories,
-  })
+export const patchProjectScoreSchema = objectNullish(createProjectScoreSchema)
+  .omit({ project_id: true })
   .openapi("PatchProjectScore");
 
-const createProjectTagSchema = z
+export const createProjectTagSchema = z
   .object({
     project_id: projectTagSchema.shape.project_id,
     name: projectTagSchema.shape.name,
@@ -1016,6 +1127,24 @@ export const patchProjectTagSchema = z
     color: projectTagSchema.shape.color,
   })
   .openapi("PatchProjectTag");
+
+export const createSpanIframeSchema = spanIframeSchema
+  .omit({
+    id: true,
+    created: true,
+    deleted_at: true,
+    user_id: true,
+  })
+  .openapi("CreateSpanIFrame");
+
+export const patchSpanIframeSchema = z
+  .object({
+    name: spanIframeSchema.shape.name.nullish(),
+    url: spanIframeSchema.shape.url.nullish(),
+    post_message: spanIframeSchema.shape.post_message.nullish(),
+    description: spanIframeSchema.shape.description.nullish(),
+  })
+  .openapi("PatchSpanIFrame");
 
 export const createViewSchema = viewSchema
   .omit({
@@ -1054,7 +1183,7 @@ export const patchOrganizationSchema = z
   .openapi("PatchOrganization");
 
 const createApiKeyBaseSchema = generateBaseTableOpSchema("API key");
-const createApiKeySchema = z.object({
+export const createApiKeySchema = z.object({
   name: z.string().describe("Name of the api key. Does not have to be unique"),
   org_name: createApiKeyBaseSchema.shape.org_name,
 });
@@ -1146,13 +1275,68 @@ export const patchOrganizationMembersSchema = z
   })
   .openapi("PatchOrganizationMembers");
 
-export const patchOrganizationMembersOutputSchema = z.object({
-  status: z.literal("success"),
-  send_email_error: z
+export const patchOrganizationMembersOutputSchema = z
+  .object({
+    status: z.literal("success"),
+    org_id: z.string().describe("The id of the org that was modified."),
+    send_email_error: z
+      .string()
+      .nullish()
+      .describe(
+        "If invite emails failed to send for some reason, the patch operation will still complete, but we will return an error message here",
+      ),
+  })
+  .openapi("PatchOrganizationMembersOutput");
+
+const createAISecretBaseSchema = generateBaseTableOpSchema("AI Secret");
+export const createAISecretSchema = z
+  .object({
+    name: aiSecretSchema.shape.name,
+    type: aiSecretSchema.shape.type,
+    metadata: aiSecretSchema.shape.metadata,
+    secret: z
+      .string()
+      .nullish()
+      .describe(
+        "Secret value. If omitted in a PUT request, the existing secret value will be left intact, not replaced with null.",
+      ),
+    org_name: createAISecretBaseSchema.shape.org_name,
+  })
+  .openapi("CreateAISecret");
+
+export const deleteAISecretSchema = z
+  .object({
+    name: aiSecretSchema.shape.name,
+    org_name: createAISecretBaseSchema.shape.org_name,
+  })
+  .openapi("DeleteAISecret");
+
+export const patchAISecretSchema = z
+  .object({
+    name: aiSecretSchema.shape.name.nullish(),
+    type: aiSecretSchema.shape.type,
+    metadata: aiSecretSchema.shape.metadata,
+    secret: z.string().nullish(),
+  })
+  .openapi("PatchAISecret");
+
+export const createEnvVarSchema = envVarSchema
+  .pick({ object_type: true, object_id: true, name: true })
+  .extend({
+    value: z
+      .string()
+      .nullish()
+      .describe(
+        "The value of the environment variable. Will be encrypted at rest.",
+      ),
+  });
+
+export const patchEnvVarSchema = envVarSchema.pick({ name: true }).extend({
+  value: z
     .string()
     .nullish()
     .describe(
-      "If invite emails failed to send for some reason, the patch operation will still complete, but we will return an error message here",
+      "The value of the environment variable. Will be encrypted at rest.",
     ),
 });
 
@@ -1213,6 +1397,11 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
     object: userSchema,
   },
   prompt_session: {},
+  project_automation: {
+    object: projectAutomationSchema,
+    create: createProjectAutomationSchema,
+    patch_id: patchProjectAutomationSchema,
+  },
   project_score: {
     object: projectScoreSchema,
     create: createProjectScoreSchema,
@@ -1222,6 +1411,11 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
     object: projectTagSchema,
     create: createProjectTagSchema,
     patch_id: patchProjectTagSchema,
+  },
+  span_iframe: {
+    object: spanIframeSchema,
+    create: createSpanIframeSchema,
+    patch_id: patchSpanIframeSchema,
   },
   view: {
     object: viewSchema,
@@ -1236,5 +1430,16 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
   api_key: {
     object: apiKeySchema,
     create: createApiKeySchema,
+  },
+  ai_secret: {
+    object: aiSecretSchema,
+    create: createAISecretSchema,
+    delete: deleteAISecretSchema,
+    patch_id: patchAISecretSchema,
+  },
+  env_var: {
+    object: envVarSchema,
+    create: createEnvVarSchema,
+    patch_id: patchEnvVarSchema,
   },
 };

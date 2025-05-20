@@ -11,3 +11,7 @@ node_modules
 build
 dist
 *.egg-info
+.aider*
+!.aiderignore
+
+**/.claude/settings.local.json

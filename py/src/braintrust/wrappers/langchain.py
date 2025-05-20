@@ -27,6 +27,7 @@ langchain_parent = contextvars.ContextVar("langchain_current_span", default=None
 
 class BraintrustTracer(BaseCallbackHandler):
     def __init__(self, logger=None):
+        _logger.warning("BraintrustTracer is deprecated, use `pip install braintrust-langchain` instead")
         self.logger = logger
         self.spans = {}
 
@@ -64,14 +65,14 @@ class BraintrustTracer(BaseCallbackHandler):
         inputs: Dict[str, Any],
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
-        tags: List[str] | None = None,
+        parent_run_id: Optional[UUID] = None,
+        tags: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> Any:
         self._start_span(parent_run_id, run_id, "Chain", input=inputs, metadata={"tags": tags})
 
     def on_chain_end(
-        self, outputs: Dict[str, Any], *, run_id: UUID, parent_run_id: UUID | None = None, **kwargs: Any
+        self, outputs: Dict[str, Any], *, run_id: UUID, parent_run_id: Optional[UUID] = None, **kwargs: Any
     ) -> Any:
         self._end_span(run_id, output=outputs)
 
@@ -81,8 +82,8 @@ class BraintrustTracer(BaseCallbackHandler):
         prompts: List[str],
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
-        tags: List[str] | None = None,
+        parent_run_id: Optional[UUID] = None,
+        tags: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> Any:
         self._start_span(
@@ -99,8 +100,8 @@ class BraintrustTracer(BaseCallbackHandler):
         messages: List[List[BaseMessage]],
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
-        tags: List[str] | None = None,
+        parent_run_id: Optional[UUID] = None,
+        tags: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> Any:
         self._start_span(
@@ -112,7 +113,7 @@ class BraintrustTracer(BaseCallbackHandler):
         )
 
     def on_llm_end(
-        self, response: LLMResult, *, run_id: UUID, parent_run_id: UUID | None = None, **kwargs: Any
+        self, response: LLMResult, *, run_id: UUID, parent_run_id: Optional[UUID] = None, **kwargs: Any
     ) -> Any:
         metrics = {}
         token_usage = response.llm_output.get("token_usage", {})
@@ -131,19 +132,21 @@ class BraintrustTracer(BaseCallbackHandler):
         input_str: str,
         *,
         run_id: UUID,
-        parent_run_id: UUID | None = None,
-        tags: List[str] | None = None,
+        parent_run_id: Optional[UUID] = None,
+        tags: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> Any:
         _logger.warning("Starting tool, but it will not be traced in braintrust (unsupported)")
 
-    def on_tool_end(self, output: str, *, run_id: UUID, parent_run_id: UUID | None = None, **kwargs: Any) -> Any:
+    def on_tool_end(self, output: str, *, run_id: UUID, parent_run_id: Optional[UUID] = None, **kwargs: Any) -> Any:
         pass
 
-    def on_retriever_start(self, query: str, *, run_id: UUID, parent_run_id: UUID | None = None, **kwargs: Any) -> Any:
+    def on_retriever_start(
+        self, query: str, *, run_id: UUID, parent_run_id: Optional[UUID] = None, **kwargs: Any
+    ) -> Any:
         _logger.warning("Starting retriever, but it will not be traced in braintrust (unsupported)")
 
     def on_retriever_end(
-        self, response: List[Document], *, run_id: UUID, parent_run_id: UUID | None = None, **kwargs: Any
+        self, response: List[Document], *, run_id: UUID, parent_run_id: Optional[UUID] = None, **kwargs: Any
     ) -> Any:
         pass

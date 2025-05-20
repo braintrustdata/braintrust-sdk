@@ -13,6 +13,7 @@ export function runCatchFinally<R>(
     const ret = f();
     if (ret instanceof Promise) {
       runSyncCleanup = false;
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
       return (ret as any).catch(catchF).finally(finallyF) as R;
     } else {
       return ret;
@@ -42,9 +43,10 @@ export function isEmpty(a: unknown): a is null | undefined {
 export class LazyValue<T> {
   private callable: () => Promise<T>;
   private value:
-    | { hasComputed: true; val: Promise<T> }
-    | { hasComputed: false } = {
-    hasComputed: false,
+    | { computedState: "succeeded"; val: Promise<T> }
+    | { computedState: "in_progress"; val: Promise<T> }
+    | { computedState: "uninitialized" } = {
+    computedState: "uninitialized",
   };
 
   constructor(callable: () => Promise<T>) {
@@ -52,19 +54,93 @@ export class LazyValue<T> {
   }
 
   get(): Promise<T> {
-    if (this.value.hasComputed) {
+    if (this.value.computedState !== "uninitialized") {
       return this.value.val;
     }
     // Note that we do not want to await the Promise returned by the callable
-    // inside `get` before setting `hasComputed` to true, because that would
-    // allow multiple async tasks to invoke `.get` concurrently and potentially
-    // invoke `this.callable` multiple times. By keeping this method fully
-    // synchronous, we guarantee that `callable` is only invoked once.
-    this.value = { hasComputed: true, val: this.callable() };
+    // inside `get` before updating `computedState`, because that would allow
+    // multiple async tasks to invoke `.get` concurrently and potentially invoke
+    // `this.callable` multiple times. By keeping this method fully synchronous,
+    // we guarantee that `callable` is only invoked once.
+    //
+    // Once the callable completes successfully, we update the computedState to
+    // "succeeded".
+    this.value = {
+      computedState: "in_progress",
+      val: this.callable().then((x) => {
+        this.value.computedState = "succeeded";
+        return x;
+      }),
+    };
     return this.value.val;
   }
 
-  public get hasComputed(): boolean {
-    return this.value.hasComputed;
+  // If this is true, the caller should be able to obtain the LazyValue without
+  // it throwing.
+  public get hasSucceeded(): boolean {
+    return this.value.computedState === "succeeded";
   }
+}
+
+// Synchronous version of LazyValue.
+export class SyncLazyValue<T> {
+  private callable: () => T;
+  private value:
+    | { computedState: "succeeded"; val: T }
+    | { computedState: "uninitialized" } = {
+    computedState: "uninitialized",
+  };
+
+  constructor(callable: () => T) {
+    this.callable = callable;
+  }
+
+  get(): T {
+    if (this.value.computedState !== "uninitialized") {
+      return this.value.val;
+    }
+    const result = this.callable();
+    this.value = { computedState: "succeeded", val: result };
+    return result;
+  }
+
+  // If this is true, the caller should be able to obtain the SyncLazyValue without
+  // it throwing.
+  public get hasSucceeded(): boolean {
+    return this.value.computedState === "succeeded";
+  }
+}
+
+export function addAzureBlobHeaders(
+  headers: Record<string, string>,
+  url: string,
+) {
+  // According to https://stackoverflow.com/questions/37824136/put-on-sas-blob-url-without-specifying-x-ms-blob-type-header,
+  // there is no way to avoid including this.
+  if (url.includes("blob.core.windows.net")) {
+    headers["x-ms-blob-type"] = "BlockBlob";
+  }
+}
+
+// Internal error class for indicating that an operation was aborted.
+export class InternalAbortError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InternalAbortError";
+  }
+}
+
+// Return a copy of record with the given keys removed.
+export function filterFrom(record: Record<string, any>, keys: string[]) {
+  const out: Record<string, any> = {};
+  for (const k of Object.keys(record)) {
+    if (!keys.includes(k)) {
+      out[k] = record[k];
+    }
+  }
+  return out;
+}
+
+export function objectIsEmpty(obj: Record<string, any>): boolean {
+  return !obj || Object.keys(obj).length === 0;
 }

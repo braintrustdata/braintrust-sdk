@@ -105,7 +105,8 @@ def get_past_n_ancestors(n=10, remote=None):
 def attempt(op):
     try:
         return op()
-    except (TypeError, ValueError, git.GitCommandError):
+    # OSError covers FileNotFoundError, FileExistsError, etc.
+    except (TypeError, ValueError, OSError, git.GitCommandError):
         return None
 
 
@@ -145,7 +146,7 @@ def repo_info():
         branch = None
         git_diff = None
 
-        dirty = repo.is_dirty()
+        dirty = attempt(lambda: repo.is_dirty())
 
         commit = attempt(lambda: repo.head.commit.hexsha.strip())
         commit_message = attempt(lambda: repo.head.commit.message.strip())
@@ -157,7 +158,7 @@ def repo_info():
         branch = attempt(lambda: repo.active_branch.name)
 
         if dirty:
-            git_diff = attempt(lambda: truncate_to_byte_limit(repo.git.diff("HEAD")))
+            git_diff = attempt(lambda: truncate_to_byte_limit(repo.git.diff("HEAD", no_ext_diff=True)))
 
         return RepoInfo(
             commit=commit,

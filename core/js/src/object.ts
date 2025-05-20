@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { AsyncScoringControl } from "../typespecs/api_types";
 import {
   Source,
@@ -6,13 +7,12 @@ import {
   AUDIT_SOURCE_FIELD,
   IS_MERGE_FIELD,
   MERGE_PATHS_FIELD,
-  PARENT_ID_FIELD,
   SKIP_ASYNC_SCORING_FIELD,
 } from "./db_fields";
+import { objectReferenceSchema } from "typespecs";
 
 export type IdField = { id: string };
 export type InputField = { input: unknown };
-export type InputsField = { inputs: unknown };
 export type OtherExperimentLogFields = {
   output: unknown;
   expected: unknown;
@@ -22,19 +22,21 @@ export type OtherExperimentLogFields = {
   metadata: Record<string, unknown>;
   metrics: Record<string, unknown>;
   datasetRecordId: string;
+  origin: z.infer<typeof objectReferenceSchema>;
+  span_attributes: Record<string, unknown>;
   [ASYNC_SCORING_CONTROL_FIELD]: AsyncScoringControl;
   [MERGE_PATHS_FIELD]: string[][];
   [SKIP_ASYNC_SCORING_FIELD]: boolean;
 };
 
 export type ExperimentLogPartialArgs = Partial<OtherExperimentLogFields> &
-  Partial<InputField | InputsField>;
+  Partial<InputField>;
 
 export type ExperimentLogFullArgs = Partial<
   Omit<OtherExperimentLogFields, "output" | "scores">
 > &
   Required<Pick<OtherExperimentLogFields, "output" | "scores">> &
-  Partial<InputField | InputsField> &
+  Partial<InputField> &
   Partial<IdField>;
 
 export type LogFeedbackFullArgs = IdField &
@@ -52,6 +54,11 @@ export interface ParentExperimentIds {
 export interface ParentProjectLogIds {
   project_id: string;
   log_id: "g";
+}
+
+export interface ParentPlaygroundLogIds {
+  prompt_session_id: string;
+  log_id: "x";
 }
 
 export type LogCommentFullArgs = IdField & {
@@ -81,7 +88,6 @@ export type ExperimentEvent = Partial<InputField> &
     span_parents: string[];
     span_attributes: Record<string, unknown>;
     context: Record<string, unknown>;
-    [PARENT_ID_FIELD]: string;
     [AUDIT_SOURCE_FIELD]: Source;
     [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
   }>;
@@ -90,14 +96,19 @@ export type DatasetEvent = {
   input?: unknown;
   tags?: string[];
   metadata?: unknown;
+  created?: string;
   id: string;
   dataset_id: string;
-  created: string;
 } & ({ expected?: unknown } | { output?: unknown });
 
 export type LoggingEvent = Omit<ExperimentEvent, "experiment_id"> & {
   project_id: string;
   log_id: "g";
+};
+
+export type PlaygroundLogEvent = Omit<ExperimentEvent, "experiment_id"> & {
+  prompt_session_id: string;
+  log_id: "x";
 };
 
 export type CommentEvent = IdField & {
@@ -110,28 +121,36 @@ export type CommentEvent = IdField & {
   };
   [AUDIT_SOURCE_FIELD]: Source;
   [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
-} & (ParentExperimentIds | ParentProjectLogIds);
+} & (ParentExperimentIds | ParentProjectLogIds | ParentPlaygroundLogIds);
 
 export type BackgroundLogEvent =
   | ExperimentEvent
   | DatasetEvent
   | LoggingEvent
+  | PlaygroundLogEvent
   | CommentEvent;
 
 export const DEFAULT_IS_LEGACY_DATASET = false;
 
 interface LegacyDatasetRecord {
   id: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   input: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   output: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata: any;
 }
 
 interface NewDatasetRecord {
   id: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   input: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   expected: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tags: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata: any;
 }
 
@@ -148,8 +167,10 @@ export function ensureDatasetRecord<
   legacy: IsLegacyDataset,
 ): DatasetRecord<IsLegacyDataset> {
   if (legacy) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return ensureLegacyDatasetRecord(r) as DatasetRecord<IsLegacyDataset>;
   } else {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return ensureNewDatasetRecord(r) as DatasetRecord<IsLegacyDataset>;
   }
 }
@@ -181,26 +202,4 @@ export function ensureNewDatasetRecord(
   };
   delete row.output;
   return row;
-}
-
-export function makeLegacyEvent(e: BackgroundLogEvent): BackgroundLogEvent {
-  if (!("dataset_id" in e) || !("expected" in e)) {
-    return e;
-  }
-
-  const event = {
-    ...e,
-    output: e.expected,
-  };
-  delete event.expected;
-
-  if (MERGE_PATHS_FIELD in event) {
-    for (const path of (event[MERGE_PATHS_FIELD] || []) as string[][]) {
-      if (path.length > 0 && path[0] === "expected") {
-        path[0] = "output";
-      }
-    }
-  }
-
-  return event;
 }

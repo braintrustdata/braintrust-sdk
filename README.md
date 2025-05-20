@@ -9,7 +9,7 @@ This repository contains the Python and Javascript SDKs for Braintrust. The SDKs
 - Run evaluations (via the `Eval` framework)
 - Manage an on-premises installation of Braintrust (Python)
 
-## Quickstart: Typescript
+## Quickstart: TypeScript
 
 First, install the Braintrust SDK:
 
@@ -96,9 +96,18 @@ BRAINTRUST_API_KEY=<YOUR_API_KEY> \
   braintrust eval eval_tutorial.py
 ```
 
+## Integrations
+
+Braintrust provides integrations with several popular AI development tools and platforms:
+
+- **LangChain.js**: A callback handler to automatically log LangChain.js executions to Braintrust. [Learn more](integrations/langchain-js)
+- **LangChain Python**: Integration for logging LangChain Python executions to Braintrust. [Learn more](integrations/langchain-py)
+- **Val Town**: Examples and templates for using Braintrust with Val Town's serverless JavaScript/TypeScript environment. [Learn more](integrations/val.town)
+- **Vercel AI SDK**: Integration with Vercel's AI SDK for building AI-powered applications. [Learn more](integrations/vercel-ai-sdk)
+
 ## Documentation
 
 For more information, check out the [docs](https://www.braintrust.dev/docs):
 
-- [Typescript](https://www.braintrust.dev/docs/libs/nodejs)
+- [TypeScript](https://www.braintrust.dev/docs/libs/nodejs)
 - [Python](https://www.braintrust.dev/docs/libs/python)

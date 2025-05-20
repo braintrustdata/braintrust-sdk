@@ -7,6 +7,7 @@ from botocore.exceptions import ClientError
 
 from braintrust.logger import app_conn, login
 
+# pylint: disable=no-name-in-module
 from ...aws import cloudformation
 from ...util import response_raise_for_status
 
@@ -36,6 +37,13 @@ PARAMS = {
     "OutboundRateLimitMaxRequests": "outbound_rate_limit_max_requests",
     "UseGlobalProxy": "use_global_proxy",
     "EnableQuarantine": "enable_quarantine",
+    "EnableBrainstore": "enable_brainstore",
+    "BrainstoreInstanceKeyPairName": "brainstore_instance_key_pair_name",
+    "BrainstoreInstanceType": "brainstore_instance_type",
+    "BrainstoreInstanceCount": "brainstore_instance_count",
+    "BrainstoreMaxInstanceCount": "brainstore_max_instance_count",
+    "BrainstoreVersionOverride": "brainstore_version_override",
+    "BrainstoreLicenseKey": "brainstore_license_key",
 }
 
 REMOVED_PARAMS = ["ThirdAZIndex"]
@@ -240,6 +248,46 @@ def build_parser(subparsers, parents):
         default=os.environ.get("BRAINTRUST_API_KEY", None),
     )
 
+    # Brainstore configuration
+    parser.add_argument(
+        "--enable-brainstore",
+        help="Enable Brainstore object-storage data backend",
+        choices=[None, "true", "false"],
+        default=None,
+    )
+    parser.add_argument(
+        "--brainstore-license-key",
+        help="The license key to use for Brainstore",
+        default=None,
+    )
+    parser.add_argument(
+        "--brainstore-instance-key-pair-name",
+        help="The EC2 Key Pair to allow SSH access to the Brainstore instance",
+        default=None,
+    )
+    parser.add_argument(
+        "--brainstore-instance-type",
+        help="EC2 instance type for Brainstore. Must be a Graviton instance type.",
+        default=None,
+    )
+    parser.add_argument(
+        "--brainstore-instance-count",
+        help="Number of Brainstore instances to run",
+        type=int,
+        default=None,
+    )
+    parser.add_argument(
+        "--brainstore-max-instance-count",
+        help="Max scaling size for Brainstore instances",
+        type=int,
+        default=None,
+    )
+    parser.add_argument(
+        "--brainstore-version-override",
+        help="Lock Brainstore to a specific docker tag",
+        default=None,
+    )
+
     parser.set_defaults(func=main)
 
 
@@ -269,6 +317,13 @@ def main(args):
         PARAMS["ClickhouseCatchupEtlArn"] = "clickhouse_catchup_etl_arn"
         PARAMS["ClickhouseConnectUrl"] = "clickhouse_connect_url"
         PARAMS["ClickhousePGUrl"] = "clickhouse_pg_url"
+        PARAMS["EnableBrainstore"] = "enable_brainstore"
+        PARAMS["BrainstoreInstanceKeyPairName"] = "brainstore_instance_key_pair_name"
+        PARAMS["BrainstoreLicenseKey"] = "brainstore_license_key"
+        PARAMS["BrainstoreInstanceType"] = "brainstore_instance_type"
+        PARAMS["BrainstoreInstanceCount"] = "brainstore_instance_count"
+        PARAMS["BrainstoreMaxInstanceCount"] = "brainstore_max_instance_count"
+        PARAMS["BrainstoreVersionOverride"] = "brainstore_version_override"
 
         if args.template is None:
             template = "https://braintrust-cf.s3.amazonaws.com/braintrust-latest-vpc.yaml"
@@ -306,7 +361,11 @@ def main(args):
             ]
             if v is not None
         ]
-        _logger.info(f"Using params: {params}")
+        _logger.info("Using params:")
+        for param in params:
+            _logger.info(f"  {param['ParameterKey']}: {param['ParameterValue']}")
+
+        _logger.info(f"Typical stack creation takes 10-15 minutes.")
 
         cloudformation.create_stack(
             StackName=args.name,
@@ -315,13 +374,13 @@ def main(args):
             Capabilities=CAPABILITIES,
         )
 
-        for _ in range(120):
+        for _ in range(80):
             status = cloudformation.describe_stacks(StackName=args.name)["Stacks"][0]
             if status["StackStatus"] != "CREATE_IN_PROGRESS":
                 exists = True
                 break
             _logger.info("Waiting for stack to be created...")
-            time.sleep(5)
+            time.sleep(15)
         else:
             _logger.error(
                 textwrap.dedent(
@@ -347,9 +406,11 @@ def main(args):
             param_updates[param] = args.__dict__[arg_name]
     if len(param_updates) > 0 or args.update_template:
         template_kwargs = {"TemplateURL": template} if args.update_template else {"UsePreviousTemplate": True}
-        _logger.info(
-            f"Updating stack with name {args.name} with params: {param_updates} and template: {template_kwargs}"
-        )
+        _logger.info(f"Updating stack with name {args.name} with template: {template_kwargs}")
+
+        _logger.info("Using params:")
+        for param, value in param_updates.items():
+            _logger.info(f"  {param}: {value}")
 
         if args.template:
             new_template = cloudformation.get_template_summary(TemplateURL=template)

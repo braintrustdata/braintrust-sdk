@@ -5,7 +5,7 @@ import sys
 import textwrap
 import traceback
 
-from . import eval, install
+from . import eval, install, push
 
 
 def main(args=None):
@@ -22,9 +22,9 @@ def main(args=None):
     parent_parser.add_argument(
         "--verbose",
         "-v",
-        default=False,
-        action="store_true",
-        help="Include additional details, including full stack traces on errors.",
+        default=0,
+        action="count",
+        help="Include additional details, including full stack traces on errors. Pass twice (-vv) for debug logging.",
     )
 
     parser = argparse.ArgumentParser(
@@ -36,11 +36,11 @@ def main(args=None):
     )
     subparsers = parser.add_subparsers(help="sub-command help", dest="subcommand", required=True)
 
-    for module in [eval, install]:
+    for module in [eval, install, push]:
         module.build_parser(subparsers, parent_parser)
 
     args = parser.parse_args(args=args)
-    level = logging.DEBUG if args.verbose else logging.INFO
+    level = logging.DEBUG if args.verbose >= 2 else logging.INFO
     logging.basicConfig(format="%(asctime)s %(levelname)s [%(name)s]: %(message)s", level=level)
 
     return args.func(args)

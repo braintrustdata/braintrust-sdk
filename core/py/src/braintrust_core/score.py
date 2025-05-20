@@ -1,7 +1,7 @@
 import dataclasses
 import sys
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from .serializable_data_class import SerializableDataClass
 
@@ -16,11 +16,11 @@ class Score(SerializableDataClass):
     score: Optional[float]
     """The score for the evaluation. This should be a float between 0 and 1. If the score is None, the evaluation is considered to be skipped."""
 
-    metadata: Dict[str, any] = dataclasses.field(default_factory=dict)
+    metadata: Dict[str, Any] = dataclasses.field(default_factory=dict)
     """Metadata for the score. This can be used to store additional information about the score."""
 
     # DEPRECATION_NOTICE: this field is deprecated, as errors are propagated up to the caller.
-    error: Exception = None
+    error: Optional[Exception] = None
     """Deprecated: The error field is deprecated, as errors are now propagated to the caller. The field will be removed in a future version of the library."""
 
     def as_dict(self):
@@ -40,16 +40,16 @@ class Score(SerializableDataClass):
 
 
 class Scorer(ABC):
-    async def eval_async(self, output, expected=None, **kwargs):
+    async def eval_async(self, output: Any, expected: Any = None, **kwargs: Any) -> Score:
         return await self._run_eval_async(output, expected, **kwargs)
 
-    def eval(self, output, expected=None, **kwargs):
+    def eval(self, output: Any, expected: Any = None, **kwargs: Any) -> Score:
         return self._run_eval_sync(output, expected, **kwargs)
 
-    def __call__(self, output, expected=None, **kwargs):
+    def __call__(self, output: Any, expected: Any = None, **kwargs: Any) -> Score:
         return self.eval(output, expected, **kwargs)
 
-    async def _run_eval_async(self, output, expected=None, **kwargs) -> Score:
+    async def _run_eval_async(self, output: Any, expected: Any = None, **kwargs: Any) -> Score:
         # By default we just run the sync version in a thread
         return self._run_eval_sync(output, expected, **kwargs)
 
@@ -57,7 +57,7 @@ class Scorer(ABC):
         return self.__class__.__name__
 
     @abstractmethod
-    def _run_eval_sync(self, output, expected=None, **kwargs) -> Score:
+    def _run_eval_sync(self, output: Any, expected: Any = None, **kwargs: Any) -> Score:
         ...
 
 

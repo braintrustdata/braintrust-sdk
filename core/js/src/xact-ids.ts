@@ -16,6 +16,9 @@ export function prettifyXact(valueString: TransactionId): string {
 }
 
 export function loadPrettyXact(encodedHex: string): TransactionId {
+  if (encodedHex.length !== 16) {
+    return encodedHex;
+  }
   const value = BigInt(`0x${encodedHex}`);
   const multipliedInverse = modularMultiply(value, COPRIME_INVERSE);
   const withTopBits = TOP_BITS | multipliedInverse;

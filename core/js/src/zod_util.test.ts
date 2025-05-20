@@ -14,7 +14,7 @@ test("parseNoStrip basic", () => {
   });
   expect(parseNoStrip(testSchema, { a: "hello" })).toEqual({ a: "hello" });
   expect(() => parseNoStrip(testSchema, { a: "hello", c: 5 })).toThrowError(
-    /Extraneous key.*c.*at path.*in input/,
+    /Extraneous key.*c.*at path.*/,
   );
 });
 
@@ -57,8 +57,8 @@ test("objectNullish basic", () => {
     },
   };
   const obj4 = {};
-  expect(() => schema.parse(obj3)).toThrowError("");
-  expect(() => schema.parse(obj4)).toThrowError("");
+  expect(() => schema.parse(obj3)).toThrowError();
+  expect(() => schema.parse(obj4)).toThrowError();
   expect(nullishSchema.parse(obj3)).toEqual(obj3);
   expect(nullishSchema.parse(obj4)).toEqual(obj4);
 
@@ -66,6 +66,6 @@ test("objectNullish basic", () => {
   const obj5 = {
     c: {},
   };
-  expect(() => schema.parse(obj5)).toThrowError("");
-  expect(() => nullishSchema.parse(obj5)).toThrowError("");
+  expect(() => schema.parse(obj5)).toThrowError();
+  expect(() => nullishSchema.parse(obj5)).toThrowError();
 });

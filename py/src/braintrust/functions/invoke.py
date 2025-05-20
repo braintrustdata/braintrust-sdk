@@ -1,13 +1,14 @@
-from typing import Any, Literal, Optional, TypeVar, Union, overload
+from typing import Any, List, Literal, Optional, TypeVar, Union, overload
 
 from sseclient import SSEClient
 
 from ..logger import Exportable, get_span_parent_object, login, proxy_conn
 from ..util import response_raise_for_status
 from .constants import INVOKE_API_VERSION
-from .stream import BraintrustStream
+from .stream import BraintrustInvokeError, BraintrustStream
 
 T = TypeVar("T")
+ModeType = Literal["auto", "parallel"]
 
 
 @overload
@@ -22,8 +23,11 @@ def invoke(
     global_function: Optional[str] = None,
     # arguments to the function
     input: Any = None,
+    messages: Optional[List[Any]] = None,
     parent: Optional[Union[Exportable, str]] = None,
     stream: Optional[Literal[False]] = None,
+    mode: Optional[ModeType] = None,
+    strict: Optional[bool] = None,
     org_name: Optional[str] = None,
     api_key: Optional[str] = None,
     app_url: Optional[str] = None,
@@ -44,8 +48,11 @@ def invoke(
     global_function: Optional[str] = None,
     # arguments to the function
     input: Any = None,
+    messages: Optional[List[Any]] = None,
     parent: Optional[Union[Exportable, str]] = None,
     stream: Literal[True] = True,
+    mode: Optional[ModeType] = None,
+    strict: Optional[bool] = None,
     org_name: Optional[str] = None,
     api_key: Optional[str] = None,
     app_url: Optional[str] = None,
@@ -65,8 +72,11 @@ def invoke(
     global_function: Optional[str] = None,
     # arguments to the function
     input: Any = None,
+    messages: Optional[List[Any]] = None,
     parent: Optional[Union[Exportable, str]] = None,
     stream: bool = False,
+    mode: Optional[ModeType] = None,
+    strict: Optional[bool] = None,
     org_name: Optional[str] = None,
     api_key: Optional[str] = None,
     app_url: Optional[str] = None,
@@ -78,6 +88,7 @@ def invoke(
 
     Args:
         input: The input to the function. This will be logged as the `input` field in the span.
+        messages: Additional OpenAI-style messages to add to the prompt (only works for llm functions).
         parent: The parent of the function. This can be an existing span, logger, or experiment, or
             the output of `.export()` if you are distributed tracing. If unspecified, will use
             the same semantics as `traced()` to determine the parent and no-op if not in a tracing
@@ -85,6 +96,11 @@ def invoke(
         stream: Whether to stream the function's output. If True, the function will return a
             `BraintrustStream`, otherwise it will return the output of the function as a JSON
             object.
+        mode: The response shape of the function if returning tool calls. If "auto", will return
+            a string if the function returns a string, and a JSON object otherwise. If "parallel",
+            will return an array of JSON objects with one object per tool call.
+        strict: Whether to use strict mode for the function. If true, the function will throw an
+            error if the variable names in the prompt do not match the input keys.
         org_name: The name of the Braintrust organization to use.
         api_key: The API key to use for authentication.
         app_url: The URL of the Braintrust application.
@@ -133,15 +149,65 @@ def invoke(
         api_version=INVOKE_API_VERSION,
         **function_id_args,
     )
+    if messages is not None:
+        request["messages"] = messages
+    if mode is not None:
+        request["mode"] = mode
+    if strict is not None:
+        request["strict"] = strict
 
     headers = {"Accept": "text/event-stream" if stream else "application/json"}
 
-    resp = proxy_conn().post("function/invoke", json=request, headers=headers)
+    resp = proxy_conn().post("function/invoke", json=request, headers=headers, stream=stream)
+    if resp.status_code == 500:
+        raise BraintrustInvokeError(resp.text)
+
     response_raise_for_status(resp)
 
     if stream:
-        if not resp.content:
-            raise ValueError("Received empty stream body")
         return BraintrustStream(SSEClient(resp))
     else:
         return resp.json()
+
+
+def init_function(project_name: str, slug: str, version: Optional[str] = None):
+    """
+    Creates a function that can be used as either a task or scorer in the Eval framework.
+    When used as a task, it will invoke the specified Braintrust function with the input.
+    When used as a scorer, it will invoke the function with the scorer arguments.
+
+    Example:
+    ```python
+    # As a task
+    Eval(
+        name="my-evaluator",
+        data=data,
+        task=init_function("my-project", "my-function"),
+        scores=[...]
+    )
+
+    # As a scorer
+    Eval(
+        name="my-evaluator",
+        data=data,
+        task=task,
+        scores=[init_function("my-project", "my-scorer")]
+    )
+    ```
+
+    :param project_name: The name of the project containing the function.
+    :param slug: The slug of the function to invoke.
+    :param version: Optional version of the function to use. Defaults to latest.
+    :return: A function that can be used as a task or scorer.
+    """
+
+    def f(*args: Any, **kwargs: Any) -> Any:
+        if len(args) > 0:
+            # Task.
+            return invoke(project_name=project_name, slug=slug, version=version, input=args[0])
+        else:
+            # Scorer.
+            return invoke(project_name=project_name, slug=slug, version=version, input=kwargs)
+
+    f.__name__ = f"init_function-{project_name}-{slug}-{version or 'latest'}"
+    return f

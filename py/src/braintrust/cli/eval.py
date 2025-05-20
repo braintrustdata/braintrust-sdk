@@ -24,6 +24,7 @@ from ..framework import (
     run_evaluator,
     set_thread_pool_max_workers,
 )
+from ..logger import Dataset
 from ..util import eprint
 
 INCLUDE = [
@@ -127,13 +128,26 @@ async def run_evaluator_task(evaluator, position, opts: EvaluatorOpts):
         base_experiment_name = None
         if isinstance(evaluator.data, BaseExperiment):
             base_experiment_name = evaluator.data.name
+
+        dataset = None
+        if isinstance(evaluator.data, Dataset):
+            dataset = evaluator.data
+
+        # NOTE: This code is duplicated with _EvalCommon in py/src/braintrust/framework.py.
+        # Make sure to update those arguments if you change this.
         experiment = init_experiment(
-            evaluator.project_name,
-            evaluator.experiment_name,
+            project_name=evaluator.project_name,
+            project_id=evaluator.project_id,
+            experiment_name=evaluator.experiment_name,
+            description=evaluator.description,
             metadata=evaluator.metadata,
             is_public=evaluator.is_public,
             update=evaluator.update,
             base_experiment=base_experiment_name,
+            base_experiment_id=evaluator.base_experiment_id,
+            git_metadata_settings=evaluator.git_metadata_settings,
+            repo_info=evaluator.repo_info,
+            dataset=dataset,
         )
 
     try:
@@ -167,7 +181,7 @@ def add_report(eval_reports, reporter, report):
     eval_reports[reporter.name]["results"].append(report)
 
 
-async def run_once(handles, evaluator_opts):
+async def run_once(handles: List[FileHandle], evaluator_opts: EvaluatorOpts) -> bool:
     objects = EvaluatorState()
     update_evaluators(objects, handles, terminate_on_failure=evaluator_opts.terminate_on_failure)
 
@@ -260,7 +274,7 @@ def run(args):
         load_dotenv(args.env_file)
 
     evaluator_opts = EvaluatorOpts(
-        verbose=args.verbose,
+        verbose=args.verbose > 0,
         no_send_logs=args.no_send_logs,
         no_progress_bars=args.no_progress_bars,
         terminate_on_failure=args.terminate_on_failure,

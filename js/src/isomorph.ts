@@ -1,4 +1,4 @@
-import { GitMetadataSettings, RepoInfo } from "@braintrust/core";
+import { GitMetadataSettings, RepoInfo } from "@braintrust/core/typespecs";
 
 export interface CallerLocation {
   caller_functionname: string;
@@ -34,6 +34,9 @@ export interface Common {
   newAsyncLocalStorage: <T>() => IsoAsyncLocalStorage<T>;
   processOn: (event: string, handler: (code: any) => void) => void;
 
+  // hash a string. not guaranteed to be crypto safe.
+  hash?: (data: string) => string;
+
   // Filesystem operations.
   pathJoin?: (...args: string[]) => string;
   pathDirname?: (path: string) => string;
@@ -42,6 +45,16 @@ export interface Common {
     opts?: { recursive?: boolean },
   ) => Promise<string | undefined>;
   writeFile?: (filename: string, data: string) => Promise<void>;
+  readFile?: (filename: string) => Promise<Uint8Array>;
+  readdir?: (path: string) => Promise<string[]>;
+  utimes?: (path: string, atime: Date, mtime: Date) => Promise<void>;
+  unlink?: (path: string) => Promise<void>;
+  stat?: (path: string) => Promise<any>; // type-erased
+  homedir?: () => string;
+
+  // zlib (promisified and type-erased).
+  gunzip?: (data: any) => Promise<any>;
+  gzip?: (data: any) => Promise<any>;
 }
 
 const iso: Common = {
