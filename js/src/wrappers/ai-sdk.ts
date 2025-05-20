@@ -1,5 +1,6 @@
 import { ContentPart, Message, Tools } from "@braintrust/core/typespecs";
 import { startSpan } from "../logger";
+import type { Span } from "../logger";
 import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import {
   LanguageModelV1,
@@ -76,18 +77,24 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
 
   // For the first cut, do not support custom span_info arguments. We can
   // propagate those via async local storage
-  async doGenerate(options: LanguageModelV1CallOptions) {
-    const span = startSpan({
-      name: "Chat Completion",
-      spanAttributes: {
-        type: "llm",
-      },
-    });
-    const { prompt, mode, ...rest } = options;
+  async doGenerate(
+    options: LanguageModelV1CallOptions & { overrideSpan?: Span },
+  ) {
+    const { overrideSpan, ...originalModelOptions } = options;
+
+    const span =
+      overrideSpan ||
+      startSpan({
+        name: "Chat Completion",
+        spanAttributes: {
+          type: "llm",
+        },
+      });
+    const { prompt, mode, ...rest } = originalModelOptions;
     const startTime = getCurrentUnixTimestamp();
 
     try {
-      const ret = await this.model.doGenerate(options);
+      const ret = await this.model.doGenerate(originalModelOptions);
       span.log({
         input: postProcessPrompt(prompt),
         metadata: {
@@ -115,20 +122,27 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
       });
       return ret;
     } finally {
-      span.end();
+      if (!overrideSpan) {
+        span.end();
+      }
     }
   }
 
-  async doStream(options: LanguageModelV1CallOptions) {
-    const { prompt, mode, ...rest } = options;
+  async doStream(
+    options: LanguageModelV1CallOptions & { overrideSpan?: Span },
+  ) {
+    const { overrideSpan, ...originalModelOptions } = options;
+    const { prompt, mode, ...rest } = originalModelOptions;
     const startTime = getCurrentUnixTimestamp();
 
-    const span = startSpan({
-      name: "Chat Completion",
-      spanAttributes: {
-        type: "llm",
-      },
-    });
+    const span =
+      overrideSpan ||
+      startSpan({
+        name: "Chat Completion",
+        spanAttributes: {
+          type: "llm",
+        },
+      });
 
     span.log({
       input: postProcessPrompt(prompt),
@@ -146,13 +160,15 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
     let ended = false;
     const end = () => {
       if (!ended) {
-        span.end();
+        if (!overrideSpan) {
+          span.end();
+        }
         ended = true;
       }
     };
 
     try {
-      const ret = await this.model.doStream(options);
+      const ret = await this.model.doStream(originalModelOptions);
 
       let time_to_first_token: number | undefined = undefined;
       let usage:
