@@ -13,7 +13,6 @@ if [ "$PYPI_REPO" != "pypi" ] && [ "$PYPI_REPO" != "testpypi" ]; then
     exit 1
 fi
 
-echo "Running version script..."
 VERSION=$(bash scripts/get_version.sh)
 
 if [ -z "$VERSION" ]; then
@@ -21,8 +20,7 @@ if [ -z "$VERSION" ]; then
     exit 1
 fi
 
-echo "Publishing version $VERSION to testpypi (eventually $PYPI_REPO)"
-#
-# test pypi is hardcoded for now
-#
-twine upload --repository testpypi dist/*"$VERSION"*
+echo "Publishing version $VERSION to $PYPI_REPO"
+
+# Upload to the specified repository (either pypi or testpypi)
+twine upload --repository "$PYPI_REPO" dist/*"$VERSION"*
