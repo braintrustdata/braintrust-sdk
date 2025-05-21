@@ -168,7 +168,7 @@ const TOKEN_PREFIX_MAP: Record<string, string> = {
   output: "completion",
 };
 
-export function parseMetricsFromUsage(usage: any): Record<string, number> {
+export function parseMetricsFromUsage(usage: unknown): Record<string, number> {
   if (!usage) {
     return {};
   }

@@ -15,3 +15,4 @@ dist
 !.aiderignore
 
 **/.claude/settings.local.json
+CLAUDE.local.md

@@ -15,7 +15,6 @@ install_requires = [
     "GitPython",
     "requests",
     "chevron",
-    "braintrust_core",
     "tqdm",
     "exceptiongroup>=1.2.0",
     "python-dotenv",
@@ -26,23 +25,8 @@ install_requires = [
 
 extras_require = {
     "cli": ["boto3", "psycopg2-binary", "uv"],
-    "dev": [
-        "black",
-        "build",
-        "flake8",
-        "flake8-isort",
-        "IPython",
-        "isort==5.12.0",
-        "pre-commit",
-        "pytest",
-        "twine",
-        "pytest-asyncio",
-        "nox",
-    ],
     "doc": ["pydoc-markdown"],
     "openai-agents": ["openai-agents"],
-    # These should only be installed for linting import errors, not for tests.
-    "lint": ["anthropic"],
 }
 
 extras_require["all"] = sorted({package for packages in extras_require.values() for package in packages})
