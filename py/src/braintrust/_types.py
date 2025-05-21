@@ -29,7 +29,7 @@ class ObjectReference(TypedDict):
     """
     ID of the original event.
     """
-    _xact_id: str
+    _xact_id: NotRequired[Optional[str]]
     """
     Transaction ID of the original event.
     """
