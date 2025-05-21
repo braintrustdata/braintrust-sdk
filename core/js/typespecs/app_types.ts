@@ -202,6 +202,9 @@ export const apiKeySchema = z
     name: apiKeyBaseSchema.shape.name,
     preview_name: z.string(),
     user_id: userSchema.shape.id.nullish(),
+    user_email: userSchema.shape.email.nullish(),
+    user_given_name: userSchema.shape.given_name.nullish(),
+    user_family_name: userSchema.shape.family_name.nullish(),
     org_id: organizationSchema.shape.id.nullish(),
   })
   .openapi("ApiKey");
