@@ -37,7 +37,7 @@ jobs:
       - name: Install build dependencies
         working-directory: py
         run: |
-          make install-build-deps
+          make install-dev
       - name: Verify, build and publish to TestPyPI
         working-directory: py
         run: |

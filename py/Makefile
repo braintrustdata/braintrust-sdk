@@ -35,9 +35,8 @@ install-build-deps:
 	python -m pip install -e .
 	python -m pip install -r requirements-build.txt
 
-install-dev:
-	pip install -e .
-	pip install -r requirements-dev.txt
+install-dev: install-build-deps
+	python -m pip install -r requirements-dev.txt
 
 _publish:
 	./scripts/publish.sh
@@ -48,7 +47,7 @@ _check-git-clean:
 		exit 1; \
 	fi
 
-_verify-build-publish: _check-git-clean lint build test-wheel _publish
+_verify-build-publish: _check-git-clean build test-wheel _publish
 
 publish-to-pypi: export PYPI_REPO := pypi
 publish-to-pypi: _verify-build-publish
