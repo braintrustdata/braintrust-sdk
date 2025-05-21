@@ -8,7 +8,7 @@ from openai import AsyncOpenAI, OpenAI
 
 from braintrust import logger, wrap_openai
 from braintrust.span_types import SpanTypeAttribute
-from braintrust.wrappers.test_utils import assert_metrics_are_valid, simulate_login
+from braintrust.wrappers.test_utils import assert_metrics_are_valid, init_test_logger
 
 TEST_ORG_ID = "test-org-openai-py-tracing"
 PROJECT_NAME = "test-project-openai-py-tracing"
@@ -19,7 +19,7 @@ TEST_SYSTEM_PROMPT = "You are a helpful assistant that only responds with number
 
 @pytest.fixture
 def memory_logger():
-    simulate_login(PROJECT_NAME)
+    init_test_logger(PROJECT_NAME)
     with logger._internal_with_memory_background_logger() as bgl:
         yield bgl
 

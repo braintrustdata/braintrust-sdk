@@ -7,7 +7,7 @@ from braintrust.util import LazyValue
 TEST_ORG_ID = "test-org-id"
 
 
-def simulate_login(project_name: str):
+def init_test_logger(project_name: str):
     project_metadata = ObjectMetadata(id=project_name, name=project_name, full_info=dict())
     metadata = OrgProjectMetadata(org_id=TEST_ORG_ID, project=project_metadata)
     lazy_metadata = LazyValue(lambda: metadata, use_mutex=False)

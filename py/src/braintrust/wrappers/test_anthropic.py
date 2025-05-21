@@ -15,19 +15,11 @@ from braintrust import logger
 from braintrust.logger import ObjectMetadata, OrgProjectMetadata
 from braintrust.util import LazyValue
 from braintrust.wrappers.anthropic import wrap_anthropic
+from braintrust.wrappers.test_utils import init_test_logger
 
 TEST_ORG_ID = "test-org-123"
 PROJECT_NAME = "test-anthropic-app"
 MODEL = "claude-3-haiku-20240307"  # use the cheapest model since answers dont matter
-
-
-def _setup_test_logger(project_name: str):
-    # FIXME[matt] make reusable
-    project_metadata = ObjectMetadata(id=project_name, name=project_name, full_info=dict())
-    metadata = OrgProjectMetadata(org_id=TEST_ORG_ID, project=project_metadata)
-    lazy_metadata = LazyValue(lambda: metadata, use_mutex=False)
-    l = logger.init_logger(project=project_name)
-    l._lazy_metadata = lazy_metadata  # FIXME[matt] this is cheesy but it stops us from having to login
 
 
 def _get_client():
@@ -40,7 +32,7 @@ def _get_async_client():
 
 def test_memory_logger():
     # FIXME[matt] this should be moved to a common place
-    _setup_test_logger("test-anthropic-app")
+    init_test_logger("test-anthropic-app")
     with logger._internal_with_memory_background_logger() as bgl:
         assert not bgl.pop()
 
@@ -56,7 +48,7 @@ def test_memory_logger():
 
 @pytest.fixture
 def memory_logger():
-    _setup_test_logger(PROJECT_NAME)
+    init_test_logger(PROJECT_NAME)
     with logger._internal_with_memory_background_logger() as bgl:
         yield bgl
 
