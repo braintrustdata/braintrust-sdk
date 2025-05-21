@@ -211,9 +211,26 @@ export interface Span extends Exportable {
    * Links can be generated at any time, but they will only become viewable
    * after the span and its root have been flushed to the server and ingested.
    *
-   * @returns A permalink to the span.
+   * This function can block resolving data with the server. For production
+   * applications it's preferable to call {@link Span.link} instead.
+   *
+   * @returns A promise which resolves to a permalink to the span.
    */
   permalink(): Promise<string>;
+
+  /**
+   * Format a link to the Braintrust application for viewing this span.
+   *
+   * Links can be generated at any time, but they will only become viewable
+   * after the span and its root have been flushed to the server and ingested.
+   *
+   * There are certain conditions that a Span doesn'thave enough information
+   * to return a stable link (e.g. during an unresolved experiment). In this case
+   * or if there's an error generating link, we'll return a placeholder link.
+   *
+   * @returns A link to the span.
+   */
+  link(): string;
 
   /**
    * Flush any pending rows to the server.
@@ -291,6 +308,10 @@ export class NoopSpan implements Span {
   }
 
   public async permalink(): Promise<string> {
+    return NOOP_SPAN_PERMALINK;
+  }
+
+  public link(): string {
     return NOOP_SPAN_PERMALINK;
   }
 
@@ -1465,6 +1486,15 @@ export async function spanComponentsToObjectId({
   )();
 }
 
+export const ERR_PERMALINK = "https://braintrust.dev/error-generating-link";
+
+function getErrPermlink(msg: string) {
+  if (msg == "") {
+    return ERR_PERMALINK;
+  }
+  return `${ERR_PERMALINK}?msg=${encodeURIComponent(msg)}`;
+}
+
 /**
  * Format a permalink to the Braintrust application for viewing the span
  * represented by the provided `slug`.
@@ -1472,7 +1502,7 @@ export async function spanComponentsToObjectId({
  * Links can be generated at any time, but they will only become viewable after
  * the span and its root have been flushed to the server and ingested.
  *
- * If you have a `Span` object, use {@link Span.permalink} instead.
+ * If you have a `Span` object, use {@link Span.link} instead.
  *
  * @param slug The identifier generated from {@link Span.export}.
  * @param opts Optional arguments.
@@ -1501,9 +1531,7 @@ export async function permalink(
     }
     await state.login({});
     if (!state.orgName) {
-      throw new Error(
-        "Must either provide orgName explicitly or be logged in to a specific org",
-      );
+      throw new Error("provide-org-or-login"); // this is caught below
     }
     return state.orgName;
   };
@@ -1513,24 +1541,31 @@ export async function permalink(
     }
     await state.login({});
     if (!state.appUrl) {
-      throw new Error("Must either provide appUrl explicitly or be logged in");
+      throw new Error("provide-app-url-or-login"); // this is caught below
     }
     return state.appUrl;
   };
 
-  const components = SpanComponentsV3.fromStr(slug);
-  const object_type = spanObjectTypeV3ToString(components.data.object_type);
-  const [orgName, appUrl, object_id] = await Promise.all([
-    getOrgName(),
-    getAppUrl(),
-    spanComponentsToObjectId({ components, state }),
-  ]);
-  const id = components.data.row_id;
-  if (!id) {
-    throw new Error("Span slug does not refer to an individual row");
+  try {
+    const components = SpanComponentsV3.fromStr(slug);
+    const object_type = spanObjectTypeV3ToString(components.data.object_type);
+    const [orgName, appUrl, object_id] = await Promise.all([
+      getOrgName(),
+      getAppUrl(),
+      spanComponentsToObjectId({ components, state }),
+    ]);
+    const id = components.data.row_id;
+    if (!id) {
+      throw new Error("Span slug does not refer to an individual row");
+    }
+    const urlParams = new URLSearchParams({ object_type, object_id, id });
+    return `${appUrl}/app/${orgName}/object?${urlParams}`;
+  } catch (e) {
+    if (e instanceof FailedHTTPResponse) {
+      return getErrPermlink(`http-error-${e.status}`);
+    }
+    return getErrPermlink(e instanceof Error ? e.message : String(e));
   }
-  const urlParams = new URLSearchParams({ object_type, object_id, id });
-  return `${appUrl}/app/${orgName}/object?${urlParams}`;
 }
 
 // IMPORTANT NOTE: This function may pass arguments which override those in the
@@ -4643,6 +4678,72 @@ export class SpanImpl implements Span {
     });
   }
 
+  public link(): string {
+    if (!this.id) {
+      return NOOP_SPAN_PERMALINK;
+    }
+
+    try {
+      const orgName = this._state.orgName;
+      if (!orgName) {
+        throw new Error("log-in-or-provide-org-name");
+      }
+
+      return this._link(orgName);
+    } catch (e) {
+      return getErrPermlink(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  _link(orgName: string): string {
+    const appUrl = this._state.appUrl || "https://www.braintrust.dev";
+    const baseUrl = `${appUrl}/app/${orgName}`;
+
+    // NOTE[matt]: I believe lazy values should not exist in the span or the logger.
+    // Nothing in this module should have the possibility of blocking with the lone exception of
+    // flush() which should be a clear exception. We shouldn't build on it and
+    // plan to remove it in the future.
+    const args = this.parentComputeObjectMetadataArgs;
+
+    switch (this.parentObjectType) {
+      case SpanObjectTypeV3.PROJECT_LOGS: {
+        // Links to spans require a project id or name. We might not either, so use whatever
+        // we can to make a link without making a roundtrip to the server.
+        const projectID =
+          args?.project_id || this.parentObjectId.getSync().value;
+        const projectName = args?.project_name;
+        if (projectID) {
+          return `${baseUrl}/object?object_type=project_logs&object_id=${projectID}&id=${this._id}`;
+        } else if (projectName) {
+          return `${baseUrl}/p/${projectName}/logs?oid=${this._id}`;
+        } else {
+          return getErrPermlink("provide-project-name-or-id");
+        }
+      }
+      case SpanObjectTypeV3.EXPERIMENT: {
+        // Experiment links require an id, so the sync version will only work after the experiment is
+        // resolved.
+        let expID =
+          args?.experiment_id || this.parentObjectId?.getSync()?.value;
+        if (!expID) {
+          return getErrPermlink("provide-experiment-id");
+        } else {
+          return `${baseUrl}/object?object_type=experiment&object_id=${expID}&id=${this._id}`;
+        }
+      }
+      case SpanObjectTypeV3.PLAYGROUND_LOGS: {
+        // FIXME[matt] I dont believe these are used in the SDK.
+        return NOOP_SPAN_PERMALINK;
+      }
+      default: {
+        // trigger a compile-time error if we add a new object type
+        const _exhaustive: never = this.parentObjectType;
+        _exhaustive;
+        return NOOP_SPAN_PERMALINK;
+      }
+    }
+  }
+
   async flush(): Promise<void> {
     return await this._state.bgLogger().flush();
   }
@@ -5617,8 +5718,18 @@ export interface DatasetSummary {
 const TEST_API_KEY = "___TEST_API_KEY__THIS_IS_NOT_REAL___";
 
 // This is a helper function to simulate a login for testing.
-function simulateLoginForTests() {
-  return login({ apiKey: TEST_API_KEY });
+async function simulateLoginForTests() {
+  return await login({
+    apiKey: TEST_API_KEY,
+    appUrl: "https://braintrust.dev",
+  });
+}
+
+// This is a helper function to simulate a logout for testing.
+function simulateLogoutForTests() {
+  _globalState.resetLoginInfo();
+  _globalState.appUrl = "https://www.braintrust.dev";
+  return _globalState;
 }
 
 export const _exportsForTestingOnly = {
@@ -5627,4 +5738,5 @@ export const _exportsForTestingOnly = {
   useTestBackgroundLogger,
   clearTestBackgroundLogger,
   simulateLoginForTests,
+  simulateLogoutForTests,
 };
