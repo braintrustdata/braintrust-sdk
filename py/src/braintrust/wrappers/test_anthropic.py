@@ -13,9 +13,9 @@ import pytest
 
 from braintrust import logger
 from braintrust.logger import ObjectMetadata, OrgProjectMetadata
+from braintrust.test_helpers import init_test_logger
 from braintrust.util import LazyValue
 from braintrust.wrappers.anthropic import wrap_anthropic
-from braintrust.wrappers.test_utils import init_test_logger
 
 TEST_ORG_ID = "test-org-123"
 PROJECT_NAME = "test-anthropic-app"
@@ -28,22 +28,6 @@ def _get_client():
 
 def _get_async_client():
     return anthropic.AsyncAnthropic()
-
-
-def test_memory_logger():
-    # FIXME[matt] this should be moved to a common place
-    init_test_logger("test-anthropic-app")
-    with logger._internal_with_memory_background_logger() as bgl:
-        assert not bgl.pop()
-
-        @logger.traced
-        def thing():
-            return "hello"
-
-        thing()
-        logs = bgl.pop()
-        assert len(logs) == 1
-        assert logs
 
 
 @pytest.fixture

@@ -8,7 +8,8 @@ from openai import AsyncOpenAI, OpenAI
 
 from braintrust import logger, wrap_openai
 from braintrust.span_types import SpanTypeAttribute
-from braintrust.wrappers.test_utils import assert_metrics_are_valid, init_test_logger
+from braintrust.test_helpers import init_test_logger
+from braintrust.wrappers.test_utils import assert_metrics_are_valid
 
 TEST_ORG_ID = "test-org-openai-py-tracing"
 PROJECT_NAME = "test-project-openai-py-tracing"
