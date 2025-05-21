@@ -1,16 +1,33 @@
 """
-Define our tests to run against different combinations of
-Python & library versions.
+Nox scripts the environment our tests run in and it used to verify our library
+works with and without different dependencies. A few commands to check out:
+
+    nox                        Run all sessions.
+    nox -l                     List all sessions.
+    nox -s <session>           Run a specific session.
+    nox ... -- --wheel         Run tests against the wheel in dist.
+    nox -h                     Get help.
 """
+
+import glob
+import os
+import site
+import subprocess
+import tempfile
 
 import nox
 
-LATEST = "__latest__"
-SRC = "src/braintrust"
+SRC_DIR = "braintrust"
+WRAPPER_DIR = "braintrust/wrappers"
+
 
 SILENT_INSTALLS = True
-
+LATEST = "__latest__"
 ERROR_CODES = tuple(range(1, 256))
+
+
+# The minimal set of dependencies we need to run tests.
+BASE_TEST_DEPS = ("pytest", "pytest-asyncio")
 
 # List your package here if it's not guaranteed to be installed. We'll (try to)
 # validate things work with or without them.
@@ -31,13 +48,11 @@ AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 
 @nox.session()
 def test_core(session):
-    """Test the core library with no optional dependencies installed."""
     _install_test_deps(session)
     # verify we haven't installed our 3p deps.
     for p in VENDOR_PACKAGES:
         session.run("python", "-c", f"import {p}", success_codes=ERROR_CODES, silent=True)
-    session.run("python", "-c", "import braintrust")
-    _run_common_tests(session)
+    _run_core_tests(session)
 
 
 @nox.session()
@@ -45,8 +60,8 @@ def test_core(session):
 def test_with_pydantic_ai(session, pydantic_ai_version):
     _install_test_deps(session)
     _install(session, "pydantic_ai", pydantic_ai_version)
-    session.run("pytest", f"{SRC}/wrappers/test_pydantic_ai.py")
-    _run_common_tests(session)
+    _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai.py")
+    _run_core_tests(session)
 
 
 @nox.session()
@@ -54,8 +69,8 @@ def test_with_pydantic_ai(session, pydantic_ai_version):
 def test_with_anthropic(session, version):
     _install_test_deps(session)
     _install(session, "anthropic", version)
-    session.run("pytest", f"{SRC}/wrappers/test_anthropic.py")
-    _run_common_tests(session)
+    _run_tests(session, f"{WRAPPER_DIR}/test_anthropic.py")
+    _run_core_tests(session)
 
 
 @nox.session()
@@ -63,8 +78,8 @@ def test_with_anthropic(session, version):
 def test_with_openai(session, version):
     _install_test_deps(session)
     _install(session, "openai", version)
-    session.run("pytest", f"{SRC}/wrappers/test_openai.py")
-    _run_common_tests(session)
+    _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
+    _run_core_tests(session)
 
 
 @nox.session()
@@ -75,7 +90,7 @@ def test_with_autoevals(session, version):
     # we need some tests with it installed.
     _install_test_deps(session)
     _install(session, "autoevals", version)
-    _run_common_tests(session)
+    _run_core_tests(session)
 
 
 @nox.session()
@@ -85,22 +100,96 @@ def test_with_braintrust_core(session):
     # is enough.
     _install_test_deps(session)
     _install(session, "braintrust_core")
-    _run_common_tests(session)
+    _run_core_tests(session)
+
+
+@nox.session()
+def pylint(session):
+    # pylint needs everything so we don't trigger missing import errors
+    session.install(".[all]")
+    session.install("-r", "requirements-dev.txt")
+    session.install(*VENDOR_PACKAGES)
+
+    result = session.run("git", "ls-files", "**/*.py", silent=True, log=False)
+    files = result.strip().splitlines()
+    if not files:
+        return
+    session.run("pylint", "--errors-only", *files)
 
 
 def _install_test_deps(session):
-    session.install("pytest")
-    session.install("pytest-asyncio")
-    session.install("-e", ".[test]")
+    # verify braintrust isn't installed yet
+    session.run("python", "-c", "import braintrust", success_codes=ERROR_CODES, silent=True)
+
+    # Install _only_ the dependencies we need for testing (not lint, black,
+    # ipython, whatever). We want to carefully control the base
+    # testing environment so it should be truly minimal.
+    session.install(*BASE_TEST_DEPS)
+
+    # Choose the way we'll install braintrust ... wheel or source.
+    install_wheel = "--wheel" in session.posargs
+    bt = _get_braintrust_wheel() if install_wheel else "."
+    session.install(bt)
+
+    # Sanity check we have installed braintrust (and that it is from a wheel if needed)
+    session.run("python", "-c", "import braintrust")
+    if install_wheel:
+        lines = [
+            "import sys, braintrust as b",
+            "print(f'Using braintrust from: {b.__file__}')",
+            "sys.exit(0 if 'site-packages' in b.__file__ else 1)",
+        ]
+        session.run("python", "-c", ";".join(lines))
 
 
-def _run_common_tests(session):
-    """Run all the tests that don't require any special dependencies."""
-    session.run("pytest", SRC, f"--ignore={SRC}/wrappers")
+def _get_braintrust_wheel():
+    path = "dist/braintrust-*.whl"
+    wheels = glob.glob(path)
+    if len(wheels) != 1:
+        msg = f"There should be one wheel in {path}. Got {len(wheels)}"
+        raise Exception(msg)
+    return wheels[0]
+
+
+def _run_core_tests(session):
+    """Run all tests which don't require optional dependencies."""
+    _run_tests(session, SRC_DIR, ignore_path=WRAPPER_DIR)
+
+
+def _run_tests(session, test_path, ignore_path=""):
+    """Run tests against a wheel or the source code. Paths should be relative and start with braintrust."""
+    wheel_flag = "--wheel" in session.posargs
+    if not wheel_flag:
+        # Run the tests in the src directory
+        ignore = f"--ignore=src/{ignore_path}" if ignore_path else ""
+        session.run("pytest", f"src/{test_path}", ignore)
+        return
+
+    # Running the tests from the wheel involves a bit of gymnastics to ensure we don't import
+    # local modules from the source directory.
+    # First, we need to absolute paths to all the binaries and libs in our venv that we'll see.
+    py = os.path.join(session.bin, "python")
+    site_packages = session.run(py, "-c", "import site; print(site.getsitepackages()[0])", silent=True).strip()
+    abs_test_path = os.path.abspath(os.path.join(site_packages, test_path))
+    ignore_path = os.path.abspath(os.path.join(site_packages, ignore_path))
+    pytest_path = os.path.join(session.bin, "pytest")
+    ignore = f"--ignore={ignore_path}" if ignore_path else ""
+
+    # Lastly, change to a different directory to ensure we don't install local stuff.
+    with tempfile.TemporaryDirectory() as tmp:
+        os.chdir(tmp)
+        # This env var is used to detect if we're running from the wheel.
+        # It proved very helpful because it's very easy
+        # to accidentally import local modules from the source directory.
+        env = {"BRAINTRUST_TESTING_WHEEL": "1"}
+        session.run(pytest_path, abs_test_path, ignore, env=env)
+
+    # And a final note ... if it's not clear from above, we include test files in our wheel, which
+    # is perhaps not ideal?
 
 
 def _install(session, package, version=LATEST):
-    cmd = f"{package}=={version}"
+    pkg_version = f"{package}=={version}"
     if version == LATEST or not version:
-        cmd = package
-    session.run("pip", "install", cmd, silent=SILENT_INSTALLS)
+        pkg_version = package
+    session.install(pkg_version, silent=SILENT_INSTALLS)

@@ -29,7 +29,7 @@ class ObjectReference(TypedDict):
     """
     ID of the original event.
     """
-    _xact_id: str
+    _xact_id: NotRequired[Optional[str]]
     """
     Transaction ID of the original event.
     """
@@ -420,9 +420,14 @@ class ToolFunctionDefinition(TypedDict):
     function: Function1
 
 
+class CacheControl(TypedDict):
+    type: Literal["ephemeral"]
+
+
 class ChatCompletionContentPartText(TypedDict):
     text: NotRequired[Optional[str]]
     type: Literal["text"]
+    cache_control: NotRequired[Optional[CacheControl]]
 
 
 class ImageUrl(TypedDict):
@@ -458,7 +463,7 @@ class ChatCompletionMessageReasoning(TypedDict):
 
 
 class ChatCompletionMessageParam1(TypedDict):
-    content: NotRequired[Optional[str]]
+    content: NotRequired[Optional[Union[str, Sequence[ChatCompletionContentPartText]]]]
     role: Literal["system"]
     name: NotRequired[Optional[str]]
 
@@ -476,7 +481,7 @@ class FunctionCall1(TypedDict):
 
 class ChatCompletionMessageParam3(TypedDict):
     role: Literal["assistant"]
-    content: NotRequired[Optional[str]]
+    content: NotRequired[Optional[Union[str, Sequence[ChatCompletionContentPartText]]]]
     function_call: NotRequired[Optional[FunctionCall1]]
     name: NotRequired[Optional[str]]
     tool_calls: NotRequired[Optional[Sequence[ChatCompletionMessageToolCall]]]
@@ -490,7 +495,7 @@ class ChatCompletionMessageParam4(TypedDict):
 
 
 class ChatCompletionMessageParam5(TypedDict):
-    content: NotRequired[Optional[str]]
+    content: Optional[str]
     name: str
     role: Literal["function"]
 

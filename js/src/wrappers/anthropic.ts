@@ -1,13 +1,37 @@
-import Anthropic from "@anthropic-ai/sdk";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Span, startSpan } from "../logger";
 import { SpanTypeAttribute } from "@braintrust/core";
 import { filterFrom, getCurrentUnixTimestamp } from "../util";
 
-export function wrapAnthropic(anthropic: Anthropic): Anthropic {
-  return anthropicProxy(anthropic);
+/**
+ * Wrap an `Anthropic` object (created with `new Anthropic(...)`) to add tracing. If Braintrust is
+ * not configured, nothing will be traced. If this is not an `Anthropic` object, this function is
+ * a no-op.
+ *
+ * Currently, this only supports the `v4` API.
+ *
+ * @param anthropic
+ * @returns The wrapped `Anthropic` object.
+ */
+export function wrapAnthropic<T extends object>(anthropic: T): T {
+  const au: unknown = anthropic;
+  if (
+    au &&
+    typeof au === "object" &&
+    "messages" in au &&
+    typeof au.messages === "object" &&
+    au.messages &&
+    "create" in au.messages
+  ) {
+    return anthropicProxy(au);
+  } else {
+    console.warn("Unsupported Anthropic library. Not wrapping.");
+    return anthropic;
+  }
 }
 
-function anthropicProxy(anthropic: Anthropic): Anthropic {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function anthropicProxy(anthropic: any): any {
   return new Proxy(anthropic, {
     get(target, prop, receiver) {
       switch (prop) {
@@ -22,6 +46,7 @@ function anthropicProxy(anthropic: Anthropic): Anthropic {
   });
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function betaProxy(beta: any) {
   return new Proxy(beta, {
     get(target, prop, receiver) {
@@ -33,6 +58,7 @@ function betaProxy(beta: any) {
   });
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function messagesProxy(messages: any) {
   return new Proxy(messages, {
     get(target, prop, receiver) {
@@ -50,6 +76,7 @@ function messagesProxy(messages: any) {
   });
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createProxy(create: (params: any) => Promise<any>) {
   return new Proxy(create, {
     apply(target, thisArg, argArray) {
@@ -81,11 +108,15 @@ function createProxy(create: (params: any) => Promise<any>) {
       // Actually do the call.
       const apiPromise = Reflect.apply(target, thisArg, argArray);
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const onThen: ThenFn<any> = function (msgOrStream: any) {
         // handle the sync interface create(stream=False)
         if (!args["stream"]) {
           const event = parseEventFromMessage(msgOrStream);
-          span.log(event);
+          span.log({
+            ...event,
+            metrics: event.metrics ? finalizeMetrics(event.metrics) : undefined,
+          });
           span.end();
           return msgOrStream;
         }
@@ -102,6 +133,7 @@ function createProxy(create: (params: any) => Promise<any>) {
 type ThenFn<T> = Promise<T>["then"];
 
 function apiPromiseProxy<T>(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   apiPromise: any,
   span: StartedSpan,
   onThen: ThenFn<T>,
@@ -111,20 +143,27 @@ function apiPromiseProxy<T>(
       if (prop === "then") {
         // This path is used with messages.create(stream=True) calls.
         const thenFunc = Reflect.get(target, prop, receiver);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return function (onFulfilled: any, onRejected: any) {
           return thenFunc.call(
             target,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             async (result: any) => {
-              const processed = onThen(result);
-              return onFulfilled ? onFulfilled(processed) : processed;
+              try {
+                const processed = onThen(result);
+                return onFulfilled ? onFulfilled(processed) : processed;
+              } catch (error) {
+                return onRejected ? onRejected(error) : Promise.reject(error);
+              }
             },
-            onRejected, // FIXME[matt] error handling?
+            onRejected,
           );
         };
       } else if (prop === "withResponse") {
         // This path is used with messages.stream(...) calls.
         const withResponseFunc = Reflect.get(target, prop, receiver);
         return () => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           return withResponseFunc.call(target).then((withResponse: any) => {
             if (withResponse["data"]) {
               const { data: stream } = withResponse;
@@ -201,14 +240,17 @@ function streamProxy<T>(
   });
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
   // this is where we actually do the business of iterating the message stream
   let ttft = -1;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const deltas: any[] = [];
   let metadata = {};
   let totals: Metrics = {};
-  let span = sspan.span;
+  const span = sspan.span;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return async function <T>(...args: [any]): Promise<IteratorResult<T>> {
     const result = await stream.next(...args);
 
@@ -218,10 +260,12 @@ function streamNextProxy(stream: AsyncIterator<any>, sspan: StartedSpan) {
     }
 
     if (result.done) {
-      totals.tokens =
-        (totals["prompt_tokens"] || 0) + (totals["completion_tokens"] || 0);
       const output = deltas.join("");
-      span.log({ output: output, metrics: totals, metadata: metadata });
+      span.log({
+        output: output,
+        metrics: finalizeMetrics(totals),
+        metadata: metadata,
+      });
       span.end();
       return result;
     }
@@ -275,12 +319,13 @@ type Metrics = Record<string, number>;
 type MetricsOrUndefined = Metrics | undefined;
 
 // Parse the event from given anthropic Message.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseEventFromMessage(message: any) {
   // FIXME[matt] the whole content or just the text?
-  let output = message?.content || null;
+  const output = message?.content || null;
   const metrics = parseMetricsFromUsage(message?.usage);
   const metas = ["stop_reason", "stop_sequence"];
-  const metadata: Record<string, any> = {};
+  const metadata: Record<string, unknown> = {};
   for (const m of metas) {
     if (message[m] !== undefined) {
       metadata[m] = message[m];
@@ -295,6 +340,7 @@ function parseEventFromMessage(message: any) {
 }
 
 // Parse the metrics from the usage object.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseMetricsFromUsage(usage: any): MetricsOrUndefined {
   if (!usage) {
     return undefined;
@@ -311,20 +357,31 @@ function parseMetricsFromUsage(usage: any): MetricsOrUndefined {
 
   saveIfExistsTo("input_tokens", "prompt_tokens");
   saveIfExistsTo("output_tokens", "completion_tokens");
-  saveIfExistsTo("cache_read_input_tokens", "cache_read_input_tokens");
-  saveIfExistsTo("cache_creation_input_tokens", "cache_creation_input_tokens");
-
-  metrics["tokens"] =
-    (metrics.prompt_tokens || 0) + (metrics.completion_tokens || 0);
+  saveIfExistsTo("cache_read_input_tokens", "prompt_cached_tokens");
+  saveIfExistsTo("cache_creation_input_tokens", "prompt_cache_creation_tokens");
 
   return metrics;
 }
 
+function finalizeMetrics(metrics: Metrics): Metrics {
+  const prompt_tokens =
+    (metrics.prompt_tokens || 0) +
+    (metrics.prompt_cached_tokens || 0) +
+    (metrics.prompt_cache_creation_tokens || 0);
+  return {
+    ...metrics,
+    // Anthropic's `input_tokens` does not include cache creation or cached read tokens.
+    prompt_tokens,
+    tokens: prompt_tokens + (metrics.completion_tokens || 0),
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function coalesceInput(messages: any[], system: string | undefined) {
   // convert anthropic args to the single "input" field Braintrust expects.
 
   // Make a copy because we're going to mutate it.
-  var input = (messages || []).slice();
+  const input = (messages || []).slice();
   if (system) {
     input.push({ role: "system", content: system });
   }
