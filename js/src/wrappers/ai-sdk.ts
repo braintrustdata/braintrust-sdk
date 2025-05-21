@@ -163,14 +163,13 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
     let ended = false;
     const end = () => {
       if (ended) {
-      	return;
+        return;
       }
-      
+
       if (!this.instanceSpan) {
         span.end();
+        ended = true;
       }
-      
-      ended = true;
     };
 
     try {
