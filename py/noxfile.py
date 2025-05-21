@@ -22,7 +22,7 @@ WRAPPER_DIR = "braintrust/wrappers"
 
 
 SILENT_INSTALLS = True
-LATEST = "__latest__"
+LATEST = "latest"
 ERROR_CODES = tuple(range(1, 256))
 
 
@@ -56,17 +56,17 @@ def test_core(session):
 
 
 @nox.session()
-@nox.parametrize("pydantic_ai_version", PYDANTIC_AI_VERSIONS)
-def test_with_pydantic_ai(session, pydantic_ai_version):
+@nox.parametrize("version", PYDANTIC_AI_VERSIONS, ids=PYDANTIC_AI_VERSIONS)
+def test_pydantic_ai(session, version):
     _install_test_deps(session)
-    _install(session, "pydantic_ai", pydantic_ai_version)
+    _install(session, "pydantic_ai", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai.py")
     _run_core_tests(session)
 
 
 @nox.session()
-@nox.parametrize("version", ANTHROPIC_VERSIONS)
-def test_with_anthropic(session, version):
+@nox.parametrize("version", ANTHROPIC_VERSIONS, ids=ANTHROPIC_VERSIONS)
+def test_anthropic(session, version):
     _install_test_deps(session)
     _install(session, "anthropic", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_anthropic.py")
@@ -74,8 +74,8 @@ def test_with_anthropic(session, version):
 
 
 @nox.session()
-@nox.parametrize("version", OPENAI_VERSIONS)
-def test_with_openai(session, version):
+@nox.parametrize("version", OPENAI_VERSIONS, ids=OPENAI_VERSIONS)
+def test_openai(session, version):
     _install_test_deps(session)
     _install(session, "openai", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
@@ -83,8 +83,8 @@ def test_with_openai(session, version):
 
 
 @nox.session()
-@nox.parametrize("version", AUTOEVALS_VERSIONS)
-def test_with_autoevals(session, version):
+@nox.parametrize("version", AUTOEVALS_VERSIONS, ids=AUTOEVALS_VERSIONS)
+def test_autoevals(session, version):
     # Run all of our core tests with autoevals installed. Some tests
     # specifically validate scores from autoevals work properly, so
     # we need some tests with it installed.
@@ -94,7 +94,7 @@ def test_with_autoevals(session, version):
 
 
 @nox.session()
-def test_with_braintrust_core(session):
+def test_braintrust_core(session):
     # Some tests do specific things if braintrust_core is installed, so run our
     # common tests with it installed. Testing the latest (aka the last ever version)
     # is enough.
@@ -115,6 +115,14 @@ def pylint(session):
     if not files:
         return
     session.run("pylint", "--errors-only", *files)
+
+
+@nox.session(default=False)
+def test_wrappers_latest(session):
+    # A shortcut for testing the latest versions of wrappers. Don't run it by default since
+    # it's just a dev env helper.
+    session.notify("test_openai(latest)")
+    session.notify("test_anthropic(latest)")
 
 
 def _install_test_deps(session):
