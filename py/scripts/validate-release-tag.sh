@@ -5,19 +5,19 @@
 
 set -e
 
-# Get the tag from the RELEASE_TAG environment variable
-if [ -z "$RELEASE_TAG" ]; then
-  echo "ERROR: RELEASE_TAG environment variable not set"
+# Get the tag from the first command line argument
+if [ $# -eq 0 ]; then
+  echo "ERROR: Release tag argument not provided"
+  echo "Usage: $0 <release-tag>"
   exit 1
 fi
-
 
 ROOT_DIR=$(git rev-parse --show-toplevel)
 
 # Fetch the latest tags to ensure we're up to date
 git fetch --tags --prune
 
-TAG=$RELEASE_TAG
+TAG=$1
 
 # Check if tag starts with py-sdk-v
 if [[ ! "$TAG" =~ ^py-sdk-v ]]; then
