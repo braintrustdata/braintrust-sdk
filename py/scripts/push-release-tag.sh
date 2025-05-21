@@ -67,5 +67,6 @@ git tag "$TAG" "$COMMIT"
 git push origin "$TAG"
 
 echo ""
-echo "Tag ${TAG} has been created and pushed to origin. Check GitHub Actions for build progress."
+echo "Tag ${TAG} has been created and pushed to origin. Check GitHub Actions for build progress:"
+echo "https://github.com/braintrustdata/braintrust-sdk/actions/workflows/publish-py-sdk.yaml"
 echo ""

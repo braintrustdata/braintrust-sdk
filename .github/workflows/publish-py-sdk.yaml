@@ -50,7 +50,7 @@ jobs:
       - name: Build, Verify and Publish
         working-directory: py
         run: |
-          make install-build-deps
+          make install-dev
           make build
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
