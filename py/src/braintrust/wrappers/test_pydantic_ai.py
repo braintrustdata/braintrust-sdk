@@ -11,8 +11,8 @@ from pydantic_ai.providers.openai import OpenAIProvider  # pylint: disable=impor
 from braintrust import logger, wrap_openai
 from braintrust.logger import ObjectMetadata, OrgProjectMetadata
 from braintrust.span_types import SpanTypeAttribute
+from braintrust.test_helpers import init_test_logger
 from braintrust.util import LazyValue
-from braintrust.wrappers.test_utils import init_test_logger
 
 PROJECT_NAME = "test-pydantic-ai"
 MODEL = "gpt-3.5-turbo"  # Use a cheaper model for testing
