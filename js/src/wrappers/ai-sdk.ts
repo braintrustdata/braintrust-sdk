@@ -168,8 +168,9 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
 
       if (!this.instanceSpan) {
         span.end();
-        ended = true;
       }
+
+      ended = true;
     };
 
     try {
