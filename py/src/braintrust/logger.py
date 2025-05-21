@@ -167,6 +167,10 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
         """
 
     @abstractmethod
+    def link(self) -> str:
+        """Return a link to the span. FIXME[matt] add docs"""
+
+    @abstractmethod
     def permalink(self) -> str:
         """
         Format a permalink to the Braintrust application for viewing this span.
@@ -245,6 +249,9 @@ class _NoopSpan(Span):
 
     def export(self):
         return ""
+
+    def link(self) -> str:
+        return NOOP_SPAN_PERMALINK
 
     def permalink(self) -> str:
         return NOOP_SPAN_PERMALINK
@@ -3316,6 +3323,9 @@ class SpanImpl(Span):
             root_span_id=self.root_span_id,
             propagated_event=self.propagated_event,
         ).to_str()
+
+    def link(self) -> str:
+        return "TEST"
 
     def permalink(self) -> str:
         return permalink(self.export())

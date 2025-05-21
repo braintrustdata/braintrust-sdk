@@ -2,9 +2,10 @@ from typing import List
 from unittest import TestCase
 
 import braintrust
-from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt
+from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt, init_logger
 from braintrust.logger import _deep_copy_event, _extract_attachments
 from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
+from braintrust.test_helpers import simulate_login, simulate_logout, with_login
 
 
 class TestInit(TestCase):
@@ -311,3 +312,55 @@ def test_noop_permalink_issue_1837():
 
     link = braintrust.permalink(span.export())
     assert link == "https://braintrust.dev/noop-span"
+
+    assert span.link() == "https://braintrust.dev/noop-span"
+
+
+def test_span_link_logged_out():
+    simulate_logout()
+    logger = init_logger(
+        project="test-project",
+        project_id="test-project-id",
+    )
+    span = logger.start_span(name="test-span")
+    span.end()
+    link = span.link()
+    assert link == "https://braintrust.dev/error-generating-link?msg=login-or-provide-org-name"
+
+
+def test_span_link_logged_out_org_name():
+    simulate_logout()
+    logger = init_logger(
+        project="test-project",
+        project_id="test-project-id",
+        org_name="test-org-name",
+    )
+    span = logger.start_span(name="test-span")
+    span.end()
+    link = span.link()
+    assert link == "https://braintrust.dev/test-org-name/p/test-project/logs?oid=test-project-id"
+
+
+def test_span_project_id_logged_in(with_login):
+    logger = init_logger(
+        project="test-project",
+        project_id="test-project-id",
+    )
+
+    span = logger.start_span(name="test-span")
+    span.end()
+
+    link = span.link()
+    assert link == "https://braintrust.dev/test-org-name/p/test-project/logs?oid=test-project-id"
+
+
+def test_span_project_name_logged_in(with_login):
+    logger = init_logger(
+        project="test-project",
+    )
+
+    span = logger.start_span(name="test-span")
+    span.end()
+
+    link = span.link()
+    assert link == "https://braintrust.dev/test-org-name/p/test-project/logs?oid=test-project-id"

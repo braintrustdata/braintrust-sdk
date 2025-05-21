@@ -8,6 +8,8 @@ login/logout and capturing logs in memory.
 import contextlib
 from typing import Any, Dict, List, Optional
 
+import pytest
+
 from braintrust import logger
 from braintrust.logger import ObjectMetadata, OrgProjectMetadata, _MemoryBackgroundLogger
 from braintrust.util import LazyValue
@@ -18,19 +20,15 @@ TEST_ORG_ID = "test-org-id"
 TEST_ORG_NAME = "test-org-name"
 
 
-def simulate_login_for_tests() -> None:
+def simulate_login() -> None:
     """
     Simulate a successful login for testing purposes.
 
     This lets you use Braintrust features that require login without actually
     connecting to the Braintrust service. Logs will be stored locally
     rather than sent to Braintrust.
-
-    This is only for testing and won't work with actual API requests.
     """
-    # Reset state if logged in
-    if logger._state.logged_in:
-        simulate_logout_for_tests()
+    simulate_logout()
 
     # Set up the minimum state required for tests to work
     logger._state.login_token = TEST_API_KEY
@@ -42,7 +40,7 @@ def simulate_login_for_tests() -> None:
     logger._state.logged_in = True
 
 
-def simulate_logout_for_tests() -> None:
+def simulate_logout() -> None:
     """
     Simulate logging out for testing purposes.
 
@@ -50,6 +48,13 @@ def simulate_logout_for_tests() -> None:
     """
     # Reset login state
     logger._state.reset_login_info()
+
+
+@pytest.fixture
+def with_login():
+    simulate_login()
+    yield
+    simulate_logout()
 
 
 def init_test_logger(project_name: str):
@@ -82,7 +87,7 @@ def test_simulate_login_logout():
         assert not logger._state.logged_in
 
         # Simulate login
-        simulate_login_for_tests()
+        simulate_login()
 
         # Verify we're now logged in with the expected test values
         assert logger._state.logged_in
@@ -93,8 +98,10 @@ def test_simulate_login_logout():
         assert logger._state.app_public_url == "https://www.braintrust.dev"
         assert logger._state.api_url == "https://www.braintrust.dev/api"
 
+        assert logger.org_id() == TEST_ORG_ID
+
         # Simulate logout
-        simulate_logout_for_tests()
+        simulate_logout()
 
         # Verify we're logged out
         assert not logger._state.logged_in
