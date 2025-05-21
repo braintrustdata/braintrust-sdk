@@ -46,9 +46,12 @@ if [ "$CURRENT_BRANCH" != "main" ]; then
   fi
 
   TAG_COMMIT=$(git rev-parse "$TAG")
-  MAIN_CONTAINS=$(git branch --contains $TAG_COMMIT | grep -c "main" || true)
 
-  if [ "$MAIN_CONTAINS" -eq "0" ]; then
+  # Ensure we have main branch history
+  git fetch origin main --depth=1000
+
+  # Check if tag is on main branch
+  if ! git merge-base --is-ancestor "$TAG_COMMIT" origin/main; then
     echo "ERROR: Tag $TAG is not on the main branch"
     exit 1
   fi
