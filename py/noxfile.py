@@ -118,9 +118,6 @@ def pylint(session):
 
 
 def _install_test_deps(session):
-    # verify braintrust isn't installed yet
-    session.run("python", "-c", "import braintrust", success_codes=ERROR_CODES, silent=True)
-
     # Install _only_ the dependencies we need for testing (not lint, black,
     # ipython, whatever). We want to carefully control the base
     # testing environment so it should be truly minimal.
