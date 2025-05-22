@@ -86,6 +86,7 @@ from .util import (
     encode_uri_component,
     eprint,
     get_caller_location,
+    mask_api_key,
     merge_dicts,
     response_raise_for_status,
 )
@@ -1455,10 +1456,8 @@ def login(
             app_conn.set_token(api_key)
             resp = app_conn.post("api/apikey/login")
             if not resp.ok:
-                api_key_prefix = (
-                    (" (" + api_key[:2] + "*" * (len(api_key) - 4) + api_key[-2:] + ")") if len(api_key) > 4 else ""
-                )
-                raise ValueError(f"Invalid API key{api_key_prefix}: [{resp.status_code}] {resp.text}")
+                masked_api_key = mask_api_key(api_key)
+                raise ValueError(f"Invalid API key {masked_api_key}: [{resp.status_code}] {resp.text}")
             info = resp.json()
 
             _check_org_info(info["org_info"], org_name)
@@ -1466,7 +1465,8 @@ def login(
             if not _state.api_url:
                 if org_name:
                     raise ValueError(
-                        f"Unable to log into organization '{org_name}'. Are you sure this credential is scoped to the organization?"
+                        f"Unable to log into organization '{org_name}'."
+                        " Are you sure this credential is scoped to the organization?"
                     )
                 else:
                     raise ValueError("Unable to log into any organization with the provided credential.")

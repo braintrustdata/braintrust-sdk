@@ -64,6 +64,12 @@ def encode_uri_component(name: str) -> str:
     return urllib.parse.quote(name, safe="")
 
 
+def mask_api_key(api_key: str) -> str:
+    if len(api_key) <= 4:
+        return "*" * len(api_key)
+    return api_key[:2] + "*" * (len(api_key) - 4) + api_key[-2:]
+
+
 def _urljoin(*parts: str) -> str:
     return "/".join(
         p for p in [x.strip("/") if i < len(parts) - 1 else x.lstrip("/") for i, x in enumerate(parts)] if p.strip()

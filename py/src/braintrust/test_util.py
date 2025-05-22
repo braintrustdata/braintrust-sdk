@@ -3,7 +3,7 @@ from typing import List, Optional, Tuple
 
 import pytest
 
-from .util import LazyValue
+from .util import LazyValue, mask_api_key
 
 
 class TestLazyValue(unittest.TestCase):
@@ -153,3 +153,10 @@ def test_get_sync_error():
     is_resolved, value = lazy.get_sync()
     assert is_resolved is False
     assert value is None
+
+
+def test_mask_api_key():
+    assert mask_api_key("1234567890") == "12******90"
+    assert mask_api_key("12345") == "12*45"
+    for i in ["", "1", "12", "123", "1234"]:
+        assert mask_api_key(i) == "*" * len(i)
