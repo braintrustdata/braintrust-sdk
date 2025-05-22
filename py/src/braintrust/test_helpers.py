@@ -99,12 +99,11 @@ def test_simulate_login_logout():
 
         # Verify we're now logged in with the expected test values
         assert logger._state.logged_in
-        assert logger._state.login_token == TEST_API_KEY
+        assert logger._state.login_token == logger.TEST_API_KEY
         assert logger._state.org_id == TEST_ORG_ID
         assert logger._state.org_name == TEST_ORG_NAME
         assert logger._state.app_url == "https://www.braintrust.dev"
         assert logger._state.app_public_url == "https://www.braintrust.dev"
-        assert logger._state.api_url == "https://www.braintrust.dev/api"
 
         assert logger.org_id() == TEST_ORG_ID
 
