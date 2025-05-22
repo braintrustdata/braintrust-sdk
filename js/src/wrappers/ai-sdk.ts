@@ -116,8 +116,8 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
           ...("tools" in mode && mode.tools
             ? { tools: convertTools(mode.tools) }
             : "tool" in mode && mode.tool
-            ? { tools: convertTools([mode.tool]) }
-            : {}),
+              ? { tools: convertTools([mode.tool]) }
+              : {}),
         },
         output: postProcessOutput(ret.text, ret.toolCalls, ret.finishReason),
         metrics: {
@@ -162,8 +162,8 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
         ...("tools" in mode && mode.tools
           ? { tools: convertTools(mode.tools) }
           : "tool" in mode && mode.tool
-          ? { tools: convertTools([mode.tool]) }
-          : {}),
+            ? { tools: convertTools([mode.tool]) }
+            : {}),
       },
     });
 
