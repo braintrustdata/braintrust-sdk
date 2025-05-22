@@ -1,6 +1,5 @@
 import { ContentPart, Message, Tools } from "@braintrust/core/typespecs";
-import { startSpan } from "../logger";
-import type { Span } from "../logger";
+import { startSpan, type Span } from "../logger";
 import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import {
   LanguageModelV1,
@@ -21,6 +20,10 @@ import {
   X_CACHED_HEADER,
 } from "./oai";
 
+export interface WrapAISDKModelOpts {
+  span?: Span;
+}
+
 /**
  * Wrap an ai-sdk model (created with `.chat()`, `.completion()`, etc.) to add tracing. If Braintrust is
  * not configured, this is a no-op
@@ -34,8 +37,9 @@ import {
  */
 export function wrapAISDKModel<T extends object>(
   model: T,
-  overrideSpan?: Span,
+  opts?: WrapAISDKModelOpts,
 ): T {
+  opts = opts ?? {};
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
   const m = model as any;
   if (
@@ -46,7 +50,7 @@ export function wrapAISDKModel<T extends object>(
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
     return new BraintrustLanguageModelWrapper(
       m as LanguageModelV1,
-      overrideSpan,
+      opts,
     ) as any as T;
   } else {
     console.warn("Unsupported AI SDK model. Not wrapping.");
@@ -55,7 +59,10 @@ export function wrapAISDKModel<T extends object>(
 }
 
 class BraintrustLanguageModelWrapper implements LanguageModelV1 {
-  constructor(private model: LanguageModelV1, private instanceSpan?: Span) {}
+  constructor(
+    private model: LanguageModelV1,
+    private opts?: WrapAISDKModelOpts,
+  ) {}
 
   get specificationVersion() {
     return this.model.specificationVersion;
@@ -89,7 +96,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
   // propagate those via async local storage
   async doGenerate(options: LanguageModelV1CallOptions) {
     const span =
-      this.instanceSpan ??
+      this.opts?.span ??
       startSpan({
         name: "Chat Completion",
         spanAttributes: {
@@ -128,7 +135,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
       });
       return ret;
     } finally {
-      if (!this.instanceSpan) {
+      if (!this.opts?.span) {
         span.end();
       }
     }
@@ -139,7 +146,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
     const startTime = getCurrentUnixTimestamp();
 
     const span =
-      this.instanceSpan ??
+      this.opts?.span ??
       startSpan({
         name: "Chat Completion",
         spanAttributes: {
@@ -166,7 +173,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
         return;
       }
 
-      if (!this.instanceSpan) {
+      if (!this.opts?.span) {
         span.end();
       }
 
