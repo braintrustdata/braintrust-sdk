@@ -1,6 +1,5 @@
 import { ContentPart, Message, Tools } from "@braintrust/core/typespecs";
-import { startSpan } from "../logger";
-import type { Span } from "../logger";
+import { startSpan, type Span } from "../logger";
 import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import {
   LanguageModelV1,
