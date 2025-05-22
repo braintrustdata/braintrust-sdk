@@ -315,12 +315,25 @@ class TestLogger(TestCase):
 def test_noop_permalink_issue_1837():
     # fixes issue #BRA-1837
     span = braintrust.NOOP_SPAN
-    assert span.permalink() == "https://braintrust.dev/noop-span"
+    assert span.permalink() == "https://www.braintrust.dev/noop-span"
 
     link = braintrust.permalink(span.export())
-    assert link == "https://braintrust.dev/noop-span"
+    assert link == "https://www.braintrust.dev/noop-span"
 
-    assert span.link() == "https://braintrust.dev/noop-span"
+    assert span.link() == "https://www.braintrust.dev/noop-span"
+
+
+def test_permalink_logged_out(with_memory_logger):
+    simulate_logout()
+    assert_logged_out()
+    logger = init_logger(
+        project="test-project",
+        project_id="test-project-id",
+    )
+    span = logger.start_span(name="test-span")
+    span.end()
+    link = span.permalink()
+    assert link == "https://www.braintrust.dev/error-generating-link?msg=login-or-provide-org-name"
 
 
 def test_span_link_logged_out(with_memory_logger):
@@ -333,7 +346,7 @@ def test_span_link_logged_out(with_memory_logger):
     span = logger.start_span(name="test-span")
     span.end()
     link = span.link()
-    assert link == "https://braintrust.dev/error-generating-link?msg=login-or-provide-org-name"
+    assert link == "https://www.braintrust.dev/error-generating-link?msg=login-or-provide-org-name"
 
 
 def test_span_link_logged_out_org_name(with_memory_logger):
@@ -348,7 +361,7 @@ def test_span_link_logged_out_org_name(with_memory_logger):
     link = span.link()
     assert (
         link
-        == f"https://braintrust.dev/app/test-org-name/object?object_type=project_logs&object_id=test-project-id&id={span._id}"
+        == f"https://www.braintrust.dev/app/test-org-name/object?object_type=project_logs&object_id=test-project-id&id={span._id}"
     )
 
 
@@ -388,7 +401,7 @@ def test_span_project_id_logged_in(with_memory_logger, with_simulate_login):
     link = span.link()
     assert (
         link
-        == f"https://braintrust.dev/app/test-org-name/object?object_type=project_logs&object_id=test-project-id&id={span._id}"
+        == f"https://www.braintrust.dev/app/test-org-name/object?object_type=project_logs&object_id=test-project-id&id={span._id}"
     )
 
 
@@ -398,7 +411,7 @@ def test_span_project_name_logged_in(with_simulate_login, with_memory_logger):
     span.end()
 
     link = span.link()
-    assert link == f"https://braintrust.dev/app/test-org-name/p/test-project/logs?oid={span._id}"
+    assert link == f"https://www.braintrust.dev/app/test-org-name/p/test-project/logs?oid={span._id}"
 
 
 def test_span_link_with_resolved_experiment(with_simulate_login, with_memory_logger):
@@ -418,7 +431,7 @@ def test_span_link_with_resolved_experiment(with_simulate_login, with_memory_log
     link = span.link()
     assert (
         link
-        == f"https://braintrust.dev/app/test-org-name/object?object_type=experiment&object_id=test-experiment-id&id={span._id}"
+        == f"https://www.braintrust.dev/app/test-org-name/object?object_type=experiment&object_id=test-experiment-id&id={span._id}"
     )
 
 
@@ -432,4 +445,4 @@ def test_span_link_with_unresolved_experiment(with_simulate_login, with_memory_l
     span.end()
 
     link = span.link()
-    assert link == "https://braintrust.dev/error-generating-link?msg=resolve-experiment-id"
+    assert link == "https://www.braintrust.dev/error-generating-link?msg=resolve-experiment-id"

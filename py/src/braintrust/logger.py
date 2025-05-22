@@ -289,7 +289,7 @@ class _NoopSpan(Span):
 
 
 NOOP_SPAN: Span = _NoopSpan()
-NOOP_SPAN_PERMALINK = "https://braintrust.dev/noop-span"
+NOOP_SPAN_PERMALINK = "https://www.braintrust.dev/noop-span"
 
 
 class BraintrustState:
@@ -2643,29 +2643,35 @@ def permalink(slug: str, org_name: Optional[str] = None, app_url: Optional[str] 
         # Noop spans have an empty slug, so return a dummy permalink.
         return NOOP_SPAN_PERMALINK
 
-    if not org_name:
-        login()
-        if not _state.org_name:
-            raise Exception("Must either provide org_name explicitly or be logged in to a specific org")
-        org_name = _state.org_name
+    try:
+        if not org_name:
+            login()
+            if not _state.org_name:
+                raise Exception("Must either provide org_name explicitly or be logged in to a specific org")
+            org_name = _state.org_name
 
-    if not app_url:
-        login()
-        if not _state.app_url:
-            raise Exception("Must either provide app_url explicitly or be logged in")
-        app_url = _state.app_url
+        if not app_url:
+            login()
+            if not _state.app_url:
+                raise Exception("Must either provide app_url explicitly or be logged in")
+            app_url = _state.app_url
 
-    components = SpanComponentsV3.from_str(slug)
+        components = SpanComponentsV3.from_str(slug)
 
-    object_type = str(components.object_type)
-    object_id = span_components_to_object_id(components)
-    id = components.row_id
+        object_type = str(components.object_type)
+        object_id = span_components_to_object_id(components)
+        id = components.row_id
 
-    if not id:
-        raise ValueError("Span slug does not refer to an individual row")
+        if not id:
+            raise ValueError("Span slug does not refer to an individual row")
 
-    url_params = urlencode({"object_type": object_type, "object_id": object_id, "id": id})
-    return f"{app_url}/app/{org_name}/object?{url_params}"
+            url_params = urlencode({"object_type": object_type, "object_id": object_id, "id": id})
+            return f"{app_url}/app/{org_name}/object?{url_params}"
+    except Exception as e:
+        if "BRAINTRUST_API_KEY" in str(e):
+            return _get_error_link("login-or-provide-org-name")
+        else:
+            return _get_error_link()
 
 
 def _start_span_parent_args(
@@ -3359,7 +3365,7 @@ class SpanImpl(Span):
                 return NOOP_SPAN_PERMALINK
             base_url = cur_logger._get_link_base_url()
             if not base_url:
-                return "https://braintrust.dev/error-generating-link?msg=login-or-provide-org-name"
+                return _get_error_link("login-or-provide-org-name")
 
             project_id = info.get("id")
             project_name = info.get("name")
@@ -3368,24 +3374,30 @@ class SpanImpl(Span):
             elif project_name:
                 return f"{base_url}/p/{project_name}/logs?oid={self._id}"
             else:
-                return "https://braintrust.dev/error-generating-link?msg=no-project-id-or-name"
+                return _get_error_link("no-project-id-or-name")
         elif parent_type == SpanObjectTypeV3.EXPERIMENT:
             app_url = _state.app_url or _get_app_url()
             org_name = _state.org_name or _get_org_name()
             if not app_url or not org_name:
-                return "https://braintrust.dev/error-generating-link?msg=provide-app-url-or-org-name"
+                return _get_error_link("provide-app-url-or-org-name")
             base_url = f"{app_url}/app/{org_name}"
 
             exp_id = info.get("id")
             if exp_id:
                 return f"{base_url}/object?object_type=experiment&object_id={exp_id}&id={self._id}"
             else:
-                return "https://braintrust.dev/error-generating-link?msg=resolve-experiment-id"
+                return _get_error_link("resolve-experiment-id")
 
         return NOOP_SPAN_PERMALINK
 
     def permalink(self) -> str:
-        return permalink(self.export())
+        try:
+            return permalink(self.export())
+        except Exception as e:
+            if "BRAINTRUST_API_KEY" in str(e):
+                return _get_error_link("login-or-provide-org-name")
+            else:
+                return _get_error_link("")
 
     def close(self, end_time=None) -> float:
         return self.end(end_time)
@@ -4451,3 +4463,7 @@ def _get_org_name(org_name: Optional[str] = None) -> Optional[str]:
     if org_name:
         return org_name
     return os.getenv("BRAINTRUST_ORG_NAME")
+
+
+def _get_error_link(msg="") -> str:
+    return "https://www.braintrust.dev/error-generating-link?msg=%s" % msg
