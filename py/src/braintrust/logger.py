@@ -99,6 +99,11 @@ TMapping = TypeVar("TMapping", bound=Mapping[str, Any])
 TMutableMapping = TypeVar("TMutableMapping", bound=MutableMapping[str, Any])
 
 
+TEST_API_KEY = "___TEST_API_KEY__"
+
+DEFAULT_APP_URL = "https://braintrust.dev"
+
+
 class Exportable(ABC):
     @abstractmethod
     def export(self) -> str:
@@ -1296,6 +1301,13 @@ def init_logger(
 
     compute_metadata_args = dict(project_name=project, project_id=project_id)
 
+    link_args = {
+        "app_url": app_url,
+        "org_name": org_name,
+        "project_name": project,
+        "project_id": project_id,
+    }
+
     def compute_metadata():
         login(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login)
         return _compute_logger_metadata(**compute_metadata_args)
@@ -1304,6 +1316,7 @@ def init_logger(
         lazy_metadata=LazyValue(compute_metadata, use_mutex=True),
         async_flush=async_flush,
         compute_metadata_args=compute_metadata_args,
+        link_args=link_args,
     )
     if set_current:
         _state.current_logger = ret
@@ -1412,6 +1425,8 @@ def login(
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
     :param force_login: Login again, even if you have already logged in (by default, this function will exit quickly if you have already logged in)
     """
+    # FIXME[matt] Remove thrown exceptions from this method. Perhaps a better pattern is (is_success, message) = login()
+    # to guarantee we don't throw into userland.
 
     global _state
 
@@ -1427,31 +1442,43 @@ def login(
                         f"Re-logging in with different {varname} ({arg}) than original ({orig}). To force re-login, pass `force_login=True`"
                     )
 
+            sanitized_api_key = HTTPConnection.sanitize_token(api_key) if api_key else None
             check_updated_param("app_url", app_url, _state.app_url)
-            check_updated_param(
-                "api_key", HTTPConnection.sanitize_token(api_key) if api_key else None, _state.login_token
-            )
+            check_updated_param("api_key", sanitized_api_key, _state.login_token)
             check_updated_param("org_name", org_name, _state.org_name)
             return
 
-        if app_url is None:
-            app_url = os.environ.get("BRAINTRUST_APP_URL", "https://www.braintrust.dev")
+        app_url = _get_app_url(app_url)
 
         app_public_url = os.environ.get("BRAINTRUST_APP_PUBLIC_URL", app_url)
 
         if api_key is None:
             api_key = os.environ.get("BRAINTRUST_API_KEY")
 
-        if org_name is None:
-            org_name = os.environ.get("BRAINTRUST_ORG_NAME")
+        org_name = _get_org_name(org_name)
 
         _state.reset_login_info()
 
         _state.app_url = app_url
         _state.app_public_url = app_public_url
+        _state.org_name = org_name
 
         conn = None
-        if api_key is not None:
+        if api_key == TEST_API_KEY:
+            # a small hook for pseudo-logins
+            test_org_info = [
+                {
+                    "id": "test-org-id",
+                    "name": org_name or "test-org-name",
+                    "api_url": "https://api.braintrust.ai",
+                    "proxy_url": "https://proxy.braintrust.ai",
+                }
+            ]
+            _check_org_info(test_org_info, org_name)
+            _state.login_token = TEST_API_KEY
+            _state.logged_in = True
+            return
+        elif api_key is not None:
             app_conn = HTTPConnection(_state.app_url, adapter=_http_adapter)
             app_conn.set_token(api_key)
             resp = app_conn.post("api/apikey/login")
@@ -3325,7 +3352,26 @@ class SpanImpl(Span):
         ).to_str()
 
     def link(self) -> str:
-        return "TEST"
+        cur_logger = _state.current_logger
+        if not cur_logger:
+            return NOOP_SPAN_PERMALINK
+
+        base_url = cur_logger._get_link_base_url()
+        if not base_url:
+            return "https://braintrust.dev/error-generating-link?msg=login-or-provide-org-name"
+
+        parent_type, info = self._get_parent_info()
+        if parent_type == SpanObjectTypeV3.PROJECT_LOGS:
+            project_id = info.get("id")
+            project_name = info.get("name")
+            if project_id:
+                return f"{base_url}/object?object_type=project_logs&object_id={project_id}&id={self._id}"
+            elif project_name:
+                return f"{base_url}/p/{project_name}/logs?oid={self._id}"
+            else:
+                return "https://braintrust.dev/error-generating-link?msg=no-project-id-or-name"
+
+        return NOOP_SPAN_PERMALINK
 
     def permalink(self) -> str:
         return permalink(self.export())
@@ -3352,6 +3398,17 @@ class SpanImpl(Span):
                 _state.current_span.reset(self._context_token)
 
             self.end()
+
+    def _get_parent_info(self):
+        if self.parent_object_type == SpanObjectTypeV3.PROJECT_LOGS:
+            is_resolved, id1 = self.parent_object_id.get_sync()
+            meta = self.parent_compute_object_metadata_args or {}
+            id2 = meta.get("project_id")
+            name = meta.get("project_name")
+            _id = id1 if is_resolved else id2
+            return self.parent_object_type, {"name": name, "id": _id}
+        else:
+            return None, {}
 
 
 def log_exc_info_to_span(
@@ -3955,6 +4012,7 @@ class Logger(Exportable):
         lazy_metadata: LazyValue[OrgProjectMetadata],
         async_flush: bool = True,
         compute_metadata_args: Optional[Dict] = None,
+        link_args: Optional[Dict] = None,
     ):
         self._lazy_metadata = lazy_metadata
         self.async_flush = async_flush
@@ -3962,6 +4020,9 @@ class Logger(Exportable):
         self.last_start_time = time.time()
         self._lazy_id = LazyValue(lambda: self.id, use_mutex=False)
         self._called_start_span = False
+        # unresolved args about the org / project. Use these as potential
+        # fallbacks when generating links
+        self._link_args = link_args
 
     @property
     def org_id(self) -> str:
@@ -4169,6 +4230,19 @@ class Logger(Exportable):
     def __enter__(self) -> "Logger":
         return self
 
+    def _get_link_base_url(self) -> Optional[str]:
+        """Return the base of link urls (e.g. https://braintrust.dev/app/my-org-name/) if we have the info
+        otherwise return None.
+        """
+        # the url and org name can be passed into init_logger, resolved by login or provided as env variables
+        # so this resolves all of those things. It's possible we never have an org name if the user has not
+        # yet logged in and there is nothing else configured.
+        app_url = _state.app_url or self._link_args.get("app_url") or _get_app_url()
+        org_name = _state.org_name or self._link_args.get("org_name") or _get_org_name()
+        if not app_url or not org_name:
+            return None
+        return f"{app_url}/app/{org_name}"
+
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         del exc_type, exc_value, traceback
 
@@ -4349,3 +4423,15 @@ class TracedThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
             return context.run(fn, *args, **kwargs)
 
         return super().submit(wrapped_fn, *args, **kwargs)
+
+
+def _get_app_url(app_url: Optional[str] = None) -> str:
+    if app_url:
+        return app_url
+    return os.getenv("BRAINTRUST_APP_URL", DEFAULT_APP_URL)
+
+
+def _get_org_name(org_name: Optional[str] = None) -> Optional[str]:
+    if org_name:
+        return org_name
+    return os.getenv("BRAINTRUST_ORG_NAME")

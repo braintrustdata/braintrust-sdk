@@ -1,11 +1,18 @@
+import os
 from typing import List
 from unittest import TestCase
 
 import braintrust
-from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt, init_logger
+from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt, init_logger, logger
 from braintrust.logger import _deep_copy_event, _extract_attachments
 from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
-from braintrust.test_helpers import simulate_login, simulate_logout, with_simulate_login
+from braintrust.test_helpers import (
+    assert_logged_out,
+    simulate_login,
+    simulate_logout,
+    with_memory_logger,
+    with_simulate_login,
+)
 
 
 class TestInit(TestCase):
@@ -316,8 +323,9 @@ def test_noop_permalink_issue_1837():
     assert span.link() == "https://braintrust.dev/noop-span"
 
 
-def test_span_link_logged_out():
+def test_span_link_logged_out(with_memory_logger):
     simulate_logout()
+    assert_logged_out()
     logger = init_logger(
         project="test-project",
         project_id="test-project-id",
@@ -328,20 +336,47 @@ def test_span_link_logged_out():
     assert link == "https://braintrust.dev/error-generating-link?msg=login-or-provide-org-name"
 
 
-def test_span_link_logged_out_org_name():
+def test_span_link_logged_out_org_name(with_memory_logger):
     simulate_logout()
+    assert_logged_out()
     logger = init_logger(
-        project="test-project",
         project_id="test-project-id",
         org_name="test-org-name",
     )
     span = logger.start_span(name="test-span")
     span.end()
     link = span.link()
-    assert link == "https://braintrust.dev/test-org-name/p/test-project/logs?oid=test-project-id"
+    assert (
+        link
+        == f"https://braintrust.dev/app/test-org-name/object?object_type=project_logs&object_id=test-project-id&id={span._id}"
+    )
 
 
-def test_span_project_id_logged_in(with_simulate_login):
+def test_span_link_logged_out_org_name_env_vars(with_memory_logger):
+    simulate_logout()
+    assert_logged_out()
+    keys = ["BRAINTRUST_APP_URL", "BRAINTRUST_ORG_NAME"]
+    originals = {k: os.environ.get(k) for k in keys}
+    try:
+        os.environ["BRAINTRUST_APP_URL"] = "https://my-own-thing.ca/foo/bar"
+        os.environ["BRAINTRUST_ORG_NAME"] = "my-own-thing"
+
+        logger = init_logger(project_id="test-project-id")
+        span = logger.start_span(name="test-span")
+        span.end()
+        link = span.link()
+        assert (
+            link
+            == f"https://my-own-thing.ca/foo/bar/app/my-own-thing/object?object_type=project_logs&object_id=test-project-id&id={span._id}"
+        )
+    finally:
+        for k, v in originals.items():
+            os.environ.pop(k, None)
+            if v:
+                os.environ[k] = v
+
+
+def test_span_project_id_logged_in(with_memory_logger, with_simulate_login):
     logger = init_logger(
         project="test-project",
         project_id="test-project-id",
@@ -351,16 +386,16 @@ def test_span_project_id_logged_in(with_simulate_login):
     span.end()
 
     link = span.link()
-    assert link == "https://braintrust.dev/test-org-name/p/test-project/logs?oid=test-project-id"
-
-
-def test_span_project_name_logged_in(with_simulate_login):
-    logger = init_logger(
-        project="test-project",
+    assert (
+        link
+        == f"https://braintrust.dev/app/test-org-name/object?object_type=project_logs&object_id=test-project-id&id={span._id}"
     )
 
+
+def test_span_project_name_logged_in(with_simulate_login, with_memory_logger):
+    init_logger(project="test-project")
     span = logger.start_span(name="test-span")
     span.end()
 
     link = span.link()
-    assert link == "https://braintrust.dev/test-org-name/p/test-project/logs?oid=test-project-id"
+    assert link == f"https://braintrust.dev/app/test-org-name/p/test-project/logs?oid={span._id}"

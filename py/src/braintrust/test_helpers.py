@@ -5,7 +5,6 @@ from braintrust.logger import ObjectMetadata, OrgProjectMetadata, _MemoryBackgro
 from braintrust.util import LazyValue
 
 # Fake API key for testing only - this will not work with actual API calls
-TEST_API_KEY = "___TEST_API_KEY__THIS_IS_NOT_REAL___"
 TEST_ORG_ID = "test-org-id"
 TEST_ORG_NAME = "test-org-name"
 
@@ -19,15 +18,7 @@ def simulate_login() -> None:
     rather than sent to Braintrust.
     """
     simulate_logout()
-
-    # Set up the minimum state required for tests to work
-    logger._state.login_token = TEST_API_KEY
-    logger._state.org_id = TEST_ORG_ID
-    logger._state.org_name = TEST_ORG_NAME
-    logger._state.app_url = "https://www.braintrust.dev"
-    logger._state.app_public_url = "https://www.braintrust.dev"
-    logger._state.api_url = "https://www.braintrust.dev/api"
-    logger._state.logged_in = True
+    logger.login(api_key=logger.TEST_API_KEY)
 
 
 def simulate_logout() -> None:
@@ -40,6 +31,13 @@ def simulate_logout() -> None:
     logger._state.reset_login_info()
 
 
+def assert_logged_out():
+    assert not logger._state.logged_in
+    assert logger._state.login_token is None
+    assert logger._state.org_id is None
+    assert logger._state.org_name is None
+
+
 @pytest.fixture
 def with_simulate_login():
     simulate_login()
@@ -47,6 +45,12 @@ def with_simulate_login():
         yield
     finally:
         simulate_logout()
+
+
+@pytest.fixture
+def with_memory_logger():
+    with logger._internal_with_memory_background_logger() as bgl:
+        yield bgl
 
 
 def init_test_logger(project_name: str):
