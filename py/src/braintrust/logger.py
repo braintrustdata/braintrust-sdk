@@ -3352,16 +3352,15 @@ class SpanImpl(Span):
         ).to_str()
 
     def link(self) -> str:
-        cur_logger = _state.current_logger
-        if not cur_logger:
-            return NOOP_SPAN_PERMALINK
-
-        base_url = cur_logger._get_link_base_url()
-        if not base_url:
-            return "https://braintrust.dev/error-generating-link?msg=login-or-provide-org-name"
-
         parent_type, info = self._get_parent_info()
         if parent_type == SpanObjectTypeV3.PROJECT_LOGS:
+            cur_logger = _state.current_logger
+            if not cur_logger:
+                return NOOP_SPAN_PERMALINK
+            base_url = cur_logger._get_link_base_url()
+            if not base_url:
+                return "https://braintrust.dev/error-generating-link?msg=login-or-provide-org-name"
+
             project_id = info.get("id")
             project_name = info.get("name")
             if project_id:
@@ -3370,6 +3369,18 @@ class SpanImpl(Span):
                 return f"{base_url}/p/{project_name}/logs?oid={self._id}"
             else:
                 return "https://braintrust.dev/error-generating-link?msg=no-project-id-or-name"
+        elif parent_type == SpanObjectTypeV3.EXPERIMENT:
+            app_url = _state.app_url or _get_app_url()
+            org_name = _state.org_name or _get_org_name()
+            if not app_url or not org_name:
+                return "https://braintrust.dev/error-generating-link?msg=provide-app-url-or-org-name"
+            base_url = f"{app_url}/app/{org_name}"
+
+            exp_id = info.get("id")
+            if exp_id:
+                return f"{base_url}/object?object_type=experiment&object_id={exp_id}&id={self._id}"
+            else:
+                return "https://braintrust.dev/error-generating-link?msg=resolve-experiment-id"
 
         return NOOP_SPAN_PERMALINK
 
@@ -3407,6 +3418,11 @@ class SpanImpl(Span):
             name = meta.get("project_name")
             _id = id1 if is_resolved else id2
             return self.parent_object_type, {"name": name, "id": _id}
+        elif self.parent_object_type == SpanObjectTypeV3.EXPERIMENT:
+            is_resolved, experiment_id = self.parent_object_id.get_sync()
+            if is_resolved:
+                return self.parent_object_type, {"id": experiment_id}
+            return self.parent_object_type, {}
         else:
             return None, {}
 

@@ -399,3 +399,28 @@ def test_span_project_name_logged_in(with_simulate_login, with_memory_logger):
 
     link = span.link()
     assert link == f"https://braintrust.dev/app/test-org-name/p/test-project/logs?oid={span._id}"
+
+
+def test_span_link_with_unresolved_experiment(with_simulate_login, with_memory_logger):
+    experiment = braintrust.init(
+        project="test-project",
+        experiment="test-experiment",
+    )
+
+    # this is cheesy, but just got speed of dev. will do an integraiton test for this.
+    id_lazy_value = LazyValue(lambda: "test-experiment-id", use_mutex=False)
+    eid = id_lazy_value.get()
+    assert eid == "test-experiment-id"
+
+    # Start a span within the experiment context
+    span = experiment.start_span(name="test-span")
+    span.parent_object_id = id_lazy_value
+    span.end()
+
+    # Get the link
+    link = span.link()
+    # Should return an error message for experiment with no ID
+    assert (
+        link
+        == f"https://braintrust.dev/app/test-org-name/object?object_type=experiment&object_id=test-experiment-id&id={span._id}"
+    )
