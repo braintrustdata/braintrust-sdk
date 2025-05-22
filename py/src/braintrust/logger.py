@@ -101,7 +101,7 @@ TMutableMapping = TypeVar("TMutableMapping", bound=MutableMapping[str, Any])
 
 TEST_API_KEY = "___TEST_API_KEY__"
 
-DEFAULT_APP_URL = "https://braintrust.dev"
+DEFAULT_APP_URL = "https://www.braintrust.dev"
 
 
 class Exportable(ABC):
