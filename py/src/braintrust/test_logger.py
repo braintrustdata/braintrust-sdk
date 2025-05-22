@@ -5,7 +5,7 @@ import braintrust
 from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt, init_logger
 from braintrust.logger import _deep_copy_event, _extract_attachments
 from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
-from braintrust.test_helpers import simulate_login, simulate_logout, with_login
+from braintrust.test_helpers import simulate_login, simulate_logout, with_simulate_login
 
 
 class TestInit(TestCase):
@@ -341,7 +341,7 @@ def test_span_link_logged_out_org_name():
     assert link == "https://braintrust.dev/test-org-name/p/test-project/logs?oid=test-project-id"
 
 
-def test_span_project_id_logged_in(with_login):
+def test_span_project_id_logged_in(with_simulate_login):
     logger = init_logger(
         project="test-project",
         project_id="test-project-id",
@@ -354,7 +354,7 @@ def test_span_project_id_logged_in(with_login):
     assert link == "https://braintrust.dev/test-org-name/p/test-project/logs?oid=test-project-id"
 
 
-def test_span_project_name_logged_in(with_login):
+def test_span_project_name_logged_in(with_simulate_login):
     logger = init_logger(
         project="test-project",
     )

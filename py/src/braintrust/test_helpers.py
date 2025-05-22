@@ -1,13 +1,3 @@
-"""
-Test helpers for Braintrust.
-
-This module provides utilities for testing with Braintrust, including simulating
-login/logout and capturing logs in memory.
-"""
-
-import contextlib
-from typing import Any, Dict, List, Optional
-
 import pytest
 
 from braintrust import logger
@@ -51,10 +41,12 @@ def simulate_logout() -> None:
 
 
 @pytest.fixture
-def with_login():
+def with_simulate_login():
     simulate_login()
-    yield
-    simulate_logout()
+    try:
+        yield
+    finally:
+        simulate_logout()
 
 
 def init_test_logger(project_name: str):
@@ -78,6 +70,18 @@ def init_test_logger(project_name: str):
 # ----------------------------------------------------------------------
 # Tests for the helper functions
 # ----------------------------------------------------------------------
+
+
+def test_without_login_pre():
+    assert not logger._state.logged_in
+
+
+def test_with_simulate_login(with_simulate_login):
+    assert logger._state.logged_in
+
+
+def test_without_login_post():
+    assert not logger._state.logged_in
 
 
 def test_simulate_login_logout():
@@ -111,8 +115,7 @@ def test_simulate_login_logout():
 
 
 def test_memory_logger():
-    # FIXME[matt] this should be moved to a common place
-    init_test_logger("test-anthropic-app")
+    init_test_logger(__name__)
     with logger._internal_with_memory_background_logger() as bgl:
         assert not bgl.pop()
 
