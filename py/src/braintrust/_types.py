@@ -489,7 +489,7 @@ class ChatCompletionMessageParam3(TypedDict):
 
 
 class ChatCompletionMessageParam4(TypedDict):
-    content: NotRequired[Optional[str]]
+    content: NotRequired[Optional[Union[str, Sequence[ChatCompletionContentPartText]]]]
     role: Literal["tool"]
     tool_call_id: NotRequired[Optional[str]]
 
