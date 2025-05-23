@@ -3059,7 +3059,9 @@ export async function loadPrompt({
     });
     if (!prompt) {
       throw new Error(
-        `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[projectName ?? projectId]} (not found on server or in local cache): ${e}`,
+        `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[
+          projectName ?? projectId,
+        ]} (not found on server or in local cache): ${e}`,
       );
     }
     return prompt;
@@ -5189,6 +5191,11 @@ export function renderMessage<T extends Message>(
                           url: render(c.image_url.url),
                         },
                       };
+                    // TODO - what needs to be rendered
+                    case "image":
+                    case "tool_use":
+                    case "tool_result":
+                      return c;
                     default:
                       const _exhaustiveCheck: never = c;
                       return _exhaustiveCheck;
