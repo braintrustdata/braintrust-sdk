@@ -71,6 +71,7 @@ from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptMessage
 from .prompt_cache.disk_cache import DiskCache
 from .prompt_cache.lru_cache import LRUCache
 from .prompt_cache.prompt_cache import PromptCache
+from .queue import LogQueue
 from .serializable_data_class import SerializableDataClass
 from .span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from .span_types import SpanTypeAttribute
@@ -712,10 +713,9 @@ class _HTTPBackgroundLogger:
         self.started = False
 
         self.logger = logging.getLogger("braintrust")
-        self.queue: "queue.Queue[LazyValue[Dict[str, Any]]]" = queue.Queue(maxsize=self.queue_maxsize)
-        # Each time we put items in the queue, we increment a semaphore to
-        # indicate to any consumer thread that it should attempt a flush.
-        self.queue_filled_semaphore = threading.Semaphore(value=0)
+        self.queue: "LogQueue[LazyValue[Dict[str, Any]]]" = LogQueue(
+            maxsize=self.queue_maxsize, drop_when_full=self.queue_drop_when_full
+        )
 
         atexit.register(self._finalize)
 
@@ -723,16 +723,8 @@ class _HTTPBackgroundLogger:
         self._start()
         dropped_items = []
         for event in args:
-            try:
-                self.queue.put_nowait(event)
-            except queue.Full:
-                # Notify consumers to start draining the queue.
-                self.queue_filled_semaphore.release()
-                if self.queue_drop_when_full:
-                    dropped_items.append(event)
-                else:
-                    self.queue.put(event)
-        self.queue_filled_semaphore.release()
+            dropped = self.queue.put(event)
+            dropped_items.extend(dropped)
 
         if dropped_items:
             self._register_dropped_item_count(len(dropped_items))
@@ -757,7 +749,7 @@ class _HTTPBackgroundLogger:
     def _publisher(self):
         while True:
             # Wait for some data on the queue before trying to flush.
-            self.queue_filled_semaphore.acquire()
+            self.queue.wait_for_items()
 
             while self.sync_flush:
                 time.sleep(0.1)
@@ -775,12 +767,7 @@ class _HTTPBackgroundLogger:
         # order of published elements would be undefined.
         with self.flush_lock:
             # Drain the queue.
-            wrapped_items = []
-            try:
-                for _ in range(self.queue.qsize()):
-                    wrapped_items.append(self.queue.get_nowait())
-            except queue.Empty:
-                pass
+            wrapped_items = self.queue.drain_all()
 
             all_items, attachments = self._unwrap_lazy_values(wrapped_items)
             if len(all_items) == 0:
