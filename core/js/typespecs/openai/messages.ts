@@ -21,8 +21,8 @@ export const chatCompletionContentPartTextSchema = z
 
 const chatCompletionSystemMessageParamSchema = z.object({
   content: z.union([
-    z.string().default(""),
-    z.array(chatCompletionContentPartTextSchema),
+    z.string().default("").openapi({ title: "text" }),
+    z.array(chatCompletionContentPartTextSchema).openapi({ title: "array" }),
   ]),
   role: z.literal("system"),
   name: z.string().optional(),
@@ -80,8 +80,8 @@ const functionSchema = z.object({
 });
 const chatCompletionToolMessageParamSchema = z.object({
   content: z.union([
-    z.string().default(""),
-    z.array(chatCompletionContentPartTextSchema),
+    z.string().default("").openapi({ title: "text" }),
+    z.array(chatCompletionContentPartTextSchema).openapi({ title: "array" }),
   ]),
   role: z.literal("tool"),
   tool_call_id: z.string().default(""),
