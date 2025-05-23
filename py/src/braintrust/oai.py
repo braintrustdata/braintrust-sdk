@@ -18,13 +18,12 @@ def _is_not_given(value: Any) -> bool:
     if value is None:
         return False
 
-    # Check by type name and repr to avoid import dependency
-    type_name = type(value).__name__
-    if type_name == "NotGiven":
-        return True
-
-    # Fallback to string representation check
-    return str(value) == "NOT_GIVEN" or repr(value) == "NOT_GIVEN"
+    try:
+        # Check by type name and repr to avoid import dependency
+        type_name = type(value).__name__
+        return type_name == "NotGiven"
+    except Exception:
+        return False
 
 
 class NamedWrapper:
