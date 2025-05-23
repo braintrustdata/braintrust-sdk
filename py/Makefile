@@ -38,6 +38,9 @@ install-build-deps:
 install-dev: install-build-deps
 	python -m pip install -r requirements-dev.txt
 
+install-optional:
+	python -m pip install anthropic openai pydantic_ai
+
 _publish:
 	./scripts/publish.sh
 
