@@ -224,7 +224,7 @@ export interface Span extends Exportable {
    * Links can be generated at any time, but they will only become viewable
    * after the span and its root have been flushed to the server and ingested.
    *
-   * There are certain conditions that a Span doesn'thave enough information
+   * There are some conditions when a Span doesn't have enough information
    * to return a stable link (e.g. during an unresolved experiment). In this case
    * or if there's an error generating link, we'll return a placeholder link.
    *
