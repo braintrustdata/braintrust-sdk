@@ -4481,4 +4481,4 @@ def _get_org_name(org_name: Optional[str] = None) -> Optional[str]:
 
 
 def _get_error_link(msg="") -> str:
-    return "https://www.braintrust.dev/error-generating-link?msg=%s" % msg
+    return f"https://www.braintrust.dev/error-generating-link?msg={encode_uri_component(msg)}"
