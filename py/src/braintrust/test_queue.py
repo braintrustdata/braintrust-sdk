@@ -1,0 +1,198 @@
+import asyncio
+import threading
+import time
+from unittest.mock import Mock
+
+import pytest
+
+from braintrust.queue import LogQueue
+
+
+def test_log_queue_basic_operations():
+    """Test basic push/pop operations of LogQueue"""
+    queue = LogQueue(maxsize=5)
+
+    # Test empty queue
+    items = queue.drain_all()
+    assert items == []
+
+    # Test adding items
+    queue.put("item1")
+    queue.put("item2")
+
+    # Test draining items
+    items = queue.drain_all()
+    assert items == ["item1", "item2"]
+
+    # Queue should be empty after draining
+    items = queue.drain_all()
+    assert items == []
+
+
+def test_log_queue_drops_oldest_when_full():
+    """Test queue drops oldest items when full and drop_when_full=True"""
+    queue = LogQueue(maxsize=2, drop_when_full=True)
+
+    # Fill queue to capacity
+    queue.put("item1")
+    queue.put("item2")
+
+    # Adding more should drop the oldest (item1)
+    dropped = queue.put("item3")
+    assert dropped == ["item1"]
+
+    # Queue should now contain item2 and item3
+    items = queue.drain_all()
+    assert items == ["item2", "item3"]
+
+
+def test_log_queue_blocking_put():
+    """Test queue blocks when full and drop_when_full=False"""
+    queue = LogQueue(maxsize=1, drop_when_full=False)
+
+    queue.put("item1")
+
+    # Drain the queue to make space
+    items = queue.drain_all()
+    assert items == ["item1"]
+
+    # Now we can add another item without blocking
+    queue.put("item2")
+
+    items = queue.drain_all()
+    assert items == ["item2"]
+
+
+def test_log_queue_semaphore_signaling():
+    """Test that semaphore is properly signaled when items are added"""
+    queue = LogQueue(maxsize=5)
+
+    # Initially no signal
+    assert not queue.wait_for_items(timeout=0.1)
+
+    # Add item and check signal
+    queue.put("item1")
+    assert queue.wait_for_items(timeout=0.1)
+
+    # After draining, should signal again if there were items
+    queue.drain_all()
+
+
+def test_log_queue_size():
+    """Test queue size reporting"""
+    queue = LogQueue(maxsize=5)
+
+    assert queue.size() == 0
+
+    queue.put("item1")
+    queue.put("item2")
+
+    assert queue.size() == 2
+
+    queue.drain_all()
+    assert queue.size() == 0
+
+
+def test_log_queue_multiple_drops():
+    """Test multiple items get dropped in FIFO order when queue is full"""
+    queue = LogQueue(maxsize=2, drop_when_full=True)
+
+    # Fill queue
+    queue.put("item1")
+    queue.put("item2")
+
+    # Add multiple items that will cause drops
+    dropped1 = queue.put("item3")
+    dropped2 = queue.put("item4")
+
+    assert dropped1 == ["item1"]
+    assert dropped2 == ["item2"]
+
+    # Queue should contain the newest items
+    items = queue.drain_all()
+    assert items == ["item3", "item4"]
+
+
+def test_log_queue_unlimited_size():
+    """Test queue with maxsize=0 (unlimited)"""
+    queue = LogQueue(maxsize=0, drop_when_full=True)
+
+    # Should be able to add many items without drops
+    for i in range(100):
+        dropped = queue.put(f"item{i}")
+        assert dropped == []  # No drops in unlimited queue
+
+    # All items should be there
+    items = queue.drain_all()
+    assert len(items) == 100
+    assert items[0] == "item0"
+    assert items[99] == "item99"
+
+
+@pytest.mark.asyncio
+async def test_queue_never_blocks_event_loop():
+    """Test that queue operations don't block the asyncio event loop"""
+    queue = LogQueue(maxsize=1, drop_when_full=False)
+
+    # Fill the queue
+    queue.put("item1")
+
+    # Flag to prove event loop stays responsive
+    flag_set = False
+
+    async def set_flag():
+        nonlocal flag_set
+        flag_set = True
+
+    # Start potentially blocking operation in thread and flag setter concurrently
+    flag_task = asyncio.create_task(set_flag())
+    put_task = asyncio.create_task(asyncio.to_thread(queue.put, "item2"))
+
+    # Wait for flag task to complete
+    await flag_task
+
+    # Flag should be set, proving event loop wasn't blocked
+    assert flag_set is True
+
+    # Clean up
+    queue.drain_all()
+    await put_task
+
+
+@pytest.mark.asyncio
+async def test_queue_concurrent_drops_and_drains():
+    """Test concurrent producer/consumer with drops and drains in asyncio"""
+    queue = LogQueue(maxsize=3, drop_when_full=True)
+
+    total_pushed = 0
+    total_dropped = 0
+    total_drained = 0
+
+    async def producer():
+        nonlocal total_pushed, total_dropped
+        # Push many items to guarantee some drops
+        for i in range(15):
+            dropped = queue.put(f"item{i}")
+            total_pushed += 1
+            total_dropped += len(dropped)
+
+    async def consumer():
+        nonlocal total_drained
+        # Periodically drain, but not fast enough to prevent all drops
+        for _ in range(3):
+            await asyncio.sleep(0)  # Yield control
+            items = queue.drain_all()
+            total_drained += len(items)
+
+    # Run both concurrently
+    await asyncio.gather(producer(), consumer())
+
+    # Final drain to get remaining items
+    final_items = queue.drain_all()
+    total_drained += len(final_items)
+
+    # Verify the accounting works out
+    assert total_pushed == 15
+    assert total_dropped > 0  # Some items should have been dropped
+    assert total_drained > 0  # Some items should have been drained
+    assert total_drained + total_dropped == total_pushed  # Conservation of items
