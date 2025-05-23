@@ -10,22 +10,6 @@ X_LEGACY_CACHED_HEADER = "x-cached"
 X_CACHED_HEADER = "x-bt-cached"
 
 
-def _is_not_given(value: Any) -> bool:
-    """Check if a value is OpenAI's NOT_GIVEN sentinel value.
-
-    This avoids importing NOT_GIVEN directly by checking the type name and repr.
-    """
-    if value is None:
-        return False
-
-    try:
-        # Check by type name and repr to avoid import dependency
-        type_name = type(value).__name__
-        return type_name == "NotGiven"
-    except Exception:
-        return False
-
-
 class NamedWrapper:
     def __init__(self, wrapped: Any):
         self.__wrapped = wrapped
@@ -805,7 +789,9 @@ def _is_numeric(v):
 
 def prettify_params(params: Dict[str, Any]) -> Dict[str, Any]:
     # Filter out NOT_GIVEN parameters
+    # https://linear.app/braintrustdata/issue/BRA-2467
     ret = {k: v for k, v in params.items() if not _is_not_given(v)}
+
     if "response_format" in ret:
         ret["response_format"] = serialize_response_format(ret["response_format"])
     return ret
@@ -845,3 +831,14 @@ def serialize_response_format(response_format: Any) -> Any:
         )
     else:
         return response_format
+
+
+def _is_not_given(value: Any) -> bool:
+    if value is None:
+        return False
+    try:
+        # Check by type name and repr to avoid import dependency
+        type_name = type(value).__name__
+        return type_name == "NotGiven"
+    except Exception:
+        return False
