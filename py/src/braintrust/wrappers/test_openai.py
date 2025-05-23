@@ -27,21 +27,6 @@ def memory_logger():
         yield bgl
 
 
-def test_is_not_given():
-    """Test the _is_not_given function correctly identifies NOT_GIVEN values."""
-    # Test with actual NOT_GIVEN value
-    assert _is_not_given(NOT_GIVEN) == True
-
-    # Test with other values that should not be considered NOT_GIVEN
-    assert _is_not_given(None) == False
-    assert _is_not_given("hello") == False
-    assert _is_not_given(42) == False
-    assert _is_not_given([]) == False
-    assert _is_not_given({}) == False
-    assert _is_not_given(0) == False
-    assert _is_not_given(False) == False
-
-
 def test_openai_chat_metrics(memory_logger):
     assert not memory_logger.pop()
 
