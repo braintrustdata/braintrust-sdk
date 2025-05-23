@@ -1,0 +1,27 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: anthropics/claude-code-action@beta
+        with:
+          direct_prompt: |
+            Please provide a thorough code review of this pull request. Focus on:
+
+            1. **Code Quality & Issues**: Look for bugs, logic errors, edge cases not handled, security vulnerabilities, and performance issues
+            2. **Code Style & Consistency**: Check for adherence to existing patterns, naming conventions, and formatting
+            3. **Testing**: Verify adequate test coverage and identify missing test cases
+            4. **Architecture & Design**: Assess if changes follow good software engineering practices
+            5. **Breaking Changes**: Identify any potential breaking changes that need documentation
+            6. **Dependencies**: Review any new dependencies or version changes
+
+            Be specific with file:line references and provide actionable feedback. If you find critical issues, clearly mark them as such.
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
