@@ -174,7 +174,18 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
 
     @abstractmethod
     def link(self) -> str:
-        """Return a link to the span. FIXME[matt] add docs"""
+        """
+        Format a link to the Braintrust application for viewing this span.
+
+        Links can be generated at any time, but they will only become viewable
+        after the span and its root have been flushed to the server and ingested.
+
+        There are some conditions when a Span doesn't have enough information
+        to return a stable link (e.g. during an unresolved experiment). In this case
+        or if there's an error generating link, we'll return a placeholder link.
+
+        :returns: A link to the span.
+        """
 
     @abstractmethod
     def permalink(self) -> str:
@@ -182,6 +193,10 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
         Format a permalink to the Braintrust application for viewing this span.
 
         Links can be generated at any time, but they will only become viewable after the span and its root have been flushed to the server and ingested.
+
+        This function can block resolving data with the server. For production
+        applications it's preferable to call `Span.link` instead.
+
 
         :returns: A permalink to the span.
         """
