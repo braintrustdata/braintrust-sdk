@@ -2665,8 +2665,8 @@ def permalink(slug: str, org_name: Optional[str] = None, app_url: Optional[str] 
         if not id:
             raise ValueError("Span slug does not refer to an individual row")
 
-            url_params = urlencode({"object_type": object_type, "object_id": object_id, "id": id})
-            return f"{app_url}/app/{org_name}/object?{url_params}"
+        url_params = urlencode({"object_type": object_type, "object_id": object_id, "id": id})
+        return f"{app_url}/app/{org_name}/object?{url_params}"
     except Exception as e:
         if "BRAINTRUST_API_KEY" in str(e):
             return _get_error_link("login-or-provide-org-name")

@@ -446,3 +446,20 @@ def test_span_link_with_unresolved_experiment(with_simulate_login, with_memory_l
 
     link = span.link()
     assert link == "https://www.braintrust.dev/error-generating-link?msg=resolve-experiment-id"
+
+
+def test_permalink_with_valid_span_logged_in(with_simulate_login, with_memory_logger):
+    logger = init_logger(
+        project="test-project",
+        project_id="test-project-id",
+    )
+
+    span = logger.start_span(name="test-span")
+    span.end()
+
+    span_export = span.export()
+
+    link = braintrust.permalink(span_export, org_name="test-org-name", app_url="https://www.braintrust.dev")
+
+    expected_link = f"https://www.braintrust.dev/app/test-org-name/object?object_type=project_logs&object_id=test-project-id&id={span._id}"
+    assert link == expected_link
