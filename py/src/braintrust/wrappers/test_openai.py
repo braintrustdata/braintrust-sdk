@@ -25,9 +25,6 @@ def memory_logger():
         yield bgl
 
 
-# ------------- Synchronous API Tests -------------
-
-
 def test_openai_chat_metrics(memory_logger):
     assert not memory_logger.pop()
 
@@ -554,9 +551,6 @@ async def test_openai_client_async_error(memory_logger):
     assert fake_model in str(log)
 
 
-# ------------- Async Context Manager Tests -------------
-
-
 @pytest.mark.asyncio
 async def test_openai_chat_async_context_manager(memory_logger):
     """Test async context manager behavior for chat completions streams."""
@@ -709,9 +703,6 @@ async def test_openai_response_streaming_async(memory_logger):
         assert start < metrics["start"] < metrics["end"] < end
         assert "What's 12 + 12?" in str(span["input"])
         assert "24" in str(span["output"])
-
-
-# ------------- Integration with Advanced Patterns Tests -------------
 
 
 @pytest.mark.asyncio
