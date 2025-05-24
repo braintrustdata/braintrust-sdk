@@ -135,13 +135,13 @@ def test_memory_logger():
 def assert_dict_matches(actual, expected):
     """Assert that actual dictionary matches expected dictionary.
 
-    The expected dictionary can be a subset of actual (i.e. actual can have additional keys).
-    Values in expected can be functions that validate the actual value.
+        The expected dictionary can be a subset of actual (i.e. actual can have additional keys).
+        Values in expected can be functions that validate the actual value.
 
-+    assert_dict_matches({"a":"a", "b":2, "c":3}, {
-+        "a": "a",  # Values match exactly
-+        "b": lambda x: isinstance(x, int)  # Custom validation with lambda
-+    })  # => passes
+    +    assert_dict_matches({"a":"a", "b":2, "c":3}, {
+    +        "a": "a",  # Values match exactly
+    +        "b": lambda x: isinstance(x, int)  # Custom validation with lambda
+    +    })  # => passes
     """
     for key, expected_val in expected.items():
         assert key in actual, f"Expected key '{key}' not found"
