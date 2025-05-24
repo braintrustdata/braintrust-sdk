@@ -788,7 +788,10 @@ def _is_numeric(v):
 
 
 def prettify_params(params: Dict[str, Any]) -> Dict[str, Any]:
-    ret = {**params}
+    # Filter out NOT_GIVEN parameters
+    # https://linear.app/braintrustdata/issue/BRA-2467
+    ret = {k: v for k, v in params.items() if not _is_not_given(v)}
+
     if "response_format" in ret:
         ret["response_format"] = serialize_response_format(ret["response_format"])
     return ret
@@ -828,3 +831,14 @@ def serialize_response_format(response_format: Any) -> Any:
         )
     else:
         return response_format
+
+
+def _is_not_given(value: Any) -> bool:
+    if value is None:
+        return False
+    try:
+        # Check by type name and repr to avoid import dependency
+        type_name = type(value).__name__
+        return type_name == "NotGiven"
+    except Exception:
+        return False

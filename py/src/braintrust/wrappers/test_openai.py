@@ -5,10 +5,12 @@ from typing import Any, Dict, Optional
 import openai
 import pytest
 from openai import AsyncOpenAI, OpenAI
+from openai._types import NOT_GIVEN
 
 from braintrust import logger, wrap_openai
+from braintrust.oai import _is_not_given
 from braintrust.span_types import SpanTypeAttribute
-from braintrust.test_helpers import init_test_logger
+from braintrust.test_helpers import assert_dict_matches, init_test_logger
 from braintrust.wrappers.test_utils import assert_metrics_are_valid
 
 TEST_ORG_ID = "test-org-openai-py-tracing"
@@ -23,9 +25,6 @@ def memory_logger():
     init_test_logger(PROJECT_NAME)
     with logger._internal_with_memory_background_logger() as bgl:
         yield bgl
-
-
-# ------------- Synchronous API Tests -------------
 
 
 def test_openai_chat_metrics(memory_logger):
@@ -281,9 +280,6 @@ def test_openai_client_error(memory_logger):
     # It seems the error field may not be present in newer OpenAI versions
     # Just check that we got a log entry with the fake model
     assert fake_model in str(log)
-
-
-# ------------- Asynchronous API Tests -------------
 
 
 @pytest.mark.asyncio
@@ -554,9 +550,6 @@ async def test_openai_client_async_error(memory_logger):
     assert fake_model in str(log)
 
 
-# ------------- Async Context Manager Tests -------------
-
-
 @pytest.mark.asyncio
 async def test_openai_chat_async_context_manager(memory_logger):
     """Test async context manager behavior for chat completions streams."""
@@ -711,9 +704,6 @@ async def test_openai_response_streaming_async(memory_logger):
         assert "24" in str(span["output"])
 
 
-# ------------- Integration with Advanced Patterns Tests -------------
-
-
 @pytest.mark.asyncio
 async def test_openai_async_parallel_requests(memory_logger):
     """Test multiple parallel async requests with the wrapped client."""
@@ -748,6 +738,100 @@ async def test_openai_async_parallel_requests(memory_logger):
         # assert span["metadata"]["provider"] == "openai"
         assert prompts[i] in str(span["input"])
         assert_metrics_are_valid(span["metrics"])
+
+
+def test_openai_not_given_filtering(memory_logger):
+    """Test that NOT_GIVEN values are filtered out of logged inputs but API call still works."""
+    assert not memory_logger.pop()
+
+    client = wrap_openai(openai.OpenAI())
+
+    # Make a call with NOT_GIVEN for optional parameters
+    response = client.chat.completions.create(
+        model=TEST_MODEL,
+        messages=[{"role": "user", "content": TEST_PROMPT}],
+        max_tokens=NOT_GIVEN,
+        top_p=NOT_GIVEN,
+        frequency_penalty=NOT_GIVEN,
+        temperature=0.5,  # one real one
+        presence_penalty=NOT_GIVEN,
+        tools=NOT_GIVEN,
+    )
+
+    # Verify the API call worked normally
+    assert response
+    assert response.choices[0].message.content
+    assert "24" in response.choices[0].message.content or "twenty-four" in response.choices[0].message.content.lower()
+
+    # Check the logged span
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+
+    assert_dict_matches(
+        span,
+        {
+            "input": [{"role": "user", "content": TEST_PROMPT}],
+            "metadata": {
+                "model": TEST_MODEL,
+                "temperature": 0.5,
+            },
+        },
+    )
+    # Verify NOT_GIVEN values are not in the logged metadata
+    meta = span["metadata"]
+    assert "NOT_GIVEN" not in str(meta)
+    for k in ["max_tokens", "top_p", "frequency_penalty", "presence_penalty", "tools"]:
+        assert k not in meta
+
+
+def test_openai_responses_not_given_filtering(memory_logger):
+    """Test that NOT_GIVEN values are filtered out of logged inputs for responses API."""
+    assert not memory_logger.pop()
+
+    client = wrap_openai(openai.OpenAI())
+
+    # Make a call with NOT_GIVEN for optional parameters
+    response = client.responses.create(
+        model=TEST_MODEL,
+        input=TEST_PROMPT,
+        instructions="Just the number please",
+        max_output_tokens=NOT_GIVEN,
+        tools=NOT_GIVEN,
+        temperature=0.5,  # one real parameter
+        top_p=NOT_GIVEN,
+        metadata=NOT_GIVEN,
+        store=NOT_GIVEN,
+    )
+
+    # Verify the API call worked normally
+    assert response
+    assert response.output
+    assert len(response.output) > 0
+    content = response.output[0].content[0].text
+    assert "24" in content or "twenty-four" in content.lower()
+
+    # Check the logged span
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+
+    assert_dict_matches(
+        span,
+        {
+            "input": TEST_PROMPT,
+            "metadata": {
+                "model": TEST_MODEL,
+                "temperature": 0.5,
+                "instructions": "Just the number please",
+            },
+        },
+    )
+    # Verify NOT_GIVEN values are not in the logged metadata
+    meta = span["metadata"]
+    assert "NOT_GIVEN" not in str(meta)
+    for k in ["max_output_tokens", "tools", "top_p", "store"]:
+        assert k not in meta
 
 
 def _is_wrapped(client):
