@@ -578,6 +578,7 @@ describe("span.link", () => {
   });
 
   test("span.link handles missing experiment id", async () => {
+    const _state = await _exportsForTestingOnly.simulateLoginForTests();
     const experiment = initExperiment("test-experiment");
     const span = experiment.startSpan({ name: "test-span" });
     span.end();
@@ -591,6 +592,7 @@ describe("span.link", () => {
   });
 
   test("span.link handles missing project id and name", async () => {
+    const _state = await _exportsForTestingOnly.simulateLoginForTests();
     const logger = initLogger({});
     const span = logger.startSpan({ name: "test-span" });
     span.end();
@@ -606,6 +608,7 @@ describe("span.link", () => {
   });
 
   test("span.link handles playground logs", async () => {
+    const _state = await _exportsForTestingOnly.simulateLoginForTests();
     const logger = initLogger({});
     const span = logger.startSpan({ name: "test-span" });
     span.end();
