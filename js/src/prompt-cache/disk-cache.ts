@@ -64,7 +64,7 @@ export class DiskCache<T> {
     this.logWarnings = options.logWarnings ?? true;
   }
 
-  private getEntryPath(key: string): string {
+  public getEntryPath(key: string): string {
     const hashed = iso.hash!(key);
     return iso.pathJoin!(this.dir, hashed);
   }
@@ -84,6 +84,7 @@ export class DiskCache<T> {
       await iso.utimes!(filePath, new Date(), new Date());
       return JSON.parse(data.toString());
     } catch (e) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       if ((e as NodeJS.ErrnoException).code === "ENOENT") {
         return undefined;
       }

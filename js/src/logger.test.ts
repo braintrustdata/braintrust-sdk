@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/consistent-type-assertions */
 import { vi, expect, test, describe, beforeEach, afterEach } from "vitest";
 import {
   _exportsForTestingOnly,
@@ -12,7 +13,6 @@ import {
   Prompt,
   permalink,
   BraintrustState,
-  FailedHTTPResponse,
 } from "./logger";
 import { SpanObjectTypeV3 } from "@braintrust/core";
 import { LazyValue } from "./util";
@@ -48,6 +48,7 @@ test("verify MemoryBackgroundLogger intercepts logs", async () => {
 
   await memoryLogger.flush();
 
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
   const events = (await memoryLogger.drain()) as any[]; // FIXME[matt] what type should this be?
   expect(events).toHaveLength(2);
 
@@ -374,7 +375,9 @@ test("disable logging", async () => {
 
   let submittedItems = [];
   const submitLogsRequestSpy = vi
+    // @ts-ignore
     .spyOn(bgLogger, "submitLogsRequest")
+    // @ts-ignore
     .mockImplementation((items: string[]) => {
       submittedItems = items;
       return Promise.resolve();
@@ -497,6 +500,7 @@ describe("span.link", () => {
     // Get the link
     const link1 = span.link();
     expect(link1).toBe(
+      // @ts-ignore
       `https://braintrust.dev/app/test-org-name/p/test-project/logs?oid=${span._id}`,
     );
   });
@@ -574,11 +578,11 @@ describe("span.link", () => {
   });
 
   test("span.link handles missing experiment id", async () => {
-    const state = await _exportsForTestingOnly.simulateLoginForTests();
     const experiment = initExperiment("test-experiment");
     const span = experiment.startSpan({ name: "test-span" });
     span.end();
     // Force parentObjectId to be undefined
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (span as any).parentObjectId = { getSync: () => ({ value: undefined }) };
     const link = span.link();
     expect(link).toBe(
@@ -587,12 +591,13 @@ describe("span.link", () => {
   });
 
   test("span.link handles missing project id and name", async () => {
-    const state = await _exportsForTestingOnly.simulateLoginForTests();
     const logger = initLogger({});
     const span = logger.startSpan({ name: "test-span" });
     span.end();
     // Force parentObjectId to be undefined and remove project metadata
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (span as any).parentObjectId = { getSync: () => ({ value: undefined }) };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (span as any).parentComputeObjectMetadataArgs = {};
     const link = span.link();
     expect(link).toBe(
@@ -601,11 +606,11 @@ describe("span.link", () => {
   });
 
   test("span.link handles playground logs", async () => {
-    const state = await _exportsForTestingOnly.simulateLoginForTests();
     const logger = initLogger({});
     const span = logger.startSpan({ name: "test-span" });
     span.end();
     // Force parentObjectType to be PLAYGROUND_LOGS
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (span as any).parentObjectType = SpanObjectTypeV3.PLAYGROUND_LOGS;
     const link = span.link();
     expect(link).toBe("https://braintrust.dev/noop-span");

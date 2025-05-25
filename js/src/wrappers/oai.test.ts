@@ -10,7 +10,12 @@ import {
 } from "vitest";
 import { configureNode } from "../node";
 import OpenAI from "openai";
-import { _exportsForTestingOnly, initLogger } from "../logger";
+import {
+  _exportsForTestingOnly,
+  initLogger,
+  Logger,
+  TestBackgroundLogger,
+} from "../logger";
 import { wrapOpenAI } from "../exports-node";
 import { getCurrentUnixTimestamp } from "../util";
 import { parseMetricsFromUsage } from "./oai_responses";
@@ -21,7 +26,7 @@ const TEST_SUITE_OPTIONS = { timeout: 10000 };
 
 try {
   configureNode();
-} catch (e) {
+} catch {
   // FIXME[matt] have a better of way of initializing brainstrust state once per process.
 }
 
@@ -32,8 +37,8 @@ test("openai is installed", () => {
 describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
   let oai: OpenAI;
   let client: OpenAI;
-  let backgroundLogger: any;
-  let logger: any;
+  let backgroundLogger: TestBackgroundLogger;
+  let _logger: Logger<false>;
 
   // fake login before we test. once is enough.
   beforeAll(async () => {
@@ -44,7 +49,7 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
     oai = new OpenAI();
     client = wrapOpenAI(oai);
-    logger = initLogger({
+    _logger = initLogger({
       projectName: "openai.test.ts",
       projectId: "test-project-id",
     });
@@ -79,6 +84,7 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
 
       const spans = await backgroundLogger.drain();
       assert.lengthOf(spans, 1);
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
       const span = spans[0] as any;
       assert.equal(span.span_attributes.name, "Chat Completion");
       assert.equal(span.span_attributes.type, "llm");
@@ -116,6 +122,7 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
 
     const spans = await backgroundLogger.drain();
     assert.lengthOf(spans, 1);
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
     const span = spans[0] as any;
     assert.ok(span);
     assert.equal(span.span_attributes.type, "llm");
@@ -158,11 +165,13 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     expect(onEvent).toHaveBeenCalled();
     expect(onDelta).toHaveBeenCalled();
     expect(onIteration).toHaveBeenCalled();
-    const result = await stream.finalResponse();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result: any = await stream.finalResponse();
     expect(result.output[0].content[0].text).toContain("36");
 
     const spans = await backgroundLogger.drain();
     assert.lengthOf(spans, 1);
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
     const span = spans[0] as any;
     assert.equal(span.span_attributes.name, "openai.responses.create");
     assert.equal(span.span_attributes.type, "llm");
@@ -205,9 +214,11 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
 
     const spans = await backgroundLogger.drain();
     assert.lengthOf(spans, 1);
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
     const span = spans[0] as any;
     assert.equal(span.span_attributes.name, "openai.responses.create");
     assert.equal(span.span_attributes.type, "llm");
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
     const input = span.input as any[];
     assert.lengthOf(input, 2);
     assert.equal(input[0].content, "Read me a few lines of Sonnet 18");
@@ -248,6 +259,7 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
 
     const spans = await backgroundLogger.drain();
     assert.lengthOf(spans, 1);
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
     const span = spans[0] as any;
     assert.equal(span.span_attributes.name, "openai.responses.create");
     assert.equal(span.span_attributes.type, "llm");
@@ -273,7 +285,7 @@ test("parseMetricsFromUsage", () => {
   assert.equal(metrics.prompt_brand_new_token, 12);
   assert.equal(metrics.completion_tokens, 8);
   // test a bunch of error conditions
-  var totallyBadInputs = [
+  const totallyBadInputs = [
     null,
     undefined,
     "not an object",
