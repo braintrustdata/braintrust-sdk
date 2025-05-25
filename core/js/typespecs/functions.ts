@@ -253,6 +253,7 @@ export const invokeFunctionNonIdArgsSchema = z.object({
     .record(z.string(), z.unknown())
     .nullish()
     .describe("Any relevant metadata"),
+  tags: z.array(z.string()).nullish().describe("Any relevant tags"),
   messages: z
     .array(chatCompletionMessageParamSchema)
     .optional()
