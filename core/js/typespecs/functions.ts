@@ -252,8 +252,13 @@ export const invokeFunctionNonIdArgsSchema = z.object({
   metadata: z
     .record(z.string(), z.unknown())
     .nullish()
-    .describe("Any relevant metadata"),
-  tags: z.array(z.string()).nullish().describe("Any relevant tags"),
+    .describe(
+      "Any relevant metadata. This will be logged and available as the `metadata` argument.",
+    ),
+  tags: z
+    .array(z.string())
+    .nullish()
+    .describe("Any relevant tags to log on the span."),
   messages: z
     .array(chatCompletionMessageParamSchema)
     .optional()
