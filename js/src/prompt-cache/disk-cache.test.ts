@@ -4,12 +4,12 @@ import { DiskCache } from "./disk-cache";
 import { tmpdir } from "os";
 import { beforeEach, describe, it, afterEach, expect } from "vitest";
 import { configureNode } from "../node";
-import iso from "../isomorph";
 
 describe("DiskCache", () => {
   configureNode();
 
   let cacheDir: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let cache: DiskCache<any>;
 
   beforeEach(async () => {
@@ -20,7 +20,7 @@ describe("DiskCache", () => {
   afterEach(async () => {
     try {
       await fs.rm(cacheDir, { recursive: true, force: true });
-    } catch (e) {
+    } catch {
       // Ignore errors if directory doesn't exist.
     }
   });
