@@ -5191,11 +5191,6 @@ export function renderMessage<T extends Message>(
                           url: render(c.image_url.url),
                         },
                       };
-                    // TODO - what needs to be rendered
-                    case "image":
-                    case "tool_use":
-                    case "tool_result":
-                      return c;
                     default:
                       const _exhaustiveCheck: never = c;
                       return _exhaustiveCheck;
