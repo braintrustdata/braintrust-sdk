@@ -46,67 +46,6 @@ export const chatCompletionContentPartImageSchema = z
   })
   .openapi("ChatCompletionContentPartImage");
 
-export const anthropicImageSourceSchema = z.object({
-  type: z.literal("base64"),
-  media_type: z.enum(["image/jpeg", "image/png", "image/gif", "image/webp"]),
-  data: z.string(),
-});
-
-export const anthropicContentPartTextSchema = z
-  .object({
-    type: z.literal("text"),
-    text: z.string(),
-    cache_control: cacheControlSchema.optional(),
-  })
-  .openapi("AnthropicContentPartText");
-
-export const anthropicContentPartImageSchema = z
-  .object({
-    type: z.literal("image"),
-    source: anthropicImageSourceSchema,
-    cache_control: cacheControlSchema.optional(),
-  })
-  .openapi("AnthropicContentPartImage");
-
-export const anthropicToolUseContentPartSchema = z
-  .object({
-    type: z.literal("tool_use"),
-    id: z.string(),
-    name: z.string(),
-    input: z.record(z.any()),
-    cache_control: cacheControlSchema.optional(),
-  })
-  .openapi("AnthropicToolUseContentPart");
-
-export const anthropicToolResultContentPartSchema = z
-  .object({
-    type: z.literal("tool_result"),
-    tool_use_id: z.string(),
-    content: z
-      .union([
-        z.string(),
-        z.array(
-          z.union([
-            anthropicContentPartTextSchema,
-            anthropicContentPartImageSchema,
-          ]),
-        ),
-      ])
-      .optional(),
-    is_error: z.boolean().optional(),
-    cache_control: cacheControlSchema.optional(),
-  })
-  .openapi("AnthropicToolResultContentPart");
-
-export const anthropicContentPartSchema = z
-  .union([
-    anthropicContentPartTextSchema.openapi({ title: "text" }),
-    anthropicContentPartImageSchema.openapi({ title: "image" }),
-    anthropicToolUseContentPartSchema.openapi({ title: "tool_use" }),
-    anthropicToolResultContentPartSchema.openapi({ title: "tool_result" }),
-  ])
-  .openapi("AnthropicContentPart");
-
 export const chatCompletionContentPartSchema = z
   .union([
     chatCompletionContentPartTextSchema.openapi({ title: "text" }),
@@ -126,49 +65,6 @@ export const chatCompletionContentSchema = z
       .openapi({ title: "array" }),
   ])
   .openapi("ChatCompletionContent");
-
-const anthropicSystemMessageParamSchema = z.object({
-  role: z.literal("system"),
-  content: z.union([z.string(), z.array(anthropicContentPartTextSchema)]),
-  cache_control: cacheControlSchema.optional(),
-});
-
-const anthropicUserMessageParamSchema = z.object({
-  role: z.literal("user"),
-  content: z.union([
-    z.string(),
-    z.array(
-      z.union([
-        anthropicContentPartTextSchema,
-        anthropicContentPartImageSchema,
-        anthropicToolResultContentPartSchema,
-      ]),
-    ),
-  ]),
-  cache_control: cacheControlSchema.optional(),
-});
-
-const anthropicAssistantMessageParamSchema = z.object({
-  role: z.literal("assistant"),
-  content: z.union([
-    z.string(),
-    z.array(
-      z.union([
-        anthropicContentPartTextSchema,
-        anthropicToolUseContentPartSchema,
-      ]),
-    ),
-  ]),
-  cache_control: cacheControlSchema.optional(),
-});
-
-export const anthropicMessageParamSchema = z
-  .union([
-    anthropicSystemMessageParamSchema.openapi({ title: "system" }),
-    anthropicUserMessageParamSchema.openapi({ title: "user" }),
-    anthropicAssistantMessageParamSchema.openapi({ title: "assistant" }),
-  ])
-  .openapi("AnthropicMessageParam");
 
 const chatCompletionUserMessageParamSchema = z.object({
   content: chatCompletionContentSchema,
@@ -269,29 +165,8 @@ export const chatCompletionOpenAIMessageParamSchema = z.union([
 export const chatCompletionMessageParamSchema = z
   .union([
     chatCompletionOpenAIMessageParamSchema.openapi({ title: "openai" }),
-    anthropicMessageParamSchema.openapi({ title: "anthropic" }),
     chatCompletionFallbackMessageParamSchema.openapi({ title: "fallback" }),
   ])
   .openapi("ChatCompletionMessageParam");
 
-export const anthropicToolSchema = z.object({
-  name: z.string(),
-  description: z.string().optional(),
-  input_schema: z.record(z.any()), // JSON Schema for the tool's input
-  cache_control: cacheControlSchema.optional(),
-});
-
-export const anthropicToolChoiceSchema = z.union([
-  z.literal("auto"),
-  z.literal("any"),
-  z.object({
-    type: z.literal("tool"),
-    name: z.string(),
-  }),
-]);
-
 export type ToolCall = z.infer<typeof chatCompletionMessageToolCallSchema>;
-export type AnthropicContentPart = z.infer<typeof anthropicContentPartSchema>;
-export type AnthropicMessageParam = z.infer<typeof anthropicMessageParamSchema>;
-export type AnthropicTool = z.infer<typeof anthropicToolSchema>;
-export type AnthropicToolChoice = z.infer<typeof anthropicToolChoiceSchema>;
