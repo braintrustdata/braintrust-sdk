@@ -566,7 +566,11 @@ const webhookAutomationActionSchema = z.object({
   url: z.string().describe("The webhook URL to send the request to"),
 });
 
-export const automationEventTypeEnum = z.enum(["logs", "retention"]);
+export const automationEventTypeEnum = z.enum([
+  "logs",
+  "retention",
+  "btql_export",
+]);
 export const logAutomationConfigSchema = z.object({
   event_type: z
     .literal("logs")
@@ -611,6 +615,19 @@ const retentionAutomationConfigSchema = z.object({
     .describe("The number of days to retain the object"),
 });
 
+const btqlExportAutomationConfigSchema = z.object({
+  event_type: z
+    .literal("btql_export")
+    .describe("The event which starts the automation execution"),
+  btql_query: z.string().describe("XXX the query"),
+  bucket_name: z.string().describe("The S3 bucket to export the results to"),
+  key_prefix: z.string().describe("The S3 prefix to use for result files"),
+  format: z
+    .enum(["jsonl", "parquet"])
+    .describe("The format to export the results in"),
+  batch_size: z.number().describe("The number of rows to export in each batch"),
+});
+
 const projectAutomationBaseSchema =
   generateBaseTableSchema("project automation");
 export const projectAutomationSchema = z
@@ -622,7 +639,11 @@ export const projectAutomationSchema = z
     name: projectAutomationBaseSchema.shape.name,
     description: projectAutomationBaseSchema.shape.description,
     config: z
-      .union([logAutomationConfigSchema, retentionAutomationConfigSchema])
+      .union([
+        logAutomationConfigSchema,
+        retentionAutomationConfigSchema,
+        btqlExportAutomationConfigSchema,
+      ])
       .describe("The configuration for the automation rule"),
   })
   .openapi("ProjectAutomation");
@@ -641,6 +662,13 @@ export const retentionAutomationSchema = projectAutomationSchema.merge(
   }),
 );
 export type RetentionAutomation = z.infer<typeof retentionAutomationSchema>;
+
+export const btqlExportAutomationSchema = projectAutomationSchema.merge(
+  z.object({
+    config: btqlExportAutomationConfigSchema,
+  }),
+);
+export type BtqlExportAutomation = z.infer<typeof btqlExportAutomationSchema>;
 
 export const onlineScoreConfigSchema = z
   .object({
