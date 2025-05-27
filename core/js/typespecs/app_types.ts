@@ -619,6 +619,7 @@ const btqlExportAutomationConfigSchema = z.object({
   event_type: z
     .literal("btql_export")
     .describe("The event which starts the automation execution"),
+  // XXX add view support
   btql_query: z.string().describe("XXX the query"),
   bucket_name: z.string().describe("The S3 bucket to export the results to"),
   key_prefix: z.string().describe("The S3 prefix to use for result files"),
@@ -626,6 +627,10 @@ const btqlExportAutomationConfigSchema = z.object({
     .enum(["jsonl", "parquet"])
     .describe("The format to export the results in"),
   batch_size: z.number().describe("The number of rows to export in each batch"),
+});
+
+export const btqlExportStateSchema = z.object({
+  cursor: z.string(),
 });
 
 const projectAutomationBaseSchema =
