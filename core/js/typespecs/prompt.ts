@@ -26,7 +26,10 @@ export {
   type MessageRole,
 } from "./openai/messages";
 
-export { anthropicMessageParamSchema } from "./anthropic/messages";
+export {
+  anthropicMessageParamSchema,
+  anthropicContentPartImageSchema,
+} from "./anthropic/messages";
 
 export { toolsSchema } from "./openai/tools";
 export type { Tools } from "./openai/tools";
