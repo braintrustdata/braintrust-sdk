@@ -1897,7 +1897,7 @@ interface BackgroundLogger {
   flush(): Promise<void>;
 }
 
-class TestBackgroundLogger implements BackgroundLogger {
+export class TestBackgroundLogger implements BackgroundLogger {
   private items: LazyValue<BackgroundLogEvent>[][] = [];
 
   log(items: LazyValue<BackgroundLogEvent>[]): void {
