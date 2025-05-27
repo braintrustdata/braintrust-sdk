@@ -83,12 +83,15 @@ export const anthropicToolResultContentPartSchema = z
     type: z.literal("tool_result"),
     tool_use_id: z.string(),
     content: z
-      .array(
-        z.union([
-          anthropicContentPartTextSchema,
-          anthropicContentPartImageSchema,
-        ]),
-      )
+      .union([
+        z.string(),
+        z.array(
+          z.union([
+            anthropicContentPartTextSchema,
+            anthropicContentPartImageSchema,
+          ]),
+        ),
+      ])
       .optional(),
     is_error: z.boolean().optional(),
     cache_control: cacheControlSchema.optional(),
