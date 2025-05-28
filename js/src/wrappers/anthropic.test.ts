@@ -19,6 +19,7 @@ import { initLogger, _exportsForTestingOnly, login } from "../logger";
 import { configureNode } from "../node";
 import { getCurrentUnixTimestamp } from "../util";
 import { L } from "vitest/dist/chunks/reporters.nr4dxCkA";
+import { anthropicMessageParamSchema } from "@braintrust/core/typespecs/dist";
 
 // use the cheapest model for tests
 const TEST_MODEL = "claude-3-haiku-20240307";
@@ -76,6 +77,7 @@ describe("anthropic client unit tests", () => {
       temperature: 0.01,
     });
     expect(response).toBeDefined();
+    expect(anthropicMessageParamSchema.safeParse(response).success).toBe(true);
 
     const spans = await backgroundLogger.drain();
     expect(spans).toHaveLength(1);
@@ -88,7 +90,12 @@ describe("anthropic client unit tests", () => {
     }
     const userInput = inputsByRole["user"];
     expect(userInput).toBeDefined();
+    expect(anthropicMessageParamSchema.safeParse(userInput).success).toBe(true);
+
     const systemInput = inputsByRole["system"];
+    expect(anthropicMessageParamSchema.safeParse(systemInput).success).toBe(
+      true,
+    );
     expect(systemInput.role).toEqual("system");
     expect(systemInput.content).toEqual(system);
   });

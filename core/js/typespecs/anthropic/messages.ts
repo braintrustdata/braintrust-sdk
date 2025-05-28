@@ -130,6 +130,7 @@ const anthropicMCPToolResultContentPartSchema = z.object({
       z.object({
         type: z.literal("text"),
         text: z.string(),
+        // This is a simplification of the strict citation schema
         citations: z.array(z.record(z.any())).nullish(),
         cache_control: cacheControlSchema.nullish(),
       }),
@@ -222,8 +223,8 @@ export const anthropicContentPartSchema = z.union([
   anthropicContainerUploadContentPartSchema,
 ]);
 
-// system isn't technically a role, per Anthropic's docs, but we have users making use of it,
-// so we'll support it for parsing purposes
+// System blocks are provided as a separate parameter to the Anthropic client, rather than in the messages parameter.
+// However, we include it as an input on LLM spans created by the anthropic wrapper, so we need to support it here.
 export const anthropicMessageParamSchema = z.object({
   role: z.enum(["system", "user", "assistant"]),
   content: z.union([z.string(), z.array(anthropicContentPartSchema)]),
