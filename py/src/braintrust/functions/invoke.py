@@ -1,4 +1,4 @@
-from typing import Any, List, Literal, Optional, TypeVar, Union, overload
+from typing import Any, Dict, List, Literal, Optional, TypeVar, Union, overload
 
 from sseclient import SSEClient
 
@@ -24,6 +24,8 @@ def invoke(
     # arguments to the function
     input: Any = None,
     messages: Optional[List[Any]] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+    tags: Optional[List[str]] = None,
     parent: Optional[Union[Exportable, str]] = None,
     stream: Optional[Literal[False]] = None,
     mode: Optional[ModeType] = None,
@@ -49,6 +51,8 @@ def invoke(
     # arguments to the function
     input: Any = None,
     messages: Optional[List[Any]] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+    tags: Optional[List[str]] = None,
     parent: Optional[Union[Exportable, str]] = None,
     stream: Literal[True] = True,
     mode: Optional[ModeType] = None,
@@ -73,6 +77,8 @@ def invoke(
     # arguments to the function
     input: Any = None,
     messages: Optional[List[Any]] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+    tags: Optional[List[str]] = None,
     parent: Optional[Union[Exportable, str]] = None,
     stream: bool = False,
     mode: Optional[ModeType] = None,
@@ -89,6 +95,10 @@ def invoke(
     Args:
         input: The input to the function. This will be logged as the `input` field in the span.
         messages: Additional OpenAI-style messages to add to the prompt (only works for llm functions).
+        metadata: Additional metadata to add to the span. This will be logged as the `metadata` field in the span.
+            It will also be available as the {{metadata}} field in the prompt and as the `metadata` argument
+            to the function.
+        tags: Tags to add to the span. This will be logged as the `tags` field in the span.
         parent: The parent of the function. This can be an existing span, logger, or experiment, or
             the output of `.export()` if you are distributed tracing. If unspecified, will use
             the same semantics as `traced()` to determine the parent and no-op if not in a tracing
@@ -144,6 +154,8 @@ def invoke(
 
     request = dict(
         input=input,
+        metadata=metadata,
+        tags=tags,
         parent=parent,
         stream=stream,
         api_version=INVOKE_API_VERSION,

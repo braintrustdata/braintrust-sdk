@@ -35,6 +35,9 @@ async function main() {
   const tool = message.content.find(
     (content): content is Anthropic.ToolUseBlock => content.type === "tool_use",
   );
+  if (!tool) {
+    throw new Error("No tool used");
+  }
 
   const result = await client.messages.create({
     model: "claude-3-5-sonnet-latest",
