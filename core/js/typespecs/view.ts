@@ -36,8 +36,7 @@ export const viewDataSchema = z
   .strip()
   .openapi("ViewData");
 export type ViewData = z.infer<typeof viewDataSchema>;
-
-export const viewOptionsSchema = z
+export const baseViewOptionsSchema = z
   .object({
     columnVisibility: z.record(z.boolean()).nullish(),
     columnOrder: z.array(z.string()).nullish(),
@@ -46,6 +45,29 @@ export const viewOptionsSchema = z
     rowHeight: z.string().nullish(),
     layout: z.string().nullish(),
   })
-  .strip()
+  .strip();
+
+export const monitorViewOptionsSchema = z
+  .object({
+    spanType: z.enum(["range", "frame"]).nullish(),
+    rangeValue: z.string().nullish(),
+    frameStart: z.string().nullish(),
+    frameEnd: z.string().nullish(),
+    chartVisibility: z.record(z.boolean()).nullish(),
+    projectId: z.string().nullish(),
+    type: z.enum(["project", "experiment"]).nullish(),
+  })
+  .strip();
+
+export const viewOptionsSchema = z
+  .union([
+    // Future options must have a viewType
+    baseViewOptionsSchema,
+    z.object({
+      viewType: z.literal(viewTypeEnum.Values.monitor),
+      options: baseViewOptionsSchema,
+    }),
+  ])
   .openapi("ViewOptions");
+
 export type ViewOptions = z.infer<typeof viewOptionsSchema>;
