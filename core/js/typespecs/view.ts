@@ -58,17 +58,18 @@ export const monitorViewOptionsSchema = z
     projectId: z.string().nullish(),
     type: z.enum(["project", "experiment"]).nullish(),
   })
-  .strip()
-  .openapi({ title: "MonitorViewOptions" });
+  .strip();
 
 export const viewOptionsSchema = z
   .union([
     // Future options must have a viewType
     tableViewOptionsSchema,
-    z.object({
-      viewType: z.literal(viewTypeEnum.Values.monitor),
-      options: monitorViewOptionsSchema,
-    }),
+    z
+      .object({
+        viewType: z.literal(viewTypeEnum.Values.monitor),
+        options: monitorViewOptionsSchema,
+      })
+      .openapi({ title: "MonitorViewOptions" }),
   ])
   .openapi("ViewOptions");
 
