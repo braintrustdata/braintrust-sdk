@@ -12,9 +12,11 @@ import { LRUCache } from "./lru-cache";
 async function makeUnwritable(dirPath: string): Promise<() => Promise<void>> {
   if (process.platform === "win32") {
     const { execSync } = await import("child_process");
-    execSync(`attrib +R "${dirPath}"`);
+    // Use icacls to deny write access via Windows ACLs
+    execSync(`icacls "${dirPath}" /deny %USERNAME%:(W)`);
     return async () => {
-      execSync(`attrib -R "${dirPath}"`);
+      // Remove the deny rule to restore access
+      execSync(`icacls "${dirPath}" /remove:d %USERNAME%`);
     };
   } else {
     const stats = await fs.stat(dirPath);
