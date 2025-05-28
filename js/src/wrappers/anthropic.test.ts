@@ -19,7 +19,7 @@ import { initLogger, _exportsForTestingOnly, login } from "../logger";
 import { configureNode } from "../node";
 import { getCurrentUnixTimestamp } from "../util";
 import { L } from "vitest/dist/chunks/reporters.nr4dxCkA";
-import { anthropicMessageParamSchema } from "@braintrust/core/typespecs/dist";
+import { anthropicMessageParamSchema } from "../../../core/js/typespecs/anthropic/messages";
 
 // use the cheapest model for tests
 const TEST_MODEL = "claude-3-haiku-20240307";
