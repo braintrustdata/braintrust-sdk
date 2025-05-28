@@ -5,26 +5,6 @@ import { tmpdir } from "os";
 import { beforeEach, describe, it, afterEach, expect } from "vitest";
 import { configureNode } from "../node";
 
-async function makeUnwritable(dirPath: string): Promise<() => Promise<void>> {
-  if (process.platform === "win32") {
-    const { execSync } = await import("child_process");
-    // Use icacls to deny write access via Windows ACLs
-    execSync(`icacls "${dirPath}" /deny %USERNAME%:(W)`);
-    return async () => {
-      // Remove the deny rule to restore access
-      execSync(`icacls "${dirPath}" /remove:d %USERNAME%`);
-    };
-  } else {
-    const stats = await fs.stat(dirPath);
-    const notWritable =
-      ~fs.constants.S_IWUSR & ~fs.constants.S_IWGRP & ~fs.constants.S_IWOTH;
-    await fs.chmod(dirPath, stats.mode & notWritable);
-    return async () => {
-      await fs.chmod(dirPath, stats.mode);
-    };
-  }
-}
-
 describe("DiskCache", () => {
   configureNode();
 
@@ -34,7 +14,7 @@ describe("DiskCache", () => {
 
   beforeEach(async () => {
     cacheDir = path.join(tmpdir(), `disk-cache-test-${Date.now()}`);
-    cache = new DiskCache({ cacheDir, max: 3 });
+    cache = new DiskCache({ cacheDir, max: 3, logWarnings: false });
   });
 
   afterEach(async () => {
@@ -99,19 +79,20 @@ describe("DiskCache", () => {
   });
 
   it("should never throw when write fails", async () => {
-    // Make cache directory read-only using platform-specific approach.
-    await fs.mkdir(cacheDir, { recursive: true });
-    const makeWritable = await makeUnwritable(cacheDir);
+    // there's probably a better way to do get permission errors, but I couldn't
+    // find one that worked on github actions
+    const isWin = process.platform === "win32";
+    const unwritableDir = isWin ? "C:\\Windows\\System32" : "/usr/bin";
 
-    try {
-      // Should not throw when write fails, but write should fail silently.
-      await cache.set("test", { foo: "bar" });
-      const result = await cache.get("test");
-      expect(result).toBeUndefined();
-    } finally {
-      // Clean up: restore write permissions
-      await makeWritable();
-    }
+    const brokenCache = new DiskCache({
+      cacheDir: unwritableDir,
+      logWarnings: false,
+    });
+
+    // Should not throw when write fails, but write should fail silently.
+    await brokenCache.set("test", { foo: "bar" });
+    const result = await brokenCache.get("test");
+    expect(result).toBeUndefined();
   });
 
   it("should throw on corrupted data", async () => {

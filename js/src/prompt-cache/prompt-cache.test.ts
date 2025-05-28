@@ -249,21 +249,24 @@ describe("PromptCache", () => {
 
   describe("error handling", () => {
     it("should throw never when disk write fails", async () => {
-      // Make cache directory read-only using platform-specific approach.
-      await fs.mkdir(cacheDir, { recursive: true });
-      const makeWritable = await makeUnwritable(cacheDir);
+      const isWin = process.platform === "win32";
+      const unwritableDir = isWin ? "C:\\Windows\\System32" : "/usr/bin";
 
-      try {
-        // Should not throw when disk write fails.
-        await cache.set(testKey, testPrompt);
+      const brokenCache = new PromptCache({
+        memoryCache: new LRUCache({ max: 2 }),
+        diskCache: new DiskCache<Prompt>({
+          cacheDir: unwritableDir,
+          max: 5,
+          logWarnings: false,
+        }),
+      });
 
-        // Memory cache should still be updated.
-        const result = await cache.get(testKey);
-        expect(result).toEqual(testPrompt);
-      } finally {
-        // Clean up: restore write permissions
-        await makeWritable();
-      }
+      // Should not throw when disk write fails.
+      await brokenCache.set(testKey, testPrompt);
+
+      // Memory cache should still be updated.
+      const result = await brokenCache.get(testKey);
+      expect(result).toEqual(testPrompt);
     });
 
     it("should handle disk read errors", async () => {

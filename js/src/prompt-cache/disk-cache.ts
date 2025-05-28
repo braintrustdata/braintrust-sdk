@@ -111,7 +111,9 @@ export class DiskCache<T> {
       await iso.writeFile!(filePath, data);
       await this.evictOldestIfFull();
     } catch (e) {
-      console.warn("Failed to write to disk cache", e);
+      if (this.logWarnings) {
+        console.warn("Failed to write to disk cache", e);
+      }
       return;
     }
   }
