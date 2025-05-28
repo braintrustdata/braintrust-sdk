@@ -45,7 +45,8 @@ export const tableViewOptionsSchema = z
     rowHeight: z.string().nullish(),
     layout: z.string().nullish(),
   })
-  .strip();
+  .strip()
+  .openapi("TableViewOptions");
 
 export const monitorViewOptionsSchema = z
   .object({
@@ -57,7 +58,8 @@ export const monitorViewOptionsSchema = z
     projectId: z.string().nullish(),
     type: z.enum(["project", "experiment"]).nullish(),
   })
-  .strip();
+  .strip()
+  .openapi("MonitorViewOptions");
 
 export const viewOptionsSchema = z
   .union([
