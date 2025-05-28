@@ -224,7 +224,7 @@ export const anthropicContentPartSchema = z.union([
 
 // system isn't technically a role, per Anthropic's docs, but we have users making use of it,
 // so we'll support it for parsing purposes
-const anthropicMessageParamSchema = z.object({
+export const anthropicMessageParamSchema = z.object({
   role: z.enum(["system", "user", "assistant"]),
   content: z.union([z.string(), z.array(anthropicContentPartSchema)]),
 });
