@@ -62,14 +62,16 @@ export const monitorViewOptionsSchema = z
 
 export const viewOptionsSchema = z
   .union([
-    // Future options must have a viewType
-    tableViewOptionsSchema,
+    // Monitor view with explicit type
     z
       .object({
         viewType: z.literal(viewTypeEnum.Values.monitor),
         options: monitorViewOptionsSchema,
       })
       .openapi({ title: "MonitorViewOptions" }),
+    // All other views (including legacy table views without viewType)
+    tableViewOptionsSchema,
+  ])
   ])
   .openapi("ViewOptions");
 
