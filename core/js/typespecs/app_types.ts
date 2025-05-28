@@ -566,11 +566,7 @@ const webhookAutomationActionSchema = z.object({
   url: z.string().describe("The webhook URL to send the request to"),
 });
 
-export const automationEventTypeEnum = z.enum([
-  "logs",
-  "retention",
-  "btql_export",
-]);
+export const automationEventTypeEnum = z.enum(["logs", "btql_export"]);
 export const logAutomationConfigSchema = z.object({
   event_type: z
     .literal("logs")
@@ -588,31 +584,6 @@ export const logAutomationConfigSchema = z.object({
   action: z
     .discriminatedUnion("type", [webhookAutomationActionSchema])
     .describe("The action to take when the automation rule is triggered"),
-});
-
-export const retentionObjectTypeEnum = z
-  .enum(["project_logs", "experiment", "dataset"])
-  .describe("The object type that the retention policy applies to")
-  .openapi("RetentionObjectType");
-export type RetentionObjectType = z.infer<typeof retentionObjectTypeEnum>;
-
-const retentionAutomationConfigSchema = z.object({
-  event_type: z
-    .literal("retention")
-    .describe("The event which starts the automation execution"),
-  object_type: retentionObjectTypeEnum.describe(
-    "The object type that the retention policy applies to",
-  ),
-  object_id: z
-    .string()
-    .uuid()
-    .nullable()
-    .describe("The object id that the retention policy applies to"),
-  retention_days: z
-    .number()
-    .min(1)
-    .max(365)
-    .describe("The number of days to retain the object"),
 });
 
 const btqlExportAutomationConfigSchema = z.object({
@@ -644,11 +615,7 @@ export const projectAutomationSchema = z
     name: projectAutomationBaseSchema.shape.name,
     description: projectAutomationBaseSchema.shape.description,
     config: z
-      .union([
-        logAutomationConfigSchema,
-        retentionAutomationConfigSchema,
-        btqlExportAutomationConfigSchema,
-      ])
+      .union([logAutomationConfigSchema, btqlExportAutomationConfigSchema])
       .describe("The configuration for the automation rule"),
   })
   .openapi("ProjectAutomation");
@@ -660,13 +627,6 @@ export const logAutomationSchema = projectAutomationSchema.merge(
   }),
 );
 export type LogAutomation = z.infer<typeof logAutomationSchema>;
-
-export const retentionAutomationSchema = projectAutomationSchema.merge(
-  z.object({
-    config: retentionAutomationConfigSchema,
-  }),
-);
-export type RetentionAutomation = z.infer<typeof retentionAutomationSchema>;
 
 export const btqlExportAutomationSchema = projectAutomationSchema.merge(
   z.object({
