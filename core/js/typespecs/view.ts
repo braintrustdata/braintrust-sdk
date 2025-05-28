@@ -17,7 +17,7 @@ export const viewTypeEnum = z
     "agents",
     "monitor",
   ])
-  .describe("Type of table that the view corresponds to.");
+  .describe("Type of object that the view corresponds to.");
 export type ViewType = z.infer<typeof viewTypeEnum>;
 
 export const viewDataSearchSchema = z
