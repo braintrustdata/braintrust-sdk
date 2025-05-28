@@ -229,9 +229,12 @@ describe("PromptCache", () => {
 
   describe("error handling", () => {
     it("should throw never when disk write fails", async () => {
-      // Make cache directory read-only.
+      // Make cache directory read-only using portable Node.js constants.
       await fs.mkdir(cacheDir, { recursive: true });
-      await fs.chmod(cacheDir, 0o444);
+      const originalStats = await fs.stat(cacheDir);
+      const notWritable =
+        ~fs.constants.S_IWUSR & ~fs.constants.S_IWGRP & ~fs.constants.S_IWOTH;
+      await fs.chmod(cacheDir, originalStats.mode & notWritable);
 
       // Should not throw when disk write fails.
       await cache.set(testKey, testPrompt);
@@ -240,8 +243,8 @@ describe("PromptCache", () => {
       const result = await cache.get(testKey);
       expect(result).toEqual(testPrompt);
 
-      // Restore permissions so cleanup can happen.
-      await fs.chmod(cacheDir, 0o777);
+      // Restore original permissions so cleanup can happen.
+      await fs.chmod(cacheDir, originalStats.mode);
     });
 
     it("should handle disk read errors", async () => {

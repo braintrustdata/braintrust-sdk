@@ -79,11 +79,14 @@ describe("DiskCache", () => {
   });
 
   it("should never throw when write fails", async () => {
-    // Make cache directory read-only.
+    // Make cache directory read-only using portable Node.js constants.
     await fs.mkdir(cacheDir, { recursive: true });
-    await fs.chmod(cacheDir, 0o444);
+    const stats = await fs.stat(cacheDir);
+    const notWritable =
+      ~fs.constants.S_IWUSR & ~fs.constants.S_IWGRP & ~fs.constants.S_IWOTH;
+    await fs.chmod(cacheDir, stats.mode & notWritable);
 
-    // Should throw when write fails.
+    // Should not throw when write fails, but write should fail silently.
     await cache.set("test", { foo: "bar" });
     const result = await cache.get("test");
     expect(result).toBeUndefined();
