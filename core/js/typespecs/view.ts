@@ -36,7 +36,7 @@ export const viewDataSchema = z
   .strip()
   .openapi("ViewData");
 export type ViewData = z.infer<typeof viewDataSchema>;
-export const baseViewOptionsSchema = z
+export const tableViewOptionsSchema = z
   .object({
     columnVisibility: z.record(z.boolean()).nullish(),
     columnOrder: z.array(z.string()).nullish(),
@@ -62,10 +62,10 @@ export const monitorViewOptionsSchema = z
 export const viewOptionsSchema = z
   .union([
     // Future options must have a viewType
-    baseViewOptionsSchema,
+    tableViewOptionsSchema,
     z.object({
       viewType: z.literal(viewTypeEnum.Values.monitor),
-      options: baseViewOptionsSchema,
+      options: monitorViewOptionsSchema,
     }),
   ])
   .openapi("ViewOptions");
