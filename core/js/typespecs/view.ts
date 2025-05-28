@@ -72,7 +72,6 @@ export const viewOptionsSchema = z
     // All other views (including legacy table views without viewType)
     tableViewOptionsSchema,
   ])
-  ])
   .openapi("ViewOptions");
 
 export type ViewOptions = z.infer<typeof viewOptionsSchema>;
