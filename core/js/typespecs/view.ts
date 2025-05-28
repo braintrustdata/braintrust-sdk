@@ -69,7 +69,7 @@ export const viewOptionsSchema = z
         options: monitorViewOptionsSchema,
       })
       .openapi({ title: "MonitorViewOptions" }),
-    // All other views (including legacy table views without viewType)
+    // All other views (legacy)
     tableViewOptionsSchema,
   ])
   .openapi("ViewOptions");
