@@ -5,6 +5,24 @@ import { tmpdir } from "os";
 import { beforeEach, describe, it, afterEach, expect } from "vitest";
 import { configureNode } from "../node";
 
+async function makeUnwritable(dirPath: string): Promise<() => Promise<void>> {
+  if (process.platform === "win32") {
+    const { execSync } = await import("child_process");
+    execSync(`attrib +R "${dirPath}"`);
+    return async () => {
+      execSync(`attrib -R "${dirPath}"`);
+    };
+  } else {
+    const stats = await fs.stat(dirPath);
+    const notWritable =
+      ~fs.constants.S_IWUSR & ~fs.constants.S_IWGRP & ~fs.constants.S_IWOTH;
+    await fs.chmod(dirPath, stats.mode & notWritable);
+    return async () => {
+      await fs.chmod(dirPath, stats.mode);
+    };
+  }
+}
+
 describe("DiskCache", () => {
   configureNode();
 
@@ -79,17 +97,19 @@ describe("DiskCache", () => {
   });
 
   it("should never throw when write fails", async () => {
-    // Make cache directory read-only using portable Node.js constants.
+    // Make cache directory read-only using platform-specific approach.
     await fs.mkdir(cacheDir, { recursive: true });
-    const stats = await fs.stat(cacheDir);
-    const notWritable =
-      ~fs.constants.S_IWUSR & ~fs.constants.S_IWGRP & ~fs.constants.S_IWOTH;
-    await fs.chmod(cacheDir, stats.mode & notWritable);
+    const makeWritable = await makeUnwritable(cacheDir);
 
-    // Should not throw when write fails, but write should fail silently.
-    await cache.set("test", { foo: "bar" });
-    const result = await cache.get("test");
-    expect(result).toBeUndefined();
+    try {
+      // Should not throw when write fails, but write should fail silently.
+      await cache.set("test", { foo: "bar" });
+      const result = await cache.get("test");
+      expect(result).toBeUndefined();
+    } finally {
+      // Clean up: restore write permissions
+      await makeWritable();
+    }
   });
 
   it("should throw on corrupted data", async () => {

@@ -9,6 +9,24 @@ import { DiskCache } from "./disk-cache";
 import { configureNode } from "../node";
 import { LRUCache } from "./lru-cache";
 
+async function makeUnwritable(dirPath: string): Promise<() => Promise<void>> {
+  if (process.platform === "win32") {
+    const { execSync } = await import("child_process");
+    execSync(`attrib +R "${dirPath}"`);
+    return async () => {
+      execSync(`attrib -R "${dirPath}"`);
+    };
+  } else {
+    const stats = await fs.stat(dirPath);
+    const notWritable =
+      ~fs.constants.S_IWUSR & ~fs.constants.S_IWGRP & ~fs.constants.S_IWOTH;
+    await fs.chmod(dirPath, stats.mode & notWritable);
+    return async () => {
+      await fs.chmod(dirPath, stats.mode);
+    };
+  }
+}
+
 describe("PromptCache", () => {
   configureNode();
 
@@ -229,22 +247,21 @@ describe("PromptCache", () => {
 
   describe("error handling", () => {
     it("should throw never when disk write fails", async () => {
-      // Make cache directory read-only using portable Node.js constants.
+      // Make cache directory read-only using platform-specific approach.
       await fs.mkdir(cacheDir, { recursive: true });
-      const originalStats = await fs.stat(cacheDir);
-      const notWritable =
-        ~fs.constants.S_IWUSR & ~fs.constants.S_IWGRP & ~fs.constants.S_IWOTH;
-      await fs.chmod(cacheDir, originalStats.mode & notWritable);
+      const makeWritable = await makeUnwritable(cacheDir);
 
-      // Should not throw when disk write fails.
-      await cache.set(testKey, testPrompt);
+      try {
+        // Should not throw when disk write fails.
+        await cache.set(testKey, testPrompt);
 
-      // Memory cache should still be updated.
-      const result = await cache.get(testKey);
-      expect(result).toEqual(testPrompt);
-
-      // Restore original permissions so cleanup can happen.
-      await fs.chmod(cacheDir, originalStats.mode);
+        // Memory cache should still be updated.
+        const result = await cache.get(testKey);
+        expect(result).toEqual(testPrompt);
+      } finally {
+        // Clean up: restore write permissions
+        await makeWritable();
+      }
     });
 
     it("should handle disk read errors", async () => {
