@@ -33,9 +33,9 @@ jobs:
         run: |
           # This is already done by make install-dev, but we're keeping this as a separate step
           # to explicitly verify that installation works
-          python -m pip install -e ./core/py[all]
-          python -m pip install -e ./py[all]
-          python -m pip install -e ./integrations/langchain-py[all]
+          python -m uv pip install -e ./core/py[all]
+          python -m uv pip install -e ./py[all]
+          python -m uv pip install -e ./integrations/langchain-py[all]
       - name: Test whether the Python SDK can be imported
         run: |
           python -c 'import braintrust'
