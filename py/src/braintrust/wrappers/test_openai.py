@@ -632,6 +632,8 @@ async def test_openai_streaming_with_break(memory_logger):
         model=TEST_MODEL, messages=[{"role": "user", "content": TEST_PROMPT}], stream=True
     )
 
+    time.sleep(0.2)  # time to first token sleep
+
     # Only process the first few chunks
     counter = 0
     async for chunk in stream:
