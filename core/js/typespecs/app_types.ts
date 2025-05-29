@@ -567,37 +567,36 @@ const webhookAutomationActionSchema = z.object({
 });
 
 export const automationEventTypeEnum = z.enum(["logs", "btql_export"]);
+const intervalSecondsSchema = z
+  .number()
+  .min(1)
+  .max(30 * 24 * 60 * 60)
+  .describe(
+    "Perform the triggered action at most once in this interval of seconds",
+  );
 export const logAutomationConfigSchema = z.object({
-  event_type: z
-    .literal("logs")
-    .describe("The event which starts the automation execution"),
+  event_type: z.literal("logs").describe("The type of automation."),
   btql_filter: z
     .string()
     .describe("BTQL filter to identify rows for the automation rule"),
-  interval_seconds: z
-    .number()
-    .min(1)
-    .max(30 * 24 * 60 * 60)
-    .describe(
-      "Perform the triggered action at most once in this interval of seconds",
-    ),
+  interval_seconds: intervalSecondsSchema,
   action: z
     .discriminatedUnion("type", [webhookAutomationActionSchema])
     .describe("The action to take when the automation rule is triggered"),
 });
 
 const btqlExportAutomationConfigSchema = z.object({
-  event_type: z
-    .literal("btql_export")
-    .describe("The event which starts the automation execution"),
-  // XXX add view support
-  btql_query: z.string().describe("XXX the query"),
-  bucket_name: z.string().describe("The S3 bucket to export the results to"),
-  key_prefix: z.string().describe("The S3 prefix to use for result files"),
+  event_type: z.literal("btql_export").describe("The type of automation."),
+  btql_query: z.string().describe("The BTQL query to export"),
+  export_path: z
+    .string()
+    .describe(
+      "The path to export the results to. It should include the storage protocol and prefix, e.g. s3://bucket-name/path/to/export",
+    ),
   format: z
     .enum(["jsonl", "parquet"])
     .describe("The format to export the results in"),
-  batch_size: z.number().describe("The number of rows to export in each batch"),
+  interval_seconds: intervalSecondsSchema,
 });
 
 export const btqlExportStateSchema = z.object({
