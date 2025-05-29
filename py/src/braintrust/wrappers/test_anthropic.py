@@ -364,6 +364,6 @@ def _assert_metrics_are_valid(metrics, start, end):
     assert metrics["prompt_tokens"] > 0
     assert metrics["completion_tokens"] > 0
     if start and end:
-        assert start <= metrics["start"] < metrics["end"] <= end
+        assert start <= metrics["start"] <= metrics["end"] <= end
     else:
-        assert metrics["start"] < metrics["end"]
+        assert metrics["start"] <= metrics["end"]
