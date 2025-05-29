@@ -5,6 +5,7 @@ works with and without different dependencies. A few commands to check out:
     nox                        Run all sessions.
     nox -l                     List all sessions.
     nox -s <session>           Run a specific session.
+    nox ... -- --no-vcr        Run tests without vcrpy.
     nox ... -- --wheel         Run tests against the wheel in dist.
     nox -h                     Get help.
 """
@@ -27,7 +28,7 @@ ERROR_CODES = tuple(range(1, 256))
 
 
 # The minimal set of dependencies we need to run tests.
-BASE_TEST_DEPS = ("pytest", "pytest-asyncio")
+BASE_TEST_DEPS = ("pytest", "pytest-asyncio", "pytest-vcr")
 
 # List your package here if it's not guaranteed to be installed. We'll (try to)
 # validate things work with or without them.
@@ -118,7 +119,7 @@ def pylint(session):
 
 
 @nox.session(default=False)
-def test_wrappers_latest(session):
+def test_latest_wrappers(session):
     # A shortcut for testing the latest versions of wrappers. Don't run it by default since
     # it's just a dev env helper.
     session.notify("test_openai(latest)")
@@ -164,10 +165,16 @@ def _run_core_tests(session):
 def _run_tests(session, test_path, ignore_path=""):
     """Run tests against a wheel or the source code. Paths should be relative and start with braintrust."""
     wheel_flag = "--wheel" in session.posargs
+    common_args = ["--disable-vcr"] if "--disable-vcr" in session.posargs else []
     if not wheel_flag:
         # Run the tests in the src directory
-        ignore = f"--ignore=src/{ignore_path}" if ignore_path else ""
-        session.run("pytest", f"src/{test_path}", ignore)
+        test_args = [
+            "pytest",
+            f"src/{test_path}",
+        ]
+        if ignore_path:
+            test_args.append(f"--ignore=src/{ignore_path}")
+        session.run(*test_args, *common_args)
         return
 
     # Running the tests from the wheel involves a bit of gymnastics to ensure we don't import
@@ -187,7 +194,7 @@ def _run_tests(session, test_path, ignore_path=""):
         # It proved very helpful because it's very easy
         # to accidentally import local modules from the source directory.
         env = {"BRAINTRUST_TESTING_WHEEL": "1"}
-        session.run(pytest_path, abs_test_path, ignore, env=env)
+        session.run(pytest_path, abs_test_path, ignore, *vcr_args, env=env)
 
     # And a final note ... if it's not clear from above, we include test files in our wheel, which
     # is perhaps not ideal?
