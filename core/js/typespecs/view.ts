@@ -15,8 +15,9 @@ export const viewTypeEnum = z
     "scorers",
     "logs",
     "agents",
+    "monitor",
   ])
-  .describe("Type of table that the view corresponds to.");
+  .describe("Type of object that the view corresponds to.");
 export type ViewType = z.infer<typeof viewTypeEnum>;
 
 export const viewDataSearchSchema = z
@@ -35,8 +36,7 @@ export const viewDataSchema = z
   .strip()
   .openapi("ViewData");
 export type ViewData = z.infer<typeof viewDataSchema>;
-
-export const viewOptionsSchema = z
+export const tableViewOptionsSchema = z
   .object({
     columnVisibility: z.record(z.boolean()).nullish(),
     columnOrder: z.array(z.string()).nullish(),
@@ -46,5 +46,32 @@ export const viewOptionsSchema = z
     layout: z.string().nullish(),
   })
   .strip()
+  .openapi({ title: "TableViewOptions" });
+
+export const monitorViewOptionsSchema = z
+  .object({
+    spanType: z.enum(["range", "frame"]).nullish(),
+    rangeValue: z.string().nullish(),
+    frameStart: z.string().nullish(),
+    frameEnd: z.string().nullish(),
+    chartVisibility: z.record(z.boolean()).nullish(),
+    projectId: z.string().nullish(),
+    type: z.enum(["project", "experiment"]).nullish(),
+  })
+  .strip();
+
+export const viewOptionsSchema = z
+  .union([
+    // Monitor view with explicit type
+    z
+      .object({
+        viewType: z.literal(viewTypeEnum.Values.monitor),
+        options: monitorViewOptionsSchema,
+      })
+      .openapi({ title: "MonitorViewOptions" }),
+    // All other views (legacy)
+    tableViewOptionsSchema,
+  ])
   .openapi("ViewOptions");
+
 export type ViewOptions = z.infer<typeof viewOptionsSchema>;
