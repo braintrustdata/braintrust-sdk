@@ -13,7 +13,9 @@ lint: fixup
 
 test:
 	nox -x
-	nox -s "test_wrappers" -- --disable-vcr
+	# by default, do one run of our code with actual request
+	# to openai, anthropic, etc so we have some testing of reality.
+	nox -s "test_latest_wrappers" -- --disable-vcr
 
 test-wheel: build
 	nox -x -- --wheel
