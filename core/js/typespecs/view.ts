@@ -48,6 +48,8 @@ export const tableViewOptionsSchema = z
   .strip()
   .openapi({ title: "TableViewOptions" });
 
+export type TableViewOptions = z.infer<typeof tableViewOptionsSchema>;
+
 export const monitorViewOptionsSchema = z
   .object({
     spanType: z.enum(["range", "frame"]).nullish(),
