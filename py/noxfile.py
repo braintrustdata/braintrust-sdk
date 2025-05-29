@@ -18,6 +18,9 @@ import tempfile
 
 import nox
 
+# much faster than pip
+nox.options.default_venv_backend = "uv"
+
 SRC_DIR = "braintrust"
 WRAPPER_DIR = "braintrust/wrappers"
 
