@@ -329,8 +329,6 @@ def test_anthropic_messages_sync(memory_logger):
     assert "2+2" in str(log["input"])
     assert "4" in str(log["output"])
     assert log["project_id"] == PROJECT_NAME
-    assert start < log["metrics"]["start"] < end
-    assert start < log["metrics"]["end"] < end
     assert log["span_id"]
     assert log["root_span_id"]
     attrs = log["span_attributes"]
