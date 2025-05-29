@@ -201,7 +201,7 @@ def _run_tests(session, test_path, ignore_path=""):
         # It proved very helpful because it's very easy
         # to accidentally import local modules from the source directory.
         env = {"BRAINTRUST_TESTING_WHEEL": "1"}
-        session.run(pytest_path, abs_test_path, ignore, *vcr_args, env=env)
+        session.run(pytest_path, abs_test_path, ignore, *common_args, env=env)
 
     # And a final note ... if it's not clear from above, we include test files in our wheel, which
     # is perhaps not ideal?
