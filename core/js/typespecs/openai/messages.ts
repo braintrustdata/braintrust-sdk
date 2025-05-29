@@ -38,6 +38,7 @@ const imageURLSchema = z.object({
     ])
     .optional(),
 });
+
 export const chatCompletionContentPartImageSchema = z
   .object({
     image_url: imageURLSchema,
@@ -70,14 +71,17 @@ const chatCompletionUserMessageParamSchema = z.object({
   role: z.literal("user"),
   name: z.string().optional(),
 });
+
 const functionCallSchema = z.object({
   arguments: z.string(),
   name: z.string(),
 });
+
 const functionSchema = z.object({
   arguments: z.string(),
   name: z.string(),
 });
+
 const chatCompletionToolMessageParamSchema = z.object({
   content: z.union([
     z.string().default("").openapi({ title: "text" }),
@@ -86,11 +90,13 @@ const chatCompletionToolMessageParamSchema = z.object({
   role: z.literal("tool"),
   tool_call_id: z.string().default(""),
 });
+
 const chatCompletionFunctionMessageParamSchema = z.object({
   content: z.string().nullable(),
   name: z.string(),
   role: z.literal("function"),
 });
+
 export const chatCompletionMessageToolCallSchema = z
   .object({
     id: z.string(),
@@ -136,6 +142,7 @@ const chatCompletionAssistantMessageParamSchema = z.object({
     .nullish()
     .transform((x) => x ?? undefined),
 });
+
 const chatCompletionFallbackMessageParamSchema = z.object({
   role: messageRoleSchema.exclude([
     "system",
@@ -146,6 +153,7 @@ const chatCompletionFallbackMessageParamSchema = z.object({
   ]),
   content: z.string().nullish(),
 });
+
 export const chatCompletionOpenAIMessageParamSchema = z.union([
   chatCompletionSystemMessageParamSchema.openapi({ title: "system" }),
   chatCompletionUserMessageParamSchema.openapi({ title: "user" }),
