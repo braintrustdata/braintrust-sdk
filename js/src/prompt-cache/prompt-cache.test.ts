@@ -249,7 +249,9 @@ describe("PromptCache", () => {
 
   describe("error handling", () => {
     it("should throw never when disk write fails", async () => {
-      cacheDir = path.join(
+      // simulate a write failure by using a nonexistent directory
+      // with mkdir false.
+      const nonExistentDir = path.join(
         tmpdir(),
         "doesnt-exist",
         `write-fail-disk-cache-test-${Date.now()}`,
@@ -257,7 +259,7 @@ describe("PromptCache", () => {
       const brokenCache = new PromptCache({
         memoryCache: new LRUCache({ max: 2 }),
         diskCache: new DiskCache<Prompt>({
-          cacheDir: cacheDir,
+          cacheDir: nonExistentDir,
           max: 5,
           mkdir: false,
           logWarnings: false,
