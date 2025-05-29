@@ -14,7 +14,8 @@ describe("DiskCache", () => {
 
   beforeEach(async () => {
     cacheDir = path.join(tmpdir(), `disk-cache-test-${Date.now()}`);
-    cache = new DiskCache({ cacheDir, max: 3 });
+
+    cache = new DiskCache({ cacheDir, max: 3, logWarnings: false });
   });
 
   afterEach(async () => {
@@ -79,13 +80,24 @@ describe("DiskCache", () => {
   });
 
   it("should never throw when write fails", async () => {
-    // Make cache directory read-only.
-    await fs.mkdir(cacheDir, { recursive: true });
-    await fs.chmod(cacheDir, 0o444);
+    const cacheDir = path.join(
+      tmpdir(),
+      "doesnt-exist-dir",
+      `write-fail-disk-cache-test-${Date.now()}`,
+    );
 
-    // Should throw when write fails.
-    await cache.set("test", { foo: "bar" });
-    const result = await cache.get("test");
+    // use mkdir false as a way of triggering cross-platform write
+    // errors. I tried other methods (permissions, etc) but couldn't
+    // get one that worked on github actions.
+    const brokenCache = new DiskCache({
+      cacheDir,
+      logWarnings: false,
+      mkdir: false,
+    });
+
+    // Failed writes shouldn't throw errors.
+    await brokenCache.set("test", { foo: "bar" });
+    const result = await brokenCache.get("test");
     expect(result).toBeUndefined();
   });
 

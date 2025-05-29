@@ -50,7 +50,7 @@ test-pnpm:
 	pnpm test
 
 # Test everything
-test: test-anthropic test-pnpm test-openai
+test: test-pnpm test-openai test-anthropic
 
 # Test the core and the latest versions of wrappers.
 test-latest: test-pnpm test-anthropic-latest test-openai-latest
