@@ -121,24 +121,28 @@ def pylint(session):
     session.run("pylint", "--errors-only", *files)
 
 
-@nox.session(default=False)
-def test_latest_wrappers(session):
-    # A shortcut for testing the latest versions of wrappers. Don't run it by default since
-    # it's just a dev env helper.
-    session.notify("test_openai(latest)")
-    session.notify("test_anthropic(latest)")
+@nox.session()
+def test_latest_wrappers_novcr(session):
+    """Run the latest wrapper tests without vcrpy."""
+    # every test run we hit openai, anthropic,  at least once so we balance CI speed (with vcrpy)
+    # with testing reality.
+    args = session.posargs.copy()
+    if "--disable-vcr" not in args:
+        args.append("--disable-vcr")
+    session.notify("test_openai(latest)", posargs=args)
+    session.notify("test_anthropic(latest)", posargs=args)
+    session.notify("test_pydantic_ai(latest)", posargs=args)
 
 
 def _install_test_deps(session):
-    # Install _only_ the dependencies we need for testing (not lint, black,
-    # ipython, whatever). We want to carefully control the base
-    # testing environment so it should be truly minimal.
-    session.install(*BASE_TEST_DEPS)
-
     # Choose the way we'll install braintrust ... wheel or source.
     install_wheel = "--wheel" in session.posargs
     bt = _get_braintrust_wheel() if install_wheel else "."
-    session.install(bt)
+
+    # Install _only_ the dependencies we need for testing (not lint, black,
+    # ipython, whatever). We want to carefully control the base
+    # testing environment so it should be truly minimal.
+    session.install(bt, *BASE_TEST_DEPS)
 
     # Sanity check we have installed braintrust (and that it is from a wheel if needed)
     session.run("python", "-c", "import braintrust")
