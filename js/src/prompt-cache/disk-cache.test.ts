@@ -14,6 +14,7 @@ describe("DiskCache", () => {
 
   beforeEach(async () => {
     cacheDir = path.join(tmpdir(), `disk-cache-test-${Date.now()}`);
+
     cache = new DiskCache({ cacheDir, max: 3, logWarnings: false });
   });
 
@@ -79,17 +80,22 @@ describe("DiskCache", () => {
   });
 
   it("should never throw when write fails", async () => {
-    // there's probably a better way to do get permission errors, but I couldn't
-    // find one that worked on github actions
-    const isWin = process.platform === "win32";
-    const unwritableDir = isWin ? "C:\\Windows\\System32" : "/usr/bin";
+    const cacheDir = path.join(
+      tmpdir(),
+      "doesnt-exist-dir",
+      `write-fail-disk-cache-test-${Date.now()}`,
+    );
 
+    // use mkdir false as a way of triggering cross-platform write
+    // errors. I tried other methods (permissions, etc) but couldn't
+    // get one that worked on github actions.
     const brokenCache = new DiskCache({
-      cacheDir: unwritableDir,
+      cacheDir,
       logWarnings: false,
+      mkdir: false,
     });
 
-    // Should not throw when write fails, but write should fail silently.
+    // Failed writes shouldn't throw errors.
     await brokenCache.set("test", { foo: "bar" });
     const result = await brokenCache.get("test");
     expect(result).toBeUndefined();
