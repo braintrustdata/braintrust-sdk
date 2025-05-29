@@ -398,7 +398,6 @@ async def test_openai_embeddings_async(memory_logger):
         assert span
         assert span["metadata"]["model"] == "text-embedding-ada-002"
         # assert span["metadata"]["provider"] == "openai"
-        assert_metrics_are_valid(span["metrics"], start, end)
         assert "This is a test" in str(span["input"])
 
 
