@@ -249,14 +249,17 @@ describe("PromptCache", () => {
 
   describe("error handling", () => {
     it("should throw never when disk write fails", async () => {
-      const isWin = process.platform === "win32";
-      const unwritableDir = isWin ? "C:\\Windows\\System32" : "/usr/bin";
-
+      cacheDir = path.join(
+        tmpdir(),
+        "doesnt-exist",
+        `write-fail-disk-cache-test-${Date.now()}`,
+      );
       const brokenCache = new PromptCache({
         memoryCache: new LRUCache({ max: 2 }),
         diskCache: new DiskCache<Prompt>({
-          cacheDir: unwritableDir,
+          cacheDir: cacheDir,
           max: 5,
+          mkdir: false,
           logWarnings: false,
         }),
       });
