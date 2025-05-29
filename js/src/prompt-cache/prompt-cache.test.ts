@@ -9,26 +9,6 @@ import { DiskCache } from "./disk-cache";
 import { configureNode } from "../node";
 import { LRUCache } from "./lru-cache";
 
-async function makeUnwritable(dirPath: string): Promise<() => Promise<void>> {
-  if (process.platform === "win32") {
-    const { execSync } = await import("child_process");
-    // Use icacls to deny write access via Windows ACLs
-    execSync(`icacls "${dirPath}" /deny %USERNAME%:(W)`);
-    return async () => {
-      // Remove the deny rule to restore access
-      execSync(`icacls "${dirPath}" /remove:d %USERNAME%`);
-    };
-  } else {
-    const stats = await fs.stat(dirPath);
-    const notWritable =
-      ~fs.constants.S_IWUSR & ~fs.constants.S_IWGRP & ~fs.constants.S_IWOTH;
-    await fs.chmod(dirPath, stats.mode & notWritable);
-    return async () => {
-      await fs.chmod(dirPath, stats.mode);
-    };
-  }
-}
-
 describe("PromptCache", () => {
   configureNode();
 
