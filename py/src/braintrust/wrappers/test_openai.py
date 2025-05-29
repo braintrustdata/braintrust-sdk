@@ -56,8 +56,7 @@ def test_openai_chat_metrics(memory_logger):
         span = spans[0]
         assert span
         metrics = span["metrics"]
-        assert_metrics_are_valid(metrics)
-        assert start < metrics["start"] < metrics["end"] < end
+        assert_metrics_are_valid(metrics, start, end)
         assert span["metadata"]["model"] == TEST_MODEL
         # assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
@@ -74,7 +73,6 @@ def test_openai_responses_metrics(memory_logger):
         instructions="Just the number please",
     )
     assert unwrapped_response
-    # Extract content from output field as responses API structure has changed
     assert unwrapped_response.output
     assert len(unwrapped_response.output) > 0
     unwrapped_content = unwrapped_response.output[0].content[0].text
@@ -108,10 +106,9 @@ def test_openai_responses_metrics(memory_logger):
     span = spans[0]
     assert span
     metrics = span["metrics"]
-    assert_metrics_are_valid(metrics)
+    assert_metrics_are_valid(metrics, start, end)
     assert 0 <= metrics.get("prompt_cached_tokens", 0)
     assert 0 <= metrics.get("completion_reasoning_tokens", 0)
-    assert start < metrics["start"] < metrics["end"] < end
     assert span["metadata"]["model"] == TEST_MODEL
     # assert span["metadata"]["provider"] == "openai"
     assert TEST_PROMPT in str(span["input"])
@@ -145,7 +142,6 @@ def test_openai_embeddings(memory_logger):
     assert span
     assert span["metadata"]["model"] == "text-embedding-ada-002"
     # assert span["metadata"]["provider"] == "openai"
-    assert start < span["metrics"]["start"] < span["metrics"]["end"] < end
     assert "This is a test" in str(span["input"])
 
 
@@ -193,8 +189,7 @@ def test_openai_chat_streaming_sync(memory_logger):
         span = spans[0]
         assert span
         metrics = span["metrics"]
-        assert_metrics_are_valid(metrics)
-        assert start < metrics["start"] < metrics["end"] < end
+        assert_metrics_are_valid(metrics, start, end)
         assert span["metadata"]["model"] == TEST_MODEL
         # assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
@@ -324,8 +319,7 @@ async def test_openai_chat_async(memory_logger):
     span = spans[0]
     assert span
     metrics = span["metrics"]
-    assert_metrics_are_valid(metrics)
-    assert start < metrics["start"] < metrics["end"] < end
+    assert_metrics_are_valid(metrics, start, end)
     assert span["metadata"]["model"] == TEST_MODEL
     # assert span["metadata"]["provider"] == "openai"
     assert TEST_PROMPT in str(span["input"])
@@ -370,7 +364,7 @@ async def test_openai_responses_async(memory_logger):
         assert_metrics_are_valid(metrics)
         assert 0 <= metrics.get("prompt_cached_tokens", 0)
         assert 0 <= metrics.get("completion_reasoning_tokens", 0)
-        assert start < metrics["start"] < metrics["end"] < end
+        assert_metrics_are_valid(metrics, start, end)
         assert span["metadata"]["model"] == TEST_MODEL
         # assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
@@ -404,7 +398,6 @@ async def test_openai_embeddings_async(memory_logger):
         assert span
         assert span["metadata"]["model"] == "text-embedding-ada-002"
         # assert span["metadata"]["provider"] == "openai"
-        assert start < span["metrics"]["start"] < span["metrics"]["end"] < end
         assert "This is a test" in str(span["input"])
 
 
@@ -452,9 +445,8 @@ async def test_openai_chat_streaming_async(memory_logger):
         span = spans[0]
         assert span
         metrics = span["metrics"]
-        assert_metrics_are_valid(metrics)
+        assert_metrics_are_valid(metrics, start, end)
         assert span["metadata"]["stream"] == True
-        assert start < metrics["start"] < metrics["end"] < end
         assert span["metadata"]["model"] == TEST_MODEL
         # assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
@@ -596,9 +588,8 @@ async def test_openai_chat_async_context_manager(memory_logger):
         assert len(spans) == 1
         span = spans[0]
         metrics = span["metrics"]
-        assert_metrics_are_valid(metrics)
+        assert_metrics_are_valid(metrics, start, end)
         assert span["metadata"]["stream"] == True
-        assert start < metrics["start"] < metrics["end"] < end
         assert "24" in str(span["output"]) or "twenty-four" in str(span["output"]).lower()
 
 
@@ -697,9 +688,8 @@ async def test_openai_response_streaming_async(memory_logger):
         assert len(spans) == 1
         span = spans[0]
         metrics = span["metrics"]
-        assert_metrics_are_valid(metrics)
+        assert_metrics_are_valid(metrics, start, end)
         assert span["metadata"]["stream"] == True
-        assert start < metrics["start"] < metrics["end"] < end
         assert "What's 12 + 12?" in str(span["input"])
         assert "24" in str(span["output"])
 

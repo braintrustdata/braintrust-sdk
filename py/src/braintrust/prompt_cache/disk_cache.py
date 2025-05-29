@@ -40,6 +40,7 @@ class DiskCache(Generic[T]):
         serializer: Optional[Callable[[T], Any]] = None,
         deserializer: Optional[Callable[[Any], T]] = None,
         log_warnings: bool = True,
+        mkdirs: bool = True,
     ):
         """
         Creates a new DiskCache instance.
@@ -65,6 +66,7 @@ class DiskCache(Generic[T]):
         self._serializer = serializer
         self._deserializer = deserializer
         self._log_warnings = log_warnings
+        self._mkdirs = mkdirs
 
     def _get_entry_path(self, key: str) -> str:
         """Gets the file path for a cache entry."""
@@ -118,7 +120,10 @@ class DiskCache(Generic[T]):
             RuntimeError: If there is an error writing to the disk cache.
         """
         try:
-            os.makedirs(self._dir, exist_ok=True)
+            # mkdirs exists only to make it easy to simulate cross-platform write errors
+            # (permissions, etc wouldn't work on github actions on windows)
+            if self._mkdirs:
+                os.makedirs(self._dir, exist_ok=True)
             file_path = self._get_entry_path(key)
 
             with gzip.open(file_path, "wb") as f:
