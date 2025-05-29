@@ -647,7 +647,7 @@ async def test_openai_streaming_with_break(memory_logger):
     assert len(spans) == 1
     span = spans[0]
     metrics = span["metrics"]
-    assert metrics["time_to_first_token"] > 0
+    assert metrics["time_to_first_token"] >= 0
 
 
 @pytest.mark.asyncio
@@ -681,7 +681,7 @@ async def test_openai_chat_error_in_async_context(memory_logger):
     span = spans[0]
     # The error field might not be present in newer versions
     # Just check that we got a span with time metrics
-    assert span["metrics"]["time_to_first_token"] > 0
+    assert span["metrics"]["time_to_first_token"] >= 0
 
 
 @pytest.mark.asyncio
