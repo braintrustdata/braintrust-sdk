@@ -13,6 +13,7 @@ lint: fixup
 
 test:
 	nox -x
+	nox -s "test_wrappers" -- --disable-vcr
 
 test-wheel: build
 	nox -x -- --wheel
