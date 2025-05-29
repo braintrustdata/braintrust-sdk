@@ -599,10 +599,6 @@ const btqlExportAutomationConfigSchema = z.object({
   interval_seconds: intervalSecondsSchema,
 });
 
-export const btqlExportStateSchema = z.object({
-  cursor: z.string(),
-});
-
 const projectAutomationBaseSchema =
   generateBaseTableSchema("project automation");
 export const projectAutomationSchema = z
