@@ -101,10 +101,10 @@ class TestDiskCache(unittest.TestCase):
             log_warnings=False,
             mkdirs=False,
         )
-        self.cache.set("test", {"foo": "bar"})
+        broken_cache.set("test", {"foo": "bar"})
 
         try:
-            self.cache.get("test")
+            broken_cache.get("test")
         except KeyError:
             pass
 
