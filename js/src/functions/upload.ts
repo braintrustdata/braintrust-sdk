@@ -315,14 +315,15 @@ async function uploadBundles({
   } as const;
 
   const bundle = await bundlePromises[sourceFile];
-  if (!bundle || !handles[sourceFile].bundleFile) {
+  const bundleFileName = handles[sourceFile].bundleFile;
+  if (!bundle || !bundleFileName) {
     return false;
   }
 
   const sourceMapContextPromise = makeSourceMapContext({
     inFile: sourceFile,
-    outFile: handles[sourceFile].bundleFile,
-    sourceMapFile: handles[sourceFile].bundleFile + ".map",
+    outFile: bundleFileName,
+    sourceMapFile: bundleFileName + ".map",
   });
 
   let pathInfo: z.infer<typeof pathInfoSchema> | undefined = undefined;
@@ -348,7 +349,6 @@ async function uploadBundles({
   }
 
   // Upload bundleFile to pathInfo.url
-  const bundleFileName = handles[sourceFile].bundleFile;
   if (isEmpty(bundleFileName)) {
     throw new Error("No bundle file found");
   }

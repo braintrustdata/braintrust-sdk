@@ -2,9 +2,13 @@
     "compilerOptions": {
       "skipLibCheck": true
     },
+    "tsconfig": "./tsconfig.json",
     "excludeExternals": true,
     "externalPattern": [
         "**/node_modules/**"
+    ],
+    "exclude": [
+        "**/examples/**"
     ],
     "plugin": ["typedoc-plugin-markdown"],
     "out": "../../app/content/docs/reference/libs/nodejs",

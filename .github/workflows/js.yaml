@@ -32,4 +32,4 @@ jobs:
         shell: bash
         run: |
           cd js
-          make test
+          make verify-ci
