@@ -55,7 +55,7 @@ DEFAULTS = {
     "APIHandlerMemorySize": 10240,
 }
 
-CAPABILITIES = ["CAPABILITY_IAM", "CAPABILITY_NAMED_IAM", "CAPABILITY_AUTO_EXPAND"]
+CAPABILITIES = ["CAPABILITY_IAM", "CAPABILITY_AUTO_EXPAND"]
 
 LATEST_TEMPLATE = "https://braintrust-cf.s3.amazonaws.com/braintrust-latest.yaml"
 
