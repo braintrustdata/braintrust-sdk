@@ -38,7 +38,7 @@ test-openai-%:
 # common things
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-pnpm test test-latest prune installing-optional-deps
+.PHONY: test-pnpm test test-latest prune installing-optional-deps verify-ci build docs
 
 install-optional-deps:
 	npm_config_save=false npm_config_lockfile=false pnpm add "openai" "@anthropic-ai/sdk"
@@ -58,8 +58,14 @@ test-latest: test-pnpm test-anthropic-latest test-openai-latest
 prune:
 	pnpm prune
 
+docs:
+	pnpm run docs
 
 
+build:
+	pnpm run build
+
+verify-ci: test docs build
 
 # This is the only method I could find to install a package without explicitly
 # adding a dependency or modifying lock files.
