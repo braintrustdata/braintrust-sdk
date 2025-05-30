@@ -59,8 +59,7 @@ prune:
 	pnpm prune
 
 docs:
-	pnpm run docs
-
+	npm run docs
 
 build:
 	pnpm run build
