@@ -65,7 +65,7 @@ docs:
 build:
 	pnpm run build
 
-verify-ci: test docs build
+verify-ci: docs build test
 
 # This is the only method I could find to install a package without explicitly
 # adding a dependency or modifying lock files.
