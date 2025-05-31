@@ -681,10 +681,6 @@ class _HTTPBackgroundLogger:
         except:
             self.queue_maxsize = 1000
 
-        try:
-            self.queue_drop_when_full = bool(int(os.environ["BRAINTRUST_QUEUE_DROP_WHEN_FULL"]))
-        except:
-            self.queue_drop_when_full = False
 
         try:
             self.queue_drop_logging_period = float(os.environ["BRAINTRUST_QUEUE_DROP_LOGGING_PERIOD"])
@@ -703,10 +699,6 @@ class _HTTPBackgroundLogger:
         except:
             self.all_publish_payloads_dir = None
 
-        # Don't limit the queue size if we're in 'sync_flush' mode and are not
-        # dropping when full, otherwise logging could block indefinitely.
-        if self.sync_flush and not self.queue_drop_when_full:
-            self.queue_maxsize = 0
 
         self.start_thread_lock = threading.RLock()
         self.thread = threading.Thread(target=self._publisher, daemon=True)
@@ -714,7 +706,7 @@ class _HTTPBackgroundLogger:
 
         self.logger = logging.getLogger("braintrust")
         self.queue: "LogQueue[LazyValue[Dict[str, Any]]]" = LogQueue(
-            maxsize=self.queue_maxsize, drop_when_full=self.queue_drop_when_full
+            maxsize=self.queue_maxsize
         )
 
         atexit.register(self._finalize)

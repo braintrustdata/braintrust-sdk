@@ -30,34 +30,39 @@ def test_log_queue_basic_operations():
 
 
 def test_log_queue_drops_oldest_when_full():
-    """Test queue drops oldest items when full and drop_when_full=True"""
-    queue = LogQueue(maxsize=2, drop_when_full=True)
+    """Test queue drops oldest items when full"""
+    queue = LogQueue(maxsize=2)
 
     # Fill queue to capacity
-    queue.put("item1")
-    queue.put("item2")
+    d1 = queue.put("item1")
+    d2 = queue.put("item2")
+    assert not d1
+    assert not d2
 
     # Adding more should drop the oldest (item1)
-    dropped = queue.put("item3")
-    assert dropped == ["item1"]
+    d3 = queue.put("item3")
+    assert d3 == ["item1"]
+
+    d4 = queue.put("item4")
+    assert d4 == ["item2"]
 
     # Queue should now contain item2 and item3
     items = queue.drain_all()
-    assert items == ["item2", "item3"]
+    assert items == ["item3", "item4"]
 
 
-def test_log_queue_blocking_put():
-    """Test queue blocks when full and drop_when_full=False"""
-    queue = LogQueue(maxsize=1, drop_when_full=False)
+def test_log_queue_size_limit():
+    """Test queue drops items when size limit is reached"""
+    queue = LogQueue(maxsize=1)
 
-    queue.put("item1")
+    d1 = queue.put("item1")
+    assert d1 == []
+    assert queue.size() == 1
 
-    # Drain the queue to make space
-    items = queue.drain_all()
-    assert items == ["item1"]
-
-    # Now we can add another item without blocking
-    queue.put("item2")
+    # Adding another item should drop the first
+    d2 = queue.put("item2")
+    assert d2 == ["item1"]
+    assert queue.size() == 1
 
     items = queue.drain_all()
     assert items == ["item2"]
@@ -95,7 +100,7 @@ def test_log_queue_size():
 
 def test_log_queue_multiple_drops():
     """Test multiple items get dropped in FIFO order when queue is full"""
-    queue = LogQueue(maxsize=2, drop_when_full=True)
+    queue = LogQueue(maxsize=2)
 
     # Fill queue
     queue.put("item1")
@@ -115,7 +120,7 @@ def test_log_queue_multiple_drops():
 
 def test_log_queue_unlimited_size():
     """Test queue with maxsize=0 (unlimited)"""
-    queue = LogQueue(maxsize=0, drop_when_full=True)
+    queue = LogQueue(maxsize=0)
 
     # Should be able to add many items without drops
     for i in range(100):
@@ -129,10 +134,25 @@ def test_log_queue_unlimited_size():
     assert items[99] == "item99"
 
 
+def test_log_queue_negative_maxsize():
+    """Test queue with negative maxsize should be unlimited"""
+    queue = LogQueue(maxsize=-5)
+
+    # Should be able to add items without drops
+    for i in range(10):
+        dropped = queue.put(f"item{i}")
+        assert dropped == []
+
+    assert queue.size() == 10
+    
+    items = queue.drain_all()
+    assert len(items) == 10
+
+
 @pytest.mark.asyncio
 async def test_queue_never_blocks_event_loop():
     """Test that queue operations don't block the asyncio event loop"""
-    queue = LogQueue(maxsize=1, drop_when_full=False)
+    queue = LogQueue(maxsize=1)
 
     # Fill the queue
     queue.put("item1")
@@ -144,9 +164,12 @@ async def test_queue_never_blocks_event_loop():
         nonlocal flag_set
         flag_set = True
 
-    # Start potentially blocking operation in thread and flag setter concurrently
+    # Start queue operation and flag setter concurrently
     flag_task = asyncio.create_task(set_flag())
-    put_task = asyncio.create_task(asyncio.to_thread(queue.put, "item2"))
+    
+    # This should not block since we drop when full
+    dropped = queue.put("item2")
+    assert dropped == ["item1"]
 
     # Wait for flag task to complete
     await flag_task
@@ -156,13 +179,12 @@ async def test_queue_never_blocks_event_loop():
 
     # Clean up
     queue.drain_all()
-    await put_task
 
 
 @pytest.mark.asyncio
 async def test_queue_concurrent_drops_and_drains():
     """Test concurrent producer/consumer with drops and drains in asyncio"""
-    queue = LogQueue(maxsize=3, drop_when_full=True)
+    queue = LogQueue(maxsize=3)
 
     total_pushed = 0
     total_dropped = 0
@@ -196,3 +218,69 @@ async def test_queue_concurrent_drops_and_drains():
     assert total_dropped > 0  # Some items should have been dropped
     assert total_drained > 0  # Some items should have been drained
     assert total_drained + total_dropped == total_pushed  # Conservation of items
+
+
+def test_log_queue_thread_safety():
+    """Test that queue operations are thread-safe under concurrent access"""
+    import threading
+    import time
+    
+    queue = LogQueue(maxsize=5)
+    total_added = 0
+    total_dropped = 0
+    total_drained = 0
+    errors = []
+    
+    def producer(thread_id):
+        nonlocal total_added, total_dropped
+        try:
+            for i in range(20):
+                dropped = queue.put(f"t{thread_id}_item{i}")
+                with threading.Lock():  # Protect shared counters
+                    total_added += 1
+                    total_dropped += len(dropped)
+                time.sleep(0.001)  # Small delay to encourage interleaving
+        except Exception as e:
+            errors.append(f"Producer {thread_id}: {e}")
+    
+    def consumer():
+        nonlocal total_drained
+        try:
+            for _ in range(10):
+                time.sleep(0.005)  # Let producers add some items
+                items = queue.drain_all()
+                with threading.Lock():  # Protect shared counter
+                    total_drained += len(items)
+        except Exception as e:
+            errors.append(f"Consumer: {e}")
+    
+    # Start multiple producer threads and one consumer
+    threads = []
+    for i in range(3):
+        t = threading.Thread(target=producer, args=(i,))
+        threads.append(t)
+        t.start()
+    
+    consumer_thread = threading.Thread(target=consumer)
+    threads.append(consumer_thread)
+    consumer_thread.start()
+    
+    # Wait for all threads to complete
+    for t in threads:
+        t.join()
+    
+    # Final drain to get any remaining items
+    final_items = queue.drain_all()
+    total_drained += len(final_items)
+    
+    # Check for errors
+    assert not errors, f"Thread safety errors: {errors}"
+    
+    # Verify conservation of items
+    assert total_added == 60  # 3 threads * 20 items each
+    assert total_dropped >= 0
+    assert total_drained >= 0
+    assert total_drained + total_dropped == total_added
+    
+    # Verify queue is in a consistent state
+    assert queue.size() == 0  # Should be empty after final drain
