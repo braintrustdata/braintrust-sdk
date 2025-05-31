@@ -1,4 +1,5 @@
 import { z } from "zod";
+import * as uuid from "uuid";
 
 const webhookAutomationActionSchema = z.object({
   type: z.literal("webhook").describe("The type of action to take"),
@@ -48,6 +49,10 @@ const exportCredentialsSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("aws_iam"),
     role_arn: z.string().describe("The ARN of the IAM role to use"),
+    external_id: z
+      .string()
+      .default(() => `braintrust-${uuid.v4()}`)
+      .describe("The external ID to use"),
   }),
 ]);
 
