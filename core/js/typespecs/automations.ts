@@ -24,6 +24,12 @@ export const logAutomationConfigSchema = z.object({
     .describe("The action to take when the automation rule is triggered"),
 });
 
+export const exportDefinitionTypeEnum = z.enum([
+  "log_traces",
+  "log_spans",
+  "btql_query",
+]);
+
 export const exportDefinitionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("log_traces"),
@@ -36,6 +42,7 @@ export const exportDefinitionSchema = z.discriminatedUnion("type", [
     btql_query: z.string().describe("The BTQL query to export"),
   }),
 ]);
+export type ExportDefinition = z.infer<typeof exportDefinitionSchema>;
 
 const exportCredentialsSchema = z.discriminatedUnion("type", [
   z.object({
