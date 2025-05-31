@@ -9,16 +9,18 @@ from braintrust.queue import LogQueue
 
 
 def test_log_queue_basic_operations():
-    """Test basic push/pop operations of LogQueue"""
+    """Test basic push/pop operations and size reporting of LogQueue"""
     queue = LogQueue(maxsize=5)
 
     # Test empty queue
     items = queue.drain_all()
     assert items == []
+    assert queue.size() == 0
 
     # Test adding items
     queue.put("item1")
     queue.put("item2")
+    assert queue.size() == 2
 
     # Test draining items
     items = queue.drain_all()
@@ -27,10 +29,12 @@ def test_log_queue_basic_operations():
     # Queue should be empty after draining
     items = queue.drain_all()
     assert items == []
+    assert queue.size() == 0
 
 
-def test_log_queue_drops_oldest_when_full():
-    """Test queue drops oldest items when full"""
+def test_log_queue_drop_behavior():
+    """Test queue drops oldest items when full, including single and multiple drops"""
+    # Test basic drop behavior with size 2
     queue = LogQueue(maxsize=2)
 
     # Fill queue to capacity
@@ -46,26 +50,44 @@ def test_log_queue_drops_oldest_when_full():
     d4 = queue.put("item4")
     assert d4 == ["item2"]
 
-    # Queue should now contain item2 and item3
+    # Queue should now contain newest items
     items = queue.drain_all()
     assert items == ["item3", "item4"]
 
+    # Test size limit with maxsize=1
+    queue_small = LogQueue(maxsize=1)
 
-def test_log_queue_size_limit():
-    """Test queue drops items when size limit is reached"""
-    queue = LogQueue(maxsize=1)
-
-    d1 = queue.put("item1")
+    d1 = queue_small.put("item1")
     assert d1 == []
-    assert queue.size() == 1
+    assert queue_small.size() == 1
 
     # Adding another item should drop the first
-    d2 = queue.put("item2")
+    d2 = queue_small.put("item2")
     assert d2 == ["item1"]
-    assert queue.size() == 1
+    assert queue_small.size() == 1
 
-    items = queue.drain_all()
+    items = queue_small.drain_all()
     assert items == ["item2"]
+
+    # Test multiple drops in sequence
+    queue_multi = LogQueue(maxsize=2)
+
+    # Fill queue
+    queue_multi.put("item1")
+    queue_multi.put("item2")
+
+    # Add multiple items that will cause drops
+    dropped1 = queue_multi.put("item3")
+    dropped2 = queue_multi.put("item4")
+
+    assert dropped1 == ["item1"]
+    assert dropped2 == ["item2"]
+
+    # Queue should contain the newest items
+    items = queue_multi.drain_all()
+    assert items == ["item3", "item4"]
+
+
 
 
 def test_log_queue_semaphore_signaling():
@@ -83,43 +105,13 @@ def test_log_queue_semaphore_signaling():
     queue.drain_all()
 
 
-def test_log_queue_size():
-    """Test queue size reporting"""
-    queue = LogQueue(maxsize=5)
-
-    assert queue.size() == 0
-
-    queue.put("item1")
-    queue.put("item2")
-
-    assert queue.size() == 2
-
-    queue.drain_all()
-    assert queue.size() == 0
 
 
-def test_log_queue_multiple_drops():
-    """Test multiple items get dropped in FIFO order when queue is full"""
-    queue = LogQueue(maxsize=2)
-
-    # Fill queue
-    queue.put("item1")
-    queue.put("item2")
-
-    # Add multiple items that will cause drops
-    dropped1 = queue.put("item3")
-    dropped2 = queue.put("item4")
-
-    assert dropped1 == ["item1"]
-    assert dropped2 == ["item2"]
-
-    # Queue should contain the newest items
-    items = queue.drain_all()
-    assert items == ["item3", "item4"]
 
 
 def test_log_queue_unlimited_size():
-    """Test queue with maxsize=0 (unlimited)"""
+    """Test queue with unlimited capacity (maxsize=0 or negative)"""
+    # Test maxsize=0 (unlimited)
     queue = LogQueue(maxsize=0)
 
     # Should be able to add many items without drops
@@ -133,20 +125,20 @@ def test_log_queue_unlimited_size():
     assert items[0] == "item0"
     assert items[99] == "item99"
 
-
-def test_log_queue_negative_maxsize():
-    """Test queue with negative maxsize should be unlimited"""
-    queue = LogQueue(maxsize=-5)
+    # Test negative maxsize should also be unlimited
+    queue_neg = LogQueue(maxsize=-5)
 
     # Should be able to add items without drops
     for i in range(10):
-        dropped = queue.put(f"item{i}")
+        dropped = queue_neg.put(f"item{i}")
         assert dropped == []
 
-    assert queue.size() == 10
+    assert queue_neg.size() == 10
     
-    items = queue.drain_all()
+    items = queue_neg.drain_all()
     assert len(items) == 10
+
+
 
 
 @pytest.mark.asyncio
