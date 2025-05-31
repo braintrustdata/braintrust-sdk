@@ -2,7 +2,7 @@ name: integration-tests
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled]
 
 jobs:
   open-pr:
