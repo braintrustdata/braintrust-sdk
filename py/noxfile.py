@@ -5,6 +5,7 @@ works with and without different dependencies. A few commands to check out:
     nox                        Run all sessions.
     nox -l                     List all sessions.
     nox -s <session>           Run a specific session.
+    nox ... -- --no-vcr        Run tests without vcrpy.
     nox ... -- --wheel         Run tests against the wheel in dist.
     nox -h                     Get help.
 """
@@ -17,6 +18,9 @@ import tempfile
 
 import nox
 
+# much faster than pip
+nox.options.default_venv_backend = "uv"
+
 SRC_DIR = "braintrust"
 WRAPPER_DIR = "braintrust/wrappers"
 
@@ -27,7 +31,7 @@ ERROR_CODES = tuple(range(1, 256))
 
 
 # The minimal set of dependencies we need to run tests.
-BASE_TEST_DEPS = ("pytest", "pytest-asyncio")
+BASE_TEST_DEPS = ("pytest", "pytest-asyncio", "pytest-vcr")
 
 # List your package here if it's not guaranteed to be installed. We'll (try to)
 # validate things work with or without them.
@@ -117,24 +121,28 @@ def pylint(session):
     session.run("pylint", "--errors-only", *files)
 
 
-@nox.session(default=False)
-def test_wrappers_latest(session):
-    # A shortcut for testing the latest versions of wrappers. Don't run it by default since
-    # it's just a dev env helper.
-    session.notify("test_openai(latest)")
-    session.notify("test_anthropic(latest)")
+@nox.session()
+def test_latest_wrappers_novcr(session):
+    """Run the latest wrapper tests without vcrpy."""
+    # every test run we hit openai, anthropic,  at least once so we balance CI speed (with vcrpy)
+    # with testing reality.
+    args = session.posargs.copy()
+    if "--disable-vcr" not in args:
+        args.append("--disable-vcr")
+    session.notify("test_openai(latest)", posargs=args)
+    session.notify("test_anthropic(latest)", posargs=args)
+    session.notify("test_pydantic_ai(latest)", posargs=args)
 
 
 def _install_test_deps(session):
-    # Install _only_ the dependencies we need for testing (not lint, black,
-    # ipython, whatever). We want to carefully control the base
-    # testing environment so it should be truly minimal.
-    session.install(*BASE_TEST_DEPS)
-
     # Choose the way we'll install braintrust ... wheel or source.
     install_wheel = "--wheel" in session.posargs
     bt = _get_braintrust_wheel() if install_wheel else "."
-    session.install(bt)
+
+    # Install _only_ the dependencies we need for testing (not lint, black,
+    # ipython, whatever). We want to carefully control the base
+    # testing environment so it should be truly minimal.
+    session.install(bt, *BASE_TEST_DEPS)
 
     # Sanity check we have installed braintrust (and that it is from a wheel if needed)
     session.run("python", "-c", "import braintrust")
@@ -164,10 +172,16 @@ def _run_core_tests(session):
 def _run_tests(session, test_path, ignore_path=""):
     """Run tests against a wheel or the source code. Paths should be relative and start with braintrust."""
     wheel_flag = "--wheel" in session.posargs
+    common_args = ["--disable-vcr"] if "--disable-vcr" in session.posargs else []
     if not wheel_flag:
         # Run the tests in the src directory
-        ignore = f"--ignore=src/{ignore_path}" if ignore_path else ""
-        session.run("pytest", f"src/{test_path}", ignore)
+        test_args = [
+            "pytest",
+            f"src/{test_path}",
+        ]
+        if ignore_path:
+            test_args.append(f"--ignore=src/{ignore_path}")
+        session.run(*test_args, *common_args)
         return
 
     # Running the tests from the wheel involves a bit of gymnastics to ensure we don't import
@@ -187,7 +201,7 @@ def _run_tests(session, test_path, ignore_path=""):
         # It proved very helpful because it's very easy
         # to accidentally import local modules from the source directory.
         env = {"BRAINTRUST_TESTING_WHEEL": "1"}
-        session.run(pytest_path, abs_test_path, ignore, env=env)
+        session.run(pytest_path, abs_test_path, ignore, *common_args, env=env)
 
     # And a final note ... if it's not clear from above, we include test files in our wheel, which
     # is perhaps not ideal?
