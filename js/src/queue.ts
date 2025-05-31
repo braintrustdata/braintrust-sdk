@@ -14,14 +14,14 @@ export class Queue<T> {
 
     // Add all new items to the queue
     this.items.push(...items);
-    
+
     // If we exceed maxSize, drop oldest items
     if (this.items.length > this.maxSize) {
       const numToDrop = this.items.length - this.maxSize;
       const dropped = this.items.splice(0, numToDrop);
       return dropped;
     }
-    
+
     return [];
   }
 

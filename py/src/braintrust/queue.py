@@ -34,13 +34,13 @@ class LogQueue:
         """
         with self._mutex:
             dropped = []
-            
+
             # If queue is at max capacity, popleft before appending
             if self._maxlen is not None and len(self._queue) == self._maxlen:
                 dropped_item = self._queue.popleft()
                 dropped.append(dropped_item)
                 self._total_dropped += 1
-            
+
             self._queue.append(item)
 
         # Signal that items are available
@@ -58,7 +58,7 @@ class LogQueue:
         with self._mutex:
             if len(self._queue) == 0:
                 return []
-    
+
             old_queue = self._queue
             self._queue = deque(maxlen=self._maxlen)
 

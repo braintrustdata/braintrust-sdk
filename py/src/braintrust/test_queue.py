@@ -88,8 +88,6 @@ def test_log_queue_drop_behavior():
     assert items == ["item3", "item4"]
 
 
-
-
 def test_log_queue_semaphore_signaling():
     """Test that semaphore is properly signaled when items are added"""
     queue = LogQueue(maxsize=5)
@@ -103,10 +101,6 @@ def test_log_queue_semaphore_signaling():
 
     # After draining, should signal again if there were items
     queue.drain_all()
-
-
-
-
 
 
 def test_log_queue_unlimited_size():
@@ -134,11 +128,9 @@ def test_log_queue_unlimited_size():
         assert dropped == []
 
     assert queue_neg.size() == 10
-    
+
     items = queue_neg.drain_all()
     assert len(items) == 10
-
-
 
 
 @pytest.mark.asyncio
@@ -158,7 +150,7 @@ async def test_queue_never_blocks_event_loop():
 
     # Start queue operation and flag setter concurrently
     flag_task = asyncio.create_task(set_flag())
-    
+
     # This should not block since we drop when full
     dropped = queue.put("item2")
     assert dropped == ["item1"]
@@ -216,13 +208,13 @@ def test_log_queue_thread_safety():
     """Test that queue operations are thread-safe under concurrent access"""
     import threading
     import time
-    
+
     queue = LogQueue(maxsize=5)
     total_added = 0
     total_dropped = 0
     total_drained = 0
     errors = []
-    
+
     def producer(thread_id):
         nonlocal total_added, total_dropped
         try:
@@ -234,7 +226,7 @@ def test_log_queue_thread_safety():
                 time.sleep(0.001)  # Small delay to encourage interleaving
         except Exception as e:
             errors.append(f"Producer {thread_id}: {e}")
-    
+
     def consumer():
         nonlocal total_drained
         try:
@@ -245,34 +237,34 @@ def test_log_queue_thread_safety():
                     total_drained += len(items)
         except Exception as e:
             errors.append(f"Consumer: {e}")
-    
+
     # Start multiple producer threads and one consumer
     threads = []
     for i in range(3):
         t = threading.Thread(target=producer, args=(i,))
         threads.append(t)
         t.start()
-    
+
     consumer_thread = threading.Thread(target=consumer)
     threads.append(consumer_thread)
     consumer_thread.start()
-    
+
     # Wait for all threads to complete
     for t in threads:
         t.join()
-    
+
     # Final drain to get any remaining items
     final_items = queue.drain_all()
     total_drained += len(final_items)
-    
+
     # Check for errors
     assert not errors, f"Thread safety errors: {errors}"
-    
+
     # Verify conservation of items
     assert total_added == 60  # 3 threads * 20 items each
     assert total_dropped >= 0
     assert total_drained >= 0
     assert total_drained + total_dropped == total_added
-    
+
     # Verify queue is in a consistent state
     assert queue.size() == 0  # Should be empty after final drain
