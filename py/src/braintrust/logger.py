@@ -681,7 +681,6 @@ class _HTTPBackgroundLogger:
         except:
             self.queue_maxsize = 1000
 
-
         try:
             self.queue_drop_logging_period = float(os.environ["BRAINTRUST_QUEUE_DROP_LOGGING_PERIOD"])
         except:
@@ -699,15 +698,12 @@ class _HTTPBackgroundLogger:
         except:
             self.all_publish_payloads_dir = None
 
-
         self.start_thread_lock = threading.RLock()
         self.thread = threading.Thread(target=self._publisher, daemon=True)
         self.started = False
 
         self.logger = logging.getLogger("braintrust")
-        self.queue: "LogQueue[LazyValue[Dict[str, Any]]]" = LogQueue(
-            maxsize=self.queue_maxsize
-        )
+        self.queue: "LogQueue[LazyValue[Dict[str, Any]]]" = LogQueue(maxsize=self.queue_maxsize)
 
         atexit.register(self._finalize)
 
