@@ -10,6 +10,10 @@ import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
 import { functionDataSchema, functionTypeEnum } from "./functions";
 import { savedFunctionIdSchema } from "./function_id";
 import { repoInfoSchema } from "./git_types";
+import {
+  automationConfigSchema,
+  logAutomationConfigSchema,
+} from "./automations";
 extendZodWithOpenApi(z);
 
 // Section: App DB table schemas
@@ -561,44 +565,6 @@ export const projectScoreCategory = z
   .openapi("ProjectScoreCategory");
 export type ProjectScoreCategory = z.infer<typeof projectScoreCategory>;
 
-const webhookAutomationActionSchema = z.object({
-  type: z.literal("webhook").describe("The type of action to take"),
-  url: z.string().describe("The webhook URL to send the request to"),
-});
-
-export const automationEventTypeEnum = z.enum(["logs", "btql_export"]);
-const intervalSecondsSchema = z
-  .number()
-  .min(1)
-  .max(30 * 24 * 60 * 60)
-  .describe(
-    "Perform the triggered action at most once in this interval of seconds",
-  );
-export const logAutomationConfigSchema = z.object({
-  event_type: z.literal("logs").describe("The type of automation."),
-  btql_filter: z
-    .string()
-    .describe("BTQL filter to identify rows for the automation rule"),
-  interval_seconds: intervalSecondsSchema,
-  action: z
-    .discriminatedUnion("type", [webhookAutomationActionSchema])
-    .describe("The action to take when the automation rule is triggered"),
-});
-
-const btqlExportAutomationConfigSchema = z.object({
-  event_type: z.literal("btql_export").describe("The type of automation."),
-  btql_query: z.string().describe("The BTQL query to export"),
-  export_path: z
-    .string()
-    .describe(
-      "The path to export the results to. It should include the storage protocol and prefix, e.g. s3://bucket-name/path/to/export",
-    ),
-  format: z
-    .enum(["jsonl", "parquet"])
-    .describe("The format to export the results in"),
-  interval_seconds: intervalSecondsSchema,
-});
-
 const projectAutomationBaseSchema =
   generateBaseTableSchema("project automation");
 export const projectAutomationSchema = z
@@ -609,9 +575,9 @@ export const projectAutomationSchema = z
     created: projectAutomationBaseSchema.shape.created,
     name: projectAutomationBaseSchema.shape.name,
     description: projectAutomationBaseSchema.shape.description,
-    config: z
-      .union([logAutomationConfigSchema, btqlExportAutomationConfigSchema])
-      .describe("The configuration for the automation rule"),
+    config: automationConfigSchema.describe(
+      "The configuration for the automation rule",
+    ),
   })
   .openapi("ProjectAutomation");
 
@@ -625,7 +591,7 @@ export type LogAutomation = z.infer<typeof logAutomationSchema>;
 
 export const btqlExportAutomationSchema = projectAutomationSchema.merge(
   z.object({
-    config: btqlExportAutomationConfigSchema,
+    config: logAutomationConfigSchema,
   }),
 );
 export type BtqlExportAutomation = z.infer<typeof btqlExportAutomationSchema>;
