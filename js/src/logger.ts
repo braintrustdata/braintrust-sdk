@@ -1987,7 +1987,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     if (!isNaN(queueDropExceedingMaxsizeEnv)) {
       this.queueDropExceedingMaxsize = queueDropExceedingMaxsizeEnv;
     }
-    
+
     this.queue = new Queue(this.queueDropExceedingMaxsize);
 
     const queueDropLoggingPeriodEnv = Number(
@@ -2028,7 +2028,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
 
     const droppedItems = this.queue.push(...items);
-    
+
     if (!this.syncFlush) {
       this.triggerActiveFlush();
     }
