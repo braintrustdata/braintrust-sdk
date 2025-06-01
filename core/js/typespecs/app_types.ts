@@ -12,6 +12,7 @@ import { savedFunctionIdSchema } from "./function_id";
 import { repoInfoSchema } from "./git_types";
 import {
   automationConfigSchema,
+  btqlExportAutomationConfigSchema,
   logAutomationConfigSchema,
 } from "./automations";
 extendZodWithOpenApi(z);
@@ -591,7 +592,7 @@ export type LogAutomation = z.infer<typeof logAutomationSchema>;
 
 export const btqlExportAutomationSchema = projectAutomationSchema.merge(
   z.object({
-    config: logAutomationConfigSchema,
+    config: btqlExportAutomationConfigSchema,
   }),
 );
 export type BtqlExportAutomation = z.infer<typeof btqlExportAutomationSchema>;
