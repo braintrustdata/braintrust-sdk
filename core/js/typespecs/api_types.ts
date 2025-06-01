@@ -698,12 +698,12 @@ const feedbackProjectLogsRequestSchema = makeFeedbackRequestSchema(
 // use individual schema types, import them directly.
 
 export type EventObjectSchemasEntry = {
-  event?: Zod.ZodTypeAny;
-  fetchResponse?: Zod.ZodTypeAny;
-  insertEvent?: Zod.ZodTypeAny;
-  insertRequest?: Zod.ZodTypeAny;
-  feedbackItem?: Zod.ZodTypeAny;
-  feedbackRequest?: Zod.ZodTypeAny;
+  event?: z.ZodTypeAny;
+  fetchResponse?: z.ZodTypeAny;
+  insertEvent?: z.ZodTypeAny;
+  insertRequest?: z.ZodTypeAny;
+  feedbackItem?: z.ZodTypeAny;
+  feedbackRequest?: z.ZodTypeAny;
 };
 
 export const apiSpecEventObjectSchemas: Record<
