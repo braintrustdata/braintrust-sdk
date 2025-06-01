@@ -698,12 +698,19 @@ const feedbackProjectLogsRequestSchema = makeFeedbackRequestSchema(
 // use individual schema types, import them directly.
 
 export type EventObjectSchemasEntry = {
-  event?: z.ZodTypeAny;
-  fetchResponse?: z.ZodTypeAny;
-  insertEvent?: z.ZodTypeAny;
-  insertRequest?: z.ZodTypeAny;
-  feedbackItem?: z.ZodTypeAny;
-  feedbackRequest?: z.ZodTypeAny;
+  // Zod changed its own convention for this, so we need to use plain any.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  event?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  fetchResponse?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  insertEvent?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  insertRequest?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  feedbackItem?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  feedbackRequest?: any;
 };
 
 export const apiSpecEventObjectSchemas: Record<
