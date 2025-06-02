@@ -44,8 +44,6 @@ test-py-core:
 test-py-sdk: nox
 	source env.sh && cd py && pytest
 
-test-js:
-	pnpm install && pnpm test
 
 nox:
 	cd py && make test
@@ -54,3 +52,24 @@ nox:
 pylint:
 
 	cd py && make lint
+
+
+#
+# js stuff
+#
+#
+
+.PHONY: js-build js-test js-docs js-verify-ci
+
+js-build:
+	pnpm install
+	pnpm run build
+
+js-test: js-build
+	pnpm run test
+	cd js && make test
+
+js-docs: js-build
+	cd js && make docs
+
+js-verify-ci: js-docs js-test
