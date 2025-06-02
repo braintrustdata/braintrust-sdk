@@ -38,7 +38,7 @@ test-openai-%:
 # common things
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-pnpm test test-latest prune installing-optional-deps docs
+.PHONY: test-pnpm test test-latest prune installing-optional-deps docs build verify-ci
 
 install-optional-deps:
 	npm_config_save=false npm_config_lockfile=false pnpm add "openai" "@anthropic-ai/sdk"
@@ -60,6 +60,12 @@ prune:
 
 docs:
 	pnpm run docs
+
+build:
+	pnpm run build
+
+
+verify-ci: build docs test
 
 
 

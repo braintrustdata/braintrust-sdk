@@ -27,9 +27,8 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - uses: pnpm/action-setup@v4
       - run: pnpm install
-      - run: pnpm run build
       - name: "run tests"
         shell: bash
         run: |
           cd js
-          make test
+          make verify-ci
