@@ -18,20 +18,10 @@ from typing import Any, Dict, List, Optional
 import requests
 
 from .. import api_conn, app_conn, login, org_id, proxy_conn
-from ..framework2 import CodeFunction, global_
+from ..framework import _set_lazy_load
+from ..framework2 import CodeFunction, _ProjectIdCache, global_
 from ..types import IfExists
 from ..util import add_azure_blob_headers
-
-
-class _ProjectIdCache:
-    def __init__(self):
-        self._cache = {}
-
-    def get(self, project):
-        if project not in self._cache:
-            resp = app_conn().post_json("api/project/register", {"project_name": project.name})
-            self._cache[project] = resp["project"]["id"]
-        return self._cache[project]
 
 
 def _pkg_install_arg(pkg) -> Optional[str]:
@@ -322,7 +312,8 @@ def run(args):
     module_name = re.sub(".py$", "", os.path.relpath(path).replace("-", "_").replace("/", "."))
 
     try:
-        sources = _import_module(module_name, path)
+        with _set_lazy_load(True):
+            sources = _import_module(module_name, path)
     except ImportError as e:
         if str(e) == "attempted relative import with no known parent package":
             raise ImportError(

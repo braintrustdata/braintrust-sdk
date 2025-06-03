@@ -4,6 +4,9 @@ from typing import Any, Callable, Dict, List, Optional, Union, overload
 
 import slugify
 
+from braintrust.logger import api_conn, app_conn, login
+
+from .framework import _is_lazy_load  # type: ignore
 from .types import (
     ChatCompletionMessageParam,
     IfExists,
@@ -15,10 +18,36 @@ from .types import (
 )
 
 
+class _ProjectIdCache:
+    def __init__(self):
+        self._cache: Dict[Project, str] = {}
+
+    def get(self, project: "Project") -> str:
+        if project not in self._cache:
+            resp = app_conn().post_json("api/project/register", {"project_name": project.name})
+            self._cache[project] = resp["project"]["id"]
+        return self._cache[project]
+
+
 class _GlobalState:
     def __init__(self):
         self.functions: List[CodeFunction] = []
         self.prompts: List[CodePrompt] = []
+        self._project_id_cache = _ProjectIdCache()
+
+    def add_function(self, function: "CodeFunction"):
+        if _is_lazy_load():
+            self.functions.append(function)
+        else:
+            raise ValueError("Function definitions can only be added while using `braintrust push`")
+
+    def add_prompt(self, prompt: "CodePrompt"):
+        if _is_lazy_load():
+            self.prompts.append(prompt)
+        else:
+            login()
+            function_definition = prompt.to_prompt_data("error", self._project_id_cache)
+            return api_conn().post_json("insert-functions", {"functions": [function_definition]})
 
 
 global_ = _GlobalState()
@@ -52,6 +81,39 @@ class CodePrompt:
     function_type: Optional[str]
     id: Optional[str]
     if_exists: Optional[IfExists]
+
+    def to_prompt_data(self, if_exists: IfExists, project_ids: _ProjectIdCache) -> Dict[str, Any]:
+        prompt_data = self.prompt
+        if len(self.tool_functions) > 0:
+            resolvable_tool_functions: List[Any] = []
+            for f in self.tool_functions:
+                if isinstance(f, CodeFunction):
+                    resolvable_tool_functions.append(
+                        {
+                            "type": "slug",
+                            "project_id": project_ids.get(f.project),
+                            "slug": f.slug,
+                        }
+                    )
+                else:
+                    resolvable_tool_functions.append(f)
+            prompt_data["tool_functions"] = resolvable_tool_functions
+        j: Dict[str, Any] = {
+            "project_id": project_ids.get(self.project),
+            "name": self.name,
+            "slug": self.slug,
+            "function_data": {
+                "type": "prompt",
+            },
+            "prompt_data": prompt_data,
+            "if_exists": self.if_exists if self.if_exists is not None else if_exists,
+        }
+        if self.description is not None:
+            j["description"] = self.description
+        if self.function_type is not None:
+            j["function_type"] = self.function_type
+
+        return j
 
 
 class ToolBuilder:
@@ -106,7 +168,7 @@ class ToolBuilder:
             returns=returns,
             if_exists=if_exists,
         )
-        global_.functions.append(f)
+        global_.add_function(f)
         return f
 
 
@@ -225,7 +287,7 @@ class PromptBuilder:
             id=id,
             if_exists=if_exists,
         )
-        global_.prompts.append(p)
+        global_.add_prompt(p)
         return p
 
 
@@ -336,6 +398,7 @@ class ScorerBuilder:
                 name = f"Scorer {self._task_counter}"
         if slug is None or len(slug) == 0:
             slug = slugify.slugify(name)
+
         if handler is not None:  # code scorer
             assert parameters is not None
             f = CodeFunction(
@@ -349,7 +412,7 @@ class ScorerBuilder:
                 returns=returns,
                 if_exists=if_exists,
             )
-            global_.functions.append(f)
+            global_.add_function(f)
         else:  # LLM scorer
             assert model is not None
             assert use_cot is not None
@@ -386,7 +449,7 @@ class ScorerBuilder:
                 id=None,
                 if_exists=if_exists,
             )
-            global_.prompts.append(p)
+            global_.add_prompt(p)
 
 
 class Project:
