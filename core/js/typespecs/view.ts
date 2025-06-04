@@ -63,6 +63,8 @@ export const monitorViewOptionsSchema = z
   })
   .strip();
 
+export type MonitorViewOptions = z.infer<typeof monitorViewOptionsSchema>;
+
 export const viewOptionsSchema = z
   .union([
     // Monitor view with explicit type
