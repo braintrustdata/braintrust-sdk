@@ -59,8 +59,11 @@ export const monitorViewOptionsSchema = z
     chartVisibility: z.record(z.boolean()).nullish(),
     projectId: z.string().nullish(),
     type: z.enum(["project", "experiment"]).nullish(),
+    groupBy: z.string().nullish(),
   })
   .strip();
+
+export type MonitorViewOptions = z.infer<typeof monitorViewOptionsSchema>;
 
 export const viewOptionsSchema = z
   .union([
