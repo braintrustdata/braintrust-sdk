@@ -17,8 +17,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from .. import api_conn, app_conn, login, org_id, proxy_conn
-from ..framework import _set_lazy_load
+from .. import api_conn, login, org_id, proxy_conn
 from ..framework2 import CodeFunction, _ProjectIdCache, global_
 from ..types import IfExists
 from ..util import add_azure_blob_headers
@@ -214,85 +213,58 @@ def _upload_bundle(entry_module_name: str, sources: List[str], requirements: Opt
 def _collect_function_function_defs(
     project_ids: _ProjectIdCache, functions: List[Dict[str, Any]], bundle_id: str, if_exists: IfExists
 ) -> None:
-    for i, f in enumerate(global_.functions):
-        source = inspect.getsource(f.handler)
-        if f.handler.__name__ == "<lambda>":
-            m = re.search(r"handler\s*=\s*(.+)\s*[,)]", source)
-            if m is None:
-                raise ValueError(f"Failed to find handler for {f.name}")
-            source = m.group(1)
-        j = {
-            "project_id": project_ids.get(f.project),
-            "name": f.name,
-            "slug": f.slug,
-            "description": f.description,
-            "function_data": {
-                "type": "code",
-                "data": {
-                    "type": "bundle",
-                    "runtime_context": {
-                        "runtime": "python",
-                        "version": _py_version(),
+    for p in global_.projects:
+        for i, f in enumerate(p._publishable_code_functions):  # type: ignore
+            source = inspect.getsource(f.handler)
+            if f.handler.__name__ == "<lambda>":
+                m = re.search(r"handler\s*=\s*(.+)\s*[,)]", source)
+                if m is None:
+                    raise ValueError(f"Failed to find handler for {f.name}")
+                source = m.group(1)
+            j = {
+                "project_id": project_ids.get(f.project),
+                "name": f.name,
+                "slug": f.slug,
+                "description": f.description,
+                "function_data": {
+                    "type": "code",
+                    "data": {
+                        "type": "bundle",
+                        "runtime_context": {
+                            "runtime": "python",
+                            "version": _py_version(),
+                        },
+                        "location": {
+                            "type": "function",
+                            "index": i,
+                        },
+                        "bundle_id": bundle_id,
+                        "preview": source.strip(),
                     },
-                    "location": {
-                        "type": "function",
-                        "index": i,
-                    },
-                    "bundle_id": bundle_id,
-                    "preview": source.strip(),
                 },
-            },
-            "function_type": f.type_,
-            "function_schema": {
-                "parameters": f.parameters,
-                "returns": f.returns,
-            },
-            "if_exists": f.if_exists if f.if_exists else if_exists,
-        }
-        if f.parameters is None:
-            raise ValueError(f"Function {f.name} has no supplied parameters")
-        j["function_schema"] = {
-            "parameters": _pydantic_to_json_schema(f.parameters),
-        }
-        if f.returns is not None:
-            j["function_schema"]["returns"] = _pydantic_to_json_schema(f.returns)
-        functions.append(j)
+                "function_type": f.type_,
+                "function_schema": {
+                    "parameters": f.parameters,
+                    "returns": f.returns,
+                },
+                "if_exists": f.if_exists if f.if_exists else if_exists,
+            }
+            if f.parameters is None:
+                raise ValueError(f"Function {f.name} has no supplied parameters")
+            j["function_schema"] = {
+                "parameters": _pydantic_to_json_schema(f.parameters),
+            }
+            if f.returns is not None:
+                j["function_schema"]["returns"] = _pydantic_to_json_schema(f.returns)
+            functions.append(j)
 
 
 def _collect_prompt_function_defs(
     project_ids: _ProjectIdCache, functions: List[Dict[str, Any]], if_exists: IfExists
 ) -> None:
-    for p in global_.prompts:
-        prompt_data = p.prompt
-        if len(p.tool_functions) > 0:
-            resolvable_tool_functions = []
-            for f in p.tool_functions:
-                if isinstance(f, CodeFunction):
-                    resolvable_tool_functions.append(
-                        {
-                            "type": "slug",
-                            "project_id": project_ids.get(f.project),
-                            "slug": f.slug,
-                        }
-                    )
-                else:
-                    resolvable_tool_functions.append(f)
-            prompt_data["tool_functions"] = resolvable_tool_functions
-        j = {
-            "project_id": project_ids.get(p.project),
-            "name": p.name,
-            "slug": p.slug,
-            "function_data": {
-                "type": "prompt",
-            },
-            "prompt_data": prompt_data,
-            "if_exists": p.if_exists if p.if_exists is not None else if_exists,
-        }
-        if p.description is not None:
-            j["description"] = p.description
-        if p.function_type is not None:
-            j["function_type"] = p.function_type
-        functions.append(j)
+    for p in global_.projects:
+        for f in p._publishable_prompts:  # type: ignore
+            functions.append(f.to_function_definition(if_exists, project_ids))
 
 
 def run(args):

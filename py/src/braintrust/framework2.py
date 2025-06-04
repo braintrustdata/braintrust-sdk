@@ -6,7 +6,6 @@ import slugify
 
 from braintrust.logger import api_conn, app_conn, login
 
-from .framework import _is_lazy_load  # type: ignore
 from .types import (
     ChatCompletionMessageParam,
     IfExists,
@@ -31,23 +30,10 @@ class _ProjectIdCache:
 
 class _GlobalState:
     def __init__(self):
-        self.functions: List[CodeFunction] = []
-        self.prompts: List[CodePrompt] = []
-        self._project_id_cache = _ProjectIdCache()
+        self.projects: List[Project] = []
 
-    def add_function(self, function: "CodeFunction"):
-        if _is_lazy_load():
-            self.functions.append(function)
-        else:
-            raise ValueError("Function definitions can only be added while using `braintrust push`")
-
-    def add_prompt(self, prompt: "CodePrompt"):
-        if _is_lazy_load():
-            self.prompts.append(prompt)
-        else:
-            login()
-            function_definition = prompt.to_prompt_data("error", self._project_id_cache)
-            return api_conn().post_json("insert-functions", {"functions": [function_definition]})
+    def add_project(self, project: "Project"):
+        self.projects.append(project)
 
 
 global_ = _GlobalState()
@@ -82,7 +68,7 @@ class CodePrompt:
     id: Optional[str]
     if_exists: Optional[IfExists]
 
-    def to_prompt_data(self, if_exists: IfExists, project_ids: _ProjectIdCache) -> Dict[str, Any]:
+    def to_function_definition(self, if_exists: IfExists, project_ids: _ProjectIdCache) -> Dict[str, Any]:
         prompt_data = self.prompt
         if len(self.tool_functions) > 0:
             resolvable_tool_functions: List[Any] = []
@@ -168,7 +154,7 @@ class ToolBuilder:
             returns=returns,
             if_exists=if_exists,
         )
-        global_.add_function(f)
+        self.project._publishable_code_functions.append(f)  # type: ignore
         return f
 
 
@@ -287,7 +273,7 @@ class PromptBuilder:
             id=id,
             if_exists=if_exists,
         )
-        global_.add_prompt(p)
+        self.project._publishable_prompts.append(p)  # type: ignore
         return p
 
 
@@ -412,7 +398,7 @@ class ScorerBuilder:
                 returns=returns,
                 if_exists=if_exists,
             )
-            global_.add_function(f)
+            self.project._publishable_code_functions.append(f)  # type: ignore
         else:  # LLM scorer
             assert model is not None
             assert use_cot is not None
@@ -449,7 +435,7 @@ class ScorerBuilder:
                 id=None,
                 if_exists=if_exists,
             )
-            global_.add_prompt(p)
+            self.project._publishable_prompts.append(p)  # type: ignore
 
 
 class Project:
@@ -460,6 +446,22 @@ class Project:
         self.tools = ToolBuilder(self)
         self.prompts = PromptBuilder(self)
         self.scorers = ScorerBuilder(self)
+
+        self._publishable_code_functions: List[CodeFunction] = []
+        self._publishable_prompts: List[CodePrompt] = []
+
+    def publish(self):
+        login()
+        project_id_cache = _ProjectIdCache()
+
+        definitions: List[Dict[str, Any]] = []
+        if self._publishable_code_functions:
+            raise ValueError("Code functions cannot be published directly. Use `braintrust push` instead.")
+
+        for prompt in self._publishable_prompts:
+            prompt_definition = prompt.to_function_definition("error", project_id_cache)
+            definitions.append(prompt_definition)
+        return api_conn().post_json("insert-functions", {"functions": definitions})
 
 
 class ProjectBuilder:

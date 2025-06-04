@@ -44,6 +44,16 @@ export class Project {
   public prompts: PromptBuilder;
   public scorers: ScorerBuilder;
 
+  public _publishableCodeFunctions: CodeFunction<
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    GenericFunction<any, any>
+  >[] = [];
+  public _publishablePrompts: CodePrompt[] = [];
+
   constructor(args: CreateProjectOpts) {
     _initializeSpanContext();
     this.name = "name" in args ? args.name : undefined;
@@ -51,6 +61,28 @@ export class Project {
     this.tools = new ToolBuilder(this);
     this.prompts = new PromptBuilder(this);
     this.scorers = new ScorerBuilder(this);
+  }
+
+  async publish() {
+    await login();
+    const projectMap = new ProjectNameIdMap();
+    const functionDefinitions: FunctionEvent[] = [];
+    if (this._publishableCodeFunctions.length > 0) {
+      throw new Error(
+        "Code functions cannot be published directly. Use `braintrust push` instead.",
+      );
+    }
+    if (this._publishablePrompts.length > 0) {
+      for (const prompt of this._publishablePrompts) {
+        const functionDefinition =
+          await prompt.toFunctionDefinition(projectMap);
+        functionDefinitions.push(functionDefinition);
+      }
+    }
+
+    return _internalGetGlobalState().apiConn().post_json("insert-functions", {
+      functions: functionDefinitions,
+    });
   }
 }
 
@@ -123,7 +155,7 @@ export class ScorerBuilder {
         slug,
         type: "scorer",
       });
-      addFunction(scorer);
+      this.project._publishableCodeFunctions.push(scorer);
     } else {
       const promptBlock: PromptBlockData =
         "messages" in opts
@@ -158,7 +190,7 @@ export class ScorerBuilder {
         },
         "scorer",
       );
-      addPrompt(codePrompt);
+      this.project._publishablePrompts.push(codePrompt);
     }
   }
 }
@@ -304,7 +336,7 @@ export class CodePrompt {
     this.functionType = functionType;
   }
 
-  async toPromptData(
+  async toFunctionDefinition(
     projectNameToId: ProjectNameIdMap,
   ): Promise<FunctionEvent> {
     const prompt_data = {
@@ -452,6 +484,7 @@ export class PromptBuilder {
       ...opts,
       slug,
     });
+    this.project._publishablePrompts.push(codePrompt);
 
     return prompt;
   }
@@ -542,39 +575,5 @@ export class ProjectNameIdMap {
       return project.id;
     }
     return this.getId(project.name!);
-  }
-}
-
-const _nonLazyProjectMap = new ProjectNameIdMap();
-function addFunction<Input, Output, Fn extends GenericFunction<Input, Output>>(
-  fn: CodeFunction<Input, Output, Fn>,
-) {
-  if (globalThis._lazy_load) {
-    globalThis._evals.functions.push(
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      fn as CodeFunction<unknown, unknown, GenericFunction<unknown, unknown>>,
-    );
-  } else {
-    throw new Error(
-      "Function definitions can only be added while using `braintrust push`",
-    );
-  }
-}
-
-function addPrompt(prompt: CodePrompt) {
-  if (globalThis._lazy_load) {
-    globalThis._evals.prompts.push(prompt);
-  } else {
-    (async () => {
-      await login();
-      const function_definition = await prompt.toPromptData(_nonLazyProjectMap);
-      return _internalGetGlobalState()
-        .appConn()
-        .post_json("insert-functions", {
-          functions: [function_definition],
-        });
-    })().catch((e) => {
-      console.error("Failed to publish prompt", e);
-    });
   }
 }
