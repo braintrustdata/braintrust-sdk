@@ -302,11 +302,10 @@ def run(args):
 
     project_ids = ProjectIdCache()
     functions: List[Dict[str, Any]] = []
-    if len(global_.functions) > 0:
+    if global_.has_code_functions():
         bundle_id = _upload_bundle(module_name, sources, args.requirements)
         _collect_function_function_defs(project_ids, functions, bundle_id, args.if_exists)
-    if len(global_.prompts) > 0:
-        _collect_prompt_function_defs(project_ids, functions, args.if_exists)
+    _collect_prompt_function_defs(project_ids, functions, args.if_exists)
 
     if len(functions) > 0:
         api_conn().post_json("insert-functions", {"functions": functions})

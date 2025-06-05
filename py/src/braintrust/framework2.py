@@ -35,6 +35,9 @@ class _GlobalState:
     def add_project(self, project: "Project"):
         self.projects.append(project)
 
+    def has_code_functions(self) -> bool:
+        return any(p._publishable_code_functions for p in self.projects)
+
 
 global_ = _GlobalState()
 
