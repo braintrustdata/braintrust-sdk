@@ -17,7 +17,7 @@ from .types import (
 )
 
 
-class _ProjectIdCache:
+class ProjectIdCache:
     def __init__(self):
         self._cache: Dict[Project, str] = {}
 
@@ -68,7 +68,7 @@ class CodePrompt:
     id: Optional[str]
     if_exists: Optional[IfExists]
 
-    def to_function_definition(self, if_exists: IfExists, project_ids: _ProjectIdCache) -> Dict[str, Any]:
+    def to_function_definition(self, if_exists: IfExists, project_ids: ProjectIdCache) -> Dict[str, Any]:
         prompt_data = self.prompt
         if len(self.tool_functions) > 0:
             resolvable_tool_functions: List[Any] = []
@@ -452,7 +452,7 @@ class Project:
 
     def publish(self):
         login()
-        project_id_cache = _ProjectIdCache()
+        project_id_cache = ProjectIdCache()
 
         definitions: List[Dict[str, Any]] = []
         if self._publishable_code_functions:

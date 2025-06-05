@@ -17,8 +17,10 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from braintrust.framework import _set_lazy_load
+
 from .. import api_conn, login, org_id, proxy_conn
-from ..framework2 import CodeFunction, _ProjectIdCache, global_
+from ..framework2 import ProjectIdCache, global_
 from ..types import IfExists
 from ..util import add_azure_blob_headers
 
@@ -211,7 +213,7 @@ def _upload_bundle(entry_module_name: str, sources: List[str], requirements: Opt
 
 
 def _collect_function_function_defs(
-    project_ids: _ProjectIdCache, functions: List[Dict[str, Any]], bundle_id: str, if_exists: IfExists
+    project_ids: ProjectIdCache, functions: List[Dict[str, Any]], bundle_id: str, if_exists: IfExists
 ) -> None:
     for p in global_.projects:
         for i, f in enumerate(p._publishable_code_functions):  # type: ignore
@@ -260,7 +262,7 @@ def _collect_function_function_defs(
 
 
 def _collect_prompt_function_defs(
-    project_ids: _ProjectIdCache, functions: List[Dict[str, Any]], if_exists: IfExists
+    project_ids: ProjectIdCache, functions: List[Dict[str, Any]], if_exists: IfExists
 ) -> None:
     for p in global_.projects:
         for f in p._publishable_prompts:  # type: ignore
@@ -298,7 +300,7 @@ def run(args):
     except Exception as e:
         raise
 
-    project_ids = _ProjectIdCache()
+    project_ids = ProjectIdCache()
     functions: List[Dict[str, Any]] = []
     if len(global_.functions) > 0:
         bundle_id = _upload_bundle(module_name, sources, args.requirements)
