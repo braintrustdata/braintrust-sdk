@@ -44,6 +44,7 @@ export const tableViewOptionsSchema = z
     grouping: z.string().nullish(),
     rowHeight: z.string().nullish(),
     layout: z.string().nullish(),
+    chartHeight: z.number().nullish(),
   })
   .strip()
   .openapi({ title: "TableViewOptions" });
