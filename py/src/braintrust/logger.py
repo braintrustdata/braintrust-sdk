@@ -641,6 +641,9 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
             return first
 
 
+BACKGROUND_LOGGER_BASE_SLEEP_TIME_S = 1.0
+
+
 # We should only have one instance of this object in
 # 'BraintrustState._global_bg_logger'. Be careful about spawning multiple
 # instances of this class, because concurrent _BackgroundLoggers will not log to
@@ -851,7 +854,9 @@ class _HTTPBackgroundLogger:
                     print(errmsg, file=self.outfile)
                     traceback.print_exc(file=self.outfile)
                     if is_retrying:
-                        time.sleep(0.1)
+                        sleep_time_s = BACKGROUND_LOGGER_BASE_SLEEP_TIME_S * (2**i)
+                        print(f"Sleeping for {sleep_time_s}s", file=self.outfile)
+                        time.sleep(sleep_time_s)
 
         print(
             f"Failed to construct log records to flush after {self.num_tries} attempts. Dropping batch",
@@ -886,7 +891,9 @@ class _HTTPBackgroundLogger:
             else:
                 print(errmsg, file=self.outfile)
                 if is_retrying:
-                    time.sleep(0.1)
+                    sleep_time_s = BACKGROUND_LOGGER_BASE_SLEEP_TIME_S * (2**i)
+                    print(f"Sleeping for {sleep_time_s}s", file=self.outfile)
+                    time.sleep(sleep_time_s)
 
         print(f"log request failed after {self.num_tries} retries. Dropping batch", file=self.outfile)
 
@@ -1525,10 +1532,15 @@ def login(
         # this point because we know the connection _can_ successfully ping.
         conn.make_long_lived()
 
+        # Same for the app conn, which we know is valid because we have
+        # successfully logged in.
+        _state.app_conn().make_long_lived()
+
         # Set the same token in the API
         _state.app_conn().set_token(conn.token)
         if _state.proxy_url:
             _state.proxy_conn().set_token(conn.token)
+            _state.proxy_conn().make_long_lived()
         _state.login_token = conn.token
         _state.logged_in = True
 

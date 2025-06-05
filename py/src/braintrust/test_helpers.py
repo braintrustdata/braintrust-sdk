@@ -132,17 +132,28 @@ def test_memory_logger():
         assert logs
 
 
-def assert_dict_matches(actual, expected):
+def assert_dict_matches(actual, expected, exact_keys=False):
     """Assert that actual dictionary matches expected dictionary.
 
         The expected dictionary can be a subset of actual (i.e. actual can have additional keys).
         Values in expected can be functions that validate the actual value.
+
+    Args:
+        actual: The actual dictionary to check
+        expected: The expected dictionary pattern to match
+        exact_keys: If True, actual and expected must have exactly the same keys.
+                   If False (default), actual can have keys not in expected.
 
     +    assert_dict_matches({"a":"a", "b":2, "c":3}, {
     +        "a": "a",  # Values match exactly
     +        "b": lambda x: isinstance(x, int)  # Custom validation with lambda
     +    })  # => passes
     """
+    if exact_keys:
+        actual_keys = set(actual.keys())
+        expected_keys = set(expected.keys())
+        assert actual_keys == expected_keys, f"Key sets do not match. Actual: {actual_keys}, Expected: {expected_keys}"
+
     for key, expected_val in expected.items():
         assert key in actual, f"Expected key '{key}' not found"
 
@@ -153,10 +164,10 @@ def assert_dict_matches(actual, expected):
             assert expected_val(actual_val), f"Validation failed for key '{key}': {actual_val}"
         elif isinstance(expected_val, dict) and isinstance(actual_val, dict):
             # Recursively validate nested dictionaries
-            assert_dict_matches(actual_val, expected_val)
+            assert_dict_matches(actual_val, expected_val, exact_keys)
         elif isinstance(expected_val, (list, tuple)) and isinstance(actual_val, (list, tuple)):
             # Handle lists and tuples - must match exactly
-            _assert_sequence_matches(actual_val, expected_val, key)
+            _assert_sequence_matches(actual_val, expected_val, key, exact_keys)
         else:
             # Direct value comparison
             assert (
@@ -164,7 +175,7 @@ def assert_dict_matches(actual, expected):
             ), f"Value mismatch for key '{key}': expected {expected_val}, got {actual_val}"
 
 
-def _assert_sequence_matches(actual_seq, expected_seq, key):
+def _assert_sequence_matches(actual_seq, expected_seq, key, exact_keys=False):
     """Helper function to match sequences (lists/tuples) exactly."""
     assert len(expected_seq) == len(
         actual_seq
@@ -173,10 +184,10 @@ def _assert_sequence_matches(actual_seq, expected_seq, key):
     for i, (expected_item, actual_item) in enumerate(zip(expected_seq, actual_seq)):
         if isinstance(expected_item, dict) and isinstance(actual_item, dict):
             # Recursively validate nested dictionaries
-            assert_dict_matches(actual_item, expected_item)
+            assert_dict_matches(actual_item, expected_item, exact_keys)
         elif isinstance(expected_item, (list, tuple)) and isinstance(actual_item, (list, tuple)):
             # Recursively validate nested sequences
-            _assert_sequence_matches(actual_item, expected_item, f"{key}[{i}]")
+            _assert_sequence_matches(actual_item, expected_item, f"{key}[{i}]", exact_keys)
         else:
             # Direct value comparison
             assert (
@@ -218,6 +229,32 @@ def test_assert_dict_matches():
 
     # Test empty expected dict should pass (matches any actual dict)
     assert_dict_matches(d, {})
+
+
+def test_assert_dict_matches_exact_keys():
+    """Test exact key matching."""
+    actual = {"a": 1, "b": 2, "c": 3}
+
+    # Exact match should pass
+    assert_dict_matches(actual, {"a": 1, "b": 2, "c": 3}, exact_keys=True)
+
+    # Missing key in expected should fail
+    with pytest.raises(AssertionError, match="Key sets do not match"):
+        assert_dict_matches(actual, {"a": 1, "b": 2}, exact_keys=True)
+
+    # Extra key in expected should fail
+    with pytest.raises(AssertionError, match="Key sets do not match"):
+        assert_dict_matches(actual, {"a": 1, "b": 2, "c": 3, "d": 4}, exact_keys=True)
+
+    # Test with nested dictionaries
+    actual_nested = {"outer": {"a": 1, "b": 2}}
+
+    # Exact nested match should pass
+    assert_dict_matches(actual_nested, {"outer": {"a": 1, "b": 2}}, exact_keys=True)
+
+    # Missing nested key should fail
+    with pytest.raises(AssertionError, match="Key sets do not match"):
+        assert_dict_matches(actual_nested, {"outer": {"a": 1}}, exact_keys=True)
 
 
 def test_assert_dict_matches_with_lists_and_tuples():

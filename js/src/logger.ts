@@ -1925,6 +1925,8 @@ export class TestBackgroundLogger implements BackgroundLogger {
   }
 }
 
+const BACKGROUND_LOGGER_BASE_SLEEP_TIME_S = 1.0;
+
 // We should only have one instance of this object per state object in
 // 'BraintrustState._bgLogger'. Be careful about spawning multiple
 // instances of this class, because concurrent BackgroundLoggers will not log to
@@ -2169,7 +2171,11 @@ class HTTPBackgroundLogger implements BackgroundLogger {
           throw e;
         } else {
           console.warn(e);
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          const sleepTimeS = BACKGROUND_LOGGER_BASE_SLEEP_TIME_S * 2 ** i;
+          console.info(`Sleeping for ${sleepTimeS}s`);
+          await new Promise((resolve) =>
+            setTimeout(resolve, sleepTimeS * 1000),
+          );
         }
       }
     }
@@ -2229,7 +2235,11 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       } else {
         console.warn(errMsg);
         if (isRetrying) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          const sleepTimeS = BACKGROUND_LOGGER_BASE_SLEEP_TIME_S * 2 ** i;
+          console.info(`Sleeping for ${sleepTimeS}s`);
+          await new Promise((resolve) =>
+            setTimeout(resolve, sleepTimeS * 1000),
+          );
         }
       }
     }
