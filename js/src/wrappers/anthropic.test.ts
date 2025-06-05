@@ -44,7 +44,7 @@ test("anthropic is installed", () => {
   expect(Anthropic).toBeDefined();
 });
 
-describe("anthropic client unit tests", () => {
+describe("anthropic client unit tests", { retry: 3 }, () => {
   let anthropic: Anthropic;
   let client: any;
   let backgroundLogger: any;

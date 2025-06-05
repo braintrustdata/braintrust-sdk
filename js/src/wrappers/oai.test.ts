@@ -22,7 +22,7 @@ import { parseMetricsFromUsage } from "./oai_responses";
 
 // use the cheapest model for tests
 const TEST_MODEL = "gpt-4o-mini";
-const TEST_SUITE_OPTIONS = { timeout: 10000 };
+const TEST_SUITE_OPTIONS = { timeout: 10000, retry: 3 };
 
 try {
   configureNode();
