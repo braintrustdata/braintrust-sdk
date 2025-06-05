@@ -122,7 +122,7 @@ def test_openai_responses_metrics(memory_logger):
     assert 0 <= metrics.get("prompt_cached_tokens", 0)
     assert 0 <= metrics.get("completion_reasoning_tokens", 0)
     assert span["metadata"]["model"] == TEST_MODEL
-    # assert span["metadata"]["provider"] == "openai"
+    assert span["metadata"]["provider"] == "openai"
     assert TEST_PROMPT in str(span["input"])
 
 
@@ -154,7 +154,7 @@ def test_openai_embeddings(memory_logger):
     span = spans[0]
     assert span
     assert span["metadata"]["model"] == "text-embedding-ada-002"
-    # assert span["metadata"]["provider"] == "openai"
+    assert span["metadata"]["provider"] == "openai"
     assert "This is a test" in str(span["input"])
 
 
@@ -417,7 +417,7 @@ async def test_openai_embeddings_async(memory_logger):
         span = spans[0]
         assert span
         assert span["metadata"]["model"] == "text-embedding-ada-002"
-        # assert span["metadata"]["provider"] == "openai"
+        assert span["metadata"]["provider"] == "openai"
         assert "This is a test" in str(span["input"])
 
 
@@ -796,6 +796,7 @@ def test_openai_not_given_filtering(memory_logger):
             "input": [{"role": "user", "content": TEST_PROMPT}],
             "metadata": {
                 "model": TEST_MODEL,
+                "provider": "openai",
                 "temperature": 0.5,
             },
         },
@@ -845,6 +846,7 @@ def test_openai_responses_not_given_filtering(memory_logger):
             "input": TEST_PROMPT,
             "metadata": {
                 "model": TEST_MODEL,
+                "provider": "openai",
                 "temperature": 0.5,
                 "instructions": "Just the number please",
             },
