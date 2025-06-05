@@ -69,7 +69,7 @@ def test_openai_chat_metrics(memory_logger):
         metrics = span["metrics"]
         assert_metrics_are_valid(metrics, start, end)
         assert span["metadata"]["model"] == TEST_MODEL
-        # assert span["metadata"]["provider"] == "openai"
+        assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
 
 

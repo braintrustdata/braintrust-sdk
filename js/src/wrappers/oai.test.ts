@@ -127,6 +127,7 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.ok(span);
     assert.equal(span.span_attributes.type, "llm");
     assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.metadata.provider, "openai");
     const m = span.metrics;
     assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
     assert.isTrue(m.tokens > 0);
@@ -177,6 +178,7 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.equal(span.span_attributes.type, "llm");
     assert.equal(span.input[0].content, "What is 6x6?");
     assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.metadata.provider, "openai");
     expect(span.output).toContain("36");
 
     const m = span.metrics;
@@ -226,6 +228,7 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.equal(input[1].content, "the whole poem, strip punctuation");
     assert.equal(input[1].role, "system");
     assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.metadata.provider, "openai");
     assert.equal(span.metadata.temperature, 0.5);
     // This line takes the output text, converts it to lowercase, and removes all characters
     // except letters, numbers and whitespace using a regex
@@ -265,6 +268,7 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.equal(span.span_attributes.type, "llm");
     assert.equal(span.input[0].content, "What is the capital of France?");
     assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.metadata.provider, "openai");
     expect(span.output).toContain("Paris");
     const m = span.metrics;
     assert.isTrue(m.tokens > 0);
