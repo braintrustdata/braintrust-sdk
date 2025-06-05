@@ -679,7 +679,7 @@ class _HTTPBackgroundLogger:
         try:
             self.queue_maxsize = int(os.environ["BRAINTRUST_QUEUE_SIZE"])
         except:
-            self.queue_maxsize = 1000
+            self.queue_maxsize = 5000
 
         try:
             self.queue_drop_logging_period = float(os.environ["BRAINTRUST_QUEUE_DROP_LOGGING_PERIOD"])
