@@ -206,8 +206,6 @@ async def test_queue_concurrent_drops_and_drains():
 
 def test_log_queue_thread_safety():
     """Test that queue operations are thread-safe under concurrent access"""
-    import threading
-    import time
 
     queue = LogQueue(maxsize=5)
     total_added = 0
