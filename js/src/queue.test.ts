@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { Queue, Deque } from "./queue";
+import { Queue } from "./queue";
 
 test("Queue basic operations - push, drain, length", () => {
   const queue = new Queue<number>(0);
@@ -81,159 +81,152 @@ test("Queue should maintain order with mixed operations", () => {
   expect(drained).toEqual([4, 5, 6, 7]);
 });
 
-test("Deque basic operations - push and drain", () => {
-  const deque = new Deque<number>(5);
+test("Queue basic operations - push and drain", () => {
+  const queue = new Queue<number>(5);
 
-  expect(deque.length()).toBe(0);
+  expect(queue.length()).toBe(0);
 
-  const dropped1 = deque.push(1, 2, 3);
+  const dropped1 = queue.push(1, 2, 3);
   expect(dropped1).toEqual([]);
 
-  expect(deque.length()).toBe(3);
+  expect(queue.length()).toBe(3);
 
-  const drained = deque.drain();
+  const drained = queue.drain();
   expect(drained).toEqual([1, 2, 3]);
 
-  expect(deque.length()).toBe(0);
+  expect(queue.length()).toBe(0);
 
-  const emptyDrain = deque.drain();
+  const emptyDrain = queue.drain();
   expect(emptyDrain).toEqual([]);
 });
 
-test("Deque with maxSize should overwrite oldest items", () => {
-  const deque = new Deque<number>(3);
+test("Queue with maxSize should overwrite oldest items", () => {
+  const queue = new Queue<number>(3);
 
-  const dropped1 = deque.push(1, 2, 3);
+  const dropped1 = queue.push(1, 2, 3);
   expect(dropped1).toEqual([]);
-  expect(deque.length()).toBe(3);
+  expect(queue.length()).toBe(3);
 
-  const dropped2 = deque.push(4);
+  const dropped2 = queue.push(4);
   expect(dropped2).toEqual([1]);
-  expect(deque.length()).toBe(3);
+  expect(queue.length()).toBe(3);
 
-  const drained = deque.drain();
+  const drained = queue.drain();
   expect(drained).toEqual([2, 3, 4]);
 });
 
-test("Deque edge case - capacity 1", () => {
-  const deque = new Deque<number>(1);
+test("Queue edge case - capacity 1", () => {
+  const queue = new Queue<number>(1);
 
-  const dropped1 = deque.push(1);
+  const dropped1 = queue.push(1);
   expect(dropped1).toEqual([]);
-  expect(deque.length()).toBe(1);
+  expect(queue.length()).toBe(1);
 
-  const dropped2 = deque.push(2);
+  const dropped2 = queue.push(2);
   expect(dropped2).toEqual([1]);
-  expect(deque.length()).toBe(1);
+  expect(queue.length()).toBe(1);
 
-  const drained = deque.drain();
+  const drained = queue.drain();
   expect(drained).toEqual([2]);
 
-  expect(deque.length()).toBe(0);
-  const emptyDrain = deque.drain();
+  expect(queue.length()).toBe(0);
+  const emptyDrain = queue.drain();
   expect(emptyDrain).toEqual([]);
 });
 
-test("Deque circular buffer wrapping", () => {
-  const deque = new Deque<number>(3);
+test("Queue circular buffer wrapping", () => {
+  const queue = new Queue<number>(3);
 
   // Fill completely
-  deque.push(1, 2, 3);
-  expect(deque.length()).toBe(3);
+  queue.push(1, 2, 3);
+  expect(queue.length()).toBe(3);
 
   // Test overflow behavior - should drop oldest items
-  const dropped = deque.push(4, 5);
+  const dropped = queue.push(4, 5);
   expect(dropped).toEqual([1, 2]);
-  expect(deque.length()).toBe(3);
+  expect(queue.length()).toBe(3);
 
   // Verify remaining items in correct order
-  const drained = deque.drain();
+  const drained = queue.drain();
   expect(drained).toEqual([3, 4, 5]);
 });
 
-test("Deque peek method returns next item without removing it", () => {
-  const deque = new Deque<number>(3);
+test("Queue peek method returns next item without removing it", () => {
+  const queue = new Queue<number>(3);
 
-  expect(deque.peek()).toBe(undefined);
+  expect(queue.peek()).toBe(undefined);
 
-  deque.push(1, 2);
+  queue.push(1, 2);
 
-  expect(deque.peek()).toBe(1);
-  expect(deque.length()).toBe(2);
+  expect(queue.peek()).toBe(1);
+  expect(queue.length()).toBe(2);
 
-  expect(deque.popLeft()).toBe(1);
-  expect(deque.peek()).toBe(2);
+  // Note: We removed popLeft method, so this test now uses drain to verify peek
+  const firstItem = queue.peek();
+  expect(firstItem).toBe(1);
 
-  expect(deque.popLeft()).toBe(2);
-  expect(deque.peek()).toBe(undefined);
+  const drained = queue.drain();
+  expect(drained).toEqual([1, 2]);
+  expect(queue.peek()).toBe(undefined);
 });
 
-test("Deque clears popped items from memory", () => {
-  const deque = new Deque<{ value: number }>(2);
+test("Queue clears items from memory", () => {
+  const queue = new Queue<{ value: number }>(2);
 
   const obj1 = { value: 1 };
   const obj2 = { value: 2 };
   const obj3 = { value: 3 };
 
-  deque.push(obj1, obj2);
-
-  // Pop item and verify it's cleared from internal buffer
-  const popped = deque.popLeft();
-  expect(popped).toBe(obj1);
-
-  // Verify buffer slot is cleared (peek at internal state via any casting for test)
-  const buffer = (deque as any).buffer;
-  const head = (deque as any).head;
-  expect(buffer[(head - 1 + buffer.length) % buffer.length]).toBe(undefined);
+  queue.push(obj1, obj2);
 
   // Fill to capacity to trigger overwrite
-  deque.push(obj3);
+  queue.push(obj3);
 
-  // The slot where obj2 was should still contain obj2 since it hasn't been popped
-  expect(deque.peek()).toBe(obj2);
+  // Verify buffer handles overwrites correctly
+  expect(queue.length()).toBe(2);
+  expect(queue.peek()).toBe(obj2);
 });
 
-test("Deque drain returns all items and clears deque", () => {
-  const deque = new Deque<number>(5);
+test("Queue drain returns all items and clears queue", () => {
+  const queue = new Queue<number>(5);
 
-  expect(deque.drain()).toEqual([]);
+  expect(queue.drain()).toEqual([]);
 
-  deque.push(1, 2, 3);
+  queue.push(1, 2, 3);
 
-  const drained = deque.drain();
+  const drained = queue.drain();
   expect(drained).toEqual([1, 2, 3]);
-  expect(deque.length()).toBe(0);
-  expect(deque.peek()).toBe(undefined);
+  expect(queue.length()).toBe(0);
+  expect(queue.peek()).toBe(undefined);
 
   // Verify we can use it again after drain
-  deque.push(4);
-  expect(deque.peek()).toBe(4);
+  queue.push(4);
+  expect(queue.peek()).toBe(4);
 });
 
-test("Deque clear method empties deque", () => {
-  const deque = new Deque<number>(5);
+test("Queue clear method empties queue", () => {
+  const queue = new Queue<number>(5);
 
-  deque.push(1, 2, 3);
-  expect(deque.length()).toBe(3);
+  queue.push(1, 2, 3);
+  expect(queue.length()).toBe(3);
 
-  deque.clear();
-  expect(deque.length()).toBe(0);
-  expect(deque.peek()).toBe(undefined);
-  expect(deque.popLeft()).toBe(undefined);
+  queue.clear();
+  expect(queue.length()).toBe(0);
+  expect(queue.peek()).toBe(undefined);
 });
 
-test("Deque handles maxSize < 1 by using 5000", () => {
-  const deque = new Deque<number>(-1);
+test("Queue handles maxSize < 1 by using 5000", () => {
+  const queue = new Queue<number>(-1);
 
   // Should be able to add many items without dropping any
   const items = Array.from({ length: 100 }, (_, i) => i);
-  const dropped = deque.push(...items);
+  const dropped = queue.push(...items);
 
   expect(dropped).toEqual([]);
-  expect(deque.length()).toBe(100);
+  expect(queue.length()).toBe(100);
 });
 
-test("Performance: Queue vs Deque comparison", () => {
+test("Performance: Queue comparison", () => {
   function runTest<
     T extends {
       push(...items: number[]): number[];
@@ -379,55 +372,35 @@ test("Performance: Queue vs Deque comparison", () => {
     return performance.now() - start;
   }
 
-  console.log("\nPerformance Comparison Table:");
-  console.log("=====================================");
-  console.log(
-    "Size   | Test Type           | Queue (ms) | Deque (ms) | Speedup",
-  );
-  console.log(
-    "-------|---------------------|------------|------------|--------",
-  );
+  console.log("\nPerformance Test Results:");
+  console.log("=========================");
 
-  for (const size of [1000, 5000, 10000]) {
+  for (const size of [1000, 5000]) {
     // Test 1: Fill without overflow
     const queueFillNoOverflow = runFillNoOverflow(Queue, size);
-    const dequeFillNoOverflow = runFillNoOverflow(Deque, size);
-    const speedup1 = (queueFillNoOverflow / dequeFillNoOverflow).toFixed(1);
     console.log(
-      `${size.toString().padStart(6)} | Fill (no overflow)  | ${queueFillNoOverflow.toFixed(2).padStart(10)} | ${dequeFillNoOverflow.toFixed(2).padStart(10)} | ${speedup1}x`,
+      `Queue (size ${size}) - Fill (no overflow): ${queueFillNoOverflow.toFixed(2)}ms`,
     );
 
     // Test 2: Fill with overflow
     const queueFillOverflow = runFillWithOverflow(Queue, size);
-    const dequeFillOverflow = runFillWithOverflow(Deque, size);
-    const speedup2 = (queueFillOverflow / dequeFillOverflow).toFixed(1);
     console.log(
-      `${size.toString().padStart(6)} | Fill (with overflow)| ${queueFillOverflow.toFixed(2).padStart(10)} | ${dequeFillOverflow.toFixed(2).padStart(10)} | ${speedup2}x`,
+      `Queue (size ${size}) - Fill (with overflow): ${queueFillOverflow.toFixed(2)}ms`,
     );
 
     // Test 3: Small fill/drain cycles
     const queueSmall = runSmallFillDrain(Queue, size);
-    const dequeSmall = runSmallFillDrain(Deque, size);
-    const speedup3 = (queueSmall / dequeSmall).toFixed(1);
     console.log(
-      `${size.toString().padStart(6)} | Small fill/drain    | ${queueSmall.toFixed(2).padStart(10)} | ${dequeSmall.toFixed(2).padStart(10)} | ${speedup3}x`,
+      `Queue (size ${size}) - Small fill/drain: ${queueSmall.toFixed(2)}ms`,
     );
 
     // Test 4: Cycle operations
     const queueCycle = runCycleOperations(Queue, size);
-    const dequeCycle = runCycleOperations(Deque, size);
-    const speedup4 = (queueCycle / dequeCycle).toFixed(1);
     console.log(
-      `${size.toString().padStart(6)} | Cycle operations    | ${queueCycle.toFixed(2).padStart(10)} | ${dequeCycle.toFixed(2).padStart(10)} | ${speedup4}x`,
+      `Queue (size ${size}) - Cycle operations: ${queueCycle.toFixed(2)}ms`,
     );
-
-    if (size < 10000)
-      console.log(
-        "-------|---------------------|------------|------------|--------",
-      );
 
     // Verify tests completed
     expect(queueFillNoOverflow).toBeGreaterThan(0);
-    expect(dequeFillNoOverflow).toBeGreaterThan(0);
   }
 });
