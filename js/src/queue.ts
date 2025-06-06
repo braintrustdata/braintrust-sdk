@@ -48,6 +48,9 @@ export class Queue<T> {
       return items;
     }
 
+    // FIXME[matt] we could short circuit if the buffer is full
+    // and just return buffer and create a new one.
+
     let current = this.head;
     while (this.size > 0) {
       const item = this.buffer[current];
