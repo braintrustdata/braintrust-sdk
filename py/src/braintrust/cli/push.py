@@ -215,58 +215,56 @@ def _upload_bundle(entry_module_name: str, sources: List[str], requirements: Opt
 def _collect_function_function_defs(
     project_ids: ProjectIdCache, functions: List[Dict[str, Any]], bundle_id: str, if_exists: IfExists
 ) -> None:
-    for p in global_.projects:
-        for i, f in enumerate(p._publishable_code_functions):  # type: ignore
-            source = inspect.getsource(f.handler)
-            if f.handler.__name__ == "<lambda>":
-                m = re.search(r"handler\s*=\s*(.+)\s*[,)]", source)
-                if m is None:
-                    raise ValueError(f"Failed to find handler for {f.name}")
-                source = m.group(1)
-            j = {
-                "project_id": project_ids.get(f.project),
-                "name": f.name,
-                "slug": f.slug,
-                "description": f.description,
-                "function_data": {
-                    "type": "code",
-                    "data": {
-                        "type": "bundle",
-                        "runtime_context": {
-                            "runtime": "python",
-                            "version": _py_version(),
-                        },
-                        "location": {
-                            "type": "function",
-                            "index": i,
-                        },
-                        "bundle_id": bundle_id,
-                        "preview": source.strip(),
+    for i, f in enumerate(global_.functions):
+        source = inspect.getsource(f.handler)
+        if f.handler.__name__ == "<lambda>":
+            m = re.search(r"handler\s*=\s*(.+)\s*[,)]", source)
+            if m is None:
+                raise ValueError(f"Failed to find handler for {f.name}")
+            source = m.group(1)
+        j = {
+            "project_id": project_ids.get(f.project),
+            "name": f.name,
+            "slug": f.slug,
+            "description": f.description,
+            "function_data": {
+                "type": "code",
+                "data": {
+                    "type": "bundle",
+                    "runtime_context": {
+                        "runtime": "python",
+                        "version": _py_version(),
                     },
+                    "location": {
+                        "type": "function",
+                        "index": i,
+                    },
+                    "bundle_id": bundle_id,
+                    "preview": source.strip(),
                 },
-                "function_type": f.type_,
-                "function_schema": {
-                    "parameters": f.parameters,
-                    "returns": f.returns,
-                },
-                "if_exists": f.if_exists if f.if_exists else if_exists,
-            }
-            if f.parameters is None:
-                raise ValueError(f"Function {f.name} has no supplied parameters")
-            j["function_schema"] = {
-                "parameters": _pydantic_to_json_schema(f.parameters),
-            }
-            if f.returns is not None:
-                j["function_schema"]["returns"] = _pydantic_to_json_schema(f.returns)
-            functions.append(j)
+            },
+            "function_type": f.type_,
+            "function_schema": {
+                "parameters": f.parameters,
+                "returns": f.returns,
+            },
+            "if_exists": f.if_exists if f.if_exists else if_exists,
+        }
+        if f.parameters is None:
+            raise ValueError(f"Function {f.name} has no supplied parameters")
+        j["function_schema"] = {
+            "parameters": _pydantic_to_json_schema(f.parameters),
+        }
+        if f.returns is not None:
+            j["function_schema"]["returns"] = _pydantic_to_json_schema(f.returns)
+        functions.append(j)
 
 
 def _collect_prompt_function_defs(
     project_ids: ProjectIdCache, functions: List[Dict[str, Any]], if_exists: IfExists
 ) -> None:
-    for p in global_.projects:
-        for f in p._publishable_prompts:  # type: ignore
-            functions.append(f.to_function_definition(if_exists, project_ids))
+    for p in global_.prompts:
+        functions.append(p.to_function_definition(if_exists, project_ids))
 
 
 def run(args):
@@ -302,10 +300,11 @@ def run(args):
 
     project_ids = ProjectIdCache()
     functions: List[Dict[str, Any]] = []
-    if global_.has_code_functions():
+    if len(global_.functions) > 0:
         bundle_id = _upload_bundle(module_name, sources, args.requirements)
         _collect_function_function_defs(project_ids, functions, bundle_id, args.if_exists)
-    _collect_prompt_function_defs(project_ids, functions, args.if_exists)
+    if len(global_.prompts) > 0:
+        _collect_prompt_function_defs(project_ids, functions, args.if_exists)
 
     if len(functions) > 0:
         api_conn().post_json("insert-functions", {"functions": functions})

@@ -31,13 +31,8 @@ class ProjectIdCache:
 
 class _GlobalState:
     def __init__(self):
-        self.projects: List[Project] = []
-
-    def add_project(self, project: "Project"):
-        self.projects.append(project)
-
-    def has_code_functions(self) -> bool:
-        return any(p._publishable_code_functions for p in self.projects)  # type: ignore
+        self.functions: List[CodeFunction] = []
+        self.prompts: List[CodePrompt] = []
 
 
 global_ = _GlobalState()
@@ -158,7 +153,7 @@ class ToolBuilder:
             returns=returns,
             if_exists=if_exists,
         )
-        self.project._publishable_code_functions.append(f)  # type: ignore
+        self.project.add_code_function(f)
         return f
 
 
@@ -277,7 +272,7 @@ class PromptBuilder:
             id=id,
             if_exists=if_exists,
         )
-        self.project._publishable_prompts.append(p)  # type: ignore
+        self.project.add_prompt(p)
         return p
 
 
@@ -402,7 +397,7 @@ class ScorerBuilder:
                 returns=returns,
                 if_exists=if_exists,
             )
-            self.project._publishable_code_functions.append(f)  # type: ignore
+            self.project.add_code_function(f)
         else:  # LLM scorer
             assert model is not None
             assert use_cot is not None
@@ -439,7 +434,7 @@ class ScorerBuilder:
                 id=None,
                 if_exists=if_exists,
             )
-            self.project._publishable_prompts.append(p)  # type: ignore
+            self.project.add_prompt(p)
 
 
 class Project:
@@ -454,8 +449,15 @@ class Project:
         self._publishable_code_functions: List[CodeFunction] = []
         self._publishable_prompts: List[CodePrompt] = []
 
+    def add_code_function(self, fn: CodeFunction):
+        self._publishable_code_functions.append(fn)
         if _is_lazy_load():
-            global_.add_project(self)
+            global_.functions.append(fn)
+
+    def add_prompt(self, prompt: CodePrompt):
+        self._publishable_prompts.append(prompt)
+        if _is_lazy_load():
+            global_.prompts.append(prompt)
 
     def publish(self):
         login()
