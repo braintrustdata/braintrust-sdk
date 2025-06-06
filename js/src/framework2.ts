@@ -137,6 +137,7 @@ export class ToolBuilder {
       },
     );
 
+    this.project.addCodeFunction(tool);
     return tool;
   }
 }
