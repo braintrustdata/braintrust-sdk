@@ -9,7 +9,7 @@ import { queue } from "async";
 import chalk from "chalk";
 import pluralize from "pluralize";
 import { GenericFunction } from "./framework-types";
-import { CodeFunction, CodePrompt, Project } from "./framework2";
+import { CodeFunction, CodePrompt } from "./framework2";
 import {
   BaseMetadata,
   BraintrustState,
@@ -391,7 +391,12 @@ export type EvaluatorDef<
 } & Evaluator<Input, Output, Expected, Metadata, Parameters>;
 
 export type EvaluatorFile = {
-  projects: Project[];
+  functions: CodeFunction<
+    unknown,
+    unknown,
+    GenericFunction<unknown, unknown>
+  >[];
+  prompts: CodePrompt[];
   evaluators: {
     [evalName: string]: {
       evaluator: EvaluatorDef<
@@ -458,7 +463,8 @@ declare global {
 }
 
 globalThis._evals = {
-  projects: [],
+  functions: [],
+  prompts: [],
   evaluators: {},
   reporters: {},
 };

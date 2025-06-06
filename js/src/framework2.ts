@@ -44,7 +44,7 @@ export class Project {
   public prompts: PromptBuilder;
   public scorers: ScorerBuilder;
 
-  public _publishableCodeFunctions: CodeFunction<
+  private _publishableCodeFunctions: CodeFunction<
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -52,7 +52,7 @@ export class Project {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     GenericFunction<any, any>
   >[] = [];
-  public _publishablePrompts: CodePrompt[] = [];
+  private _publishablePrompts: CodePrompt[] = [];
 
   constructor(args: CreateProjectOpts) {
     _initializeSpanContext();
@@ -61,9 +61,28 @@ export class Project {
     this.tools = new ToolBuilder(this);
     this.prompts = new PromptBuilder(this);
     this.scorers = new ScorerBuilder(this);
+  }
 
+  public addPrompt(prompt: CodePrompt) {
+    this._publishablePrompts.push(prompt);
     if (globalThis._lazy_load) {
-      globalThis._evals.projects.push(this);
+      globalThis._evals.prompts.push(prompt);
+    }
+  }
+
+  public addCodeFunction(
+    fn: CodeFunction<
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      GenericFunction<any, any>
+    >,
+  ) {
+    this._publishableCodeFunctions.push(fn);
+    if (globalThis._lazy_load) {
+      globalThis._evals.functions.push(fn);
     }
   }
 
@@ -159,7 +178,7 @@ export class ScorerBuilder {
         slug,
         type: "scorer",
       });
-      this.project._publishableCodeFunctions.push(scorer);
+      this.project.addCodeFunction(scorer);
     } else {
       const promptBlock: PromptBlockData =
         "messages" in opts
@@ -194,7 +213,7 @@ export class ScorerBuilder {
         },
         "scorer",
       );
-      this.project._publishablePrompts.push(codePrompt);
+      this.project.addPrompt(codePrompt);
     }
   }
 }
@@ -488,7 +507,7 @@ export class PromptBuilder {
       ...opts,
       slug,
     });
-    this.project._publishablePrompts.push(codePrompt);
+    this.project.addPrompt(codePrompt);
 
     return prompt;
   }
