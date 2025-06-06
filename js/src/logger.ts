@@ -2,7 +2,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 
-import { Deque } from "./queue";
+import { Queue } from "./queue";
 import {
   _urljoin,
   AnyDatasetRecord,
@@ -1990,7 +1990,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       this.queueDropExceedingMaxsize = queueDropExceedingMaxsizeEnv;
     }
 
-    this.queue = new Deque(this.queueDropExceedingMaxsize);
+    this.queue = new Queue(this.queueDropExceedingMaxsize);
 
     const queueDropLoggingPeriodEnv = Number(
       iso.getEnv("BRAINTRUST_QUEUE_DROP_LOGGING_PERIOD"),

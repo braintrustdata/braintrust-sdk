@@ -1,9 +1,12 @@
-export class Deque<T> {
+// A simple queue that drops oldest items when full. It uses a circular
+// buffer to store items so that dropping oldest things in the queue
+// is O(1) time.
+export class Queue<T> {
   private buffer: Array<T | undefined>;
-  private head: number = 0;
-  private tail: number = 0;
-  private size: number = 0;
-  private capacity: number;
+  private head: number = 0; // the index of the first item in the queue
+  private tail: number = 0; // the index of the next item to be added
+  private size: number = 0; // the number of items in the queue
+  private capacity: number; // the maximum number of items the queue can hold
 
   constructor(maxSize: number) {
     this.capacity = maxSize < 1 ? 5000 : maxSize;
@@ -40,6 +43,9 @@ export class Deque<T> {
 
   drain(): T[] {
     const items: T[] = [];
+
+    // FIXME: if it's full maybe just return this.buffer and create a new
+    // one.
 
     let current = this.head;
     while (current !== this.tail) {
