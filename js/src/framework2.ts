@@ -61,6 +61,10 @@ export class Project {
     this.tools = new ToolBuilder(this);
     this.prompts = new PromptBuilder(this);
     this.scorers = new ScorerBuilder(this);
+
+    if (globalThis._lazy_load) {
+      globalThis._evals.projects.push(this);
+    }
   }
 
   async publish() {

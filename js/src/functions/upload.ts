@@ -2,8 +2,6 @@ import {
   CodeBundle,
   FunctionObject,
   IfExists,
-  ExtendedSavedFunctionId,
-  SavedFunctionId,
 } from "@braintrust/core/typespecs";
 import { BuildSuccess, EvaluatorState, FileHandle } from "../cli";
 import { scorerName, warning } from "../framework";
@@ -87,35 +85,39 @@ export async function uploadHandleBundles({
     const prompts: FunctionEvent[] = [];
 
     if (setCurrent) {
-      for (let i = 0; i < result.evaluator.functions.length; i++) {
-        const fn = result.evaluator.functions[i];
-        const project_id = await projectNameToId.resolve(fn.project);
+      for (const project of result.evaluator.projects) {
+        for (let i = 0; i < project._publishableCodeFunctions.length; i++) {
+          const fn = project._publishableCodeFunctions[i];
+          const project_id = await projectNameToId.resolve(fn.project);
 
-        bundleSpecs.push({
-          project_id: project_id,
-          name: fn.name,
-          slug: fn.slug,
-          description: fn.description ?? "",
-          function_type: fn.type,
-          location: {
-            type: "function",
-            index: i,
-          },
-          function_schema:
-            fn.parameters || fn.returns
-              ? {
-                  parameters: fn.parameters
-                    ? zodToJsonSchema(fn.parameters)
-                    : undefined,
-                  returns: fn.returns ? zodToJsonSchema(fn.returns) : undefined,
-                }
-              : undefined,
-          if_exists: fn.ifExists,
-        });
-      }
+          bundleSpecs.push({
+            project_id: project_id,
+            name: fn.name,
+            slug: fn.slug,
+            description: fn.description ?? "",
+            function_type: fn.type,
+            location: {
+              type: "function",
+              index: i,
+            },
+            function_schema:
+              fn.parameters || fn.returns
+                ? {
+                    parameters: fn.parameters
+                      ? zodToJsonSchema(fn.parameters)
+                      : undefined,
+                    returns: fn.returns
+                      ? zodToJsonSchema(fn.returns)
+                      : undefined,
+                  }
+                : undefined,
+            if_exists: fn.ifExists,
+          });
+        }
 
-      for (const prompt of result.evaluator.prompts) {
-        prompts.push(await prompt.toFunctionDefinition(projectNameToId));
+        for (const prompt of project._publishablePrompts) {
+          prompts.push(await prompt.toFunctionDefinition(projectNameToId));
+        }
       }
     }
 

@@ -6,6 +6,7 @@ import slugify
 
 from braintrust.logger import api_conn, app_conn, login
 
+from .framework import _is_lazy_load  # type: ignore
 from .types import (
     ChatCompletionMessageParam,
     IfExists,
@@ -36,7 +37,7 @@ class _GlobalState:
         self.projects.append(project)
 
     def has_code_functions(self) -> bool:
-        return any(p._publishable_code_functions for p in self.projects)
+        return any(p._publishable_code_functions for p in self.projects)  # type: ignore
 
 
 global_ = _GlobalState()
@@ -452,6 +453,9 @@ class Project:
 
         self._publishable_code_functions: List[CodeFunction] = []
         self._publishable_prompts: List[CodePrompt] = []
+
+        if _is_lazy_load():
+            global_.add_project(self)
 
     def publish(self):
         login()
