@@ -2,7 +2,7 @@
 // buffer to store items so that dropping oldest things in the queue
 // is O(1) time.
 export class Queue<T> {
-  private buffer: Array<T>;
+  private buffer: Array<T | undefined>;
   private head: number = 0; // the index of the first item in the queue
   private tail: number = 0; // the index of the next item to be added
   private size: number = 0; // the number of items in the queue
@@ -10,7 +10,7 @@ export class Queue<T> {
 
   constructor(maxSize: number) {
     this.capacity = maxSize < 1 ? 5000 : maxSize;
-    this.clear();
+    this.buffer = new Array(this.capacity);
   }
 
   push(...items: T[]): T[] {
