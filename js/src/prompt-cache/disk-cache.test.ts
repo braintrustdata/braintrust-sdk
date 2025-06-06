@@ -4,23 +4,24 @@ import { DiskCache } from "./disk-cache";
 import { tmpdir } from "os";
 import { beforeEach, describe, it, afterEach, expect } from "vitest";
 import { configureNode } from "../node";
-import iso from "../isomorph";
 
 describe("DiskCache", () => {
   configureNode();
 
   let cacheDir: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let cache: DiskCache<any>;
 
   beforeEach(async () => {
     cacheDir = path.join(tmpdir(), `disk-cache-test-${Date.now()}`);
-    cache = new DiskCache({ cacheDir, max: 3 });
+
+    cache = new DiskCache({ cacheDir, max: 3, logWarnings: false });
   });
 
   afterEach(async () => {
     try {
       await fs.rm(cacheDir, { recursive: true, force: true });
-    } catch (e) {
+    } catch {
       // Ignore errors if directory doesn't exist.
     }
   });
@@ -79,13 +80,24 @@ describe("DiskCache", () => {
   });
 
   it("should never throw when write fails", async () => {
-    // Make cache directory read-only.
-    await fs.mkdir(cacheDir, { recursive: true });
-    await fs.chmod(cacheDir, 0o444);
+    const cacheDir = path.join(
+      tmpdir(),
+      "doesnt-exist-dir",
+      `write-fail-disk-cache-test-${Date.now()}`,
+    );
 
-    // Should throw when write fails.
-    await cache.set("test", { foo: "bar" });
-    const result = await cache.get("test");
+    // use mkdir false as a way of triggering cross-platform write
+    // errors. I tried other methods (permissions, etc) but couldn't
+    // get one that worked on github actions.
+    const brokenCache = new DiskCache({
+      cacheDir,
+      logWarnings: false,
+      mkdir: false,
+    });
+
+    // Failed writes shouldn't throw errors.
+    await brokenCache.set("test", { foo: "bar" });
+    const result = await brokenCache.get("test");
     expect(result).toBeUndefined();
   });
 

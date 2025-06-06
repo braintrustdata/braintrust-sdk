@@ -5,6 +5,7 @@ works with and without different dependencies. A few commands to check out:
     nox                        Run all sessions.
     nox -l                     List all sessions.
     nox -s <session>           Run a specific session.
+    nox ... -- --no-vcr        Run tests without vcrpy.
     nox ... -- --wheel         Run tests against the wheel in dist.
     nox -h                     Get help.
 """
@@ -17,17 +18,20 @@ import tempfile
 
 import nox
 
+# much faster than pip
+nox.options.default_venv_backend = "uv"
+
 SRC_DIR = "braintrust"
 WRAPPER_DIR = "braintrust/wrappers"
 
 
 SILENT_INSTALLS = True
-LATEST = "__latest__"
+LATEST = "latest"
 ERROR_CODES = tuple(range(1, 256))
 
 
 # The minimal set of dependencies we need to run tests.
-BASE_TEST_DEPS = ("pytest", "pytest-asyncio")
+BASE_TEST_DEPS = ("pytest", "pytest-asyncio", "pytest-vcr")
 
 # List your package here if it's not guaranteed to be installed. We'll (try to)
 # validate things work with or without them.
@@ -56,17 +60,17 @@ def test_core(session):
 
 
 @nox.session()
-@nox.parametrize("pydantic_ai_version", PYDANTIC_AI_VERSIONS)
-def test_with_pydantic_ai(session, pydantic_ai_version):
+@nox.parametrize("version", PYDANTIC_AI_VERSIONS, ids=PYDANTIC_AI_VERSIONS)
+def test_pydantic_ai(session, version):
     _install_test_deps(session)
-    _install(session, "pydantic_ai", pydantic_ai_version)
+    _install(session, "pydantic_ai", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai.py")
     _run_core_tests(session)
 
 
 @nox.session()
-@nox.parametrize("version", ANTHROPIC_VERSIONS)
-def test_with_anthropic(session, version):
+@nox.parametrize("version", ANTHROPIC_VERSIONS, ids=ANTHROPIC_VERSIONS)
+def test_anthropic(session, version):
     _install_test_deps(session)
     _install(session, "anthropic", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_anthropic.py")
@@ -74,8 +78,8 @@ def test_with_anthropic(session, version):
 
 
 @nox.session()
-@nox.parametrize("version", OPENAI_VERSIONS)
-def test_with_openai(session, version):
+@nox.parametrize("version", OPENAI_VERSIONS, ids=OPENAI_VERSIONS)
+def test_openai(session, version):
     _install_test_deps(session)
     _install(session, "openai", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
@@ -83,8 +87,8 @@ def test_with_openai(session, version):
 
 
 @nox.session()
-@nox.parametrize("version", AUTOEVALS_VERSIONS)
-def test_with_autoevals(session, version):
+@nox.parametrize("version", AUTOEVALS_VERSIONS, ids=AUTOEVALS_VERSIONS)
+def test_autoevals(session, version):
     # Run all of our core tests with autoevals installed. Some tests
     # specifically validate scores from autoevals work properly, so
     # we need some tests with it installed.
@@ -94,7 +98,7 @@ def test_with_autoevals(session, version):
 
 
 @nox.session()
-def test_with_braintrust_core(session):
+def test_braintrust_core(session):
     # Some tests do specific things if braintrust_core is installed, so run our
     # common tests with it installed. Testing the latest (aka the last ever version)
     # is enough.
@@ -117,19 +121,28 @@ def pylint(session):
     session.run("pylint", "--errors-only", *files)
 
 
+@nox.session()
+def test_latest_wrappers_novcr(session):
+    """Run the latest wrapper tests without vcrpy."""
+    # every test run we hit openai, anthropic,  at least once so we balance CI speed (with vcrpy)
+    # with testing reality.
+    args = session.posargs.copy()
+    if "--disable-vcr" not in args:
+        args.append("--disable-vcr")
+    session.notify("test_openai(latest)", posargs=args)
+    session.notify("test_anthropic(latest)", posargs=args)
+    session.notify("test_pydantic_ai(latest)", posargs=args)
+
+
 def _install_test_deps(session):
-    # verify braintrust isn't installed yet
-    session.run("python", "-c", "import braintrust", success_codes=ERROR_CODES, silent=True)
+    # Choose the way we'll install braintrust ... wheel or source.
+    install_wheel = "--wheel" in session.posargs
+    bt = _get_braintrust_wheel() if install_wheel else "."
 
     # Install _only_ the dependencies we need for testing (not lint, black,
     # ipython, whatever). We want to carefully control the base
     # testing environment so it should be truly minimal.
-    session.install(*BASE_TEST_DEPS)
-
-    # Choose the way we'll install braintrust ... wheel or source.
-    install_wheel = "--wheel" in session.posargs
-    bt = _get_braintrust_wheel() if install_wheel else "."
-    session.install(bt)
+    session.install(bt, *BASE_TEST_DEPS)
 
     # Sanity check we have installed braintrust (and that it is from a wheel if needed)
     session.run("python", "-c", "import braintrust")
@@ -159,10 +172,16 @@ def _run_core_tests(session):
 def _run_tests(session, test_path, ignore_path=""):
     """Run tests against a wheel or the source code. Paths should be relative and start with braintrust."""
     wheel_flag = "--wheel" in session.posargs
+    common_args = ["--disable-vcr"] if "--disable-vcr" in session.posargs else []
     if not wheel_flag:
         # Run the tests in the src directory
-        ignore = f"--ignore=src/{ignore_path}" if ignore_path else ""
-        session.run("pytest", f"src/{test_path}", ignore)
+        test_args = [
+            "pytest",
+            f"src/{test_path}",
+        ]
+        if ignore_path:
+            test_args.append(f"--ignore=src/{ignore_path}")
+        session.run(*test_args, *common_args)
         return
 
     # Running the tests from the wheel involves a bit of gymnastics to ensure we don't import
@@ -182,7 +201,7 @@ def _run_tests(session, test_path, ignore_path=""):
         # It proved very helpful because it's very easy
         # to accidentally import local modules from the source directory.
         env = {"BRAINTRUST_TESTING_WHEEL": "1"}
-        session.run(pytest_path, abs_test_path, ignore, env=env)
+        session.run(pytest_path, abs_test_path, ignore, *common_args, env=env)
 
     # And a final note ... if it's not clear from above, we include test files in our wheel, which
     # is perhaps not ideal?

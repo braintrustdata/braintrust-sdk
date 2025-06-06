@@ -3,24 +3,36 @@ import {
   expect,
   describe,
   beforeEach,
+  beforeAll,
   afterEach,
   vi,
   assert,
 } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { wrapAnthropic } from "./anthropic";
-import {
-  TextBlock,
-  Message,
-  TextBlockParam,
-} from "@anthropic-ai/sdk/resources/messages";
-import { initLogger, _exportsForTestingOnly, login } from "../logger";
+import { initLogger, _exportsForTestingOnly } from "../logger";
 import { configureNode } from "../node";
 import { getCurrentUnixTimestamp } from "../util";
-import { L } from "vitest/dist/chunks/reporters.nr4dxCkA";
 
 // use the cheapest model for tests
 const TEST_MODEL = "claude-3-haiku-20240307";
+
+interface TextBlock {
+  type: "text";
+  text: string;
+}
+
+interface Message {
+  content: TextBlock[];
+  role: string;
+  id: string;
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+  };
+}
 
 try {
   configureNode();
@@ -39,7 +51,9 @@ describe("anthropic client unit tests", () => {
   let logger: any;
 
   // fake login before we test. once is enough.
-  _exportsForTestingOnly.simulateLoginForTests();
+  beforeAll(async () => {
+    await _exportsForTestingOnly.simulateLoginForTests();
+  });
 
   beforeEach(async () => {
     backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
@@ -60,7 +74,7 @@ describe("anthropic client unit tests", () => {
   test("test client.messages.create works with system text blocks", async (context) => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
-    const system: TextBlockParam[] = [
+    const system: Record<string, string>[] = [
       { text: "translate to english", type: "text" },
       { text: "remove all punctuation", type: "text" },
       { text: "only the answer, no other text", type: "text" },
@@ -113,8 +127,12 @@ describe("anthropic client unit tests", () => {
     expect(onMessage).toHaveBeenCalledTimes(1);
 
     expect(message.content[0].type).toBe("text");
-    const content = message.content[0] as TextBlock;
-    expect(content.text).toContain("old pond");
+    const content = message.content[0] as unknown;
+    if (typeof content === "object" && content !== null && "text" in content) {
+      expect(content.text).toContain("old pond");
+    } else {
+      throw new Error("Content is not a text block");
+    }
 
     const spans = await backgroundLogger.drain();
 
@@ -212,9 +230,12 @@ describe("anthropic client unit tests", () => {
 
     const endTime = getCurrentUnixTimestamp();
 
-    expect(response.content[0].type).toBe("text");
-    const content = response.content[0] as TextBlock;
-    expect(content.text).toContain("16");
+    const content = response.content[0] as unknown;
+    if (typeof content === "object" && content !== null && "text" in content) {
+      expect(content.text).toContain("16");
+    } else {
+      throw new Error("Content is not a text block");
+    }
 
     const spans = await backgroundLogger.drain();
     expect(spans).toHaveLength(1);

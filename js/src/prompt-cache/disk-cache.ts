@@ -32,6 +32,11 @@ interface DiskCacheOptions {
   max?: number;
 
   logWarnings?: boolean;
+
+  /**
+   * Whether to create the cache directory if it doesn't exist.
+   */
+  mkdir?: boolean;
 }
 
 /**
@@ -50,6 +55,7 @@ interface DiskCacheOptions {
 export class DiskCache<T> {
   private readonly dir: string;
   private readonly max?: number;
+  private readonly mkdir: boolean;
   private readonly logWarnings: boolean;
   /**
    * Creates a new DiskCache instance.
@@ -62,9 +68,10 @@ export class DiskCache<T> {
     this.dir = options.cacheDir;
     this.max = options.max;
     this.logWarnings = options.logWarnings ?? true;
+    this.mkdir = options.mkdir ?? true;
   }
 
-  private getEntryPath(key: string): string {
+  public getEntryPath(key: string): string {
     const hashed = iso.hash!(key);
     return iso.pathJoin!(this.dir, hashed);
   }
@@ -84,6 +91,7 @@ export class DiskCache<T> {
       await iso.utimes!(filePath, new Date(), new Date());
       return JSON.parse(data.toString());
     } catch (e) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       if ((e as NodeJS.ErrnoException).code === "ENOENT") {
         return undefined;
       }
@@ -102,15 +110,19 @@ export class DiskCache<T> {
    * @param value - The value to store in the cache.
    */
   async set(key: string, value: T): Promise<void> {
-    await iso.mkdir!(this.dir, { recursive: true });
-    const filePath = this.getEntryPath(key);
-    const data = await iso.gzip!(JSON.stringify(value));
-
     try {
+      if (this.mkdir) {
+        await iso.mkdir!(this.dir, { recursive: true });
+      }
+      const filePath = this.getEntryPath(key);
+      const data = await iso.gzip!(JSON.stringify(value));
+
       await iso.writeFile!(filePath, data);
       await this.evictOldestIfFull();
     } catch (e) {
-      console.warn("Failed to write to disk cache", e);
+      if (this.logWarnings) {
+        console.warn("Failed to write to disk cache", e);
+      }
       return;
     }
   }
