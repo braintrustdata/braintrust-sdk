@@ -14,6 +14,7 @@ from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, Prompt
 from braintrust.test_helpers import (
     assert_dict_matches,
     assert_logged_out,
+    init_test_logger,
     simulate_login,
     simulate_logout,
     with_memory_logger,
@@ -461,8 +462,6 @@ def test_permalink_with_valid_span_logged_in(with_simulate_login, with_memory_lo
 @pytest.mark.asyncio
 async def test_traced_async_generator_with_exception(with_memory_logger):
     """Test tracing when async generator raises an exception."""
-    from braintrust.test_helpers import init_test_logger
-
     init_test_logger(__name__)
 
     @logger.traced
@@ -500,7 +499,6 @@ async def test_traced_async_generator_with_exception(with_memory_logger):
 @pytest.mark.asyncio
 async def test_traced_async_generator_with_subtasks(with_memory_logger):
     """Test async generator with current_span().log() calls - similar to user's failing case."""
-    from braintrust.test_helpers import init_test_logger
 
     init_test_logger(__name__)
 
