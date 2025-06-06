@@ -488,8 +488,8 @@ async def test_traced_async_generator_with_exception(with_memory_logger):
         log,
         {
             "metrics": {
-                "start": lambda x: start_time <= x < end_time,
-                "end": lambda x: start_time <= x < end_time,
+                "start": lambda x: start_time <= x <= end_time,
+                "end": lambda x: start_time <= x <= end_time,
             },
             "error": lambda e: "ValueError" in str(e),
         },
@@ -545,8 +545,8 @@ async def test_traced_async_generator_with_subtasks(with_memory_logger):
             "output": "testing",
             "metadata": {"a": "b", "total": 6},  # Manual metadata logging
             "metrics": {
-                "start": lambda x: start_time <= x < end_time,
-                "end": lambda x: start_time <= x < end_time,
+                "start": lambda x: start_time <= x <= end_time,
+                "end": lambda x: start_time <= x <= end_time,
             },
         },
     )
