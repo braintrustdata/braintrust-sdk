@@ -6,7 +6,7 @@ T = TypeVar("T")
 
 
 class LogQueue:
-    """A queue that drops oldest items when full."""
+    """A thread-safe queue that drops oldest items when full."""
 
     def __init__(self, maxsize: int = 0):
         """
@@ -75,7 +75,8 @@ class LogQueue:
 
     def wait_for_items(self, timeout: Optional[float] = None) -> bool:
         """
-        Wait for items to be available in the queue.
+        Will block until the queue has at least one item in it. Might be empty by the time
+        you read though.
 
         Args:
             timeout: Maximum time to wait in seconds. None means wait forever.
