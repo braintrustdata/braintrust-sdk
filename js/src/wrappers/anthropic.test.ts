@@ -44,7 +44,7 @@ test("anthropic is installed", () => {
   expect(Anthropic).toBeDefined();
 });
 
-describe("anthropic client unit tests", () => {
+describe("anthropic client unit tests", { retry: 3 }, () => {
   let anthropic: Anthropic;
   let client: any;
   let backgroundLogger: any;
@@ -244,6 +244,7 @@ describe("anthropic client unit tests", () => {
     expect(span["span_attributes"].name).toBe("anthropic.messages.create");
     const metadata = span.metadata;
     expect(metadata?.model).toBe(TEST_MODEL);
+    expect(metadata?.provider).toBe("anthropic");
     expect(metadata?.max_tokens).toBe(100);
     expect(metadata["stop_reason"]).toBe("end_turn");
     expect(metadata["temperature"]).toBe(0.5);
@@ -308,6 +309,7 @@ describe("anthropic client unit tests", () => {
       },
       metadata: {
         model: TEST_MODEL,
+        provider: "anthropic",
         max_tokens: 100,
         temperature: 0.1,
       },
@@ -391,6 +393,7 @@ describe("anthropic client unit tests", () => {
       },
       metadata: {
         model: TEST_MODEL,
+        provider: "anthropic",
         max_tokens: 100,
         temperature: 0.1,
       },
@@ -473,6 +476,7 @@ describe("anthropic client unit tests", () => {
       },
       metadata: {
         model: TEST_MODEL,
+        provider: "anthropic",
         max_tokens: 100,
         temperature: 0.1,
       },

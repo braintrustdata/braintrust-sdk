@@ -93,11 +93,10 @@ function createProxy(create: (params: any) => Promise<any>) {
         name: "anthropic.messages.create",
         spanAttributes: {
           type: SpanTypeAttribute.LLM,
-          provider: "anthropic",
         },
         event: {
           input,
-          metadata,
+          metadata: { ...metadata, provider: "anthropic" },
         },
         startTime: getCurrentUnixTimestamp(),
       };
