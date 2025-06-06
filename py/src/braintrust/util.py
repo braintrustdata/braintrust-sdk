@@ -203,7 +203,7 @@ class MarkAsyncWrapper:
 
 
 def bt_iscoroutinefunction(f):
-    return inspect.iscoroutinefunction(f) or getattr(f, BT_IS_ASYNC_ATTRIBUTE, False)
+    return inspect.iscoroutinefunction(f) or inspect.isasyncgenfunction(f) or getattr(f, BT_IS_ASYNC_ATTRIBUTE, False)
 
 
 def add_azure_blob_headers(headers: Dict[str, str], url: str) -> None:

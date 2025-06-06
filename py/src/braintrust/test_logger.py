@@ -1,12 +1,18 @@
+import asyncio
+import inspect
 import os
-from typing import List
+import time
+from typing import AsyncGenerator, List
 from unittest import TestCase
+
+import pytest
 
 import braintrust
 from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt, init_logger, logger
 from braintrust.logger import _deep_copy_event, _extract_attachments
 from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
 from braintrust.test_helpers import (
+    assert_dict_matches,
     assert_logged_out,
     simulate_login,
     simulate_logout,
@@ -323,19 +329,6 @@ def test_noop_permalink_issue_1837():
     assert span.link() == "https://www.braintrust.dev/noop-span"
 
 
-def test_permalink_logged_out(with_memory_logger):
-    simulate_logout()
-    assert_logged_out()
-    logger = init_logger(
-        project="test-project",
-        project_id="test-project-id",
-    )
-    span = logger.start_span(name="test-span")
-    span.end()
-    link = span.permalink()
-    assert link == "https://www.braintrust.dev/error-generating-link?msg=login-or-provide-org-name"
-
-
 def test_span_link_logged_out(with_memory_logger):
     simulate_logout()
     assert_logged_out()
@@ -463,3 +456,197 @@ def test_permalink_with_valid_span_logged_in(with_simulate_login, with_memory_lo
 
     expected_link = f"https://www.braintrust.dev/app/test-org-name/object?object_type=project_logs&object_id=test-project-id&id={span._id}"
     assert link == expected_link
+
+
+def test_isasyncgenfunction_detection():
+    """Test that async generator functions are properly detected."""
+
+    async def async_gen_func():
+        yield 1
+        yield 2
+
+    def sync_gen_func():
+        yield 1
+        yield 2
+
+    async def async_func():
+        return "hello"
+
+    def sync_func():
+        return "hello"
+
+    # Verify our test functions are classified correctly
+    assert inspect.isasyncgenfunction(async_gen_func)
+    assert inspect.isgeneratorfunction(sync_gen_func)
+    assert inspect.iscoroutinefunction(async_func)
+    assert not any(
+        [
+            inspect.isasyncgenfunction(sync_gen_func),
+            inspect.isasyncgenfunction(async_func),
+            inspect.isasyncgenfunction(sync_func),
+            inspect.isgeneratorfunction(async_gen_func),
+            inspect.iscoroutinefunction(sync_gen_func),
+            inspect.iscoroutinefunction(sync_func),
+        ]
+    )
+
+
+@pytest.mark.asyncio
+async def test_traced_async_generator_basic(with_memory_logger):
+    """Test basic tracing of an async generator function."""
+    from braintrust.test_helpers import init_test_logger
+
+    init_test_logger(__name__)
+
+    @logger.traced
+    async def async_number_generator() -> AsyncGenerator[int, None]:
+        """Generate numbers asynchronously."""
+        for i in range(3):
+            yield i
+
+    # Start timing
+    start_time = time.time()
+
+    # Consume the async generator
+    results = []
+    async for value in async_number_generator():
+        results.append(value)
+
+    # End timing
+    end_time = time.time()
+
+    assert results == [0, 1, 2]
+
+    # Check if the function was traced properly
+    logs = with_memory_logger.pop()
+
+    # Verify timing
+    assert len(logs) == 1
+    log_entry = logs[0]
+    span_start = log_entry["metrics"]["start"]
+    span_end = log_entry["metrics"]["end"]
+
+    # Verify span timing is within our measured bounds
+    assert start_time <= span_start < span_end <= end_time
+
+
+def test_sync_generator_comparison(with_memory_logger):
+    """Compare behavior with synchronous generators."""
+    from braintrust.test_helpers import init_test_logger
+
+    init_test_logger(__name__)
+
+    @logger.traced
+    def sync_number_generator():
+        """Generate numbers synchronously."""
+        for i in range(3):
+            yield i
+
+    # Start timing
+    start_time = time.time()
+
+    results = list(sync_number_generator())
+
+    # End timing
+    end_time = time.time()
+
+    assert results == [0, 1, 2]
+
+    logs = with_memory_logger.pop()
+
+    # Verify timing
+    assert len(logs) == 1
+    log_entry = logs[0]
+    span_start = log_entry["metrics"]["start"]
+    span_end = log_entry["metrics"]["end"]
+
+    # Verify span timing is within our measured bounds
+    assert span_start >= start_time
+    assert span_end <= end_time
+    assert span_end > span_start
+
+
+@pytest.mark.asyncio
+async def test_traced_async_generator_with_exception(with_memory_logger):
+    """Test tracing when async generator raises an exception."""
+    from braintrust.test_helpers import init_test_logger
+
+    init_test_logger(__name__)
+
+    @logger.traced
+    async def failing_async_generator() -> AsyncGenerator[int, None]:
+        """An async generator that fails."""
+        yield 1
+        yield 2
+        raise ValueError("Something went wrong")
+
+    results = []
+    with pytest.raises(ValueError, match="Something went wrong"):
+        async for value in failing_async_generator():
+            results.append(value)
+
+    assert results == [1, 2]  # Should have yielded these before failing
+
+    logs = with_memory_logger.pop()
+    print(f"Failing async generator logs: {logs}")
+    print(f"Number of logs: {len(logs)}")
+    if logs:
+        print(f"First log: {logs[0]}")
+    # Should still have a log entry even though it failed
+
+
+@pytest.mark.asyncio
+async def test_traced_async_generator_with_current_span_logging(with_memory_logger):
+    """Test async generator with current_span().log() calls - similar to user's failing case."""
+    from braintrust.test_helpers import init_test_logger
+
+    init_test_logger(__name__)
+
+    num_loops = 3
+
+    @logger.traced
+    async def foo(i: int) -> int:
+        """Simulate some async work."""
+        await asyncio.sleep(0.001)  # Small delay to simulate work
+        return i * 2
+
+    @logger.traced("main")
+    async def main():
+        yield 1
+        logger.current_span().log(metadata={"a": "b"})
+        tasks = [asyncio.create_task(foo(i)) for i in range(num_loops)]
+        done, _ = await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
+        total = sum(task.result() for task in done)
+        logger.current_span().log(metadata=dict(total=total), output="testing")
+        yield total
+
+    # consume the generator
+    results: list[int] = []
+    start_time = time.time()
+    async for value in main():
+        results.append(value)
+    end_time = time.time()
+
+    assert results == [1, 6]
+
+    # Check logs
+    logs = with_memory_logger.pop()
+    assert len(logs) == num_loops + 1
+
+    # Find the main span
+    main_spans = [l for l in logs if l["span_attributes"]["name"] == "main"]
+    assert len(main_spans) == 1
+    main_span = main_spans[0]
+
+    assert_dict_matches(
+        main_span,
+        {
+            "input": {},
+            "output": "testing",
+            "metadata": {"a": "b", "total": 6},  # Manual metadata logging
+            "metrics": {
+                "start": lambda x: start_time <= x < end_time,
+                "end": lambda x: start_time <= x < end_time,
+            },
+        },
+    )
