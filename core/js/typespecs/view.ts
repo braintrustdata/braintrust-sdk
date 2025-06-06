@@ -52,6 +52,7 @@ export const tableViewOptionsSchema = z
     columnSizing: z.record(z.number()).nullish(),
     grouping: z.string().nullish(),
     rowHeight: z.string().nullish(),
+    tallGroupRows: z.boolean().nullish(),
     layout: z.string().nullish(),
     chartHeight: z.number().nullish(),
     excludedMeasures: z.array(chartSelectionType).nullish(),
