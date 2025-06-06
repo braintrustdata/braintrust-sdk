@@ -3069,7 +3069,9 @@ export async function loadPrompt({
     });
     if (!prompt) {
       throw new Error(
-        `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[projectName ?? projectId]} (not found on server or in local cache): ${e}`,
+        `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[
+          projectName ?? projectId,
+        ]} (not found on server or in local cache): ${e}`,
       );
     }
     return prompt;
@@ -3441,7 +3443,10 @@ export function traced<IsAsyncFlush extends boolean = true, R = void>(
  *    messages: [{ role: "user", content: input }],
  *  });
  *  return result.choices[0].message.content ?? "unknown";
- * });
+ * },
+ * // Optional: if you're using a framework like NextJS that minifies your code, specify the function name and it will be used for the span name
+ * { name: "myFunc" },
+ * );
  * ```
  * Now, any calls to `myFunc` will be traced, and the input and output will be logged automatically.
  * If tracing is inactive, i.e. there is no active logger or experiment, it's just a no-op.
@@ -4733,7 +4738,7 @@ export class SpanImpl implements Span {
       case SpanObjectTypeV3.EXPERIMENT: {
         // Experiment links require an id, so the sync version will only work after the experiment is
         // resolved.
-        let expID =
+        const expID =
           args?.experiment_id || this.parentObjectId?.getSync()?.value;
         if (!expID) {
           return getErrPermlink("provide-experiment-id");
