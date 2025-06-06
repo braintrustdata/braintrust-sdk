@@ -1,41 +1,71 @@
-export class Queue<T> {
-  private items: T[] = [];
-  private maxSize: number;
+export class Deque<T> {
+  private buffer: Array<T | undefined>;
+  private head: number = 0;
+  private tail: number = 0;
+  private size: number = 0;
+  private capacity: number;
 
   constructor(maxSize: number) {
-    this.maxSize = maxSize;
+    this.capacity = maxSize < 1 ? 5000 : maxSize;
+    this.buffer = new Array(this.capacity);
   }
 
   push(...items: T[]): T[] {
-    if (this.maxSize < 1) {
-      this.items.push(...items);
-      return [];
+    const dropped: T[] = [];
+
+    for (const item of items) {
+      if (this.size === this.capacity) {
+        const droppedItem = this.buffer[this.head];
+        if (droppedItem !== undefined) {
+          dropped.push(droppedItem);
+        }
+        this.head = (this.head + 1) % this.capacity;
+      } else {
+        this.size++;
+      }
+
+      this.buffer[this.tail] = item;
+      this.tail = (this.tail + 1) % this.capacity;
     }
 
-    // Add all new items to the queue
-    this.items.push(...items);
+    return dropped;
+  }
 
-    // If we exceed maxSize, drop oldest items
-    if (this.items.length > this.maxSize) {
-      const numToDrop = this.items.length - this.maxSize;
-      const dropped = this.items.splice(0, numToDrop);
-      return dropped;
+  peek(): T | undefined {
+    if (this.size === 0) {
+      return undefined;
     }
-
-    return [];
+    return this.buffer[this.head];
   }
 
   drain(): T[] {
-    const items = this.items;
-    this.items = [];
+    const items: T[] = [];
+
+    let current = this.head;
+    while (current !== this.tail) {
+      const item = this.buffer[current];
+      if (item !== undefined) {
+        items.push(item);
+      }
+      this.buffer[current] = undefined;
+      current = (current + 1) % this.capacity;
+    }
+
+    this.head = 0;
+    this.tail = 0;
+    this.size = 0;
+
     return items;
   }
 
-  length(): number {
-    return this.items.length;
+  clear(): void {
+    this.buffer = new Array(this.capacity);
+    this.head = 0;
+    this.tail = 0;
+    this.size = 0;
   }
 
-  clear(): void {
-    this.items = [];
+  length(): number {
+    return this.size;
   }
 }

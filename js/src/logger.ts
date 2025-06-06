@@ -2,7 +2,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 
-import { Queue } from "./queue";
+import { Deque } from "./queue";
 import {
   _urljoin,
   AnyDatasetRecord,
@@ -1934,7 +1934,7 @@ const BACKGROUND_LOGGER_BASE_SLEEP_TIME_S = 1.0;
 // the backend in a deterministic order.
 class HTTPBackgroundLogger implements BackgroundLogger {
   private apiConn: LazyValue<HTTPConnection>;
-  private queue: Queue<LazyValue<BackgroundLogEvent>>;
+  private queue: Deque<LazyValue<BackgroundLogEvent>>;
   private activeFlush: Promise<void> = Promise.resolve();
   private activeFlushResolved = true;
   private activeFlushError: unknown = undefined;
@@ -1990,7 +1990,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       this.queueDropExceedingMaxsize = queueDropExceedingMaxsizeEnv;
     }
 
-    this.queue = new Queue(this.queueDropExceedingMaxsize);
+    this.queue = new Deque(this.queueDropExceedingMaxsize);
 
     const queueDropLoggingPeriodEnv = Number(
       iso.getEnv("BRAINTRUST_QUEUE_DROP_LOGGING_PERIOD"),
