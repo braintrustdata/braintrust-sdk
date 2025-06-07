@@ -1,0 +1,14 @@
+[project]
+name = "adk-py-examples"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "braintrust-adk-py",
+    "google-adk>=0.2.0",
+    "ruff>=0.11.6",
+]
+
+[tool.uv.sources]
+braintrust-adk-py = { workspace = true }
