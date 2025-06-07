@@ -26,10 +26,6 @@ jobs:
           node-version: ${{ matrix.node-version }}
           registry-url: "https://registry.npmjs.org"
       - uses: pnpm/action-setup@v4
-      - run: pnpm install
-      - run: pnpm run build
-      - name: "run tests"
+      - name: "verify ci"
         shell: bash
-        run: |
-          cd js
-          make test
+        run: make js-verify-ci

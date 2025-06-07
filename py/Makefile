@@ -17,6 +17,9 @@ test:
 test-wheel: build
 	nox -x -- --wheel
 
+test-core:
+	nox -s test_core
+
 _template-version:
 	@bash scripts/template-version.sh
 
@@ -29,17 +32,17 @@ verify: lint test
 
 install-build-deps:
 	# Ensure pip is at a known version first for reproducible builds
-	python -m pip install pip==25.1.1
+	python -m pip install uv==0.7.8
 	# Use 'python -m pip' to ensure we're using python's pip
 	# https://pip.pypa.io/en/latest/user_guide/
-	python -m pip install -e .
-	python -m pip install -r requirements-build.txt
+	python -m uv pip install -e .
+	python -m uv pip install -r requirements-build.txt
 
 install-dev: install-build-deps
-	python -m pip install -r requirements-dev.txt
+	python -m uv pip install -r requirements-dev.txt
 
 install-optional:
-	python -m pip install anthropic openai pydantic_ai
+	python -m uv pip install anthropic openai pydantic_ai
 
 _publish:
 	./scripts/publish.sh
