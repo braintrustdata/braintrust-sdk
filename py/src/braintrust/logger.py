@@ -1701,7 +1701,20 @@ def traced(*span_args: Any, **span_kwargs: Any) -> Callable[[F], F]:
                     _try_log_output(span, ret)
                 return ret
 
-        if bt_iscoroutinefunction(f):
+        @wraps(f)
+        async def wrapper_async_gen(*f_args, **f_kwargs):
+            with start_span(*span_args, **span_kwargs) as span:
+                if trace_io:
+                    _try_log_input(span, f_sig, f_args, f_kwargs)
+                async_gen = f(*f_args, **f_kwargs)
+                async for value in async_gen:
+                    yield value
+                # NOTE[matt] i'm disabling output tracing (e.g notrace_io=False) for async generators
+                # because an async generator could be infinite and make us OOM.
+
+        if inspect.isasyncgenfunction(f):
+            return cast(F, wrapper_async_gen)
+        elif bt_iscoroutinefunction(f):
             return cast(F, wrapper_async)
         else:
             return cast(F, wrapper_sync)
