@@ -103,15 +103,16 @@ def test_log_queue_semaphore_signaling():
     queue.drain_all()
 
 
-def test_log_queue_unlimited_size():
-    """Test queue with unlimited capacity (maxsize=0 or negative)"""
-    # Test maxsize=0 (unlimited)
+def test_log_queue_default_size():
+    """Test queue with invalid maxsize defaults to 5000"""
+    # Test maxsize=0 defaults to 5000
     queue = LogQueue(maxsize=0)
+    assert queue.maxsize == 5000
 
-    # Should be able to add many items without drops
+    # Should be able to add many items without drops (up to 5000)
     for i in range(100):
         dropped = queue.put(f"item{i}")
-        assert dropped == []  # No drops in unlimited queue
+        assert dropped == []  # No drops when under capacity
 
     # All items should be there
     items = queue.drain_all()
@@ -119,10 +120,11 @@ def test_log_queue_unlimited_size():
     assert items[0] == "item0"
     assert items[99] == "item99"
 
-    # Test negative maxsize should also be unlimited
+    # Test negative maxsize also defaults to 5000
     queue_neg = LogQueue(maxsize=-5)
+    assert queue_neg.maxsize == 5000
 
-    # Should be able to add items without drops
+    # Should be able to add items without drops (when under capacity)
     for i in range(10):
         dropped = queue_neg.put(f"item{i}")
         assert dropped == []
