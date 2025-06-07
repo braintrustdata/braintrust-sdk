@@ -38,7 +38,7 @@ test-openai-%:
 # common things
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-pnpm test test-latest prune installing-optional-deps docs build verify-ci
+.PHONY: test-pnpm test test-latest prune installing-optional-deps docs build verify-ci bench
 
 install-optional-deps:
 	npm_config_save=false npm_config_lockfile=false pnpm add "openai" "@anthropic-ai/sdk"
@@ -63,6 +63,9 @@ docs:
 
 build:
 	pnpm run build
+
+bench:
+	npx tsx src/queue.bench.ts
 
 
 # note: we don't use the docs in ci, but this makes sure they keep building
