@@ -6,7 +6,7 @@ import slugify
 
 from braintrust.logger import api_conn, app_conn, login
 
-from .framework import _is_lazy_load  # type: ignore
+from .framework import _is_lazy_load, bcolors  # type: ignore
 from .types import (
     ChatCompletionMessageParam,
     IfExists,
@@ -16,6 +16,7 @@ from .types import (
     SavedFunctionId,
     ToolFunctionDefinition,
 )
+from .util import eprint
 
 
 class ProjectIdCache:
@@ -462,12 +463,18 @@ class Project:
             global_.prompts.append(prompt)
 
     def publish(self):
+        if _is_lazy_load():
+            eprint(f"{bcolors.WARNING}publish() is a no-op when running `braintrust push`.{bcolors.ENDC}")
+            return
+
         login()
         project_id_cache = ProjectIdCache()
 
         definitions: List[Dict[str, Any]] = []
         if self._publishable_code_functions:
-            raise ValueError("Code functions cannot be published directly. Use `braintrust push` instead.")
+            eprint(
+                f"{bcolors.WARNING}Code functions cannot be published directly. Use `braintrust push` instead.{bcolors.ENDC}"
+            )
 
         for prompt in self._publishable_prompts:
             prompt_definition = prompt.to_function_definition(None, project_id_cache)

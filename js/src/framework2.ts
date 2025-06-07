@@ -87,11 +87,15 @@ export class Project {
   }
 
   async publish() {
+    if (globalThis._lazy_load) {
+      console.warn("publish() is a no-op when running `braintrust push`.");
+      return;
+    }
     await login();
     const projectMap = new ProjectNameIdMap();
     const functionDefinitions: FunctionEvent[] = [];
     if (this._publishableCodeFunctions.length > 0) {
-      throw new Error(
+      console.warn(
         "Code functions cannot be published directly. Use `braintrust push` instead.",
       );
     }
@@ -103,7 +107,7 @@ export class Project {
       }
     }
 
-    return _internalGetGlobalState().apiConn().post_json("insert-functions", {
+    await _internalGetGlobalState().apiConn().post_json("insert-functions", {
       functions: functionDefinitions,
     });
   }
