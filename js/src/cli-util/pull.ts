@@ -8,7 +8,6 @@ import { loadCLIEnv } from "./bundle";
 import { PullArgs } from "./types";
 import { warning } from "../framework";
 import { z } from "zod";
-import { ProjectNameIdMap } from "../functions/upload";
 import fs from "fs/promises";
 import util from "util";
 import slugify from "slugify";
@@ -16,6 +15,7 @@ import path from "path";
 import { currentRepo } from "../gitutil";
 import { isEmpty, loadPrettyXact, prettifyXact } from "@braintrust/core";
 import {
+  ProjectNameIdMap,
   ToolFunctionDefinition,
   toolFunctionDefinitionSchema,
 } from "../framework2";
