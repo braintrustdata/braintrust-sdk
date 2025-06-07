@@ -1710,7 +1710,7 @@ def traced(*span_args: Any, **span_kwargs: Any) -> Callable[[F], F]:
                 async for value in async_gen:
                     yield value
                 # NOTE[matt] i'm disabling output tracing (e.g notrace_io=False) for async generators
-                # because an async generator could be be infinite and make us OOM.
+                # because an async generator could be infinite and make us OOM.
 
         if inspect.isasyncgenfunction(f):
             return cast(F, wrapper_async_gen)
