@@ -22,7 +22,8 @@ export function loadModule({
 }): EvaluatorFile {
   return evalWithModuleContext(inFile, () => {
     globalThis._evals = {
-      projects: [],
+      functions: [],
+      prompts: [],
       evaluators: {},
       reporters: {},
     };

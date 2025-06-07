@@ -67,7 +67,7 @@ class CodePrompt:
     id: Optional[str]
     if_exists: Optional[IfExists]
 
-    def to_function_definition(self, if_exists: IfExists, project_ids: ProjectIdCache) -> Dict[str, Any]:
+    def to_function_definition(self, if_exists: Optional[IfExists], project_ids: ProjectIdCache) -> Dict[str, Any]:
         prompt_data = self.prompt
         if len(self.tool_functions) > 0:
             resolvable_tool_functions: List[Any] = []
@@ -177,7 +177,7 @@ class PromptBuilder:
         params: Optional[ModelParams] = None,
         tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
         if_exists: Optional[IfExists] = None,
-    ):
+    ) -> CodePrompt:
         ...
 
     @overload  # messages only, no prompt
@@ -193,7 +193,7 @@ class PromptBuilder:
         params: Optional[ModelParams] = None,
         tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
         if_exists: Optional[IfExists] = None,
-    ):
+    ) -> CodePrompt:
         ...
 
     def create(
@@ -295,7 +295,7 @@ class ScorerBuilder:
         handler: Callable[..., Any],
         parameters: Any,
         returns: Any = None,
-    ):
+    ) -> CodeFunction:
         ...
 
     # LLM scorer with prompt.
@@ -312,7 +312,7 @@ class ScorerBuilder:
         params: Optional[ModelParams] = None,
         use_cot: bool,
         choice_scores: Dict[str, float],
-    ):
+    ) -> CodePrompt:
         ...
 
     # LLM scorer with messages.
@@ -329,7 +329,7 @@ class ScorerBuilder:
         params: Optional[ModelParams] = None,
         use_cot: bool,
         choice_scores: Dict[str, float],
-    ):
+    ) -> CodePrompt:
         ...
 
     def create(
@@ -350,7 +350,7 @@ class ScorerBuilder:
         params: Optional[ModelParams] = None,
         use_cot: Optional[bool] = None,
         choice_scores: Optional[Dict[str, float]] = None,
-    ):
+    ) -> Union[CodeFunction, CodePrompt]:
         """Creates a scorer.
 
         Args:
@@ -398,6 +398,7 @@ class ScorerBuilder:
                 if_exists=if_exists,
             )
             self.project.add_code_function(f)
+            return f
         else:  # LLM scorer
             assert model is not None
             assert use_cot is not None
@@ -435,6 +436,7 @@ class ScorerBuilder:
                 if_exists=if_exists,
             )
             self.project.add_prompt(p)
+            return p
 
 
 class Project:
@@ -468,7 +470,7 @@ class Project:
             raise ValueError("Code functions cannot be published directly. Use `braintrust push` instead.")
 
         for prompt in self._publishable_prompts:
-            prompt_definition = prompt.to_function_definition("error", project_id_cache)
+            prompt_definition = prompt.to_function_definition(None, project_id_cache)
             definitions.append(prompt_definition)
         return api_conn().post_json("insert-functions", {"functions": definitions})
 
