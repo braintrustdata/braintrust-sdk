@@ -1,7 +1,7 @@
 import pytest
 
 from braintrust import logger
-from braintrust.logger import ObjectMetadata, OrgProjectMetadata, _MemoryBackgroundLogger
+from braintrust.logger import ObjectMetadata, OrgProjectMetadata, _internal_reset_global_state, _MemoryBackgroundLogger
 from braintrust.util import LazyValue
 
 # Fake API key for testing only - this will not work with actual API calls
@@ -29,6 +29,7 @@ def simulate_logout() -> None:
     """
     # Reset login state
     logger._state.reset_login_info()
+    logger._state.current_experiment = None
 
 
 def assert_logged_out():
@@ -51,6 +52,7 @@ def with_simulate_login():
 def with_memory_logger():
     with logger._internal_with_memory_background_logger() as bgl:
         yield bgl
+    logger._state.current_experiment = None
 
 
 def init_test_logger(project_name: str):
