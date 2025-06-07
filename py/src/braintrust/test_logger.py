@@ -550,3 +550,83 @@ async def test_traced_async_generator_with_subtasks(with_memory_logger):
             },
         },
     )
+
+
+@pytest.mark.asyncio
+async def test_traced_async_function(with_memory_logger):
+    """Test tracing async functions."""
+    init_test_logger(__name__)
+
+    @logger.traced
+    async def async_multiply(x: int, y: int) -> int:
+        """An async function that multiplies two numbers."""
+        await asyncio.sleep(0.001)  # Small delay to simulate async work
+        result = x * y
+        logger.current_span().log(metadata={"operation": "multiply"})
+        return result
+
+    start_time = time.time()
+    result = await async_multiply(3, 4)
+    end_time = time.time()
+
+    assert result == 12
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+
+    assert_dict_matches(
+        log,
+        {
+            "input": {"x": 3, "y": 4},
+            "output": 12,
+            "metadata": {"operation": "multiply"},
+            "metrics": {
+                "start": lambda x: start_time <= x <= end_time,
+                "end": lambda x: start_time <= x <= end_time,
+            },
+            "span_attributes": {
+                "name": "async_multiply",
+                "type": "function",
+            },
+        },
+    )
+
+
+def test_traced_sync_function(with_memory_logger):
+    """Test tracing synchronous functions."""
+    init_test_logger(__name__)
+
+    @logger.traced
+    def sync_add(a: int, b: int) -> int:
+        """A sync function that adds two numbers."""
+        result = a + b
+        logger.current_span().log(metadata={"operation": "add"})
+        return result
+
+    start_time = time.time()
+    result = sync_add(5, 7)
+    end_time = time.time()
+
+    assert result == 12
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+
+    assert_dict_matches(
+        log,
+        {
+            "input": {"a": 5, "b": 7},
+            "output": 12,
+            "metadata": {"operation": "add"},
+            "metrics": {
+                "start": lambda x: start_time <= x <= end_time,
+                "end": lambda x: start_time <= x <= end_time,
+            },
+            "span_attributes": {
+                "name": "sync_add",
+                "type": "function",
+            },
+        },
+    )
