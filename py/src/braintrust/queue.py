@@ -2,6 +2,8 @@ import threading
 from collections import deque
 from typing import Any, List, Optional, TypeVar
 
+from .util import eprint
+
 T = TypeVar("T")
 
 
@@ -13,10 +15,14 @@ class LogQueue:
         Initialize the LogQueue.
 
         Args:
-            maxsize: Maximum size of the queue. 0 or less than 1 means unlimited.
+            maxsize: Maximum size of the queue. If 0 or negative, defaults to 5000.
         """
+        if maxsize < 1:
+            eprint(f"Queue maxsize {maxsize} is invalid, using default size 5000")
+            maxsize = 5000
+
         self.maxsize = maxsize
-        self._maxlen = None if maxsize < 1 else maxsize
+        self._maxlen = maxsize
         self._mutex = threading.Lock()
         self._queue: deque[T] = deque(maxlen=self._maxlen)
         self._semaphore = threading.Semaphore(value=0)
@@ -36,7 +42,7 @@ class LogQueue:
             dropped = []
 
             # If queue is at max capacity, popleft before appending
-            if self._maxlen is not None and len(self._queue) == self._maxlen:
+            if len(self._queue) == self._maxlen:
                 dropped_item = self._queue.popleft()
                 dropped.append(dropped_item)
                 self._total_dropped += 1

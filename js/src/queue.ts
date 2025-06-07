@@ -9,7 +9,13 @@ export class Queue<T> {
   private capacity: number; // the maximum number of items the queue can hold
 
   constructor(maxSize: number) {
-    this.capacity = maxSize < 1 ? 5000 : maxSize;
+    if (maxSize < 1) {
+      console.warn(
+        `Queue maxSize ${maxSize} is invalid, using default size 5000`,
+      );
+      maxSize = 5000;
+    }
+    this.capacity = maxSize;
     this.buffer = new Array(this.capacity);
   }
 
