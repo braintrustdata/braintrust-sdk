@@ -537,17 +537,19 @@ function postprocessStreamingResults(allResults: any[]): {
     }
 
     if (delta.tool_calls) {
-      if (!tool_calls) {
+      const toolDelta = delta.tool_calls[0];
+      if (!tool_calls || (toolDelta.id && tool_calls[0].id !== toolDelta.id)) {
         tool_calls = [
+          ...(tool_calls || []),
           {
-            id: delta.tool_calls[0].id,
-            type: delta.tool_calls[0].type,
-            function: delta.tool_calls[0].function,
+            id: toolDelta.id,
+            type: toolDelta.type,
+            function: toolDelta.function,
           },
         ];
       } else {
-        tool_calls[0].function.arguments +=
-          delta.tool_calls[0].function.arguments;
+        tool_calls[tool_calls.length - 1].function.arguments +=
+          toolDelta.function.arguments;
       }
     }
   }

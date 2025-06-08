@@ -136,6 +136,119 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.isTrue(m.completion_reasoning_tokens >= 0);
   });
 
+  test("openai.chat.completions.tools", async (context) => {
+    assert.lengthOf(await backgroundLogger.drain(), 0);
+
+    // Define tools that can be called in parallel
+    const tools = [
+      {
+        type: "function" as const,
+        function: {
+          name: "get_weather",
+          description: "Get the weather for a location",
+          parameters: {
+            type: "object",
+            properties: {
+              location: {
+                type: "string",
+                description: "The location to get weather for",
+              },
+            },
+            required: ["location"],
+          },
+        },
+      },
+      {
+        type: "function" as const,
+        function: {
+          name: "get_time",
+          description: "Get the current time for a timezone",
+          parameters: {
+            type: "object",
+            properties: {
+              timezone: {
+                type: "string",
+                description: "The timezone to get time for",
+              },
+            },
+            required: ["timezone"],
+          },
+        },
+      },
+    ];
+
+    for (const stream of [false, true]) {
+      const start = getCurrentUnixTimestamp();
+
+      const result = await client.chat.completions.create({
+        messages: [
+          {
+            role: "user",
+            content: "What's the weather in New York and the time in Tokyo?",
+          },
+        ],
+        model: TEST_MODEL,
+        tools: tools,
+        temperature: 0,
+        stream: stream,
+        stream_options: stream ? { include_usage: true } : undefined,
+      });
+
+      if (stream) {
+        // Consume the stream
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for await (const _chunk of result as any) {
+          // Exhaust the stream
+        }
+      }
+
+      const end = getCurrentUnixTimestamp();
+
+      const spans = await backgroundLogger.drain();
+      assert.lengthOf(spans, 1);
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+      const span = spans[0] as any;
+      assert.ok(span);
+      assert.equal(span.span_attributes.type, "llm");
+      assert.equal(span.metadata.model, TEST_MODEL);
+      assert.equal(span.metadata.stream, stream);
+
+      // Verify the input contains the expected prompt
+      assert.include(
+        JSON.stringify(span.input),
+        "What's the weather in New York and the time in Tokyo?",
+      );
+
+      // Verify tools were included in metadata
+      assert.property(span.metadata, "tools");
+      assert.lengthOf(span.metadata.tools, 2);
+
+      // Verify tool calls are in the output
+      if (span.output && Array.isArray(span.output)) {
+        const message = span.output[0]?.message;
+        if (message?.tool_calls) {
+          // Should have both tools called
+          assert.lengthOf(message.tool_calls, 2);
+          const tool_names = message.tool_calls.map(
+            (call: any) => call.function.name,
+          );
+          assert.include(tool_names, "get_weather");
+          assert.include(tool_names, "get_time");
+        }
+      }
+
+      const m = span.metrics;
+      assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
+      // Token metrics might be available depending on the response
+      if (m.tokens !== undefined) {
+        assert.isTrue(m.tokens > 0);
+        assert.isTrue(m.prompt_tokens > 0);
+        assert.isTrue(m.prompt_cached_tokens >= 0);
+        assert.isTrue(m.completion_reasoning_tokens >= 0);
+      }
+    }
+  });
+
   test("openai.responses.stream", async (context) => {
     if (!oai.responses) {
       context.skip();
