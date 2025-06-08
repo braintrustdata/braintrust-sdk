@@ -218,6 +218,7 @@ class ChatCompletionWrapper:
 
             if delta.get("tool_calls") is not None:
                 tool_delta = delta["tool_calls"][0]
+                # pylint: disable=unsubscriptable-object
                 if not tool_calls or (tool_delta.get("id") and tool_calls[-1]["id"] != tool_delta.get("id")):
                     tool_calls = (tool_calls or []) + [
                         {
@@ -227,6 +228,7 @@ class ChatCompletionWrapper:
                         }
                     ]
                 else:
+                    # pylint: disable=unsubscriptable-object
                     tool_calls[-1]["function"]["arguments"] += delta["tool_calls"][0]["function"]["arguments"]
 
         return {
