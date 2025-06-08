@@ -192,9 +192,9 @@ class ChatCompletionWrapper:
     def _postprocess_streaming_results(cls, all_results: List[Dict[str, Any]]) -> Dict[str, Any]:
         role = None
         content = None
-        tool_calls = None
+        tool_calls: Optional[List[Any]] = None
         finish_reason = None
-        metrics = {}
+        metrics: Dict[str, float] = {}
         for result in all_results:
             usage = result.get("usage")
             if usage:
@@ -215,9 +215,11 @@ class ChatCompletionWrapper:
 
             if delta.get("content") is not None:
                 content = (content or "") + delta.get("content")
+
             if delta.get("tool_calls") is not None:
-                if tool_calls is None:
-                    tool_calls = [
+                tool_delta = delta["tool_calls"][0]
+                if not tool_calls or (tool_delta.get("id") and tool_calls[-1]["id"] != tool_delta.get("id")):
+                    tool_calls = (tool_calls or []) + [
                         {
                             "id": delta["tool_calls"][0]["id"],
                             "type": delta["tool_calls"][0]["type"],
@@ -225,7 +227,7 @@ class ChatCompletionWrapper:
                         }
                     ]
                 else:
-                    tool_calls[0]["function"]["arguments"] += delta["tool_calls"][0]["function"]["arguments"]
+                    tool_calls[-1]["function"]["arguments"] += delta["tool_calls"][0]["function"]["arguments"]
 
         return {
             "metrics": metrics,
