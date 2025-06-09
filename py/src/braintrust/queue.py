@@ -96,3 +96,14 @@ class LogQueue:
             True if items became available, False if timeout occurred.
         """
         return self._has_items_event.wait(timeout=timeout)
+
+    @property
+    def dropped(self) -> int:
+        """
+        Get the total number of items dropped due to queue overflow.
+
+        Returns:
+            Total number of items dropped since queue creation.
+        """
+        with self._mutex:
+            return self._total_dropped

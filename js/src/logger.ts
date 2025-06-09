@@ -2353,6 +2353,10 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     this.apiConn = new LazyValue(async () => apiConn);
   }
 
+  public get queueDropped(): number {
+    return this.queue.dropped;
+  }
+
   public disable() {
     this._disabled = true;
   }
