@@ -2,7 +2,7 @@
 // buffer to store items so that dropping oldest things in the queue
 // is O(1) time.
 export class Queue<T> {
-  private buffer: Array<T | undefined>;
+  private buffer: Array<T>;
   private head: number = 0; // the index of the first item in the queue
   private tail: number = 0; // the index of the next item to be added
   private size: number = 0; // the number of items in the queue
@@ -49,33 +49,28 @@ export class Queue<T> {
 
   drain(): T[] {
     const items: T[] = [];
-
     if (this.size === 0) {
       return items;
     }
 
-    // FIXME[matt] we could short circuit if the buffer is full
-    // and just return buffer and create a new one.
-
-    let current = this.head;
-    while (this.size > 0) {
-      const item = this.buffer[current];
-      if (item !== undefined) {
-        items.push(item);
-      }
-      this.buffer[current] = undefined;
-      current = (current + 1) % this.capacity;
-      this.size--;
+    if (this.head < this.tail) {
+      items.push(...this.buffer.slice(this.head, this.tail));
+      this.buffer.fill(undefined as T, this.head, this.tail);
+    } else {
+      items.push(...this.buffer.slice(this.head));
+      items.push(...this.buffer.slice(0, this.tail));
+      this.buffer.fill(undefined as T, this.head, this.capacity);
+      this.buffer.fill(undefined as T, 0, this.tail);
     }
 
     this.head = 0;
     this.tail = 0;
-
+    this.size = 0;
     return items;
   }
 
   clear(): void {
-    this.buffer = new Array(this.capacity);
+    this.buffer.fill(undefined as T);
     this.head = 0;
     this.tail = 0;
     this.size = 0;
