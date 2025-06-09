@@ -1,3 +1,5 @@
+const DEFAULT_QUEUE_SIZE = 5000;
+
 // A simple queue that drops oldest items when full. It uses a circular
 // buffer to store items so that dropping oldest things in the queue
 // is O(1) time.
@@ -11,9 +13,9 @@ export class Queue<T> {
   constructor(maxSize: number) {
     if (maxSize < 1) {
       console.warn(
-        `Queue maxSize ${maxSize} is invalid, using default size 5000`,
+        `maxSize ${maxSize} is <1, using default ${DEFAULT_QUEUE_SIZE}`,
       );
-      maxSize = 5000;
+      maxSize = DEFAULT_QUEUE_SIZE;
     }
     this.capacity = maxSize;
     this.buffer = new Array(this.capacity);

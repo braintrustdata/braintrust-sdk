@@ -1,10 +1,12 @@
 import threading
 from collections import deque
-from typing import Any, List, Optional, TypeVar
+from typing import List, Optional, TypeVar
 
 from .util import eprint
 
 T = TypeVar("T")
+
+DEFAULT_QUEUE_SIZE = 5000
 
 
 class LogQueue:
@@ -18,8 +20,8 @@ class LogQueue:
             maxsize: Maximum size of the queue. If 0 or negative, defaults to 5000.
         """
         if maxsize < 1:
-            eprint(f"Queue maxsize {maxsize} is invalid, using default size 5000")
-            maxsize = 5000
+            eprint(f"Queue maxsize {maxsize} is invalid, using default size {DEFAULT_QUEUESIZE}")
+            maxsize = DEFAULT_QUEUESIZE
 
         self.maxsize = maxsize
         self._maxlen = maxsize
