@@ -43,11 +43,13 @@ function parseSpanFromResponseCreateParams(params: any): TimedSpan {
     name: "openai.responses.create",
     spanAttributes: {
       type: "llm",
-      provider: "openai",
     },
     event: {
       input,
-      metadata: filterFrom(params, ["input", "instructions"]),
+      metadata: {
+        ...filterFrom(params, ["input", "instructions"]),
+        provider: "openai",
+      },
     },
     startTime: getCurrentUnixTimestamp(),
   };
