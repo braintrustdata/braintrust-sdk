@@ -35,9 +35,10 @@ def test_queue_performance(rate: int, queue_size: int, duration: int) -> None:
     post_import_memory = get_memory_mb()
     print(f"Memory after import: {post_import_memory:.1f} MB (+{post_import_memory - initial_memory:.1f} MB)")
 
-    # Reset dropped counter at start of test
+    # Reset queue counters at start of test
     bg_logger = braintrust.logger._state.global_bg_logger()
     bg_logger.queue._total_dropped = 0
+    bg_logger.queue._total_pushed = 0
 
     interval_s = 1.0 / rate
     total_spans = rate * duration
@@ -56,11 +57,10 @@ def test_queue_performance(rate: int, queue_size: int, duration: int) -> None:
             input={"message": f"Test message {created_spans}"}
         )
 
-        # Skip the log call to reduce queue items
-        # span.log(
-        #     output=f"Test output {created_spans}",
-        #     metadata={"timestamp": time.time(), "rate": rate}
-        # )
+        span.log(
+            output=f"Test output {created_spans}",
+            metadata={"timestamp": time.time(), "rate": rate}
+        )
 
         span.end()
         created_spans += 1
@@ -80,7 +80,8 @@ def test_queue_performance(rate: int, queue_size: int, duration: int) -> None:
         if created_spans < total_spans:
             elapsed = time.time() - span_start_time
             sleep_time = max(0, interval_s - elapsed)
-            time.sleep(sleep_time)
+            if sleep_time > 0:
+                time.sleep(sleep_time)
 
     end_time = time.time()
     actual_duration = end_time - start_time

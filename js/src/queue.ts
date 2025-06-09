@@ -10,6 +10,7 @@ export class Queue<T> {
   private size: number = 0; // the number of items in the queue
   private capacity: number; // the maximum number of items the queue can hold
   public dropped: number = 0; // the total number of items dropped
+  public totalPushed: number = 0; // the total number of items pushed to the queue
 
   constructor(maxSize: number) {
     if (maxSize < 1) {
@@ -26,6 +27,8 @@ export class Queue<T> {
     const dropped: T[] = [];
 
     for (const item of items) {
+      this.totalPushed++; // Track total items pushed
+
       if (this.size === this.capacity) {
         const droppedItem = this.buffer[this.head];
         if (droppedItem !== undefined) {

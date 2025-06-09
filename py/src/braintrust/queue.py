@@ -28,6 +28,7 @@ class LogQueue:
         self._queue: deque[T] = deque(maxlen=maxsize)
         self._has_items_event = threading.Event()
         self._total_dropped = 0
+        self._total_pushed = 0
 
     def put(self, item: T) -> List[T]:
         """
@@ -49,6 +50,7 @@ class LogQueue:
                 self._total_dropped += 1
 
             self._queue.append(item)
+            self._total_pushed += 1
 
             # Signal that items are available if queue was empty
             self._has_items_event.set()
@@ -107,3 +109,14 @@ class LogQueue:
         """
         with self._mutex:
             return self._total_dropped
+
+    @property
+    def total_pushed(self) -> int:
+        """
+        Get the total number of items pushed to the queue.
+
+        Returns:
+            Total number of items pushed since queue creation.
+        """
+        with self._mutex:
+            return self._total_pushed

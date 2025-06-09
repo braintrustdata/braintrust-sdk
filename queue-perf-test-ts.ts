@@ -43,15 +43,17 @@ async function testQueuePerformance(
     `Memory after import: ${postImportMemory.toFixed(1)} MB (+${(postImportMemory - initialMemory).toFixed(1)} MB)`,
   );
 
-  // Reset dropped counter at start of test
+  // Reset counters at start of test and check queue size
   try {
     const state = getGlobalState();
     const httpLogger = state.httpLogger();
     if (httpLogger && httpLogger.queue) {
+      console.log(`Queue capacity: ${(httpLogger.queue as any).capacity}`);
       (httpLogger.queue as any).dropped = 0;
+      (httpLogger.queue as any).totalPushed = 0;
     }
   } catch (e) {
-    console.log("Could not reset dropped counter:", e);
+    console.log("Could not reset counters:", e);
   }
 
   const intervalS = 1.0 / rate;
@@ -71,11 +73,10 @@ async function testQueuePerformance(
       input: { message: `Test message ${createdSpans}` },
     });
 
-    // Skip the log call to reduce queue items
-    // span.log({
-    //   output: `Test output ${createdSpans}`,
-    //   metadata: { timestamp: Date.now() / 1000, rate }
-    // });
+    span.log({
+      output: `Test output ${createdSpans}`,
+      metadata: { timestamp: Date.now() / 1000, rate },
+    });
 
     span.end();
     createdSpans++;
@@ -108,26 +109,30 @@ async function testQueuePerformance(
   const endTime = Date.now() / 1000;
   const actualDuration = endTime - startTime;
 
-  // Get dropped count from background logger
-  let droppedSpans = 0;
+  // Get queue statistics from background logger
+  let droppedItems = 0;
+  let totalPushedItems = 0;
   try {
     const state = getGlobalState();
-    droppedSpans = state.httpLogger().queueDropped;
+    const httpLogger = state.httpLogger();
+    droppedItems = httpLogger.queueDropped;
+    totalPushedItems = (httpLogger.queue as any).totalPushed;
   } catch (e) {
-    console.log("Could not get dropped count:", e);
+    console.log("Could not get queue stats:", e);
   }
 
   // Final memory snapshot
   const finalMemory = getMemoryMB();
 
   console.log(`Created ${createdSpans} spans in ${actualDuration.toFixed(2)}s`);
-  if (droppedSpans !== undefined && droppedSpans !== null) {
-    console.log(`Dropped: ${droppedSpans} spans`);
+  console.log(`Total queue operations: ${totalPushedItems}`);
+  console.log(`Dropped queue items: ${droppedItems}`);
+  if (totalPushedItems > 0) {
     console.log(
-      `Drop rate: ${((droppedSpans / createdSpans) * 100).toFixed(1)}%`,
+      `Queue drop rate: ${((droppedItems / totalPushedItems) * 100).toFixed(1)}%`,
     );
   } else {
-    console.log(`Dropped: See console warnings above for drop notifications`);
+    console.log(`Queue drop rate: 0.0%`);
   }
   if (queueFillTime) {
     console.log(`Queue filled after: ${queueFillTime.toFixed(2)}s`);
