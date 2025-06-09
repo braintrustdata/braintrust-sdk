@@ -1,152 +1,196 @@
-import { initLogger, traced } from "./js/src/index";
+#!/usr/bin/env node
 
-interface TestResult {
-  rate: number;
-  duration: number;
-  totalSpans: number;
-  droppedSpans: number;
-  queueFillTime?: number;
+import * as process from "process";
+
+function getMemoryMB(): number {
+  return process.memoryUsage().rss / 1024 / 1024;
 }
 
-class QueuePerformanceTester {
-  private logger: any;
-  private results: TestResult[] = [];
+async function testQueuePerformance(
+  rate: number,
+  queueSize: number,
+  duration: number,
+): Promise<void> {
+  console.log(
+    `Testing ${rate} spans/sec for ${duration} seconds with queue size ${queueSize}...`,
+  );
 
-  constructor() {
-    // Initialize logger with a test project using production
-    this.logger = initLogger({
-      projectName: "queue-perf-test",
-    });
+  // Take initial memory snapshot
+  const initialMemory = getMemoryMB();
+  console.log(`Initial memory: ${initialMemory.toFixed(1)} MB`);
+
+  // Set queue size environment variable before importing braintrust
+  process.env.BRAINTRUST_QUEUE_DROP_EXCEEDING_MAXSIZE = queueSize.toString();
+  console.log(
+    `Set BRAINTRUST_QUEUE_DROP_EXCEEDING_MAXSIZE=${process.env.BRAINTRUST_QUEUE_DROP_EXCEEDING_MAXSIZE}`,
+  );
+
+  // Make queue drop logging very frequent (every 1 second instead of 60)
+  process.env.BRAINTRUST_QUEUE_DROP_LOGGING_PERIOD = "1";
+
+  const braintrust = await import("./js/src/index");
+  // Initialize logger (this should create a fresh queue)
+  const logger = braintrust.initLogger({
+    projectName: "queue-perf-test",
+  });
+
+  // Get the global state for accessing queue stats
+  const getGlobalState = (braintrust as any)._internalGetGlobalState;
+
+  // Memory after import
+  const postImportMemory = getMemoryMB();
+  console.log(
+    `Memory after import: ${postImportMemory.toFixed(1)} MB (+${(postImportMemory - initialMemory).toFixed(1)} MB)`,
+  );
+
+  // Reset dropped counter at start of test
+  try {
+    const state = getGlobalState();
+    const httpLogger = state.httpLogger();
+    if (httpLogger && httpLogger.queue) {
+      (httpLogger.queue as any).dropped = 0;
+    }
+  } catch (e) {
+    console.log("Could not reset dropped counter:", e);
   }
 
-  async testSpanCreationRate(
-    rate: number,
-    duration: number = 10,
-  ): Promise<TestResult> {
-    console.log(`Testing ${rate} spans/sec for ${duration} seconds...`);
+  const intervalS = 1.0 / rate;
+  const totalSpans = rate * duration;
+  let createdSpans = 0;
+  let queueFillTime: number | null = null;
+  const memorySnapshots: Array<[number, number, number]> = [];
 
-    const intervalMs = 1000 / rate;
-    const totalSpans = rate * duration;
-    let createdSpans = 0;
-    let droppedSpans = 0;
-    let queueFillTime: number | undefined;
+  const startTime = Date.now() / 1000;
 
-    const startTime = Date.now();
+  while (createdSpans < totalSpans) {
+    const spanStartTime = Date.now() / 1000;
 
-    return new Promise((resolve) => {
-      const interval = setInterval(() => {
-        if (createdSpans >= totalSpans) {
-          clearInterval(interval);
-          const endTime = Date.now();
-          const actualDuration = (endTime - startTime) / 1000;
-
-          const result: TestResult = {
-            rate,
-            duration: actualDuration,
-            totalSpans: createdSpans,
-            droppedSpans,
-            queueFillTime,
-          };
-
-          console.log(
-            `  Created ${createdSpans} spans in ${actualDuration.toFixed(2)}s`,
-          );
-          console.log(`  Dropped: ${droppedSpans} spans`);
-          if (queueFillTime) {
-            console.log(`  Queue filled after: ${queueFillTime.toFixed(2)}s`);
-          }
-
-          resolve(result);
-          return;
-        }
-
-        // Create a span
-        const span = this.logger.startSpan({
-          name: `test-span-${createdSpans}`,
-          input: { message: `Test message ${createdSpans}` },
-        });
-
-        // Simulate some work
-        span.log({
-          output: `Test output ${createdSpans}`,
-          metadata: { timestamp: Date.now(), rate },
-        });
-
-        span.end();
-        createdSpans++;
-
-        // Check if queue is dropping items - hacky access to internal queue
-        const bgLogger = (this.logger as any).state.bgLogger();
-        droppedSpans = bgLogger.queueDropped;
-        console.assert(typeof droppedSpans === "number");
-
-        if (!queueFillTime && createdSpans > 5000) {
-          queueFillTime = (Date.now() - startTime) / 1000;
-        }
-      }, intervalMs);
+    // Create a span
+    const span = logger.startSpan({
+      name: `test-span-${createdSpans}`,
+      input: { message: `Test message ${createdSpans}` },
     });
-  }
 
-  async runAllTests(): Promise<void> {
-    const rates = [10, 100, 1000, 5000 /*, 10000, 20000*/];
+    // Skip the log call to reduce queue items
+    // span.log({
+    //   output: `Test output ${createdSpans}`,
+    //   metadata: { timestamp: Date.now() / 1000, rate }
+    // });
 
-    console.log("Starting queue performance tests...\n");
+    span.end();
+    createdSpans++;
 
-    for (const rate of rates) {
-      try {
-        const result = await this.testSpanCreationRate(rate, 5); // 5 second tests
-        this.results.push(result);
+    // Check if queue is filling up (estimate based on queue_size)
+    if (queueFillTime === null && createdSpans > queueSize) {
+      queueFillTime = Date.now() / 1000 - startTime;
+    }
 
-        // Wait a bit between tests to let things settle
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-      } catch (error) {
-        console.error(`Error testing rate ${rate}:`, error);
+    // Take memory snapshots at regular intervals
+    if (createdSpans % Math.floor(totalSpans / 4) === 0 && createdSpans > 0) {
+      const currentMemory = getMemoryMB();
+      const elapsedTime = Date.now() / 1000 - startTime;
+      memorySnapshots.push([elapsedTime, currentMemory, createdSpans]);
+      console.log(
+        `Memory at ${elapsedTime.toFixed(1)}s (${createdSpans} spans): ${currentMemory.toFixed(1)} MB`,
+      );
+    }
+
+    // Adaptive sleep to maintain desired rate
+    if (createdSpans < totalSpans) {
+      const elapsed = Date.now() / 1000 - spanStartTime;
+      const sleepTime = Math.max(0, intervalS - elapsed);
+      if (sleepTime > 0) {
+        await new Promise((resolve) => setTimeout(resolve, sleepTime * 1000));
       }
     }
-
-    this.printSummary();
   }
 
-  private printSummary(): void {
-    console.log("\n=== Queue Performance Test Results ===");
-    console.log(
-      "Rate (spans/sec) | Duration (s) | Total Spans | Dropped | Queue Fill Time",
-    );
-    console.log(
-      "----------------|-------------|-------------|---------|----------------",
-    );
+  const endTime = Date.now() / 1000;
+  const actualDuration = endTime - startTime;
 
-    for (const result of this.results) {
-      const fillTime = result.queueFillTime
-        ? result.queueFillTime.toFixed(2) + "s"
-        : "N/A";
+  // Get dropped count from background logger
+  let droppedSpans = 0;
+  try {
+    const state = getGlobalState();
+    droppedSpans = state.httpLogger().queueDropped;
+  } catch (e) {
+    console.log("Could not get dropped count:", e);
+  }
+
+  // Final memory snapshot
+  const finalMemory = getMemoryMB();
+
+  console.log(`Created ${createdSpans} spans in ${actualDuration.toFixed(2)}s`);
+  if (droppedSpans !== undefined && droppedSpans !== null) {
+    console.log(`Dropped: ${droppedSpans} spans`);
+    console.log(
+      `Drop rate: ${((droppedSpans / createdSpans) * 100).toFixed(1)}%`,
+    );
+  } else {
+    console.log(`Dropped: See console warnings above for drop notifications`);
+  }
+  if (queueFillTime) {
+    console.log(`Queue filled after: ${queueFillTime.toFixed(2)}s`);
+  }
+
+  console.log(
+    `Final memory: ${finalMemory.toFixed(1)} MB (+${(finalMemory - initialMemory).toFixed(1)} MB total)`,
+  );
+
+  // Show memory growth during test
+  if (memorySnapshots.length > 0) {
+    console.log("\nMemory progression:");
+    for (const [elapsedTime, memory, spans] of memorySnapshots) {
+      const growth = memory - initialMemory;
       console.log(
-        `${result.rate.toString().padStart(15)} | ` +
-          `${result.duration.toFixed(2).padStart(11)} | ` +
-          `${result.totalSpans.toString().padStart(11)} | ` +
-          `${result.droppedSpans.toString().padStart(7)} | ` +
-          `${fillTime.padStart(15)}`,
+        `  ${elapsedTime.toFixed(1)}s: ${memory.toFixed(1)} MB (+${growth.toFixed(1)} MB, ${spans} spans)`,
       );
     }
+  }
 
-    // Find the rate where dropping starts to occur significantly
-    const droppingResults = this.results.filter((r) => r.droppedSpans > 0);
-    if (droppingResults.length > 0) {
-      const firstDroppingRate = droppingResults[0].rate;
-      console.log(
-        `\nFirst significant dropping occurred at: ${firstDroppingRate} spans/sec`,
-      );
-    }
+  // Wait for queue to flush and monitor memory recovery
+  console.log("\nWaiting for queue to flush...");
+  const flushStartTime = Date.now() / 1000;
+  for (let i = 0; i < 10; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+    const currentMemory = getMemoryMB();
+    const elapsedFlushTime = Date.now() / 1000 - flushStartTime;
+    const memoryChange = currentMemory - finalMemory;
+    console.log(
+      `Flush +${elapsedFlushTime.toFixed(1)}s: ${currentMemory.toFixed(1)} MB (${memoryChange >= 0 ? "+" : ""}${memoryChange.toFixed(1)} MB from test end)`,
+    );
   }
 }
 
-// Run the tests
-async function main() {
-  const tester = new QueuePerformanceTester();
-  await tester.runAllTests();
-  process.exit(0);
+function main() {
+  if (process.argv.length !== 5) {
+    console.log(
+      "Usage: node queue-perf-test-ts.ts <spans_per_second> <queue_size> <duration_seconds>",
+    );
+    console.log("Example: node queue-perf-test-ts.ts 5000 5000 10");
+    process.exit(1);
+  }
+
+  const rate = parseInt(process.argv[2]);
+  const queueSize = parseInt(process.argv[3]);
+  const duration = parseInt(process.argv[4]);
+
+  if (isNaN(rate) || isNaN(queueSize) || isNaN(duration)) {
+    console.log("Error: All arguments must be integers");
+    process.exit(1);
+  }
+
+  testQueuePerformance(rate, queueSize, duration)
+    .then(() => {
+      console.log("Test completed");
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error("Test failed:", error);
+      process.exit(1);
+    });
 }
 
 if (require.main === module) {
-  main().catch(console.error);
+  main();
 }

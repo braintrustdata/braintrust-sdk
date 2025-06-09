@@ -12,7 +12,7 @@ DEFAULT_QUEUE_SIZE = 5000
 class LogQueue:
     """A thread-safe queue that drops oldest items when full."""
 
-    def __init__(self, maxsize: int = 0):
+    def __init__(self, maxsize: int = DEFAULT_QUEUE_SIZE):
         """
         Initialize the LogQueue.
 

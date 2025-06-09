@@ -1,128 +1,139 @@
 #!/usr/bin/env python3
 
-import threading
+import os
+import sys
 import time
-from dataclasses import dataclass
-from typing import List, Optional
+from typing import Optional
 
-import braintrust
+import psutil
 
 
-@dataclass
-class TestResult:
-    rate: int
-    duration: float
-    total_spans: int
-    dropped_spans: int
+def get_memory_mb() -> float:
+    """Get current process memory usage in MB."""
+    return psutil.Process().memory_info().rss / 1024 / 1024
+
+
+def test_queue_performance(rate: int, queue_size: int, duration: int) -> None:
+    """Test queue performance with given parameters."""
+    print(f"Testing {rate} spans/sec for {duration} seconds with queue size {queue_size}...")
+
+    # Take initial memory snapshot
+    initial_memory = get_memory_mb()
+    print(f"Initial memory: {initial_memory:.1f} MB")
+
+    # Set queue size environment variable before importing braintrust
+    os.environ['BRAINTRUST_QUEUE_SIZE'] = str(queue_size)
+
+    # Make queue drop logging very frequent (every 1 second instead of 60)
+    os.environ['BRAINTRUST_QUEUE_DROP_LOGGING_PERIOD'] = '1'
+
+    import braintrust
+    # Initialize logger (this should create a fresh queue)
+    logger = braintrust.init_logger(project="queue-perf-test")
+
+    # Memory after import
+    post_import_memory = get_memory_mb()
+    print(f"Memory after import: {post_import_memory:.1f} MB (+{post_import_memory - initial_memory:.1f} MB)")
+
+    # Reset dropped counter at start of test
+    bg_logger = braintrust.logger._state.global_bg_logger()
+    bg_logger.queue._total_dropped = 0
+
+    interval_s = 1.0 / rate
+    total_spans = rate * duration
+    created_spans = 0
     queue_fill_time: Optional[float] = None
+    memory_snapshots = []
 
+    start_time = time.time()
 
-class QueuePerformanceTester:
-    def __init__(self):
-        self.logger = braintrust.init_logger(project="queue-perf-test")
-        self.results: List[TestResult] = []
+    while created_spans < total_spans:
+        span_start_time = time.time()
 
-    def test_span_creation_rate(self, rate: int, duration: int = 10) -> TestResult:
-        print(f"Testing {rate} spans/sec for {duration} seconds...")
-
-        interval_s = 1.0 / rate
-        total_spans = rate * duration
-        created_spans = 0
-        dropped_spans = 0
-        queue_fill_time: Optional[float] = None
-
-        start_time = time.time()
-
-        while created_spans < total_spans:
-            # Create a span
-            span = self.logger.start_span(
-                name=f"test-span-{created_spans}",
-                input={"message": f"Test message {created_spans}"}
-            )
-
-            # Simulate some work
-            span.log(
-                output=f"Test output {created_spans}",
-                metadata={"timestamp": time.time(), "rate": rate}
-            )
-
-            span.end()
-            created_spans += 1
-
-            # Check dropped spans - hacky access to internal queue
-            import braintrust
-            bg_logger = braintrust.logger._state.global_bg_logger()
-            dropped_spans = bg_logger.queue.dropped
-            assert isinstance(dropped_spans, int)
-
-            # Check if queue is filling up (estimate based on DEFAULT_QUEUE_SIZE)
-            if queue_fill_time is None and created_spans > 5000:
-                queue_fill_time = time.time() - start_time
-
-            # Sleep to maintain the desired rate
-            if created_spans < total_spans:
-                time.sleep(interval_s)
-
-        end_time = time.time()
-        actual_duration = end_time - start_time
-
-        result = TestResult(
-            rate=rate,
-            duration=actual_duration,
-            total_spans=created_spans,
-            dropped_spans=dropped_spans,  # We'll need to instrument this properly
-            queue_fill_time=queue_fill_time,
+        # Create a span
+        span = logger.start_span(
+            name=f"test-span-{created_spans}",
+            input={"message": f"Test message {created_spans}"}
         )
 
-        print(f"  Created {created_spans} spans in {actual_duration:.2f}s")
-        print(f"  Dropped: {dropped_spans} spans")
-        if queue_fill_time:
-            print(f"  Queue filled after: {queue_fill_time:.2f}s")
+        # Skip the log call to reduce queue items
+        # span.log(
+        #     output=f"Test output {created_spans}",
+        #     metadata={"timestamp": time.time(), "rate": rate}
+        # )
 
-        return result
+        span.end()
+        created_spans += 1
 
-    def run_all_tests(self) -> None:
-        rates = [10, 100, 1000, 5000, 10000, 20000]
+        # Check if queue is filling up (estimate based on queue_size)
+        if queue_fill_time is None and created_spans > queue_size:
+            queue_fill_time = time.time() - start_time
 
-        print("Starting queue performance tests...\n")
+        # Take memory snapshots at regular intervals
+        if created_spans % (total_spans // 4) == 0 and created_spans > 0:
+            current_memory = get_memory_mb()
+            elapsed_time = time.time() - start_time
+            memory_snapshots.append((elapsed_time, current_memory, created_spans))
+            print(f"Memory at {elapsed_time:.1f}s ({created_spans} spans): {current_memory:.1f} MB")
 
-        for rate in rates:
-            try:
-                result = self.test_span_creation_rate(rate, 5)  # 5 second tests
-                self.results.append(result)
+        # Adaptive sleep to maintain desired rate
+        if created_spans < total_spans:
+            elapsed = time.time() - span_start_time
+            sleep_time = max(0, interval_s - elapsed)
+            time.sleep(sleep_time)
 
-                # Wait a bit between tests to let things settle
-                time.sleep(2)
-            except Exception as error:
-                print(f"Error testing rate {rate}: {error}")
+    end_time = time.time()
+    actual_duration = end_time - start_time
 
-        self.print_summary()
+    # Get dropped count from background logger
+    bg_logger = braintrust.logger._state.global_bg_logger()
+    dropped_spans = bg_logger.queue.dropped
 
-    def print_summary(self) -> None:
-        print("\n=== Queue Performance Test Results ===")
-        print("Rate (spans/sec) | Duration (s) | Total Spans | Dropped | Queue Fill Time")
-        print("----------------|-------------|-------------|---------|----------------")
+    # Final memory snapshot
+    final_memory = get_memory_mb()
 
-        for result in self.results:
-            fill_time = f"{result.queue_fill_time:.2f}s" if result.queue_fill_time else "N/A"
-            print(
-                f"{result.rate:>15} | "
-                f"{result.duration:>11.2f} | "
-                f"{result.total_spans:>11} | "
-                f"{result.dropped_spans:>7} | "
-                f"{fill_time:>15}"
-            )
+    print(f"Created {created_spans} spans in {actual_duration:.2f}s")
+    print(f"Dropped: {dropped_spans} spans")
+    print(f"Drop rate: {(dropped_spans / created_spans * 100):.1f}%")
+    if queue_fill_time:
+        print(f"Queue filled after: {queue_fill_time:.2f}s")
 
-        # Find the rate where dropping starts to occur significantly
-        dropping_results = [r for r in self.results if r.dropped_spans > 0]
-        if dropping_results:
-            first_dropping_rate = dropping_results[0].rate
-            print(f"\nFirst significant dropping occurred at: {first_dropping_rate} spans/sec")
+    print(f"Final memory: {final_memory:.1f} MB (+{final_memory - initial_memory:.1f} MB total)")
+
+    # Show memory growth during test
+    if memory_snapshots:
+        print("\nMemory progression:")
+        for elapsed_time, memory, spans in memory_snapshots:
+            growth = memory - initial_memory
+            print(f"  {elapsed_time:.1f}s: {memory:.1f} MB (+{growth:.1f} MB, {spans} spans)")
+
+    # Wait for queue to flush and monitor memory recovery
+    print("\nWaiting for queue to flush...")
+    flush_start_time = time.time()
+    for i in range(10):
+        time.sleep(2)  # Wait 2 seconds
+        current_memory = get_memory_mb()
+        elapsed_flush_time = time.time() - flush_start_time
+        memory_change = current_memory - final_memory
+        sign = "+" if memory_change >= 0 else ""
+        print(f"Flush +{elapsed_flush_time:.1f}s: {current_memory:.1f} MB ({sign}{memory_change:.1f} MB from test end)")
 
 
 def main():
-    tester = QueuePerformanceTester()
-    tester.run_all_tests()
+    if len(sys.argv) != 4:
+        print("Usage: python queue-perf-test-py.py <spans_per_second> <queue_size> <duration_seconds>")
+        print("Example: python queue-perf-test-py.py 5000 5000 10")
+        sys.exit(1)
+
+    try:
+        rate = int(sys.argv[1])
+        queue_size = int(sys.argv[2])
+        duration = int(sys.argv[3])
+    except ValueError:
+        print("Error: All arguments must be integers")
+        sys.exit(1)
+
+    test_queue_performance(rate, queue_size, duration)
 
 
 if __name__ == "__main__":
