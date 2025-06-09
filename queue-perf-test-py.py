@@ -86,16 +86,21 @@ def test_queue_performance(rate: int, queue_size: int, duration: int) -> None:
     end_time = time.time()
     actual_duration = end_time - start_time
 
-    # Get dropped count from background logger
+    # Get queue statistics from background logger
     bg_logger = braintrust.logger._state.global_bg_logger()
-    dropped_spans = bg_logger.queue.dropped
+    dropped_items = bg_logger.queue.dropped
+    total_pushed_items = bg_logger.queue.total_pushed
 
     # Final memory snapshot
     final_memory = get_memory_mb()
 
     print(f"Created {created_spans} spans in {actual_duration:.2f}s")
-    print(f"Dropped: {dropped_spans} spans")
-    print(f"Drop rate: {(dropped_spans / created_spans * 100):.1f}%")
+    print(f"Total queue operations: {total_pushed_items}")
+    print(f"Dropped queue items: {dropped_items}")
+    if total_pushed_items > 0:
+        print(f"Queue drop rate: {(dropped_items / total_pushed_items * 100):.1f}%")
+    else:
+        print(f"Queue drop rate: 0.0%")
     if queue_fill_time:
         print(f"Queue filled after: {queue_fill_time:.2f}s")
 
