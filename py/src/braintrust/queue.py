@@ -20,8 +20,8 @@ class LogQueue:
             maxsize: Maximum size of the queue. If 0 or negative, defaults to 5000.
         """
         if maxsize < 1:
-            eprint(f"Queue maxsize {maxsize} is invalid, using default size {DEFAULT_QUEUESIZE}")
-            maxsize = DEFAULT_QUEUESIZE
+            eprint(f"Queue maxsize {maxsize} is invalid, using default size {DEFAULT_QUEUE_SIZE}")
+            maxsize = DEFAULT_QUEUE_SIZE
 
         self.maxsize = maxsize
         self._maxlen = maxsize
