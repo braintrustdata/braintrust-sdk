@@ -184,7 +184,7 @@ class ChatCompletionWrapper:
             ret,
             {
                 "input": messages,
-                "metadata": params,
+                "metadata": {**params, "provider": "openai"},
             },
         )
 
@@ -373,7 +373,7 @@ class ResponseWrapper:
             ret,
             {
                 "input": input,
-                "metadata": params,
+                "metadata": {**params, "provider": "openai"},
             },
         )
 
@@ -494,7 +494,7 @@ class BaseWrapper(abc.ABC):
             ret,
             {
                 "input": input,
-                "metadata": params,
+                "metadata": {**params, "provider": "openai"},
             },
         )
 
