@@ -1,4 +1,4 @@
-const DEFAULT_QUEUE_SIZE = 5000;
+export const DEFAULT_QUEUE_SIZE = 5000;
 
 // A simple queue that drops oldest items when full. It uses a circular
 // buffer to store items so that dropping oldest things in the queue
