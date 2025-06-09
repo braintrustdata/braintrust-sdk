@@ -216,8 +216,12 @@ class ChatCompletionWrapper:
             if delta.get("content") is not None:
                 content = (content or "") + delta.get("content")
 
-            if delta.get("tool_calls") is not None:
-                tool_delta = delta["tool_calls"][0]
+            if delta.get("tool_calls"):
+                tool_calls = delta.get("tool_calls")
+                if not tool_calls:
+                    continue
+                tool_delta = tool_calls[0]
+
                 # pylint: disable=unsubscriptable-object
                 if not tool_calls or (tool_delta.get("id") and tool_calls[-1]["id"] != tool_delta.get("id")):
                     tool_calls = (tool_calls or []) + [

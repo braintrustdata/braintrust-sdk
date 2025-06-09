@@ -137,8 +137,8 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.isTrue(m.completion_reasoning_tokens >= 0);
   });
 
-  test("openai.chat.completions.tools", async (context) => {
-    assert.lengthOf(await backgroundLogger.drain(), 0);
+  test("openai.chat.completions.tools", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
 
     // Define tools that can be called in parallel
     const tools = [
@@ -179,7 +179,7 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     ];
 
     for (const stream of [false, true]) {
-      const start = getCurrentUnixTimestamp();
+      const startTime = getCurrentUnixTimestamp();
 
       const result = await client.chat.completions.create({
         messages: [
@@ -197,55 +197,85 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
 
       if (stream) {
         // Consume the stream
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
         for await (const _chunk of result as any) {
           // Exhaust the stream
         }
       }
 
-      const end = getCurrentUnixTimestamp();
+      const endTime = getCurrentUnixTimestamp();
 
       const spans = await backgroundLogger.drain();
-      assert.lengthOf(spans, 1);
+      expect(spans).toHaveLength(1);
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
       const span = spans[0] as any;
-      assert.ok(span);
-      assert.equal(span.span_attributes.type, "llm");
-      assert.equal(span.metadata.model, TEST_MODEL);
-      assert.equal(span.metadata.stream, stream);
 
-      // Verify the input contains the expected prompt
-      assert.include(
-        JSON.stringify(span.input),
-        "What's the weather in New York and the time in Tokyo?",
-      );
-
-      // Verify tools were included in metadata
-      assert.property(span.metadata, "tools");
-      assert.lengthOf(span.metadata.tools, 2);
+      expect(span).toMatchObject({
+        project_id: expect.any(String),
+        log_id: expect.any(String),
+        created: expect.any(String),
+        span_id: expect.any(String),
+        root_span_id: expect.any(String),
+        span_attributes: {
+          type: "llm",
+          name: "Chat Completion",
+        },
+        metadata: {
+          model: TEST_MODEL,
+          provider: "openai",
+          stream: stream,
+          tools: expect.arrayContaining([
+            expect.objectContaining({
+              type: "function",
+              function: expect.objectContaining({
+                name: "get_weather",
+              }),
+            }),
+            expect.objectContaining({
+              type: "function",
+              function: expect.objectContaining({
+                name: "get_time",
+              }),
+            }),
+          ]),
+        },
+        input: expect.arrayContaining([
+          expect.objectContaining({
+            role: "user",
+            content: "What's the weather in New York and the time in Tokyo?",
+          }),
+        ]),
+        metrics: expect.objectContaining({
+          start: expect.any(Number),
+          end: expect.any(Number),
+        }),
+      });
 
       // Verify tool calls are in the output
       if (span.output && Array.isArray(span.output)) {
         const message = span.output[0]?.message;
         if (message?.tool_calls) {
-          // Should have both tools called
-          assert.lengthOf(message.tool_calls, 2);
+          expect(message.tool_calls).toHaveLength(2);
           const tool_names = message.tool_calls.map(
-            (call: any) => call.function.name,
+            (call: { function: { name: string } }) => call.function.name,
           );
-          assert.include(tool_names, "get_weather");
-          assert.include(tool_names, "get_time");
+          expect(tool_names).toContain("get_weather");
+          expect(tool_names).toContain("get_time");
         }
       }
 
-      const m = span.metrics;
-      assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
+      // Validate timing
+      const { metrics } = span;
+      expect(startTime).toBeLessThanOrEqual(metrics.start);
+      expect(metrics.start).toBeLessThanOrEqual(metrics.end);
+      expect(metrics.end).toBeLessThanOrEqual(endTime);
+
       // Token metrics might be available depending on the response
-      if (m.tokens !== undefined) {
-        assert.isTrue(m.tokens > 0);
-        assert.isTrue(m.prompt_tokens > 0);
-        assert.isTrue(m.prompt_cached_tokens >= 0);
-        assert.isTrue(m.completion_reasoning_tokens >= 0);
+      if (metrics.tokens !== undefined) {
+        expect(metrics.tokens).toBeGreaterThan(0);
+        expect(metrics.prompt_tokens).toBeGreaterThan(0);
+        expect(metrics.prompt_cached_tokens).toBeGreaterThanOrEqual(0);
+        expect(metrics.completion_reasoning_tokens).toBeGreaterThanOrEqual(0);
       }
     }
   });
