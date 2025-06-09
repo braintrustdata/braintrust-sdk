@@ -24,10 +24,9 @@ class LogQueue:
             maxsize = DEFAULT_QUEUE_SIZE
 
         self.maxsize = maxsize
-        self._maxlen = maxsize
         self._mutex = threading.Lock()
-        self._queue: deque[T] = deque(maxlen=self._maxlen)
-        self._semaphore = threading.Semaphore(value=0)
+        self._queue: deque[T] = deque(maxlen=maxsize)
+        self._has_items_event = threading.Event()
         self._total_dropped = 0
 
     def put(self, item: T) -> List[T]:
@@ -44,15 +43,16 @@ class LogQueue:
             dropped = []
 
             # If queue is at max capacity, popleft before appending
-            if len(self._queue) == self._maxlen:
+            if len(self._queue) == self.maxsize:
                 dropped_item = self._queue.popleft()
                 dropped.append(dropped_item)
                 self._total_dropped += 1
 
             self._queue.append(item)
 
-        # Signal that items are available
-        self._semaphore.release()
+            # Signal that items are available if queue was empty
+            self._has_items_event.set()
+
         return dropped
 
     def drain_all(self) -> List[T]:
@@ -68,7 +68,10 @@ class LogQueue:
                 return []
 
             old_queue = self._queue
-            self._queue = deque(maxlen=self._maxlen)
+            self._queue = deque(maxlen=self.maxsize)
+
+            # Clear the event since queue is now empty
+            self._has_items_event.clear()
 
         return list(old_queue) if old_queue else []
 
@@ -92,4 +95,4 @@ class LogQueue:
         Returns:
             True if items became available, False if timeout occurred.
         """
-        return self._semaphore.acquire(timeout=timeout)
+        return self._has_items_event.wait(timeout=timeout)
