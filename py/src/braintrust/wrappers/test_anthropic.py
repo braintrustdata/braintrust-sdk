@@ -22,6 +22,16 @@ PROJECT_NAME = "test-anthropic-app"
 MODEL = "claude-3-haiku-20240307"  # use the cheapest model since answers dont matter
 
 
+@pytest.fixture(scope="module")
+def vcr_config():
+    return {
+        "filter_headers": [
+            "authorization",
+            "x-api-key",
+        ]
+    }
+
+
 def _get_client():
     return anthropic.Anthropic()
 
@@ -37,6 +47,7 @@ def memory_logger():
         yield bgl
 
 
+@pytest.mark.vcr
 def test_anthropic_messages_create_stream_true(memory_logger):
     assert not memory_logger.pop()
 
@@ -63,13 +74,13 @@ def test_anthropic_messages_create_stream_true(memory_logger):
     assert span["metadata"]["max_tokens"] == 300
     assert span["metadata"]["stream"] == True
     metrics = span["metrics"]
-    assert metrics
-    assert start < metrics["start"] < metrics["end"] < end
+    _assert_metrics_are_valid(metrics, start, end)
     assert span["input"] == kws["messages"]
     assert span["output"]
     assert "12" in span["output"][0]["text"]
 
 
+@pytest.mark.vcr
 def test_anthropic_messages_model_params_inputs(memory_logger):
     assert not memory_logger.pop()
     client = wrap_anthropic(_get_client())
@@ -106,6 +117,7 @@ def test_anthropic_messages_model_params_inputs(memory_logger):
         assert log["metadata"]["top_p"] == 0.5
 
 
+@pytest.mark.vcr
 def test_anthropic_messages_system_prompt_inputs(memory_logger):
     assert not memory_logger.pop()
 
@@ -144,6 +156,7 @@ def test_anthropic_messages_system_prompt_inputs(memory_logger):
         assert inputs_by_role["user"] == q[0]["content"]
 
 
+@pytest.mark.vcr
 @pytest.mark.asyncio
 async def test_anthropic_messages_create_async(memory_logger):
     assert not memory_logger.pop()
@@ -167,6 +180,7 @@ async def test_anthropic_messages_create_async(memory_logger):
     assert "7" in span["output"][0]["text"]
 
 
+@pytest.mark.vcr
 @pytest.mark.asyncio
 async def test_anthropic_messages_create_async_stream_true(memory_logger):
     assert not memory_logger.pop()
@@ -192,6 +206,7 @@ async def test_anthropic_messages_create_async_stream_true(memory_logger):
     assert "7" in span["output"][0]["text"]
 
 
+@pytest.mark.vcr
 @pytest.mark.asyncio
 async def test_anthropic_messages_streaming_async(memory_logger):
     assert not memory_logger.pop()
@@ -220,8 +235,7 @@ async def test_anthropic_messages_streaming_async(memory_logger):
     assert log["span_attributes"]["type"] == "llm"
     assert log["metadata"]["model"] == MODEL
     assert log["metadata"]["max_tokens"] == 1024
-    _assert_metrics_are_valid(log["metrics"])
-    assert start < log["metrics"]["start"] < log["metrics"]["end"] < end
+    _assert_metrics_are_valid(log["metrics"], start, end)
     metrics = log["metrics"]
     assert metrics["prompt_tokens"] == usage.input_tokens
     assert metrics["completion_tokens"] == usage.output_tokens
@@ -232,6 +246,7 @@ async def test_anthropic_messages_streaming_async(memory_logger):
     assert log["metadata"]["max_tokens"] == 1024
 
 
+@pytest.mark.vcr
 def test_anthropic_client_error(memory_logger):
     assert not memory_logger.pop()
 
@@ -254,6 +269,7 @@ def test_anthropic_client_error(memory_logger):
     assert "404" in log["error"]
 
 
+@pytest.mark.vcr
 def test_anthropic_messages_stream_errors(memory_logger):
     assert not memory_logger.pop()
 
@@ -275,6 +291,7 @@ def test_anthropic_messages_stream_errors(memory_logger):
     assert span["metrics"]["end"] > 0
 
 
+@pytest.mark.vcr
 def test_anthropic_messages_streaming_sync(memory_logger):
     assert not memory_logger.pop()
 
@@ -300,9 +317,8 @@ def test_anthropic_messages_streaming_sync(memory_logger):
     assert "2+2" in str(log["input"])
     assert "4" in str(log["output"])
     assert log["project_id"] == PROJECT_NAME
-    assert start < log["metrics"]["start"] < log["metrics"]["end"] < end
     assert log["span_attributes"]["type"] == "llm"
-    _assert_metrics_are_valid(log["metrics"])
+    _assert_metrics_are_valid(log["metrics"], start, end)
     assert log["metrics"]["prompt_tokens"] == usage.input_tokens
     assert log["metrics"]["completion_tokens"] == usage.output_tokens
     assert log["metrics"]["tokens"] == usage.input_tokens + usage.output_tokens
@@ -310,6 +326,7 @@ def test_anthropic_messages_streaming_sync(memory_logger):
     assert log["metrics"]["prompt_cache_creation_tokens"] == usage.cache_creation_input_tokens
 
 
+@pytest.mark.vcr
 def test_anthropic_messages_sync(memory_logger):
     assert not memory_logger.pop()
 
@@ -332,20 +349,21 @@ def test_anthropic_messages_sync(memory_logger):
     assert "2+2" in str(log["input"])
     assert "4" in str(log["output"])
     assert log["project_id"] == PROJECT_NAME
-    assert start < log["metrics"]["start"] < end
-    assert start < log["metrics"]["end"] < end
     assert log["span_id"]
     assert log["root_span_id"]
     attrs = log["span_attributes"]
     assert attrs["type"] == "llm"
     assert "anthropic" in attrs["name"]
     metrics = log["metrics"]
-    _assert_metrics_are_valid(metrics)
-    assert start < metrics["start"] < metrics["end"] < end
+    _assert_metrics_are_valid(metrics, start, end)
     assert log["metadata"]["model"] == MODEL
 
 
-def _assert_metrics_are_valid(metrics: Dict[str, Any]):
+def _assert_metrics_are_valid(metrics, start, end):
     assert metrics["tokens"] > 0
     assert metrics["prompt_tokens"] > 0
     assert metrics["completion_tokens"] > 0
+    if start and end:
+        assert start <= metrics["start"] <= metrics["end"] <= end
+    else:
+        assert metrics["start"] <= metrics["end"]

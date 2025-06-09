@@ -369,7 +369,7 @@ function parseBaseParams<T extends Record<string, any>>(
     },
   };
   const input = params[inputField];
-  const paramsRest = { ...params };
+  const paramsRest = { ...params, provider: "openai" };
   delete paramsRest[inputField];
   return mergeDicts(ret, { event: { input, metadata: paramsRest } });
 }

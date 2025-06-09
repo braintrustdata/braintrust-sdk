@@ -10,6 +10,12 @@ import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
 import { functionDataSchema, functionTypeEnum } from "./functions";
 import { savedFunctionIdSchema } from "./function_id";
 import { repoInfoSchema } from "./git_types";
+import {
+  automationConfigSchema,
+  btqlExportAutomationConfigSchema,
+  logAutomationConfigSchema,
+  retentionAutomationConfigSchema,
+} from "./automations";
 extendZodWithOpenApi(z);
 
 // Section: App DB table schemas
@@ -566,51 +572,6 @@ const webhookAutomationActionSchema = z.object({
   url: z.string().describe("The webhook URL to send the request to"),
 });
 
-export const automationEventTypeEnum = z.enum(["logs", "retention"]);
-export const logAutomationConfigSchema = z.object({
-  event_type: z
-    .literal("logs")
-    .describe("The event which starts the automation execution"),
-  btql_filter: z
-    .string()
-    .describe("BTQL filter to identify rows for the automation rule"),
-  interval_seconds: z
-    .number()
-    .min(1)
-    .max(30 * 24 * 60 * 60)
-    .describe(
-      "Perform the triggered action at most once in this interval of seconds",
-    ),
-  action: z
-    .discriminatedUnion("type", [webhookAutomationActionSchema])
-    .describe("The action to take when the automation rule is triggered"),
-});
-
-export const retentionObjectTypeEnum = z
-  .enum(["project_logs", "experiment", "dataset"])
-  .describe("The object type that the retention policy applies to")
-  .openapi("RetentionObjectType");
-export type RetentionObjectType = z.infer<typeof retentionObjectTypeEnum>;
-
-const retentionAutomationConfigSchema = z.object({
-  event_type: z
-    .literal("retention")
-    .describe("The event which starts the automation execution"),
-  object_type: retentionObjectTypeEnum.describe(
-    "The object type that the retention policy applies to",
-  ),
-  object_id: z
-    .string()
-    .uuid()
-    .nullable()
-    .describe("The object id that the retention policy applies to"),
-  retention_days: z
-    .number()
-    .min(1)
-    .max(365)
-    .describe("The number of days to retain the object"),
-});
-
 const projectAutomationBaseSchema =
   generateBaseTableSchema("project automation");
 export const projectAutomationSchema = z
@@ -621,9 +582,9 @@ export const projectAutomationSchema = z
     created: projectAutomationBaseSchema.shape.created,
     name: projectAutomationBaseSchema.shape.name,
     description: projectAutomationBaseSchema.shape.description,
-    config: z
-      .union([logAutomationConfigSchema, retentionAutomationConfigSchema])
-      .describe("The configuration for the automation rule"),
+    config: automationConfigSchema.describe(
+      "The configuration for the automation rule",
+    ),
   })
   .openapi("ProjectAutomation");
 
@@ -634,6 +595,13 @@ export const logAutomationSchema = projectAutomationSchema.merge(
   }),
 );
 export type LogAutomation = z.infer<typeof logAutomationSchema>;
+
+export const btqlExportAutomationSchema = projectAutomationSchema.merge(
+  z.object({
+    config: btqlExportAutomationConfigSchema,
+  }),
+);
+export type BtqlExportAutomation = z.infer<typeof btqlExportAutomationSchema>;
 
 export const retentionAutomationSchema = projectAutomationSchema.merge(
   z.object({

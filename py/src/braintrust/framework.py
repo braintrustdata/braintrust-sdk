@@ -179,6 +179,7 @@ class EvalScorerArgs(SerializableDataClass, Generic[Input, Output]):
 
 OneOrMoreScores = Union[float, int, bool, None, Score, List[Score]]
 
+
 # Synchronous scorer interface - implements callable
 class SyncScorerLike(Protocol, Generic[Input, Output]):
     """
@@ -525,6 +526,10 @@ def _set_lazy_load(lazy_load: bool):
         yield
     finally:
         _lazy_load = current
+
+
+def _is_lazy_load():
+    return _lazy_load
 
 
 def pluralize(n, singular, plural):

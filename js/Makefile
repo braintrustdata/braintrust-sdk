@@ -38,7 +38,7 @@ test-openai-%:
 # common things
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-pnpm test test-latest prune installing-optional-deps
+.PHONY: test-pnpm test test-latest prune installing-optional-deps docs build verify-ci
 
 install-optional-deps:
 	npm_config_save=false npm_config_lockfile=false pnpm add "openai" "@anthropic-ai/sdk"
@@ -50,13 +50,24 @@ test-pnpm:
 	pnpm test
 
 # Test everything
-test: test-anthropic test-pnpm test-openai
+test: test-pnpm test-openai test-anthropic
 
 # Test the core and the latest versions of wrappers.
 test-latest: test-pnpm test-anthropic-latest test-openai-latest
 
 prune:
 	pnpm prune
+
+docs:
+	pnpm run docs
+
+build:
+	pnpm run build
+
+
+# note: we don't use the docs in ci, but this makes sure they keep building
+
+verify-ci: build docs test
 
 
 

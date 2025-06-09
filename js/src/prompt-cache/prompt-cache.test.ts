@@ -229,19 +229,29 @@ describe("PromptCache", () => {
 
   describe("error handling", () => {
     it("should throw never when disk write fails", async () => {
-      // Make cache directory read-only.
-      await fs.mkdir(cacheDir, { recursive: true });
-      await fs.chmod(cacheDir, 0o444);
+      // simulate a write failure by using a nonexistent directory
+      // with mkdir false.
+      const nonExistentDir = path.join(
+        tmpdir(),
+        "doesnt-exist",
+        `write-fail-disk-cache-test-${Date.now()}`,
+      );
+      const brokenCache = new PromptCache({
+        memoryCache: new LRUCache({ max: 2 }),
+        diskCache: new DiskCache<Prompt>({
+          cacheDir: nonExistentDir,
+          max: 5,
+          mkdir: false,
+          logWarnings: false,
+        }),
+      });
 
       // Should not throw when disk write fails.
-      await cache.set(testKey, testPrompt);
+      await brokenCache.set(testKey, testPrompt);
 
       // Memory cache should still be updated.
-      const result = await cache.get(testKey);
+      const result = await brokenCache.get(testKey);
       expect(result).toEqual(testPrompt);
-
-      // Restore permissions so cleanup can happen.
-      await fs.chmod(cacheDir, 0o777);
     });
 
     it("should handle disk read errors", async () => {

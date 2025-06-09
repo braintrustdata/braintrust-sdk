@@ -20,6 +20,16 @@ TEST_PROMPT = "What's 12 + 12?"
 TEST_SYSTEM_PROMPT = "You are a helpful assistant that only responds with numbers."
 
 
+@pytest.fixture(scope="module")
+def vcr_config():
+    return {
+        "filter_headers": [
+            "authorization",
+            "openai-organization",
+        ]
+    }
+
+
 @pytest.fixture
 def memory_logger():
     init_test_logger(PROJECT_NAME)
@@ -27,6 +37,7 @@ def memory_logger():
         yield bgl
 
 
+@pytest.mark.vcr
 def test_openai_chat_metrics(memory_logger):
     assert not memory_logger.pop()
 
@@ -56,13 +67,13 @@ def test_openai_chat_metrics(memory_logger):
         span = spans[0]
         assert span
         metrics = span["metrics"]
-        assert_metrics_are_valid(metrics)
-        assert start < metrics["start"] < metrics["end"] < end
+        assert_metrics_are_valid(metrics, start, end)
         assert span["metadata"]["model"] == TEST_MODEL
-        # assert span["metadata"]["provider"] == "openai"
+        assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
 
 
+@pytest.mark.vcr
 def test_openai_responses_metrics(memory_logger):
     assert not memory_logger.pop()
 
@@ -74,7 +85,6 @@ def test_openai_responses_metrics(memory_logger):
         instructions="Just the number please",
     )
     assert unwrapped_response
-    # Extract content from output field as responses API structure has changed
     assert unwrapped_response.output
     assert len(unwrapped_response.output) > 0
     unwrapped_content = unwrapped_response.output[0].content[0].text
@@ -108,15 +118,15 @@ def test_openai_responses_metrics(memory_logger):
     span = spans[0]
     assert span
     metrics = span["metrics"]
-    assert_metrics_are_valid(metrics)
+    assert_metrics_are_valid(metrics, start, end)
     assert 0 <= metrics.get("prompt_cached_tokens", 0)
     assert 0 <= metrics.get("completion_reasoning_tokens", 0)
-    assert start < metrics["start"] < metrics["end"] < end
     assert span["metadata"]["model"] == TEST_MODEL
-    # assert span["metadata"]["provider"] == "openai"
+    assert span["metadata"]["provider"] == "openai"
     assert TEST_PROMPT in str(span["input"])
 
 
+@pytest.mark.vcr
 def test_openai_embeddings(memory_logger):
     assert not memory_logger.pop()
 
@@ -144,11 +154,11 @@ def test_openai_embeddings(memory_logger):
     span = spans[0]
     assert span
     assert span["metadata"]["model"] == "text-embedding-ada-002"
-    # assert span["metadata"]["provider"] == "openai"
-    assert start < span["metrics"]["start"] < span["metrics"]["end"] < end
+    assert span["metadata"]["provider"] == "openai"
     assert "This is a test" in str(span["input"])
 
 
+@pytest.mark.vcr
 def test_openai_chat_streaming_sync(memory_logger):
     assert not memory_logger.pop()
 
@@ -193,14 +203,14 @@ def test_openai_chat_streaming_sync(memory_logger):
         span = spans[0]
         assert span
         metrics = span["metrics"]
-        assert_metrics_are_valid(metrics)
-        assert start < metrics["start"] < metrics["end"] < end
+        assert_metrics_are_valid(metrics, start, end)
         assert span["metadata"]["model"] == TEST_MODEL
         # assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
         assert "24" in str(span["output"]) or "twenty-four" in str(span["output"]).lower()
 
 
+@pytest.mark.vcr
 def test_openai_chat_with_system_prompt(memory_logger):
     assert not memory_logger.pop()
 
@@ -232,6 +242,7 @@ def test_openai_chat_with_system_prompt(memory_logger):
         assert inputs[1]["content"] == TEST_PROMPT
 
 
+@pytest.mark.vcr
 def test_openai_client_comparison(memory_logger):
     """Test that wrapped and unwrapped clients produce the same output."""
     assert not memory_logger.pop()
@@ -257,6 +268,7 @@ def test_openai_client_comparison(memory_logger):
         assert len(spans) == 1
 
 
+@pytest.mark.vcr
 def test_openai_client_error(memory_logger):
     assert not memory_logger.pop()
 
@@ -282,6 +294,7 @@ def test_openai_client_error(memory_logger):
     assert fake_model in str(log)
 
 
+@pytest.mark.vcr
 @pytest.mark.asyncio
 async def test_openai_chat_async(memory_logger):
     assert not memory_logger.pop()
@@ -324,14 +337,14 @@ async def test_openai_chat_async(memory_logger):
     span = spans[0]
     assert span
     metrics = span["metrics"]
-    assert_metrics_are_valid(metrics)
-    assert start < metrics["start"] < metrics["end"] < end
+    assert_metrics_are_valid(metrics, start, end)
     assert span["metadata"]["model"] == TEST_MODEL
     # assert span["metadata"]["provider"] == "openai"
     assert TEST_PROMPT in str(span["input"])
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_responses_async(memory_logger):
     assert not memory_logger.pop()
 
@@ -370,13 +383,14 @@ async def test_openai_responses_async(memory_logger):
         assert_metrics_are_valid(metrics)
         assert 0 <= metrics.get("prompt_cached_tokens", 0)
         assert 0 <= metrics.get("completion_reasoning_tokens", 0)
-        assert start < metrics["start"] < metrics["end"] < end
+        assert_metrics_are_valid(metrics, start, end)
         assert span["metadata"]["model"] == TEST_MODEL
         # assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_embeddings_async(memory_logger):
     assert not memory_logger.pop()
 
@@ -403,12 +417,12 @@ async def test_openai_embeddings_async(memory_logger):
         span = spans[0]
         assert span
         assert span["metadata"]["model"] == "text-embedding-ada-002"
-        # assert span["metadata"]["provider"] == "openai"
-        assert start < span["metrics"]["start"] < span["metrics"]["end"] < end
+        assert span["metadata"]["provider"] == "openai"
         assert "This is a test" in str(span["input"])
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_chat_streaming_async(memory_logger):
     assert not memory_logger.pop()
 
@@ -452,9 +466,8 @@ async def test_openai_chat_streaming_async(memory_logger):
         span = spans[0]
         assert span
         metrics = span["metrics"]
-        assert_metrics_are_valid(metrics)
+        assert_metrics_are_valid(metrics, start, end)
         assert span["metadata"]["stream"] == True
-        assert start < metrics["start"] < metrics["end"] < end
         assert span["metadata"]["model"] == TEST_MODEL
         # assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
@@ -462,6 +475,7 @@ async def test_openai_chat_streaming_async(memory_logger):
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_chat_async_with_system_prompt(memory_logger):
     assert not memory_logger.pop()
 
@@ -494,6 +508,7 @@ async def test_openai_chat_async_with_system_prompt(memory_logger):
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_client_async_comparison(memory_logger):
     """Test that wrapped and unwrapped async clients produce the same output."""
     assert not memory_logger.pop()
@@ -525,6 +540,7 @@ async def test_openai_client_async_comparison(memory_logger):
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_client_async_error(memory_logger):
     assert not memory_logger.pop()
 
@@ -551,6 +567,7 @@ async def test_openai_client_async_error(memory_logger):
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_chat_async_context_manager(memory_logger):
     """Test async context manager behavior for chat completions streams."""
     assert not memory_logger.pop()
@@ -596,13 +613,13 @@ async def test_openai_chat_async_context_manager(memory_logger):
         assert len(spans) == 1
         span = spans[0]
         metrics = span["metrics"]
-        assert_metrics_are_valid(metrics)
+        assert_metrics_are_valid(metrics, start, end)
         assert span["metadata"]["stream"] == True
-        assert start < metrics["start"] < metrics["end"] < end
         assert "24" in str(span["output"]) or "twenty-four" in str(span["output"]).lower()
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_streaming_with_break(memory_logger):
     """Test breaking out of the streaming loop early."""
     assert not memory_logger.pop()
@@ -614,6 +631,8 @@ async def test_openai_streaming_with_break(memory_logger):
     stream = await client.chat.completions.create(
         model=TEST_MODEL, messages=[{"role": "user", "content": TEST_PROMPT}], stream=True
     )
+
+    time.sleep(0.2)  # time to first token sleep
 
     # Only process the first few chunks
     counter = 0
@@ -628,10 +647,11 @@ async def test_openai_streaming_with_break(memory_logger):
     assert len(spans) == 1
     span = spans[0]
     metrics = span["metrics"]
-    assert metrics["time_to_first_token"] > 0
+    assert metrics["time_to_first_token"] >= 0
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_chat_error_in_async_context(memory_logger):
     """Test error handling inside the async context manager."""
     assert not memory_logger.pop()
@@ -661,10 +681,11 @@ async def test_openai_chat_error_in_async_context(memory_logger):
     span = spans[0]
     # The error field might not be present in newer versions
     # Just check that we got a span with time metrics
-    assert span["metrics"]["time_to_first_token"] > 0
+    assert span["metrics"]["time_to_first_token"] >= 0
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_response_streaming_async(memory_logger):
     """Test the newer responses API with streaming."""
     assert not memory_logger.pop()
@@ -697,14 +718,14 @@ async def test_openai_response_streaming_async(memory_logger):
         assert len(spans) == 1
         span = spans[0]
         metrics = span["metrics"]
-        assert_metrics_are_valid(metrics)
+        assert_metrics_are_valid(metrics, start, end)
         assert span["metadata"]["stream"] == True
-        assert start < metrics["start"] < metrics["end"] < end
         assert "What's 12 + 12?" in str(span["input"])
         assert "24" in str(span["output"])
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_async_parallel_requests(memory_logger):
     """Test multiple parallel async requests with the wrapped client."""
     assert not memory_logger.pop()
@@ -740,6 +761,7 @@ async def test_openai_async_parallel_requests(memory_logger):
         assert_metrics_are_valid(span["metrics"])
 
 
+@pytest.mark.vcr
 def test_openai_not_given_filtering(memory_logger):
     """Test that NOT_GIVEN values are filtered out of logged inputs but API call still works."""
     assert not memory_logger.pop()
@@ -774,6 +796,7 @@ def test_openai_not_given_filtering(memory_logger):
             "input": [{"role": "user", "content": TEST_PROMPT}],
             "metadata": {
                 "model": TEST_MODEL,
+                "provider": "openai",
                 "temperature": 0.5,
             },
         },
@@ -785,6 +808,7 @@ def test_openai_not_given_filtering(memory_logger):
         assert k not in meta
 
 
+@pytest.mark.vcr
 def test_openai_responses_not_given_filtering(memory_logger):
     """Test that NOT_GIVEN values are filtered out of logged inputs for responses API."""
     assert not memory_logger.pop()
@@ -822,6 +846,7 @@ def test_openai_responses_not_given_filtering(memory_logger):
             "input": TEST_PROMPT,
             "metadata": {
                 "model": TEST_MODEL,
+                "provider": "openai",
                 "temperature": 0.5,
                 "instructions": "Just the number please",
             },
