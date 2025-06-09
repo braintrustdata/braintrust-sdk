@@ -88,19 +88,24 @@ def test_log_queue_drop_behavior():
     assert items == ["item3", "item4"]
 
 
-def test_log_queue_semaphore_signaling():
-    """Test that semaphore is properly signaled when items are added"""
+def test_log_queue_wait_for_items_semaphore_reset():
+    """Test that wait_for_items semaphore resets after drain, not accumulates"""
     queue = LogQueue(maxsize=5)
 
-    # Initially no signal
-    assert not queue.wait_for_items(timeout=0.1)
+    assert queue.wait_for_items(timeout=0.05) is False
 
-    # Add item and check signal
+    # multiple puts should start
     queue.put("item1")
-    assert queue.wait_for_items(timeout=0.1)
+    queue.put("item2")
+    queue.put("item3")
 
-    # After draining, should signal again if there were items
-    queue.drain_all()
+    # First wait should succeed
+    assert queue.wait_for_items(timeout=0.05) is True
+    items = queue.drain_all()
+    assert len(items) == 3
+
+    # After drain, should block
+    assert queue.wait_for_items(timeout=0.05) is False
 
 
 def test_log_queue_default_size():
