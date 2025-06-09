@@ -8,7 +8,6 @@ import inspect
 import json
 import logging
 import os
-import queue
 import sys
 import textwrap
 import threading
@@ -71,7 +70,7 @@ from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptMessage
 from .prompt_cache.disk_cache import DiskCache
 from .prompt_cache.lru_cache import LRUCache
 from .prompt_cache.prompt_cache import PromptCache
-from .queue import LogQueue
+from .queue import DEFAULT_QUEUE_SIZE, LogQueue
 from .serializable_data_class import SerializableDataClass
 from .span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from .span_types import SpanTypeAttribute
@@ -679,7 +678,7 @@ class _HTTPBackgroundLogger:
         try:
             self.queue_maxsize = int(os.environ["BRAINTRUST_QUEUE_SIZE"])
         except:
-            self.queue_maxsize = 5000
+            self.queue_maxsize = DEFAULT_QUEUE_SIZE
 
         try:
             self.queue_drop_logging_period = float(os.environ["BRAINTRUST_QUEUE_DROP_LOGGING_PERIOD"])
