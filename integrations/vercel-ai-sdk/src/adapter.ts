@@ -39,7 +39,7 @@ export function toAIStreamResponse(
   stream: BraintrustStreamOrReadable,
   init?: ResponseInit,
 ): Response {
-  return toAIStreamResponse(stream, init);
+  return toDataStreamResponse(stream, init);
 }
 
 function btStreamToAISDKTransformStream(
