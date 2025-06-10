@@ -228,24 +228,12 @@ export const invokeParent = z.union([
     ),
 ]);
 
-const fetchRowFieldsSchema = z.object({
-  object_type: spanParentObjectTypeSchema.describe(
-    "The type of the object you are logging to",
-  ),
-  object_id: z.string().describe("The id of the object you are logging to"),
-  row_id: z.string().describe("The row id to fetch"),
-  fields: z.array(z.string()).describe("The fields to fetch"),
-});
-
 export const invokeFunctionNonIdArgsSchema = z.object({
   input: customTypes.unknown
     .optional()
     .describe(
       "Argument to the function, which can be any JSON serializable value",
     ),
-  fetch_row_fields: fetchRowFieldsSchema
-    .nullish()
-    .describe("If provided, the row id and fields to fetch before invoke"),
   expected: customTypes.unknown
     .optional()
     .describe("The expected output of the function"),
