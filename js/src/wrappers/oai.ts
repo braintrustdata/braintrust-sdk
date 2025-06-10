@@ -538,7 +538,10 @@ function postprocessStreamingResults(allResults: any[]): {
 
     if (delta.tool_calls) {
       const toolDelta = delta.tool_calls[0];
-      if (!tool_calls || (toolDelta.id && tool_calls[tool_calls.length - 1].id !== toolDelta.id)) {
+      if (
+        !tool_calls ||
+        (toolDelta.id && tool_calls[tool_calls.length - 1].id !== toolDelta.id)
+      ) {
         tool_calls = [
           ...(tool_calls || []),
           {
