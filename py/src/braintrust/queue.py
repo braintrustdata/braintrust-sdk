@@ -17,7 +17,7 @@ class LogQueue:
         Initialize the LogQueue.
 
         Args:
-            maxsize: Maximum size of the queue. If 0 or negative, defaults to 5000.
+            maxsize: Maximum size of the queue. If 0 or negative, defaults to DEFAULT_QUEUE_SIZE.
         """
         if maxsize < 1:
             eprint(f"Queue maxsize {maxsize} is invalid, using default size {DEFAULT_QUEUE_SIZE}")
