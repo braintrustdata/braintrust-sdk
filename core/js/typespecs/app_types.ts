@@ -693,6 +693,12 @@ export const projectTagSchema = z
     name: projectTagBaseSchema.shape.name,
     description: projectTagBaseSchema.shape.description,
     color: z.string().nullish().describe("Color of the tag for the UI"),
+    position: z
+      .string()
+      .nullish()
+      .describe(
+        "An optional LexoRank-based string that sets the sort position for the tag in the UI",
+      ),
   })
   .describe(
     "A project tag is a user-configured tag for tracking and filtering your experiments, logs, and other data",
