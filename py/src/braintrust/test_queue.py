@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from braintrust.queue import LogQueue
+from braintrust.queue import DEFAULT_QUEUE_SIZE, LogQueue
 
 
 def test_log_queue_basic_operations():
@@ -109,10 +109,8 @@ def test_log_queue_wait_for_items_semaphore_reset():
 
 
 def test_log_queue_default_size():
-    """Test queue with invalid maxsize defaults to 5000"""
-    # Test maxsize=0 defaults to 5000
     queue = LogQueue(maxsize=0)
-    assert queue.maxsize == 5000
+    assert queue.maxsize == DEFAULT_QUEUE_SIZE
 
     # Should be able to add many items without drops (up to 5000)
     for i in range(100):
@@ -125,9 +123,9 @@ def test_log_queue_default_size():
     assert items[0] == "item0"
     assert items[99] == "item99"
 
-    # Test negative maxsize also defaults to 5000
+    # Test negative maxsize also defaults
     queue_neg = LogQueue(maxsize=-5)
-    assert queue_neg.maxsize == 5000
+    assert queue_neg.maxsize == DEFAULT_QUEUE_SIZE
 
     # Should be able to add items without drops (when under capacity)
     for i in range(10):
