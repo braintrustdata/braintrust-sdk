@@ -1,4 +1,5 @@
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
+import { braintrustAttachmentReferenceSchema } from "typespecs/attachment-reference";
 import { z } from "zod";
 extendZodWithOpenApi(z);
 
@@ -29,7 +30,7 @@ const chatCompletionSystemMessageParamSchema = z.object({
 });
 
 const imageURLSchema = z.object({
-  url: z.string(),
+  url: z.union([z.string(), braintrustAttachmentReferenceSchema]),
   detail: z
     .union([
       z.literal("auto").openapi({ title: "auto" }),
