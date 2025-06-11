@@ -11,7 +11,6 @@ import {
   promptSchema,
   functionSchema,
 } from "./app_types";
-import { functionIdSchema } from "./functions";
 import {
   EventObjectType,
   ObjectType,
@@ -957,7 +956,7 @@ export const asyncScoringStateSchema = z
     z.object({
       status: z.literal("enabled"),
       token: z.string(),
-      function_ids: z.array(functionIdSchema).nonempty(),
+      function_ids: z.array(z.unknown()).nonempty(),
       skip_logging: z.boolean().nullish(),
     }),
     // Explicitly disabled.
