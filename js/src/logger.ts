@@ -63,7 +63,7 @@ import {
   PromptBlockData,
 } from "@braintrust/core/typespecs";
 import { waitUntil } from "@vercel/functions";
-import Mustache, { Context } from "mustache";
+import Mustache from "mustache";
 import { z, ZodError } from "zod";
 import {
   BraintrustStream,
@@ -276,7 +276,7 @@ export class NoopSpan implements Span {
   public rootSpanId: string;
   public spanParents: string[];
 
-  public kind: "span" = "span";
+  public kind: "span" = "span" as const;
 
   constructor() {
     this.id = "";
@@ -5190,6 +5190,11 @@ export function renderMessage<T extends Message>(
                     case "text":
                       return { ...c, text: render(c.text) };
                     case "image_url":
+                      if (isObject(c.image_url.url)) {
+                        throw new Error(
+                          "Attachments must be replaced with URLs before calling `build()`",
+                        );
+                      }
                       return {
                         ...c,
                         image_url: {
@@ -5455,16 +5460,6 @@ export class Prompt<
       throw new Error("Empty prompt");
     }
 
-    const escape = (v: unknown) => {
-      if (v === undefined) {
-        throw new Error("Missing!");
-      } else if (typeof v === "string") {
-        return v;
-      } else {
-        return JSON.stringify(v);
-      }
-    };
-
     const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
     const variables: Record<string, unknown> = {
       input: buildArgs,
@@ -5590,7 +5585,7 @@ export class Prompt<
       };
     } else {
       const _: never = prompt;
-      throw new Error("never!");
+      throw new Error(`Invalid prompt type: ${_}`);
     }
   }
 
