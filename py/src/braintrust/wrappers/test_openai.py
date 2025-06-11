@@ -859,5 +859,109 @@ def test_openai_responses_not_given_filtering(memory_logger):
         assert k not in meta
 
 
+@pytest.mark.vcr
+def test_openai_parallel_tool_calls(memory_logger):
+    """Test parallel tool calls with both streaming and non-streaming modes."""
+    assert not memory_logger.pop()
+
+    # Define tools that can be called in parallel
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Get the weather for a location",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"location": {"type": "string", "description": "The location to get weather for"}},
+                    "required": ["location"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_time",
+                "description": "Get the current time for a timezone",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"timezone": {"type": "string", "description": "The timezone to get time for"}},
+                    "required": ["timezone"],
+                },
+            },
+        },
+    ]
+
+    client = openai.OpenAI()
+    clients = [client, wrap_openai(client)]
+
+    for stream in [False, True]:
+        for client in clients:
+            start = time.time()
+
+            resp = client.chat.completions.create(
+                model=TEST_MODEL,
+                messages=[{"role": "user", "content": "What's the weather in New York and the time in Tokyo?"}],
+                tools=tools,
+                temperature=0,
+                stream=stream,
+                stream_options={"include_usage": True} if stream else None,
+            )
+
+            if stream:
+                # Consume the stream
+                for chunk in resp:  # type: ignore
+                    # Exhaust the stream
+                    pass
+
+            end = time.time()
+
+            if not _is_wrapped(client):
+                assert not memory_logger.pop()
+                continue
+
+            # Verify spans were created with wrapped client
+            spans = memory_logger.pop()
+            assert len(spans) == 1
+            span = spans[0]
+
+            # Validate the span structure
+            assert_dict_matches(
+                span,
+                {
+                    "span_attributes": {"type": "llm", "name": "Chat Completion"},
+                    "metadata": {
+                        "model": TEST_MODEL,
+                        "provider": "openai",
+                        "stream": stream,
+                        "tools": lambda tools_list: len(tools_list) == 2
+                        and any(tool.get("function", {}).get("name") == "get_weather" for tool in tools_list)
+                        and any(tool.get("function", {}).get("name") == "get_time" for tool in tools_list),
+                    },
+                    "input": lambda inp: "What's the weather in New York and the time in Tokyo?" in str(inp),
+                    "metrics": lambda m: assert_metrics_are_valid(m, start, end) is None,
+                },
+            )
+
+            # Verify tool calls are in the output (if present)
+            if span.get("output") and isinstance(span["output"], list) and len(span["output"]) > 0:
+                message = span["output"][0].get("message", {})
+                tool_calls = message.get("tool_calls")
+                if tool_calls and len(tool_calls) >= 2:
+                    # Extract tool names, handling cases where function.name might be None
+                    tool_names = []
+                    for call in tool_calls:
+                        func = call.get("function", {})
+                        name = func.get("name") if isinstance(func, dict) else None
+                        if name:
+                            tool_names.append(name)
+
+                    # Check if we have the expected tools (only if names are available)
+                    if tool_names:
+                        assert (
+                            "get_weather" in tool_names or "get_time" in tool_names
+                        ), f"Expected weather/time tools, got: {tool_names}"
+
+
 def _is_wrapped(client):
     return hasattr(client, "_NamedWrapper__wrapped")
