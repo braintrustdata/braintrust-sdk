@@ -14,6 +14,7 @@ import {
   automationConfigSchema,
   btqlExportAutomationConfigSchema,
   logAutomationConfigSchema,
+  retentionAutomationConfigSchema,
 } from "./automations";
 extendZodWithOpenApi(z);
 
@@ -566,6 +567,11 @@ export const projectScoreCategory = z
   .openapi("ProjectScoreCategory");
 export type ProjectScoreCategory = z.infer<typeof projectScoreCategory>;
 
+const webhookAutomationActionSchema = z.object({
+  type: z.literal("webhook").describe("The type of action to take"),
+  url: z.string().describe("The webhook URL to send the request to"),
+});
+
 const projectAutomationBaseSchema =
   generateBaseTableSchema("project automation");
 export const projectAutomationSchema = z
@@ -596,6 +602,13 @@ export const btqlExportAutomationSchema = projectAutomationSchema.merge(
   }),
 );
 export type BtqlExportAutomation = z.infer<typeof btqlExportAutomationSchema>;
+
+export const retentionAutomationSchema = projectAutomationSchema.merge(
+  z.object({
+    config: retentionAutomationConfigSchema,
+  }),
+);
+export type RetentionAutomation = z.infer<typeof retentionAutomationSchema>;
 
 export const onlineScoreConfigSchema = z
   .object({
