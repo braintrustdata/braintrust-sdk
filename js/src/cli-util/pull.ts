@@ -8,14 +8,14 @@ import { loadCLIEnv } from "./bundle";
 import { PullArgs } from "./types";
 import { warning } from "../framework";
 import { z } from "zod";
-import { ProjectNameIdMap } from "../functions/upload";
 import fs from "fs/promises";
 import util from "util";
 import slugify from "slugify";
 import path from "path";
 import { currentRepo } from "../gitutil";
-import { isEmpty, loadPrettyXact } from "@braintrust/core";
+import { isEmpty, loadPrettyXact, prettifyXact } from "@braintrust/core";
 import {
+  ProjectNameIdMap,
   ToolFunctionDefinition,
   toolFunctionDefinitionSchema,
 } from "../framework2";
@@ -124,6 +124,7 @@ export async function pullCommand(args: PullArgs) {
 
     const projectFileContents = await makeProjectFile({
       projectName,
+      projectId: await projectNameIdMap.getId(projectName),
       fileName: projectFile,
       functions: projectNameToFunctions[projectName],
       hasSpecifiedFunction: !!args.slug || !!args.id,
@@ -135,11 +136,13 @@ export async function pullCommand(args: PullArgs) {
 
 async function makeProjectFile({
   projectName,
+  projectId,
   fileName,
   functions,
   hasSpecifiedFunction,
 }: {
   projectName: string;
+  projectId: string;
   fileName: string;
   functions: FunctionObject[];
   hasSpecifiedFunction: boolean;
@@ -160,6 +163,7 @@ async function makeProjectFile({
 import braintrust from "braintrust";
 
 const project = braintrust.projects.create({
+  id: ${doubleQuote(projectId)},
   name: ${doubleQuote(projectName)},
 });
 
@@ -257,8 +261,10 @@ function makeFunctionDefinition({
       : "";
 
   return `export const ${varName} = project.${pluralize(objectType)}.create({
+  id: ${doubleQuote(func.id)},
   name: ${doubleQuote(func.name)},
-  slug: ${doubleQuote(func.slug)},${printOptionalField("description", func.description)}${printOptionalField("model", model)}
+  slug: ${doubleQuote(func.slug)},
+  version: ${doubleQuote(prettifyXact(func._xact_id))}, ${printOptionalField("description", func.description)}${printOptionalField("model", model)}
 ${indent(promptContents, 2)},
 ${indent(paramsString, 2)}
 ${indent(toolsString, 2)}

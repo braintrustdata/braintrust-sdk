@@ -52,3 +52,31 @@ test("LazyValue caches successful result", async () => {
   expect(result2).toBe("test value");
   expect(lazy.hasSucceeded).toBe(true);
 });
+
+test("LazyValue GetSync returns correct state and value", async () => {
+  const lazy = new LazyValue(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    return "test value";
+  });
+
+  // Initial state - uninitialized
+  const initial = lazy.getSync();
+  expect(initial.resolved).toBe(false);
+  expect(initial.value).toBeUndefined();
+
+  // Start computation
+  const promise = lazy.get();
+
+  // In progress state
+  const inProgress = lazy.getSync();
+  expect(inProgress.resolved).toBe(false);
+  expect(inProgress.value).toBeUndefined();
+
+  // Wait for completion
+  await promise;
+
+  // Completed state
+  const completed = lazy.getSync();
+  expect(completed.resolved).toBe(true);
+  expect(completed.value).toBe("test value");
+});

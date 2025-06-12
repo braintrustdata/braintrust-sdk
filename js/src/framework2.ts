@@ -5,16 +5,24 @@ import { z } from "zod";
 import {
   FunctionType,
   IfExists,
-  Message,
-  ModelParams,
   SavedFunctionId,
   PromptBlockData,
   PromptData,
   toolFunctionDefinitionSchema,
   type ToolFunctionDefinition,
+  chatCompletionMessageParamSchema,
+  modelParamsSchema,
+  functionDataSchema,
+  projectSchema,
+  ExtendedSavedFunctionId,
 } from "@braintrust/core/typespecs";
-import { TransactionId } from "@braintrust/core";
-import { Prompt, PromptRowWithId } from "./logger";
+import { loadPrettyXact, TransactionId } from "@braintrust/core";
+import {
+  _internalGetGlobalState,
+  login,
+  Prompt,
+  PromptRowWithId,
+} from "./logger";
 import { GenericFunction } from "./framework-types";
 
 export { toolFunctionDefinitionSchema, ToolFunctionDefinition };
@@ -36,6 +44,16 @@ export class Project {
   public prompts: PromptBuilder;
   public scorers: ScorerBuilder;
 
+  private _publishableCodeFunctions: CodeFunction<
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    GenericFunction<any, any>
+  >[] = [];
+  private _publishablePrompts: CodePrompt[] = [];
+
   constructor(args: CreateProjectOpts) {
     _initializeSpanContext();
     this.name = "name" in args ? args.name : undefined;
@@ -43,6 +61,55 @@ export class Project {
     this.tools = new ToolBuilder(this);
     this.prompts = new PromptBuilder(this);
     this.scorers = new ScorerBuilder(this);
+  }
+
+  public addPrompt(prompt: CodePrompt) {
+    this._publishablePrompts.push(prompt);
+    if (globalThis._lazy_load) {
+      globalThis._evals.prompts.push(prompt);
+    }
+  }
+
+  public addCodeFunction(
+    fn: CodeFunction<
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      GenericFunction<any, any>
+    >,
+  ) {
+    this._publishableCodeFunctions.push(fn);
+    if (globalThis._lazy_load) {
+      globalThis._evals.functions.push(fn);
+    }
+  }
+
+  async publish() {
+    if (globalThis._lazy_load) {
+      console.warn("publish() is a no-op when running `braintrust push`.");
+      return;
+    }
+    await login();
+    const projectMap = new ProjectNameIdMap();
+    const functionDefinitions: FunctionEvent[] = [];
+    if (this._publishableCodeFunctions.length > 0) {
+      console.warn(
+        "Code functions cannot be published directly. Use `braintrust push` instead.",
+      );
+    }
+    if (this._publishablePrompts.length > 0) {
+      for (const prompt of this._publishablePrompts) {
+        const functionDefinition =
+          await prompt.toFunctionDefinition(projectMap);
+        functionDefinitions.push(functionDefinition);
+      }
+    }
+
+    await _internalGetGlobalState().apiConn().post_json("insert-functions", {
+      functions: functionDefinitions,
+    });
   }
 }
 
@@ -74,17 +141,7 @@ export class ToolBuilder {
       },
     );
 
-    if (globalThis._lazy_load) {
-      globalThis._evals.functions.push(
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        tool as CodeFunction<
-          unknown,
-          unknown,
-          GenericFunction<unknown, unknown>
-        >,
-      );
-    }
-
+    this.project.addCodeFunction(tool);
     return tool;
   }
 }
@@ -126,16 +183,7 @@ export class ScorerBuilder {
         slug,
         type: "scorer",
       });
-      if (globalThis._lazy_load) {
-        globalThis._evals.functions.push(
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          scorer as CodeFunction<
-            unknown,
-            unknown,
-            GenericFunction<unknown, unknown>
-          >,
-        );
-      }
+      this.project.addCodeFunction(scorer);
     } else {
       const promptBlock: PromptBlockData =
         "messages" in opts
@@ -170,9 +218,7 @@ export class ScorerBuilder {
         },
         "scorer",
       );
-      if (globalThis._lazy_load) {
-        globalThis._evals.prompts.push(codePrompt);
-      }
+      this.project.addPrompt(codePrompt);
     }
   }
 }
@@ -317,6 +363,47 @@ export class CodePrompt {
     this.id = opts.id;
     this.functionType = functionType;
   }
+
+  async toFunctionDefinition(
+    projectNameToId: ProjectNameIdMap,
+  ): Promise<FunctionEvent> {
+    const prompt_data = {
+      ...this.prompt,
+    };
+    if (this.toolFunctions.length > 0) {
+      const resolvableToolFunctions: ExtendedSavedFunctionId[] =
+        await Promise.all(
+          this.toolFunctions.map(async (fn) => {
+            if ("slug" in fn) {
+              return {
+                type: "slug",
+                project_id: await projectNameToId.resolve(fn.project),
+                slug: fn.slug,
+              };
+            } else {
+              return fn;
+            }
+          }),
+        );
+
+      // This is a hack because these will be resolved on the server side.
+      prompt_data.tool_functions =
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        resolvableToolFunctions as SavedFunctionId[];
+    }
+    return {
+      project_id: await projectNameToId.resolve(this.project),
+      name: this.name,
+      slug: this.slug,
+      description: this.description ?? "",
+      function_data: {
+        type: "prompt",
+      },
+      function_type: this.functionType,
+      prompt_data,
+      if_exists: this.ifExists,
+    };
+  }
 }
 
 interface PromptId {
@@ -336,13 +423,35 @@ interface PromptNoTrace {
 }
 
 // This roughly maps to promptBlockDataSchema, but is more ergonomic for the user.
-type PromptContents =
-  | {
-      prompt: string;
-    }
-  | {
-      messages: Message[];
-    };
+export const promptContentsSchema = z.union([
+  z.object({
+    prompt: z.string(),
+  }),
+  z.object({
+    messages: z.array(chatCompletionMessageParamSchema),
+  }),
+]);
+
+export type PromptContents = z.infer<typeof promptContentsSchema>;
+
+export const promptDefinitionSchema = promptContentsSchema.and(
+  z.object({
+    model: z.string(),
+    params: modelParamsSchema.optional(),
+  }),
+);
+
+export type PromptDefinition = z.infer<typeof promptDefinitionSchema>;
+
+export const promptDefinitionWithToolsSchema = promptDefinitionSchema.and(
+  z.object({
+    tools: z.array(toolFunctionDefinitionSchema).optional(),
+  }),
+);
+
+export type PromptDefinitionWithTools = z.infer<
+  typeof promptDefinitionWithToolsSchema
+>;
 
 export type PromptOpts<
   HasId extends boolean,
@@ -356,10 +465,8 @@ export type PromptOpts<
   (HasTools extends true ? Partial<PromptTools> : {}) &
   // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   (HasNoTrace extends true ? Partial<PromptNoTrace> : {}) &
-  PromptContents & {
-    model: string;
-    params?: ModelParams;
-  };
+  PromptDefinition;
+
 export class PromptBuilder {
   constructor(private readonly project: Project) {}
 
@@ -380,39 +487,19 @@ export class PromptBuilder {
       }
     }
 
-    const promptBlock: PromptBlockData =
-      "messages" in opts
-        ? {
-            type: "chat",
-            messages: opts.messages,
-            tools:
-              rawTools && rawTools.length > 0
-                ? JSON.stringify(rawTools)
-                : undefined,
-          }
-        : {
-            type: "completion",
-            content: opts.prompt,
-          };
-
     const slug =
       opts.slug ?? slugifyLib(opts.name, { lower: true, strict: true });
 
-    const promptData: PromptData = {
-      prompt: promptBlock,
-      options: {
-        model: opts.model,
-        params: opts.params,
-      },
-    };
+    const promptData: PromptData = promptDefinitionToPromptData(opts, rawTools);
 
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const promptRow: PromptRowWithId<HasId, HasVersion> = {
       id: opts.id,
-      _xact_id: opts.version,
+      _xact_id: opts.version ? loadPrettyXact(opts.version) : undefined,
       name: opts.name,
       slug: slug,
       prompt_data: promptData,
+      ...(this.project.id !== undefined ? { project_id: this.project.id } : {}),
     } as PromptRowWithId<HasId, HasVersion>;
 
     const prompt = new Prompt<HasId, HasVersion>(
@@ -425,11 +512,96 @@ export class PromptBuilder {
       ...opts,
       slug,
     });
-
-    if (globalThis._lazy_load) {
-      globalThis._evals.prompts.push(codePrompt);
-    }
+    this.project.addPrompt(codePrompt);
 
     return prompt;
+  }
+}
+
+export function promptDefinitionToPromptData(
+  promptDefinition: PromptDefinition,
+  rawTools?: ToolFunctionDefinition[],
+): PromptData {
+  const promptBlock: PromptBlockData =
+    "messages" in promptDefinition
+      ? {
+          type: "chat",
+          messages: promptDefinition.messages,
+          tools:
+            rawTools && rawTools.length > 0
+              ? JSON.stringify(rawTools)
+              : undefined,
+        }
+      : {
+          type: "completion",
+          content: promptDefinition.prompt,
+        };
+
+  return {
+    prompt: promptBlock,
+    options: {
+      model: promptDefinition.model,
+      params: promptDefinition.params,
+    },
+  };
+}
+
+export interface FunctionEvent {
+  project_id: string;
+  slug: string;
+  name: string;
+  description: string;
+  prompt_data?: PromptData;
+  function_data: z.infer<typeof functionDataSchema>;
+  function_type?: FunctionType;
+  if_exists?: IfExists;
+}
+
+export class ProjectNameIdMap {
+  private nameToId: Record<string, string> = {};
+  private idToName: Record<string, string> = {};
+
+  async getId(projectName: string): Promise<string> {
+    if (!(projectName in this.nameToId)) {
+      const response = await _internalGetGlobalState()
+        .appConn()
+        .post_json("api/project/register", {
+          project_name: projectName,
+        });
+
+      const result = z
+        .object({
+          project: projectSchema,
+        })
+        .parse(response);
+
+      const projectId = result.project.id;
+
+      this.nameToId[projectName] = projectId;
+      this.idToName[projectId] = projectName;
+    }
+    return this.nameToId[projectName];
+  }
+
+  async getName(projectId: string): Promise<string> {
+    if (!(projectId in this.idToName)) {
+      const response = await _internalGetGlobalState()
+        .appConn()
+        .post_json("api/project/get", {
+          id: projectId,
+        });
+      const result = z.array(projectSchema).nonempty().parse(response);
+      const projectName = result[0].name;
+      this.idToName[projectId] = projectName;
+      this.nameToId[projectName] = projectId;
+    }
+    return this.idToName[projectId];
+  }
+
+  async resolve(project: Project): Promise<string> {
+    if (project.id) {
+      return project.id;
+    }
+    return this.getId(project.name!);
   }
 }

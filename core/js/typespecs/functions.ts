@@ -58,6 +58,14 @@ export const codeBundleSchema = z
   .openapi("CodeBundle");
 export type CodeBundle = z.infer<typeof codeBundleSchema>;
 
+export const remoteEvalDataSchema = z.object({
+  type: z.literal("remote_eval"),
+  endpoint: z.string(),
+  eval_name: z.string(),
+  parameters: z.record(z.string(), z.unknown()),
+});
+export type RemoteEvalData = z.infer<typeof remoteEvalDataSchema>;
+
 export const functionDataSchema = z
   .union([
     z
@@ -90,6 +98,10 @@ export const functionDataSchema = z
     graphDataSchema.openapi({
       title: "graph",
       description: "This feature is preliminary and unsupported.",
+    }),
+    remoteEvalDataSchema.openapi({
+      title: "remote_eval",
+      description: "A remote eval to run",
     }),
     z
       .object({
@@ -216,31 +228,25 @@ export const invokeParent = z.union([
     ),
 ]);
 
-const fetchRowFieldsSchema = z.object({
-  object_type: spanParentObjectTypeSchema.describe(
-    "The type of the object you are logging to",
-  ),
-  object_id: z.string().describe("The id of the object you are logging to"),
-  row_id: z.string().describe("The row id to fetch"),
-  fields: z.array(z.string()).describe("The fields to fetch"),
-});
-
 export const invokeFunctionNonIdArgsSchema = z.object({
   input: customTypes.unknown
     .optional()
     .describe(
       "Argument to the function, which can be any JSON serializable value",
     ),
-  fetch_row_fields: fetchRowFieldsSchema
-    .nullish()
-    .describe("If provided, the row id and fields to fetch before invoke"),
   expected: customTypes.unknown
     .optional()
     .describe("The expected output of the function"),
   metadata: z
     .record(z.string(), z.unknown())
     .nullish()
-    .describe("Any relevant metadata"),
+    .describe(
+      "Any relevant metadata. This will be logged and available as the `metadata` argument.",
+    ),
+  tags: z
+    .array(z.string())
+    .nullish()
+    .describe("Any relevant tags to log on the span."),
   messages: z
     .array(chatCompletionMessageParamSchema)
     .optional()
@@ -398,6 +404,12 @@ export const sseTextEventSchema = baseSSEEventSchema.merge(
   }),
 );
 
+export const sseReasoningEventSchema = baseSSEEventSchema.merge(
+  z.object({
+    event: z.literal("reasoning_delta"),
+  }),
+);
+
 export const sseDataEventSchema = baseSSEEventSchema.merge(
   z.object({
     event: z.literal("json_delta"),
@@ -461,6 +473,7 @@ export const sseProgressEventDataSchema = z
     output_type: functionOutputTypeEnum,
     name: z.string(),
     event: z.enum([
+      "reasoning_delta",
       "text_delta",
       "json_delta",
       "error",
@@ -483,6 +496,7 @@ export type SSEConsoleEventData = z.infer<typeof sseConsoleEventDataSchema>;
 export const callEventSchema = z
   .union([
     sseTextEventSchema.openapi({ title: "text_delta" }),
+    sseReasoningEventSchema.openapi({ title: "reasoning_delta" }),
     sseDataEventSchema.openapi({ title: "json_delta" }),
     sseProgressEventSchema.openapi({ title: "progress" }),
     sseErrorEventSchema.openapi({ title: "error" }),
@@ -520,7 +534,7 @@ export const toolFunctionDefinitionSchema = z.object({
     name: z.string(),
     description: z.string().optional(),
     parameters: z.record(z.unknown()).optional(),
-    strict: z.boolean().optional(),
+    strict: z.boolean().nullish(),
   }),
 });
 export type ToolFunctionDefinition = z.infer<

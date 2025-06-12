@@ -66,7 +66,7 @@ class BraintrustProgressChunk:
     format: str
     output_type: str
     name: str
-    event: Literal["json_delta", "text_delta"]
+    event: Literal["json_delta", "text_delta", "reasoning_delta"]
     type: Literal["progress"] = "progress"
 
 

@@ -2,6 +2,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 
+import { Queue, DEFAULT_QUEUE_SIZE } from "./queue";
 import {
   _urljoin,
   AnyDatasetRecord,
@@ -211,9 +212,26 @@ export interface Span extends Exportable {
    * Links can be generated at any time, but they will only become viewable
    * after the span and its root have been flushed to the server and ingested.
    *
-   * @returns A permalink to the span.
+   * This function can block resolving data with the server. For production
+   * applications it's preferable to call {@link Span.link} instead.
+   *
+   * @returns A promise which resolves to a permalink to the span.
    */
   permalink(): Promise<string>;
+
+  /**
+   * Format a link to the Braintrust application for viewing this span.
+   *
+   * Links can be generated at any time, but they will only become viewable
+   * after the span and its root have been flushed to the server and ingested.
+   *
+   * There are some conditions when a Span doesn't have enough information
+   * to return a stable link (e.g. during an unresolved experiment). In this case
+   * or if there's an error generating link, we'll return a placeholder link.
+   *
+   * @returns A link to the span.
+   */
+  link(): string;
 
   /**
    * Flush any pending rows to the server.
@@ -291,6 +309,10 @@ export class NoopSpan implements Span {
   }
 
   public async permalink(): Promise<string> {
+    return NOOP_SPAN_PERMALINK;
+  }
+
+  public link(): string {
     return NOOP_SPAN_PERMALINK;
   }
 
@@ -482,7 +504,7 @@ export class BraintrustState {
     const serializedParsed = loginSchema.safeParse(serialized);
     if (!serializedParsed.success) {
       throw new Error(
-        `Cannot deserialize BraintrustState: ${serializedParsed.error.errors}`,
+        `Cannot deserialize BraintrustState: ${serializedParsed.error.message}`,
       );
     }
     const state = new BraintrustState({ ...opts });
@@ -632,15 +654,16 @@ export const _internalGetGlobalState = () => _globalState;
 export class FailedHTTPResponse extends Error {
   public status: number;
   public text: string;
-  public data: any;
+  public data: string;
 
-  constructor(status: number, text: string, data: any = null) {
+  constructor(status: number, text: string, data: string) {
     super(`${status}: ${text} (${data})`);
     this.status = status;
     this.text = text;
     this.data = data;
   }
 }
+
 async function checkResponse(resp: Response) {
   if (resp.ok) {
     return resp;
@@ -1464,6 +1487,15 @@ export async function spanComponentsToObjectId({
   )();
 }
 
+export const ERR_PERMALINK = "https://braintrust.dev/error-generating-link";
+
+function getErrPermlink(msg: string) {
+  if (msg == "") {
+    return ERR_PERMALINK;
+  }
+  return `${ERR_PERMALINK}?msg=${encodeURIComponent(msg)}`;
+}
+
 /**
  * Format a permalink to the Braintrust application for viewing the span
  * represented by the provided `slug`.
@@ -1471,7 +1503,7 @@ export async function spanComponentsToObjectId({
  * Links can be generated at any time, but they will only become viewable after
  * the span and its root have been flushed to the server and ingested.
  *
- * If you have a `Span` object, use {@link Span.permalink} instead.
+ * If you have a `Span` object, use {@link Span.link} instead.
  *
  * @param slug The identifier generated from {@link Span.export}.
  * @param opts Optional arguments.
@@ -1500,9 +1532,7 @@ export async function permalink(
     }
     await state.login({});
     if (!state.orgName) {
-      throw new Error(
-        "Must either provide orgName explicitly or be logged in to a specific org",
-      );
+      throw new Error("provide-org-or-login"); // this is caught below
     }
     return state.orgName;
   };
@@ -1512,24 +1542,31 @@ export async function permalink(
     }
     await state.login({});
     if (!state.appUrl) {
-      throw new Error("Must either provide appUrl explicitly or be logged in");
+      throw new Error("provide-app-url-or-login"); // this is caught below
     }
     return state.appUrl;
   };
 
-  const components = SpanComponentsV3.fromStr(slug);
-  const object_type = spanObjectTypeV3ToString(components.data.object_type);
-  const [orgName, appUrl, object_id] = await Promise.all([
-    getOrgName(),
-    getAppUrl(),
-    spanComponentsToObjectId({ components, state }),
-  ]);
-  const id = components.data.row_id;
-  if (!id) {
-    throw new Error("Span slug does not refer to an individual row");
+  try {
+    const components = SpanComponentsV3.fromStr(slug);
+    const object_type = spanObjectTypeV3ToString(components.data.object_type);
+    const [orgName, appUrl, object_id] = await Promise.all([
+      getOrgName(),
+      getAppUrl(),
+      spanComponentsToObjectId({ components, state }),
+    ]);
+    const id = components.data.row_id;
+    if (!id) {
+      throw new Error("Span slug does not refer to an individual row");
+    }
+    const urlParams = new URLSearchParams({ object_type, object_id, id });
+    return `${appUrl}/app/${orgName}/object?${urlParams}`;
+  } catch (e) {
+    if (e instanceof FailedHTTPResponse) {
+      return getErrPermlink(`http-error-${e.status}`);
+    }
+    return getErrPermlink(e instanceof Error ? e.message : String(e));
   }
-  const urlParams = new URLSearchParams({ object_type, object_id, id });
-  return `${appUrl}/app/${orgName}/object?${urlParams}`;
 }
 
 // IMPORTANT NOTE: This function may pass arguments which override those in the
@@ -1745,8 +1782,10 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
 
   private startSpanImpl(args?: StartSpanArgs): Span {
     return new SpanImpl({
-      state: this.state,
       ...args,
+      // Sometimes `args` gets passed directly into this function, and it contains an undefined value for `state`.
+      // To ensure that we always use this logger's state, we override the `state` argument no matter what.
+      state: this.state,
       ...startSpanParentArgs({
         state: this.state,
         parent: args?.parent,
@@ -1859,7 +1898,7 @@ interface BackgroundLogger {
   flush(): Promise<void>;
 }
 
-class TestBackgroundLogger implements BackgroundLogger {
+export class TestBackgroundLogger implements BackgroundLogger {
   private items: LazyValue<BackgroundLogEvent>[][] = [];
 
   log(items: LazyValue<BackgroundLogEvent>[]): void {
@@ -1887,13 +1926,15 @@ class TestBackgroundLogger implements BackgroundLogger {
   }
 }
 
+const BACKGROUND_LOGGER_BASE_SLEEP_TIME_S = 1.0;
+
 // We should only have one instance of this object per state object in
 // 'BraintrustState._bgLogger'. Be careful about spawning multiple
 // instances of this class, because concurrent BackgroundLoggers will not log to
 // the backend in a deterministic order.
 class HTTPBackgroundLogger implements BackgroundLogger {
   private apiConn: LazyValue<HTTPConnection>;
-  private items: LazyValue<BackgroundLogEvent>[] = [];
+  private queue: Queue<LazyValue<BackgroundLogEvent>>;
   private activeFlush: Promise<void> = Promise.resolve();
   private activeFlushResolved = true;
   private activeFlushError: unknown = undefined;
@@ -1904,7 +1945,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public maxRequestSize: number = 6 * 1024 * 1024;
   public defaultBatchSize: number = 100;
   public numTries: number = 3;
-  public queueDropExceedingMaxsize: number | undefined = undefined;
+  public queueDropExceedingMaxsize: number = DEFAULT_QUEUE_SIZE;
   public queueDropLoggingPeriod: number = 60;
   public failedPublishPayloadsDir: string | undefined = undefined;
   public allPublishPayloadsDir: string | undefined = undefined;
@@ -1949,6 +1990,8 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       this.queueDropExceedingMaxsize = queueDropExceedingMaxsizeEnv;
     }
 
+    this.queue = new Queue(this.queueDropExceedingMaxsize);
+
     const queueDropLoggingPeriodEnv = Number(
       iso.getEnv("BRAINTRUST_QUEUE_DROP_LOGGING_PERIOD"),
     );
@@ -1986,17 +2029,8 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       return;
     }
 
-    const [addedItems, droppedItems] = (() => {
-      if (this.queueDropExceedingMaxsize === undefined) {
-        return [items, []];
-      }
-      const numElementsToAdd = Math.min(
-        Math.max(this.queueDropExceedingMaxsize - this.items.length, 0),
-        items.length,
-      );
-      return [items.slice(0, numElementsToAdd), items.slice(numElementsToAdd)];
-    })();
-    this.items.push(...addedItems);
+    const droppedItems = this.queue.push(...items);
+
     if (!this.syncFlush) {
       this.triggerActiveFlush();
     }
@@ -2025,15 +2059,14 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
   private async flushOnce(args?: { batchSize?: number }): Promise<void> {
     if (this._disabled) {
-      this.items = [];
+      this.queue.clear();
       return;
     }
 
     const batchSize = args?.batchSize ?? this.defaultBatchSize;
 
     // Drain the queue.
-    const wrappedItems = this.items;
-    this.items = [];
+    const wrappedItems = this.queue.drain();
 
     const [allItems, attachments] = await this.unwrapLazyValues(wrappedItems);
     if (allItems.length === 0) {
@@ -2095,7 +2128,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
 
     // If more items were added while we were flushing, flush again
-    if (this.items.length > 0) {
+    if (this.queue.length() > 0) {
       await this.flushOnce(args);
     }
   }
@@ -2131,7 +2164,11 @@ class HTTPBackgroundLogger implements BackgroundLogger {
           throw e;
         } else {
           console.warn(e);
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          const sleepTimeS = BACKGROUND_LOGGER_BASE_SLEEP_TIME_S * 2 ** i;
+          console.info(`Sleeping for ${sleepTimeS}s`);
+          await new Promise((resolve) =>
+            setTimeout(resolve, sleepTimeS * 1000),
+          );
         }
       }
     }
@@ -2191,7 +2228,11 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       } else {
         console.warn(errMsg);
         if (isRetrying) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          const sleepTimeS = BACKGROUND_LOGGER_BASE_SLEEP_TIME_S * 2 ** i;
+          console.info(`Sleeping for ${sleepTimeS}s`);
+          await new Promise((resolve) =>
+            setTimeout(resolve, sleepTimeS * 1000),
+          );
         }
       }
     }
@@ -3021,7 +3062,9 @@ export async function loadPrompt({
     });
     if (!prompt) {
       throw new Error(
-        `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[projectName ?? projectId]} (not found on server or in local cache): ${e}`,
+        `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[
+          projectName ?? projectId,
+        ]} (not found on server or in local cache): ${e}`,
       );
     }
     return prompt;
@@ -3393,7 +3436,10 @@ export function traced<IsAsyncFlush extends boolean = true, R = void>(
  *    messages: [{ role: "user", content: input }],
  *  });
  *  return result.choices[0].message.content ?? "unknown";
- * });
+ * },
+ * // Optional: if you're using a framework like NextJS that minifies your code, specify the function name and it will be used for the span name
+ * { name: "myFunc" },
+ * );
  * ```
  * Now, any calls to `myFunc` will be traced, and the input and output will be logged automatically.
  * If tracing is inactive, i.e. there is no active logger or experiment, it's just a no-op.
@@ -3771,12 +3817,15 @@ function extractAttachments(
  *
  * @returns The same event instance as the input.
  */
-function enrichAttachments<T extends Record<string, any>>(event: T): T {
+function enrichAttachments<T extends Record<string, any>>(
+  event: T,
+  state: BraintrustState | undefined,
+): T {
   for (const [key, value] of Object.entries(event)) {
     // Base case: AttachmentReference.
     const parsedValue = attachmentReferenceSchema.safeParse(value);
     if (parsedValue.success) {
-      (event as any)[key] = new ReadonlyAttachment(parsedValue.data);
+      (event as any)[key] = new ReadonlyAttachment(parsedValue.data, state);
       continue;
     }
 
@@ -3786,7 +3835,7 @@ function enrichAttachments<T extends Record<string, any>>(event: T): T {
     }
 
     // Recursive case: object or array:
-    enrichAttachments(value);
+    enrichAttachments(value, state);
   }
 
   return event;
@@ -3990,7 +4039,7 @@ export class Experiment
     lazyMetadata: LazyValue<ProjectExperimentMetadata>,
     dataset?: AnyDataset,
   ) {
-    super("experiment", undefined, enrichAttachments);
+    super("experiment", undefined, (r) => enrichAttachments(r, state));
     this.lazyMetadata = lazyMetadata;
     this.dataset = dataset;
     this.lastStartTime = getCurrentUnixTimestamp();
@@ -4104,8 +4153,10 @@ export class Experiment
 
   private startSpanImpl(args?: StartSpanArgs): Span {
     return new SpanImpl({
-      state: this.state,
       ...args,
+      // Sometimes `args` gets passed directly into this function, and it contains an undefined value for `state`.
+      // To ensure that we always use this experiment's state, we override the `state` argument no matter what.
+      state: this.state,
       ...startSpanParentArgs({
         state: this.state,
         parent: args?.parent,
@@ -4181,17 +4232,25 @@ export class Experiment
         }
       }
 
-      const results = await state.apiConn().get_json(
-        "/experiment-comparison2",
-        {
-          experiment_id: await this.id,
-          base_experiment_id: comparisonExperimentId,
-        },
-        3,
-      );
+      try {
+        const results = await state.apiConn().get_json(
+          "/experiment-comparison2",
+          {
+            experiment_id: await this.id,
+            base_experiment_id: comparisonExperimentId,
+          },
+          3,
+        );
 
-      scores = results["scores"];
-      metrics = results["metrics"];
+        scores = results["scores"];
+        metrics = results["metrics"];
+      } catch (e) {
+        console.warn(
+          `Failed to fetch experiment scores and metrics: ${e}\n\nView complete results in Braintrust or run experiment.summarize() again.`,
+        );
+        scores = {};
+        metrics = {};
+      }
     }
 
     return {
@@ -4203,7 +4262,7 @@ export class Experiment
       experimentUrl: experimentUrl,
       comparisonExperimentName: comparisonExperimentName,
       scores: scores ?? {},
-      metrics: metrics,
+      metrics: metrics ?? {},
     };
   }
 
@@ -4283,7 +4342,7 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     private state: BraintrustState,
     private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>,
   ) {
-    super("experiment", undefined, enrichAttachments);
+    super("experiment", undefined, (r) => enrichAttachments(r, state));
   }
 
   public get id(): Promise<string> {
@@ -4627,6 +4686,72 @@ export class SpanImpl implements Span {
     });
   }
 
+  public link(): string {
+    if (!this.id) {
+      return NOOP_SPAN_PERMALINK;
+    }
+
+    try {
+      const orgName = this._state.orgName;
+      if (!orgName) {
+        throw new Error("log-in-or-provide-org-name");
+      }
+
+      return this._link(orgName);
+    } catch (e) {
+      return getErrPermlink(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  _link(orgName: string): string {
+    const appUrl = this._state.appUrl || "https://www.braintrust.dev";
+    const baseUrl = `${appUrl}/app/${orgName}`;
+
+    // NOTE[matt]: I believe lazy values should not exist in the span or the logger.
+    // Nothing in this module should have the possibility of blocking with the lone exception of
+    // flush() which should be a clear exception. We shouldn't build on it and
+    // plan to remove it in the future.
+    const args = this.parentComputeObjectMetadataArgs;
+
+    switch (this.parentObjectType) {
+      case SpanObjectTypeV3.PROJECT_LOGS: {
+        // Links to spans require a project id or name. We might not either, so use whatever
+        // we can to make a link without making a roundtrip to the server.
+        const projectID =
+          args?.project_id || this.parentObjectId.getSync().value;
+        const projectName = args?.project_name;
+        if (projectID) {
+          return `${baseUrl}/object?object_type=project_logs&object_id=${projectID}&id=${this._id}`;
+        } else if (projectName) {
+          return `${baseUrl}/p/${projectName}/logs?oid=${this._id}`;
+        } else {
+          return getErrPermlink("provide-project-name-or-id");
+        }
+      }
+      case SpanObjectTypeV3.EXPERIMENT: {
+        // Experiment links require an id, so the sync version will only work after the experiment is
+        // resolved.
+        const expID =
+          args?.experiment_id || this.parentObjectId?.getSync()?.value;
+        if (!expID) {
+          return getErrPermlink("provide-experiment-id");
+        } else {
+          return `${baseUrl}/object?object_type=experiment&object_id=${expID}&id=${this._id}`;
+        }
+      }
+      case SpanObjectTypeV3.PLAYGROUND_LOGS: {
+        // FIXME[matt] I dont believe these are used in the SDK.
+        return NOOP_SPAN_PERMALINK;
+      }
+      default: {
+        // trigger a compile-time error if we add a new object type
+        const _exhaustive: never = this.parentObjectType;
+        _exhaustive;
+        return NOOP_SPAN_PERMALINK;
+      }
+    }
+  }
+
   async flush(): Promise<void> {
     return await this._state.bgLogger().flush();
   }
@@ -4727,7 +4852,7 @@ export class Dataset<
       (r: AnyDatasetRecord) =>
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         ensureDatasetRecord(
-          enrichAttachments(r),
+          enrichAttachments(r, this.state),
           isLegacyDataset,
         ) as WithTransactionId<DatasetRecord<IsLegacyDataset>>,
       _internal_btql,
@@ -5208,6 +5333,7 @@ export class Prompt<
 > {
   private parsedPromptData: PromptData | undefined;
   private hasParsedPromptData = false;
+  private readonly __braintrust_prompt_marker = true;
 
   constructor(
     private metadata: PromptRowWithId<HasId, HasVersion> | PromptSessionEvent,
@@ -5216,6 +5342,7 @@ export class Prompt<
   ) {}
 
   public get id(): HasId extends true ? string : string | undefined {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return this.metadata.id as HasId extends true ? string : string | undefined;
   }
 
@@ -5240,6 +5367,7 @@ export class Prompt<
   public get version(): HasId extends true
     ? TransactionId
     : TransactionId | undefined {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return this.metadata[TRANSACTION_ID_FIELD] as HasId extends true
       ? TransactionId
       : TransactionId | undefined;
@@ -5247,6 +5375,10 @@ export class Prompt<
 
   public get options(): NonNullable<PromptData["options"]> {
     return this.getParsedPromptData()?.options || {};
+  }
+
+  public get promptData(): PromptData {
+    return this.getParsedPromptData()!;
   }
 
   /**
@@ -5474,6 +5606,28 @@ export class Prompt<
     }
     return this.parsedPromptData!;
   }
+
+  public static isPrompt(data: unknown): data is Prompt<boolean, boolean> {
+    return (
+      typeof data === "object" &&
+      data !== null &&
+      "__braintrust_prompt_marker" in data
+    );
+  }
+  public static fromPromptData(
+    name: string,
+    promptData: PromptData,
+  ): Prompt<false, false> {
+    return new Prompt(
+      {
+        name: name,
+        slug: name,
+        prompt_data: promptData,
+      },
+      {},
+      false,
+    );
+  }
 }
 
 export type AnyDataset = Dataset<boolean>;
@@ -5577,8 +5731,18 @@ export interface DatasetSummary {
 const TEST_API_KEY = "___TEST_API_KEY__THIS_IS_NOT_REAL___";
 
 // This is a helper function to simulate a login for testing.
-function simulateLoginForTests() {
-  return login({ apiKey: TEST_API_KEY });
+async function simulateLoginForTests() {
+  return await login({
+    apiKey: TEST_API_KEY,
+    appUrl: "https://braintrust.dev",
+  });
+}
+
+// This is a helper function to simulate a logout for testing.
+function simulateLogoutForTests() {
+  _globalState.resetLoginInfo();
+  _globalState.appUrl = "https://www.braintrust.dev";
+  return _globalState;
 }
 
 export const _exportsForTestingOnly = {
@@ -5587,4 +5751,5 @@ export const _exportsForTestingOnly = {
   useTestBackgroundLogger,
   clearTestBackgroundLogger,
   simulateLoginForTests,
+  simulateLogoutForTests,
 };

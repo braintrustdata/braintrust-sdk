@@ -43,11 +43,13 @@ function parseSpanFromResponseCreateParams(params: any): TimedSpan {
     name: "openai.responses.create",
     spanAttributes: {
       type: "llm",
-      provider: "openai",
     },
     event: {
       input,
-      metadata: filterFrom(params, ["input", "instructions"]),
+      metadata: {
+        ...filterFrom(params, ["input", "instructions"]),
+        provider: "openai",
+      },
     },
     startTime: getCurrentUnixTimestamp(),
   };
@@ -168,7 +170,7 @@ const TOKEN_PREFIX_MAP: Record<string, string> = {
   output: "completion",
 };
 
-export function parseMetricsFromUsage(usage: any): Record<string, number> {
+export function parseMetricsFromUsage(usage: unknown): Record<string, number> {
   if (!usage) {
     return {};
   }

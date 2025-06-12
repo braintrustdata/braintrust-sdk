@@ -8,11 +8,16 @@ and handles file system errors gracefully.
 """
 
 import gzip
+import hashlib
 import json
+import logging
 import os
 from typing import Any, Callable, Generic, List, Optional, TypeVar
 
 T = TypeVar("T")
+
+
+log = logging.getLogger(__name__)
 
 
 class DiskCache(Generic[T]):
@@ -34,6 +39,8 @@ class DiskCache(Generic[T]):
         max_size: Optional[int] = None,
         serializer: Optional[Callable[[T], Any]] = None,
         deserializer: Optional[Callable[[Any], T]] = None,
+        log_warnings: bool = True,
+        mkdirs: bool = True,
     ):
         """
         Creates a new DiskCache instance.
@@ -58,10 +65,13 @@ class DiskCache(Generic[T]):
         self._max_size = max_size
         self._serializer = serializer
         self._deserializer = deserializer
+        self._log_warnings = log_warnings
+        self._mkdirs = mkdirs
 
     def _get_entry_path(self, key: str) -> str:
         """Gets the file path for a cache entry."""
-        return os.path.join(self._dir, key)
+        k = hashlib.sha256(key.encode("utf-8")).hexdigest()
+        return os.path.join(self._dir, k)
 
     def get(self, key: str) -> T:
         """
@@ -91,7 +101,11 @@ class DiskCache(Generic[T]):
         except FileNotFoundError:
             raise KeyError(f"Cache key not found: {key}")
         except Exception as e:
-            raise RuntimeError(f"Failed to read from disk cache: {e}") from e
+            # if we have any other error, it's unexpected, but we won't want to crash an app,
+            # so log and treat it like a cache miss.
+            if self._log_warnings:
+                log.warning(f"Unexpected error reading from disk cache: {e}")
+            raise KeyError(f"Cache key not found: {key}") from e
 
     def set(self, key: str, value: T) -> None:
         """
@@ -106,7 +120,10 @@ class DiskCache(Generic[T]):
             RuntimeError: If there is an error writing to the disk cache.
         """
         try:
-            os.makedirs(self._dir, exist_ok=True)
+            # mkdirs exists only to make it easy to simulate cross-platform write errors
+            # (permissions, etc wouldn't work on github actions on windows)
+            if self._mkdirs:
+                os.makedirs(self._dir, exist_ok=True)
             file_path = self._get_entry_path(key)
 
             with gzip.open(file_path, "wb") as f:
@@ -114,36 +131,23 @@ class DiskCache(Generic[T]):
                     value = self._serializer(value)
                 f.write(json.dumps(value).encode("utf-8"))
 
-            if self._max_size:
-                entries = os.listdir(self._dir)
-                if len(entries) > self._max_size:
-                    self._evict_oldest(entries)
+            self._evict_if_full()
         except Exception as e:
-            raise RuntimeError(f"Failed to write to disk cache: {e}") from e
+            # Swallow any cache write errors. Don't crash the app.
+            if self._log_warnings:
+                log.warning(f"Failed to write to disk cache: {e}")
 
-    def _evict_oldest(self, entries: List[str]) -> None:
-        """
-        Evicts the oldest entries from the cache until it is under the maximum size.
+    def _evict_if_full(self):
+        if self._max_size is None or self._max_size <= 0:
+            return None
 
-        This method requires that self.max_size is not None, as it is only called when
-        evicting entries to maintain the maximum cache size.
+        paths = [os.path.join(self._dir, f) for f in os.listdir(self._dir)]
+        if not paths or len(paths) <= self._max_size:
+            return
 
-        Args:
-            entries: List of cache entry filenames.
+        stats = [(p, os.path.getmtime(p)) for p in paths]
+        stats.sort(key=lambda x: x[1])
+        oldest_paths = stats[0 : len(stats) - self._max_size]
 
-        Raises:
-            OSError: If there is an error getting file mtimes or removing entries.
-        """
-        assert self._max_size is not None
-
-        stats = []
-        for entry in entries:
-            path = self._get_entry_path(entry)
-            mtime = os.path.getmtime(path)
-            stats.append({"name": entry, "mtime": mtime})
-
-        stats.sort(key=lambda x: x["mtime"])
-        to_remove = stats[0 : len(stats) - self._max_size]
-
-        for entry in to_remove:
-            os.unlink(self._get_entry_path(entry["name"]))
+        for path in oldest_paths:
+            os.unlink(path[0])

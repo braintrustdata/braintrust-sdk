@@ -2,6 +2,7 @@ import iso from "../isomorph";
 
 export function canUseDiskCache(): boolean {
   return !!(
+    iso.hash &&
     iso.gunzip &&
     iso.gzip &&
     iso.stat &&
@@ -29,6 +30,13 @@ interface DiskCacheOptions {
    * If not specified, the cache will grow unbounded.
    */
   max?: number;
+
+  logWarnings?: boolean;
+
+  /**
+   * Whether to create the cache directory if it doesn't exist.
+   */
+  mkdir?: boolean;
 }
 
 /**
@@ -47,7 +55,8 @@ interface DiskCacheOptions {
 export class DiskCache<T> {
   private readonly dir: string;
   private readonly max?: number;
-
+  private readonly mkdir: boolean;
+  private readonly logWarnings: boolean;
   /**
    * Creates a new DiskCache instance.
    * @param options - Configuration options for the cache.
@@ -58,15 +67,13 @@ export class DiskCache<T> {
     }
     this.dir = options.cacheDir;
     this.max = options.max;
+    this.logWarnings = options.logWarnings ?? true;
+    this.mkdir = options.mkdir ?? true;
   }
 
-  /**
-   * Gets the file path for a cache entry.
-   * @param key - The cache key to get the path for.
-   * @returns The full filesystem path for the cache entry.
-   */
-  private getEntryPath(key: string): string {
-    return iso.pathJoin!(this.dir, key);
+  public getEntryPath(key: string): string {
+    const hashed = iso.hash!(key);
+    return iso.pathJoin!(this.dir, hashed);
   }
 
   /**
@@ -75,7 +82,6 @@ export class DiskCache<T> {
    *
    * @param key - The key to look up in the cache.
    * @returns The cached value if found, undefined otherwise.
-   * @throws If there is an error reading from the disk cache (except for file not found).
    */
   async get(key: string): Promise<T | undefined> {
     try {
@@ -85,10 +91,14 @@ export class DiskCache<T> {
       await iso.utimes!(filePath, new Date(), new Date());
       return JSON.parse(data.toString());
     } catch (e) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       if ((e as NodeJS.ErrnoException).code === "ENOENT") {
         return undefined;
       }
-      throw e;
+      if (this.logWarnings) {
+        console.warn("Failed to read from disk cache", e);
+      }
+      return undefined;
     }
   }
 
@@ -100,34 +110,45 @@ export class DiskCache<T> {
    * @param value - The value to store in the cache.
    */
   async set(key: string, value: T): Promise<void> {
-    await iso.mkdir!(this.dir, { recursive: true });
-    const filePath = this.getEntryPath(key);
-    const data = await iso.gzip!(JSON.stringify(value));
-    await iso.writeFile!(filePath, data);
-
-    if (this.max) {
-      const entries = await iso.readdir!(this.dir);
-      if (entries.length > this.max) {
-        await this.evictOldest(entries);
+    try {
+      if (this.mkdir) {
+        await iso.mkdir!(this.dir, { recursive: true });
       }
+      const filePath = this.getEntryPath(key);
+      const data = await iso.gzip!(JSON.stringify(value));
+
+      await iso.writeFile!(filePath, data);
+      await this.evictOldestIfFull();
+    } catch (e) {
+      if (this.logWarnings) {
+        console.warn("Failed to write to disk cache", e);
+      }
+      return;
     }
   }
 
-  /**
-   * Evicts the oldest entries from the cache until it is under the maximum size.
-   * @param entries - List of all cache entry filenames.
-   */
-  private async evictOldest(entries: string[]): Promise<void> {
+  private async evictOldestIfFull(): Promise<void> {
+    if (!this.max) {
+      return;
+    }
+
+    const files = await iso.readdir!(this.dir);
+    const paths = files.map((file) => iso.pathJoin!(this.dir, file));
+
+    if (paths.length <= this.max) {
+      return;
+    }
+
     interface CacheEntry {
-      name: string;
+      path: string;
       mtime: number;
     }
 
     const stats = await Promise.all(
-      entries.map(async (entry): Promise<CacheEntry> => {
-        const stat = await iso.stat!(this.getEntryPath(entry));
+      paths.map(async (path): Promise<CacheEntry> => {
+        const stat = await iso.stat!(path);
         return {
-          name: entry,
+          path,
           mtime: stat.mtime.getTime(),
         };
       }),
@@ -136,8 +157,6 @@ export class DiskCache<T> {
     stats.sort((a, b) => a.mtime - b.mtime);
     const toRemove = stats.slice(0, stats.length - this.max!);
 
-    await Promise.all(
-      toRemove.map((stat) => iso.unlink!(this.getEntryPath(stat.name))),
-    );
+    await Promise.all(toRemove.map((stat) => iso.unlink!(stat.path)));
   }
 }

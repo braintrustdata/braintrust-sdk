@@ -47,6 +47,7 @@ describe("PromptCache", () => {
       diskCache: new DiskCache<Prompt>({
         cacheDir,
         max: 5,
+        logWarnings: false,
       }),
     });
   });
@@ -129,6 +130,37 @@ describe("PromptCache", () => {
       );
     });
 
+    it("should handle odd project names", async () => {
+      const names = [
+        ".",
+        "..",
+        "/a/b/c",
+        "normal",
+        "my\0file.txt",
+        "file*.txT",
+        "what?.txt",
+        " asdf ",
+        "invalid/name",
+        "my<file>.txt",
+      ];
+      for (const name of names) {
+        const p = new Prompt(
+          {
+            project_id: name,
+            name: "test-prompt",
+            slug: "test-prompt",
+            id: "789",
+            _xact_id: "789",
+          },
+          {},
+          false,
+        );
+        await cache.set(p, p);
+        const result = await cache.get(p);
+        expect(result).toEqual(p);
+      }
+    });
+
     it("should handle different versions of the same prompt", async () => {
       const promptV1 = new Prompt(
         {
@@ -196,20 +228,30 @@ describe("PromptCache", () => {
   });
 
   describe("error handling", () => {
-    it("should throw when disk write fails", async () => {
-      // Make cache directory read-only.
-      await fs.mkdir(cacheDir, { recursive: true });
-      await fs.chmod(cacheDir, 0o444);
+    it("should throw never when disk write fails", async () => {
+      // simulate a write failure by using a nonexistent directory
+      // with mkdir false.
+      const nonExistentDir = path.join(
+        tmpdir(),
+        "doesnt-exist",
+        `write-fail-disk-cache-test-${Date.now()}`,
+      );
+      const brokenCache = new PromptCache({
+        memoryCache: new LRUCache({ max: 2 }),
+        diskCache: new DiskCache<Prompt>({
+          cacheDir: nonExistentDir,
+          max: 5,
+          mkdir: false,
+          logWarnings: false,
+        }),
+      });
 
-      // Should throw when disk write fails.
-      await expect(cache.set(testKey, testPrompt)).rejects.toThrow();
+      // Should not throw when disk write fails.
+      await brokenCache.set(testKey, testPrompt);
 
       // Memory cache should still be updated.
-      const result = await cache.get(testKey);
+      const result = await brokenCache.get(testKey);
       expect(result).toEqual(testPrompt);
-
-      // Restore permissions so cleanup can happen.
-      await fs.chmod(cacheDir, 0o777);
     });
 
     it("should handle disk read errors", async () => {
@@ -221,6 +263,7 @@ describe("PromptCache", () => {
         diskCache: new DiskCache<Prompt>({
           cacheDir,
           max: 5,
+          logWarnings: false,
         }),
       });
 
@@ -256,6 +299,7 @@ describe("PromptCache", () => {
         diskCache: new DiskCache<Prompt>({
           cacheDir,
           max: 5,
+          logWarnings: false,
         }),
       });
 

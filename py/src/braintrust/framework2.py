@@ -4,6 +4,9 @@ from typing import Any, Callable, Dict, List, Optional, Union, overload
 
 import slugify
 
+from braintrust.logger import api_conn, app_conn, login
+
+from .framework import _is_lazy_load, bcolors  # type: ignore
 from .types import (
     ChatCompletionMessageParam,
     IfExists,
@@ -13,6 +16,18 @@ from .types import (
     SavedFunctionId,
     ToolFunctionDefinition,
 )
+from .util import eprint
+
+
+class ProjectIdCache:
+    def __init__(self):
+        self._cache: Dict[Project, str] = {}
+
+    def get(self, project: "Project") -> str:
+        if project not in self._cache:
+            resp = app_conn().post_json("api/project/register", {"project_name": project.name})
+            self._cache[project] = resp["project"]["id"]
+        return self._cache[project]
 
 
 class _GlobalState:
@@ -52,6 +67,39 @@ class CodePrompt:
     function_type: Optional[str]
     id: Optional[str]
     if_exists: Optional[IfExists]
+
+    def to_function_definition(self, if_exists: Optional[IfExists], project_ids: ProjectIdCache) -> Dict[str, Any]:
+        prompt_data = self.prompt
+        if len(self.tool_functions) > 0:
+            resolvable_tool_functions: List[Any] = []
+            for f in self.tool_functions:
+                if isinstance(f, CodeFunction):
+                    resolvable_tool_functions.append(
+                        {
+                            "type": "slug",
+                            "project_id": project_ids.get(f.project),
+                            "slug": f.slug,
+                        }
+                    )
+                else:
+                    resolvable_tool_functions.append(f)
+            prompt_data["tool_functions"] = resolvable_tool_functions
+        j: Dict[str, Any] = {
+            "project_id": project_ids.get(self.project),
+            "name": self.name,
+            "slug": self.slug,
+            "function_data": {
+                "type": "prompt",
+            },
+            "prompt_data": prompt_data,
+            "if_exists": self.if_exists if self.if_exists is not None else if_exists,
+        }
+        if self.description is not None:
+            j["description"] = self.description
+        if self.function_type is not None:
+            j["function_type"] = self.function_type
+
+        return j
 
 
 class ToolBuilder:
@@ -106,7 +154,7 @@ class ToolBuilder:
             returns=returns,
             if_exists=if_exists,
         )
-        global_.functions.append(f)
+        self.project.add_code_function(f)
         return f
 
 
@@ -130,7 +178,7 @@ class PromptBuilder:
         params: Optional[ModelParams] = None,
         tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
         if_exists: Optional[IfExists] = None,
-    ):
+    ) -> CodePrompt:
         ...
 
     @overload  # messages only, no prompt
@@ -146,7 +194,7 @@ class PromptBuilder:
         params: Optional[ModelParams] = None,
         tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
         if_exists: Optional[IfExists] = None,
-    ):
+    ) -> CodePrompt:
         ...
 
     def create(
@@ -225,7 +273,7 @@ class PromptBuilder:
             id=id,
             if_exists=if_exists,
         )
-        global_.prompts.append(p)
+        self.project.add_prompt(p)
         return p
 
 
@@ -248,7 +296,7 @@ class ScorerBuilder:
         handler: Callable[..., Any],
         parameters: Any,
         returns: Any = None,
-    ):
+    ) -> CodeFunction:
         ...
 
     # LLM scorer with prompt.
@@ -265,7 +313,7 @@ class ScorerBuilder:
         params: Optional[ModelParams] = None,
         use_cot: bool,
         choice_scores: Dict[str, float],
-    ):
+    ) -> CodePrompt:
         ...
 
     # LLM scorer with messages.
@@ -282,7 +330,7 @@ class ScorerBuilder:
         params: Optional[ModelParams] = None,
         use_cot: bool,
         choice_scores: Dict[str, float],
-    ):
+    ) -> CodePrompt:
         ...
 
     def create(
@@ -303,7 +351,7 @@ class ScorerBuilder:
         params: Optional[ModelParams] = None,
         use_cot: Optional[bool] = None,
         choice_scores: Optional[Dict[str, float]] = None,
-    ):
+    ) -> Union[CodeFunction, CodePrompt]:
         """Creates a scorer.
 
         Args:
@@ -336,6 +384,7 @@ class ScorerBuilder:
                 name = f"Scorer {self._task_counter}"
         if slug is None or len(slug) == 0:
             slug = slugify.slugify(name)
+
         if handler is not None:  # code scorer
             assert parameters is not None
             f = CodeFunction(
@@ -349,7 +398,8 @@ class ScorerBuilder:
                 returns=returns,
                 if_exists=if_exists,
             )
-            global_.functions.append(f)
+            self.project.add_code_function(f)
+            return f
         else:  # LLM scorer
             assert model is not None
             assert use_cot is not None
@@ -386,7 +436,8 @@ class ScorerBuilder:
                 id=None,
                 if_exists=if_exists,
             )
-            global_.prompts.append(p)
+            self.project.add_prompt(p)
+            return p
 
 
 class Project:
@@ -397,6 +448,38 @@ class Project:
         self.tools = ToolBuilder(self)
         self.prompts = PromptBuilder(self)
         self.scorers = ScorerBuilder(self)
+
+        self._publishable_code_functions: List[CodeFunction] = []
+        self._publishable_prompts: List[CodePrompt] = []
+
+    def add_code_function(self, fn: CodeFunction):
+        self._publishable_code_functions.append(fn)
+        if _is_lazy_load():
+            global_.functions.append(fn)
+
+    def add_prompt(self, prompt: CodePrompt):
+        self._publishable_prompts.append(prompt)
+        if _is_lazy_load():
+            global_.prompts.append(prompt)
+
+    def publish(self):
+        if _is_lazy_load():
+            eprint(f"{bcolors.WARNING}publish() is a no-op when running `braintrust push`.{bcolors.ENDC}")
+            return
+
+        login()
+        project_id_cache = ProjectIdCache()
+
+        definitions: List[Dict[str, Any]] = []
+        if self._publishable_code_functions:
+            eprint(
+                f"{bcolors.WARNING}Code functions cannot be published directly. Use `braintrust push` instead.{bcolors.ENDC}"
+            )
+
+        for prompt in self._publishable_prompts:
+            prompt_definition = prompt.to_function_definition(None, project_id_cache)
+            definitions.append(prompt_definition)
+        return api_conn().post_json("insert-functions", {"functions": definitions})
 
 
 class ProjectBuilder:

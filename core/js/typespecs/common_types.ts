@@ -54,6 +54,7 @@ export const objectTypes = z.enum([
   "group",
   "acl",
   "user",
+  "project_automation",
   "project_score",
   "project_tag",
   "span_iframe",
@@ -114,7 +115,10 @@ export const objectReferenceSchema = z
       .uuid()
       .describe("ID of the object the event is originating from."),
     id: z.string().describe("ID of the original event."),
-    _xact_id: z.string().describe("Transaction ID of the original event."),
+    _xact_id: z
+      .string()
+      .nullish()
+      .describe("Transaction ID of the original event."),
     created: z
       .string()
       .nullish()
@@ -124,3 +128,5 @@ export const objectReferenceSchema = z
   })
   .describe("Reference to the original object and event this was copied from.")
   .openapi("ObjectReference");
+
+export type ObjectReference = z.infer<typeof objectReferenceSchema>;

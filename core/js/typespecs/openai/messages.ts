@@ -7,17 +7,26 @@ export const messageRoleSchema = z
   .openapi("MessageRole");
 export type MessageRole = z.infer<typeof messageRoleSchema>;
 
-const chatCompletionSystemMessageParamSchema = z.object({
-  content: z.string().default(""),
-  role: z.literal("system"),
-  name: z.string().optional(),
+export const cacheControlSchema = z.object({
+  type: z.enum(["ephemeral"]),
 });
+
 export const chatCompletionContentPartTextSchema = z
   .object({
     text: z.string().default(""),
     type: z.literal("text"),
+    cache_control: cacheControlSchema.optional(),
   })
   .openapi("ChatCompletionContentPartText");
+
+const chatCompletionSystemMessageParamSchema = z.object({
+  content: z.union([
+    z.string().default("").openapi({ title: "text" }),
+    z.array(chatCompletionContentPartTextSchema).openapi({ title: "array" }),
+  ]),
+  role: z.literal("system"),
+  name: z.string().optional(),
+});
 
 const imageURLSchema = z.object({
   url: z.string(),
@@ -89,12 +98,15 @@ const functionSchema = z.object({
   name: z.string(),
 });
 const chatCompletionToolMessageParamSchema = z.object({
-  content: z.string().default(""),
+  content: z.union([
+    z.string().default("").openapi({ title: "text" }),
+    z.array(chatCompletionContentPartTextSchema).openapi({ title: "array" }),
+  ]),
   role: z.literal("tool"),
   tool_call_id: z.string().default(""),
 });
 const chatCompletionFunctionMessageParamSchema = z.object({
-  content: z.string().default(""),
+  content: z.string().nullable(),
   name: z.string(),
   role: z.literal("function"),
 });
@@ -106,9 +118,27 @@ export const chatCompletionMessageToolCallSchema = z
   })
   .openapi("ChatCompletionMessageToolCall");
 
+export const chatCompletionMessageReasoningSchema = z
+  .object({
+    id: z
+      .string()
+      .nullish()
+      .transform((x) => x ?? undefined),
+    content: z
+      .string()
+      .nullish()
+      .transform((x) => x ?? undefined),
+  })
+  .describe(
+    "Note: This is not part of the OpenAI API spec, but we added it for interoperability with multiple reasoning models.",
+  )
+  .openapi("ChatCompletionMessageReasoning");
+
 const chatCompletionAssistantMessageParamSchema = z.object({
   role: z.literal("assistant"),
-  content: z.string().nullish(),
+  content: z
+    .union([z.string(), z.array(chatCompletionContentPartTextSchema)])
+    .nullish(),
   // NOTE: It's important to keep these optional, rather than nullish, to stay
   // inline with the OpenAI SDK's type definition.
   function_call: functionCallSchema.nullish().transform((x) => x ?? undefined),
@@ -118,6 +148,10 @@ const chatCompletionAssistantMessageParamSchema = z.object({
     .transform((x) => x ?? undefined),
   tool_calls: z
     .array(chatCompletionMessageToolCallSchema)
+    .nullish()
+    .transform((x) => x ?? undefined),
+  reasoning: z
+    .array(chatCompletionMessageReasoningSchema)
     .nullish()
     .transform((x) => x ?? undefined),
 });

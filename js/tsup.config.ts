@@ -20,4 +20,11 @@ export default defineConfig([
     outDir: "dist",
     external: ["esbuild", "prettier", "typescript"],
   },
+  {
+    entry: ["dev/index.ts"],
+    format: ["cjs", "esm"],
+    outDir: "dev/dist",
+    external: ["esbuild", "prettier", "typescript"],
+    dts: true,
+  },
 ]);

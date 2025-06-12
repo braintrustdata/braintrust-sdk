@@ -1,12 +1,27 @@
 import asyncio
 import logging
+import warnings
 from contextlib import contextmanager
 from typing import Any
 
-from braintrust import span_types
 from braintrust.logger import NOOP_SPAN, log_exc_info_to_span, start_span
 
 log = logging.getLogger(__name__)
+
+
+# This tracer depends on an internal anthropic method used to merge
+# streamed messages together. It's a bit tricky so I'm opting to use it
+# here. If it goes away, this polyfill will make it a no-op and the only
+# result will be missing `output` and metrics in our spans. Our tests always
+# run against the latest version of anthropic's SDK, so we'll know.
+# anthropic-sdk-python/blob/main/src/anthropic/lib/streaming/_messages.py#L392
+try:
+    from anthropic.lib.streaming._messages import accumulate_event
+except ImportError:
+
+    def accumulate_event(event=None, current_snapshot=None, **kwargs):
+        warnings.warn("braintrust: missing method: anthropic.lib.streaming._messages.accumulate_event")
+        return current_snapshot
 
 
 # Anthropic model parameters that we want to track as span metadata.
@@ -19,6 +34,7 @@ METADATA_PARAMS = (
     "stop_sequences",
     "tool_choice",
     "tools",
+    "stream",
 )
 
 
@@ -46,6 +62,12 @@ class AsyncMessages(Wrapper):
         self.__messages = messages
 
     async def create(self, *args, **kwargs):
+        if kwargs.get("stream", False):
+            return await self.__create_with_stream_true(*args, **kwargs)
+        else:
+            return await self.__create_with_stream_false(*args, **kwargs)
+
+    async def __create_with_stream_false(self, *args, **kwargs):
         span = _start_span("anthropic.messages.create", kwargs)
         try:
             result = await self.__messages.create(*args, **kwargs)
@@ -55,9 +77,38 @@ class AsyncMessages(Wrapper):
         except Exception as e:
             with _catch_exceptions():
                 span.log(error=e)
-            raise e
+            raise
         finally:
             span.end()
+
+    async def __create_with_stream_true(self, *args, **kwargs):
+        span = _start_span("anthropic.messages.stream", kwargs)
+        try:
+            stream = await self.__messages.create(*args, **kwargs)
+        except Exception as e:
+            with _catch_exceptions():
+                span.log(error=e)
+                span.end()
+            raise
+
+        traced_stream = TracedMessageStream(stream, span)
+
+        async def async_stream():
+            try:
+                async for msg in traced_stream:
+                    yield msg
+            except Exception as e:
+                with _catch_exceptions():
+                    span.log(error=e)
+                raise
+            finally:
+                with _catch_exceptions():
+                    msg = traced_stream._get_final_traced_message()
+                    if msg:
+                        _log_message_to_span(msg, span)
+                    span.end()
+
+        return async_stream()
 
     def stream(self, *args, **kwargs):
         span = _start_span("anthropic.messages.stream", kwargs)
@@ -109,35 +160,41 @@ class TracedMessageStreamManager(Wrapper):
     def __init__(self, msg_stream_mgr, span):
         super().__init__(msg_stream_mgr)
         self.__msg_stream_mgr = msg_stream_mgr
+        self.__traced_message_stream = None
         self.__span = span
 
     async def __aenter__(self):
         ms = await self.__msg_stream_mgr.__aenter__()
-        return TracedMessageStream(ms, self.__span)
+        self.__traced_message_stream = TracedMessageStream(ms, self.__span)
+        return self.__traced_message_stream
 
     def __enter__(self):
         ms = self.__msg_stream_mgr.__enter__()
-        return TracedMessageStream(ms, self.__span)
+        self.__traced_message_stream = TracedMessageStream(ms, self.__span)
+        return self.__traced_message_stream
 
     def __aexit__(self, exc_type, exc_value, traceback):
         try:
             return self.__msg_stream_mgr.__aexit__(exc_type, exc_value, traceback)
         finally:
             with _catch_exceptions():
-                # I think you can make a case that this should be done when the iterator
-                # is exhausted, but this is safe.
-                if exc_type:
-                    log_exc_info_to_span(self.__span, exc_type, exc_value, traceback)
-                self.__span.end()
+                self.__close(exc_type, exc_value, traceback)
 
     def __exit__(self, exc_type, exc_value, traceback):
         try:
             return self.__msg_stream_mgr.__exit__(exc_type, exc_value, traceback)
         finally:
             with _catch_exceptions():
-                if exc_type:
-                    log_exc_info_to_span(self.__span, exc_type, exc_value, traceback)
-                self.__span.end()
+                self.__close(exc_type, exc_value, traceback)
+
+    def __close(self, exc_type, exc_value, traceback):
+        tms = self.__traced_message_stream
+        msg = tms._get_final_traced_message()
+        if msg:
+            _log_message_to_span(msg, self.__span)
+        if exc_type:
+            log_exc_info_to_span(self.__span, exc_type, exc_value, traceback)
+        self.__span.end()
 
 
 class TracedMessageStream(Wrapper):
@@ -150,6 +207,10 @@ class TracedMessageStream(Wrapper):
         self.__msg_stream = msg_stream
         self.__span = span
         self.__metrics = {}
+        self.__snapshot = None
+
+    def _get_final_traced_message(self):
+        return self.__snapshot
 
     def __await__(self):
         return self.__msg_stream.__await__()
@@ -173,31 +234,7 @@ class TracedMessageStream(Wrapper):
         return m
 
     def __process_message(self, m):
-        if m.type == "text":
-            # snapshot accumulates the whole message as it streams in. We can send the whole thing
-            # and updates will be dedup'ed downstream
-            self.__span.log(output=str(m.snapshot))
-        elif m.type in ("message_start", "message_delta", "message_stop"):
-            # Parse the metrics from usage.
-            # Note: For some messages it's on m.usage and others m.message.usage.
-            usage = None
-            if hasattr(m, "message"):
-                usage = getattr(m.message, "usage", None)
-            elif hasattr(m, "usage"):
-                usage = m.usage
-
-            # Not every message has every stat, but the total depends on sum of prompt & completion tokens,
-            # so we need to track the current max for each value.
-            if usage:
-                cur_metrics = _extract_metrics(usage)
-                for k, v in cur_metrics.items():
-                    if v > self.__metrics.get(k, -1):
-                        self.__metrics[k] = v
-                self.__metrics["tokens"] = self.__metrics.get("prompt_tokens", 0) + self.__metrics.get(
-                    "completion_tokens", 0
-                )
-
-            self.__span.log(metrics=self.__metrics)
+        self.__snapshot = accumulate_event(event=m, current_snapshot=self.__snapshot)
 
 
 def _get_input_from_kwargs(kwargs):
@@ -237,8 +274,8 @@ def _start_span(name, kwargs):
 def _log_message_to_span(message, span):
     """Log telemetry from the given anthropic.Message to the given span."""
     with _catch_exceptions():
-        metrics = _extract_metrics(getattr(message, "usage", {}))
-        content = getattr(message, "content")
+        metrics = _finalize_metrics(_extract_metrics(getattr(message, "usage", {})))
+        content = getattr(message, "content", None)
         span.log(output=content, metrics=metrics)
 
 
@@ -254,11 +291,23 @@ def _extract_metrics(usage):
 
     _save_if_exists_to("input_tokens", "prompt_tokens")
     _save_if_exists_to("output_tokens", "completion_tokens")
-    _save_if_exists_to("cache_read_input_tokens")
-    _save_if_exists_to("cache_creation_input_tokens")
-    metrics["tokens"] = metrics.get("prompt_tokens", 0) + metrics.get("completion_tokens", 0)
+    _save_if_exists_to("cache_read_input_tokens", "prompt_cached_tokens")
+    _save_if_exists_to("cache_creation_input_tokens", "prompt_cache_creation_tokens")
 
     return metrics
+
+
+def _finalize_metrics(metrics):
+    prompt_tokens = (
+        metrics.get("prompt_tokens", 0)
+        + metrics.get("prompt_cached_tokens", 0)
+        + metrics.get("prompt_cache_creation_tokens", 0)
+    )
+    return {
+        **metrics,
+        "prompt_tokens": prompt_tokens,
+        "tokens": prompt_tokens + metrics.get("completion_tokens", 0),
+    }
 
 
 @contextmanager
@@ -270,6 +319,10 @@ def _catch_exceptions():
 
 
 def wrap_anthropic(client):
+    """Wrap an `Anthropic` object (or AsyncAnthropic) to add tracing. If Braintrust
+    is not configured, this is a no-op. If this is not an `Anthropic` object, this
+    function is a no-op.
+    """
     type_name = getattr(type(client), "__name__")
     # We use 'in' because it could be AsyncAnthropicBedrock
     if "AsyncAnthropic" in type_name:

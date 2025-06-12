@@ -1,0 +1,46 @@
+name: integration-tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+jobs:
+  open-pr:
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'run-integration-tests') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout parent repository
+        uses: actions/checkout@v4
+        with:
+          repository: braintrustdata/braintrust
+          path: braintrust
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure Git in parent repository
+        run: |
+          cd braintrust
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+
+      - name: Initialize and update SDK submodule
+        run: |
+          cd braintrust
+          git submodule init
+          git submodule update --init --recursive
+          cd sdk
+          git remote set-url origin https://github.com/braintrustdata/braintrust-sdk.git
+          git fetch origin
+          git checkout ${{ github.event.pull_request.head.sha }}
+
+      - name: Create integration test PR
+        run: ./braintrust/sdk/scripts/create-integration-test-pr.sh
+        env:
+          GH_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+          COMMIT_HASH: ${{ github.event.pull_request.head.sha }}
+          PARENT_REPO_PATH: braintrust

@@ -10,6 +10,11 @@ import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
 import { functionDataSchema, functionTypeEnum } from "./functions";
 import { savedFunctionIdSchema } from "./function_id";
 import { repoInfoSchema } from "./git_types";
+import {
+  automationConfigSchema,
+  btqlExportAutomationConfigSchema,
+  logAutomationConfigSchema,
+} from "./automations";
 extendZodWithOpenApi(z);
 
 // Section: App DB table schemas
@@ -202,6 +207,9 @@ export const apiKeySchema = z
     name: apiKeyBaseSchema.shape.name,
     preview_name: z.string(),
     user_id: userSchema.shape.id.nullish(),
+    user_email: userSchema.shape.email.nullish(),
+    user_given_name: userSchema.shape.given_name.nullish(),
+    user_family_name: userSchema.shape.family_name.nullish(),
     org_id: organizationSchema.shape.id.nullish(),
   })
   .openapi("ApiKey");
@@ -214,6 +222,13 @@ export const spanFieldOrderItem = z.object({
   layout: z.literal("full").or(z.literal("two_column")).nullish(),
 });
 export type SpanFieldOrderItem = z.infer<typeof spanFieldOrderItem>;
+
+export const remoteEvalSourceSchema = z.object({
+  url: z.string(),
+  name: z.string(),
+  description: z.string().nullish(),
+});
+export type RemoteEvalSource = z.infer<typeof remoteEvalSourceSchema>;
 
 export const projectSettingsSchema = z
   .object({
@@ -232,6 +247,10 @@ export const projectSettingsSchema = z
       .array(spanFieldOrderItem)
       .nullish()
       .describe("The order of the fields to display in the trace view"),
+    remote_eval_sources: z
+      .array(remoteEvalSourceSchema)
+      .nullish()
+      .describe("The remote eval sources to use for the project"),
   })
   .openapi("ProjectSettings");
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
@@ -547,6 +566,37 @@ export const projectScoreCategory = z
   .openapi("ProjectScoreCategory");
 export type ProjectScoreCategory = z.infer<typeof projectScoreCategory>;
 
+const projectAutomationBaseSchema =
+  generateBaseTableSchema("project automation");
+export const projectAutomationSchema = z
+  .object({
+    id: projectAutomationBaseSchema.shape.id,
+    project_id: projectAutomationBaseSchema.shape.project_id,
+    user_id: projectAutomationBaseSchema.shape.user_id,
+    created: projectAutomationBaseSchema.shape.created,
+    name: projectAutomationBaseSchema.shape.name,
+    description: projectAutomationBaseSchema.shape.description,
+    config: automationConfigSchema.describe(
+      "The configuration for the automation rule",
+    ),
+  })
+  .openapi("ProjectAutomation");
+
+export type ProjectAutomation = z.infer<typeof projectAutomationSchema>;
+export const logAutomationSchema = projectAutomationSchema.merge(
+  z.object({
+    config: logAutomationConfigSchema,
+  }),
+);
+export type LogAutomation = z.infer<typeof logAutomationSchema>;
+
+export const btqlExportAutomationSchema = projectAutomationSchema.merge(
+  z.object({
+    config: btqlExportAutomationConfigSchema,
+  }),
+);
+export type BtqlExportAutomation = z.infer<typeof btqlExportAutomationSchema>;
+
 export const onlineScoreConfigSchema = z
   .object({
     sampling_rate: z
@@ -643,6 +693,12 @@ export const projectTagSchema = z
     name: projectTagBaseSchema.shape.name,
     description: projectTagBaseSchema.shape.description,
     color: z.string().nullish().describe("Color of the tag for the UI"),
+    position: z
+      .string()
+      .nullish()
+      .describe(
+        "An optional LexoRank-based string that sets the sort position for the tag in the UI",
+      ),
   })
   .describe(
     "A project tag is a user-configured tag for tracking and filtering your experiments, logs, and other data",
@@ -1028,6 +1084,21 @@ export type AclBatchUpdateResponse = z.infer<
   typeof aclBatchUpdateResponseSchema
 >;
 
+export const createProjectAutomationSchema = projectAutomationSchema
+  .pick({
+    project_id: true,
+    name: true,
+    description: true,
+    config: true,
+  })
+  .openapi("CreateProjectAutomation");
+
+export const patchProjectAutomationSchema = objectNullish(
+  createProjectAutomationSchema,
+)
+  .omit({ project_id: true })
+  .openapi("PatchProjectAutomation");
+
 export const createProjectScoreSchema = projectScoreSchema
   .pick({
     project_id: true,
@@ -1329,6 +1400,11 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
     object: userSchema,
   },
   prompt_session: {},
+  project_automation: {
+    object: projectAutomationSchema,
+    create: createProjectAutomationSchema,
+    patch_id: patchProjectAutomationSchema,
+  },
   project_score: {
     object: projectScoreSchema,
     create: createProjectScoreSchema,

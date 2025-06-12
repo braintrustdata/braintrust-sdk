@@ -1,13 +1,7 @@
 import {
   CodeBundle,
-  functionDataSchema,
   FunctionObject,
   IfExists,
-  projectSchema,
-  PromptData,
-  ExtendedSavedFunctionId,
-  SavedFunctionId,
-  FunctionType,
 } from "@braintrust/core/typespecs";
 import { BuildSuccess, EvaluatorState, FileHandle } from "../cli";
 import { scorerName, warning } from "../framework";
@@ -27,7 +21,7 @@ import { findCodeDefinition, makeSourceMapContext } from "./infer-source";
 import slugifyLib from "slugify";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import pluralize from "pluralize";
-import { Project } from "../framework2";
+import { FunctionEvent, ProjectNameIdMap } from "../framework2";
 
 export type EvaluatorMap = Record<
   string,
@@ -36,17 +30,6 @@ export type EvaluatorMap = Record<
     experiment: Experiment;
   }
 >;
-
-interface FunctionEvent {
-  project_id: string;
-  slug: string;
-  name: string;
-  description: string;
-  prompt_data?: PromptData;
-  function_data: z.infer<typeof functionDataSchema>;
-  function_type?: FunctionType;
-  if_exists?: IfExists;
-}
 
 interface BundledFunctionSpec {
   project_id: string;
@@ -91,12 +74,6 @@ export async function uploadHandleBundles({
   );
 
   const projectNameToId = new ProjectNameIdMap();
-  const resolveProjectId = async (project: Project): Promise<string> => {
-    if (project.id) {
-      return project.id;
-    }
-    return projectNameToId.getId(project.name!);
-  };
 
   const uploadPromises = buildResults.map(async (result) => {
     if (result.type !== "success") {
@@ -110,7 +87,7 @@ export async function uploadHandleBundles({
     if (setCurrent) {
       for (let i = 0; i < result.evaluator.functions.length; i++) {
         const fn = result.evaluator.functions[i];
-        const project_id = await resolveProjectId(fn.project);
+        const project_id = await projectNameToId.resolve(fn.project);
 
         bundleSpecs.push({
           project_id: project_id,
@@ -136,43 +113,7 @@ export async function uploadHandleBundles({
       }
 
       for (const prompt of result.evaluator.prompts) {
-        const prompt_data = {
-          ...prompt.prompt,
-        };
-        if (prompt.toolFunctions.length > 0) {
-          const resolvableToolFunctions: ExtendedSavedFunctionId[] =
-            await Promise.all(
-              prompt.toolFunctions.map(async (fn) => {
-                if ("slug" in fn) {
-                  return {
-                    type: "slug",
-                    project_id: await resolveProjectId(fn.project),
-                    slug: fn.slug,
-                  };
-                } else {
-                  return fn;
-                }
-              }),
-            );
-
-          // This is a hack because these will be resolved on the server side.
-          prompt_data.tool_functions =
-            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-            resolvableToolFunctions as SavedFunctionId[];
-        }
-
-        prompts.push({
-          project_id: await resolveProjectId(prompt.project),
-          name: prompt.name,
-          slug: prompt.slug,
-          description: prompt.description ?? "",
-          function_data: {
-            type: "prompt",
-          },
-          function_type: prompt.functionType,
-          prompt_data,
-          if_exists: prompt.ifExists,
-        });
+        prompts.push(await prompt.toFunctionDefinition(projectNameToId));
       }
     }
 
@@ -315,14 +256,15 @@ async function uploadBundles({
   } as const;
 
   const bundle = await bundlePromises[sourceFile];
-  if (!bundle || !handles[sourceFile].bundleFile) {
+  const bundleFileName = handles[sourceFile].bundleFile;
+  if (!bundle || !bundleFileName) {
     return false;
   }
 
   const sourceMapContextPromise = makeSourceMapContext({
     inFile: sourceFile,
-    outFile: handles[sourceFile].bundleFile,
-    sourceMapFile: handles[sourceFile].bundleFile + ".map",
+    outFile: bundleFileName,
+    sourceMapFile: bundleFileName + ".map",
   });
 
   let pathInfo: z.infer<typeof pathInfoSchema> | undefined = undefined;
@@ -348,7 +290,6 @@ async function uploadBundles({
   }
 
   // Upload bundleFile to pathInfo.url
-  const bundleFileName = handles[sourceFile].bundleFile;
   if (isEmpty(bundleFileName)) {
     throw new Error("No bundle file found");
   }
@@ -456,46 +397,4 @@ function formatNameAndSlug(pieces: string[]) {
     name: capitalize(nonEmptyPieces.join(" ")),
     slug: slugifyLib(nonEmptyPieces.join("-")),
   };
-}
-
-export class ProjectNameIdMap {
-  private nameToId: Record<string, string> = {};
-  private idToName: Record<string, string> = {};
-
-  async getId(projectName: string): Promise<string> {
-    if (!(projectName in this.nameToId)) {
-      const response = await _internalGetGlobalState()
-        .appConn()
-        .post_json("api/project/register", {
-          project_name: projectName,
-        });
-
-      const result = z
-        .object({
-          project: projectSchema,
-        })
-        .parse(response);
-
-      const projectId = result.project.id;
-
-      this.nameToId[projectName] = projectId;
-      this.idToName[projectId] = projectName;
-    }
-    return this.nameToId[projectName];
-  }
-
-  async getName(projectId: string): Promise<string> {
-    if (!(projectId in this.idToName)) {
-      const response = await _internalGetGlobalState()
-        .appConn()
-        .post_json("api/project/get", {
-          id: projectId,
-        });
-      const result = z.array(projectSchema).nonempty().parse(response);
-      const projectName = result[0].name;
-      this.idToName[projectId] = projectName;
-      this.nameToId[projectName] = projectId;
-    }
-    return this.idToName[projectId];
-  }
 }

@@ -18,6 +18,35 @@ class NamedWrapper:
         return getattr(self.__wrapped, name)
 
 
+class AsyncResponseWrapper:
+    """Wrapper that properly preserves async context manager behavior for OpenAI responses."""
+
+    def __init__(self, response: Any):
+        self._response = response
+
+    async def __aenter__(self):
+        if hasattr(self._response, "__aenter__"):
+            return await self._response.__aenter__()
+        return self._response
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if hasattr(self._response, "__aexit__"):
+            return await self._response.__aexit__(exc_type, exc_val, exc_tb)
+
+    def __aiter__(self):
+        if hasattr(self._response, "__aiter__"):
+            return self._response.__aiter__()
+        raise TypeError("Response object is not an async iterator")
+
+    async def __anext__(self):
+        if hasattr(self._response, "__anext__"):
+            return await self._response.__anext__()
+        raise StopAsyncIteration
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._response, name)
+
+
 def log_headers(response: Any, span: Span):
     cached_value = response.headers.get(X_CACHED_HEADER) or response.headers.get(X_LEGACY_CACHED_HEADER)
 
@@ -65,7 +94,7 @@ class ChatCompletionWrapper:
                                     }
                                 )
                                 first = False
-                            all_results.append(item if isinstance(item, dict) else item.dict())
+                            all_results.append(_try_to_dict(item))
                             yield item
 
                         span.log(**self._postprocess_streaming_results(all_results))
@@ -75,7 +104,7 @@ class ChatCompletionWrapper:
                 should_end = False
                 return gen()
             else:
-                log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+                log_response = _try_to_dict(raw_response)
                 metrics = _parse_metrics_from_usage(log_response.get("usage", {}))
                 metrics["time_to_first_token"] = time.time() - start
                 span.log(
@@ -120,7 +149,7 @@ class ChatCompletionWrapper:
                                     }
                                 )
                                 first = False
-                            all_results.append(item if isinstance(item, dict) else item.dict())
+                            all_results.append(_try_to_dict(item))
                             yield item
 
                         span.log(**self._postprocess_streaming_results(all_results))
@@ -128,9 +157,10 @@ class ChatCompletionWrapper:
                         span.end()
 
                 should_end = False
-                return gen()
+                streamer = gen()
+                return AsyncResponseWrapper(streamer)
             else:
-                log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+                log_response = _try_to_dict(raw_response)
                 metrics = _parse_metrics_from_usage(log_response.get("usage"))
                 metrics["time_to_first_token"] = time.time() - start
                 span.log(
@@ -148,13 +178,13 @@ class ChatCompletionWrapper:
         ret = params.pop("span_info", {})
 
         # Then, copy the rest of the params
-        params = {**params}
+        params = prettify_params(params)
         messages = params.pop("messages", None)
         return merge_dicts(
             ret,
             {
                 "input": messages,
-                "metadata": params,
+                "metadata": {**params, "provider": "openai"},
             },
         )
 
@@ -162,12 +192,14 @@ class ChatCompletionWrapper:
     def _postprocess_streaming_results(cls, all_results: List[Dict[str, Any]]) -> Dict[str, Any]:
         role = None
         content = None
-        tool_calls = None
+        tool_calls: Optional[List[Any]] = None
         finish_reason = None
-        metrics = {}
+        metrics: Dict[str, float] = {}
         for result in all_results:
-            if "usage" in result and result["usage"] is not None:
-                metrics = _parse_metrics_from_usage(result["usage"])
+            usage = result.get("usage")
+            if usage:
+                metrics.update(_parse_metrics_from_usage(usage))
+
             choices = result["choices"]
             if not choices:
                 continue
@@ -183,9 +215,16 @@ class ChatCompletionWrapper:
 
             if delta.get("content") is not None:
                 content = (content or "") + delta.get("content")
+
             if delta.get("tool_calls") is not None:
-                if tool_calls is None:
-                    tool_calls = [
+                delta_tool_calls = delta.get("tool_calls")
+                if not delta_tool_calls:
+                    continue
+                tool_delta = delta_tool_calls[0]
+
+                # pylint: disable=unsubscriptable-object
+                if not tool_calls or (tool_delta.get("id") and tool_calls[-1]["id"] != tool_delta.get("id")):
+                    tool_calls = (tool_calls or []) + [
                         {
                             "id": delta["tool_calls"][0]["id"],
                             "type": delta["tool_calls"][0]["type"],
@@ -193,7 +232,8 @@ class ChatCompletionWrapper:
                         }
                     ]
                 else:
-                    tool_calls[0]["function"]["arguments"] += delta["tool_calls"][0]["function"]["arguments"]
+                    # pylint: disable=unsubscriptable-object
+                    tool_calls[-1]["function"]["arguments"] += delta["tool_calls"][0]["function"]["arguments"]
 
         return {
             "metrics": metrics,
@@ -257,8 +297,9 @@ class ResponseWrapper:
 
                 should_end = False
                 return gen()
+
             else:
-                log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+                log_response = _try_to_dict(raw_response)
                 metrics = _parse_metrics_from_usage(log_response.get("usage"))
                 metrics["time_to_first_token"] = time.time() - start
                 span.log(
@@ -309,16 +350,14 @@ class ResponseWrapper:
                         span.end()
 
                 should_end = False
-                return gen()
+                streamer = gen()
+                return AsyncResponseWrapper(streamer)
             else:
-                log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+                log_response = _try_to_dict(raw_response)
+                metrics = _parse_metrics_from_usage(log_response.get("usage"))
+                metrics["time_to_first_token"] = time.time() - start
                 span.log(
-                    metrics={
-                        "time_to_first_token": time.time() - start,
-                        "tokens": log_response["usage"]["total_tokens"],
-                        "prompt_tokens": log_response["usage"]["input_tokens"],
-                        "completion_tokens": log_response["usage"]["output_tokens"],
-                    },
+                    metrics=metrics,
                     output=log_response["output"],
                 )
                 return raw_response
@@ -332,13 +371,13 @@ class ResponseWrapper:
         ret = params.pop("span_info", {})
 
         # Then, copy the rest of the params
-        params = {**params}
+        params = prettify_params(params)
         input = params.pop("input", None)
         return merge_dicts(
             ret,
             {
                 "input": input,
-                "metadata": params,
+                "metadata": {**params, "provider": "openai"},
             },
         )
 
@@ -351,12 +390,15 @@ class ResponseWrapper:
         metrics = {}
         output = []
         for result in all_results:
+            usage = None
             if hasattr(result, "usage"):
-                metrics = {
-                    "tokens": result.usage.total_tokens,
-                    "prompt_tokens": result.usage.input_tokens,
-                    "completion_tokens": result.usage.output_tokens,
-                }
+                usage = getattr(result, "usage")
+            elif result.type == "response.completed" and hasattr(result, "response"):
+                usage = getattr(result.response, "usage")
+
+            if usage:
+                parsed_metrics = _parse_metrics_from_usage(usage)
+                metrics.update(parsed_metrics)
 
             if result.type == "response.output_item.added":
                 output.append({"id": result.item.id, "type": result.item.type})
@@ -391,7 +433,7 @@ class ResponseWrapper:
                         current_content["annotations"] = []
                     if annotation_index == len(current_content["annotations"]):
                         current_content["annotations"].append({})
-                    current_content["annotations"][annotation_index] = result.annotation.dict()
+                    current_content["annotations"][annotation_index] = _try_to_dict(result.annotation)
 
         return {
             "metrics": metrics,
@@ -424,7 +466,7 @@ class BaseWrapper(abc.ABC):
             else:
                 raw_response = create_response
 
-            log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+            log_response = _try_to_dict(raw_response)
             self.process_output(log_response, span)
             return raw_response
 
@@ -440,7 +482,7 @@ class BaseWrapper(abc.ABC):
                 log_headers(create_response, span)
             else:
                 raw_response = create_response
-            log_response = raw_response if isinstance(raw_response, dict) else raw_response.dict()
+            log_response = _try_to_dict(raw_response)
             self.process_output(log_response, span)
             return raw_response
 
@@ -449,14 +491,14 @@ class BaseWrapper(abc.ABC):
         # First, destructively remove span_info
         ret = params.pop("span_info", {})
 
-        params = {**params}
+        params = prettify_params(params)
         input = params.pop("input", None)
 
         return merge_dicts(
             ret,
             {
                 "input": input,
-                "metadata": params,
+                "metadata": {**params, "provider": "openai"},
             },
         )
 
@@ -466,11 +508,10 @@ class EmbeddingWrapper(BaseWrapper):
         super().__init__(create_fn, acreate_fn, "Embedding")
 
     def process_output(self, response: Dict[str, Any], span: Span):
+        usage = response.get("usage")
+        metrics = _parse_metrics_from_usage(usage)
         span.log(
-            metrics={
-                "tokens": response["usage"]["total_tokens"],
-                "prompt_tokens": response["usage"]["prompt_tokens"],
-            },
+            metrics=metrics,
             # TODO: Add a flag to control whether to log the full embedding vector,
             # possibly w/ JSON compression.
             output={"embedding_length": len(response["data"][0]["embedding"])},
@@ -565,7 +606,10 @@ class AsyncCompletionsV1Wrapper(NamedWrapper):
         super().__init__(completions)
 
     async def create(self, *args: Any, **kwargs: Any) -> Any:
-        return await ChatCompletionWrapper(None, self.__completions.with_raw_response.create).acreate(*args, **kwargs)
+        response = await ChatCompletionWrapper(None, self.__completions.with_raw_response.create).acreate(
+            *args, **kwargs
+        )
+        return AsyncResponseWrapper(response)
 
 
 class AsyncEmbeddingV1Wrapper(NamedWrapper):
@@ -574,7 +618,8 @@ class AsyncEmbeddingV1Wrapper(NamedWrapper):
         super().__init__(embedding)
 
     async def create(self, *args: Any, **kwargs: Any) -> Any:
-        return await EmbeddingWrapper(None, self.__embedding.with_raw_response.create).acreate(*args, **kwargs)
+        response = await EmbeddingWrapper(None, self.__embedding.with_raw_response.create).acreate(*args, **kwargs)
+        return AsyncResponseWrapper(response)
 
 
 class AsyncModerationV1Wrapper(NamedWrapper):
@@ -583,7 +628,8 @@ class AsyncModerationV1Wrapper(NamedWrapper):
         super().__init__(moderation)
 
     async def create(self, *args: Any, **kwargs: Any) -> Any:
-        return await ModerationWrapper(None, self.__moderation.with_raw_response.create).acreate(*args, **kwargs)
+        response = await ModerationWrapper(None, self.__moderation.with_raw_response.create).acreate(*args, **kwargs)
+        return AsyncResponseWrapper(response)
 
 
 class ChatV1Wrapper(NamedWrapper):
@@ -613,7 +659,8 @@ class AsyncResponsesV1Wrapper(NamedWrapper):
         super().__init__(responses)
 
     async def create(self, *args: Any, **kwargs: Any) -> Any:
-        return await ResponseWrapper(None, self.__responses.with_raw_response.create).acreate(*args, **kwargs)
+        response = await ResponseWrapper(None, self.__responses.with_raw_response.create).acreate(*args, **kwargs)
+        return AsyncResponseWrapper(response)
 
 
 class BetaCompletionsV1Wrapper(NamedWrapper):
@@ -631,7 +678,8 @@ class AsyncBetaCompletionsV1Wrapper(NamedWrapper):
         super().__init__(completions)
 
     async def parse(self, *args: Any, **kwargs: Any) -> Any:
-        return await ChatCompletionWrapper(None, self.__completions.parse).acreate(*args, **kwargs)
+        response = await ChatCompletionWrapper(None, self.__completions.parse).acreate(*args, **kwargs)
+        return AsyncResponseWrapper(response)
 
 
 class BetaChatV1Wrapper(NamedWrapper):
@@ -684,7 +732,8 @@ class OpenAIV1Wrapper(NamedWrapper):
 def wrap_openai(openai: Any):
     """
     Wrap the openai module (pre v1) or OpenAI instance (post v1) to add tracing.
-    If Braintrust is not configured, this is a no-op.
+    If Braintrust is not configured, nothing will be traced. If this is not an
+    `OpenAI` object, this function is a no-op.
 
     :param openai: The openai module or OpenAI object
     """
@@ -712,28 +761,26 @@ TOKEN_PREFIX_MAP = {
 }
 
 
-def _parse_metrics_from_usage(usage: Dict[str, Any]) -> Dict[str, Any]:
+def _parse_metrics_from_usage(usage: Any) -> Dict[str, Any]:
     # For simplicity, this function handles all the different APIs
-
-    if not usage or not isinstance(usage, dict):
-        return {}
-
-    # example usage format:
-    # { 'input_tokens': 14,
-    # ' input_tokens_details': {'cached_tokens': 0},
-    # ' output_tokens_details': {'reasoning_tokens': 0},
-    # }
-    # we remap names and change detail tokens to names like
-    # input_cached_tokens.
-
     metrics = {}
+
+    if not usage:
+        return metrics
+
+    # This might be a dict or a Usage object that can be cast to a dict
+    # to a dict
+    usage = _try_to_dict(usage)
+    if not isinstance(usage, dict):
+        return metrics  # unexpected
+
     for oai_name, value in usage.items():
         if oai_name.endswith("_tokens_details"):
             # handle `_tokens_detail` dicts
-            raw_prefix = oai_name[: -len("_tokens_details")]
-            prefix = TOKEN_PREFIX_MAP.get(raw_prefix, raw_prefix)
             if not isinstance(value, dict):
                 continue  # unexpected
+            raw_prefix = oai_name[: -len("_tokens_details")]
+            prefix = TOKEN_PREFIX_MAP.get(raw_prefix, raw_prefix)
             for k, v in value.items():
                 if _is_numeric(v):
                     metrics[f"{prefix}_{k}"] = v
@@ -746,3 +793,60 @@ def _parse_metrics_from_usage(usage: Dict[str, Any]) -> Dict[str, Any]:
 
 def _is_numeric(v):
     return isinstance(v, (int, float, complex))
+
+
+def prettify_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    # Filter out NOT_GIVEN parameters
+    # https://linear.app/braintrustdata/issue/BRA-2467
+    ret = {k: v for k, v in params.items() if not _is_not_given(v)}
+
+    if "response_format" in ret:
+        ret["response_format"] = serialize_response_format(ret["response_format"])
+    return ret
+
+
+def _try_to_dict(obj: Any) -> Dict[str, Any]:
+    if isinstance(obj, dict):
+        return obj
+    # convert a pydantic object to a dict
+    if hasattr(obj, "model_dump") and callable(obj.model_dump):
+        try:
+            return obj.model_dump()
+        except Exception:
+            pass
+    # deprecated pydantic method, try model_dump first.
+    if hasattr(obj, "dict") and callable(obj.dict):
+        try:
+            return obj.dict()
+        except Exception:
+            pass
+    return obj
+
+
+def serialize_response_format(response_format: Any) -> Any:
+    try:
+        from pydantic import BaseModel
+    except ImportError:
+        return response_format
+
+    if isinstance(response_format, type) and issubclass(response_format, BaseModel):
+        return dict(
+            type="json_schema",
+            json_schema=dict(
+                name=response_format.__name__,
+                schema=response_format.model_json_schema(),
+            ),
+        )
+    else:
+        return response_format
+
+
+def _is_not_given(value: Any) -> bool:
+    if value is None:
+        return False
+    try:
+        # Check by type name and repr to avoid import dependency
+        type_name = type(value).__name__
+        return type_name == "NotGiven"
+    except Exception:
+        return False
