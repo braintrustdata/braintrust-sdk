@@ -23,7 +23,7 @@ import {
   Prompt,
   PromptRowWithId,
 } from "./logger";
-import { GenericFunction } from "./framework-types";
+import { GenericFunction, ToolOpts } from "./framework-types";
 
 export { toolFunctionDefinitionSchema, ToolFunctionDefinition };
 
@@ -118,7 +118,7 @@ export class ToolBuilder {
   constructor(private readonly project: Project) {}
 
   public create<Input, Output, Fn extends GenericFunction<Input, Output>>(
-    opts: CodeOpts<Input, Output, Fn>,
+    opts: ToolOpts<Input, Output, Fn>,
   ): CodeFunction<Input, Output, Fn> {
     this.taskCounter++;
     opts = opts ?? {};
