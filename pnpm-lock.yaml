@@ -243,6 +243,9 @@ importers:
       prettier:
         specifier: ^3.5.3
         version: 3.5.3
+      tinybench:
+        specifier: ^4.0.1
+        version: 4.0.1
       ts-jest:
         specifier: ^29.1.4
         version: 29.1.4(@babel/core@7.24.7)(esbuild@0.25.5)(jest@29.7.0)(typescript@5.4.4)
@@ -6813,6 +6816,11 @@ packages:
 
   /tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
+    dev: true
+
+  /tinybench@4.0.1:
+    resolution: {integrity: sha512-Nb1srn7dvzkVx0J5h1vq8f48e3TIcbrS7e/UfAI/cDSef/n8yLh4zsAEsFkfpw6auTY+ZaspEvam/xs8nMnotQ==}
+    engines: {node: '>=18.0.0'}
     dev: true
 
   /tinyexec@0.3.2:
