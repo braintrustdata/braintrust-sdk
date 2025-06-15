@@ -126,28 +126,34 @@ export class ToolBuilder {
   constructor(private readonly project: Project) {}
 
   public create<
-    TParams extends z.ZodTypeAny,
-    TReturns extends z.ZodTypeAny,
-    THandler extends GenericFunction<z.infer<TParams>, z.infer<TReturns>>,
+    TParams extends { _output: any; _input: any; _def: any },
+    TReturns extends { _output: any; _input: any; _def: any },
+    THandler extends GenericFunction<TParams["_output"], TReturns["_output"]>,
   >(
     opts: Partial<BaseFnOpts> & {
       handler: THandler;
       parameters: TParams;
       returns: TReturns;
     },
-  ): CodeFunction<z.infer<TParams>, z.infer<TReturns>, THandler>;
+  ): CodeFunction<TParams["_output"], TReturns["_output"], THandler>;
   public create<THandler extends GenericFunction<any, any>>(
     opts: Partial<BaseFnOpts> & {
       handler: THandler;
-      parameters?: z.ZodTypeAny;
-      returns?: z.ZodTypeAny;
+      parameters?: any;
+      returns?: any;
     },
   ): CodeFunction<any, any, THandler>;
-  public create(opts: any): any {
+  public create(
+    opts: Partial<BaseFnOpts> & {
+      handler: GenericFunction<any, any>;
+      parameters?: any;
+      returns?: any;
+    },
+  ): CodeFunction<any, any, any> {
     this.taskCounter++;
     opts = opts ?? {};
 
-    const { handler, name, slug, ...rest } = opts;
+    const { handler, name, slug, parameters, returns, ...rest } = opts;
     let resolvedName = name ?? handler.name;
 
     if (resolvedName.trim().length === 0) {
@@ -159,6 +165,8 @@ export class ToolBuilder {
       name: resolvedName,
       slug: slug ?? slugifyLib(resolvedName, { lower: true, strict: true }),
       type: "tool",
+      parameters: parameters as any,
+      returns: returns as any,
       ...rest,
     });
 

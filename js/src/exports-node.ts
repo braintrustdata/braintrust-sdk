@@ -27,4 +27,3 @@ export { LazyValue } from "./util";
 export * from "./wrappers/oai";
 export { wrapAISDKModel } from "./wrappers/ai-sdk";
 export { wrapAnthropic } from "./wrappers/anthropic";
-// Note: exports-types excluded from namespace to avoid runtime declarations for type-only exports
