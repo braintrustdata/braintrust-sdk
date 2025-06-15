@@ -19,7 +19,7 @@ async function main() {
     apiKey: "YOUR_API_KEY",
   });
   experiment.log({
-    inputs: { test: 1 },
+    input: { test: 1 },
     output: "foo",
     expected: "bar",
     scores: {
