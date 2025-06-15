@@ -23,7 +23,7 @@ import {
   Prompt,
   PromptRowWithId,
 } from "./logger";
-import { GenericFunction, ToolOpts } from "./framework-types";
+import { GenericFunction } from "./framework-types";
 
 interface BaseFnOpts {
   name: string;
@@ -126,7 +126,9 @@ export class ToolBuilder {
   constructor(private readonly project: Project) {}
 
   public create<
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     TParams extends { _output: any; _input: any; _def: any },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     TReturns extends { _output: any; _input: any; _def: any },
     THandler extends GenericFunction<TParams["_output"], TReturns["_output"]>,
   >(
@@ -136,19 +138,30 @@ export class ToolBuilder {
       returns: TReturns;
     },
   ): CodeFunction<TParams["_output"], TReturns["_output"], THandler>;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public create<THandler extends GenericFunction<any, any>>(
     opts: Partial<BaseFnOpts> & {
       handler: THandler;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       parameters?: any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       returns?: any;
-    },
+    }, // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): CodeFunction<any, any, THandler>;
+
+  // This type definition is just a catch all so that the implementation can be
+  // less specific than the two more specific declarations above.
   public create(
     opts: Partial<BaseFnOpts> & {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       handler: GenericFunction<any, any>;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       parameters?: any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       returns?: any;
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): CodeFunction<any, any, any> {
     this.taskCounter++;
     opts = opts ?? {};
@@ -160,12 +173,15 @@ export class ToolBuilder {
       resolvedName = `Tool ${path.basename(__filename)} ${this.taskCounter}`;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tool: CodeFunction<any, any, any> = new CodeFunction(this.project, {
       handler,
       name: resolvedName,
       slug: slug ?? slugifyLib(resolvedName, { lower: true, strict: true }),
       type: "tool",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
       parameters: parameters as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/consistent-type-assertions
       returns: returns as any,
       ...rest,
     });
@@ -256,13 +272,6 @@ type Schema<Input, Output> = Partial<{
   parameters: z.ZodSchema<Input>;
   returns: z.ZodSchema<Output>;
 }>;
-
-interface BaseFnOpts {
-  name: string;
-  slug: string;
-  description: string;
-  ifExists: IfExists;
-}
 
 export type CodeOpts<
   Params,
