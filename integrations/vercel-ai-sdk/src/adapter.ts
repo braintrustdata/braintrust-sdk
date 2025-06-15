@@ -33,7 +33,7 @@ export function toDataStreamResponse(
 }
 
 /**
- * @deprecated Use `toAIStreamResponse` instead.
+ * @deprecated Use `toDataStreamResponse` instead.
  */
 export function toAIStreamResponse(
   stream: BraintrustStreamOrReadable,
