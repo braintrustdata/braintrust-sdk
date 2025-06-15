@@ -56,5 +56,20 @@ import { configureNode } from "./node";
 configureNode();
 
 export * from "./exports-node";
+// Export types separately to avoid namespace generation issues
+export type {
+  ParentExperimentIds,
+  ParentProjectLogIds,
+  IdField,
+  InputField,
+  OtherExperimentLogFields,
+  ExperimentLogPartialArgs,
+  ExperimentLogFullArgs,
+  LogFeedbackFullArgs,
+  LogCommentFullArgs,
+  CommentEvent,
+  DatasetRecord,
+} from "@braintrust/core";
+export type { ToolFunctionDefinition } from "@braintrust/core/typespecs";
 import * as braintrust from "./exports-node";
 export default braintrust;

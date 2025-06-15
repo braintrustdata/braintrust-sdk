@@ -6,8 +6,8 @@ export type GenericFunction<Input, Output> =
   | ((input: Input) => Promise<Output>);
 
 export type Schema<Input, Output> = Partial<{
-  parameters: z.ZodSchema<Input>;
-  returns: z.ZodSchema<Output>;
+  parameters: z.ZodTypeAny;
+  returns: z.ZodTypeAny;
 }>;
 
 interface BaseFnOpts {

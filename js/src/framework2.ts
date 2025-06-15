@@ -25,7 +25,15 @@ import {
 } from "./logger";
 import { GenericFunction, ToolOpts } from "./framework-types";
 
-export { toolFunctionDefinitionSchema, ToolFunctionDefinition };
+interface BaseFnOpts {
+  name: string;
+  slug: string;
+  description: string;
+  ifExists: IfExists;
+}
+
+export { toolFunctionDefinitionSchema };
+// ToolFunctionDefinition exported as type-only from main index to avoid namespace issues
 
 type NameOrId = { name: string } | { id: string };
 
@@ -117,9 +125,25 @@ export class ToolBuilder {
   private taskCounter = 0;
   constructor(private readonly project: Project) {}
 
-  public create<Input, Output, Fn extends GenericFunction<Input, Output>>(
-    opts: ToolOpts<Input, Output, Fn>,
-  ): CodeFunction<Input, Output, Fn> {
+  public create<
+    TParams extends z.ZodTypeAny,
+    TReturns extends z.ZodTypeAny,
+    THandler extends GenericFunction<z.infer<TParams>, z.infer<TReturns>>,
+  >(
+    opts: Partial<BaseFnOpts> & {
+      handler: THandler;
+      parameters: TParams;
+      returns: TReturns;
+    },
+  ): CodeFunction<z.infer<TParams>, z.infer<TReturns>, THandler>;
+  public create<THandler extends GenericFunction<any, any>>(
+    opts: Partial<BaseFnOpts> & {
+      handler: THandler;
+      parameters?: z.ZodTypeAny;
+      returns?: z.ZodTypeAny;
+    },
+  ): CodeFunction<any, any, THandler>;
+  public create(opts: any): any {
     this.taskCounter++;
     opts = opts ?? {};
 
@@ -130,16 +154,13 @@ export class ToolBuilder {
       resolvedName = `Tool ${path.basename(__filename)} ${this.taskCounter}`;
     }
 
-    const tool: CodeFunction<Input, Output, Fn> = new CodeFunction(
-      this.project,
-      {
-        handler,
-        name: resolvedName,
-        slug: slug ?? slugifyLib(resolvedName, { lower: true, strict: true }),
-        type: "tool",
-        ...rest,
-      },
-    );
+    const tool: CodeFunction<any, any, any> = new CodeFunction(this.project, {
+      handler,
+      name: resolvedName,
+      slug: slug ?? slugifyLib(resolvedName, { lower: true, strict: true }),
+      type: "tool",
+      ...rest,
+    });
 
     this.project.addCodeFunction(tool);
     return tool;
