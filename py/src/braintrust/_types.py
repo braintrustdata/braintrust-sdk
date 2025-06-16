@@ -431,7 +431,7 @@ class ChatCompletionContentPartText(TypedDict):
 
 
 class ImageUrl(TypedDict):
-    url: str
+    url: Union[str, BraintrustAttachmentReference]
     detail: NotRequired[Optional[Union[Literal["auto"], Literal["low"], Literal["high"]]]]
 
 
