@@ -3871,7 +3871,7 @@ async function resolveAttachmentsToBase64<T extends Record<string, any>>(
     }
 
     // Recursive case: object or array:
-    resolveAttachmentsToBase64(value, state);
+    await resolveAttachmentsToBase64(value, state);
   }
 
   return event;
