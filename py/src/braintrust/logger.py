@@ -1,4 +1,5 @@
 import atexit
+import base64
 import concurrent.futures
 import contextlib
 import contextvars
@@ -2478,6 +2479,10 @@ class ReadonlyAttachment:
 
         return LazyValue(download, use_mutex=True)
 
+    def __str__(self) -> str:
+        b64_content = base64.b64encode(self.data).decode("utf-8")
+        return f"data:{self.reference['content_type']};base64,{b64_content}"
+
 
 def _log_feedback_impl(
     parent_object_type: SpanObjectTypeV3,
@@ -3822,13 +3827,18 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
 
 
 def _create_custom_render():
+    print("Creating custom render")
+
     def _get_key(key: str, scopes: List[Dict[str, Any]], warn: bool) -> Any:
+        print(key)
         thing = chevron.renderer._get_key(key, scopes, warn)  # type: ignore
+        print(thing)
         if isinstance(thing, str):
             return thing
         return json.dumps(thing)
 
     def _html_escape(x: Any) -> Any:
+        print("Escaping HTML", x)
         return x
 
     custom_render = types.FunctionType(
