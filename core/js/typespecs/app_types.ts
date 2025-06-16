@@ -403,6 +403,10 @@ export const experimentSchema = z
       ),
     user_id: experimentBaseSchema.shape.user_id,
     metadata: experimentBaseSchema.shape.metadata,
+    tags: z
+      .array(z.string())
+      .nullish()
+      .describe("A list of tags for the experiment"),
   })
   .openapi("Experiment");
 export type Experiment = z.infer<typeof experimentSchema>;
