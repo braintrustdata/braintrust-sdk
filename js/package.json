@@ -1,6 +1,6 @@
 {
   "name": "braintrust",
-  "version": "0.0.205",
+  "version": "0.0.206",
   "description": "SDK for integrating Braintrust",
   "repository": {
     "type": "git",
@@ -75,6 +75,7 @@
     "autoevals": "^0.0.69",
     "npm-run-all": "^4.1.5",
     "prettier": "^3.5.3",
+    "tinybench": "^4.0.1",
     "ts-jest": "^29.1.4",
     "tsup": "^8.3.5",
     "typedoc": "^0.28.5",

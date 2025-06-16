@@ -17,6 +17,9 @@ test:
 test-wheel: build
 	nox -x -- --wheel
 
+test-core:
+	nox -s test_core
+
 _template-version:
 	@bash scripts/template-version.sh
 
@@ -29,7 +32,6 @@ verify: lint test
 
 install-build-deps:
 	# Ensure pip is at a known version first for reproducible builds
-	python -m pip install pip==25.1.1
 	python -m pip install uv==0.7.8
 	# Use 'python -m pip' to ensure we're using python's pip
 	# https://pip.pypa.io/en/latest/user_guide/

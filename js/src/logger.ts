@@ -2,6 +2,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 
+import { Queue, DEFAULT_QUEUE_SIZE } from "./queue";
 import {
   _urljoin,
   AnyDatasetRecord,
@@ -1933,7 +1934,7 @@ const BACKGROUND_LOGGER_BASE_SLEEP_TIME_S = 1.0;
 // the backend in a deterministic order.
 class HTTPBackgroundLogger implements BackgroundLogger {
   private apiConn: LazyValue<HTTPConnection>;
-  private items: LazyValue<BackgroundLogEvent>[] = [];
+  private queue: Queue<LazyValue<BackgroundLogEvent>>;
   private activeFlush: Promise<void> = Promise.resolve();
   private activeFlushResolved = true;
   private activeFlushError: unknown = undefined;
@@ -1944,7 +1945,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public maxRequestSize: number = 6 * 1024 * 1024;
   public defaultBatchSize: number = 100;
   public numTries: number = 3;
-  public queueDropExceedingMaxsize: number | undefined = undefined;
+  public queueDropExceedingMaxsize: number = DEFAULT_QUEUE_SIZE;
   public queueDropLoggingPeriod: number = 60;
   public failedPublishPayloadsDir: string | undefined = undefined;
   public allPublishPayloadsDir: string | undefined = undefined;
@@ -1989,6 +1990,8 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       this.queueDropExceedingMaxsize = queueDropExceedingMaxsizeEnv;
     }
 
+    this.queue = new Queue(this.queueDropExceedingMaxsize);
+
     const queueDropLoggingPeriodEnv = Number(
       iso.getEnv("BRAINTRUST_QUEUE_DROP_LOGGING_PERIOD"),
     );
@@ -2026,17 +2029,8 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       return;
     }
 
-    const [addedItems, droppedItems] = (() => {
-      if (this.queueDropExceedingMaxsize === undefined) {
-        return [items, []];
-      }
-      const numElementsToAdd = Math.min(
-        Math.max(this.queueDropExceedingMaxsize - this.items.length, 0),
-        items.length,
-      );
-      return [items.slice(0, numElementsToAdd), items.slice(numElementsToAdd)];
-    })();
-    this.items.push(...addedItems);
+    const droppedItems = this.queue.push(...items);
+
     if (!this.syncFlush) {
       this.triggerActiveFlush();
     }
@@ -2065,15 +2059,14 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
   private async flushOnce(args?: { batchSize?: number }): Promise<void> {
     if (this._disabled) {
-      this.items = [];
+      this.queue.clear();
       return;
     }
 
     const batchSize = args?.batchSize ?? this.defaultBatchSize;
 
     // Drain the queue.
-    const wrappedItems = this.items;
-    this.items = [];
+    const wrappedItems = this.queue.drain();
 
     const [allItems, attachments] = await this.unwrapLazyValues(wrappedItems);
     if (allItems.length === 0) {
@@ -2135,7 +2128,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
 
     // If more items were added while we were flushing, flush again
-    if (this.items.length > 0) {
+    if (this.queue.length() > 0) {
       await this.flushOnce(args);
     }
   }
@@ -3069,7 +3062,9 @@ export async function loadPrompt({
     });
     if (!prompt) {
       throw new Error(
-        `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[projectName ?? projectId]} (not found on server or in local cache): ${e}`,
+        `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[
+          projectName ?? projectId,
+        ]} (not found on server or in local cache): ${e}`,
       );
     }
     return prompt;
@@ -3441,7 +3436,10 @@ export function traced<IsAsyncFlush extends boolean = true, R = void>(
  *    messages: [{ role: "user", content: input }],
  *  });
  *  return result.choices[0].message.content ?? "unknown";
- * });
+ * },
+ * // Optional: if you're using a framework like NextJS that minifies your code, specify the function name and it will be used for the span name
+ * { name: "myFunc" },
+ * );
  * ```
  * Now, any calls to `myFunc` will be traced, and the input and output will be logged automatically.
  * If tracing is inactive, i.e. there is no active logger or experiment, it's just a no-op.
@@ -4733,7 +4731,7 @@ export class SpanImpl implements Span {
       case SpanObjectTypeV3.EXPERIMENT: {
         // Experiment links require an id, so the sync version will only work after the experiment is
         // resolved.
-        let expID =
+        const expID =
           args?.experiment_id || this.parentObjectId?.getSync()?.value;
         if (!expID) {
           return getErrPermlink("provide-experiment-id");
