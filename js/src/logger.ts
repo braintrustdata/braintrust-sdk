@@ -5590,7 +5590,9 @@ export class Prompt<
       } else if (typeof v === "string") {
         return v;
       } else if (v instanceof ReadonlyAttachment) {
-        return "FOOBAR";
+        throw new Error(
+          "Use buildWithAttachments() to build prompts with attachments",
+        );
       } else {
         return JSON.stringify(v);
       }
