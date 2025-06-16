@@ -3817,6 +3817,7 @@ function extractAttachments(
  *
  * @returns The same event instance as the input.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function enrichAttachments<T extends Record<string, any>>(
   event: T,
   state: BraintrustState | undefined,
@@ -3825,6 +3826,7 @@ function enrichAttachments<T extends Record<string, any>>(
     // Base case: AttachmentReference.
     const parsedValue = attachmentReferenceSchema.safeParse(value);
     if (parsedValue.success) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
       (event as any)[key] = new ReadonlyAttachment(parsedValue.data, state);
       continue;
     }
@@ -3836,6 +3838,40 @@ function enrichAttachments<T extends Record<string, any>>(
 
     // Recursive case: object or array:
     enrichAttachments(value, state);
+  }
+
+  return event;
+}
+
+/**
+ * Recursively hydrates any `AttachmentReference` into `Attachment` by modifying
+ * the input in-place.
+ *
+ * @returns The same event instance as the input.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function resolveAttachmentsToBase64<T extends Record<string, any>>(
+  event: T,
+  state: BraintrustState | undefined,
+): Promise<T> {
+  for (const [key, value] of Object.entries(event)) {
+    if (value instanceof ReadonlyAttachment) {
+      const buf = await (await value.data()).arrayBuffer();
+      const base64 = Buffer.from(buf).toString("base64");
+      const base64URL = `data:${value.reference.content_type};base64,${base64}`;
+
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+      (event as any)[key] = base64URL;
+      continue;
+    }
+
+    // Base case: non-object.
+    if (!(value instanceof Object)) {
+      continue;
+    }
+
+    // Recursive case: object or array:
+    resolveAttachmentsToBase64(value, state);
   }
 
   return event;
@@ -5404,6 +5440,36 @@ export class Prompt<
     }) as CompiledPrompt<Flavor>;
   }
 
+  /**
+   * This is a special build method that first resolves attachment references, and then
+   * calls the regular build method. You should use this if you are building prompts from
+   * dataset rows that contain attachments.
+   *
+   * @param buildArgs Args to forward along to the prompt template.
+   */
+  public async buildWithAttachments<
+    Flavor extends "chat" | "completion" = "chat",
+  >(
+    buildArgs: unknown,
+    options: {
+      flavor?: Flavor;
+      messages?: Message[];
+      strict?: boolean;
+      state?: BraintrustState;
+    } = {},
+  ): Promise<CompiledPrompt<Flavor>> {
+    const hydrated =
+      buildArgs instanceof Object
+        ? await resolveAttachmentsToBase64(buildArgs, options.state)
+        : buildArgs;
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return this.runBuild(hydrated, {
+      flavor: options.flavor ?? "chat",
+      messages: options.messages,
+      strict: options.strict,
+    }) as CompiledPrompt<Flavor>;
+  }
+
   private runBuild<Flavor extends "chat" | "completion">(
     buildArgs: unknown,
     options: {
@@ -5523,6 +5589,8 @@ export class Prompt<
         throw new Error("Missing!");
       } else if (typeof v === "string") {
         return v;
+      } else if (v instanceof ReadonlyAttachment) {
+        return "FOOBAR";
       } else {
         return JSON.stringify(v);
       }
