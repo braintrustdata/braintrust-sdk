@@ -898,6 +898,7 @@ export const createExperimentSchema = z
     dataset_version: experimentSchema.shape.dataset_version,
     public: experimentSchema.shape.public.nullish(),
     metadata: experimentSchema.shape.metadata,
+    tags: experimentSchema.shape.tags,
     ensure_new: z
       .boolean()
       .nullish()
