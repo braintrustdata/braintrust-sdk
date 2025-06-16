@@ -1216,6 +1216,18 @@ export class ReadonlyAttachment {
   }
 
   /**
+   * Returns the attachment contents as a base64-encoded URL that is suitable
+   * for use in a prompt.
+   *
+   * @returns The attachment contents as a base64-encoded URL.
+   */
+  async asBase64Url(): Promise<string> {
+    const buf = await (await this.data()).arrayBuffer();
+    const base64 = Buffer.from(buf).toString("base64");
+    return `data:${this.reference.content_type};base64,${base64}`;
+  }
+
+  /**
    * Fetch the attachment metadata, which includes a downloadUrl and a status.
    * This will re-fetch the status each time in case it changes over time.
    */
@@ -3856,12 +3868,8 @@ async function resolveAttachmentsToBase64<T extends Record<string, any>>(
 ): Promise<T> {
   for (const [key, value] of Object.entries(event)) {
     if (value instanceof ReadonlyAttachment) {
-      const buf = await (await value.data()).arrayBuffer();
-      const base64 = Buffer.from(buf).toString("base64");
-      const base64URL = `data:${value.reference.content_type};base64,${base64}`;
-
       // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-      (event as any)[key] = base64URL;
+      (event as any)[key] = await value.asBase64Url();
       continue;
     }
 
