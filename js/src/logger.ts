@@ -2,6 +2,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 
+import { Queue, DEFAULT_QUEUE_SIZE } from "./queue";
 import {
   _urljoin,
   AnyDatasetRecord,
@@ -62,7 +63,7 @@ import {
   PromptBlockData,
 } from "@braintrust/core/typespecs";
 import { waitUntil } from "@vercel/functions";
-import Mustache, { Context } from "mustache";
+import Mustache from "mustache";
 import { z, ZodError } from "zod";
 import {
   BraintrustStream,
@@ -275,7 +276,7 @@ export class NoopSpan implements Span {
   public rootSpanId: string;
   public spanParents: string[];
 
-  public kind: "span" = "span";
+  public kind: "span" = "span" as const;
 
   constructor() {
     this.id = "";
@@ -1215,6 +1216,18 @@ export class ReadonlyAttachment {
   }
 
   /**
+   * Returns the attachment contents as a base64-encoded URL that is suitable
+   * for use in a prompt.
+   *
+   * @returns The attachment contents as a base64-encoded URL.
+   */
+  async asBase64Url(): Promise<string> {
+    const buf = await (await this.data()).arrayBuffer();
+    const base64 = Buffer.from(buf).toString("base64");
+    return `data:${this.reference.content_type};base64,${base64}`;
+  }
+
+  /**
    * Fetch the attachment metadata, which includes a downloadUrl and a status.
    * This will re-fetch the status each time in case it changes over time.
    */
@@ -1933,7 +1946,7 @@ const BACKGROUND_LOGGER_BASE_SLEEP_TIME_S = 1.0;
 // the backend in a deterministic order.
 class HTTPBackgroundLogger implements BackgroundLogger {
   private apiConn: LazyValue<HTTPConnection>;
-  private items: LazyValue<BackgroundLogEvent>[] = [];
+  private queue: Queue<LazyValue<BackgroundLogEvent>>;
   private activeFlush: Promise<void> = Promise.resolve();
   private activeFlushResolved = true;
   private activeFlushError: unknown = undefined;
@@ -1944,7 +1957,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public maxRequestSize: number = 6 * 1024 * 1024;
   public defaultBatchSize: number = 100;
   public numTries: number = 3;
-  public queueDropExceedingMaxsize: number | undefined = undefined;
+  public queueDropExceedingMaxsize: number = DEFAULT_QUEUE_SIZE;
   public queueDropLoggingPeriod: number = 60;
   public failedPublishPayloadsDir: string | undefined = undefined;
   public allPublishPayloadsDir: string | undefined = undefined;
@@ -1989,6 +2002,8 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       this.queueDropExceedingMaxsize = queueDropExceedingMaxsizeEnv;
     }
 
+    this.queue = new Queue(this.queueDropExceedingMaxsize);
+
     const queueDropLoggingPeriodEnv = Number(
       iso.getEnv("BRAINTRUST_QUEUE_DROP_LOGGING_PERIOD"),
     );
@@ -2026,17 +2041,8 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       return;
     }
 
-    const [addedItems, droppedItems] = (() => {
-      if (this.queueDropExceedingMaxsize === undefined) {
-        return [items, []];
-      }
-      const numElementsToAdd = Math.min(
-        Math.max(this.queueDropExceedingMaxsize - this.items.length, 0),
-        items.length,
-      );
-      return [items.slice(0, numElementsToAdd), items.slice(numElementsToAdd)];
-    })();
-    this.items.push(...addedItems);
+    const droppedItems = this.queue.push(...items);
+
     if (!this.syncFlush) {
       this.triggerActiveFlush();
     }
@@ -2065,15 +2071,14 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
   private async flushOnce(args?: { batchSize?: number }): Promise<void> {
     if (this._disabled) {
-      this.items = [];
+      this.queue.clear();
       return;
     }
 
     const batchSize = args?.batchSize ?? this.defaultBatchSize;
 
     // Drain the queue.
-    const wrappedItems = this.items;
-    this.items = [];
+    const wrappedItems = this.queue.drain();
 
     const [allItems, attachments] = await this.unwrapLazyValues(wrappedItems);
     if (allItems.length === 0) {
@@ -2135,7 +2140,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
 
     // If more items were added while we were flushing, flush again
-    if (this.items.length > 0) {
+    if (this.queue.length() > 0) {
       await this.flushOnce(args);
     }
   }
@@ -3824,6 +3829,7 @@ function extractAttachments(
  *
  * @returns The same event instance as the input.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function enrichAttachments<T extends Record<string, any>>(
   event: T,
   state: BraintrustState | undefined,
@@ -3832,6 +3838,7 @@ function enrichAttachments<T extends Record<string, any>>(
     // Base case: AttachmentReference.
     const parsedValue = attachmentReferenceSchema.safeParse(value);
     if (parsedValue.success) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
       (event as any)[key] = new ReadonlyAttachment(parsedValue.data, state);
       continue;
     }
@@ -3843,6 +3850,36 @@ function enrichAttachments<T extends Record<string, any>>(
 
     // Recursive case: object or array:
     enrichAttachments(value, state);
+  }
+
+  return event;
+}
+
+/**
+ * Recursively hydrates any `AttachmentReference` into `Attachment` by modifying
+ * the input in-place.
+ *
+ * @returns The same event instance as the input.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function resolveAttachmentsToBase64<T extends Record<string, any>>(
+  event: T,
+  state: BraintrustState | undefined,
+): Promise<T> {
+  for (const [key, value] of Object.entries(event)) {
+    if (value instanceof ReadonlyAttachment) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+      (event as any)[key] = await value.asBase64Url();
+      continue;
+    }
+
+    // Base case: non-object.
+    if (!(value instanceof Object)) {
+      continue;
+    }
+
+    // Recursive case: object or array:
+    await resolveAttachmentsToBase64(value, state);
   }
 
   return event;
@@ -5197,6 +5234,11 @@ export function renderMessage<T extends Message>(
                     case "text":
                       return { ...c, text: render(c.text) };
                     case "image_url":
+                      if (isObject(c.image_url.url)) {
+                        throw new Error(
+                          "Attachments must be replaced with URLs before calling `build()`",
+                        );
+                      }
                       return {
                         ...c,
                         image_url: {
@@ -5406,6 +5448,36 @@ export class Prompt<
     }) as CompiledPrompt<Flavor>;
   }
 
+  /**
+   * This is a special build method that first resolves attachment references, and then
+   * calls the regular build method. You should use this if you are building prompts from
+   * dataset rows that contain attachments.
+   *
+   * @param buildArgs Args to forward along to the prompt template.
+   */
+  public async buildWithAttachments<
+    Flavor extends "chat" | "completion" = "chat",
+  >(
+    buildArgs: unknown,
+    options: {
+      flavor?: Flavor;
+      messages?: Message[];
+      strict?: boolean;
+      state?: BraintrustState;
+    } = {},
+  ): Promise<CompiledPrompt<Flavor>> {
+    const hydrated =
+      buildArgs instanceof Object
+        ? await resolveAttachmentsToBase64(buildArgs, options.state)
+        : buildArgs;
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return this.runBuild(hydrated, {
+      flavor: options.flavor ?? "chat",
+      messages: options.messages,
+      strict: options.strict,
+    }) as CompiledPrompt<Flavor>;
+  }
+
   private runBuild<Flavor extends "chat" | "completion">(
     buildArgs: unknown,
     options: {
@@ -5461,16 +5533,6 @@ export class Prompt<
     if (!prompt) {
       throw new Error("Empty prompt");
     }
-
-    const escape = (v: unknown) => {
-      if (v === undefined) {
-        throw new Error("Missing!");
-      } else if (typeof v === "string") {
-        return v;
-      } else {
-        return JSON.stringify(v);
-      }
-    };
 
     const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
     const variables: Record<string, unknown> = {
@@ -5535,6 +5597,10 @@ export class Prompt<
         throw new Error("Missing!");
       } else if (typeof v === "string") {
         return v;
+      } else if (v instanceof ReadonlyAttachment) {
+        throw new Error(
+          "Use buildWithAttachments() to build prompts with attachments",
+        );
       } else {
         return JSON.stringify(v);
       }
@@ -5597,7 +5663,7 @@ export class Prompt<
       };
     } else {
       const _: never = prompt;
-      throw new Error("never!");
+      throw new Error(`Invalid prompt type: ${_}`);
     }
   }
 

@@ -17,6 +17,9 @@ test:
 test-wheel: build
 	nox -x -- --wheel
 
+test-core:
+	nox -s test_core
+
 _template-version:
 	@bash scripts/template-version.sh
 
