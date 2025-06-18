@@ -1,6 +1,3 @@
-import { ContentPart, Message, Tools } from "@braintrust/core/typespecs";
-import { startSpan } from "../logger";
-import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import {
   LanguageModelV1,
   LanguageModelV1CallOptions,
@@ -10,10 +7,14 @@ import {
   LanguageModelV1ObjectGenerationMode,
   LanguageModelV1Prompt,
   LanguageModelV1ProviderDefinedTool,
+  LanguageModelV1ProviderMetadata,
   LanguageModelV1StreamPart,
   LanguageModelV1TextPart,
   LanguageModelV1ToolCallPart,
 } from "@ai-sdk/provider";
+import { ContentPart, Message, Tools } from "@braintrust/core/typespecs";
+import { startSpan } from "../logger";
+import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import {
   LEGACY_CACHED_HEADER,
   parseCachedHeader,
@@ -88,6 +89,8 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
 
     try {
       const ret = await this.model.doGenerate(options);
+      const processedUsage = postProcessUsage(ret.usage, ret.providerMetadata);
+
       span.log({
         input: postProcessPrompt(prompt),
         metadata: {
@@ -102,11 +105,12 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
         output: postProcessOutput(ret.text, ret.toolCalls, ret.finishReason),
         metrics: {
           time_to_first_token: getCurrentUnixTimestamp() - startTime,
-          tokens: !isEmpty(ret.usage)
-            ? ret.usage.promptTokens + ret.usage.completionTokens
-            : undefined,
-          prompt_tokens: ret.usage?.promptTokens,
-          completion_tokens: ret.usage?.completionTokens,
+          tokens: !isEmpty(processedUsage) ? processedUsage.tokens : undefined,
+          prompt_tokens: processedUsage.promptTokens,
+          completion_tokens: processedUsage.completionTokens,
+          prompt_cache_creation_tokens:
+            processedUsage.promptCacheCreationTokens,
+          prompt_cached_tokens: processedUsage.promptCachedTokens,
           cached: parseCachedHeader(
             ret.rawResponse?.headers?.[X_CACHED_HEADER] ??
               ret.rawResponse?.headers?.[LEGACY_CACHED_HEADER],
@@ -161,6 +165,8 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
             completionTokens: number;
           }
         | undefined = undefined;
+      let providerMetadata: LanguageModelV1ProviderMetadata | undefined =
+        undefined;
       let fullText: string | undefined = undefined;
       const toolCalls: Record<string, LanguageModelV1FunctionToolCall> = {};
       let finishReason: LanguageModelV1FinishReason | undefined = undefined;
@@ -204,6 +210,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
                   break;
                 case "finish":
                   usage = chunk.usage;
+                  providerMetadata = chunk.providerMetadata;
                   finishReason = chunk.finishReason;
                   break;
               }
@@ -211,6 +218,8 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
               controller.enqueue(chunk);
             },
             async flush(controller) {
+              const processedUsage = postProcessUsage(usage, providerMetadata);
+
               span.log({
                 output: postProcessOutput(
                   fullText,
@@ -221,11 +230,14 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
                 ),
                 metrics: {
                   time_to_first_token,
-                  tokens: !isEmpty(usage)
-                    ? usage.promptTokens + usage.completionTokens
+                  tokens: !isEmpty(processedUsage)
+                    ? processedUsage.tokens
                     : undefined,
-                  prompt_tokens: usage?.promptTokens,
-                  completion_tokens: usage?.completionTokens,
+                  prompt_tokens: processedUsage.promptTokens,
+                  completion_tokens: processedUsage.completionTokens,
+                  prompt_cache_creation_tokens:
+                    processedUsage.promptCacheCreationTokens,
+                  prompt_cached_tokens: processedUsage.promptCachedTokens,
                   cached: parseCachedHeader(
                     ret.rawResponse?.headers?.[X_CACHED_HEADER] ??
                       ret.rawResponse?.headers?.[LEGACY_CACHED_HEADER],
@@ -357,5 +369,56 @@ function postProcessOutput(
           : ""),
     },
     finish_reason: finishReason,
+  };
+}
+
+function extractProviderUsageMetadata(
+  providerMetadata?: LanguageModelV1ProviderMetadata,
+) {
+  if (!providerMetadata) {
+    return {};
+  }
+
+  if (providerMetadata.anthropic) {
+    const anthropicMetadata = providerMetadata.anthropic as
+      | {
+          cacheCreationInputTokens: number;
+          cacheReadInputTokens: number;
+        }
+      | undefined;
+
+    return {
+      cacheCreationTokens: anthropicMetadata?.cacheCreationInputTokens || 0,
+      cachedTokens: anthropicMetadata?.cacheReadInputTokens || 0,
+    };
+  }
+
+  return {};
+}
+
+function postProcessUsage(
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+  },
+  providerMetadata?: LanguageModelV1ProviderMetadata,
+) {
+  const providerUsage = extractProviderUsageMetadata(providerMetadata);
+
+  const promptTokens =
+    (usage?.promptTokens || 0) +
+    (providerUsage.cacheCreationTokens || 0) +
+    (providerUsage.cachedTokens || 0);
+
+  const completionTokens = usage?.completionTokens || 0;
+
+  const tokens = promptTokens + completionTokens;
+
+  return {
+    promptTokens,
+    promptCacheCreationTokens: providerUsage.cacheCreationTokens || 0,
+    promptCachedTokens: providerUsage.cachedTokens || 0,
+    completionTokens,
+    tokens,
   };
 }
