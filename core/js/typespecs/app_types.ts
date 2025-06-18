@@ -404,6 +404,10 @@ export const experimentSchema = z
       ),
     user_id: experimentBaseSchema.shape.user_id,
     metadata: experimentBaseSchema.shape.metadata,
+    tags: z
+      .array(z.string())
+      .nullish()
+      .describe("A list of tags for the experiment"),
   })
   .openapi("Experiment");
 export type Experiment = z.infer<typeof experimentSchema>;
@@ -907,6 +911,7 @@ export const createExperimentSchema = z
     dataset_version: experimentSchema.shape.dataset_version,
     public: experimentSchema.shape.public.nullish(),
     metadata: experimentSchema.shape.metadata,
+    tags: experimentSchema.shape.tags,
     ensure_new: z
       .boolean()
       .nullish()

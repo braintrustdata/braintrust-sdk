@@ -388,6 +388,10 @@ export const runEvalSchema = z
       .describe(
         "A template path of extra messages to append to the conversion. These messages will be appended to the end of the conversation, after the last message.",
       ),
+    tags: z
+      .array(z.string())
+      .optional()
+      .describe("Optional tags that will be added to the experiment."),
   })
   .openapi("RunEval");
 
