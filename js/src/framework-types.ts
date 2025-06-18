@@ -1,13 +1,18 @@
 import { IfExists } from "@braintrust/core/typespecs";
 import { z } from "zod";
 
+// Type to accept both regular Zod schemas and OpenAPI-extended ones
+type ZodSchema<T = any> =
+  | z.ZodType<T, any, any>
+  | (z.ZodType<T, any, any> & { openapi?: any });
+
 export type GenericFunction<Input, Output> =
   | ((input: Input) => Output)
   | ((input: Input) => Promise<Output>);
 
 export type Schema<Input, Output> = Partial<{
-  parameters: z.ZodSchema<Input>;
-  returns: z.ZodSchema<Output>;
+  parameters: ZodSchema<Input>;
+  returns: ZodSchema<Output>;
 }>;
 
 interface BaseFnOpts {
