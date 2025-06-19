@@ -1226,6 +1226,11 @@ export const patchOrganizationMembersSchema = z
           .array()
           .nullish()
           .describe("Emails of users to invite"),
+        service_principals: z
+          .string()
+          .array()
+          .nullish()
+          .describe("Service principals to create"),
         send_invite_emails: z
           .boolean()
           .nullish()
