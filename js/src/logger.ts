@@ -98,6 +98,8 @@ export type StartSpanArgs = {
   parent?: string;
   event?: StartSpanEventArgs;
   propagatedEvent?: StartSpanEventArgs;
+  spanId?: string;
+  parentSpanIds?: ParentSpanIds | MultiParentSpanIds;
 };
 
 export type EndSpanArgs = {
@@ -1804,7 +1806,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
         parentObjectType: this.parentObjectType(),
         parentObjectId: this.lazyId,
         parentComputeObjectMetadataArgs: this.computeMetadataArgs,
-        parentSpanIds: undefined,
+        parentSpanIds: args?.parentSpanIds,
         propagatedEvent: args?.propagatedEvent,
       }),
       defaultRootType: SpanTypeAttribute.TASK,
