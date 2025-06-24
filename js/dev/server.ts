@@ -33,6 +33,7 @@ import {
   loginToState,
 } from "../src/logger";
 import { LRUCache } from "../src/prompt-cache/lru-cache";
+import { _internalSetInitialState } from "../src/logger";
 import {
   BT_CURSOR_HEADER,
   BT_FOUND_EXISTING_HEADER,
@@ -65,6 +66,13 @@ export function runDevServer(
   ) as EvaluatorManifest;
 
   globalThis._lazy_load = false;
+
+  // Initialize global state if not already done
+  try {
+    _internalSetInitialState();
+  } catch (e) {
+    // Already initialized, that's fine
+  }
 
   const app = express();
 
