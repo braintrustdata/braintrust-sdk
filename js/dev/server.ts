@@ -33,7 +33,7 @@ import {
   loginToState,
 } from "../src/logger";
 import { LRUCache } from "../src/prompt-cache/lru-cache";
-import { _internalSetInitialState } from "../src/logger";
+import { configureNode } from "../src/node";
 import {
   BT_CURSOR_HEADER,
   BT_FOUND_EXISTING_HEADER,
@@ -67,9 +67,9 @@ export function runDevServer(
 
   globalThis._lazy_load = false;
 
-  // Initialize global state if not already done
+  // Initialize Node.js environment if not already done
   try {
-    _internalSetInitialState();
+    configureNode();
   } catch (e) {
     // Already initialized, that's fine
   }
