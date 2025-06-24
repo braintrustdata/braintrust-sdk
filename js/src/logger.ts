@@ -99,7 +99,7 @@ export type StartSpanArgs = {
   event?: StartSpanEventArgs;
   propagatedEvent?: StartSpanEventArgs;
   spanId?: string;
-  parentSpanIds?: ParentSpanIds;
+  parentSpanIds?: ParentSpanIds | MultiParentSpanIds;
 };
 
 export type EndSpanArgs = {
