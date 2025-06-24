@@ -1,4 +1,5 @@
 import atexit
+import base64
 import concurrent.futures
 import contextlib
 import contextvars
@@ -2477,6 +2478,10 @@ class ReadonlyAttachment:
             return obj_response.content
 
         return LazyValue(download, use_mutex=True)
+
+    def __str__(self) -> str:
+        b64_content = base64.b64encode(self.data).decode("utf-8")
+        return f"data:{self.reference['content_type']};base64,{b64_content}"
 
 
 def _log_feedback_impl(
