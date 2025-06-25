@@ -5,7 +5,7 @@ import sys
 import textwrap
 import traceback
 
-from . import eval, install, push, remote_eval
+from . import eval, install, push
 
 
 def main(args=None):
@@ -36,7 +36,7 @@ def main(args=None):
     )
     subparsers = parser.add_subparsers(help="sub-command help", dest="subcommand", required=True)
 
-    for module in [eval, install, push, remote_eval]:
+    for module in [eval, install, push]:
         module.build_parser(subparsers, parent_parser)
 
     args = parser.parse_args(args=args)
