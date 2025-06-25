@@ -33,7 +33,6 @@ import {
   loginToState,
 } from "../src/logger";
 import { LRUCache } from "../src/prompt-cache/lru-cache";
-import { configureNode } from "../src/node";
 import {
   BT_CURSOR_HEADER,
   BT_FOUND_EXISTING_HEADER,
@@ -66,13 +65,6 @@ export function runDevServer(
   ) as EvaluatorManifest;
 
   globalThis._lazy_load = false;
-
-  // Initialize Node.js environment if not already done
-  try {
-    configureNode();
-  } catch (e) {
-    // Already initialized, that's fine
-  }
 
   const app = express();
 
