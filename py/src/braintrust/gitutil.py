@@ -70,10 +70,10 @@ def _get_base_branch_ancestor(remote=None):
         )
         return None
 
-    head = "HEAD" if _current_repo().is_dirty() else "HEAD^"
     try:
+        head = "HEAD" if _current_repo().is_dirty() else "HEAD^"
         return subprocess.check_output(["git", "merge-base", head, f"{remote_name}/{base_branch}"]).decode().strip()
-    except subprocess.CalledProcessError as e:
+    except (subprocess.CalledProcessError, git.GitCommandError) as e:
         # _logger.warning(f"Could not find a common ancestor with {remote_name}/{base_branch}")
         return None
 

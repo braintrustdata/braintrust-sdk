@@ -44,12 +44,32 @@ test-py-core:
 test-py-sdk: nox
 	source env.sh && cd py && pytest
 
-test-js:
-	pnpm install && pnpm test
 
 nox:
-	nox -f py/noxfile.py
+	cd py && make test
 	nox -f integrations/langchain-py/noxfile.py
 
 pylint:
-	@pylint --errors-only $(shell git ls-files 'py/**/*.py')
+
+	cd py && make lint
+
+
+#
+# js stuff
+#
+#
+
+.PHONY: js-build js-test js-docs js-verify-ci
+
+js-build:
+	pnpm install
+	pnpm run build
+
+js-test: js-build
+	pnpm run test
+	cd js && make test
+
+js-docs: js-build
+	cd js && make docs
+
+js-verify-ci: js-docs js-test

@@ -31,11 +31,9 @@ from typing import (
 )
 
 import exceptiongroup
-from braintrust_core.score import Score, Scorer
-from braintrust_core.serializable_data_class import SerializableDataClass
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
-from typing_extensions import NotRequired, TypedDict
+from typing_extensions import NotRequired, Protocol, TypedDict
 
 from .git_fields import GitMetadataSettings, RepoInfo
 from .logger import (
@@ -51,6 +49,8 @@ from .logger import (
 )
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
+from .score import Score, is_score, is_scorer
+from .serializable_data_class import SerializableDataClass
 from .span_types import SpanTypeAttribute
 from .util import bt_iscoroutinefunction, eprint
 
@@ -179,9 +179,37 @@ class EvalScorerArgs(SerializableDataClass, Generic[Input, Output]):
 
 OneOrMoreScores = Union[float, int, bool, None, Score, List[Score]]
 
+
+# Synchronous scorer interface - implements callable
+class SyncScorerLike(Protocol, Generic[Input, Output]):
+    """
+    Protocol for synchronous scorers that implement the callable interface.
+    This is the most common interface and is used when no async version is available.
+    """
+
+    def __call__(
+        self, input: Input, output: Output, expected: Optional[Output] = None, **kwargs: Any
+    ) -> OneOrMoreScores:
+        ...
+
+
+# Asynchronous scorer interface
+class AsyncScorerLike(Protocol, Generic[Input, Output]):
+    """
+    Protocol for asynchronous scorers that implement the eval_async interface.
+    The framework will prefer this interface if available.
+    """
+
+    async def eval_async(self, output: Output, expected: Optional[Output] = None, **kwargs: Any) -> OneOrMoreScores:
+        ...
+
+
+# Union type for any kind of scorer (for typing)
+ScorerLike = Union[SyncScorerLike[Input, Output], AsyncScorerLike[Input, Output]]
+
 EvalScorer = Union[
-    Scorer,
-    Type[Scorer],
+    ScorerLike[Input, Output],
+    Type[ScorerLike[Input, Output]],
     Callable[[Input, Output, Output], OneOrMoreScores],
     Callable[[Input, Output, Output], Awaitable[OneOrMoreScores]],
 ]
@@ -498,6 +526,10 @@ def _set_lazy_load(lazy_load: bool):
         yield
     finally:
         _lazy_load = current
+
+
+def _is_lazy_load():
+    return _lazy_load
 
 
 def pluralize(n, singular, plural):
@@ -1091,7 +1123,9 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
         with root_span.start_span(
             name=name, span_attributes={"type": SpanTypeAttribute.SCORE}, input=dict(**kwargs)
         ) as span:
-            score = scorer.eval_async if isinstance(scorer, Scorer) else scorer
+            score = scorer
+            if hasattr(scorer, "eval_async"):
+                score = scorer.eval_async
 
             scorer_args = kwargs
 
@@ -1104,12 +1138,12 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
 
             if isinstance(result, Iterable):
                 for s in result:
-                    if not isinstance(s, Score):
+                    if not is_score(s):
                         raise ValueError(
-                            f"When returning an array of scores, each score must be a non-empty object. Got: {s}"
+                            f"When returning an array of scores, each score must be a valid Score object. Got: {s}"
                         )
                 result = list(result)
-            elif isinstance(result, Score):
+            elif is_score(result):
                 result = [result]
             else:
                 result = [Score(name=name, score=result)]
@@ -1127,9 +1161,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             return result
 
     # First, resolve the scorers if they are classes
-    scorers = [
-        scorer() if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer for scorer in evaluator.scores
-    ]
+    scorers = [scorer() if inspect.isclass(scorer) and is_scorer(scorer) else scorer for scorer in evaluator.scores]
     scorer_names = [_scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
     unhandled_scores = scorer_names
 

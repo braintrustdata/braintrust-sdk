@@ -9,3 +9,4 @@ export * from "./git_types";
 export * from "./prompt";
 export * from "./view";
 export * from "./graph";
+export * from "./automations";

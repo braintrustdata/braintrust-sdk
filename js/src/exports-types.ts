@@ -21,3 +21,4 @@ export {
   evaluatorDefinitionSchema,
   evaluatorDefinitionsSchema,
 } from "../dev/types";
+export type { EvalParameters } from "./eval-parameters";

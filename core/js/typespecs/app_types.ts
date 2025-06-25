@@ -10,6 +10,11 @@ import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
 import { functionDataSchema, functionTypeEnum } from "./functions";
 import { savedFunctionIdSchema } from "./function_id";
 import { repoInfoSchema } from "./git_types";
+import {
+  automationConfigSchema,
+  btqlExportAutomationConfigSchema,
+  logAutomationConfigSchema,
+} from "./automations";
 extendZodWithOpenApi(z);
 
 // Section: App DB table schemas
@@ -202,6 +207,9 @@ export const apiKeySchema = z
     name: apiKeyBaseSchema.shape.name,
     preview_name: z.string(),
     user_id: userSchema.shape.id.nullish(),
+    user_email: userSchema.shape.email.nullish(),
+    user_given_name: userSchema.shape.given_name.nullish(),
+    user_family_name: userSchema.shape.family_name.nullish(),
     org_id: organizationSchema.shape.id.nullish(),
   })
   .openapi("ApiKey");
@@ -214,6 +222,13 @@ export const spanFieldOrderItem = z.object({
   layout: z.literal("full").or(z.literal("two_column")).nullish(),
 });
 export type SpanFieldOrderItem = z.infer<typeof spanFieldOrderItem>;
+
+export const remoteEvalSourceSchema = z.object({
+  url: z.string(),
+  name: z.string(),
+  description: z.string().nullish(),
+});
+export type RemoteEvalSource = z.infer<typeof remoteEvalSourceSchema>;
 
 export const projectSettingsSchema = z
   .object({
@@ -232,6 +247,10 @@ export const projectSettingsSchema = z
       .array(spanFieldOrderItem)
       .nullish()
       .describe("The order of the fields to display in the trace view"),
+    remote_eval_sources: z
+      .array(remoteEvalSourceSchema)
+      .nullish()
+      .describe("The remote eval sources to use for the project"),
   })
   .openapi("ProjectSettings");
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
@@ -384,6 +403,10 @@ export const experimentSchema = z
       ),
     user_id: experimentBaseSchema.shape.user_id,
     metadata: experimentBaseSchema.shape.metadata,
+    tags: z
+      .array(z.string())
+      .nullish()
+      .describe("A list of tags for the experiment"),
   })
   .openapi("Experiment");
 export type Experiment = z.infer<typeof experimentSchema>;
@@ -557,37 +580,26 @@ export const projectAutomationSchema = z
     created: projectAutomationBaseSchema.shape.created,
     name: projectAutomationBaseSchema.shape.name,
     description: projectAutomationBaseSchema.shape.description,
-    config: z
-      .object({
-        event_type: z
-          .enum(["logs"])
-          .describe("The event which starts the automation execution"),
-        btql_filter: z
-          .string()
-          .describe("BTQL filter to identify rows for the automation rule"),
-        interval_seconds: z
-          .number()
-          .min(1)
-          .max(30 * 24 * 60 * 60)
-          .describe(
-            "Perform the triggered action at most once in this interval of seconds",
-          ),
-        action: z
-          .object({
-            type: z
-              .enum(["webhook"])
-              .describe(
-                "The type of action to take when the automation rule is triggered",
-              ),
-            url: z.string().describe("The webhook URL to send the request to"),
-          })
-          .describe("The action to take when the automation rule is triggered"),
-      })
-      .describe("The configuration for the automation rule"),
+    config: automationConfigSchema.describe(
+      "The configuration for the automation rule",
+    ),
   })
   .openapi("ProjectAutomation");
 
 export type ProjectAutomation = z.infer<typeof projectAutomationSchema>;
+export const logAutomationSchema = projectAutomationSchema.merge(
+  z.object({
+    config: logAutomationConfigSchema,
+  }),
+);
+export type LogAutomation = z.infer<typeof logAutomationSchema>;
+
+export const btqlExportAutomationSchema = projectAutomationSchema.merge(
+  z.object({
+    config: btqlExportAutomationConfigSchema,
+  }),
+);
+export type BtqlExportAutomation = z.infer<typeof btqlExportAutomationSchema>;
 
 export const onlineScoreConfigSchema = z
   .object({
@@ -685,6 +697,12 @@ export const projectTagSchema = z
     name: projectTagBaseSchema.shape.name,
     description: projectTagBaseSchema.shape.description,
     color: z.string().nullish().describe("Color of the tag for the UI"),
+    position: z
+      .string()
+      .nullish()
+      .describe(
+        "An optional LexoRank-based string that sets the sort position for the tag in the UI",
+      ),
   })
   .describe(
     "A project tag is a user-configured tag for tracking and filtering your experiments, logs, and other data",
@@ -880,6 +898,7 @@ export const createExperimentSchema = z
     dataset_version: experimentSchema.shape.dataset_version,
     public: experimentSchema.shape.public.nullish(),
     metadata: experimentSchema.shape.metadata,
+    tags: experimentSchema.shape.tags,
     ensure_new: z
       .boolean()
       .nullish()

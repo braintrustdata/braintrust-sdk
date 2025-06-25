@@ -7,6 +7,8 @@ import nox
 
 LATEST = "__latest__"
 
+nox.options.default_venv_backend = "uv"
+
 
 LANGGRAPH_VERSIONS = ("0.3.21", "0.3.22", LATEST)
 
@@ -23,4 +25,4 @@ def _install(session, package, version=LATEST):
     cmd = f"{package}=={version}"
     if version == LATEST or not version:
         cmd = package
-    session.run("pip", "install", cmd)
+    session.install(cmd)

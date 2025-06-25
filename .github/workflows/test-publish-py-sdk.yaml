@@ -1,0 +1,44 @@
+#
+# This workflow is used to publish the Python SDK to TestPyPI. You do not need to upgrade the
+# version number to use this. Only upgrade the version number when you are ready to publish to
+# PyPI. The script will automatically add an "rc" suffix to the version number for test.pypi.org
+# releases, so you can push a version number to test.pypi.org multiple times.
+#
+
+name: Publish Python SDK to TestPyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Publish the given Git ref to test.pypi.org (branch, tag, or commit SHA)"
+        required: true
+        type: string
+        default: "main"
+
+jobs:
+  build-and-publish-test:
+    runs-on: ubuntu-latest
+
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      TWINE_USERNAME: __token__
+      TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install build dependencies
+        working-directory: py
+        run: |
+          make install-dev
+      - name: Verify, build and publish to TestPyPI
+        working-directory: py
+        run: |
+          make publish-to-testpypi

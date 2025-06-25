@@ -42,6 +42,7 @@ export function isEmpty(a: unknown): a is null | undefined {
 // immediately consumes what is returned by `LazyValue.value()`).
 export class LazyValue<T> {
   private callable: () => Promise<T>;
+  private resolvedValue: T | undefined = undefined;
   private value:
     | { computedState: "succeeded"; val: Promise<T> }
     | { computedState: "in_progress"; val: Promise<T> }
@@ -69,10 +70,18 @@ export class LazyValue<T> {
       computedState: "in_progress",
       val: this.callable().then((x) => {
         this.value.computedState = "succeeded";
+        this.resolvedValue = x; // Store the resolved value
         return x;
       }),
     };
     return this.value.val;
+  }
+
+  getSync(): { resolved: boolean; value: T | undefined } {
+    return {
+      resolved: this.value.computedState === "succeeded",
+      value: this.resolvedValue,
+    };
   }
 
   // If this is true, the caller should be able to obtain the LazyValue without

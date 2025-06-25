@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { SpanTypeAttribute } from "@braintrust/core";
 import {
   CompiledPrompt,
@@ -32,12 +33,14 @@ interface OpenAILike {
 }
 
 declare global {
+  // eslint-disable-next-line no-var, @typescript-eslint/no-explicit-any
   var __inherited_braintrust_wrap_openai: ((openai: any) => any) | undefined;
 }
 
 /**
  * Wrap an `OpenAI` object (created with `new OpenAI(...)`) to add tracing. If Braintrust is
- * not configured, this is a no-op
+ * not configured, nothing will be traced. If this is not an `OpenAI` object, this function is
+ * a no-op.
  *
  * Currently, this only supports the `v4` API.
  *
@@ -45,8 +48,20 @@ declare global {
  * @returns The wrapped `OpenAI` object.
  */
 export function wrapOpenAI<T extends object>(openai: T): T {
-  if ((openai as any)?.chat?.completions?.create) {
-    return wrapOpenAIv4(openai as any) as T;
+  const oai: unknown = openai;
+  if (
+    oai &&
+    typeof oai === "object" &&
+    "chat" in oai &&
+    typeof oai.chat === "object" &&
+    oai.chat &&
+    "completions" in oai.chat &&
+    typeof oai.chat.completions === "object" &&
+    oai.chat.completions &&
+    "create" in oai.chat.completions
+  ) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return wrapOpenAIv4(oai as OpenAILike) as T;
   } else {
     console.warn("Unsupported OpenAI library (potentially v3). Not wrapping.");
     return openai;
@@ -181,6 +196,7 @@ function wrapBetaChatCompletionParse<
       ),
     );
     const startTime = getCurrentUnixTimestamp();
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const ret = await completion(params as P);
     try {
       logCompletionResponse(startTime, ret, span);
@@ -210,6 +226,7 @@ function wrapBetaChatCompletionStream<
     );
     const startTime = getCurrentUnixTimestamp();
 
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const ret = completion(params as P) as StreamingChatResponse;
 
     let first = true;
@@ -305,6 +322,7 @@ function wrapChatCompletion<
         // We could get rid of this type coercion if we could somehow enforce
         // that `P extends ChatParams` BUT does not have the property
         // `span_info`.
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         params as P,
         options,
       ).withResponse();
@@ -314,12 +332,13 @@ function wrapChatCompletion<
       return ret;
     } else {
       try {
-        const { data: ret, response } = await (
-          completion(
-            params as P,
-            options,
-          ) as APIPromise<NonStreamingChatResponse>
-        ).withResponse();
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const completionResponse = completion(
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          params as P,
+          options,
+        ) as APIPromise<NonStreamingChatResponse>;
+        const { data: ret, response } = await completionResponse.withResponse();
         logHeaders(response, span);
         const { messages, ...rest } = params;
         span.log({
@@ -343,14 +362,14 @@ function parseBaseParams<T extends Record<string, any>>(
 ): StartSpanArgs {
   const { span_info, ...params } = allParams;
   const { metadata: spanInfoMetadata, ...spanInfoRest } = span_info ?? {};
-  let ret: StartSpanArgs = {
+  const ret: StartSpanArgs = {
     ...spanInfoRest,
     event: {
       metadata: spanInfoMetadata,
     },
   };
   const input = params[inputField];
-  const paramsRest = { ...params };
+  const paramsRest = { ...params, provider: "openai" };
   delete paramsRest[inputField];
   return mergeDicts(ret, { event: { input, metadata: paramsRest } });
 }
@@ -393,6 +412,7 @@ function createEndpointProxy<T, R>(
   target: any,
   wrapperFn: (
     create: (params: T, options?: unknown) => APIPromise<R>,
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   ) => Function,
 ) {
   return new Proxy(target, {
@@ -517,17 +537,22 @@ function postprocessStreamingResults(allResults: any[]): {
     }
 
     if (delta.tool_calls) {
-      if (!tool_calls) {
+      const toolDelta = delta.tool_calls[0];
+      if (
+        !tool_calls ||
+        (toolDelta.id && tool_calls[tool_calls.length - 1].id !== toolDelta.id)
+      ) {
         tool_calls = [
+          ...(tool_calls || []),
           {
-            id: delta.tool_calls[0].id,
-            type: delta.tool_calls[0].type,
-            function: delta.tool_calls[0].function,
+            id: toolDelta.id,
+            type: toolDelta.type,
+            function: toolDelta.function,
           },
         ];
       } else {
-        tool_calls[0].function.arguments +=
-          delta.tool_calls[0].function.arguments;
+        tool_calls[tool_calls.length - 1].function.arguments +=
+          toolDelta.function.arguments;
       }
     }
   }
@@ -562,7 +587,7 @@ class WrapperStream<Item> implements AsyncIterable<Item> {
 
   async *[Symbol.asyncIterator](): AsyncIterator<Item, any, undefined> {
     let first = true;
-    let allResults = [];
+    const allResults: Item[] = [];
     try {
       for await (const item of this.iter) {
         if (first) {

@@ -18,6 +18,10 @@ export const braintrustStreamChunkSchema = z.union([
     data: z.string(),
   }),
   z.object({
+    type: z.literal("reasoning_delta"),
+    data: z.string(),
+  }),
+  z.object({
     type: z.literal("json_delta"),
     data: z.string(),
   }),
@@ -166,6 +170,11 @@ export class BraintrustStream {
           type: "text_delta",
           data: JSON.parse(event.data),
         };
+      case "reasoning_delta":
+        return {
+          type: "reasoning_delta",
+          data: JSON.parse(event.data),
+        };
       case "json_delta":
         return {
           type: "json_delta",
@@ -208,6 +217,11 @@ export class BraintrustStream {
       case "text_delta":
         return {
           event: "text_delta",
+          data: JSON.stringify(event.data),
+        };
+      case "reasoning_delta":
+        return {
+          event: "reasoning_delta",
           data: JSON.stringify(event.data),
         };
       case "json_delta":
@@ -298,7 +312,7 @@ export function createFinalValuePassThroughStream<
   const decoder = new TextDecoder();
   const textChunks: string[] = [];
   const jsonChunks: string[] = [];
-
+  const reasoningChunks: string[] = [];
   const transformStream = new TransformStream<T, BraintrustStreamChunk>({
     transform(chunk, controller) {
       if (typeof chunk === "string") {
@@ -321,6 +335,9 @@ export function createFinalValuePassThroughStream<
             break;
           case "json_delta":
             jsonChunks.push(chunk.data);
+            break;
+          case "reasoning_delta":
+            reasoningChunks.push(chunk.data);
             break;
           case "error":
             onError(chunk.data);
@@ -346,6 +363,8 @@ export function createFinalValuePassThroughStream<
         onFinal(JSON.parse(jsonChunks.join("")));
       } else if (textChunks.length > 0) {
         onFinal(textChunks.join(""));
+      } else if (reasoningChunks.length > 0) {
+        onFinal(reasoningChunks.join(""));
       } else {
         onFinal(undefined);
       }

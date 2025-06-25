@@ -1,4 +1,20 @@
-.PHONY: prune test-anthropic test-anthropic-@0.39.0 test-anthropic-@0.38.0 test-anthropic-latest test
+# Default target
+help:
+	@echo "Braintrust JS SDK Makefile"
+	@echo ""
+	@echo "Available commands:"
+	@echo "  make help                - Show this help message"
+	@echo "  make build              - Build the SDK"
+	@echo "  make clean              - Clean build artifacts"
+	@echo "  make install-optional-deps - Install optional dependencies"
+	@echo "  make test               - Run all tests (core + wrappers)"
+	@echo "  make test-core          - Run core tests only"
+	@echo "  make test-openai        - Run OpenAI wrapper tests"
+	@echo "  make test-anthropic     - Run Anthropic wrapper tests"
+	@echo "  make bench              - Run queue performance benchmarks"
+	@echo "  make test-latest        - Run core + latest versions of wrappers"
+
+.PHONY: help bench build clean test test-core test-openai test-anthropic test-latest install-optional-deps
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -38,25 +54,39 @@ test-openai-%:
 # common things
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-pnpm test test-latest prune installing-optional-deps
+.PHONY: test-pnpm test test-latest prune installing-optional-deps docs build verify-ci bench
 
 install-optional-deps:
 	npm_config_save=false npm_config_lockfile=false pnpm add "openai" "@anthropic-ai/sdk"
 
 
 # Test everything but the wrappers.
-test-pnpm:
+test-core:
 	pnpm prune
 	pnpm test
 
 # Test everything
-test: test-anthropic test-pnpm test-openai
+test: test-core test-openai test-anthropic
 
 # Test the core and the latest versions of wrappers.
-test-latest: test-pnpm test-anthropic-latest test-openai-latest
+test-latest: test-core test-anthropic-latest test-openai-latest
 
 prune:
 	pnpm prune
+
+docs:
+	pnpm run docs
+
+build:
+	pnpm run build
+
+bench:
+	npx tsx src/queue.bench.ts
+
+
+# note: we don't use the docs in ci, but this makes sure they keep building
+
+verify-ci: build docs test
 
 
 
@@ -67,3 +97,6 @@ define pnpm_install_no_save
 	@echo "No save installing "$(1)""
 	npm_config_save=false npm_config_lockfile=false pnpm add "$(1)"
 endef
+
+clean:
+	npm run clean

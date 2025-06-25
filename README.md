@@ -63,7 +63,7 @@ BRAINTRUST_API_KEY=<YOUR_API_KEY> \
 Install the library with pip.
 
 ```bash
-pip install braintrust
+pip install braintrust autoevals
 ```
 
 Then, create a file named `eval_tutorial.py` with the following code:

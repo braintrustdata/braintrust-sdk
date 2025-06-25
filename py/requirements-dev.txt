@@ -1,0 +1,14 @@
+# Also include build dependencies
+black
+flake8
+flake8-isort
+isort==5.12.0
+nox
+pre-commit
+pydoc-markdown
+pylint
+pytest
+pytest-asyncio
+pytest-vcr
+
+-r requirements-build.txt

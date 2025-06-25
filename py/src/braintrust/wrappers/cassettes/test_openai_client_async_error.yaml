@@ -1,0 +1,83 @@
+interactions:
+  - request:
+      body: '{"messages":[{"role":"user","content":"What''s 12 + 12?"}],"model":"non-existent-model"}'
+      headers:
+        accept:
+          - application/json
+        accept-encoding:
+          - gzip, deflate
+        connection:
+          - keep-alive
+        content-length:
+          - "87"
+        content-type:
+          - application/json
+        host:
+          - api.openai.com
+        user-agent:
+          - AsyncOpenAI/Python 1.82.0
+        x-stainless-arch:
+          - arm64
+        x-stainless-async:
+          - async:asyncio
+        x-stainless-lang:
+          - python
+        x-stainless-os:
+          - MacOS
+        x-stainless-package-version:
+          - 1.82.0
+        x-stainless-raw-response:
+          - "true"
+        x-stainless-read-timeout:
+          - "600"
+        x-stainless-retry-count:
+          - "0"
+        x-stainless-runtime:
+          - CPython
+        x-stainless-runtime-version:
+          - 3.13.3
+      method: POST
+      uri: https://api.openai.com/v1/chat/completions
+    response:
+      body:
+        string: !!binary |
+          H4sIAAAAAAAAA0yOQQ6DMBAD77zCyrn0Abyj9xCRbYkUdmmyQUWIv1faHsrRY1v20QGAo1KkuAGH
+          SUML1Rpe5Aa4x0xYJFLGyMI9fVJVYu2NjYhCFSwKMyAFuzREMTaHjRCmiWqFCpLe3e0/ovtqC4m3
+          kFP0hd6Nqvrfn0twDSUsbgC3nC94kmh9e+JZ1D+lcXSWOLuz+wIAAP//AwDwJ9T24AAAAA==
+      headers:
+        CF-RAY:
+          - 9472cb2e5cc31a2c-EWR
+        Connection:
+          - keep-alive
+        Content-Encoding:
+          - gzip
+        Content-Type:
+          - application/json; charset=utf-8
+        Date:
+          - Thu, 29 May 2025 03:09:34 GMT
+        Server:
+          - cloudflare
+        Set-Cookie:
+          - __cf_bm=GTQ9lK9aXIagrFFLKxGeQ4yhPX4.lqMiHUg2tpn490s-1748488174-1.0.1.1-UjbQXOzWFJv3y_C9.kzpGt0eEcKc0AhkeNO1KD1i3oD2g6PUQkx_FyTPdHmt9YmN2xQ0cch2zfV5plYuuMeCXgPtbRPZ4iACGpmMp.mwVwA;
+            path=/; expires=Thu, 29-May-25 03:39:34 GMT; domain=.api.openai.com; HttpOnly;
+            Secure; SameSite=None
+          - _cfuvid=2FR2R_eFbznKP3sn24Ec_2XMfvCR.7ohFqG6v9C1COM-1748488174092-0.0.1.1-604800000;
+            path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
+        Transfer-Encoding:
+          - chunked
+        X-Content-Type-Options:
+          - nosniff
+        alt-svc:
+          - h3=":443"; ma=86400
+        cf-cache-status:
+          - DYNAMIC
+        strict-transport-security:
+          - max-age=31536000; includeSubDomains; preload
+        vary:
+          - Origin
+        x-request-id:
+          - req_98c81147f2f025a021ed636bd814c3e3
+      status:
+        code: 404
+        message: Not Found
+version: 1

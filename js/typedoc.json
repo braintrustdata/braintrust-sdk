@@ -2,16 +2,17 @@
     "compilerOptions": {
       "skipLibCheck": true
     },
+    "tsconfig": "./tsconfig.json",
     "excludeExternals": true,
     "externalPattern": [
         "**/node_modules/**"
     ],
+    "exclude": ["**/examples/**"],
     "plugin": ["typedoc-plugin-markdown"],
     "out": "../../app/content/docs/reference/libs/nodejs",
     "publicPath": "/docs/libs/nodejs/",
     "githubPages": false,
     "disableSources": true,
-    "hideInPageTOC": true,
     "excludePrivate": true,
     "hideBreadcrumbs": true,
     "excludeInternal": true,
