@@ -3,7 +3,7 @@
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 import { objectNullish } from "../src/zod_util";
-import { datetimeStringSchema } from "./common_types";
+import { ObjectType, datetimeStringSchema } from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
@@ -217,7 +217,9 @@ export const environmentSchema = z
         "A url-friendly, unique identifier for the environment within an organization",
       ),
     description: environmentBaseSchema.shape.description,
-    created: environmentBaseSchema.shape.created,
+    created: datetimeStringSchema
+      .nullish()
+      .describe("Date of environment creation"),
     deleted_at: environmentBaseSchema.shape.deleted_at,
   })
   .describe(
@@ -1249,3 +1251,270 @@ export const patchEnvironmentSchema = z
     description: environmentSchema.shape.description,
   })
   .openapi("PatchEnvironment");
+
+const createApiKeyBaseSchema = generateBaseTableOpSchema("API key");
+export const createApiKeySchema = z.object({
+  name: z.string().describe("Name of the api key. Does not have to be unique"),
+  org_name: createApiKeyBaseSchema.shape.org_name,
+});
+
+export const createApiKeyOutputSchema = apiKeySchema
+  .merge(
+    z.object({
+      key: z
+        .string()
+        .describe("The raw API key. It will only be exposed this one time"),
+    }),
+  )
+  .openapi("CreateApiKeyOutput");
+
+export const organizationMembersSchema = z
+  .object({
+    members: userSchema.pick({ id: true, email: true }).array(),
+  })
+  .openapi("OrganizationMembers");
+
+export const patchOrganizationMembersSchema = z
+  .object({
+    invite_users: z
+      .object({
+        ids: userSchema.shape.id
+          .array()
+          .nullish()
+          .describe("Ids of existing users to invite"),
+        emails: userSchema.shape.email
+          .unwrap()
+          .unwrap()
+          .array()
+          .nullish()
+          .describe("Emails of users to invite"),
+        send_invite_emails: z
+          .boolean()
+          .nullish()
+          .describe(
+            "If true, send invite emails to the users who wore actually added",
+          ),
+        group_ids: groupSchema.shape.id
+          .array()
+          .nullish()
+          .describe(
+            "Optional list of group ids to add newly-invited users to.",
+          ),
+        group_names: groupSchema.shape.name
+          .array()
+          .nullish()
+          .describe(
+            "Optional list of group names to add newly-invited users to.",
+          ),
+        group_id: groupSchema.shape.id
+          .nullish()
+          .describe("Singular form of group_ids"),
+        group_name: groupSchema.shape.name
+          .nullish()
+          .describe("Singular form of group_names"),
+      })
+      .nullish()
+      .describe("Users to invite to the organization"),
+    remove_users: z
+      .object({
+        ids: userSchema.shape.id
+          .array()
+          .nullish()
+          .describe("Ids of users to remove"),
+        emails: userSchema.shape.email
+          .unwrap()
+          .unwrap()
+          .array()
+          .nullish()
+          .describe("Emails of users to remove"),
+      })
+      .nullish()
+      .describe("Users to remove from the organization"),
+    org_name: z
+      .string()
+      .nullish()
+      .describe(
+        `For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, or in case you want to explicitly assert the organization you are modifying, you may specify the name of the organization.`,
+      ),
+    org_id: z
+      .string()
+      .nullish()
+      .describe(
+        `For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, or in case you want to explicitly assert the organization you are modifying, you may specify the id of the organization.`,
+      ),
+  })
+  .openapi("PatchOrganizationMembers");
+
+export const patchOrganizationMembersOutputSchema = z
+  .object({
+    status: z.literal("success"),
+    org_id: z.string().describe("The id of the org that was modified."),
+    send_email_error: z
+      .string()
+      .nullish()
+      .describe(
+        "If invite emails failed to send for some reason, the patch operation will still complete, but we will return an error message here",
+      ),
+  })
+  .openapi("PatchOrganizationMembersOutput");
+
+const createAISecretBaseSchema = generateBaseTableOpSchema("AI Secret");
+export const createAISecretSchema = z
+  .object({
+    name: aiSecretSchema.shape.name,
+    type: aiSecretSchema.shape.type,
+    metadata: aiSecretSchema.shape.metadata,
+    secret: z
+      .string()
+      .nullish()
+      .describe(
+        "Secret value. If omitted in a PUT request, the existing secret value will be left intact, not replaced with null.",
+      ),
+    org_name: createAISecretBaseSchema.shape.org_name,
+  })
+  .openapi("CreateAISecret");
+
+export const deleteAISecretSchema = z
+  .object({
+    name: aiSecretSchema.shape.name,
+    org_name: createAISecretBaseSchema.shape.org_name,
+  })
+  .openapi("DeleteAISecret");
+
+export const patchAISecretSchema = z
+  .object({
+    name: aiSecretSchema.shape.name.nullish(),
+    type: aiSecretSchema.shape.type,
+    metadata: aiSecretSchema.shape.metadata,
+    secret: z.string().nullish(),
+  })
+  .openapi("PatchAISecret");
+
+export const createEnvVarSchema = envVarSchema
+  .pick({ object_type: true, object_id: true, name: true })
+  .extend({
+    value: z
+      .string()
+      .nullish()
+      .describe(
+        "The value of the environment variable. Will be encrypted at rest.",
+      ),
+  });
+
+export const patchEnvVarSchema = envVarSchema.pick({ name: true }).extend({
+  value: z
+    .string()
+    .nullish()
+    .describe(
+      "The value of the environment variable. Will be encrypted at rest.",
+    ),
+});
+
+// Section: exported schemas, grouped by object type. The schemas are used for
+// API spec generation, so their types are not fully-specified. If you wish to
+// use individual schema types, import them directly.
+
+export type ObjectSchemasEntry = {
+  object?: z.ZodTypeAny;
+  create?: z.ZodTypeAny;
+  delete?: z.ZodTypeAny;
+  patch_id?: z.ZodTypeAny;
+  delete_id?: z.ZodTypeAny;
+};
+
+export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
+  experiment: {
+    object: experimentSchema,
+    create: createExperimentSchema,
+    patch_id: patchExperimentSchema,
+  },
+  dataset: {
+    object: datasetSchema,
+    create: createDatasetSchema,
+    patch_id: patchDatasetSchema,
+  },
+  project: {
+    object: projectSchema,
+    create: createProjectSchema,
+    patch_id: patchProjectSchema,
+  },
+  prompt: {
+    object: promptSchema,
+    create: createPromptSchema,
+    patch_id: patchPromptSchema,
+  },
+  function: {
+    object: functionSchema,
+    create: createFunctionSchema,
+    patch_id: patchFunctionSchema,
+  },
+  role: {
+    object: roleSchema,
+    create: createRoleSchema,
+    patch_id: patchRoleSchema,
+  },
+  group: {
+    object: groupSchema,
+    create: createGroupSchema,
+    patch_id: patchGroupSchema,
+  },
+  acl: {
+    object: aclSchema,
+    create: aclItemSchema,
+    delete: aclItemSchema,
+  },
+  user: {
+    object: userSchema,
+  },
+  prompt_session: {},
+  project_automation: {
+    object: projectAutomationSchema,
+    create: createProjectAutomationSchema,
+    patch_id: patchProjectAutomationSchema,
+  },
+  project_score: {
+    object: projectScoreSchema,
+    create: createProjectScoreSchema,
+    patch_id: patchProjectScoreSchema,
+  },
+  project_tag: {
+    object: projectTagSchema,
+    create: createProjectTagSchema,
+    patch_id: patchProjectTagSchema,
+  },
+  span_iframe: {
+    object: spanIframeSchema,
+    create: createSpanIframeSchema,
+    patch_id: patchSpanIframeSchema,
+  },
+  view: {
+    object: viewSchema,
+    delete_id: deleteViewSchema,
+    create: createViewSchema,
+    patch_id: patchViewSchema,
+  },
+  organization: {
+    object: organizationSchema,
+    patch_id: patchOrganizationSchema,
+  },
+  api_key: {
+    object: apiKeySchema,
+    create: createApiKeySchema,
+  },
+  ai_secret: {
+    object: aiSecretSchema,
+    create: createAISecretSchema,
+    delete: deleteAISecretSchema,
+    patch_id: patchAISecretSchema,
+  },
+  env_var: {
+    object: envVarSchema,
+    create: createEnvVarSchema,
+    patch_id: patchEnvVarSchema,
+  },
+  environment: {
+    object: environmentSchema,
+    create: createEnvironmentSchema,
+    patch_id: patchEnvironmentSchema,
+  },
+};
