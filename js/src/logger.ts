@@ -640,7 +640,10 @@ function clearTestBackgroundLogger() {
  */
 export function _internalSetInitialState() {
   if (_globalState) {
-    throw new Error("Cannot set initial state more than once");
+    console.warn(
+      "global state already set, should only call _internalSetInitialState once",
+    );
+    return;
   }
   _globalState =
     globalThis.__inherited_braintrust_state ||
