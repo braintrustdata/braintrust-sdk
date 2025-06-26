@@ -686,9 +686,7 @@ class BetaChatV1Wrapper(NamedWrapper):
     def __init__(self, chat: Any):
         super().__init__(chat)
 
-        import openai
-
-        if type(chat.completions) == openai.resources.beta.chat.completions.AsyncCompletions:
+        if "AsyncCompletions" in type(chat.completions).__name__:
             self.completions = AsyncBetaCompletionsV1Wrapper(chat.completions)
         else:
             self.completions = BetaCompletionsV1Wrapper(chat.completions)
