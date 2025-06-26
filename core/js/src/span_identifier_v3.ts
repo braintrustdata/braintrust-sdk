@@ -9,16 +9,23 @@ import {
 import { SpanComponentsV2 } from "./span_identifier_v2";
 import { z } from "zod";
 import { InvokeFunctionRequest } from "typespecs";
+import {
+  base64ToUint8Array,
+  concatUint8Arrays,
+  stringToUint8Array,
+  uint8ArrayToBase64,
+  uint8ArrayToString,
+} from "./bytes";
 
 function tryMakeUuid(
   s: string,
-): { bytes: Buffer; isUUID: true } | { bytes: undefined; isUUID: false } {
+): { bytes: Uint8Array; isUUID: true } | { bytes: undefined; isUUID: false } {
   try {
     const ret = uuid.parse(s);
     if (ret.length !== 16) {
       throw new Error();
     }
-    return { bytes: Buffer.from(ret), isUUID: true };
+    return { bytes: new Uint8Array(ret), isUUID: true };
   } catch {
     return { bytes: undefined, isUUID: false };
   }
@@ -119,19 +126,21 @@ export class SpanComponentsV3 {
         this.data.compute_object_metadata_args || undefined,
       propagated_event: this.data.propagated_event || undefined,
     };
-    const allBuffers: Array<Buffer> = [];
+    const allBuffers: Array<Uint8Array> = [];
     allBuffers.push(
-      Buffer.from([ENCODING_VERSION_NUMBER, this.data.object_type]),
+      new Uint8Array([ENCODING_VERSION_NUMBER, this.data.object_type]),
     );
 
-    const uuidEntries: Array<Buffer> = [];
+    const uuidEntries: Array<Uint8Array> = [];
     function addUuidField(
       origVal: string,
       fieldId: InternalSpanComponentUUIDFields,
     ) {
       const ret = tryMakeUuid(origVal);
       if (ret.isUUID) {
-        uuidEntries.push(Buffer.concat([Buffer.from([fieldId]), ret.bytes]));
+        uuidEntries.push(
+          concatUint8Arrays(new Uint8Array([fieldId]), ret.bytes),
+        );
       } else {
         jsonObj[_INTERNAL_SPAN_COMPONENT_UUID_FIELDS_ID_TO_NAME[fieldId]] =
           origVal;
@@ -159,17 +168,17 @@ export class SpanComponentsV3 {
     if (uuidEntries.length > 255) {
       throw new Error("Impossible: too many UUID entries to encode");
     }
-    allBuffers.push(Buffer.from([uuidEntries.length]));
+    allBuffers.push(new Uint8Array([uuidEntries.length]));
     allBuffers.push(...uuidEntries);
     if (Object.keys(jsonObj).length > 0) {
-      allBuffers.push(Buffer.from(JSON.stringify(jsonObj), "utf-8"));
+      allBuffers.push(stringToUint8Array(JSON.stringify(jsonObj)));
     }
-    return Buffer.concat(allBuffers).toString("base64");
+    return uint8ArrayToBase64(concatUint8Arrays(...allBuffers));
   }
 
   public static fromStr(s: string): SpanComponentsV3 {
     try {
-      const rawBytes = Buffer.from(s, "base64");
+      const rawBytes = base64ToUint8Array(s);
       const jsonObj: Record<string, unknown> = {};
       if (rawBytes[0] < ENCODING_VERSION_NUMBER) {
         const spanComponentsOld = SpanComponentsV2.fromStr(s);
@@ -197,7 +206,7 @@ export class SpanComponentsV3 {
         }
         if (byteOffset < rawBytes.length) {
           const remainingJsonObj = JSON.parse(
-            rawBytes.subarray(byteOffset).toString("utf-8"),
+            uint8ArrayToString(rawBytes.subarray(byteOffset)),
           );
           Object.assign(jsonObj, remainingJsonObj);
         }
