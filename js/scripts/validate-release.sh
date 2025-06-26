@@ -16,7 +16,7 @@ if [ "$CURRENT_BRANCH" != "main" ]; then
     echo "ERROR: Current commit is not on the main branch"
     exit 1
   else
-    echo "brain is on main"
+    echo "branch is on main"
   fi
 fi
 
