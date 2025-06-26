@@ -98,6 +98,8 @@ export type StartSpanArgs = {
   parent?: string;
   event?: StartSpanEventArgs;
   propagatedEvent?: StartSpanEventArgs;
+  spanId?: string;
+  parentSpanIds?: ParentSpanIds | MultiParentSpanIds;
 };
 
 export type EndSpanArgs = {
@@ -638,7 +640,10 @@ function clearTestBackgroundLogger() {
  */
 export function _internalSetInitialState() {
   if (_globalState) {
-    throw new Error("Cannot set initial state more than once");
+    console.warn(
+      "global state already set, should only call _internalSetInitialState once",
+    );
+    return;
   }
   _globalState =
     globalThis.__inherited_braintrust_state ||
@@ -1804,7 +1809,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
         parentObjectType: this.parentObjectType(),
         parentObjectId: this.lazyId,
         parentComputeObjectMetadataArgs: this.computeMetadataArgs,
-        parentSpanIds: undefined,
+        parentSpanIds: args?.parentSpanIds,
         propagatedEvent: args?.propagatedEvent,
       }),
       defaultRootType: SpanTypeAttribute.TASK,
