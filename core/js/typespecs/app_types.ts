@@ -228,6 +228,38 @@ export const environmentSchema = z
   .openapi("Environment");
 export type Environment = z.infer<typeof environmentSchema>;
 
+const environmentObjectBaseSchema =
+  generateBaseTableSchema("environment object");
+export const environmentObjectSchema = z
+  .object({
+    id: environmentObjectBaseSchema.shape.id,
+    org_id: z
+      .string()
+      .uuid()
+      .describe(
+        "Unique id for the organization that the environment object belongs under",
+      ),
+    object_type: z
+      .string()
+      .describe(
+        "The type of object (e.g., 'project', 'experiment', 'dataset')",
+      ),
+    object_id: z.string().uuid().describe("The unique id of the object"),
+    object_version: z.number().int().describe("The version of the object"),
+    environment_id: z
+      .string()
+      .uuid()
+      .describe("The environment this object version is assigned to"),
+    created_at: datetimeStringSchema
+      .nullish()
+      .describe("Date of environment object creation"),
+  })
+  .describe(
+    "An environment object links a specific version of a business object to an environment",
+  )
+  .openapi("EnvironmentObject");
+export type EnvironmentObject = z.infer<typeof environmentObjectSchema>;
+
 const apiKeyBaseSchema = generateBaseTableSchema("api key");
 export const apiKeySchema = z
   .object({
@@ -1252,6 +1284,25 @@ export const patchEnvironmentSchema = z
   })
   .openapi("PatchEnvironment");
 
+const createEnvironmentObjectBaseSchema =
+  generateBaseTableOpSchema("environment object");
+export const createEnvironmentObjectSchema = z
+  .object({
+    object_type: environmentObjectSchema.shape.object_type,
+    object_id: environmentObjectSchema.shape.object_id,
+    object_version: environmentObjectSchema.shape.object_version,
+    environment_id: environmentObjectSchema.shape.environment_id,
+    org_name: createEnvironmentObjectBaseSchema.shape.org_name,
+  })
+  .openapi("CreateEnvironmentObject");
+
+export const patchEnvironmentObjectSchema = z
+  .object({
+    object_version: environmentObjectSchema.shape.object_version.nullish(),
+    environment_id: environmentObjectSchema.shape.environment_id.nullish(),
+  })
+  .openapi("PatchEnvironmentObject");
+
 const createApiKeyBaseSchema = generateBaseTableOpSchema("API key");
 export const createApiKeySchema = z.object({
   name: z.string().describe("Name of the api key. Does not have to be unique"),
@@ -1516,5 +1567,10 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
     object: environmentSchema,
     create: createEnvironmentSchema,
     patch_id: patchEnvironmentSchema,
+  },
+  environment_object: {
+    object: environmentObjectSchema,
+    create: createEnvironmentObjectSchema,
+    patch_id: patchEnvironmentObjectSchema,
   },
 };
