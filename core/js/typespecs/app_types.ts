@@ -245,7 +245,9 @@ export const environmentObjectSchema = z
         "The type of object (e.g., 'project', 'experiment', 'dataset')",
       ),
     object_id: z.string().uuid().describe("The unique id of the object"),
-    object_version: z.number().int().describe("The version of the object"),
+    object_version: z
+      .string()
+      .describe("The version of the object (transaction ID as string)"),
     environment_id: z
       .string()
       .uuid()
