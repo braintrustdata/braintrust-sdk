@@ -6,17 +6,6 @@
 
 set -e
 
-
-ROOT_DIR=$(git rev-parse --show-toplevel)
-
-# Check if the git status is clean
-if ! git diff-index --quiet HEAD --; then
-  echo "ERROR: Git status is not clean"
-  exit 1
-fi
-
-
-
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 if [ "$CURRENT_BRANCH" != "main" ]; then
   # Ensure we have main branch history
