@@ -51,9 +51,10 @@
     "docs": "npx typedoc --options typedoc.json src/index.ts",
     "prepublishOnly": "../../scripts/node_prepublish_sdk.py",
     "postpublish": "../../scripts/node_postpublish_sdk.py",
-    "test": "vitest run --exclude src/wrappers/anthropic.test.ts --exclude src/wrappers/oai.test.ts",
+    "test": "vitest run --exclude src/wrappers/anthropic.test.ts --exclude src/wrappers/oai.test.ts --exclude src/wrappers/ai-sdk-middleware.test.ts",
     "test:anthropic": "vitest run src/wrappers/anthropic.test.ts",
-    "test:openai": "vitest run src/wrappers/oai.test.ts"
+    "test:openai": "vitest run src/wrappers/oai.test.ts",
+    "test:ai-sdk": "vitest run src/wrappers/ai-sdk-middleware.test.ts"
   },
   "author": "",
   "license": "MIT",
@@ -85,11 +86,9 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
-    "@ai-sdk/provider": "^1.0.1",
     "@braintrust/core": "workspace:*",
     "@next/env": "^14.2.3",
     "@vercel/functions": "^1.0.2",
-    "ai": "^3.2.16",
     "argparse": "^2.0.1",
     "chalk": "^4.1.2",
     "cli-progress": "^3.12.0",
@@ -107,7 +106,7 @@
     "slugify": "^1.6.6",
     "source-map": "^0.7.4",
     "uuid": "^9.0.1",
-    "zod": "^3.22.4",
+    "zod": "^3.25.67",
     "zod-to-json-schema": "^3.22.5"
   },
   "peerDependencies": {
