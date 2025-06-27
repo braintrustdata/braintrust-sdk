@@ -55,7 +55,7 @@ export const chatCompletionContentPartImageSchema = z
   })
   .openapi("ChatCompletionContentPartImage");
 
-export const chatCompletionCountentParamFileFileSchema = z
+export const chatCompletionContentParamFileFileSchema = z
   .object({
     file_data: z
       .string()
@@ -78,7 +78,7 @@ export const chatCompletionCountentParamFileFileSchema = z
 export const chatCompletionContentParamFileSchema = z
   .object({
     type: z.literal("file"),
-    file: chatCompletionCountentParamFileFileSchema,
+    file: chatCompletionContentParamFileFileSchema,
   })
   .openapi("ChatCompletionContentPartFile");
 
