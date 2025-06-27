@@ -51,9 +51,10 @@
     "docs": "npx typedoc --options typedoc.json src/index.ts",
     "prepublishOnly": "../../scripts/node_prepublish_sdk.py",
     "postpublish": "../../scripts/node_postpublish_sdk.py",
-    "test": "vitest run --exclude src/wrappers/anthropic.test.ts --exclude src/wrappers/oai.test.ts",
+    "test": "vitest run --exclude src/wrappers/anthropic.test.ts --exclude src/wrappers/oai.test.ts --exclude src/wrappers/ai-sdk-middleware.test.ts",
     "test:anthropic": "vitest run src/wrappers/anthropic.test.ts",
-    "test:openai": "vitest run src/wrappers/oai.test.ts"
+    "test:openai": "vitest run src/wrappers/oai.test.ts",
+    "test:ai-sdk": "vitest run src/wrappers/ai-sdk-middleware.test.ts"
   },
   "author": "",
   "license": "MIT",

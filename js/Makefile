@@ -17,6 +17,23 @@ help:
 .PHONY: help bench build clean test test-core test-openai test-anthropic test-latest install-optional-deps
 
 # -------------------------------------------------------------------------------------------------	#
+# ai.sdk testing
+# -------------------------------------------------------------------------------------------------
+.PHONY: test-ai-sdk test-ai-sdk-latest test-ai-sdk-%
+
+test-ai-sdk: test-ai-sdk-latest test-ai-sdk-5.0.0-beta
+
+test-ai-sdk-latest:
+	pnpm prune
+	$(call pnpm_install_no_save,ai@beta)
+	pnpm test:ai-sdk
+
+test-ai-sdk-%:
+	pnpm prune
+	$(call pnpm_install_no_save,ai@$*)
+	pnpm test:ai-sdk
+
+# -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
 # -------------------------------------------------------------------------------------------------
 
