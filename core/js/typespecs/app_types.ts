@@ -252,7 +252,7 @@ export const environmentObjectSchema = z
       .string()
       .uuid()
       .describe("The environment this object version is assigned to"),
-    created_at: datetimeStringSchema
+    created: datetimeStringSchema
       .nullish()
       .describe("Date of environment object creation"),
   })
