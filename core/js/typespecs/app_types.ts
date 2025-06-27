@@ -77,6 +77,7 @@ export const aclObjectTypeEnum = z
     "org_member",
     "project_log",
     "org_project",
+    "environment",
   ])
   .describe("The object type that the ACL applies to")
   .openapi("AclObjectType");
@@ -198,6 +199,68 @@ export const customColumnSchema = z
   })
   .openapi("CustomColumn");
 export type CustomColumn = z.infer<typeof customColumnSchema>;
+
+const environmentBaseSchema = generateBaseTableSchema("environment");
+export const environmentSchema = z
+  .object({
+    id: environmentBaseSchema.shape.id,
+    org_id: z
+      .string()
+      .uuid()
+      .describe(
+        "Unique id for the organization that the environment belongs under",
+      ),
+    name: environmentBaseSchema.shape.name,
+    slug: z
+      .string()
+      .describe(
+        "A url-friendly, unique identifier for the environment within an organization",
+      ),
+    description: environmentBaseSchema.shape.description,
+    created: datetimeStringSchema
+      .nullish()
+      .describe("Date of environment creation"),
+    deleted_at: environmentBaseSchema.shape.deleted_at,
+  })
+  .describe(
+    "An environment is a user-configured deployment target (e.g., dev, staging, prod) for tracking object versions across different stages",
+  )
+  .openapi("Environment");
+export type Environment = z.infer<typeof environmentSchema>;
+
+const environmentObjectBaseSchema =
+  generateBaseTableSchema("environment object");
+export const environmentObjectSchema = z
+  .object({
+    id: environmentObjectBaseSchema.shape.id,
+    org_id: z
+      .string()
+      .uuid()
+      .describe(
+        "Unique id for the organization that the environment object belongs under",
+      ),
+    object_type: z
+      .string()
+      .describe(
+        "The type of object (e.g., 'project', 'experiment', 'dataset')",
+      ),
+    object_id: z.string().uuid().describe("The unique id of the object"),
+    object_version: z
+      .string()
+      .describe("The version of the object (transaction ID as string)"),
+    environment_id: z
+      .string()
+      .uuid()
+      .describe("The environment this object version is assigned to"),
+    created: datetimeStringSchema
+      .nullish()
+      .describe("Date of environment object creation"),
+  })
+  .describe(
+    "An environment object links a specific version of a business object to an environment",
+  )
+  .openapi("EnvironmentObject");
+export type EnvironmentObject = z.infer<typeof environmentObjectSchema>;
 
 const apiKeyBaseSchema = generateBaseTableSchema("api key");
 export const apiKeySchema = z
@@ -970,7 +1033,7 @@ export const patchPromptSchema = z
   })
   .openapi("PatchPrompt");
 
-const patchFunctionSchema = z
+export const patchFunctionSchema = z
   .object({
     name: functionSchema.shape.name.nullish(),
     description: functionSchema.shape.description.nullish(),
@@ -983,7 +1046,7 @@ const patchFunctionSchema = z
   .openapi("PatchFunction");
 
 const createRoleBaseSchema = generateBaseTableOpSchema("role");
-const createRoleSchema = z
+export const createRoleSchema = z
   .object({
     name: makeNonempty(roleSchema.shape.name),
     description: roleSchema.shape.description,
@@ -1173,7 +1236,7 @@ export const patchViewSchema = z
   })
   .openapi("PatchView");
 
-const deleteViewSchema = z
+export const deleteViewSchema = z
   .object({
     object_type: viewSchema.shape.object_type,
     object_id: viewSchema.shape.object_id,
@@ -1189,6 +1252,58 @@ export const patchOrganizationSchema = z
     realtime_url: organizationSchema.shape.realtime_url.nullish(),
   })
   .openapi("PatchOrganization");
+
+const createEnvironmentBaseSchema = generateBaseTableOpSchema("environment");
+export const createEnvironmentSchema = z
+  .object({
+    name: makeNonempty(environmentSchema.shape.name),
+    slug: z
+      .string()
+      .min(1)
+      .regex(
+        /^[a-z0-9-]+$/,
+        "Slug must contain only lowercase letters, numbers, and hyphens",
+      )
+      .describe(
+        "A url-friendly, unique identifier for the environment within an organization",
+      ),
+    description: environmentSchema.shape.description,
+    org_name: createEnvironmentBaseSchema.shape.org_name,
+  })
+  .openapi("CreateEnvironment");
+
+export const patchEnvironmentSchema = z
+  .object({
+    name: environmentSchema.shape.name.nullish(),
+    slug: z
+      .string()
+      .regex(
+        /^[a-z0-9-]+$/,
+        "Slug must contain only lowercase letters, numbers, and hyphens",
+      )
+      .nullish(),
+    description: environmentSchema.shape.description,
+  })
+  .openapi("PatchEnvironment");
+
+const createEnvironmentObjectBaseSchema =
+  generateBaseTableOpSchema("environment object");
+export const createEnvironmentObjectSchema = z
+  .object({
+    object_type: environmentObjectSchema.shape.object_type,
+    object_id: environmentObjectSchema.shape.object_id,
+    object_version: environmentObjectSchema.shape.object_version,
+    environment_id: environmentObjectSchema.shape.environment_id,
+    org_name: createEnvironmentObjectBaseSchema.shape.org_name,
+  })
+  .openapi("CreateEnvironmentObject");
+
+export const patchEnvironmentObjectSchema = z
+  .object({
+    object_version: environmentObjectSchema.shape.object_version.nullish(),
+    environment_id: environmentObjectSchema.shape.environment_id.nullish(),
+  })
+  .openapi("PatchEnvironmentObject");
 
 const createApiKeyBaseSchema = generateBaseTableOpSchema("API key");
 export const createApiKeySchema = z.object({
@@ -1449,5 +1564,15 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
     object: envVarSchema,
     create: createEnvVarSchema,
     patch_id: patchEnvVarSchema,
+  },
+  environment: {
+    object: environmentSchema,
+    create: createEnvironmentSchema,
+    patch_id: patchEnvironmentSchema,
+  },
+  environment_object: {
+    object: environmentObjectSchema,
+    create: createEnvironmentObjectSchema,
+    patch_id: patchEnvironmentObjectSchema,
   },
 };
