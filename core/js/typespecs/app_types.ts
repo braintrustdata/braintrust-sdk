@@ -611,6 +611,7 @@ export const onlineScoreConfigSchema = z
     scorers: z
       .array(savedFunctionIdSchema)
       .describe("The list of scorers to use for online scoring"),
+    btql_filter: z.string().nullish().describe("Filter logs using BTQL"),
     apply_to_root_span: z
       .boolean()
       .nullish()
