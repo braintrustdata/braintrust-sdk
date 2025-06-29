@@ -666,3 +666,42 @@ test("span.export handles unresolved parent object ID", async () => {
   expect(typeof exported).toBe("string");
   expect((exported as string).length).toBeGreaterThan(0);
 });
+
+test("startSpan support ids with parent", () => {
+  const logger = initLogger({});
+  const span = logger.startSpan({
+    name: "test-span",
+    spanId: "123",
+    parentSpanIds: { spanId: "456", rootSpanId: "789" },
+  });
+  expect(span.spanId).toBe("123");
+  expect(span.rootSpanId).toBe("789");
+  expect(span.spanParents).toEqual(["456"]);
+  span.end();
+});
+
+test("startSpan support ids without parent", () => {
+  const logger = initLogger({});
+  const span = logger.startSpan({ name: "test-span", spanId: "123" });
+  expect(span.spanId).toBe("123");
+  expect(span.rootSpanId).toBe("123");
+  expect(span.spanParents).toEqual([]);
+  span.end();
+});
+
+test("startSpan support ids with nested parent chain", () => {
+  const logger = initLogger({});
+  const span = logger.startSpan({
+    name: "test-span",
+    spanId: "123",
+    parentSpanIds: {
+      spanId: "456",
+      rootSpanId: "789",
+      parentSpanIds: ["111", "222", "456"],
+    },
+  });
+  expect(span.spanId).toBe("123");
+  expect(span.rootSpanId).toBe("789");
+  expect(span.spanParents).toEqual(["111", "222", "456"]);
+  span.end();
+});
