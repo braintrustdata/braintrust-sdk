@@ -58,6 +58,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "ai": "^4.3.16",
     "@jest/globals": "^29.7.0",
     "@nodelib/fs.walk": "^1.2.8",
     "@types/argparse": "^2.0.14",
@@ -86,11 +87,10 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
-    "@ai-sdk/provider": "^1.0.1",
+    "@ai-sdk/provider": "^1.1.3",
     "@braintrust/core": "workspace:*",
     "@next/env": "^14.2.3",
     "@vercel/functions": "^1.0.2",
-    "ai": "^3.2.16",
     "argparse": "^2.0.1",
     "chalk": "^4.1.2",
     "cli-progress": "^3.12.0",
