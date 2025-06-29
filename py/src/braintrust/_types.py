@@ -440,7 +440,20 @@ class ChatCompletionContentPartImage(TypedDict):
     type: Literal["image_url"]
 
 
-ChatCompletionContentPart = Union[ChatCompletionContentPartText, ChatCompletionContentPartImage]
+class ChatCompletionContentPartFileFile(TypedDict):
+    file_data: str
+    filename: NotRequired[Optional[str]]
+    file_id: NotRequired[Optional[str]]
+
+
+class ChatCompletionContentPartFile(TypedDict):
+    file: ChatCompletionContentPartFileFile
+    type: Literal["file"]
+
+
+ChatCompletionContentPart = Union[
+    ChatCompletionContentPartText, ChatCompletionContentPartImage, ChatCompletionContentPartFile
+]
 
 
 ChatCompletionContent = Union[str, Sequence[ChatCompletionContentPart]]
