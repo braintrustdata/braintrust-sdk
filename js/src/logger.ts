@@ -2,6 +2,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 
+import { Queue, DEFAULT_QUEUE_SIZE } from "./queue";
 import {
   _urljoin,
   AnyDatasetRecord,
@@ -62,7 +63,7 @@ import {
   PromptBlockData,
 } from "@braintrust/core/typespecs";
 import { waitUntil } from "@vercel/functions";
-import Mustache, { Context } from "mustache";
+import Mustache from "mustache";
 import { z, ZodError } from "zod";
 import {
   BraintrustStream,
@@ -97,6 +98,8 @@ export type StartSpanArgs = {
   parent?: string;
   event?: StartSpanEventArgs;
   propagatedEvent?: StartSpanEventArgs;
+  spanId?: string;
+  parentSpanIds?: ParentSpanIds | MultiParentSpanIds;
 };
 
 export type EndSpanArgs = {
@@ -275,7 +278,7 @@ export class NoopSpan implements Span {
   public rootSpanId: string;
   public spanParents: string[];
 
-  public kind: "span" = "span";
+  public kind: "span" = "span" as const;
 
   constructor() {
     this.id = "";
@@ -637,7 +640,10 @@ function clearTestBackgroundLogger() {
  */
 export function _internalSetInitialState() {
   if (_globalState) {
-    throw new Error("Cannot set initial state more than once");
+    console.warn(
+      "global state already set, should only call _internalSetInitialState once",
+    );
+    return;
   }
   _globalState =
     globalThis.__inherited_braintrust_state ||
@@ -1212,6 +1218,18 @@ export class ReadonlyAttachment {
    */
   async data() {
     return this._data.get();
+  }
+
+  /**
+   * Returns the attachment contents as a base64-encoded URL that is suitable
+   * for use in a prompt.
+   *
+   * @returns The attachment contents as a base64-encoded URL.
+   */
+  async asBase64Url(): Promise<string> {
+    const buf = await (await this.data()).arrayBuffer();
+    const base64 = Buffer.from(buf).toString("base64");
+    return `data:${this.reference.content_type};base64,${base64}`;
   }
 
   /**
@@ -1791,7 +1809,7 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
         parentObjectType: this.parentObjectType(),
         parentObjectId: this.lazyId,
         parentComputeObjectMetadataArgs: this.computeMetadataArgs,
-        parentSpanIds: undefined,
+        parentSpanIds: args?.parentSpanIds,
         propagatedEvent: args?.propagatedEvent,
       }),
       defaultRootType: SpanTypeAttribute.TASK,
@@ -1925,13 +1943,15 @@ export class TestBackgroundLogger implements BackgroundLogger {
   }
 }
 
+const BACKGROUND_LOGGER_BASE_SLEEP_TIME_S = 1.0;
+
 // We should only have one instance of this object per state object in
 // 'BraintrustState._bgLogger'. Be careful about spawning multiple
 // instances of this class, because concurrent BackgroundLoggers will not log to
 // the backend in a deterministic order.
 class HTTPBackgroundLogger implements BackgroundLogger {
   private apiConn: LazyValue<HTTPConnection>;
-  private items: LazyValue<BackgroundLogEvent>[] = [];
+  private queue: Queue<LazyValue<BackgroundLogEvent>>;
   private activeFlush: Promise<void> = Promise.resolve();
   private activeFlushResolved = true;
   private activeFlushError: unknown = undefined;
@@ -1942,7 +1962,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public maxRequestSize: number = 6 * 1024 * 1024;
   public defaultBatchSize: number = 100;
   public numTries: number = 3;
-  public queueDropExceedingMaxsize: number | undefined = undefined;
+  public queueDropExceedingMaxsize: number = DEFAULT_QUEUE_SIZE;
   public queueDropLoggingPeriod: number = 60;
   public failedPublishPayloadsDir: string | undefined = undefined;
   public allPublishPayloadsDir: string | undefined = undefined;
@@ -1987,6 +2007,8 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       this.queueDropExceedingMaxsize = queueDropExceedingMaxsizeEnv;
     }
 
+    this.queue = new Queue(this.queueDropExceedingMaxsize);
+
     const queueDropLoggingPeriodEnv = Number(
       iso.getEnv("BRAINTRUST_QUEUE_DROP_LOGGING_PERIOD"),
     );
@@ -2024,17 +2046,8 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       return;
     }
 
-    const [addedItems, droppedItems] = (() => {
-      if (this.queueDropExceedingMaxsize === undefined) {
-        return [items, []];
-      }
-      const numElementsToAdd = Math.min(
-        Math.max(this.queueDropExceedingMaxsize - this.items.length, 0),
-        items.length,
-      );
-      return [items.slice(0, numElementsToAdd), items.slice(numElementsToAdd)];
-    })();
-    this.items.push(...addedItems);
+    const droppedItems = this.queue.push(...items);
+
     if (!this.syncFlush) {
       this.triggerActiveFlush();
     }
@@ -2063,15 +2076,14 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
   private async flushOnce(args?: { batchSize?: number }): Promise<void> {
     if (this._disabled) {
-      this.items = [];
+      this.queue.clear();
       return;
     }
 
     const batchSize = args?.batchSize ?? this.defaultBatchSize;
 
     // Drain the queue.
-    const wrappedItems = this.items;
-    this.items = [];
+    const wrappedItems = this.queue.drain();
 
     const [allItems, attachments] = await this.unwrapLazyValues(wrappedItems);
     if (allItems.length === 0) {
@@ -2133,7 +2145,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     }
 
     // If more items were added while we were flushing, flush again
-    if (this.items.length > 0) {
+    if (this.queue.length() > 0) {
       await this.flushOnce(args);
     }
   }
@@ -2169,7 +2181,11 @@ class HTTPBackgroundLogger implements BackgroundLogger {
           throw e;
         } else {
           console.warn(e);
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          const sleepTimeS = BACKGROUND_LOGGER_BASE_SLEEP_TIME_S * 2 ** i;
+          console.info(`Sleeping for ${sleepTimeS}s`);
+          await new Promise((resolve) =>
+            setTimeout(resolve, sleepTimeS * 1000),
+          );
         }
       }
     }
@@ -2229,7 +2245,11 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       } else {
         console.warn(errMsg);
         if (isRetrying) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          const sleepTimeS = BACKGROUND_LOGGER_BASE_SLEEP_TIME_S * 2 ** i;
+          console.info(`Sleeping for ${sleepTimeS}s`);
+          await new Promise((resolve) =>
+            setTimeout(resolve, sleepTimeS * 1000),
+          );
         }
       }
     }
@@ -3059,7 +3079,9 @@ export async function loadPrompt({
     });
     if (!prompt) {
       throw new Error(
-        `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[projectName ?? projectId]} (not found on server or in local cache): ${e}`,
+        `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[
+          projectName ?? projectId,
+        ]} (not found on server or in local cache): ${e}`,
       );
     }
     return prompt;
@@ -3431,7 +3453,10 @@ export function traced<IsAsyncFlush extends boolean = true, R = void>(
  *    messages: [{ role: "user", content: input }],
  *  });
  *  return result.choices[0].message.content ?? "unknown";
- * });
+ * },
+ * // Optional: if you're using a framework like NextJS that minifies your code, specify the function name and it will be used for the span name
+ * { name: "myFunc" },
+ * );
  * ```
  * Now, any calls to `myFunc` will be traced, and the input and output will be logged automatically.
  * If tracing is inactive, i.e. there is no active logger or experiment, it's just a no-op.
@@ -3809,6 +3834,7 @@ function extractAttachments(
  *
  * @returns The same event instance as the input.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function enrichAttachments<T extends Record<string, any>>(
   event: T,
   state: BraintrustState | undefined,
@@ -3817,6 +3843,7 @@ function enrichAttachments<T extends Record<string, any>>(
     // Base case: AttachmentReference.
     const parsedValue = attachmentReferenceSchema.safeParse(value);
     if (parsedValue.success) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
       (event as any)[key] = new ReadonlyAttachment(parsedValue.data, state);
       continue;
     }
@@ -3828,6 +3855,36 @@ function enrichAttachments<T extends Record<string, any>>(
 
     // Recursive case: object or array:
     enrichAttachments(value, state);
+  }
+
+  return event;
+}
+
+/**
+ * Recursively hydrates any `AttachmentReference` into `Attachment` by modifying
+ * the input in-place.
+ *
+ * @returns The same event instance as the input.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function resolveAttachmentsToBase64<T extends Record<string, any>>(
+  event: T,
+  state: BraintrustState | undefined,
+): Promise<T> {
+  for (const [key, value] of Object.entries(event)) {
+    if (value instanceof ReadonlyAttachment) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+      (event as any)[key] = await value.asBase64Url();
+      continue;
+    }
+
+    // Base case: non-object.
+    if (!(value instanceof Object)) {
+      continue;
+    }
+
+    // Recursive case: object or array:
+    await resolveAttachmentsToBase64(value, state);
   }
 
   return event;
@@ -4723,7 +4780,7 @@ export class SpanImpl implements Span {
       case SpanObjectTypeV3.EXPERIMENT: {
         // Experiment links require an id, so the sync version will only work after the experiment is
         // resolved.
-        let expID =
+        const expID =
           args?.experiment_id || this.parentObjectId?.getSync()?.value;
         if (!expID) {
           return getErrPermlink("provide-experiment-id");
@@ -5182,6 +5239,11 @@ export function renderMessage<T extends Message>(
                     case "text":
                       return { ...c, text: render(c.text) };
                     case "image_url":
+                      if (isObject(c.image_url.url)) {
+                        throw new Error(
+                          "Attachments must be replaced with URLs before calling `build()`",
+                        );
+                      }
                       return {
                         ...c,
                         image_url: {
@@ -5391,6 +5453,36 @@ export class Prompt<
     }) as CompiledPrompt<Flavor>;
   }
 
+  /**
+   * This is a special build method that first resolves attachment references, and then
+   * calls the regular build method. You should use this if you are building prompts from
+   * dataset rows that contain attachments.
+   *
+   * @param buildArgs Args to forward along to the prompt template.
+   */
+  public async buildWithAttachments<
+    Flavor extends "chat" | "completion" = "chat",
+  >(
+    buildArgs: unknown,
+    options: {
+      flavor?: Flavor;
+      messages?: Message[];
+      strict?: boolean;
+      state?: BraintrustState;
+    } = {},
+  ): Promise<CompiledPrompt<Flavor>> {
+    const hydrated =
+      buildArgs instanceof Object
+        ? await resolveAttachmentsToBase64(buildArgs, options.state)
+        : buildArgs;
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return this.runBuild(hydrated, {
+      flavor: options.flavor ?? "chat",
+      messages: options.messages,
+      strict: options.strict,
+    }) as CompiledPrompt<Flavor>;
+  }
+
   private runBuild<Flavor extends "chat" | "completion">(
     buildArgs: unknown,
     options: {
@@ -5446,16 +5538,6 @@ export class Prompt<
     if (!prompt) {
       throw new Error("Empty prompt");
     }
-
-    const escape = (v: unknown) => {
-      if (v === undefined) {
-        throw new Error("Missing!");
-      } else if (typeof v === "string") {
-        return v;
-      } else {
-        return JSON.stringify(v);
-      }
-    };
 
     const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
     const variables: Record<string, unknown> = {
@@ -5520,6 +5602,10 @@ export class Prompt<
         throw new Error("Missing!");
       } else if (typeof v === "string") {
         return v;
+      } else if (v instanceof ReadonlyAttachment) {
+        throw new Error(
+          "Use buildWithAttachments() to build prompts with attachments",
+        );
       } else {
         return JSON.stringify(v);
       }
@@ -5582,7 +5668,7 @@ export class Prompt<
       };
     } else {
       const _: never = prompt;
-      throw new Error("never!");
+      throw new Error(`Invalid prompt type: ${_}`);
     }
   }
 

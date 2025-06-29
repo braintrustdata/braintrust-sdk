@@ -36,6 +36,15 @@ export const viewDataSchema = z
   .strip()
   .openapi("ViewData");
 export type ViewData = z.infer<typeof viewDataSchema>;
+const chartSelectionType = z.object({
+  type: z.enum(["none", "score", "metric", "metadata"]),
+  value: z.string(),
+});
+export const annotationDataSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+});
+
 export const tableViewOptionsSchema = z
   .object({
     columnVisibility: z.record(z.boolean()).nullish(),
@@ -43,7 +52,15 @@ export const tableViewOptionsSchema = z
     columnSizing: z.record(z.number()).nullish(),
     grouping: z.string().nullish(),
     rowHeight: z.string().nullish(),
+    tallGroupRows: z.boolean().nullish(),
     layout: z.string().nullish(),
+    chartHeight: z.number().nullish(),
+    excludedMeasures: z.array(chartSelectionType).nullish(),
+    yMetric: chartSelectionType.nullish(),
+    xAxis: chartSelectionType.nullish(),
+    symbolGrouping: chartSelectionType.nullish(),
+    xAxisAggregation: z.enum(["avg", "sum", "min", "max", "all"]).nullish(),
+    chartAnnotations: z.array(annotationDataSchema).nullish(),
   })
   .strip()
   .openapi({ title: "TableViewOptions" });
@@ -59,8 +76,11 @@ export const monitorViewOptionsSchema = z
     chartVisibility: z.record(z.boolean()).nullish(),
     projectId: z.string().nullish(),
     type: z.enum(["project", "experiment"]).nullish(),
+    groupBy: z.string().nullish(),
   })
   .strip();
+
+export type MonitorViewOptions = z.infer<typeof monitorViewOptionsSchema>;
 
 export const viewOptionsSchema = z
   .union([

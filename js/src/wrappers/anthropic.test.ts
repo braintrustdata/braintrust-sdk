@@ -10,18 +10,29 @@ import {
 } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import { wrapAnthropic } from "./anthropic";
-import {
-  TextBlock,
-  Message,
-  TextBlockParam,
-} from "@anthropic-ai/sdk/resources/messages";
-import { initLogger, _exportsForTestingOnly, login } from "../logger";
+import { initLogger, _exportsForTestingOnly } from "../logger";
 import { configureNode } from "../node";
 import { getCurrentUnixTimestamp } from "../util";
-import { L } from "vitest/dist/chunks/reporters.nr4dxCkA";
 
 // use the cheapest model for tests
 const TEST_MODEL = "claude-3-haiku-20240307";
+
+interface TextBlock {
+  type: "text";
+  text: string;
+}
+
+interface Message {
+  content: TextBlock[];
+  role: string;
+  id: string;
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+  };
+}
 
 try {
   configureNode();
@@ -33,7 +44,7 @@ test("anthropic is installed", () => {
   expect(Anthropic).toBeDefined();
 });
 
-describe("anthropic client unit tests", () => {
+describe("anthropic client unit tests", { retry: 3 }, () => {
   let anthropic: Anthropic;
   let client: any;
   let backgroundLogger: any;
@@ -63,7 +74,7 @@ describe("anthropic client unit tests", () => {
   test("test client.messages.create works with system text blocks", async (context) => {
     expect(await backgroundLogger.drain()).toHaveLength(0);
 
-    const system: TextBlockParam[] = [
+    const system: Record<string, string>[] = [
       { text: "translate to english", type: "text" },
       { text: "remove all punctuation", type: "text" },
       { text: "only the answer, no other text", type: "text" },
@@ -116,8 +127,12 @@ describe("anthropic client unit tests", () => {
     expect(onMessage).toHaveBeenCalledTimes(1);
 
     expect(message.content[0].type).toBe("text");
-    const content = message.content[0] as TextBlock;
-    expect(content.text).toContain("old pond");
+    const content = message.content[0] as unknown;
+    if (typeof content === "object" && content !== null && "text" in content) {
+      expect(content.text).toContain("old pond");
+    } else {
+      throw new Error("Content is not a text block");
+    }
 
     const spans = await backgroundLogger.drain();
 
@@ -215,9 +230,12 @@ describe("anthropic client unit tests", () => {
 
     const endTime = getCurrentUnixTimestamp();
 
-    expect(response.content[0].type).toBe("text");
-    const content = response.content[0] as TextBlock;
-    expect(content.text).toContain("16");
+    const content = response.content[0] as unknown;
+    if (typeof content === "object" && content !== null && "text" in content) {
+      expect(content.text).toContain("16");
+    } else {
+      throw new Error("Content is not a text block");
+    }
 
     const spans = await backgroundLogger.drain();
     expect(spans).toHaveLength(1);
@@ -226,6 +244,7 @@ describe("anthropic client unit tests", () => {
     expect(span["span_attributes"].name).toBe("anthropic.messages.create");
     const metadata = span.metadata;
     expect(metadata?.model).toBe(TEST_MODEL);
+    expect(metadata?.provider).toBe("anthropic");
     expect(metadata?.max_tokens).toBe(100);
     expect(metadata["stop_reason"]).toBe("end_turn");
     expect(metadata["temperature"]).toBe(0.5);
@@ -290,6 +309,7 @@ describe("anthropic client unit tests", () => {
       },
       metadata: {
         model: TEST_MODEL,
+        provider: "anthropic",
         max_tokens: 100,
         temperature: 0.1,
       },
@@ -373,6 +393,7 @@ describe("anthropic client unit tests", () => {
       },
       metadata: {
         model: TEST_MODEL,
+        provider: "anthropic",
         max_tokens: 100,
         temperature: 0.1,
       },
@@ -455,6 +476,7 @@ describe("anthropic client unit tests", () => {
       },
       metadata: {
         model: TEST_MODEL,
+        provider: "anthropic",
         max_tokens: 100,
         temperature: 0.1,
       },

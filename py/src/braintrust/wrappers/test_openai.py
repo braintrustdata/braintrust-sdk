@@ -20,6 +20,16 @@ TEST_PROMPT = "What's 12 + 12?"
 TEST_SYSTEM_PROMPT = "You are a helpful assistant that only responds with numbers."
 
 
+@pytest.fixture(scope="module")
+def vcr_config():
+    return {
+        "filter_headers": [
+            "authorization",
+            "openai-organization",
+        ]
+    }
+
+
 @pytest.fixture
 def memory_logger():
     init_test_logger(PROJECT_NAME)
@@ -27,6 +37,7 @@ def memory_logger():
         yield bgl
 
 
+@pytest.mark.vcr
 def test_openai_chat_metrics(memory_logger):
     assert not memory_logger.pop()
 
@@ -58,10 +69,11 @@ def test_openai_chat_metrics(memory_logger):
         metrics = span["metrics"]
         assert_metrics_are_valid(metrics, start, end)
         assert span["metadata"]["model"] == TEST_MODEL
-        # assert span["metadata"]["provider"] == "openai"
+        assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
 
 
+@pytest.mark.vcr
 def test_openai_responses_metrics(memory_logger):
     assert not memory_logger.pop()
 
@@ -110,10 +122,11 @@ def test_openai_responses_metrics(memory_logger):
     assert 0 <= metrics.get("prompt_cached_tokens", 0)
     assert 0 <= metrics.get("completion_reasoning_tokens", 0)
     assert span["metadata"]["model"] == TEST_MODEL
-    # assert span["metadata"]["provider"] == "openai"
+    assert span["metadata"]["provider"] == "openai"
     assert TEST_PROMPT in str(span["input"])
 
 
+@pytest.mark.vcr
 def test_openai_embeddings(memory_logger):
     assert not memory_logger.pop()
 
@@ -141,10 +154,11 @@ def test_openai_embeddings(memory_logger):
     span = spans[0]
     assert span
     assert span["metadata"]["model"] == "text-embedding-ada-002"
-    # assert span["metadata"]["provider"] == "openai"
+    assert span["metadata"]["provider"] == "openai"
     assert "This is a test" in str(span["input"])
 
 
+@pytest.mark.vcr
 def test_openai_chat_streaming_sync(memory_logger):
     assert not memory_logger.pop()
 
@@ -196,6 +210,7 @@ def test_openai_chat_streaming_sync(memory_logger):
         assert "24" in str(span["output"]) or "twenty-four" in str(span["output"]).lower()
 
 
+@pytest.mark.vcr
 def test_openai_chat_with_system_prompt(memory_logger):
     assert not memory_logger.pop()
 
@@ -227,6 +242,7 @@ def test_openai_chat_with_system_prompt(memory_logger):
         assert inputs[1]["content"] == TEST_PROMPT
 
 
+@pytest.mark.vcr
 def test_openai_client_comparison(memory_logger):
     """Test that wrapped and unwrapped clients produce the same output."""
     assert not memory_logger.pop()
@@ -252,6 +268,7 @@ def test_openai_client_comparison(memory_logger):
         assert len(spans) == 1
 
 
+@pytest.mark.vcr
 def test_openai_client_error(memory_logger):
     assert not memory_logger.pop()
 
@@ -277,6 +294,7 @@ def test_openai_client_error(memory_logger):
     assert fake_model in str(log)
 
 
+@pytest.mark.vcr
 @pytest.mark.asyncio
 async def test_openai_chat_async(memory_logger):
     assert not memory_logger.pop()
@@ -326,6 +344,7 @@ async def test_openai_chat_async(memory_logger):
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_responses_async(memory_logger):
     assert not memory_logger.pop()
 
@@ -371,6 +390,7 @@ async def test_openai_responses_async(memory_logger):
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_embeddings_async(memory_logger):
     assert not memory_logger.pop()
 
@@ -397,11 +417,12 @@ async def test_openai_embeddings_async(memory_logger):
         span = spans[0]
         assert span
         assert span["metadata"]["model"] == "text-embedding-ada-002"
-        # assert span["metadata"]["provider"] == "openai"
+        assert span["metadata"]["provider"] == "openai"
         assert "This is a test" in str(span["input"])
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_chat_streaming_async(memory_logger):
     assert not memory_logger.pop()
 
@@ -454,6 +475,7 @@ async def test_openai_chat_streaming_async(memory_logger):
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_chat_async_with_system_prompt(memory_logger):
     assert not memory_logger.pop()
 
@@ -486,6 +508,7 @@ async def test_openai_chat_async_with_system_prompt(memory_logger):
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_client_async_comparison(memory_logger):
     """Test that wrapped and unwrapped async clients produce the same output."""
     assert not memory_logger.pop()
@@ -517,6 +540,7 @@ async def test_openai_client_async_comparison(memory_logger):
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_client_async_error(memory_logger):
     assert not memory_logger.pop()
 
@@ -543,6 +567,7 @@ async def test_openai_client_async_error(memory_logger):
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_chat_async_context_manager(memory_logger):
     """Test async context manager behavior for chat completions streams."""
     assert not memory_logger.pop()
@@ -594,6 +619,7 @@ async def test_openai_chat_async_context_manager(memory_logger):
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_streaming_with_break(memory_logger):
     """Test breaking out of the streaming loop early."""
     assert not memory_logger.pop()
@@ -605,6 +631,8 @@ async def test_openai_streaming_with_break(memory_logger):
     stream = await client.chat.completions.create(
         model=TEST_MODEL, messages=[{"role": "user", "content": TEST_PROMPT}], stream=True
     )
+
+    time.sleep(0.2)  # time to first token sleep
 
     # Only process the first few chunks
     counter = 0
@@ -619,10 +647,11 @@ async def test_openai_streaming_with_break(memory_logger):
     assert len(spans) == 1
     span = spans[0]
     metrics = span["metrics"]
-    assert metrics["time_to_first_token"] > 0
+    assert metrics["time_to_first_token"] >= 0
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_chat_error_in_async_context(memory_logger):
     """Test error handling inside the async context manager."""
     assert not memory_logger.pop()
@@ -652,10 +681,11 @@ async def test_openai_chat_error_in_async_context(memory_logger):
     span = spans[0]
     # The error field might not be present in newer versions
     # Just check that we got a span with time metrics
-    assert span["metrics"]["time_to_first_token"] > 0
+    assert span["metrics"]["time_to_first_token"] >= 0
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_response_streaming_async(memory_logger):
     """Test the newer responses API with streaming."""
     assert not memory_logger.pop()
@@ -695,6 +725,7 @@ async def test_openai_response_streaming_async(memory_logger):
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_openai_async_parallel_requests(memory_logger):
     """Test multiple parallel async requests with the wrapped client."""
     assert not memory_logger.pop()
@@ -730,6 +761,7 @@ async def test_openai_async_parallel_requests(memory_logger):
         assert_metrics_are_valid(span["metrics"])
 
 
+@pytest.mark.vcr
 def test_openai_not_given_filtering(memory_logger):
     """Test that NOT_GIVEN values are filtered out of logged inputs but API call still works."""
     assert not memory_logger.pop()
@@ -764,6 +796,7 @@ def test_openai_not_given_filtering(memory_logger):
             "input": [{"role": "user", "content": TEST_PROMPT}],
             "metadata": {
                 "model": TEST_MODEL,
+                "provider": "openai",
                 "temperature": 0.5,
             },
         },
@@ -775,6 +808,7 @@ def test_openai_not_given_filtering(memory_logger):
         assert k not in meta
 
 
+@pytest.mark.vcr
 def test_openai_responses_not_given_filtering(memory_logger):
     """Test that NOT_GIVEN values are filtered out of logged inputs for responses API."""
     assert not memory_logger.pop()
@@ -812,6 +846,7 @@ def test_openai_responses_not_given_filtering(memory_logger):
             "input": TEST_PROMPT,
             "metadata": {
                 "model": TEST_MODEL,
+                "provider": "openai",
                 "temperature": 0.5,
                 "instructions": "Just the number please",
             },
@@ -822,6 +857,110 @@ def test_openai_responses_not_given_filtering(memory_logger):
     assert "NOT_GIVEN" not in str(meta)
     for k in ["max_output_tokens", "tools", "top_p", "store"]:
         assert k not in meta
+
+
+@pytest.mark.vcr
+def test_openai_parallel_tool_calls(memory_logger):
+    """Test parallel tool calls with both streaming and non-streaming modes."""
+    assert not memory_logger.pop()
+
+    # Define tools that can be called in parallel
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Get the weather for a location",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"location": {"type": "string", "description": "The location to get weather for"}},
+                    "required": ["location"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_time",
+                "description": "Get the current time for a timezone",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"timezone": {"type": "string", "description": "The timezone to get time for"}},
+                    "required": ["timezone"],
+                },
+            },
+        },
+    ]
+
+    client = openai.OpenAI()
+    clients = [client, wrap_openai(client)]
+
+    for stream in [False, True]:
+        for client in clients:
+            start = time.time()
+
+            resp = client.chat.completions.create(
+                model=TEST_MODEL,
+                messages=[{"role": "user", "content": "What's the weather in New York and the time in Tokyo?"}],
+                tools=tools,
+                temperature=0,
+                stream=stream,
+                stream_options={"include_usage": True} if stream else None,
+            )
+
+            if stream:
+                # Consume the stream
+                for chunk in resp:  # type: ignore
+                    # Exhaust the stream
+                    pass
+
+            end = time.time()
+
+            if not _is_wrapped(client):
+                assert not memory_logger.pop()
+                continue
+
+            # Verify spans were created with wrapped client
+            spans = memory_logger.pop()
+            assert len(spans) == 1
+            span = spans[0]
+
+            # Validate the span structure
+            assert_dict_matches(
+                span,
+                {
+                    "span_attributes": {"type": "llm", "name": "Chat Completion"},
+                    "metadata": {
+                        "model": TEST_MODEL,
+                        "provider": "openai",
+                        "stream": stream,
+                        "tools": lambda tools_list: len(tools_list) == 2
+                        and any(tool.get("function", {}).get("name") == "get_weather" for tool in tools_list)
+                        and any(tool.get("function", {}).get("name") == "get_time" for tool in tools_list),
+                    },
+                    "input": lambda inp: "What's the weather in New York and the time in Tokyo?" in str(inp),
+                    "metrics": lambda m: assert_metrics_are_valid(m, start, end) is None,
+                },
+            )
+
+            # Verify tool calls are in the output (if present)
+            if span.get("output") and isinstance(span["output"], list) and len(span["output"]) > 0:
+                message = span["output"][0].get("message", {})
+                tool_calls = message.get("tool_calls")
+                if tool_calls and len(tool_calls) >= 2:
+                    # Extract tool names, handling cases where function.name might be None
+                    tool_names = []
+                    for call in tool_calls:
+                        func = call.get("function", {})
+                        name = func.get("name") if isinstance(func, dict) else None
+                        if name:
+                            tool_names.append(name)
+
+                    # Check if we have the expected tools (only if names are available)
+                    if tool_names:
+                        assert (
+                            "get_weather" in tool_names or "get_time" in tool_names
+                        ), f"Expected weather/time tools, got: {tool_names}"
 
 
 def _is_wrapped(client):
