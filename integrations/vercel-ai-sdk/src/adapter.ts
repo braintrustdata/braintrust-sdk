@@ -20,7 +20,7 @@ export function toAIStream(
     .pipeThrough(btStreamToAISDKTransformStream(callbacks));
 }
 
-export function toAIStreamResponse(
+export function toDataStreamResponse(
   stream: BraintrustStreamOrReadable,
   init?: ResponseInit,
 ): Response {
@@ -30,6 +30,16 @@ export function toAIStreamResponse(
     },
     ...init,
   });
+}
+
+/**
+ * @deprecated Use `toDataStreamResponse` instead.
+ */
+export function toAIStreamResponse(
+  stream: BraintrustStreamOrReadable,
+  init?: ResponseInit,
+): Response {
+  return toDataStreamResponse(stream, init);
 }
 
 function btStreamToAISDKTransformStream(
