@@ -1,9 +1,25 @@
-import { expect, test, describe } from "vitest";
+import {
+  expect,
+  test,
+  describe,
+  beforeEach,
+  beforeAll,
+  afterEach,
+} from "vitest";
 import { generateText, wrapLanguageModel } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { Middleware } from "./ai-sdk-middleware";
+import {
+  _exportsForTestingOnly,
+  Logger,
+  TestBackgroundLogger,
+  initLogger,
+  _internalSetInitialState,
+} from "../logger";
 
 const testModelName = "gpt-4.1";
+
+_exportsForTestingOnly.setInitialTestState();
 
 test("ai sdk middleware is installed", () => {
   expect(wrapLanguageModel).toBeDefined();
@@ -11,16 +27,30 @@ test("ai sdk middleware is installed", () => {
 });
 
 describe("ai sdk middleware tests", () => {
-  test("generateText wrapLanguageModel", async () => {
-    const tm = openai(testModelName);
+  let testLogger: TestBackgroundLogger;
+  let logger: Logger<true>;
+  let rawModel = openai(testModelName);
+  let wrappedModel = wrapLanguageModel({
+    model: rawModel,
+    middleware: Middleware({ debug: true, name: "TestMiddleware" }),
+  });
+  let models = [rawModel, wrappedModel];
 
-    const wrapped = wrapLanguageModel({
-      model: tm,
-      middleware: Middleware({ debug: true, name: "TestMiddleware" }),
+  beforeEach(async () => {
+    testLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+    logger = initLogger({
+      projectName: "anthropic.test.ts",
+      projectId: "test-project-id",
     });
+  });
 
-    for (const [_, model] of [wrapped, tm].entries()) {
-      const isWrapped = model === wrapped;
+  afterEach(() => {
+    _exportsForTestingOnly.clearTestBackgroundLogger();
+  });
+
+  test("generateText wrapLanguageModel", async () => {
+    for (const [_, model] of models.entries()) {
+      const isWrapped = model === wrappedModel;
 
       console.log(isWrapped ? "wrapped" : "not wrapped");
 
