@@ -1,5 +1,5 @@
 import { ContentPart, Message, Tools } from "@braintrust/core/typespecs";
-import { startSpan } from "../logger";
+import { startSpan, type Span } from "../logger";
 import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import {
   LanguageModelV1,
@@ -20,14 +20,26 @@ import {
   X_CACHED_HEADER,
 } from "./oai";
 
+export interface WrapAISDKModelOpts {
+  span?: Span;
+}
+
 /**
  * Wrap an ai-sdk model (created with `.chat()`, `.completion()`, etc.) to add tracing. If Braintrust is
  * not configured, this is a no-op
  *
- * @param model
+ * @param model The AI SDK model to wrap.
+ * @param overrideSpan Optional. A Braintrust Span object to use for tracing this model's operations.
+ *                     If provided, this span will be used instead of creating a new one internally.
+ *                     The lifecycle of this span (e.g., calling .end()) should be managed by the caller
+ *                     if it's passed here.
  * @returns The wrapped object.
  */
-export function wrapAISDKModel<T extends object>(model: T): T {
+export function wrapAISDKModel<T extends object>(
+  model: T,
+  opts?: WrapAISDKModelOpts,
+): T {
+  opts = opts ?? {};
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
   const m = model as any;
   if (
@@ -36,7 +48,10 @@ export function wrapAISDKModel<T extends object>(model: T): T {
     typeof m?.modelId === "string"
   ) {
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
-    return new BraintrustLanguageModelWrapper(m as LanguageModelV1) as any as T;
+    return new BraintrustLanguageModelWrapper(
+      m as LanguageModelV1,
+      opts,
+    ) as any as T;
   } else {
     console.warn("Unsupported AI SDK model. Not wrapping.");
     return model;
@@ -44,7 +59,10 @@ export function wrapAISDKModel<T extends object>(model: T): T {
 }
 
 class BraintrustLanguageModelWrapper implements LanguageModelV1 {
-  constructor(private model: LanguageModelV1) {}
+  constructor(
+    private model: LanguageModelV1,
+    private opts?: WrapAISDKModelOpts,
+  ) {}
 
   get specificationVersion() {
     return this.model.specificationVersion;
@@ -77,12 +95,14 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
   // For the first cut, do not support custom span_info arguments. We can
   // propagate those via async local storage
   async doGenerate(options: LanguageModelV1CallOptions) {
-    const span = startSpan({
-      name: "Chat Completion",
-      spanAttributes: {
-        type: "llm",
-      },
-    });
+    const span =
+      this.opts?.span ??
+      startSpan({
+        name: "Chat Completion",
+        spanAttributes: {
+          type: "llm",
+        },
+      });
     const { prompt, mode, ...rest } = options;
     const startTime = getCurrentUnixTimestamp();
 
@@ -115,7 +135,9 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
       });
       return ret;
     } finally {
-      span.end();
+      if (!this.opts?.span) {
+        span.end();
+      }
     }
   }
 
@@ -123,12 +145,14 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
     const { prompt, mode, ...rest } = options;
     const startTime = getCurrentUnixTimestamp();
 
-    const span = startSpan({
-      name: "Chat Completion",
-      spanAttributes: {
-        type: "llm",
-      },
-    });
+    const span =
+      this.opts?.span ??
+      startSpan({
+        name: "Chat Completion",
+        spanAttributes: {
+          type: "llm",
+        },
+      });
 
     span.log({
       input: postProcessPrompt(prompt),
@@ -145,10 +169,15 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
 
     let ended = false;
     const end = () => {
-      if (!ended) {
-        span.end();
-        ended = true;
+      if (ended) {
+        return;
       }
+
+      if (!this.opts?.span) {
+        span.end();
+      }
+
+      ended = true;
     };
 
     try {
