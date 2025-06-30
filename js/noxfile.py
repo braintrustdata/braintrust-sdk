@@ -18,7 +18,7 @@ def clean_js_env(func):
 @nox.session()
 @clean_js_env
 def test_ai_sdk(session: nox.Session):
-    libs = ["ai@beta", "@ai-sdk/openai@beta", "@ai-sdk/provider@beta"]
+    libs = ["ai@beta", "@ai-sdk/openai@beta", "@ai-sdk/anthropic@beta", "@ai-sdk/provider@beta"]
     _install_optional_libraries(session, libs)
     session.run("pnpm", "test:ai-sdk")
 
