@@ -23,7 +23,7 @@ class Score(SerializableDataClass):
     name: str
     """The name of the score. This should be a unique name for the scorer."""
 
-    score: Optional[float]
+    score: Optional[float] = None
     """The score for the evaluation. This should be a float between 0 and 1. If the score is None, the evaluation is considered to be skipped."""
 
     metadata: Dict[str, Any] = dataclasses.field(default_factory=dict)
