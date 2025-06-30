@@ -2,6 +2,7 @@ import {
   FunctionObject,
   functionSchema,
   SavedFunctionId,
+  ToolFunctionDefinition,
 } from "@braintrust/core/typespecs";
 import { _internalGetGlobalState } from "../logger";
 import { loadCLIEnv } from "./bundle";
@@ -14,11 +15,7 @@ import slugify from "slugify";
 import path from "path";
 import { currentRepo } from "../gitutil";
 import { isEmpty, loadPrettyXact, prettifyXact } from "@braintrust/core";
-import {
-  ProjectNameIdMap,
-  ToolFunctionDefinition,
-  toolFunctionDefinitionSchema,
-} from "../framework2";
+import { ProjectNameIdMap, toolFunctionDefinitionSchema } from "../framework2";
 import pluralize from "pluralize";
 
 export async function pullCommand(args: PullArgs) {

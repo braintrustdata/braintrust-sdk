@@ -45,7 +45,7 @@
     "dev/dist/**/*"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192\" tsup",
     "watch": "tsup --watch",
     "clean": "rm -r dist/* && rm -r dev/dist/*",
     "docs": "npx typedoc --options typedoc.json src/index.ts",
@@ -58,6 +58,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "ai": "^4.3.16",
     "@jest/globals": "^29.7.0",
     "@nodelib/fs.walk": "^1.2.8",
     "@types/argparse": "^2.0.14",
@@ -73,6 +74,7 @@
     "@types/uuid": "^9.0.7",
     "async": "^3.2.5",
     "autoevals": "^0.0.69",
+    "cross-env": "^7.0.3",
     "npm-run-all": "^4.1.5",
     "prettier": "^3.5.3",
     "tinybench": "^4.0.1",
@@ -85,11 +87,10 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
-    "@ai-sdk/provider": "^1.0.1",
+    "@ai-sdk/provider": "^1.1.3",
     "@braintrust/core": "workspace:*",
     "@next/env": "^14.2.3",
     "@vercel/functions": "^1.0.2",
-    "ai": "^3.2.16",
     "argparse": "^2.0.1",
     "chalk": "^4.1.2",
     "cli-progress": "^3.12.0",
@@ -107,10 +108,10 @@
     "slugify": "^1.6.6",
     "source-map": "^0.7.4",
     "uuid": "^9.0.1",
-    "zod": "^3.22.4",
+    "zod": "^3.25.34",
     "zod-to-json-schema": "^3.22.5"
   },
   "peerDependencies": {
-    "zod": "^3.0.0"
+    "zod": "^3.25.34"
   }
 }
