@@ -101,7 +101,7 @@ describe("ai sdk middleware tests", () => {
         output: [{ type: "text", text: "4" }],
         metadata: {
           provider: "openai",
-          finishReason: "stop",
+          finish_reason: "stop",
           model: "gpt-4.1-2025-04-14",
         },
         metrics: {
@@ -171,7 +171,7 @@ describe("ai sdk middleware tests", () => {
         output: [{ type: "text", text: expect.stringContaining("So long") }],
         metadata: {
           provider: "openai",
-          finishReason: expect.any(String),
+          finish_reason: expect.any(String),
           model: "gpt-4.1",
         },
         metrics: expect.any(Object),
@@ -268,7 +268,7 @@ describe("ai sdk middleware tests", () => {
         output: [{ type: "text", text: expect.any(String) }],
         metadata: {
           provider: "anthropic",
-          finishReason: "stop",
+          finish_reason: "stop",
           model: "claude-3-haiku-20240307",
         },
         metrics: {
@@ -283,6 +283,119 @@ describe("ai sdk middleware tests", () => {
       // Verify actual output content contains expected answer
       expect(text).toMatch(/10/);
       expect(span.output[0].text).toMatch(/10/);
+      assertTimingValid(startTime, endTime, span.metrics);
+    }
+  });
+
+  test("generateText with model parameters", async () => {
+    for (const [_, model] of models.entries()) {
+      const isWrapped = model === wrappedModel;
+      if (!isWrapped) continue;
+
+      expect(await testLogger.drain()).toHaveLength(0);
+
+      const startTime = Date.now();
+      const { text } = await generateText({
+        model: model,
+        prompt: "What is 3+3?",
+        system: "Just return the number",
+        temperature: 0.7,
+        topP: 0.9,
+      });
+      const endTime = Date.now();
+
+      const spans = await testLogger.drain();
+      expect(spans).toHaveLength(1);
+
+      const span = spans[0] as any;
+      expect(span).toMatchObject({
+        span_attributes: {
+          name: "ai-sdk.generateText",
+          type: "llm",
+        },
+        input: [
+          { role: "system", content: "Just return the number" },
+          {
+            role: "user",
+            content: [{ type: "text", text: "What is 3+3?" }],
+          },
+        ],
+        output: [{ type: "text", text: expect.any(String) }],
+        metadata: {
+          provider: "openai",
+          finish_reason: "stop",
+          model: expect.any(String),
+          temperature: 0.7,
+          top_p: 0.9,
+        },
+        metrics: expect.any(Object),
+      });
+
+      // Verify actual output content
+      expect(text).toMatch(/6/);
+      expect(span.output[0].text).toMatch(/6/);
+      assertTimingValid(startTime, endTime, span.metrics);
+    }
+  });
+
+  test("generateText with Anthropic model parameters", async () => {
+    const anthropicModel = anthropic(testAnthropicModelName);
+    const wrappedAnthropicModel = wrapLanguageModel({
+      model: anthropicModel,
+      middleware: Middleware({
+        debug: true,
+        name: "AnthropicParamsTestMiddleware",
+      }),
+    });
+
+    const models = [anthropicModel, wrappedAnthropicModel];
+
+    for (const [_, model] of models.entries()) {
+      const isWrapped = model === wrappedAnthropicModel;
+      if (!isWrapped) continue;
+
+      expect(await testLogger.drain()).toHaveLength(0);
+
+      const startTime = Date.now();
+      const { text } = await generateText({
+        model: model,
+        prompt: "What is 7+7?",
+        system: "Just return the number",
+        temperature: 0.8,
+        topK: 40,
+      });
+      const endTime = Date.now();
+
+      const spans = await testLogger.drain();
+      expect(spans).toHaveLength(1);
+
+      const span = spans[0] as any;
+      expect(span).toMatchObject({
+        span_attributes: {
+          name: "ai-sdk.generateText",
+          type: "llm",
+        },
+        input: [
+          { role: "system", content: "Just return the number" },
+          {
+            role: "user",
+            content: [{ type: "text", text: "What is 7+7?" }],
+          },
+        ],
+        output: [{ type: "text", text: expect.any(String) }],
+        metadata: {
+          provider: "anthropic",
+          finish_reason: "stop",
+          model: "claude-3-haiku-20240307",
+          temperature: 0.8,
+          top_k: 40,
+        },
+        metrics: expect.any(Object),
+      });
+
+      // Verify actual output content
+      expect(text).toMatch(/14/);
+      expect(span.output[0].text).toMatch(/14/);
       assertTimingValid(startTime, endTime, span.metrics);
     }
   });

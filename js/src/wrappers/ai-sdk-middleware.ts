@@ -4,20 +4,10 @@ import {
 } from "@ai-sdk/provider";
 import { SpanTypeAttribute } from "@braintrust/core";
 import { startSpan } from "../logger";
-import { getCurrentUnixTimestamp } from "../util";
 
 export interface MiddlewareConfig {
   debug?: boolean;
   name?: string;
-}
-
-function detectProviderFromParams(params: any): string | undefined {
-  if (!params?.providerOptions) {
-    return undefined;
-  }
-
-  const providerKeys = Object.keys(params.providerOptions); // e.g. "openai", "anthropic"
-  return providerKeys.length > 0 ? providerKeys[0] : undefined;
 }
 
 function detectProviderFromResult(result: any): string | undefined {
@@ -41,6 +31,32 @@ function extractModelFromResult(result: any): string | undefined {
   }
 
   return undefined;
+}
+
+function camelToSnake(str: string): string {
+  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+}
+
+function extractModelParameters(params: any): Record<string, any> {
+  const modelParams: Record<string, any> = {};
+
+  // Parameters to exclude from metadata (already captured elsewhere or not relevant)
+  const excludeKeys = new Set([
+    "prompt", // Already captured as input
+    "system", // Already captured as input
+    "messages", // Already captured as input
+    "model", // Already captured in metadata.model
+    "providerOptions", // Internal AI SDK configuration
+  ]);
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && !excludeKeys.has(key)) {
+      const snakeKey = camelToSnake(key);
+      modelParams[snakeKey] = value;
+    }
+  }
+
+  return modelParams;
 }
 
 function normalizeUsageMetrics(usage: any): Record<string, number> {
@@ -87,12 +103,9 @@ export function Middleware(
         event: {
           input: params.prompt,
           metadata: {
-            provider: detectProviderFromParams(params),
-            ...params,
-            prompt: undefined, // remove prompt from metadata to avoid duplication
+            ...extractModelParameters(params),
           },
         },
-        startTime: getCurrentUnixTimestamp(),
       };
 
       const span = startSpan(spanArgs);
@@ -108,7 +121,7 @@ export function Middleware(
         }
 
         if (result.finishReason !== undefined) {
-          metadata.finishReason = result.finishReason;
+          metadata.finish_reason = result.finishReason;
         }
 
         const model = extractModelFromResult(result);
@@ -141,12 +154,9 @@ export function Middleware(
         event: {
           input: params.prompt,
           metadata: {
-            provider: detectProviderFromParams(params),
-            ...params,
-            prompt: undefined, // remove prompt from metadata to avoid duplication
+            ...extractModelParameters(params),
           },
         },
-        startTime: getCurrentUnixTimestamp(),
       };
 
       const span = startSpan(spanArgs);
@@ -197,7 +207,7 @@ export function Middleware(
             }
 
             if (finalFinishReason !== undefined) {
-              metadata.finishReason = finalFinishReason;
+              metadata.finish_reason = finalFinishReason;
             }
 
             const model = extractModelFromResult(resultForDetection);
