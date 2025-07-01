@@ -25,7 +25,13 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: "https://registry.npmjs.org"
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.13"
       - uses: pnpm/action-setup@v4
+      - name: "install nox"
+        shell: bash
+        run: pip install nox
       - name: "verify ci"
         shell: bash
         run: make js-verify-ci

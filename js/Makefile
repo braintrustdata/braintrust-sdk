@@ -7,8 +7,9 @@ help:
 	@echo "  make build              - Build the SDK"
 	@echo "  make clean              - Clean build artifacts"
 	@echo "  make install-optional-deps - Install optional dependencies"
-	@echo "  make test               - Run all tests (core + wrappers)"
+	@echo "  make test               - Run all tests (core + wrappers + nox)"
 	@echo "  make test-core          - Run core tests only"
+	@echo "  make test-nox           - Run nox tests for AI SDK"
 	@echo "  make test-openai        - Run OpenAI wrapper tests"
 	@echo "  make test-anthropic     - Run Anthropic wrapper tests"
 	@echo "  make bench              - Run queue performance benchmarks"
@@ -71,7 +72,7 @@ test-openai-%:
 # common things
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-pnpm test test-latest prune installing-optional-deps docs build verify-ci bench
+.PHONY: test-pnpm test test-latest test-nox prune installing-optional-deps docs build verify-ci bench
 
 install-optional-deps:
 	npm_config_save=false npm_config_lockfile=false pnpm add "openai" "@anthropic-ai/sdk"
@@ -83,7 +84,11 @@ test-core:
 	pnpm test
 
 # Test everything
-test: test-core test-openai test-anthropic
+test: test-core test-openai test-anthropic test-nox
+
+# Run nox tests for AI SDK
+test-nox:
+	nox
 
 # Test the core and the latest versions of wrappers.
 test-latest: test-core test-anthropic-latest test-openai-latest
