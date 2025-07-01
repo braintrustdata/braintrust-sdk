@@ -11,60 +11,32 @@ export interface MiddlewareConfig {
   name?: string;
 }
 
-function detectProviderFromParams(params: any): string {
-  // Try to detect provider from model parameters
-  if (params.providerOptions?.openai) return "openai";
-  if (params.providerOptions?.anthropic) return "anthropic";
-
-  // Check if there's any other provider in providerOptions
-  if (params.providerOptions) {
-    const providerKeys = Object.keys(params.providerOptions);
-    if (providerKeys.length > 0) {
-      return providerKeys[0];
-    }
-  }
-
-  // Return unknown - will detect from result instead
-  return "unknown";
-}
-
-function detectProviderFromResult(result: any): string | undefined {
-  if (!result || !result.providerMetadata) {
+function detectProviderFromParams(params: any): string | undefined {
+  if (!params?.providerOptions) {
     return undefined;
   }
 
-  const keys = Object.keys(result.providerMetadata);
-  if (keys.length > 0) {
-    return keys[0];
+  const providerKeys = Object.keys(params.providerOptions); // e.g. "openai", "anthropic"
+  return providerKeys.length > 0 ? providerKeys[0] : undefined;
+}
+
+function detectProviderFromResult(result: any): string | undefined {
+  if (!result?.providerMetadata) {
+    return undefined;
   }
 
-  // Fallback to detecting from response headers
-  const headers = result.response?.headers || {};
-  for (const header of Object.keys(headers)) {
-    if (header.startsWith("anthropic-")) {
-      return "anthropic";
-    }
-    if (header.startsWith("openai-")) {
-      return "openai";
-    }
-  }
-
-  return undefined;
+  const keys = Object.keys(result.providerMetadata); // e.g. "openai", "anthropic"
+  return keys.length > 0 ? keys[0] : undefined;
 }
 
 function extractModelFromResult(result: any): string | undefined {
-  // Try to extract model from response metadata (for generateText)
-  if (result.response?.modelId) {
+  // For generateText, model is in response.modelId
+  if (result?.response?.modelId) {
     return result.response.modelId;
   }
 
-  // Try to extract from response body for OpenAI responses
-  if (result.response?.body?.model) {
-    return result.response.body.model;
-  }
-
-  // Try to extract from request body (for streaming responses)
-  if (result.request?.body?.model) {
+  // For streaming, model is in request.body.model
+  if (result?.request?.body?.model) {
     return result.request.body.model;
   }
 
