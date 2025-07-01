@@ -942,6 +942,12 @@ export const createPromptSchema = promptSchema
   .extend({
     name: makeNonempty(promptSchema.shape.name),
     slug: makeNonempty(promptSchema.shape.slug),
+    environment: z
+      .string()
+      .nullish()
+      .describe(
+        "Environment slug to immediately assign this prompt version to",
+      ),
   })
   .openapi("CreatePrompt");
 
@@ -957,6 +963,12 @@ export const createFunctionSchema = functionSchema
   .extend({
     name: makeNonempty(promptSchema.shape.name),
     slug: makeNonempty(promptSchema.shape.slug),
+    environment: z
+      .string()
+      .nullish()
+      .describe(
+        "Environment slug to immediately assign this function version to",
+      ),
   })
   .openapi("CreateFunction");
 
@@ -967,6 +979,10 @@ export const patchPromptSchema = z
     description: promptSchema.shape.description.nullish(),
     prompt_data: promptSchema.shape.prompt_data.nullish(),
     tags: promptSchema.shape.tags.nullish(),
+    environments: z
+      .record(z.union([z.string(), z.null()]))
+      .nullish()
+      .describe("Map of environment slugs to version IDs (or null to remove)"),
   })
   .openapi("PatchPrompt");
 
@@ -979,6 +995,10 @@ const patchFunctionSchema = z
       .nullish()
       .openapi("FunctionDataNullish"),
     tags: functionSchema.shape.tags.nullish(),
+    environments: z
+      .record(z.union([z.string(), z.null()]))
+      .nullish()
+      .describe("Map of environment slugs to version IDs (or null to remove)"),
   })
   .openapi("PatchFunction");
 
