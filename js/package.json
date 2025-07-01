@@ -56,7 +56,7 @@
     "test:openai": "vitest run src/wrappers/oai.test.ts",
     "test:ai-sdk": "vitest run src/wrappers/ai-sdk-v2.test.ts",
     "test:ai-sdk-v1": "vitest run src/wrappers/ai-sdk-v1.test.ts",
-    "test:ai-sdk-v2": "vitest run src/wrappers/ai-sdk-v2.test.ts"
+    "test:ai-sdk-v2": "vitest run src/wrappers/ai-sdk-v2.test.ts src/wrappers/ai-sdk-v1.test.ts"
   },
   "author": "",
   "license": "MIT",

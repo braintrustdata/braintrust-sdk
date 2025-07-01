@@ -7,32 +7,34 @@ help:
 	@echo "  make build              - Build the SDK"
 	@echo "  make clean              - Clean build artifacts"
 	@echo "  make install-optional-deps - Install optional dependencies"
-	@echo "  make test               - Run all tests (core + wrappers + nox)"
+	@echo "  make test               - Run all tests (core + wrappers + ai-sdk)"
 	@echo "  make test-core          - Run core tests only"
-	@echo "  make test-nox           - Run nox tests for AI SDK"
+	@echo "  make test-ai-sdk        - Run AI SDK tests (v1 + v2)"
 	@echo "  make test-openai        - Run OpenAI wrapper tests"
 	@echo "  make test-anthropic     - Run Anthropic wrapper tests"
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
 
-.PHONY: help bench build clean test test-core test-openai test-anthropic test-latest install-optional-deps
+.PHONY: help bench build clean test test-core test-openai test-anthropic test-ai-sdk test-latest install-optional-deps
 
 # -------------------------------------------------------------------------------------------------	#
-# ai.sdk testing
+# AI SDK testing
 # -------------------------------------------------------------------------------------------------
-.PHONY: test-ai-sdk test-ai-sdk-latest test-ai-sdk-%
+.PHONY: test-ai-sdk test-ai-sdk-v1 test-ai-sdk-v2
 
-test-ai-sdk: test-ai-sdk-latest test-ai-sdk-5.0.0-beta
+test-ai-sdk: test-ai-sdk-v1 test-ai-sdk-v2
 
-test-ai-sdk-latest:
+test-ai-sdk-v1:
 	pnpm prune
-	$(call pnpm_install_no_save,ai@beta)
-	pnpm test:ai-sdk
+	$(call pnpm_install_no_save,ai@^3.0.0)
+	pnpm test:ai-sdk-v1
 
-test-ai-sdk-%:
+test-ai-sdk-v2:
 	pnpm prune
-	$(call pnpm_install_no_save,ai@$*)
-	pnpm test:ai-sdk
+	npm_config_save=false npm_config_lockfile=false pnpm add ai@beta @ai-sdk/openai@beta @ai-sdk/anthropic@beta @ai-sdk/provider@beta
+	pnpm test:ai-sdk-v2
+# this should still work
+	pnpm test:ai-sdk-v1
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -72,7 +74,7 @@ test-openai-%:
 # common things
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-pnpm test test-latest test-nox prune installing-optional-deps docs build verify-ci bench
+.PHONY: test-pnpm test test-latest prune installing-optional-deps docs build verify-ci bench
 
 install-optional-deps:
 	npm_config_save=false npm_config_lockfile=false pnpm add "openai" "@anthropic-ai/sdk"
@@ -84,11 +86,7 @@ test-core:
 	pnpm test
 
 # Test everything
-test: test-core test-openai test-anthropic test-nox
-
-# Run nox tests for AI SDK
-test-nox:
-	nox
+test: test-core test-openai test-anthropic test-ai-sdk
 
 # Test the core and the latest versions of wrappers.
 test-latest: test-core test-anthropic-latest test-openai-latest

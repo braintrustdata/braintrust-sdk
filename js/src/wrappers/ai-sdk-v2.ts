@@ -3,14 +3,30 @@ import { startSpan } from "../logger";
 
 // Minimal interface definitions that match AI SDK v2 without importing it
 interface LanguageModelV2Middleware {
-  wrapGenerate?: <T>(params: {
-    doGenerate: () => Promise<T>;
+  wrapGenerate?: (params: {
+    doGenerate: () => Promise<{
+      content: any;
+      usage?: any;
+      finishReason?: string;
+    }>;
     params: any;
-  }) => Promise<T>;
-  wrapStream?: <T>(params: {
-    doStream: () => Promise<T>;
+  }) => Promise<{
+    content: any;
+    usage?: any;
+    finishReason?: string;
+  }>;
+  wrapStream?: (params: {
+    doStream: () => Promise<{
+      stream: any;
+      response?: any;
+      [key: string]: any;
+    }>;
     params: any;
-  }) => Promise<T>;
+  }) => Promise<{
+    stream: any;
+    response?: any;
+    [key: string]: any;
+  }>;
 }
 
 export interface MiddlewareConfig {
