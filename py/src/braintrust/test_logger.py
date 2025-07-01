@@ -593,7 +593,7 @@ async def test_traced_async_function(with_memory_logger):
     )
 
     @logger.traced()
-    async def async_multiply(x: int, y: int) -> int:
+    async def async_multiply(x: int, y: int) -> int:  # pylint: disable=function-redefined
         """An async function that multiplies two numbers."""
         await asyncio.sleep(0.001)  # Small delay to simulate async work
         result = x * y
@@ -628,7 +628,7 @@ async def test_traced_async_function(with_memory_logger):
     )
 
     @logger.traced(name="async_multiply_with_name")
-    async def async_multiply(x: int, y: int) -> int:
+    async def async_multiply(x: int, y: int) -> int:  # pylint: disable=function-redefined
         """An async function that multiplies two numbers."""
         await asyncio.sleep(0.001)  # Small delay to simulate async work
         result = x * y
