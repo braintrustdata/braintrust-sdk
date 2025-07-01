@@ -23,6 +23,19 @@ const testAnthropicModelName = "claude-3-haiku-20240307";
 
 _exportsForTestingOnly.setInitialTestState();
 
+function assertTimingValid(
+  startTime: number,
+  endTime: number,
+  metrics: { start: number; end: number },
+) {
+  const spanStartMs = metrics.start * 1000;
+  const spanEndMs = metrics.end * 1000;
+
+  expect(startTime).toBeLessThanOrEqual(spanStartMs);
+  expect(spanStartMs).toBeLessThanOrEqual(spanEndMs);
+  expect(spanEndMs).toBeLessThanOrEqual(endTime);
+}
+
 test("ai sdk middleware is installed", () => {
   expect(wrapLanguageModel).toBeDefined();
   expect(openai).toBeDefined();
@@ -57,12 +70,9 @@ describe("ai sdk middleware tests", () => {
   test("generateText wrapLanguageModel", async () => {
     for (const [_, model] of models.entries()) {
       const isWrapped = model === wrappedModel;
+      if (!isWrapped) continue;
 
-      console.log(isWrapped ? "wrapped" : "not wrapped");
-
-      if (isWrapped) {
-        expect(await testLogger.drain()).toHaveLength(0);
-      }
+      expect(await testLogger.drain()).toHaveLength(0);
 
       const startTime = Date.now();
       const { text } = await generateText({
@@ -71,65 +81,51 @@ describe("ai sdk middleware tests", () => {
         system: "Just return the number",
       });
       const endTime = Date.now();
-      console.log(text);
 
-      if (isWrapped) {
-        const spans = await testLogger.drain();
-        expect(spans).toHaveLength(1);
+      const spans = await testLogger.drain();
+      expect(spans).toHaveLength(1);
 
-        const span = spans[0] as any;
-        expect(span).toMatchObject({
-          span_attributes: {
-            name: "ai-sdk.generateText",
-            type: "llm",
+      const span = spans[0] as any;
+      expect(span).toMatchObject({
+        span_attributes: {
+          name: "ai-sdk.generateText",
+          type: "llm",
+        },
+        input: [
+          { role: "system", content: "Just return the number" },
+          {
+            role: "user",
+            content: [{ type: "text", text: "What is 2+2?" }],
           },
-          input: [
-            { role: "system", content: "Just return the number" },
-            {
-              role: "user",
-              content: [{ type: "text", text: "What is 2+2?" }],
-            },
-          ],
-          output: [{ type: "text", text: "4" }],
-          metadata: {
-            provider: "openai",
-            finishReason: "stop",
-            model: "gpt-4.1-2025-04-14",
-          },
-          metrics: {
-            prompt_tokens: expect.any(Number),
-            completion_tokens: expect.any(Number),
-            tokens: expect.any(Number),
-            completion_reasoning_tokens: expect.any(Number),
-            prompt_cached_tokens: expect.any(Number),
-          },
-        });
+        ],
+        output: [{ type: "text", text: "4" }],
+        metadata: {
+          provider: "openai",
+          finishReason: "stop",
+          model: "gpt-4.1-2025-04-14",
+        },
+        metrics: {
+          prompt_tokens: expect.any(Number),
+          completion_tokens: expect.any(Number),
+          tokens: expect.any(Number),
+          completion_reasoning_tokens: expect.any(Number),
+          prompt_cached_tokens: expect.any(Number),
+        },
+      });
 
-        // Verify timing and actual output content
-        expect(text).toContain("4");
-        expect(span.output[0].text).toBe("4");
-
-        // Verify span timing is within the call duration (convert to milliseconds)
-        const spanStartMs = span.metrics.start * 1000;
-        const spanEndMs = span.metrics.end * 1000;
-        expect(startTime).toBeLessThanOrEqual(spanStartMs);
-        expect(spanStartMs).toBeLessThanOrEqual(endTime);
-        expect(startTime).toBeLessThanOrEqual(spanEndMs);
-        expect(spanEndMs).toBeLessThanOrEqual(endTime);
-        expect(spanStartMs).toBeLessThanOrEqual(spanEndMs);
-      }
+      // Verify timing and actual output content
+      expect(text).toContain("4");
+      expect(span.output[0].text).toBe("4");
+      assertTimingValid(startTime, endTime, span.metrics);
     }
   });
 
   test("streamText wrapLanguageModel", async () => {
     for (const [_, model] of models.entries()) {
       const isWrapped = model === wrappedModel;
+      if (!isWrapped) continue;
 
-      console.log(isWrapped ? "wrapped streaming" : "not wrapped streaming");
-
-      if (isWrapped) {
-        expect(await testLogger.drain()).toHaveLength(0);
-      }
+      expect(await testLogger.drain()).toHaveLength(0);
 
       const startTime = Date.now();
       const { textStream } = await streamText({
@@ -145,57 +141,46 @@ describe("ai sdk middleware tests", () => {
       }
       const endTime = Date.now();
 
-      console.log(fullText);
       expect(fullText).toBeDefined();
       expect(fullText.length).toBeGreaterThan(50); // Should be at least 4 lines of poetry
 
-      if (isWrapped) {
-        const spans = await testLogger.drain();
-        expect(spans).toHaveLength(1);
+      const spans = await testLogger.drain();
+      expect(spans).toHaveLength(1);
 
-        const span = spans[0] as any;
-        expect(span).toMatchObject({
-          span_attributes: {
-            name: "ai-sdk.streamText",
-            type: "llm",
+      const span = spans[0] as any;
+      expect(span).toMatchObject({
+        span_attributes: {
+          name: "ai-sdk.streamText",
+          type: "llm",
+        },
+        input: [
+          {
+            role: "system",
+            content: "Respond with just the poem lines, no additional text",
           },
-          input: [
-            {
-              role: "system",
-              content: "Respond with just the poem lines, no additional text",
-            },
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: "Please recite the last 4 lines of Shakespeare's Sonnet 18",
-                },
-              ],
-            },
-          ],
-          output: [{ type: "text", text: expect.stringContaining("So long") }],
-          metadata: {
-            provider: "openai",
-            finishReason: expect.any(String),
-            model: "gpt-4.1",
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "Please recite the last 4 lines of Shakespeare's Sonnet 18",
+              },
+            ],
           },
-          metrics: expect.any(Object),
-        });
+        ],
+        output: [{ type: "text", text: expect.stringContaining("So long") }],
+        metadata: {
+          provider: "openai",
+          finishReason: expect.any(String),
+          model: "gpt-4.1",
+        },
+        metrics: expect.any(Object),
+      });
 
-        // Verify actual streaming content matches what we collected
-        expect(span.output[0].text).toBe(fullText);
-        expect(fullText).toContain("So long");
-
-        // Verify span timing is within the call duration (convert to milliseconds)
-        const spanStartMs = span.metrics.start * 1000;
-        const spanEndMs = span.metrics.end * 1000;
-        expect(startTime).toBeLessThanOrEqual(spanStartMs);
-        expect(spanStartMs).toBeLessThanOrEqual(endTime);
-        expect(startTime).toBeLessThanOrEqual(spanEndMs);
-        expect(spanEndMs).toBeLessThanOrEqual(endTime);
-        expect(spanStartMs).toBeLessThanOrEqual(spanEndMs);
-      }
+      // Verify actual streaming content matches what we collected
+      expect(span.output[0].text).toBe(fullText);
+      expect(fullText).toContain("So long");
+      assertTimingValid(startTime, endTime, span.metrics);
     }
   });
 
@@ -252,12 +237,9 @@ describe("ai sdk middleware tests", () => {
 
     for (const [_, model] of models.entries()) {
       const isWrapped = model === wrappedAnthropicModel;
+      if (!isWrapped) continue;
 
-      console.log(isWrapped ? "wrapped anthropic" : "not wrapped anthropic");
-
-      if (isWrapped) {
-        expect(await testLogger.drain()).toHaveLength(0);
-      }
+      expect(await testLogger.drain()).toHaveLength(0);
 
       const startTime = Date.now();
       const { text } = await generateText({
@@ -266,53 +248,42 @@ describe("ai sdk middleware tests", () => {
         system: "Just return the number",
       });
       const endTime = Date.now();
-      console.log(text);
 
-      if (isWrapped) {
-        const spans = await testLogger.drain();
-        expect(spans).toHaveLength(1);
+      const spans = await testLogger.drain();
+      expect(spans).toHaveLength(1);
 
-        const span = spans[0] as any;
-        expect(span).toMatchObject({
-          span_attributes: {
-            name: "ai-sdk.generateText",
-            type: "llm",
+      const span = spans[0] as any;
+      expect(span).toMatchObject({
+        span_attributes: {
+          name: "ai-sdk.generateText",
+          type: "llm",
+        },
+        input: [
+          { role: "system", content: "Just return the number" },
+          {
+            role: "user",
+            content: [{ type: "text", text: "What is 5+5?" }],
           },
-          input: [
-            { role: "system", content: "Just return the number" },
-            {
-              role: "user",
-              content: [{ type: "text", text: "What is 5+5?" }],
-            },
-          ],
-          output: [{ type: "text", text: expect.any(String) }],
-          metadata: {
-            provider: "anthropic",
-            finishReason: "stop",
-            model: "claude-3-haiku-20240307",
-          },
-          metrics: {
-            prompt_tokens: expect.any(Number),
-            completion_tokens: expect.any(Number),
-            tokens: expect.any(Number),
-            prompt_cached_tokens: expect.any(Number),
-            // Note: Anthropic doesn't have completion_reasoning_tokens unlike OpenAI
-          },
-        });
+        ],
+        output: [{ type: "text", text: expect.any(String) }],
+        metadata: {
+          provider: "anthropic",
+          finishReason: "stop",
+          model: "claude-3-haiku-20240307",
+        },
+        metrics: {
+          prompt_tokens: expect.any(Number),
+          completion_tokens: expect.any(Number),
+          tokens: expect.any(Number),
+          prompt_cached_tokens: expect.any(Number),
+          // Note: Anthropic doesn't have completion_reasoning_tokens unlike OpenAI
+        },
+      });
 
-        // Verify actual output content contains expected answer
-        expect(text).toMatch(/10/);
-        expect(span.output[0].text).toMatch(/10/);
-
-        // Verify span timing is within the call duration (convert to milliseconds)
-        const spanStartMs = span.metrics.start * 1000;
-        const spanEndMs = span.metrics.end * 1000;
-        expect(startTime).toBeLessThanOrEqual(spanStartMs);
-        expect(spanStartMs).toBeLessThanOrEqual(endTime);
-        expect(startTime).toBeLessThanOrEqual(spanEndMs);
-        expect(spanEndMs).toBeLessThanOrEqual(endTime);
-        expect(spanStartMs).toBeLessThanOrEqual(spanEndMs);
-      }
+      // Verify actual output content contains expected answer
+      expect(text).toMatch(/10/);
+      expect(span.output[0].text).toMatch(/10/);
+      assertTimingValid(startTime, endTime, span.metrics);
     }
   });
 
