@@ -29,8 +29,13 @@ interface LanguageModelV2Middleware {
   }>;
 }
 
+/**
+ * Configuration options for the AI SDK middleware
+ */
 export interface MiddlewareConfig {
+  /** Enable debug logging */
   debug?: boolean;
+  /** Name identifier for the middleware instance */
   name?: string;
 }
 
@@ -112,6 +117,25 @@ function normalizeUsageMetrics(usage: any): Record<string, number> {
   return metrics;
 }
 
+/**
+ * Creates a Braintrust middleware for AI SDK v2 that automatically traces
+ * generateText and streamText calls with comprehensive metadata and metrics.
+ *
+ * @param config - Configuration options for the middleware
+ * @returns A middleware object compatible with AI SDK v2's wrapLanguageModel
+ *
+ * @example
+ * ```typescript
+ * import { wrapLanguageModel } from "ai";
+ * import { openai } from "@ai-sdk/openai";
+ * import { AISDKMiddleware } from "braintrust";
+ *
+ * const model = wrapLanguageModel({
+ *   model: openai("gpt-4"),
+ *   middleware: AISDKMiddleware({ debug: true, name: "MyMiddleware" })
+ * });
+ * ```
+ */
 export function AISDKMiddleware(
   config: MiddlewareConfig = {},
 ): LanguageModelV2Middleware {
@@ -188,64 +212,83 @@ export function AISDKMiddleware(
       try {
         const { stream, ...rest } = await doStream();
 
-        let generatedText = "";
+        const textChunks: string[] = [];
         let finalUsage: any = {};
         let finalFinishReason: string | undefined = undefined;
         let providerMetadata: any = {};
 
         const transformStream = new TransformStream({
           transform(chunk: any, controller: any) {
-            // Collect text deltas
-            if (chunk.type === "text-delta") {
-              generatedText += chunk.delta;
-            }
+            try {
+              // Collect text deltas
+              if (chunk.type === "text-delta") {
+                textChunks.push(chunk.delta);
+              }
 
-            // Capture final metadata
-            if (chunk.type === "finish") {
-              finalFinishReason = chunk.finishReason;
-              finalUsage = chunk.usage || {};
-              providerMetadata = chunk.providerMetadata || {};
-            }
+              // Capture final metadata
+              if (chunk.type === "finish") {
+                finalFinishReason = chunk.finishReason;
+                finalUsage = chunk.usage || {};
+                providerMetadata = chunk.providerMetadata || {};
+              }
 
-            controller.enqueue(chunk);
+              controller.enqueue(chunk);
+            } catch (error) {
+              // Log stream processing error
+              span.log({
+                error: error instanceof Error ? error.message : String(error),
+              });
+              span.end();
+              controller.error(error);
+            }
           },
 
           flush() {
-            // Log the final aggregated result when stream completes
-            const output = generatedText
-              ? [{ type: "text", text: generatedText }]
-              : [];
+            try {
+              // Log the final aggregated result when stream completes
+              const generatedText = textChunks.join("");
+              const output = generatedText
+                ? [{ type: "text", text: generatedText }]
+                : [];
 
-            // Create a result object for provider detection
-            const resultForDetection = {
-              providerMetadata,
-              response: rest.response,
-              ...rest,
-            };
+              // Create a result object for provider detection
+              const resultForDetection = {
+                providerMetadata,
+                response: rest.response,
+                ...rest,
+              };
 
-            const metadata: Record<string, any> = {};
+              const metadata: Record<string, any> = {};
 
-            const provider = detectProviderFromResult(resultForDetection);
-            if (provider !== undefined) {
-              metadata.provider = provider;
+              const provider = detectProviderFromResult(resultForDetection);
+              if (provider !== undefined) {
+                metadata.provider = provider;
+              }
+
+              if (finalFinishReason !== undefined) {
+                metadata.finish_reason = finalFinishReason;
+              }
+
+              const model = extractModelFromResult(resultForDetection);
+              if (model !== undefined) {
+                metadata.model = model;
+              }
+
+              span.log({
+                output,
+                metadata,
+                metrics: normalizeUsageMetrics(finalUsage),
+              });
+
+              span.end();
+            } catch (error) {
+              // Log flush error
+              span.log({
+                error: error instanceof Error ? error.message : String(error),
+              });
+              span.end();
+              throw error;
             }
-
-            if (finalFinishReason !== undefined) {
-              metadata.finish_reason = finalFinishReason;
-            }
-
-            const model = extractModelFromResult(resultForDetection);
-            if (model !== undefined) {
-              metadata.model = model;
-            }
-
-            span.log({
-              output,
-              metadata,
-              metrics: normalizeUsageMetrics(finalUsage),
-            });
-
-            span.end();
           },
         });
 

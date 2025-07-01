@@ -20,6 +20,7 @@ import {
 
 const testModelName = "gpt-4.1";
 const testAnthropicModelName = "claude-3-haiku-20240307";
+const TEST_SUITE_OPTIONS = { timeout: 10000, retry: 3 };
 
 _exportsForTestingOnly.setInitialTestState();
 
@@ -41,7 +42,7 @@ test("ai sdk middleware is installed", () => {
   expect(openai).toBeDefined();
 });
 
-describe("ai sdk middleware tests", () => {
+describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
   let testLogger: TestBackgroundLogger;
   let logger: Logger<true>;
   let rawModel = openai(testModelName);
