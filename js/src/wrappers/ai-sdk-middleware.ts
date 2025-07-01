@@ -28,37 +28,31 @@ function detectProviderFromParams(params: any): string {
   return "unknown";
 }
 
-function detectProviderFromResult(result: any): string {
-  // Detect provider from result metadata
-  if (result.providerMetadata?.anthropic) return "anthropic";
-  if (result.providerMetadata?.openai) return "openai";
+function detectProviderFromResult(result: any): string | undefined {
+  if (!result || !result.providerMetadata) {
+    return undefined;
+  }
 
-  // Check if there's any other provider in providerMetadata
-  if (result.providerMetadata) {
-    const providerKeys = Object.keys(result.providerMetadata);
-    if (providerKeys.length > 0) {
-      return providerKeys[0];
-    }
+  const keys = Object.keys(result.providerMetadata);
+  if (keys.length > 0) {
+    return keys[0];
   }
 
   // Fallback to detecting from response headers
-  if (result.response?.headers) {
-    const headers = result.response.headers;
-    if (
-      headers["anthropic-organization-id"] ||
-      headers["anthropic-ratelimit-requests-limit"]
-    ) {
+  const headers = result.response?.headers || {};
+  for (const header of Object.keys(headers)) {
+    if (header.startsWith("anthropic-")) {
       return "anthropic";
     }
-    if (headers["openai-organization"] || headers["openai-processing-ms"]) {
+    if (header.startsWith("openai-")) {
       return "openai";
     }
   }
 
-  return "unknown";
+  return undefined;
 }
 
-function extractModelFromResult(result: any): string {
+function extractModelFromResult(result: any): string | undefined {
   // Try to extract model from response metadata (for generateText)
   if (result.response?.modelId) {
     return result.response.modelId;
@@ -74,7 +68,7 @@ function extractModelFromResult(result: any): string {
     return result.request.body.model;
   }
 
-  return "unknown";
+  return undefined;
 }
 
 function normalizeUsageMetrics(usage: any): Record<string, number> {
@@ -134,13 +128,25 @@ export function Middleware(
       try {
         const result = await doGenerate();
 
+        const metadata: Record<string, any> = {};
+
+        const provider = detectProviderFromResult(result);
+        if (provider !== undefined) {
+          metadata.provider = provider;
+        }
+
+        if (result.finishReason !== undefined) {
+          metadata.finishReason = result.finishReason;
+        }
+
+        const model = extractModelFromResult(result);
+        if (model !== undefined) {
+          metadata.model = model;
+        }
+
         span.log({
           output: result.content,
-          metadata: {
-            provider: detectProviderFromResult(result),
-            finishReason: result.finishReason,
-            model: extractModelFromResult(result),
-          },
+          metadata,
           metrics: normalizeUsageMetrics(result.usage),
         });
 
@@ -178,7 +184,7 @@ export function Middleware(
 
         let generatedText = "";
         let finalUsage: any = {};
-        let finalFinishReason = "stop";
+        let finalFinishReason: string | undefined = undefined;
         let providerMetadata: any = {};
 
         const transformStream = new TransformStream({
@@ -190,7 +196,7 @@ export function Middleware(
 
             // Capture final metadata
             if (chunk.type === "finish") {
-              finalFinishReason = chunk.finishReason || "stop";
+              finalFinishReason = chunk.finishReason;
               finalUsage = chunk.usage || {};
               providerMetadata = chunk.providerMetadata || {};
             }
@@ -211,13 +217,25 @@ export function Middleware(
               ...rest,
             };
 
+            const metadata: Record<string, any> = {};
+
+            const provider = detectProviderFromResult(resultForDetection);
+            if (provider !== undefined) {
+              metadata.provider = provider;
+            }
+
+            if (finalFinishReason !== undefined) {
+              metadata.finishReason = finalFinishReason;
+            }
+
+            const model = extractModelFromResult(resultForDetection);
+            if (model !== undefined) {
+              metadata.model = model;
+            }
+
             span.log({
               output,
-              metadata: {
-                provider: detectProviderFromResult(resultForDetection),
-                finishReason: finalFinishReason,
-                model: extractModelFromResult(resultForDetection),
-              },
+              metadata,
               metrics: normalizeUsageMetrics(finalUsage),
             });
 
