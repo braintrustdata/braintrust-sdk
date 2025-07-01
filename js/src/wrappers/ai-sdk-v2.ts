@@ -1,9 +1,17 @@
-import {
-  LanguageModelV2CallOptions,
-  LanguageModelV2Middleware,
-} from "@ai-sdk/provider";
 import { SpanTypeAttribute } from "@braintrust/core";
 import { startSpan } from "../logger";
+
+// Minimal interface definitions that match AI SDK v2 without importing it
+interface LanguageModelV2Middleware {
+  wrapGenerate?: <T>(params: {
+    doGenerate: () => Promise<T>;
+    params: any;
+  }) => Promise<T>;
+  wrapStream?: <T>(params: {
+    doStream: () => Promise<T>;
+    params: any;
+  }) => Promise<T>;
+}
 
 export interface MiddlewareConfig {
   debug?: boolean;
@@ -88,7 +96,7 @@ function normalizeUsageMetrics(usage: any): Record<string, number> {
   return metrics;
 }
 
-export function Middleware(
+export function AISDKMiddleware(
   config: MiddlewareConfig = {},
 ): LanguageModelV2Middleware {
   const { debug = false, name = "BraintrustMiddleware" } = config;

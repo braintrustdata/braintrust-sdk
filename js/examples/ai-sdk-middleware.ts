@@ -3,8 +3,7 @@
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { generateText, streamText, wrapLanguageModel } from "ai";
-import { initLogger } from "../src/index";
-import { Middleware } from "../src/wrappers/ai-sdk-middleware";
+import { initLogger, AISDKMiddleware } from "../src/index";
 
 // Initialize Braintrust logging
 initLogger({
@@ -15,12 +14,12 @@ initLogger({
 // The middleware automatically detects providers (OpenAI, Anthropic, or any custom provider)
 const wrappedOpenAI = wrapLanguageModel({
   model: openai("gpt-3.5-turbo"),
-  middleware: Middleware({ debug: false, name: "OpenAIMiddleware" }),
+  middleware: AISDKMiddleware({ debug: false, name: "OpenAIMiddleware" }),
 });
 
 const wrappedAnthropic = wrapLanguageModel({
   model: anthropic("claude-3-haiku-20240307"),
-  middleware: Middleware({ debug: false, name: "AnthropicMiddleware" }),
+  middleware: AISDKMiddleware({ debug: false, name: "AnthropicMiddleware" }),
 });
 
 async function exampleGenerateText() {
@@ -86,7 +85,7 @@ async function exampleErrorHandling() {
 
   const invalidModel = wrapLanguageModel({
     model: openai("invalid-model-name"),
-    middleware: Middleware({ debug: true, name: "ErrorMiddleware" }),
+    middleware: AISDKMiddleware({ debug: true, name: "ErrorMiddleware" }),
   });
 
   try {

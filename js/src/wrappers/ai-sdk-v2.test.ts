@@ -9,7 +9,7 @@ import {
 import { generateText, streamText, wrapLanguageModel } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
-import { Middleware } from "./ai-sdk-middleware";
+import { AISDKMiddleware } from "../exports-node";
 import {
   _exportsForTestingOnly,
   Logger,
@@ -47,7 +47,7 @@ describe("ai sdk middleware tests", () => {
   let rawModel = openai(testModelName);
   let wrappedModel = wrapLanguageModel({
     model: rawModel,
-    middleware: Middleware({ debug: true, name: "TestMiddleware" }),
+    middleware: AISDKMiddleware({ debug: true, name: "TestMiddleware" }),
   });
   let models = [rawModel, wrappedModel];
 
@@ -190,7 +190,7 @@ describe("ai sdk middleware tests", () => {
     // Create a model with an invalid model name to force an error
     const invalidModel = wrapLanguageModel({
       model: openai("invalid-model-name-that-does-not-exist"),
-      middleware: Middleware({ debug: true, name: "ErrorTestMiddleware" }),
+      middleware: AISDKMiddleware({ debug: true, name: "ErrorTestMiddleware" }),
     });
 
     try {
@@ -230,7 +230,10 @@ describe("ai sdk middleware tests", () => {
     const anthropicModel = anthropic(testAnthropicModelName);
     const wrappedAnthropicModel = wrapLanguageModel({
       model: anthropicModel,
-      middleware: Middleware({ debug: true, name: "AnthropicTestMiddleware" }),
+      middleware: AISDKMiddleware({
+        debug: true,
+        name: "AnthropicTestMiddleware",
+      }),
     });
 
     const models = [anthropicModel, wrappedAnthropicModel];
@@ -342,7 +345,7 @@ describe("ai sdk middleware tests", () => {
     const anthropicModel = anthropic(testAnthropicModelName);
     const wrappedAnthropicModel = wrapLanguageModel({
       model: anthropicModel,
-      middleware: Middleware({
+      middleware: AISDKMiddleware({
         debug: true,
         name: "AnthropicParamsTestMiddleware",
       }),
@@ -404,5 +407,16 @@ describe("ai sdk middleware tests", () => {
     // This test demonstrates that the provider detection will work
     // with any provider that follows the AI SDK patterns
     expect(true).toBe(true); // The enhanced detection is tested in integration
+  });
+
+  test("should import AISDKMiddleware from braintrust package", async () => {
+    expect(typeof AISDKMiddleware).toBe("function");
+
+    // Should be able to call it and get middleware object back
+    const middleware = AISDKMiddleware({});
+    expect(middleware).toHaveProperty("wrapGenerate");
+    expect(middleware).toHaveProperty("wrapStream");
+    expect(typeof middleware.wrapGenerate).toBe("function");
+    expect(typeof middleware.wrapStream).toBe("function");
   });
 });
