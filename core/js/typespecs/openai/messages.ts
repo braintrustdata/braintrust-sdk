@@ -55,10 +55,38 @@ export const chatCompletionContentPartImageSchema = z
   })
   .openapi("ChatCompletionContentPartImage");
 
+export const chatCompletionContentParamFileFileSchema = z
+  .object({
+    file_data: z
+      .string()
+      .openapi(
+        " The base64 encoded file data, used when passing the file to the model as a string.",
+      ),
+    filename: z
+      .string()
+      .optional()
+      .openapi(
+        "The name of the file, used when passing the file to the model as a string.",
+      ),
+    file_id: z
+      .string()
+      .optional()
+      .openapi({ title: "The ID of an uploaded file to use as input." }),
+  })
+  .openapi("ChatCompletionContentPartFile");
+
+export const chatCompletionContentParamFileSchema = z
+  .object({
+    type: z.literal("file"),
+    file: chatCompletionContentParamFileFileSchema,
+  })
+  .openapi("ChatCompletionContentPartFile");
+
 export const chatCompletionContentPartSchema = z
   .union([
     chatCompletionContentPartTextSchema.openapi({ title: "text" }),
     chatCompletionContentPartImageSchema.openapi({ title: "image_url" }),
+    chatCompletionContentParamFileSchema.openapi({ title: "file" }),
   ])
   .openapi("ChatCompletionContentPart");
 
