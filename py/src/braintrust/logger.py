@@ -563,6 +563,53 @@ class HTTPConnection:
         response_raise_for_status(resp)
         return resp.json()
 
+    async def aget_json(
+        self, object_type: str, args: Optional[Mapping[str, Any]] = None, retries: int = 0
+    ) -> Mapping[str, Any]:
+        """
+        Async version of get_json. Makes an HTTP GET request and returns JSON response.
+        """
+        loop = asyncio.get_event_loop()
+        tries = retries + 1
+
+        for i in range(tries):
+
+            def make_request():
+                # Build URL with parameters
+                url = f"{self.base_url}/{object_type.lstrip('/')}"
+                if args:
+                    url += "?" + urlencode(args)
+
+                # Create request with authentication
+                request = Request(url)
+                if self.token:
+                    request.add_header("Authorization", f"Bearer {self.token}")
+                request.add_header("Content-Type", "application/json")
+
+                # Make HTTP request
+                try:
+                    response_obj = urlopen(request)
+                    response_data = response_obj.read()
+                    return json.loads(response_data.decode("utf-8"))
+                except HTTPError as e:
+                    if e.code >= 400:
+                        error_body = e.read().decode("utf-8") if hasattr(e, "read") else str(e)
+                        raise Exception(f"HTTP {e.code}: {error_body}")
+                    raise
+                except URLError as e:
+                    raise Exception(f"URL Error: {e}")
+
+            try:
+                return await loop.run_in_executor(HTTP_REQUEST_THREAD_POOL, make_request)
+            except Exception as e:
+                if i < tries - 1:
+                    _logger.warning(f"Retrying async API request {object_type} {args}: {e}")
+                    continue
+                raise
+
+        # Needed for type checking.
+        raise Exception("unreachable")
+
 
 # Sometimes we'd like to launch network requests concurrently. We provide a
 # thread pool to accomplish this. Use a multiple of number of CPU cores to limit
@@ -1439,95 +1486,73 @@ async def aload_prompt(
     if not slug:
         raise ValueError("Must specify slug")
 
-    async def compute_metadata():
-        loop = asyncio.get_event_loop()
+    loop = asyncio.get_event_loop()
 
+    try:
+        # Run login in thread pool since it's synchronous
+        await loop.run_in_executor(HTTP_REQUEST_THREAD_POOL, login, app_url, api_key, org_name)
+
+        # Make async HTTP request
+        args = _populate_args(
+            {
+                "project_name": project,
+                "project_id": project_id,
+                "slug": slug,
+                "version": version,
+            },
+        )
+
+        response = await _state.api_conn().aget_json("v1/prompt", args)
+
+    except Exception as server_error:
+        eprint(f"Failed to load prompt, attempting to fall back to cache: {server_error}")
         try:
-            # Run login in thread pool since it's synchronous
-            await loop.run_in_executor(None, login, app_url, api_key, org_name)
-
-            # Make async HTTP request with retry logic
-            args = _populate_args(
-                {
-                    "project_name": project,
-                    "project_id": project_id,
-                    "slug": slug,
-                    "version": version,
-                },
-            )
-
-            async def make_request():
-                # Build URL with parameters
-                api_conn = _state.api_conn()
-                url = f"{api_conn.base_url}/v1/prompt"
-                if args:
-                    url += "?" + urlencode(args)
-
-                # Create request with authentication
-                request = Request(url)
-                if api_conn.token:
-                    request.add_header("Authorization", f"Bearer {api_conn.token}")
-                request.add_header("Content-Type", "application/json")
-
-                # Make HTTP request
-                try:
-                    response_obj = urlopen(request)
-                    response_data = response_obj.read()
-                    return json.loads(response_data.decode("utf-8"))
-                except HTTPError as e:
-                    if e.code >= 400:
-                        error_body = e.read().decode("utf-8") if hasattr(e, "read") else str(e)
-                        raise Exception(f"HTTP {e.code}: {error_body}")
-                    raise
-                except URLError as e:
-                    raise Exception(f"URL Error: {e}")
-
-            response = await loop.run_in_executor(None, make_request)
-
-        except Exception as server_error:
-            eprint(f"Failed to load prompt, attempting to fall back to cache: {server_error}")
-            try:
-                cache_result = await loop.run_in_executor(
-                    None,
-                    lambda: _state._prompt_cache.get(
-                        slug,
-                        version=str(version) if version else "latest",
-                        project_id=project_id,
-                        project_name=project,
-                    ),
-                )
-                return cache_result
-            except Exception as cache_error:
-                raise ValueError(
-                    f"Prompt {slug} (version {version or 'latest'}) not found in {project or project_id} (not found on server or in local cache): {cache_error}"
-                ) from server_error
-
-        if response is None or "objects" not in response or len(response["objects"]) == 0:
-            raise ValueError(f"Prompt {slug} not found in project {project or project_id}.")
-        elif len(response["objects"]) > 1:
-            raise ValueError(
-                f"Multiple prompts found with slug {slug} in project {project or project_id}. This should never happen."
-            )
-
-        resp_prompt = response["objects"][0]
-        prompt = PromptSchema.from_dict_deep(resp_prompt)
-        try:
-            await loop.run_in_executor(
-                None,
-                lambda: _state._prompt_cache.set(
+            cache_result = await loop.run_in_executor(
+                HTTP_REQUEST_THREAD_POOL,
+                lambda: _state._prompt_cache.get(
                     slug,
-                    str(version) if version else "latest",
-                    prompt,
+                    version=str(version) if version else "latest",
                     project_id=project_id,
                     project_name=project,
                 ),
             )
-        except Exception as e:
-            eprint(f"Failed to store prompt in cache: {e}")
-        return prompt
+            # Return Prompt with pre-computed metadata from cache
+            return Prompt(
+                lazy_metadata=LazyValue(lambda: cache_result, use_mutex=True),
+                defaults=defaults or {},
+                no_trace=no_trace,
+            )
+        except Exception as cache_error:
+            raise ValueError(
+                f"Prompt {slug} (version {version or 'latest'}) not found in {project or project_id} (not found on server or in local cache): {cache_error}"
+            ) from server_error
 
+    if response is None or "objects" not in response or len(response["objects"]) == 0:
+        raise ValueError(f"Prompt {slug} not found in project {project or project_id}.")
+    elif len(response["objects"]) > 1:
+        raise ValueError(
+            f"Multiple prompts found with slug {slug} in project {project or project_id}. This should never happen."
+        )
+
+    resp_prompt = response["objects"][0]
+    prompt_metadata = PromptSchema.from_dict_deep(resp_prompt)
+    try:
+        await loop.run_in_executor(
+            HTTP_REQUEST_THREAD_POOL,
+            lambda: _state._prompt_cache.set(
+                slug,
+                str(version) if version else "latest",
+                prompt_metadata,
+                project_id=project_id,
+                project_name=project,
+            ),
+        )
+    except Exception as e:
+        eprint(f"Failed to store prompt in cache: {e}")
+
+    # Return Prompt with pre-computed metadata
     return Prompt(
-        lazy_metadata=LazyValue(compute_metadata, use_mutex=True), defaults=defaults or {}, no_trace=no_trace
+        lazy_metadata=LazyValue(lambda: prompt_metadata, use_mutex=True), defaults=defaults or {}, no_trace=no_trace
     )
 
 
