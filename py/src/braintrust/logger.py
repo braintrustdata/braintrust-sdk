@@ -1,3 +1,4 @@
+import asyncio
 import atexit
 import base64
 import concurrent.futures
@@ -41,7 +42,9 @@ from typing import (
     cast,
     overload,
 )
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 import chevron
 import exceptiongroup
@@ -1393,6 +1396,131 @@ def load_prompt(
                 prompt,
                 project_id=project_id,
                 project_name=project,
+            )
+        except Exception as e:
+            eprint(f"Failed to store prompt in cache: {e}")
+        return prompt
+
+    return Prompt(
+        lazy_metadata=LazyValue(compute_metadata, use_mutex=True), defaults=defaults or {}, no_trace=no_trace
+    )
+
+
+async def aload_prompt(
+    project: Optional[str] = None,
+    slug: Optional[str] = None,
+    version: Optional[Union[str, int]] = None,
+    project_id: Optional[str] = None,
+    defaults: Optional[Mapping[str, Any]] = None,
+    no_trace: bool = False,
+    app_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    org_name: Optional[str] = None,
+) -> "Prompt":
+    """
+    Async version of load_prompt. Loads a prompt from the specified project.
+
+    :param project: The name of the project to load the prompt from. Must specify at least one of `project` or `project_id`.
+    :param slug: The slug of the prompt to load.
+    :param version: An optional version of the prompt (to read). If not specified, the latest version will be used.
+    :param project_id: The id of the project to load the prompt from. This takes precedence over `project` if specified.
+    :param defaults: (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
+    :param no_trace: If true, do not include logging metadata for this prompt when build() is called.
+    :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
+    :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
+    key is specified, will prompt the user to login.
+    :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
+    :param project_id: The id of the project to load the prompt from. This takes precedence over `project` if specified.
+    :returns: The prompt object.
+    """
+
+    if not project and not project_id:
+        raise ValueError("Must specify at least one of project or project_id")
+    if not slug:
+        raise ValueError("Must specify slug")
+
+    async def compute_metadata():
+        loop = asyncio.get_event_loop()
+
+        try:
+            # Run login in thread pool since it's synchronous
+            await loop.run_in_executor(None, login, app_url, api_key, org_name)
+
+            # Make async HTTP request with retry logic
+            args = _populate_args(
+                {
+                    "project_name": project,
+                    "project_id": project_id,
+                    "slug": slug,
+                    "version": version,
+                },
+            )
+
+            async def make_request():
+                # Build URL with parameters
+                api_conn = _state.api_conn()
+                url = f"{api_conn.base_url}/v1/prompt"
+                if args:
+                    url += "?" + urlencode(args)
+
+                # Create request with authentication
+                request = Request(url)
+                if api_conn.token:
+                    request.add_header("Authorization", f"Bearer {api_conn.token}")
+                request.add_header("Content-Type", "application/json")
+
+                # Make HTTP request
+                try:
+                    response_obj = urlopen(request)
+                    response_data = response_obj.read()
+                    return json.loads(response_data.decode("utf-8"))
+                except HTTPError as e:
+                    if e.code >= 400:
+                        error_body = e.read().decode("utf-8") if hasattr(e, "read") else str(e)
+                        raise Exception(f"HTTP {e.code}: {error_body}")
+                    raise
+                except URLError as e:
+                    raise Exception(f"URL Error: {e}")
+
+            response = await loop.run_in_executor(None, make_request)
+
+        except Exception as server_error:
+            eprint(f"Failed to load prompt, attempting to fall back to cache: {server_error}")
+            try:
+                cache_result = await loop.run_in_executor(
+                    None,
+                    lambda: _state._prompt_cache.get(
+                        slug,
+                        version=str(version) if version else "latest",
+                        project_id=project_id,
+                        project_name=project,
+                    ),
+                )
+                return cache_result
+            except Exception as cache_error:
+                raise ValueError(
+                    f"Prompt {slug} (version {version or 'latest'}) not found in {project or project_id} (not found on server or in local cache): {cache_error}"
+                ) from server_error
+
+        if response is None or "objects" not in response or len(response["objects"]) == 0:
+            raise ValueError(f"Prompt {slug} not found in project {project or project_id}.")
+        elif len(response["objects"]) > 1:
+            raise ValueError(
+                f"Multiple prompts found with slug {slug} in project {project or project_id}. This should never happen."
+            )
+
+        resp_prompt = response["objects"][0]
+        prompt = PromptSchema.from_dict_deep(resp_prompt)
+        try:
+            await loop.run_in_executor(
+                None,
+                lambda: _state._prompt_cache.set(
+                    slug,
+                    str(version) if version else "latest",
+                    prompt,
+                    project_id=project_id,
+                    project_name=project,
+                ),
             )
         except Exception as e:
             eprint(f"Failed to store prompt in cache: {e}")
