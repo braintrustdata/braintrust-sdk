@@ -1419,7 +1419,6 @@ def load_prompt(
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
-    :param project_id: The id of the project to load the prompt from. This takes precedence over `project` if specified.
     :returns: The prompt object.
     """
 
@@ -1502,7 +1501,6 @@ async def aload_prompt(
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
-    :param project_id: The id of the project to load the prompt from. This takes precedence over `project` if specified.
     :returns: The prompt object.
     """
 
