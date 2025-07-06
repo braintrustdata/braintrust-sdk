@@ -575,16 +575,15 @@ class HTTPConnection:
         for i in range(tries):
 
             def make_request():
-                # Build URL with parameters
-                url = f"{self.base_url}/{object_type.lstrip('/')}"
+                # Build URL using the same logic as sync version
+                url = _urljoin(self.base_url, f"/{object_type}")
                 if args:
-                    url += "?" + urlencode(args)
+                    url += "?" + urlencode(_strip_nones(args))
 
                 # Create request with authentication
                 request = Request(url)
                 if self.token:
                     request.add_header("Authorization", f"Bearer {self.token}")
-                request.add_header("Content-Type", "application/json")
 
                 # Make HTTP request
                 try:
@@ -1502,7 +1501,7 @@ async def aload_prompt(
             },
         )
 
-        response = await _state.api_conn().aget_json("v1/prompt", args)
+        response = await _state.api_conn().aget_json("/v1/prompt", args)
 
     except Exception as server_error:
         eprint(f"Failed to load prompt, attempting to fall back to cache: {server_error}")
@@ -3636,7 +3635,7 @@ def stringify_exception(exc_type: Type[BaseException], exc_value: BaseException,
     )
 
 
-def _strip_nones(d: T, deep: bool) -> T:
+def _strip_nones(d: T, deep: bool = False) -> T:
     if not isinstance(d, dict):
         return d
     return {k: (_strip_nones(v, deep) if deep else v) for (k, v) in d.items() if v is not None}  # type: ignore
