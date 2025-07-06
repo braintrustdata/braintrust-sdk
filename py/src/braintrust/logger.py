@@ -567,47 +567,73 @@ class HTTPConnection:
         self, object_type: str, args: Optional[Mapping[str, Any]] = None, retries: int = 0
     ) -> Mapping[str, Any]:
         """
-        Async version of get_json. Makes an HTTP GET request and returns JSON response.
+        Async version of get_json. Makes a true async HTTP GET request and returns JSON response.
         """
-        loop = asyncio.get_event_loop()
         tries = retries + 1
 
         for i in range(tries):
-
-            def make_request():
+            try:
                 # Build URL using the same logic as sync version
                 url = _urljoin(self.base_url, f"/{object_type}")
                 if args:
                     url += "?" + urlencode(_strip_nones(args))
 
-                # Create request with authentication
-                request = Request(url)
-                if self.token:
-                    request.add_header("Authorization", f"Bearer {self.token}")
-
-                # Make HTTP request
+                # Try to use aiohttp if available, otherwise fall back to asyncio approach
                 try:
-                    response_obj = urlopen(request)
-                    response_data = response_obj.read()
-                    return json.loads(response_data.decode("utf-8"))
-                except HTTPError as e:
-                    if e.code >= 400:
-                        error_body = e.read().decode("utf-8") if hasattr(e, "read") else str(e)
-                        raise Exception(f"HTTP {e.code}: {error_body}")
-                    raise
-                except URLError as e:
-                    raise Exception(f"URL Error: {e}")
+                    import aiohttp
 
-            try:
-                return await loop.run_in_executor(HTTP_REQUEST_THREAD_POOL, make_request)
+                    return await self._make_aiohttp_request(url)
+                except ImportError:
+                    # Fall back to asyncio + urllib approach
+                    return await self._make_asyncio_request(url)
+
             except Exception as e:
                 if i < tries - 1:
                     _logger.warning(f"Retrying async API request {object_type} {args}: {e}")
+                    await asyncio.sleep(0.1 * (i + 1))  # Progressive backoff
                     continue
                 raise
 
         # Needed for type checking.
         raise Exception("unreachable")
+
+    async def _make_aiohttp_request(self, url: str) -> Mapping[str, Any]:
+        """Make async HTTP request using aiohttp"""
+        import aiohttp
+
+        headers = {}
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as response:
+                if response.status >= 400:
+                    error_text = await response.text()
+                    raise Exception(f"HTTP {response.status}: {error_text}")
+                return await response.json()
+
+    async def _make_asyncio_request(self, url: str) -> Mapping[str, Any]:
+        """Make async HTTP request using asyncio and urllib (fallback)"""
+        loop = asyncio.get_event_loop()
+
+        def sync_request():
+            request = Request(url)
+            if self.token:
+                request.add_header("Authorization", f"Bearer {self.token}")
+
+            try:
+                response_obj = urlopen(request)
+                response_data = response_obj.read()
+                return json.loads(response_data.decode("utf-8"))
+            except HTTPError as e:
+                if e.code >= 400:
+                    error_body = e.read().decode("utf-8") if hasattr(e, "read") else str(e)
+                    raise Exception(f"HTTP {e.code}: {error_body}")
+                raise
+            except URLError as e:
+                raise Exception(f"URL Error: {e}")
+
+        return await loop.run_in_executor(HTTP_REQUEST_THREAD_POOL, sync_request)
 
 
 # Sometimes we'd like to launch network requests concurrently. We provide a
