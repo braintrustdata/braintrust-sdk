@@ -993,4 +993,71 @@ export const asyncScoringControlSchema = z
   ])
   .openapi("AsyncScoringControl");
 
+export const environmentSchema = z
+  .object({
+    id: z.string().uuid().describe("Unique identifier for the environment"),
+    org_id: z
+      .string()
+      .uuid()
+      .describe(
+        "Unique identifier for the organization that the environment belongs under",
+      ),
+    name: z.string().describe("Name of the environment"),
+    slug: z
+      .string()
+      .describe(
+        "A url-friendly, unique identifier for the environment within an organization",
+      ),
+    description: z
+      .string()
+      .nullish()
+      .describe("Textual description of the environment"),
+    created: datetimeStringSchema
+      .nullish()
+      .describe("Date of environment creation"),
+    deleted_at: datetimeStringSchema
+      .nullish()
+      .describe(
+        "Date of environment deletion, or null if the environment is still active",
+      ),
+  })
+  .openapi("Environment");
+export type Environment = z.infer<typeof environmentSchema>;
+
+export const createEnvironmentSchema = z
+  .object({
+    name: z.string().describe("Name of the environment"),
+    slug: z
+      .string()
+      .describe(
+        "A url-friendly, unique identifier for the environment within an organization",
+      ),
+    description: z
+      .string()
+      .nullish()
+      .describe("Textual description of the environment"),
+    org_id: z
+      .string()
+      .uuid()
+      .nullish()
+      .describe("Unique identifier for the organization"),
+  })
+  .openapi("CreateEnvironment");
+
+export const patchEnvironmentSchema = z
+  .object({
+    name: z.string().nullish().describe("Name of the environment"),
+    slug: z
+      .string()
+      .nullish()
+      .describe(
+        "A url-friendly, unique identifier for the environment within an organization",
+      ),
+    description: z
+      .string()
+      .nullish()
+      .describe("Textual description of the environment"),
+  })
+  .openapi("PatchEnvironment");
+
 export type AsyncScoringControl = z.infer<typeof asyncScoringControlSchema>;
