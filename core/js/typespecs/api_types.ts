@@ -1039,7 +1039,6 @@ export const createEnvironmentSchema = z
     org_id: z
       .string()
       .uuid()
-      .nullish()
       .describe("Unique identifier for the organization"),
   })
   .openapi("CreateEnvironment");
