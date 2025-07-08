@@ -339,12 +339,18 @@ class EmbeddingWrapper(BaseWrapper):
 
 
 class LiteLLMWrapper(NamedWrapper):
+
     def __init__(self, litellm_module: Any):
         super().__init__(litellm_module)
         self._completion_wrapper = CompletionWrapper(litellm_module.completion, None)
+        self._acompletion_wrapper = CompletionWrapper(None, litellm_module.acompletion)
 
     def completion(self, *args: Any, **kwargs: Any) -> Any:
         return self._completion_wrapper.completion(*args, **kwargs)
+        
+    async def acompletion(self, *args: Any, **kwargs: Any) -> Any:
+        return await self._acompletion_wrapper.acompletion(*args, **kwargs)
+
 
 
 def wrap_litellm(litellm_module: Any):
