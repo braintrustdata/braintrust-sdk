@@ -231,9 +231,9 @@ class CompletionWrapper:
                 if not tool_calls or (tool_delta.get("id") and tool_calls[-1]["id"] != tool_delta.get("id")):
                     tool_calls = (tool_calls or []) + [
                         {
-                            "id": delta["tool_calls"][0]["id"],
-                            "type": delta["tool_calls"][0]["type"],
-                            "function": delta["tool_calls"][0]["function"],
+                            "id": tool_delta.get("id"),
+                            "type": tool_delta.get("type"),
+                            "function": tool_delta.get("function"),
                         }
                     ]
                 else:
