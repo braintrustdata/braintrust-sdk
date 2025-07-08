@@ -88,9 +88,7 @@ export const retentionObjectTypeEnum = z
 export type RetentionObjectType = z.infer<typeof retentionObjectTypeEnum>;
 
 export const retentionAutomationConfigSchema = z.object({
-  event_type: z
-    .literal("retention")
-    .describe("The event which starts the automation execution"),
+  event_type: z.literal("retention").describe("The type of automation."),
   object_type: retentionObjectTypeEnum.describe(
     "The object type that the retention policy applies to",
   ),
