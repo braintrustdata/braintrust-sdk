@@ -1,16 +1,12 @@
 import dataclasses
 import json
-from typing import Any, Dict, List, Tuple, Union, get_origin
-
-
-def dict_no_none(entries: List[Tuple[str, Any]]) -> Dict[str, Any]:
-    return {k: v for k, v in entries if v is not None}
+from typing import Dict, Union, get_origin
 
 
 class SerializableDataClass:
     def as_dict(self):
         """Serialize the object to a dictionary."""
-        return dataclasses.asdict(self, dict_factory=dict_no_none)
+        return dataclasses.asdict(self)
 
     def as_json(self, **kwargs):
         """Serialize the object to JSON."""
