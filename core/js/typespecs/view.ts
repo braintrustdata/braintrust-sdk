@@ -61,6 +61,9 @@ export const tableViewOptionsSchema = z
     symbolGrouping: chartSelectionType.nullish(),
     xAxisAggregation: z.enum(["avg", "sum", "min", "max", "all"]).nullish(),
     chartAnnotations: z.array(annotationDataSchema).nullish(),
+    timeRangeFilter: z
+      .union([z.string(), z.object({ from: z.string(), to: z.string() })])
+      .nullish(),
   })
   .strip()
   .openapi({ title: "TableViewOptions" });
