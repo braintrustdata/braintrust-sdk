@@ -14,6 +14,28 @@ X_LEGACY_CACHED_HEADER = "x-cached"
 X_CACHED_HEADER = "x-bt-cached"
 
 
+# ---------------------------------------------------------
+# Base classes and config
+# ---------------------------------------------------------
+
+# LiteLLM's representation to Braintrust's representation
+TOKEN_NAME_MAP: dict[str, str] = {
+    # chat API
+    "total_tokens": "tokens",
+    "prompt_tokens": "prompt_tokens",
+    "completion_tokens": "completion_tokens",
+    # responses API
+    "tokens": "tokens",
+    "input_tokens": "prompt_tokens",
+    "output_tokens": "completion_tokens",
+}
+
+TOKEN_PREFIX_MAP: dict[str, str] = {
+    "input": "prompt",
+    "output": "completion",
+}
+
+
 class NamedWrapper:
     """Wrapper that preserves access to the original wrapped object's attributes."""
 
@@ -56,14 +78,9 @@ class AsyncResponseWrapper:
         return getattr(self._response, name)
 
 
-# def log_headers(response: Any, span: Span) -> None:
-#     """Log cache hit information from response headers to the span."""
-#     header = response.headers.get(X_CACHED_HEADER) or response.headers.get(X_LEGACY_CACHED_HEADER)
-#     if not header:
-#         return
-
-#     is_hit = 1 if header.lower() in ["true", "hit"] else 0
-#     span.log(metrics={"cached": is_hit})
+# ---------------------------------------------------------
+# LiteLLM wrapper
+# ---------------------------------------------------------
 
 
 class CompletionWrapper:
@@ -125,7 +142,7 @@ class CompletionWrapper:
 
     def completion(self, *args: Any, **kwargs: Any) -> Any:
         """Sync completion with tracing."""
-        updated_span_payload = self._update_span_payload_from_params(kwargs)
+        updated_span_payload = _update_span_payload_from_params(kwargs, input_key="messages")
         is_streaming = kwargs.get("stream", False)
 
         span = start_span(
@@ -155,7 +172,7 @@ class CompletionWrapper:
 
     async def acompletion(self, *args: Any, **kwargs: Any) -> Any:
         """Async completion with tracing."""
-        updated_span_payload = self._update_span_payload_from_params(kwargs)
+        updated_span_payload = _update_span_payload_from_params(kwargs, input_key="messages")
         is_streaming = kwargs.get("stream", False)
 
         span = start_span(
@@ -183,20 +200,6 @@ class CompletionWrapper:
         finally:
             if should_end:
                 span.end()
-
-    @classmethod
-    def _update_span_payload_from_params(cls, params: dict[str, Any]) -> dict[str, Any]:
-        """Updates the span payload with the parameters into LiteLLM's completion/acompletion methods."""
-        span_info_d = params.pop("span_info", {})
-
-        params = prettify_params(params)
-        messages = params.pop("messages", None)
-        model = params.pop("model", None)
-
-        return merge_dicts(
-            span_info_d,
-            {"input": messages, "metadata": {**params, "provider": "litellm", "model": model}},
-        )
 
     @classmethod
     def _postprocess_streaming_results(cls, all_results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -260,81 +263,27 @@ class CompletionWrapper:
         }
 
 
-class BaseWrapper(abc.ABC):
-    """Base wrapper for LiteLLM API endpoints."""
-
-    def __init__(self, create_fn: Callable[..., Any] | None, acreate_fn: Callable[..., Any] | None, name: str) -> None:
-        self._create_fn = create_fn
-        self._acreate_fn = acreate_fn
-        self._name = name
-
-    @abc.abstractmethod
-    def process_output(self, response: dict[str, Any], span: Span) -> None:
-        """Process the API response and log relevant information to the span."""
-        pass
-
-    def create(self, *args: Any, **kwargs: Any) -> Any:
-        """Sync create with tracing."""
-        params = self._parse_params(kwargs)
-
-        with start_span(
-            **merge_dicts(dict(name=self._name, span_attributes={"type": SpanTypeAttribute.LLM}), params)
-        ) as span:
-            create_response = self._create_fn(*args, **kwargs)
-
-            # if hasattr(create_response, "parse"):
-            #     raw_response = create_response.parse()
-            #     log_headers(create_response, span)
-            # else:
-            #     raw_response = create_response
-
-            log_response = _try_to_dict(create_response)
-            self.process_output(log_response, span)
-            return create_response
-
-    async def acreate(self, *args: Any, **kwargs: Any) -> Any:
-        """Async create with tracing."""
-
-        params = self._parse_params(kwargs)
-
-        with start_span(
-            **merge_dicts(dict(name=self._name, span_attributes={"type": SpanTypeAttribute.LLM}), params)
-        ) as span:
-            create_response = await self._acreate_fn(*args, **kwargs)
-            # if hasattr(create_response, "parse"):
-            #     raw_response = create_response.parse()
-            #     log_headers(create_response, span)
-            # else:
-            #     raw_response = create_response
-            log_response = _try_to_dict(create_response)
-            self.process_output(log_response, span)
-            return create_response
-
-    @classmethod
-    def _parse_params(cls, params: dict[str, Any]) -> dict[str, Any]:
-        """Parse parameters for span creation."""
-        # First, destructively remove span_info
-        ret = params.pop("span_info", {})
-
-        params = prettify_params(params)
-        input_data = params.pop("input", None)
-
-        return merge_dicts(
-            ret,
-            {
-                "input": input_data,
-                "metadata": {**params, "provider": "litellm"},
-            },
-        )
-
-
-class EmbeddingWrapper(BaseWrapper):
+class EmbeddingWrapper:
     """Wrapper for LiteLLM embedding functions."""
 
-    def __init__(self, embedding_fn: Callable[..., Any] | None, aembedding_fn: Callable[..., Any] | None) -> None:
-        super().__init__(embedding_fn, aembedding_fn, "Embedding")
+    def __init__(self, embedding_fn: Callable[..., Any] | None) -> None:
+        self.embedding_fn = embedding_fn
 
-    def process_output(self, response: dict[str, Any], span: Span) -> None:
+    def embedding(self, *args: Any, **kwargs: Any) -> Any:
+        """Sync embedding with tracing."""
+        updated_span_payload = _update_span_payload_from_params(kwargs, input_key="input")
+
+        with start_span(
+            **merge_dicts(
+                dict(name="Embedding", span_attributes={"type": SpanTypeAttribute.LLM}), updated_span_payload
+            )
+        ) as span:
+            embedding_response = self.embedding_fn(*args, **kwargs)
+            log_response = _try_to_dict(embedding_response)
+            self._process_output(log_response, span)
+            return embedding_response
+
+    def _process_output(self, response: dict[str, Any], span: Span) -> None:
         """Process embedding response and log metrics."""
         usage = response.get("usage")
         metrics = _parse_metrics_from_usage(usage)
@@ -353,6 +302,7 @@ class LiteLLMWrapper(NamedWrapper):
         super().__init__(litellm_module)
         self._completion_wrapper = CompletionWrapper(litellm_module.completion, None)
         self._acompletion_wrapper = CompletionWrapper(None, litellm_module.acompletion)
+        self._embedding_wrapper = EmbeddingWrapper(litellm_module.embedding)
 
     def completion(self, *args: Any, **kwargs: Any) -> Any:
         """Sync completion with tracing."""
@@ -361,6 +311,10 @@ class LiteLLMWrapper(NamedWrapper):
     async def acompletion(self, *args: Any, **kwargs: Any) -> Any:
         """Async completion with tracing."""
         return await self._acompletion_wrapper.acompletion(*args, **kwargs)
+
+    def embedding(self, *args: Any, **kwargs: Any) -> Any:
+        """Sync embedding with tracing."""
+        return self._embedding_wrapper.embedding(*args, **kwargs)
 
 
 def wrap_litellm(litellm_module: Any) -> LiteLLMWrapper:
@@ -374,22 +328,23 @@ def wrap_litellm(litellm_module: Any) -> LiteLLMWrapper:
     return LiteLLMWrapper(litellm_module)
 
 
-# LiteLLM's representation to Braintrust's representation
-TOKEN_NAME_MAP: dict[str, str] = {
-    # chat API
-    "total_tokens": "tokens",
-    "prompt_tokens": "prompt_tokens",
-    "completion_tokens": "completion_tokens",
-    # responses API
-    "tokens": "tokens",
-    "input_tokens": "prompt_tokens",
-    "output_tokens": "completion_tokens",
-}
+# ---------------------------------------------------------
+# Utility methods
+# ---------------------------------------------------------
 
-TOKEN_PREFIX_MAP: dict[str, str] = {
-    "input": "prompt",
-    "output": "completion",
-}
+
+def _update_span_payload_from_params(params: dict[str, Any], input_key: str = "input") -> dict[str, Any]:
+    """Updates the span payload with the parameters into LiteLLM's completion/acompletion methods."""
+    span_info_d = params.pop("span_info", {})
+
+    params = prettify_params(params)
+    input_data = params.pop(input_key, None)
+    model = params.pop("model", None)
+
+    return merge_dicts(
+        span_info_d,
+        {"input": input_data, "metadata": {**params, "provider": "litellm", "model": model}},
+    )
 
 
 def _parse_metrics_from_usage(usage: Any) -> dict[str, Any]:
@@ -479,15 +434,3 @@ def serialize_response_format(response_format: Any) -> Any:
         )
     else:
         return response_format
-
-
-# def _is_not_given(value: Any) -> bool:
-#     """Check if a value is a NOT_GIVEN sentinel."""
-#     if value is None:
-#         return False
-#     try:
-#         # Check by type name and repr to avoid import dependency
-#         type_name = type(value).__name__
-#         return type_name == "NotGiven"
-#     except Exception:
-#         return False
