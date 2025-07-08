@@ -290,7 +290,7 @@ class BaseWrapper(abc.ABC):
 
             log_response = _try_to_dict(create_response)
             self.process_output(log_response, span)
-            return raw_response
+            return create_response
 
     async def acreate(self, *args: Any, **kwargs: Any) -> Any:
         """Async create with tracing."""
@@ -308,7 +308,7 @@ class BaseWrapper(abc.ABC):
             #     raw_response = create_response
             log_response = _try_to_dict(create_response)
             self.process_output(log_response, span)
-            return raw_response
+            return create_response
 
     @classmethod
     def _parse_params(cls, params: dict[str, Any]) -> dict[str, Any]:
