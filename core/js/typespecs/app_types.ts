@@ -611,6 +611,7 @@ export const onlineScoreConfigSchema = z
     scorers: z
       .array(savedFunctionIdSchema)
       .describe("The list of scorers to use for online scoring"),
+    btql_filter: z.string().nullish().describe("Filter logs using BTQL"),
     apply_to_root_span: z
       .boolean()
       .nullish()
@@ -627,9 +628,15 @@ export const onlineScoreConfigSchema = z
       .nullish()
       .describe("Whether to skip adding scorer spans when computing scores"),
   })
-  .refine((val) => val.apply_to_root_span || val.apply_to_span_names?.length, {
-    message: "Online scoring rule does not apply to any rows",
-  })
+  .refine(
+    (val) =>
+      val.apply_to_root_span ||
+      val.apply_to_span_names?.length ||
+      val.btql_filter,
+    {
+      message: "Online scoring rule does not apply to any rows",
+    },
+  )
   .openapi("OnlineScoreConfig");
 export type OnlineScoreConfig = z.infer<typeof onlineScoreConfigSchema>;
 

@@ -1623,6 +1623,16 @@ def _try_log_output(span, output):
 F = TypeVar("F", bound=Callable[..., Any])
 
 
+@overload
+def traced(f: F) -> F:
+    """Decorator to trace the wrapped function when used without parentheses."""
+
+
+@overload
+def traced(*span_args: Any, **span_kwargs: Any) -> Callable[[F], F]:
+    """Decorator to trace the wrapped function when used with arguments."""
+
+
 def traced(*span_args: Any, **span_kwargs: Any) -> Callable[[F], F]:
     """Decorator to trace the wrapped function. Can either be applied bare (`@traced`) or by providing arguments (`@traced(*span_args, **span_kwargs)`), which will be forwarded to the created span. See `Span.start_span` for full details on the span arguments.
 

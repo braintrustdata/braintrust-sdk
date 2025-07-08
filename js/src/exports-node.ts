@@ -27,17 +27,3 @@ export { LazyValue } from "./util";
 export * from "./wrappers/oai";
 export { wrapAISDKModel } from "./wrappers/ai-sdk";
 export { wrapAnthropic } from "./wrappers/anthropic";
-export * from "./exports-types";
-export type {
-  ParentExperimentIds,
-  ParentProjectLogIds,
-  IdField,
-  InputField,
-  OtherExperimentLogFields,
-  ExperimentLogPartialArgs,
-  ExperimentLogFullArgs,
-  LogFeedbackFullArgs,
-  LogCommentFullArgs,
-  CommentEvent,
-  DatasetRecord,
-} from "@braintrust/core";

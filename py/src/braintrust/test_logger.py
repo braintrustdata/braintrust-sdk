@@ -592,6 +592,76 @@ async def test_traced_async_function(with_memory_logger):
         },
     )
 
+    @logger.traced()
+    async def async_multiply(x: int, y: int) -> int:  # pylint: disable=function-redefined
+        """An async function that multiplies two numbers."""
+        await asyncio.sleep(0.001)  # Small delay to simulate async work
+        result = x * y
+        logger.current_span().log(metadata={"operation": "multiply"})
+        return result
+
+    start_time = time.time()
+    result = await async_multiply(3, 4)
+    end_time = time.time()
+
+    assert result == 12
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+
+    assert_dict_matches(
+        log,
+        {
+            "input": {"x": 3, "y": 4},
+            "output": 12,
+            "metadata": {"operation": "multiply"},
+            "metrics": {
+                "start": lambda x: start_time <= x <= end_time,
+                "end": lambda x: start_time <= x <= end_time,
+            },
+            "span_attributes": {
+                "name": "async_multiply",
+                "type": "function",
+            },
+        },
+    )
+
+    @logger.traced(name="async_multiply_with_name")
+    async def async_multiply(x: int, y: int) -> int:  # pylint: disable=function-redefined
+        """An async function that multiplies two numbers."""
+        await asyncio.sleep(0.001)  # Small delay to simulate async work
+        result = x * y
+        logger.current_span().log(metadata={"operation": "multiply"})
+        return result
+
+    start_time = time.time()
+    result = await async_multiply(3, 4)
+    end_time = time.time()
+
+    assert result == 12
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+
+    assert_dict_matches(
+        log,
+        {
+            "input": {"x": 3, "y": 4},
+            "output": 12,
+            "metadata": {"operation": "multiply"},
+            "metrics": {
+                "start": lambda x: start_time <= x <= end_time,
+                "end": lambda x: start_time <= x <= end_time,
+            },
+            "span_attributes": {
+                "name": "async_multiply_with_name",
+                "type": "function",
+            },
+        },
+    )
+
 
 def test_traced_sync_function(with_memory_logger):
     """Test tracing synchronous functions."""
