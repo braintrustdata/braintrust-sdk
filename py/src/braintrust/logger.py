@@ -1,4 +1,5 @@
 import atexit
+import base64
 import concurrent.futures
 import contextlib
 import contextvars
@@ -8,7 +9,6 @@ import inspect
 import json
 import logging
 import os
-import queue
 import sys
 import textwrap
 import threading
@@ -71,6 +71,7 @@ from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptMessage
 from .prompt_cache.disk_cache import DiskCache
 from .prompt_cache.lru_cache import LRUCache
 from .prompt_cache.prompt_cache import PromptCache
+from .queue import DEFAULT_QUEUE_SIZE, LogQueue
 from .serializable_data_class import SerializableDataClass
 from .span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from .span_types import SpanTypeAttribute
@@ -641,6 +642,9 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
             return first
 
 
+BACKGROUND_LOGGER_BASE_SLEEP_TIME_S = 1.0
+
+
 # We should only have one instance of this object in
 # 'BraintrustState._global_bg_logger'. Be careful about spawning multiple
 # instances of this class, because concurrent _BackgroundLoggers will not log to
@@ -675,12 +679,7 @@ class _HTTPBackgroundLogger:
         try:
             self.queue_maxsize = int(os.environ["BRAINTRUST_QUEUE_SIZE"])
         except:
-            self.queue_maxsize = 1000
-
-        try:
-            self.queue_drop_when_full = bool(int(os.environ["BRAINTRUST_QUEUE_DROP_WHEN_FULL"]))
-        except:
-            self.queue_drop_when_full = False
+            self.queue_maxsize = DEFAULT_QUEUE_SIZE
 
         try:
             self.queue_drop_logging_period = float(os.environ["BRAINTRUST_QUEUE_DROP_LOGGING_PERIOD"])
@@ -699,20 +698,12 @@ class _HTTPBackgroundLogger:
         except:
             self.all_publish_payloads_dir = None
 
-        # Don't limit the queue size if we're in 'sync_flush' mode and are not
-        # dropping when full, otherwise logging could block indefinitely.
-        if self.sync_flush and not self.queue_drop_when_full:
-            self.queue_maxsize = 0
-
         self.start_thread_lock = threading.RLock()
         self.thread = threading.Thread(target=self._publisher, daemon=True)
         self.started = False
 
         self.logger = logging.getLogger("braintrust")
-        self.queue: "queue.Queue[LazyValue[Dict[str, Any]]]" = queue.Queue(maxsize=self.queue_maxsize)
-        # Each time we put items in the queue, we increment a semaphore to
-        # indicate to any consumer thread that it should attempt a flush.
-        self.queue_filled_semaphore = threading.Semaphore(value=0)
+        self.queue: "LogQueue[LazyValue[Dict[str, Any]]]" = LogQueue(maxsize=self.queue_maxsize)
 
         atexit.register(self._finalize)
 
@@ -720,16 +711,8 @@ class _HTTPBackgroundLogger:
         self._start()
         dropped_items = []
         for event in args:
-            try:
-                self.queue.put_nowait(event)
-            except queue.Full:
-                # Notify consumers to start draining the queue.
-                self.queue_filled_semaphore.release()
-                if self.queue_drop_when_full:
-                    dropped_items.append(event)
-                else:
-                    self.queue.put(event)
-        self.queue_filled_semaphore.release()
+            dropped = self.queue.put(event)
+            dropped_items.extend(dropped)
 
         if dropped_items:
             self._register_dropped_item_count(len(dropped_items))
@@ -754,7 +737,7 @@ class _HTTPBackgroundLogger:
     def _publisher(self):
         while True:
             # Wait for some data on the queue before trying to flush.
-            self.queue_filled_semaphore.acquire()
+            self.queue.wait_for_items()
 
             while self.sync_flush:
                 time.sleep(0.1)
@@ -772,12 +755,7 @@ class _HTTPBackgroundLogger:
         # order of published elements would be undefined.
         with self.flush_lock:
             # Drain the queue.
-            wrapped_items = []
-            try:
-                for _ in range(self.queue.qsize()):
-                    wrapped_items.append(self.queue.get_nowait())
-            except queue.Empty:
-                pass
+            wrapped_items = self.queue.drain_all()
 
             all_items, attachments = self._unwrap_lazy_values(wrapped_items)
             if len(all_items) == 0:
@@ -851,7 +829,9 @@ class _HTTPBackgroundLogger:
                     print(errmsg, file=self.outfile)
                     traceback.print_exc(file=self.outfile)
                     if is_retrying:
-                        time.sleep(0.1)
+                        sleep_time_s = BACKGROUND_LOGGER_BASE_SLEEP_TIME_S * (2**i)
+                        print(f"Sleeping for {sleep_time_s}s", file=self.outfile)
+                        time.sleep(sleep_time_s)
 
         print(
             f"Failed to construct log records to flush after {self.num_tries} attempts. Dropping batch",
@@ -886,7 +866,9 @@ class _HTTPBackgroundLogger:
             else:
                 print(errmsg, file=self.outfile)
                 if is_retrying:
-                    time.sleep(0.1)
+                    sleep_time_s = BACKGROUND_LOGGER_BASE_SLEEP_TIME_S * (2**i)
+                    print(f"Sleeping for {sleep_time_s}s", file=self.outfile)
+                    time.sleep(sleep_time_s)
 
         print(f"log request failed after {self.num_tries} retries. Dropping batch", file=self.outfile)
 
@@ -1525,10 +1507,15 @@ def login(
         # this point because we know the connection _can_ successfully ping.
         conn.make_long_lived()
 
+        # Same for the app conn, which we know is valid because we have
+        # successfully logged in.
+        _state.app_conn().make_long_lived()
+
         # Set the same token in the API
         _state.app_conn().set_token(conn.token)
         if _state.proxy_url:
             _state.proxy_conn().set_token(conn.token)
+            _state.proxy_conn().make_long_lived()
         _state.login_token = conn.token
         _state.logged_in = True
 
@@ -1636,6 +1623,16 @@ def _try_log_output(span, output):
 F = TypeVar("F", bound=Callable[..., Any])
 
 
+@overload
+def traced(f: F) -> F:
+    """Decorator to trace the wrapped function when used without parentheses."""
+
+
+@overload
+def traced(*span_args: Any, **span_kwargs: Any) -> Callable[[F], F]:
+    """Decorator to trace the wrapped function when used with arguments."""
+
+
 def traced(*span_args: Any, **span_kwargs: Any) -> Callable[[F], F]:
     """Decorator to trace the wrapped function. Can either be applied bare (`@traced`) or by providing arguments (`@traced(*span_args, **span_kwargs)`), which will be forwarded to the created span. See `Span.start_span` for full details on the span arguments.
 
@@ -1689,7 +1686,20 @@ def traced(*span_args: Any, **span_kwargs: Any) -> Callable[[F], F]:
                     _try_log_output(span, ret)
                 return ret
 
-        if bt_iscoroutinefunction(f):
+        @wraps(f)
+        async def wrapper_async_gen(*f_args, **f_kwargs):
+            with start_span(*span_args, **span_kwargs) as span:
+                if trace_io:
+                    _try_log_input(span, f_sig, f_args, f_kwargs)
+                async_gen = f(*f_args, **f_kwargs)
+                async for value in async_gen:
+                    yield value
+                # NOTE[matt] i'm disabling output tracing (e.g notrace_io=False) for async generators
+                # because an async generator could be infinite and make us OOM.
+
+        if inspect.isasyncgenfunction(f):
+            return cast(F, wrapper_async_gen)
+        elif bt_iscoroutinefunction(f):
             return cast(F, wrapper_async)
         else:
             return cast(F, wrapper_sync)
@@ -2478,6 +2488,10 @@ class ReadonlyAttachment:
             return obj_response.content
 
         return LazyValue(download, use_mutex=True)
+
+    def __str__(self) -> str:
+        b64_content = base64.b64encode(self.data).decode("utf-8")
+        return f"data:{self.reference['content_type']};base64,{b64_content}"
 
 
 def _log_feedback_impl(

@@ -2,23 +2,20 @@ import {
   FunctionObject,
   functionSchema,
   SavedFunctionId,
+  ToolFunctionDefinition,
 } from "@braintrust/core/typespecs";
 import { _internalGetGlobalState } from "../logger";
 import { loadCLIEnv } from "./bundle";
 import { PullArgs } from "./types";
 import { warning } from "../framework";
 import { z } from "zod";
-import { ProjectNameIdMap } from "../functions/upload";
 import fs from "fs/promises";
 import util from "util";
 import slugify from "slugify";
 import path from "path";
 import { currentRepo } from "../gitutil";
 import { isEmpty, loadPrettyXact, prettifyXact } from "@braintrust/core";
-import {
-  ToolFunctionDefinition,
-  toolFunctionDefinitionSchema,
-} from "../framework2";
+import { ProjectNameIdMap, toolFunctionDefinitionSchema } from "../framework2";
 import pluralize from "pluralize";
 
 export async function pullCommand(args: PullArgs) {

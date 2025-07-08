@@ -11,7 +11,6 @@ import {
   promptSchema,
   functionSchema,
 } from "./app_types";
-import { functionIdSchema } from "./functions";
 import {
   EventObjectType,
   ObjectType,
@@ -698,12 +697,19 @@ const feedbackProjectLogsRequestSchema = makeFeedbackRequestSchema(
 // use individual schema types, import them directly.
 
 export type EventObjectSchemasEntry = {
-  event?: Zod.ZodTypeAny;
-  fetchResponse?: Zod.ZodTypeAny;
-  insertEvent?: Zod.ZodTypeAny;
-  insertRequest?: Zod.ZodTypeAny;
-  feedbackItem?: Zod.ZodTypeAny;
-  feedbackRequest?: Zod.ZodTypeAny;
+  // Zod changed its own convention for this, so we need to use plain any.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  event?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  fetchResponse?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  insertEvent?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  insertRequest?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  feedbackItem?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  feedbackRequest?: any;
 };
 
 export const apiSpecEventObjectSchemas: Record<
@@ -957,7 +963,7 @@ export const asyncScoringStateSchema = z
     z.object({
       status: z.literal("enabled"),
       token: z.string(),
-      function_ids: z.array(functionIdSchema).nonempty(),
+      function_ids: z.array(z.unknown()).nonempty(),
       skip_logging: z.boolean().nullish(),
     }),
     // Explicitly disabled.

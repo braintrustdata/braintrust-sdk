@@ -10,6 +10,12 @@ import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
 import { functionDataSchema, functionTypeEnum } from "./functions";
 import { savedFunctionIdSchema } from "./function_id";
 import { repoInfoSchema } from "./git_types";
+import {
+  automationConfigSchema,
+  btqlExportAutomationConfigSchema,
+  logAutomationConfigSchema,
+  retentionAutomationConfigSchema,
+} from "./automations";
 extendZodWithOpenApi(z);
 
 // Section: App DB table schemas
@@ -398,6 +404,10 @@ export const experimentSchema = z
       ),
     user_id: experimentBaseSchema.shape.user_id,
     metadata: experimentBaseSchema.shape.metadata,
+    tags: z
+      .array(z.string())
+      .nullish()
+      .describe("A list of tags for the experiment"),
   })
   .openapi("Experiment");
 export type Experiment = z.infer<typeof experimentSchema>;
@@ -566,51 +576,6 @@ const webhookAutomationActionSchema = z.object({
   url: z.string().describe("The webhook URL to send the request to"),
 });
 
-export const automationEventTypeEnum = z.enum(["logs", "retention"]);
-export const logAutomationConfigSchema = z.object({
-  event_type: z
-    .literal("logs")
-    .describe("The event which starts the automation execution"),
-  btql_filter: z
-    .string()
-    .describe("BTQL filter to identify rows for the automation rule"),
-  interval_seconds: z
-    .number()
-    .min(1)
-    .max(30 * 24 * 60 * 60)
-    .describe(
-      "Perform the triggered action at most once in this interval of seconds",
-    ),
-  action: z
-    .discriminatedUnion("type", [webhookAutomationActionSchema])
-    .describe("The action to take when the automation rule is triggered"),
-});
-
-export const retentionObjectTypeEnum = z
-  .enum(["project_logs", "experiment", "dataset"])
-  .describe("The object type that the retention policy applies to")
-  .openapi("RetentionObjectType");
-export type RetentionObjectType = z.infer<typeof retentionObjectTypeEnum>;
-
-const retentionAutomationConfigSchema = z.object({
-  event_type: z
-    .literal("retention")
-    .describe("The event which starts the automation execution"),
-  object_type: retentionObjectTypeEnum.describe(
-    "The object type that the retention policy applies to",
-  ),
-  object_id: z
-    .string()
-    .uuid()
-    .nullable()
-    .describe("The object id that the retention policy applies to"),
-  retention_days: z
-    .number()
-    .min(1)
-    .max(365)
-    .describe("The number of days to retain the object"),
-});
-
 const projectAutomationBaseSchema =
   generateBaseTableSchema("project automation");
 export const projectAutomationSchema = z
@@ -621,19 +586,27 @@ export const projectAutomationSchema = z
     created: projectAutomationBaseSchema.shape.created,
     name: projectAutomationBaseSchema.shape.name,
     description: projectAutomationBaseSchema.shape.description,
-    config: z
-      .union([logAutomationConfigSchema, retentionAutomationConfigSchema])
-      .describe("The configuration for the automation rule"),
+    config: automationConfigSchema.describe(
+      "The configuration for the automation rule",
+    ),
   })
   .openapi("ProjectAutomation");
 
 export type ProjectAutomation = z.infer<typeof projectAutomationSchema>;
+
 export const logAutomationSchema = projectAutomationSchema.merge(
   z.object({
     config: logAutomationConfigSchema,
   }),
 );
 export type LogAutomation = z.infer<typeof logAutomationSchema>;
+
+export const btqlExportAutomationSchema = projectAutomationSchema.merge(
+  z.object({
+    config: btqlExportAutomationConfigSchema,
+  }),
+);
+export type BtqlExportAutomation = z.infer<typeof btqlExportAutomationSchema>;
 
 export const retentionAutomationSchema = projectAutomationSchema.merge(
   z.object({
@@ -652,6 +625,7 @@ export const onlineScoreConfigSchema = z
     scorers: z
       .array(savedFunctionIdSchema)
       .describe("The list of scorers to use for online scoring"),
+    btql_filter: z.string().nullish().describe("Filter logs using BTQL"),
     apply_to_root_span: z
       .boolean()
       .nullish()
@@ -668,9 +642,15 @@ export const onlineScoreConfigSchema = z
       .nullish()
       .describe("Whether to skip adding scorer spans when computing scores"),
   })
-  .refine((val) => val.apply_to_root_span || val.apply_to_span_names?.length, {
-    message: "Online scoring rule does not apply to any rows",
-  })
+  .refine(
+    (val) =>
+      val.apply_to_root_span ||
+      val.apply_to_span_names?.length ||
+      val.btql_filter,
+    {
+      message: "Online scoring rule does not apply to any rows",
+    },
+  )
   .openapi("OnlineScoreConfig");
 export type OnlineScoreConfig = z.infer<typeof onlineScoreConfigSchema>;
 
@@ -738,6 +718,12 @@ export const projectTagSchema = z
     name: projectTagBaseSchema.shape.name,
     description: projectTagBaseSchema.shape.description,
     color: z.string().nullish().describe("Color of the tag for the UI"),
+    position: z
+      .string()
+      .nullish()
+      .describe(
+        "An optional LexoRank-based string that sets the sort position for the tag in the UI",
+      ),
   })
   .describe(
     "A project tag is a user-configured tag for tracking and filtering your experiments, logs, and other data",
@@ -933,6 +919,7 @@ export const createExperimentSchema = z
     dataset_version: experimentSchema.shape.dataset_version,
     public: experimentSchema.shape.public.nullish(),
     metadata: experimentSchema.shape.metadata,
+    tags: experimentSchema.shape.tags,
     ensure_new: z
       .boolean()
       .nullish()

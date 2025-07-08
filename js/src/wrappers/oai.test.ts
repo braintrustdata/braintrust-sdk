@@ -22,7 +22,7 @@ import { parseMetricsFromUsage } from "./oai_responses";
 
 // use the cheapest model for tests
 const TEST_MODEL = "gpt-4o-mini";
-const TEST_SUITE_OPTIONS = { timeout: 10000 };
+const TEST_SUITE_OPTIONS = { timeout: 10000, retry: 3 };
 
 try {
   configureNode();
@@ -127,6 +127,7 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.ok(span);
     assert.equal(span.span_attributes.type, "llm");
     assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.metadata.provider, "openai");
     const m = span.metrics;
     assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
     assert.isTrue(m.tokens > 0);
@@ -134,6 +135,149 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.isTrue(m.time_to_first_token > 0);
     assert.isTrue(m.prompt_cached_tokens >= 0);
     assert.isTrue(m.completion_reasoning_tokens >= 0);
+  });
+
+  test("openai.chat.completions.tools", async () => {
+    expect(await backgroundLogger.drain()).toHaveLength(0);
+
+    // Define tools that can be called in parallel
+    const tools = [
+      {
+        type: "function" as const,
+        function: {
+          name: "get_weather",
+          description: "Get the weather for a location",
+          parameters: {
+            type: "object",
+            properties: {
+              location: {
+                type: "string",
+                description: "The location to get weather for",
+              },
+            },
+            required: ["location"],
+          },
+        },
+      },
+      {
+        type: "function" as const,
+        function: {
+          name: "get_time",
+          description: "Get the current time for a timezone",
+          parameters: {
+            type: "object",
+            properties: {
+              timezone: {
+                type: "string",
+                description: "The timezone to get time for",
+              },
+            },
+            required: ["timezone"],
+          },
+        },
+      },
+    ];
+
+    for (const stream of [false, true]) {
+      const startTime = getCurrentUnixTimestamp();
+
+      const result = await client.chat.completions.create({
+        messages: [
+          {
+            role: "user",
+            content: "What's the weather in New York and the time in Tokyo?",
+          },
+        ],
+        model: TEST_MODEL,
+        tools: tools,
+        temperature: 0,
+        stream: stream,
+        stream_options: stream ? { include_usage: true } : undefined,
+      });
+
+      if (stream) {
+        // Consume the stream
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+        for await (const _chunk of result as any) {
+          // Exhaust the stream
+        }
+      }
+
+      const endTime = getCurrentUnixTimestamp();
+
+      const spans = await backgroundLogger.drain();
+      expect(spans).toHaveLength(1);
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+      const span = spans[0] as any;
+
+      expect(span).toMatchObject({
+        project_id: expect.any(String),
+        log_id: expect.any(String),
+        created: expect.any(String),
+        span_id: expect.any(String),
+        root_span_id: expect.any(String),
+        span_attributes: {
+          type: "llm",
+          name: "Chat Completion",
+        },
+        metadata: {
+          model: TEST_MODEL,
+          provider: "openai",
+          stream: stream,
+          tools: expect.arrayContaining([
+            expect.objectContaining({
+              type: "function",
+              function: expect.objectContaining({
+                name: "get_weather",
+              }),
+            }),
+            expect.objectContaining({
+              type: "function",
+              function: expect.objectContaining({
+                name: "get_time",
+              }),
+            }),
+          ]),
+        },
+        input: expect.arrayContaining([
+          expect.objectContaining({
+            role: "user",
+            content: "What's the weather in New York and the time in Tokyo?",
+          }),
+        ]),
+        metrics: expect.objectContaining({
+          start: expect.any(Number),
+          end: expect.any(Number),
+        }),
+      });
+
+      // Verify tool calls are in the output
+      if (span.output && Array.isArray(span.output)) {
+        const message = span.output[0]?.message;
+        if (message?.tool_calls) {
+          expect(message.tool_calls).toHaveLength(2);
+          const tool_names = message.tool_calls.map(
+            (call: { function: { name: string } }) => call.function.name,
+          );
+          expect(tool_names).toContain("get_weather");
+          expect(tool_names).toContain("get_time");
+        }
+      }
+
+      // Validate timing
+      const { metrics } = span;
+      expect(startTime).toBeLessThanOrEqual(metrics.start);
+      expect(metrics.start).toBeLessThanOrEqual(metrics.end);
+      expect(metrics.end).toBeLessThanOrEqual(endTime);
+
+      // Token metrics might be available depending on the response
+      if (metrics.tokens !== undefined) {
+        expect(metrics.tokens).toBeGreaterThan(0);
+        expect(metrics.prompt_tokens).toBeGreaterThan(0);
+        expect(metrics.prompt_cached_tokens).toBeGreaterThanOrEqual(0);
+        expect(metrics.completion_reasoning_tokens).toBeGreaterThanOrEqual(0);
+      }
+    }
   });
 
   test("openai.responses.stream", async (context) => {
@@ -177,6 +321,7 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.equal(span.span_attributes.type, "llm");
     assert.equal(span.input[0].content, "What is 6x6?");
     assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.metadata.provider, "openai");
     expect(span.output).toContain("36");
 
     const m = span.metrics;
@@ -226,6 +371,7 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.equal(input[1].content, "the whole poem, strip punctuation");
     assert.equal(input[1].role, "system");
     assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.metadata.provider, "openai");
     assert.equal(span.metadata.temperature, 0.5);
     // This line takes the output text, converts it to lowercase, and removes all characters
     // except letters, numbers and whitespace using a regex
@@ -265,6 +411,7 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.equal(span.span_attributes.type, "llm");
     assert.equal(span.input[0].content, "What is the capital of France?");
     assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.metadata.provider, "openai");
     expect(span.output).toContain("Paris");
     const m = span.metrics;
     assert.isTrue(m.tokens > 0);

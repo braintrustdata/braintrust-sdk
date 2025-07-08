@@ -17,21 +17,12 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from .. import api_conn, app_conn, login, org_id, proxy_conn
-from ..framework2 import CodeFunction, global_
+from braintrust.framework import _set_lazy_load
+
+from .. import api_conn, login, org_id, proxy_conn
+from ..framework2 import ProjectIdCache, global_
 from ..types import IfExists
 from ..util import add_azure_blob_headers
-
-
-class _ProjectIdCache:
-    def __init__(self):
-        self._cache = {}
-
-    def get(self, project):
-        if project not in self._cache:
-            resp = app_conn().post_json("api/project/register", {"project_name": project.name})
-            self._cache[project] = resp["project"]["id"]
-        return self._cache[project]
 
 
 def _pkg_install_arg(pkg) -> Optional[str]:
@@ -222,7 +213,7 @@ def _upload_bundle(entry_module_name: str, sources: List[str], requirements: Opt
 
 
 def _collect_function_function_defs(
-    project_ids: _ProjectIdCache, functions: List[Dict[str, Any]], bundle_id: str, if_exists: IfExists
+    project_ids: ProjectIdCache, functions: List[Dict[str, Any]], bundle_id: str, if_exists: IfExists
 ) -> None:
     for i, f in enumerate(global_.functions):
         source = inspect.getsource(f.handler)
@@ -270,39 +261,10 @@ def _collect_function_function_defs(
 
 
 def _collect_prompt_function_defs(
-    project_ids: _ProjectIdCache, functions: List[Dict[str, Any]], if_exists: IfExists
+    project_ids: ProjectIdCache, functions: List[Dict[str, Any]], if_exists: IfExists
 ) -> None:
     for p in global_.prompts:
-        prompt_data = p.prompt
-        if len(p.tool_functions) > 0:
-            resolvable_tool_functions = []
-            for f in p.tool_functions:
-                if isinstance(f, CodeFunction):
-                    resolvable_tool_functions.append(
-                        {
-                            "type": "slug",
-                            "project_id": project_ids.get(f.project),
-                            "slug": f.slug,
-                        }
-                    )
-                else:
-                    resolvable_tool_functions.append(f)
-            prompt_data["tool_functions"] = resolvable_tool_functions
-        j = {
-            "project_id": project_ids.get(p.project),
-            "name": p.name,
-            "slug": p.slug,
-            "function_data": {
-                "type": "prompt",
-            },
-            "prompt_data": prompt_data,
-            "if_exists": p.if_exists if p.if_exists is not None else if_exists,
-        }
-        if p.description is not None:
-            j["description"] = p.description
-        if p.function_type is not None:
-            j["function_type"] = p.function_type
-        functions.append(j)
+        functions.append(p.to_function_definition(if_exists, project_ids))
 
 
 def run(args):
@@ -322,7 +284,8 @@ def run(args):
     module_name = re.sub(".py$", "", os.path.relpath(path).replace("-", "_").replace("/", "."))
 
     try:
-        sources = _import_module(module_name, path)
+        with _set_lazy_load(True):
+            sources = _import_module(module_name, path)
     except ImportError as e:
         if str(e) == "attempted relative import with no known parent package":
             raise ImportError(
@@ -335,7 +298,7 @@ def run(args):
     except Exception as e:
         raise
 
-    project_ids = _ProjectIdCache()
+    project_ids = ProjectIdCache()
     functions: List[Dict[str, Any]] = []
     if len(global_.functions) > 0:
         bundle_id = _upload_bundle(module_name, sources, args.requirements)
