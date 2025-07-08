@@ -41,6 +41,7 @@ VENDOR_PACKAGES = (
     "pydantic_ai",
     "autoevals",
     "braintrust_core",
+    "litellm",
 )
 
 # Test matrix
