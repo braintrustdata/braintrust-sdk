@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 import abc
 import time
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import AsyncGenerator, Generator
+from types import TracebackType
+from typing import Any, Callable
 
 from braintrust.logger import Span, start_span
 from braintrust.span_types import SpanTypeAttribute
@@ -11,7 +15,9 @@ X_CACHED_HEADER = "x-bt-cached"
 
 
 class NamedWrapper:
-    def __init__(self, wrapped: Any):
+    """Wrapper that preserves access to the original wrapped object's attributes."""
+
+    def __init__(self, wrapped: Any) -> None:
         self.__wrapped = wrapped
 
     def __getattr__(self, name: str) -> Any:
@@ -21,24 +27,27 @@ class NamedWrapper:
 class AsyncResponseWrapper:
     """Wrapper that properly preserves async context manager behavior for LiteLLM responses."""
 
-    def __init__(self, response: Any):
+    def __init__(self, response: Any) -> None:
         self._response = response
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Any:
         if hasattr(self._response, "__aenter__"):
             return await self._response.__aenter__()
         return self._response
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+    ) -> bool | None:
         if hasattr(self._response, "__aexit__"):
             return await self._response.__aexit__(exc_type, exc_val, exc_tb)
+        return None
 
-    def __aiter__(self):
+    def __aiter__(self) -> AsyncGenerator[Any, None]:
         if hasattr(self._response, "__aiter__"):
             return self._response.__aiter__()
         raise TypeError("Response object is not an async iterator")
 
-    async def __anext__(self):
+    async def __anext__(self) -> Any:
         if hasattr(self._response, "__anext__"):
             return await self._response.__anext__()
         raise StopAsyncIteration
@@ -47,159 +56,157 @@ class AsyncResponseWrapper:
         return getattr(self._response, name)
 
 
-def log_headers(response: Any, span: Span):
-    cached_value = response.headers.get(X_CACHED_HEADER) or response.headers.get(X_LEGACY_CACHED_HEADER)
+# def log_headers(response: Any, span: Span) -> None:
+#     """Log cache hit information from response headers to the span."""
+#     header = response.headers.get(X_CACHED_HEADER) or response.headers.get(X_LEGACY_CACHED_HEADER)
+#     if not header:
+#         return
 
-    if cached_value:
-        span.log(
-            metrics={
-                "cached": 1 if cached_value.lower() in ["true", "hit"] else 0,
-            }
-        )
+#     is_hit = 1 if header.lower() in ["true", "hit"] else 0
+#     span.log(metrics={"cached": is_hit})
 
 
 class CompletionWrapper:
-    def __init__(self, completion_fn: Optional[Callable[..., Any]], acompletion_fn: Optional[Callable[..., Any]]):
+    """Wrapper for LiteLLM completion functions with tracing support."""
+
+    def __init__(self, completion_fn: Callable[..., Any] | None, acompletion_fn: Callable[..., Any] | None) -> None:
         self.completion_fn = completion_fn
         self.acompletion_fn = acompletion_fn
 
+    def _handle_streaming_response(
+        self, raw_response: Any, span: Span, start_time: float, is_async: bool = False
+    ) -> AsyncResponseWrapper | Generator[Any, None, None]:
+        """Handle streaming response for both sync and async cases."""
+        if is_async:
+
+            async def async_gen() -> AsyncGenerator[Any, None]:
+                try:
+                    first = True
+                    all_results: list[dict[str, Any]] = []
+                    async for item in raw_response:
+                        if first:
+                            span.log(metrics={"time_to_first_token": time.time() - start_time})
+                            first = False
+                        all_results.append(_try_to_dict(item))
+                        yield item
+
+                    span.log(**self._postprocess_streaming_results(all_results))
+                finally:
+                    span.end()
+
+            streamer = async_gen()
+            return AsyncResponseWrapper(streamer)
+        else:
+
+            def sync_gen() -> Generator[Any, None, None]:
+                try:
+                    first = True
+                    all_results: list[dict[str, Any]] = []
+                    for item in raw_response:
+                        if first:
+                            span.log(metrics={"time_to_first_token": time.time() - start_time})
+                            first = False
+                        all_results.append(_try_to_dict(item))
+                        yield item
+
+                    span.log(**self._postprocess_streaming_results(all_results))
+                finally:
+                    span.end()
+
+            return sync_gen()
+
+    def _handle_non_streaming_response(self, raw_response: Any, span: Span, start_time: float) -> Any:
+        """Handle non-streaming response."""
+        log_response = _try_to_dict(raw_response)
+        metrics = _parse_metrics_from_usage(log_response.get("usage", {}))
+        metrics["time_to_first_token"] = time.time() - start_time
+        span.log(metrics=metrics, output=log_response["choices"])
+        return raw_response
+
     def completion(self, *args: Any, **kwargs: Any) -> Any:
-        params = self._parse_params(kwargs)
-        stream = kwargs.get("stream", False)
+        """Sync completion with tracing."""
+        updated_span_payload = self._update_span_payload_from_params(kwargs)
+        is_streaming = kwargs.get("stream", False)
 
         span = start_span(
-            **merge_dicts(dict(name="Completion", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+            **merge_dicts(
+                dict(name="Completion", span_attributes={"type": SpanTypeAttribute.LLM}), updated_span_payload
+            )
         )
         should_end = True
 
         try:
             start = time.time()
-            if self.completion_fn is None:
-                raise RuntimeError("Completion function is not available")
             completion_response = self.completion_fn(*args, **kwargs)
-            if hasattr(completion_response, "parse"):
-                raw_response = completion_response.parse()
-                log_headers(completion_response, span)
-            else:
-                raw_response = completion_response
-            if stream:
+            # if hasattr(completion_response, "parse"):
+            #     raw_response = completion_response.parse()
+            #     log_headers(completion_response, span)
+            # else:
+            #     raw_response = completion_response
 
-                def gen():
-                    try:
-                        first = True
-                        all_results = []
-                        for item in raw_response:
-                            if first:
-                                span.log(
-                                    metrics={
-                                        "time_to_first_token": time.time() - start,
-                                    }
-                                )
-                                first = False
-                            all_results.append(_try_to_dict(item))
-                            yield item
-
-                        span.log(**self._postprocess_streaming_results(all_results))
-                    finally:
-                        span.end()
-
+            if is_streaming:
                 should_end = False
-                return gen()
+                return self._handle_streaming_response(completion_response, span, start, is_async=False)
             else:
-                log_response = _try_to_dict(raw_response)
-                metrics = _parse_metrics_from_usage(log_response.get("usage", {}))
-                metrics["time_to_first_token"] = time.time() - start
-                span.log(
-                    metrics=metrics,
-                    output=log_response["choices"],
-                )
-                return raw_response
+                return self._handle_non_streaming_response(completion_response, span, start)
         finally:
             if should_end:
                 span.end()
 
     async def acompletion(self, *args: Any, **kwargs: Any) -> Any:
-        params = self._parse_params(kwargs)
-        stream = kwargs.get("stream", False)
+        """Async completion with tracing."""
+        updated_span_payload = self._update_span_payload_from_params(kwargs)
+        is_streaming = kwargs.get("stream", False)
 
         span = start_span(
-            **merge_dicts(dict(name="Completion", span_attributes={"type": SpanTypeAttribute.LLM}), params)
+            **merge_dicts(
+                dict(name="Completion", span_attributes={"type": SpanTypeAttribute.LLM}), updated_span_payload
+            )
         )
         should_end = True
 
         try:
             start = time.time()
-            if self.acompletion_fn is None:
-                raise RuntimeError("Async completion function is not available")
             completion_response = await self.acompletion_fn(*args, **kwargs)
 
-            if hasattr(completion_response, "parse"):
-                raw_response = completion_response.parse()
-                log_headers(completion_response, span)
-            else:
-                raw_response = completion_response
+            # if hasattr(completion_response, "parse"):
+            #     raw_response = completion_response.parse()
+            #     log_headers(completion_response, span)
+            # else:
+            #     raw_response = completion_response
 
-            if stream:
-
-                async def gen():
-                    try:
-                        first = True
-                        all_results = []
-                        async for item in raw_response:
-                            if first:
-                                span.log(
-                                    metrics={
-                                        "time_to_first_token": time.time() - start,
-                                    }
-                                )
-                                first = False
-                            all_results.append(_try_to_dict(item))
-                            yield item
-
-                        span.log(**self._postprocess_streaming_results(all_results))
-                    finally:
-                        span.end()
-
+            if is_streaming:
                 should_end = False
-                streamer = gen()
-                return AsyncResponseWrapper(streamer)
+                return self._handle_streaming_response(completion_response, span, start, is_async=True)
             else:
-                log_response = _try_to_dict(raw_response)
-                metrics = _parse_metrics_from_usage(log_response.get("usage"))
-                metrics["time_to_first_token"] = time.time() - start
-                span.log(
-                    metrics=metrics,
-                    output=log_response["choices"],
-                )
-                return raw_response
+                return self._handle_non_streaming_response(completion_response, span, start)
         finally:
             if should_end:
                 span.end()
 
     @classmethod
-    def _parse_params(cls, params: Dict[str, Any]) -> Dict[str, Any]:
-        # First, destructively remove span_info
-        ret = params.pop("span_info", {})
+    def _update_span_payload_from_params(cls, params: dict[str, Any]) -> dict[str, Any]:
+        """Updates the span payload with the parameters into LiteLLM's completion/acompletion methods."""
+        span_info_d = params.pop("span_info", {})
 
-        # Then, copy the rest of the params
         params = prettify_params(params)
         messages = params.pop("messages", None)
         model = params.pop("model", None)
+
         return merge_dicts(
-            ret,
-            {
-                "input": messages,
-                "metadata": {**params, "provider": "litellm", "model": model},
-            },
+            span_info_d,
+            {"input": messages, "metadata": {**params, "provider": "litellm", "model": model}},
         )
 
     @classmethod
-    def _postprocess_streaming_results(cls, all_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _postprocess_streaming_results(cls, all_results: list[dict[str, Any]]) -> dict[str, Any]:
+        """Process streaming results to extract final response."""
         role = None
         content = None
-        tool_calls: Optional[List[Any]] = None
+        tool_calls: list[Any] | None = None
         finish_reason = None
-        metrics: Dict[str, float] = {}
+        metrics: dict[str, float] = {}
+
         for result in all_results:
             usage = result.get("usage")
             if usage:
@@ -245,11 +252,7 @@ class CompletionWrapper:
             "output": [
                 {
                     "index": 0,
-                    "message": {
-                        "role": role,
-                        "content": content,
-                        "tool_calls": tool_calls,
-                    },
+                    "message": {"role": role, "content": content, "tool_calls": tool_calls},
                     "logprobs": None,
                     "finish_reason": finish_reason,
                 }
@@ -258,76 +261,81 @@ class CompletionWrapper:
 
 
 class BaseWrapper(abc.ABC):
-    def __init__(self, create_fn: Optional[Callable[..., Any]], acreate_fn: Optional[Callable[..., Any]], name: str):
+    """Base wrapper for LiteLLM API endpoints."""
+
+    def __init__(self, create_fn: Callable[..., Any] | None, acreate_fn: Callable[..., Any] | None, name: str) -> None:
         self._create_fn = create_fn
         self._acreate_fn = acreate_fn
         self._name = name
 
     @abc.abstractmethod
-    def process_output(self, response: Dict[str, Any], span: Span):
+    def process_output(self, response: dict[str, Any], span: Span) -> None:
         """Process the API response and log relevant information to the span."""
         pass
 
     def create(self, *args: Any, **kwargs: Any) -> Any:
+        """Sync create with tracing."""
         params = self._parse_params(kwargs)
 
         with start_span(
             **merge_dicts(dict(name=self._name, span_attributes={"type": SpanTypeAttribute.LLM}), params)
         ) as span:
-            if self._create_fn is None:
-                raise RuntimeError("Create function is not available")
             create_response = self._create_fn(*args, **kwargs)
 
-            if hasattr(create_response, "parse"):
-                raw_response = create_response.parse()
-                log_headers(create_response, span)
-            else:
-                raw_response = create_response
+            # if hasattr(create_response, "parse"):
+            #     raw_response = create_response.parse()
+            #     log_headers(create_response, span)
+            # else:
+            #     raw_response = create_response
 
-            log_response = _try_to_dict(raw_response)
+            log_response = _try_to_dict(create_response)
             self.process_output(log_response, span)
             return raw_response
 
     async def acreate(self, *args: Any, **kwargs: Any) -> Any:
+        """Async create with tracing."""
+
         params = self._parse_params(kwargs)
 
         with start_span(
             **merge_dicts(dict(name=self._name, span_attributes={"type": SpanTypeAttribute.LLM}), params)
         ) as span:
-            if self._acreate_fn is None:
-                raise RuntimeError("Async create function is not available")
             create_response = await self._acreate_fn(*args, **kwargs)
-            if hasattr(create_response, "parse"):
-                raw_response = create_response.parse()
-                log_headers(create_response, span)
-            else:
-                raw_response = create_response
-            log_response = _try_to_dict(raw_response)
+            # if hasattr(create_response, "parse"):
+            #     raw_response = create_response.parse()
+            #     log_headers(create_response, span)
+            # else:
+            #     raw_response = create_response
+            log_response = _try_to_dict(create_response)
             self.process_output(log_response, span)
             return raw_response
 
     @classmethod
-    def _parse_params(cls, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _parse_params(cls, params: dict[str, Any]) -> dict[str, Any]:
+        """Parse parameters for span creation."""
         # First, destructively remove span_info
         ret = params.pop("span_info", {})
 
         params = prettify_params(params)
-        input = params.pop("input", None)
+        input_data = params.pop("input", None)
 
         return merge_dicts(
             ret,
             {
-                "input": input,
+                "input": input_data,
                 "metadata": {**params, "provider": "litellm"},
             },
         )
 
 
 class EmbeddingWrapper(BaseWrapper):
-    def __init__(self, embedding_fn: Optional[Callable[..., Any]], aembedding_fn: Optional[Callable[..., Any]]):
+    """Wrapper for LiteLLM embedding functions."""
+
+    def __init__(self, embedding_fn: Callable[..., Any] | None, aembedding_fn: Callable[..., Any] | None) -> None:
         super().__init__(embedding_fn, aembedding_fn, "Embedding")
 
-    def process_output(self, response: Dict[str, Any], span: Span):
+    def process_output(self, response: dict[str, Any], span: Span) -> None:
+        """Process embedding response and log metrics."""
         usage = response.get("usage")
         metrics = _parse_metrics_from_usage(usage)
         span.log(
@@ -339,32 +347,35 @@ class EmbeddingWrapper(BaseWrapper):
 
 
 class LiteLLMWrapper(NamedWrapper):
+    """Main wrapper for the LiteLLM module."""
 
-    def __init__(self, litellm_module: Any):
+    def __init__(self, litellm_module: Any) -> None:
         super().__init__(litellm_module)
         self._completion_wrapper = CompletionWrapper(litellm_module.completion, None)
         self._acompletion_wrapper = CompletionWrapper(None, litellm_module.acompletion)
 
     def completion(self, *args: Any, **kwargs: Any) -> Any:
+        """Sync completion with tracing."""
         return self._completion_wrapper.completion(*args, **kwargs)
-        
+
     async def acompletion(self, *args: Any, **kwargs: Any) -> Any:
+        """Async completion with tracing."""
         return await self._acompletion_wrapper.acompletion(*args, **kwargs)
 
 
-
-def wrap_litellm(litellm_module: Any):
+def wrap_litellm(litellm_module: Any) -> LiteLLMWrapper:
     """
     Wrap the litellm module to add tracing.
     If Braintrust is not configured, nothing will be traced.
 
     :param litellm_module: The litellm module
+    :return: Wrapped litellm module with tracing
     """
     return LiteLLMWrapper(litellm_module)
 
 
 # LiteLLM's representation to Braintrust's representation
-TOKEN_NAME_MAP = {
+TOKEN_NAME_MAP: dict[str, str] = {
     # chat API
     "total_tokens": "tokens",
     "prompt_tokens": "prompt_tokens",
@@ -375,15 +386,16 @@ TOKEN_NAME_MAP = {
     "output_tokens": "completion_tokens",
 }
 
-TOKEN_PREFIX_MAP = {
+TOKEN_PREFIX_MAP: dict[str, str] = {
     "input": "prompt",
     "output": "completion",
 }
 
 
-def _parse_metrics_from_usage(usage: Any) -> Dict[str, Any]:
+def _parse_metrics_from_usage(usage: Any) -> dict[str, Any]:
+    """Parse usage metrics from API response."""
     # For simplicity, this function handles all the different APIs
-    metrics = {}
+    metrics: dict[str, Any] = {}
 
     if not usage:
         return metrics
@@ -410,21 +422,25 @@ def _parse_metrics_from_usage(usage: Any) -> Dict[str, Any]:
     return metrics
 
 
-def _is_numeric(v):
+def _is_numeric(v: Any) -> bool:
+    """Check if a value is numeric."""
     return isinstance(v, (int, float, complex))
 
 
-def prettify_params(params: Dict[str, Any]) -> Dict[str, Any]:
+def prettify_params(params: dict[str, Any]) -> dict[str, Any]:
+    """Clean up parameters by filtering out NOT_GIVEN values and serializing response_format."""
     # Filter out NOT_GIVEN parameters
     # https://linear.app/braintrustdata/issue/BRA-2467
-    ret = {k: v for k, v in params.items() if not _is_not_given(v)}
+    # ret = {k: v for k, v in params.items() if not _is_not_given(v)}
+    ret = {k: v for k, v in params.items()}
 
     if "response_format" in ret:
         ret["response_format"] = serialize_response_format(ret["response_format"])
     return ret
 
 
-def _try_to_dict(obj: Any) -> Dict[str, Any]:
+def _try_to_dict(obj: Any) -> dict[str, Any]:
+    """Try to convert an object to a dictionary."""
     if isinstance(obj, dict):
         return obj
     # convert a pydantic object to a dict
@@ -447,6 +463,7 @@ def _try_to_dict(obj: Any) -> Dict[str, Any]:
 
 
 def serialize_response_format(response_format: Any) -> Any:
+    """Serialize response format for logging."""
     try:
         from pydantic import BaseModel
     except ImportError:
@@ -464,12 +481,13 @@ def serialize_response_format(response_format: Any) -> Any:
         return response_format
 
 
-def _is_not_given(value: Any) -> bool:
-    if value is None:
-        return False
-    try:
-        # Check by type name and repr to avoid import dependency
-        type_name = type(value).__name__
-        return type_name == "NotGiven"
-    except Exception:
-        return False
+# def _is_not_given(value: Any) -> bool:
+#     """Check if a value is a NOT_GIVEN sentinel."""
+#     if value is None:
+#         return False
+#     try:
+#         # Check by type name and repr to avoid import dependency
+#         type_name = type(value).__name__
+#         return type_name == "NotGiven"
+#     except Exception:
+#         return False
