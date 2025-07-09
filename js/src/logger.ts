@@ -3834,17 +3834,14 @@ function extractAttachments(
 
     // Check for serialized attachment objects that lost their class identity
     if (
-      value &&
       typeof value === "object" &&
-      !Array.isArray(value) &&
-      value.reference &&
-      value.reference.type === BRAINTRUST_ATTACHMENT &&
+      value?.reference?.type === BRAINTRUST_ATTACHMENT &&
       value._data &&
       value.uploader
     ) {
       // This looks like a serialized Attachment object, recreate it properly
       const attachment = new Attachment({
-        data: value.dataDebugString || "test.jpeg",
+        data: value.dataDebugString,
         filename: value.reference.filename,
         contentType: value.reference.content_type,
       });
