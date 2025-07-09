@@ -458,6 +458,38 @@ class EmbeddingWrapper:
         )
 
 
+class ModerationWrapper:
+    """Wrapper for LiteLLM moderation functions."""
+
+    def __init__(self, moderation_fn: Callable[..., Any] | None) -> None:
+        self.moderation_fn = moderation_fn
+
+    def moderation(self, *args: Any, **kwargs: Any) -> Any:
+        """Sync moderation with tracing."""
+        updated_span_payload = _update_span_payload_from_params(kwargs, input_key="input")
+
+        with start_span(
+            **merge_dicts(
+                dict(name="Moderation", span_attributes={"type": SpanTypeAttribute.LLM}), updated_span_payload
+            )
+        ) as span:
+            moderation_response = self.moderation_fn(*args, **kwargs)
+            log_response = _try_to_dict(moderation_response)
+            self._process_output(log_response, span)
+            return moderation_response
+
+    def _process_output(self, response: dict[str, Any], span: Span) -> None:
+        """Process moderation response and log metrics."""
+        usage = response.get("usage")
+        metrics = _parse_metrics_from_usage(usage)
+        span.log(
+            metrics=metrics,
+            # TODO: Add a flag to control whether to log the full embedding vector,
+            # possibly w/ JSON compression.
+            output=response["results"],
+        )
+
+
 class LiteLLMWrapper(NamedWrapper):
     """Main wrapper for the LiteLLM module."""
 
@@ -468,6 +500,7 @@ class LiteLLMWrapper(NamedWrapper):
         self._responses_wrapper = ResponsesWrapper(litellm_module.responses, None)
         self._aresponses_wrapper = ResponsesWrapper(None, litellm_module.aresponses)
         self._embedding_wrapper = EmbeddingWrapper(litellm_module.embedding)
+        self._moderation_wrapper = ModerationWrapper(litellm_module.moderation)
 
     def completion(self, *args: Any, **kwargs: Any) -> Any:
         """Sync completion with tracing."""
@@ -488,6 +521,10 @@ class LiteLLMWrapper(NamedWrapper):
     def embedding(self, *args: Any, **kwargs: Any) -> Any:
         """Sync embedding with tracing."""
         return self._embedding_wrapper.embedding(*args, **kwargs)
+
+    def moderation(self, *args: Any, **kwargs: Any) -> Any:
+        """Sync moderation with tracing."""
+        return self._moderation_wrapper.moderation(*args, **kwargs)
 
 
 def wrap_litellm(litellm_module: Any) -> LiteLLMWrapper:
