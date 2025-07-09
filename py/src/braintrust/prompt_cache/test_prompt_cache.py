@@ -57,17 +57,17 @@ class TestPromptCache(unittest.TestCase):
                 prompt_data=prompt.PromptData(),
                 _xact_id="666666",
             )
-            self.cache.set(n, "666666", p, project_id="456")
+            self.cache.set(p, slug=n, version="666666", project_id="456")
             result = self.cache.get(n, version="666666", project_id="456")
             self.assertEqual(result.as_dict(), p.as_dict())
 
     def test_store_and_retrieve_from_memory_cache(self):
-        self.cache.set("test-prompt", "789", self.test_prompt, project_id="123")
+        self.cache.set(self.test_prompt, slug="test-prompt", version="789", project_id="123")
         result = self.cache.get("test-prompt", version="789", project_id="123")
         self.assertEqual(result.as_dict(), self.test_prompt.as_dict())
 
     def test_work_with_project_name(self):
-        self.cache.set("test-prompt", "789", self.test_prompt, project_name="test-project")
+        self.cache.set(self.test_prompt, slug="test-prompt", version="789", project_name="test-project")
         result = self.cache.get("test-prompt", version="789", project_name="test-project")
         self.assertEqual(result.as_dict(), self.test_prompt.as_dict())
 
@@ -76,13 +76,13 @@ class TestPromptCache(unittest.TestCase):
             self.cache.get("test-prompt", version="789")
 
         with self.assertRaisesRegex(ValueError, "Either project_id or project_name must be provided"):
-            self.cache.set("test-prompt", "789", self.test_prompt)
+            self.cache.set(self.test_prompt, slug="test-prompt", version="789")
 
     def test_store_and_retrieve_from_disk_after_memory_eviction(self):
         # Fill memory cache (max size is 2).
-        self.cache.set("test-prompt", "789", self.test_prompt, project_id="123")
-        self.cache.set("prompt2", "789", self.test_prompt, project_id="123")
-        self.cache.set("prompt3", "789", self.test_prompt, project_id="123")
+        self.cache.set(self.test_prompt, slug="test-prompt", version="789", project_id="123")
+        self.cache.set(self.test_prompt, slug="prompt2", version="789", project_id="123")
+        self.cache.set(self.test_prompt, slug="prompt3", version="789", project_id="123")
 
         # Original prompt should now be on disk but not in memory.
         result = self.cache.get("test-prompt", version="789", project_id="123")
@@ -93,11 +93,11 @@ class TestPromptCache(unittest.TestCase):
             self.cache.get("missing-prompt", version="789", project_id="123")
 
     def test_handle_different_projects_with_same_slug(self):
-        self.cache.set("test-prompt", "789", self.test_prompt, project_id="123")
+        self.cache.set(self.test_prompt, slug="test-prompt", version="789", project_id="123")
 
         different_prompt = prompt.PromptSchema.from_dict_deep(self.test_prompt.as_dict())
         different_prompt.project_id = "different-project"
-        self.cache.set("test-prompt", "789", different_prompt, project_id="different-project")
+        self.cache.set(different_prompt, slug="test-prompt", version="789", project_id="different-project")
 
         result1 = self.cache.get("test-prompt", version="789", project_id="123")
         result2 = self.cache.get("test-prompt", version="789", project_id="different-project")
@@ -108,7 +108,7 @@ class TestPromptCache(unittest.TestCase):
     def test_memory_only_cache(self):
         memory_only_cache = prompt_cache.PromptCache(memory_cache=lru_cache.LRUCache(max_size=2))
 
-        memory_only_cache.set("test-prompt", "789", self.test_prompt, project_id="123")
+        memory_only_cache.set(self.test_prompt, slug="test-prompt", version="789", project_id="123")
         result = memory_only_cache.get("test-prompt", version="789", project_id="123")
         self.assertEqual(result.as_dict(), self.test_prompt.as_dict())
 
@@ -124,7 +124,7 @@ class TestPromptCache(unittest.TestCase):
         # Make cache directory read-only.
         os.chmod(self.cache_dir, 0o444)
 
-        self.cache.set("test-prompt", "789", self.test_prompt, project_id="123")
+        self.cache.set(self.test_prompt, slug="test-prompt", version="789", project_id="123")
 
         # Memory cache should still be updated despite disk failure.
         result = self.cache.get("test-prompt", version="789", project_id="123")
