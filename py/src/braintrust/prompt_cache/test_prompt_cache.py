@@ -58,22 +58,22 @@ class TestPromptCache(unittest.TestCase):
                 _xact_id="666666",
             )
             self.cache.set(p, slug=n, version="666666", project_id="456")
-            result = self.cache.get(n, version="666666", project_id="456")
+            result = self.cache.get(slug=n, version="666666", project_id="456")
             self.assertEqual(result.as_dict(), p.as_dict())
 
     def test_store_and_retrieve_from_memory_cache(self):
         self.cache.set(self.test_prompt, slug="test-prompt", version="789", project_id="123")
-        result = self.cache.get("test-prompt", version="789", project_id="123")
+        result = self.cache.get(slug="test-prompt", version="789", project_id="123")
         self.assertEqual(result.as_dict(), self.test_prompt.as_dict())
 
     def test_work_with_project_name(self):
         self.cache.set(self.test_prompt, slug="test-prompt", version="789", project_name="test-project")
-        result = self.cache.get("test-prompt", version="789", project_name="test-project")
+        result = self.cache.get(slug="test-prompt", version="789", project_name="test-project")
         self.assertEqual(result.as_dict(), self.test_prompt.as_dict())
 
     def test_throw_error_if_no_project_identifier(self):
         with self.assertRaisesRegex(ValueError, "Either project_id or project_name must be provided"):
-            self.cache.get("test-prompt", version="789")
+            self.cache.get(slug="test-prompt", version="789")
 
         with self.assertRaisesRegex(ValueError, "Either project_id or project_name must be provided"):
             self.cache.set(self.test_prompt, slug="test-prompt", version="789")
@@ -85,12 +85,12 @@ class TestPromptCache(unittest.TestCase):
         self.cache.set(self.test_prompt, slug="prompt3", version="789", project_id="123")
 
         # Original prompt should now be on disk but not in memory.
-        result = self.cache.get("test-prompt", version="789", project_id="123")
+        result = self.cache.get(slug="test-prompt", version="789", project_id="123")
         self.assertEqual(result.as_dict(), self.test_prompt.as_dict())
 
     def test_raise_for_nonexistent_prompts(self):
         with self.assertRaises(KeyError):
-            self.cache.get("missing-prompt", version="789", project_id="123")
+            self.cache.get(slug="missing-prompt", version="789", project_id="123")
 
     def test_handle_different_projects_with_same_slug(self):
         self.cache.set(self.test_prompt, slug="test-prompt", version="789", project_id="123")
@@ -99,8 +99,8 @@ class TestPromptCache(unittest.TestCase):
         different_prompt.project_id = "different-project"
         self.cache.set(different_prompt, slug="test-prompt", version="789", project_id="different-project")
 
-        result1 = self.cache.get("test-prompt", version="789", project_id="123")
-        result2 = self.cache.get("test-prompt", version="789", project_id="different-project")
+        result1 = self.cache.get(slug="test-prompt", version="789", project_id="123")
+        result2 = self.cache.get(slug="test-prompt", version="789", project_id="different-project")
 
         self.assertEqual(result1.project_id, "123")
         self.assertEqual(result2.project_id, "different-project")
@@ -109,16 +109,16 @@ class TestPromptCache(unittest.TestCase):
         memory_only_cache = prompt_cache.PromptCache(memory_cache=lru_cache.LRUCache(max_size=2))
 
         memory_only_cache.set(self.test_prompt, slug="test-prompt", version="789", project_id="123")
-        result = memory_only_cache.get("test-prompt", version="789", project_id="123")
+        result = memory_only_cache.get(slug="test-prompt", version="789", project_id="123")
         self.assertEqual(result.as_dict(), self.test_prompt.as_dict())
 
         # Fill memory cache beyond capacity.
-        memory_only_cache.set("prompt2", "789", self.test_prompt, project_id="123")
-        memory_only_cache.set("prompt3", "789", self.test_prompt, project_id="123")
+        memory_only_cache.set(self.test_prompt, slug="prompt2", version="789", project_id="123")
+        memory_only_cache.set(self.test_prompt, slug="prompt3", version="789", project_id="123")
 
         # First prompt should be gone since there's no disk backup.
         with self.assertRaises(KeyError):
-            memory_only_cache.get("test-prompt", version="789", project_id="123")
+            memory_only_cache.get(slug="test-prompt", version="789", project_id="123")
 
     def test_dont_throw_when_disk_write_fails(self):
         # Make cache directory read-only.
