@@ -17,6 +17,7 @@ import {
 import { SpanObjectTypeV3 } from "@braintrust/core";
 import { LazyValue } from "./util";
 import { BackgroundLogEvent, IS_MERGE_FIELD } from "@braintrust/core";
+import { BRAINTRUST_ATTACHMENT } from "@braintrust/core/typespecs";
 import { configureNode } from "./node";
 
 configureNode();
@@ -186,6 +187,109 @@ test("extractAttachments with attachments", () => {
     f: Math.max,
     empty: {},
   });
+});
+
+test("extractAttachments with serialized attachments", () => {
+  // Simulate a serialized attachment object that lost its class identity
+  // This happens in CLI mode when attachments get serialized before reaching extractAttachments
+  const serializedAttachment = {
+    reference: {
+      type: BRAINTRUST_ATTACHMENT,
+      filename: "test.jpeg",
+      content_type: "image/jpeg",
+      key: "test-key-123",
+    },
+    _data: {}, // Required for detection
+    uploader: {}, // Required for detection
+  };
+
+  const event = {
+    input: serializedAttachment,
+    output: "test output",
+  };
+
+  const attachments: BaseAttachment[] = [];
+  extractAttachments(event, attachments);
+
+  // Should detect the serialized attachment and recreate it
+  expect(attachments).toHaveLength(1);
+  expect(attachments[0]).toBeInstanceOf(Attachment);
+  expect(attachments[0].reference.type).toBe(BRAINTRUST_ATTACHMENT);
+  expect(attachments[0].reference.filename).toBe("test.jpeg");
+  expect(attachments[0].reference.content_type).toBe("image/jpeg");
+
+  // Should replace the serialized attachment with just the reference
+  expect(event.input.type).toBe(BRAINTRUST_ATTACHMENT);
+  expect(event.input.filename).toBe("test.jpeg");
+  expect(event.input.content_type).toBe("image/jpeg");
+  expect(event.input.key).toBeDefined();
+  expect(event.output).toBe("test output");
+});
+
+test("extractAttachments with nested serialized attachments", () => {
+  // Test that serialized attachments in nested objects are also handled
+  const serializedAttachment = {
+    reference: {
+      type: BRAINTRUST_ATTACHMENT,
+      filename: "nested.pdf",
+      content_type: "application/pdf",
+      key: "nested-key-456",
+    },
+    _data: {}, // Required for detection
+    uploader: {}, // Required for detection
+  };
+
+  const event = {
+    data: {
+      nested: {
+        file: serializedAttachment,
+      },
+    },
+  };
+
+  const attachments: BaseAttachment[] = [];
+  extractAttachments(event, attachments);
+
+  // Should detect the serialized attachment and recreate it
+  expect(attachments).toHaveLength(1);
+  expect(attachments[0]).toBeInstanceOf(Attachment);
+  expect(event.data.nested.file.type).toBe(BRAINTRUST_ATTACHMENT);
+  expect(event.data.nested.file.filename).toBe("nested.pdf");
+  expect(event.data.nested.file.content_type).toBe("application/pdf");
+  expect(event.data.nested.file.key).toBeDefined();
+});
+
+test("extractAttachments with serialized attachment containing data field", () => {
+  // Test serialized attachment that has both data and dataDebugString fields
+  const serializedAttachment = {
+    reference: {
+      type: BRAINTRUST_ATTACHMENT,
+      filename: "test-file.txt",
+      content_type: "text/plain",
+      key: "data-key-789",
+    },
+    _data: {}, // Required for detection
+    uploader: {}, // Required for detection
+    data: "/path/to/original/file.txt", // Original data parameter
+    dataDebugString: "/path/to/original/file.txt", // Debug string
+  };
+
+  const event = {
+    input: serializedAttachment,
+  };
+
+  const attachments: BaseAttachment[] = [];
+  extractAttachments(event, attachments);
+
+  // Should detect the serialized attachment and recreate it
+  expect(attachments).toHaveLength(1);
+  expect(attachments[0]).toBeInstanceOf(Attachment);
+
+  // Should replace with just the reference
+  expect(event.input.type).toBe(BRAINTRUST_ATTACHMENT);
+  expect(event.input.filename).toBe("test-file.txt");
+  expect(event.input.content_type).toBe("text/plain");
+  expect(event.input.key).toBeDefined();
 });
 
 test("deepCopyEvent basic", () => {

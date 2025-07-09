@@ -3818,6 +3818,41 @@ function extractAttachments(
       continue; // Attachment cannot be nested.
     }
 
+    // Skip if this is already just a reference (no _data or uploader fields)
+    if (
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      value.type === BRAINTRUST_ATTACHMENT &&
+      value.key &&
+      !value._data &&
+      !value.uploader
+    ) {
+      // This is already just a reference, skip it
+      continue;
+    }
+
+    // Check for serialized attachment objects that lost their class identity
+    if (
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      value.reference &&
+      value.reference.type === BRAINTRUST_ATTACHMENT &&
+      value._data &&
+      value.uploader
+    ) {
+      // This looks like a serialized Attachment object, recreate it properly
+      const attachment = new Attachment({
+        data: value.dataDebugString || "test.jpeg",
+        filename: value.reference.filename,
+        contentType: value.reference.content_type,
+      });
+      attachments.push(attachment);
+      event[key] = attachment.reference;
+      continue;
+    }
+
     // Base case: non-object.
     if (!(value instanceof Object)) {
       continue; // Nothing to explore recursively.
