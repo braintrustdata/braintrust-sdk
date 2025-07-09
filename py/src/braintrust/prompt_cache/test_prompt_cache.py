@@ -133,6 +133,61 @@ class TestPromptCache(unittest.TestCase):
         # Restore permissions so cleanup can happen.
         os.chmod(self.cache_dir, 0o777)
 
+    def test_store_and_retrieve_by_id(self):
+        # Test storing and retrieving a prompt by ID
+        prompt_id = "test-prompt-id-123"
+        self.cache.set(self.test_prompt, id=prompt_id)
+        result = self.cache.get(id=prompt_id)
+        self.assertEqual(result.as_dict(), self.test_prompt.as_dict())
+
+    def test_id_based_cache_independent_of_slug(self):
+        # Test that ID-based caching is independent of slug-based caching
+        prompt_id = "test-prompt-id-456"
+
+        # Store by ID
+        self.cache.set(self.test_prompt, id=prompt_id)
+
+        # Store same prompt by slug
+        self.cache.set(self.test_prompt, slug="test-prompt", version="789", project_id="123")
+
+        # Retrieve by ID
+        result_by_id = self.cache.get(id=prompt_id)
+        self.assertEqual(result_by_id.as_dict(), self.test_prompt.as_dict())
+
+        # Retrieve by slug
+        result_by_slug = self.cache.get(slug="test-prompt", version="789", project_id="123")
+        self.assertEqual(result_by_slug.as_dict(), self.test_prompt.as_dict())
+
+        # Modify the prompt stored by ID
+        modified_prompt = prompt.PromptSchema.from_dict_deep(self.test_prompt.as_dict())
+        modified_prompt.description = "Modified description"
+        self.cache.set(modified_prompt, id=prompt_id)
+
+        # Verify ID-based retrieval gets modified version
+        result_by_id_modified = self.cache.get(id=prompt_id)
+        self.assertEqual(result_by_id_modified.description, "Modified description")
+
+        # Verify slug-based retrieval still gets original
+        result_by_slug_unchanged = self.cache.get(slug="test-prompt", version="789", project_id="123")
+        self.assertIsNone(result_by_slug_unchanged.description)
+
+    def test_raise_for_nonexistent_id(self):
+        with self.assertRaises(KeyError):
+            self.cache.get(id="missing-prompt-id")
+
+    def test_id_cache_with_disk_persistence(self):
+        # Test that ID-based caching works with disk persistence
+        prompt_id = "persistent-prompt-id"
+
+        # Fill memory cache to force disk storage
+        self.cache.set(self.test_prompt, slug="prompt1", version="v1", project_id="123")
+        self.cache.set(self.test_prompt, slug="prompt2", version="v1", project_id="123")
+        self.cache.set(self.test_prompt, id=prompt_id)
+
+        # The ID-based prompt should be retrievable (from disk if evicted from memory)
+        result = self.cache.get(id=prompt_id)
+        self.assertEqual(result.as_dict(), self.test_prompt.as_dict())
+
 
 if __name__ == "__main__":
     unittest.main()
