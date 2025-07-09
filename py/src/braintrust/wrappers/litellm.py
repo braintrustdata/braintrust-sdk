@@ -367,7 +367,7 @@ class ResponsesWrapper:
                 span.end()
 
     @classmethod
-    def _postprocess_streaming_results(cls, all_results: List[Any]) -> Dict[str, Any]:
+    def _postprocess_streaming_results(cls, all_results: list[Any]) -> dict[str, Any]:
         role = None
         content = None
         tool_calls = None
