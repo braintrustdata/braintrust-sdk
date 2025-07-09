@@ -1056,6 +1056,7 @@ export const patchEnvironmentSchema = z
       .string()
       .nullish()
       .describe("Textual description of the environment"),
+    org_id: z.string().uuid().nullish(),
   })
   .openapi("PatchEnvironment");
 
