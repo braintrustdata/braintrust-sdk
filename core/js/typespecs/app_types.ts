@@ -1233,13 +1233,15 @@ export const patchOrganizationMembersSchema = z
           .array()
           .nullish()
           .describe("Emails of users to invite"),
-        service_account: z
-          .object({
-            name: z.string(),
-            token_name: z.string().nullish(),
-          })
+        service_accounts: z
+          .array(
+            z.object({
+              name: z.string(),
+              token_name: z.string().nullish(),
+            }),
+          )
           .nullish()
-          .describe("Service account to create"),
+          .describe("Service accounts to create"),
         send_invite_emails: z
           .boolean()
           .nullish()
