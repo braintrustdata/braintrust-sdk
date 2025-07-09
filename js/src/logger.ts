@@ -3811,6 +3811,10 @@ function extractAttachments(
   attachments: BaseAttachment[],
 ): void {
   for (const [key, value] of Object.entries(event)) {
+    if (!value) {
+      continue;
+    }
+
     // Base case: Attachment or ExternalAttachment.
     if (value instanceof BaseAttachment) {
       attachments.push(value);
@@ -3818,27 +3822,14 @@ function extractAttachments(
       continue; // Attachment cannot be nested.
     }
 
-    // Skip if this is already just a reference (no _data or uploader fields)
-    if (
-      value &&
-      typeof value === "object" &&
-      !Array.isArray(value) &&
-      value.type === BRAINTRUST_ATTACHMENT &&
-      value.key &&
-      !value._data &&
-      !value.uploader
-    ) {
+    // Skip if this is already just a reference (no uploader field)
+    if (value?.type === BRAINTRUST_ATTACHMENT && value.key && !value.uploader) {
       // This is already just a reference, skip it
       continue;
     }
 
     // Check for serialized attachment objects that lost their class identity
-    if (
-      typeof value === "object" &&
-      value?.reference?.type === BRAINTRUST_ATTACHMENT &&
-      value._data &&
-      value.uploader
-    ) {
+    if (value?.reference?.type === BRAINTRUST_ATTACHMENT && value?.uploader) {
       // This looks like a serialized Attachment object, recreate it properly
       const attachment = new Attachment({
         data: value.dataDebugString,
