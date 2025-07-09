@@ -263,6 +263,169 @@ class CompletionWrapper:
         }
 
 
+class ResponsesWrapper:
+    """Wrapper for LiteLLM responses functions with tracing support."""
+
+    def __init__(self, responses_fn: Callable[..., Any] | None, aresponses_fn: Callable[..., Any] | None) -> None:
+        self.responses_fn = responses_fn
+        self.aresponses_fn = aresponses_fn
+
+    def _handle_streaming_response(
+        self, raw_response: Any, span: Span, start_time: float, is_async: bool = False
+    ) -> AsyncResponseWrapper | Generator[Any, None, None]:
+        """Handle streaming response for both sync and async cases."""
+        if is_async:
+
+            async def async_gen() -> AsyncGenerator[Any, None]:
+                try:
+                    first = True
+                    all_results: list[dict[str, Any]] = []
+                    async for item in raw_response:
+                        if first:
+                            span.log(metrics={"time_to_first_token": time.time() - start_time})
+                            first = False
+                        all_results.append(item)
+                        yield item
+
+                    span.log(**self._postprocess_streaming_results(all_results))
+                finally:
+                    span.end()
+
+            streamer = async_gen()
+            return AsyncResponseWrapper(streamer)
+        else:
+
+            def sync_gen() -> Generator[Any, None, None]:
+                try:
+                    first = True
+                    all_results: list[dict[str, Any]] = []
+                    for item in raw_response:
+                        if first:
+                            span.log(metrics={"time_to_first_token": time.time() - start_time})
+                            first = False
+                        all_results.append(item)
+                        yield item
+
+                    span.log(**self._postprocess_streaming_results(all_results))
+                finally:
+                    span.end()
+
+            return sync_gen()
+
+    def _handle_non_streaming_response(self, raw_response: Any, span: Span, start_time: float) -> Any:
+        """Handle non-streaming response."""
+        log_response = _try_to_dict(raw_response)
+        metrics = _parse_metrics_from_usage(log_response.get("usage", {}))
+        metrics["time_to_first_token"] = time.time() - start_time
+        span.log(metrics=metrics, output=log_response["output"])
+        return raw_response
+
+    def responses(self, *args: Any, **kwargs: Any) -> Any:
+        """Sync responses with tracing."""
+        updated_span_payload = _update_span_payload_from_params(kwargs, input_key="input")
+        is_streaming = kwargs.get("stream", False)
+
+        span = start_span(
+            **merge_dicts(dict(name="Response", span_attributes={"type": SpanTypeAttribute.LLM}), updated_span_payload)
+        )
+        should_end = True
+
+        try:
+            start = time.time()
+            response = self.responses_fn(*args, **kwargs)
+
+            if is_streaming:
+                should_end = False
+                return self._handle_streaming_response(response, span, start, is_async=False)
+            else:
+                return self._handle_non_streaming_response(response, span, start)
+        finally:
+            if should_end:
+                span.end()
+
+    async def aresponses(self, *args: Any, **kwargs: Any) -> Any:
+        """Async completion with tracing."""
+        updated_span_payload = _update_span_payload_from_params(kwargs, input_key="input")
+        is_streaming = kwargs.get("stream", False)
+
+        span = start_span(
+            **merge_dicts(dict(name="Response", span_attributes={"type": SpanTypeAttribute.LLM}), updated_span_payload)
+        )
+        should_end = True
+
+        try:
+            start = time.time()
+            response = await self.aresponses_fn(*args, **kwargs)
+
+            if is_streaming:
+                should_end = False
+                return self._handle_streaming_response(response, span, start, is_async=True)
+            else:
+                return self._handle_non_streaming_response(response, span, start)
+        finally:
+            if should_end:
+                span.end()
+
+    @classmethod
+    def _postprocess_streaming_results(cls, all_results: List[Any]) -> Dict[str, Any]:
+        role = None
+        content = None
+        tool_calls = None
+        finish_reason = None
+        metrics = {}
+        output = []
+        for result in all_results:
+            usage = None
+            if hasattr(result, "usage"):
+                usage = getattr(result, "usage")
+            elif result.type == "response.completed" and hasattr(result, "response"):
+                usage = getattr(result.response, "usage")
+
+            if usage:
+                parsed_metrics = _parse_metrics_from_usage(usage)
+                metrics.update(parsed_metrics)
+
+            if result.type == "response.output_item.added":
+                output.append({"id": result.item.get("id"), "type": result.item.get("type")})
+                continue
+
+            if not hasattr(result, "output_index"):
+                continue
+
+            output_index = result.output_index
+            current_output = output[output_index]
+            if result.type == "response.output_item.done":
+                current_output["status"] = result.item.get("status")
+                continue
+
+            if result.type == "response.output_item.delta":
+                current_output["delta"] = result.delta
+                continue
+
+            if hasattr(result, "content_index"):
+                if "content" not in current_output:
+                    current_output["content"] = []
+                content_index = result.content_index
+                if content_index == len(current_output["content"]):
+                    current_output["content"].append({})
+                current_content = current_output["content"][content_index]
+                if hasattr(result, "delta") and result.delta:
+                    current_content["text"] = (current_content.get("text") or "") + result.delta
+
+                if result.type == "response.output_text.annotation.added":
+                    annotation_index = result.annotation_index
+                    if "annotations" not in current_content:
+                        current_content["annotations"] = []
+                    if annotation_index == len(current_content["annotations"]):
+                        current_content["annotations"].append({})
+                    current_content["annotations"][annotation_index] = _try_to_dict(result.annotation)
+
+        return {
+            "metrics": metrics,
+            "output": output,
+        }
+
+
 class EmbeddingWrapper:
     """Wrapper for LiteLLM embedding functions."""
 
@@ -302,6 +465,8 @@ class LiteLLMWrapper(NamedWrapper):
         super().__init__(litellm_module)
         self._completion_wrapper = CompletionWrapper(litellm_module.completion, None)
         self._acompletion_wrapper = CompletionWrapper(None, litellm_module.acompletion)
+        self._responses_wrapper = ResponsesWrapper(litellm_module.responses, None)
+        self._aresponses_wrapper = ResponsesWrapper(None, litellm_module.aresponses)
         self._embedding_wrapper = EmbeddingWrapper(litellm_module.embedding)
 
     def completion(self, *args: Any, **kwargs: Any) -> Any:
@@ -311,6 +476,14 @@ class LiteLLMWrapper(NamedWrapper):
     async def acompletion(self, *args: Any, **kwargs: Any) -> Any:
         """Async completion with tracing."""
         return await self._acompletion_wrapper.acompletion(*args, **kwargs)
+
+    def responses(self, *args: Any, **kwargs: Any) -> Any:
+        """Sync responses with tracing."""
+        return self._responses_wrapper.responses(*args, **kwargs)
+
+    async def aresponses(self, *args: Any, **kwargs: Any) -> Any:
+        """Async responses with tracing."""
+        return await self._aresponses_wrapper.aresponses(*args, **kwargs)
 
     def embedding(self, *args: Any, **kwargs: Any) -> Any:
         """Sync embedding with tracing."""
