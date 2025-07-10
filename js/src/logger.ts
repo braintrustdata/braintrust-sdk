@@ -3828,7 +3828,9 @@ function extractAttachments(
       continue;
     }
 
-    // Check for serialized attachment objects that lost their class identity
+    // Somehwhere in our pipeline we're serializing the attachment and then deserializing it.
+    // This loses the instanceof identity of the attachment, so we need to recreate it because
+    // the above instance check doesn't catch it.
     if (value?.reference?.type === BRAINTRUST_ATTACHMENT && value?.uploader) {
       // This looks like a serialized Attachment object, recreate it properly
       const attachment = new Attachment({
