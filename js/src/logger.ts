@@ -3811,11 +3811,36 @@ function extractAttachments(
   attachments: BaseAttachment[],
 ): void {
   for (const [key, value] of Object.entries(event)) {
+    if (!value) {
+      continue;
+    }
+
     // Base case: Attachment or ExternalAttachment.
     if (value instanceof BaseAttachment) {
       attachments.push(value);
       event[key] = value.reference;
       continue; // Attachment cannot be nested.
+    }
+
+    // Skip if this is already just a reference (no uploader field)
+    if (value?.type === BRAINTRUST_ATTACHMENT && value.key && !value.uploader) {
+      // This is already just a reference, skip it
+      continue;
+    }
+
+    // Somewhere in our pipeline we're serializing the attachment and then deserializing it.
+    // This loses the instanceof identity of the attachment, so we need to recreate it because
+    // the above instance check doesn't catch it.
+    if (value?.reference?.type === BRAINTRUST_ATTACHMENT && value?.uploader) {
+      // This looks like a serialized Attachment object, recreate it properly
+      const attachment = new Attachment({
+        data: value.dataDebugString,
+        filename: value.reference.filename,
+        contentType: value.reference.content_type,
+      });
+      attachments.push(attachment);
+      event[key] = attachment.reference;
+      continue;
     }
 
     // Base case: non-object.
