@@ -3828,7 +3828,7 @@ function extractAttachments(
       continue;
     }
 
-    // Somehwhere in our pipeline we're serializing the attachment and then deserializing it.
+    // Somewhere in our pipeline we're serializing the attachment and then deserializing it.
     // This loses the instanceof identity of the attachment, so we need to recreate it because
     // the above instance check doesn't catch it.
     if (value?.reference?.type === BRAINTRUST_ATTACHMENT && value?.uploader) {
