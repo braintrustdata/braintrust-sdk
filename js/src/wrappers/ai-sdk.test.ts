@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { postProcessPrompt } from "./ai-sdk";
-import { LanguageModelV1Prompt } from "@ai-sdk/provider";
+import { postProcessPrompt, postProcessOutput } from "./ai-sdk";
+import {
+  LanguageModelV1Prompt,
+  LanguageModelV1FunctionToolCall,
+} from "@ai-sdk/provider";
 
 describe("postProcessPrompt", () => {
   it("correctly processes a simple chat prompt", () => {
@@ -50,5 +53,40 @@ describe("postProcessPrompt", () => {
         ],
       },
     ]);
+  });
+});
+
+describe("postProcessOutput", () => {
+  it("should format tool calls correctly in OpenAI format", () => {
+    const toolCalls: LanguageModelV1FunctionToolCall[] = [
+      {
+        toolCallType: "function",
+        toolCallId: "call_abc123",
+        toolName: "get_weather",
+        args: '{"location": "San Francisco", "unit": "celsius"}',
+      },
+    ];
+
+    const result = postProcessOutput(undefined, toolCalls, "tool_calls");
+
+    // Tool calls should be properly formatted in OpenAI format
+    expect(result).toEqual({
+      index: 0,
+      message: {
+        role: "assistant",
+        content: "",
+        tool_calls: [
+          {
+            id: "call_abc123",
+            type: "function",
+            function: {
+              name: "get_weather",
+              arguments: '{"location": "San Francisco", "unit": "celsius"}',
+            },
+          },
+        ],
+      },
+      finish_reason: "tool_calls",
+    });
   });
 });
