@@ -28,10 +28,15 @@ def test_otel_import_behavior():
 
 
 def test_otel_exporter_creation():
-    from braintrust.otel import OtelExporter
-
     if OTEL_INSTALLED:
+        from braintrust.otel import OtelExporter
+
         with pytest.MonkeyPatch.context() as m:
+            # Clear any existing environment variables first
+            m.delenv("BRAINTRUST_API_KEY", raising=False)
+            m.delenv("BRAINTRUST_PARENT", raising=False)
+
+            # Set test environment variables
             m.setenv("BRAINTRUST_API_KEY", "test-api-key")
             m.setenv("BRAINTRUST_PARENT", "project_name:test")
 
@@ -45,8 +50,10 @@ def test_otel_exporter_creation():
             with pytest.raises(ValueError, match="API key is required"):
                 OtelExporter()
     else:
+        from braintrust.otel import OtelExporter
+
         with pytest.raises(ImportError, match="OpenTelemetry packages are not installed"):
-            OtelExporter()
+            OtelExporter(api_key="fake-key")
 
 
 def test_otel_exporter_with_explicit_params():
@@ -286,7 +293,7 @@ def test_braintrust_otel_enable_no_global_provider(monkeypatch, uninstall_braint
 
 
 def test_braintrust_otel_filter_llm_enable_environment_variable():
-    """Test that BRAINTRUST_OTEL_FILTER_LLM_ENABLE environment variable is recognized."""
+    """Test that BRAINTRUST_OTEL_ENABLE_LLM_FILTER environment variable is recognized."""
     if not OTEL_INSTALLED:
         pytest.skip("OpenTelemetry not installed, skipping test")
 
@@ -297,20 +304,20 @@ def test_braintrust_otel_filter_llm_enable_environment_variable():
     from braintrust.otel import LLMSpanProcessor
 
     # Test that the environment variable is properly read
-    original_value = os.environ.get("BRAINTRUST_OTEL_FILTER_LLM_ENABLE")
+    original_value = os.environ.get("BRAINTRUST_OTEL_ENABLE_LLM_FILTER")
 
     try:
         # Test true value
-        os.environ["BRAINTRUST_OTEL_FILTER_LLM_ENABLE"] = "true"
-        assert os.environ.get("BRAINTRUST_OTEL_FILTER_LLM_ENABLE", "").lower() == "true"
+        os.environ["BRAINTRUST_OTEL_ENABLE_LLM_FILTER"] = "true"
+        assert os.environ.get("BRAINTRUST_OTEL_ENABLE_LLM_FILTER", "").lower() == "true"
 
         # Test false value
-        os.environ["BRAINTRUST_OTEL_FILTER_LLM_ENABLE"] = "false"
-        assert os.environ.get("BRAINTRUST_OTEL_FILTER_LLM_ENABLE", "").lower() == "false"
+        os.environ["BRAINTRUST_OTEL_ENABLE_LLM_FILTER"] = "false"
+        assert os.environ.get("BRAINTRUST_OTEL_ENABLE_LLM_FILTER", "").lower() == "false"
 
         # Test empty value
-        os.environ["BRAINTRUST_OTEL_FILTER_LLM_ENABLE"] = ""
-        assert os.environ.get("BRAINTRUST_OTEL_FILTER_LLM_ENABLE", "").lower() == ""
+        os.environ["BRAINTRUST_OTEL_ENABLE_LLM_FILTER"] = ""
+        assert os.environ.get("BRAINTRUST_OTEL_ENABLE_LLM_FILTER", "").lower() == ""
 
         # Test LLMSpanProcessor can be instantiated
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -329,9 +336,9 @@ def test_braintrust_otel_filter_llm_enable_environment_variable():
     finally:
         # Restore original value
         if original_value is not None:
-            os.environ["BRAINTRUST_OTEL_FILTER_LLM_ENABLE"] = original_value
+            os.environ["BRAINTRUST_OTEL_ENABLE_LLM_FILTER"] = original_value
         else:
-            os.environ.pop("BRAINTRUST_OTEL_FILTER_LLM_ENABLE", None)
+            os.environ.pop("BRAINTRUST_OTEL_ENABLE_LLM_FILTER", None)
 
 
 def test_processor_class():
