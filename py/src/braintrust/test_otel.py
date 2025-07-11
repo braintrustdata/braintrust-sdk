@@ -1,3 +1,4 @@
+# pylint: disable=not-context-manager
 import importlib
 import os
 import sys
