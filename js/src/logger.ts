@@ -5864,6 +5864,12 @@ export interface DatasetSummary {
 // on the server side.
 const TEST_API_KEY = "___TEST_API_KEY__THIS_IS_NOT_REAL___";
 
+function setInitialTestState() {
+  // a way of setting initial state for tests without any log messages
+  if (!_internalGetGlobalState()) {
+    _internalSetInitialState();
+  }
+}
 // This is a helper function to simulate a login for testing.
 async function simulateLoginForTests() {
   return await login({
@@ -5886,4 +5892,5 @@ export const _exportsForTestingOnly = {
   clearTestBackgroundLogger,
   simulateLoginForTests,
   simulateLogoutForTests,
+  setInitialTestState,
 };
