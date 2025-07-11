@@ -135,7 +135,7 @@ class OtelExporter(OTLPSpanExporter):
     Environment Variables:
     - BRAINTRUST_OTEL_ENABLE: Set to "true" to automatically configure OpenTelemetry
       with this exporter at import time.
-    - BRAINTRUST_OTEL_FILTER_LLM_ENABLE: Set to "true" to automatically wrap the
+    - BRAINTRUST_OTEL_ENABLE_LLM_FILTER: Set to "true" to automatically wrap the
       exporter with LLMSpanProcessor for filtering only LLM-related spans.
     - BRAINTRUST_API_KEY: Your Braintrust API key.
     - BRAINTRUST_PARENT: Parent identifier (e.g., "project_name:test").
@@ -294,7 +294,7 @@ def _auto_configure_braintrust_otel():
 
     try:
         # Check if LLM filtering is enabled
-        filter_llm_enabled = os.environ.get("BRAINTRUST_OTEL_FILTER_LLM_ENABLE", "").lower() == "true"
+        filter_llm_enabled = os.environ.get("BRAINTRUST_OTEL_ENABLE_LLM_FILTER", "").lower() == "true"
 
         # Create our processor using the new Processor class
         processor = Processor(enable_llm_filtering=filter_llm_enabled)

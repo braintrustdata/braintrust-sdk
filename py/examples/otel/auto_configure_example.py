@@ -4,7 +4,7 @@ import os
 
 # Set environment variables at the top before any imports
 os.environ["BRAINTRUST_OTEL_ENABLE"] = "true"
-os.environ["BRAINTRUST_OTEL_FILTER_LLM_ENABLE"] = "false"
+os.environ["BRAINTRUST_OTEL_ENABLE_LLM_FILTER"] = "false"
 os.environ["BRAINTRUST_PARENT"] = "project_name:otel-examples"
 
 import time
