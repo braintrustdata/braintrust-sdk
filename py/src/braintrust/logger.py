@@ -22,7 +22,6 @@ from multiprocessing import cpu_count
 from types import TracebackType
 from typing import (
     Any,
-    Boolean,
     Callable,
     Dict,
     Generic,
@@ -3232,7 +3231,7 @@ class SpanImpl(Span):
         if type is None and not parent_span_ids:
             type = default_root_type
 
-        self.can_set_current = cast(Boolean, coalesce(set_current, True))
+        self.can_set_current = cast(bool, coalesce(set_current, True))
         self._logged_end_time: Optional[float] = None
 
         self.parent_object_type = parent_object_type
