@@ -4437,9 +4437,11 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     return this.state;
   }
 
-  public async *asDataset<Input, Expected>(): AsyncGenerator<
-    EvalCase<Input, Expected, void>
-  > {
+  public async *asDataset<
+    Input,
+    Expected,
+    Metadata = DefaultMetadataType,
+  >(): AsyncGenerator<EvalCase<Input, Expected, Metadata>> {
     const records = this.fetch();
 
     for await (const record of records) {
@@ -4447,20 +4449,25 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
         continue;
       }
 
-      const { output, expected: expectedRecord } = record;
+      const { output, expected: expectedRecord, metadata } = record;
       const expected = (expectedRecord ?? output) as Expected;
 
+      const baseCase: any = {
+        input: record.input as Input,
+        tags: record.tags,
+      };
+
+      if (metadata !== undefined && metadata !== null) {
+        baseCase.metadata = metadata as Metadata;
+      }
+
       if (isEmpty(expected)) {
-        yield {
-          input: record.input as Input,
-          tags: record.tags,
-        } as EvalCase<Input, Expected, void>;
+        yield baseCase as EvalCase<Input, Expected, Metadata>;
       } else {
         yield {
-          input: record.input as Input,
+          ...baseCase,
           expected: expected,
-          tags: record.tags,
-        } as unknown as EvalCase<Input, Expected, void>;
+        } as EvalCase<Input, Expected, Metadata>;
       }
     }
   }
