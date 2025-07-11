@@ -22,6 +22,7 @@ from multiprocessing import cpu_count
 from types import TracebackType
 from typing import (
     Any,
+    Boolean,
     Callable,
     Dict,
     Generic,
@@ -237,6 +238,11 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
         """
         pass
 
+    @abstractmethod
+    def set_current(self) -> None:
+        """Set the span as the current span. This is used to mark the span as the active span for the current thread."""
+        pass
+
 
 class _NoopSpan(Span):
     """A fake implementation of the Span API which does nothing. This can be used as the default span."""
@@ -290,6 +296,9 @@ class _NoopSpan(Span):
         type: Optional[SpanTypeAttribute] = None,
         span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
     ):
+        pass
+
+    def set_current(self):
         pass
 
     def __enter__(self):
@@ -3197,6 +3206,8 @@ class SpanImpl(Span):
     We suggest using one of the various `start_span` methods, instead of creating Spans directly. See `Span.start_span` for full details.
     """
 
+    can_set_current: bool
+
     def __init__(
         self,
         parent_object_type: SpanObjectTypeV3,
@@ -3221,7 +3232,7 @@ class SpanImpl(Span):
         if type is None and not parent_span_ids:
             type = default_root_type
 
-        self.set_current = coalesce(set_current, True)
+        self.can_set_current = cast(Boolean, coalesce(set_current, True))
         self._logged_end_time: Optional[float] = None
 
         self.parent_object_type = parent_object_type
@@ -3468,9 +3479,12 @@ class SpanImpl(Span):
 
         _state.global_bg_logger().flush()
 
-    def __enter__(self) -> Span:
-        if self.set_current:
+    def set_current(self):
+        if self.can_set_current:
             self._context_token = _state.current_span.set(self)
+
+    def __enter__(self) -> Span:
+        self.set_current()
         return self
 
     def __exit__(self, exc_type, exc_value, tb) -> None:
@@ -3478,7 +3492,7 @@ class SpanImpl(Span):
             if exc_type is not None:
                 self.log_internal(dict(error=stringify_exception(exc_type, exc_value, tb)))
         finally:
-            if self.set_current:
+            if self.can_set_current:
                 _state.current_span.reset(self._context_token)
 
             self.end()
