@@ -29,7 +29,6 @@ processor = Processor(
     api_url="https://api.braintrust.dev",  # Base URL for Braintrust API
     enable_llm_filtering=True,  # Enable LLM span filtering
     custom_filter=my_custom_filter,  # Custom filter function
-    headers={"X-Custom-Header": "demo"},  # Additional headers
 )
 
 # Add the processor to the tracer provider
