@@ -32,6 +32,7 @@ import {
 } from "../src/db_fields";
 import { spanTypeAttributeValues } from "../src/span_types";
 import { objectNullish } from "../src/zod_util";
+import { functionTypeEnum } from "./functions";
 
 const auditSourcesSchema = z.enum(VALID_SOURCES);
 
@@ -410,6 +411,8 @@ export const promptSessionEventSchema = z
     ),
     prompt_data: customTypes.unknown.describe("Data about the prompt"),
     function_data: customTypes.unknown.describe("Data about the function"),
+    // An empty (unspecified) function_type is equivalent to "task".
+    function_type: functionTypeEnum.nullish(),
     object_data: customTypes.unknown.describe("Data about the mapped data"),
     completion: customTypes.unknown.describe("Data about the completion"),
     tags: promptSessionEventBaseSchema.shape.tags,
