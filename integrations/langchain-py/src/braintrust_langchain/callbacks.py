@@ -127,6 +127,8 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
                 **event,
             )
 
+        span.set_current()
+
         self.spans[run_id] = span
         return span
 
