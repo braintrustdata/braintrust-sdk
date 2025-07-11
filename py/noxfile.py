@@ -41,6 +41,9 @@ VENDOR_PACKAGES = (
     "pydantic_ai",
     "autoevals",
     "braintrust_core",
+    "opentelemetry-api",
+    "opentelemetry-sdk",
+    "opentelemetry-exporter-otlp-proto-http",
 )
 
 # Test matrix
