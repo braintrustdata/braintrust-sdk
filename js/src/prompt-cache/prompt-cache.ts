@@ -9,12 +9,12 @@ export interface PromptKey {
   /**
    * The slug identifier for the prompt within its project.
    */
-  slug: string;
+  slug?: string;
 
   /**
    * The version of the prompt.
    */
-  version: string;
+  version?: string;
 
   /**
    * The ID of the project containing the prompt.
@@ -27,20 +27,33 @@ export interface PromptKey {
    * Either projectId or projectName must be provided.
    */
   projectName?: string;
+
+  /**
+   * The ID of a specific prompt. If provided, slug and project parameters are ignored.
+   */
+  id?: string;
 }
 
 /**
  * Creates a unique cache key from prompt key.
  * @param key - The prompt key to convert into a cache key.
  * @returns A string that uniquely identifies the prompt in the cache.
- * @throws {Error} If neither projectId nor projectName is provided.
+ * @throws {Error} If neither projectId nor projectName is provided (when not using id).
  */
 function createCacheKey(key: PromptKey): string {
+  if (key.id) {
+    // When caching by ID, we don't need project or slug
+    return `id:${key.id}`;
+  }
+
   const prefix = key.projectId ?? key.projectName;
   if (!prefix) {
     throw new Error("Either projectId or projectName must be provided");
   }
-  return `${prefix}:${key.slug}:${key.version}`;
+  if (!key.slug) {
+    throw new Error("Slug must be provided when not using ID");
+  }
+  return `${prefix}:${key.slug}:${key.version ?? "latest"}`;
 }
 
 /**
