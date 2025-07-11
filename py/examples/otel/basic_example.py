@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 
+import os
 import time
+
+os.environ.setdefault("BRAINTRUST_PARENT", "project_name:otel-examples")
+
 
 from braintrust.otel import OtelExporter
 from opentelemetry import trace
@@ -8,7 +12,8 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 
 # Set up the tracer provider
-trace.set_tracer_provider(TracerProvider())
+provider = TracerProvider()
+trace.set_tracer_provider(provider)
 
 # Create Braintrust exporter
 exporter = OtelExporter(
@@ -17,17 +22,9 @@ exporter = OtelExporter(
     # url="https://api.braintrust.dev/otel/v1/traces",  # Optional, this is the default
 )
 
-print(f"Parent: {exporter.parent}")
-print(f"Headers: {exporter._headers}")
-
-# Add console exporter to see what spans look like
-console_exporter = ConsoleSpanExporter()
-console_processor = BatchSpanProcessor(console_exporter)
-trace.get_tracer_provider().add_span_processor(console_processor)
-
 # Add the exporter to the tracer provider
 span_processor = BatchSpanProcessor(exporter)
-trace.get_tracer_provider().add_span_processor(span_processor)
+provider.add_span_processor(span_processor)
 
 # Create a tracer
 tracer = trace.get_tracer(__name__)
@@ -44,7 +41,4 @@ with tracer.start_as_current_span("parent_span") as parent_span:
         child_span.set_attribute("step", "finalizing")
         time.sleep(0.05)
 
-print("Spans created and exported to Braintrust!")
-
-# Force flush to ensure spans are sent
 trace.get_tracer_provider().force_flush(30)
