@@ -3000,6 +3000,7 @@ type LoadPromptOptions = FullLoginOptions & {
   projectId?: string;
   slug?: string;
   version?: string;
+  id?: string;
   defaults?: DefaultPromptArgs;
   noTrace?: boolean;
   state?: BraintrustState;
@@ -3013,6 +3014,7 @@ type LoadPromptOptions = FullLoginOptions & {
  * @param options.projectId The id of the project to load the prompt from. This takes precedence over `projectName` if specified.
  * @param options.slug The slug of the prompt to load.
  * @param options.version An optional version of the prompt (to read). If not specified, the latest version will be used.
+ * @param options.id The id of a specific prompt to load. If specified, this takes precedence over all other parameters (project, slug, version).
  * @param options.defaults (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
  * @param options.noTrace If true, do not include logging metadata for this prompt when build() is called.
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
@@ -3036,6 +3038,7 @@ export async function loadPrompt({
   projectId,
   slug,
   version,
+  id,
   defaults,
   noTrace = false,
   appUrl,
@@ -3045,11 +3048,11 @@ export async function loadPrompt({
   forceLogin,
   state: stateArg,
 }: LoadPromptOptions) {
-  if (isEmpty(projectName) && isEmpty(projectId)) {
+  if (id) {
+    // When loading by ID, we don't need project or slug
+  } else if (isEmpty(projectName) && isEmpty(projectId)) {
     throw new Error("Must specify either projectName or projectId");
-  }
-
-  if (isEmpty(slug)) {
+  } else if (isEmpty(slug)) {
     throw new Error("Must specify slug");
   }
 
@@ -3063,49 +3066,82 @@ export async function loadPrompt({
       fetch,
       forceLogin,
     });
-    response = await state.apiConn().get_json("v1/prompt", {
-      project_name: projectName,
-      project_id: projectId,
-      slug,
-      version,
-    });
+    if (id) {
+      // Load prompt by ID using the /v1/prompt/{id} endpoint
+      response = await state.apiConn().get_json(`v1/prompt/${id}`, {});
+      // Wrap single prompt response in objects array to match list API format
+      if (response) {
+        response = { objects: [response] };
+      }
+    } else {
+      response = await state.apiConn().get_json("v1/prompt", {
+        project_name: projectName,
+        project_id: projectId,
+        slug,
+        version,
+      });
+    }
   } catch (e) {
     console.warn("Failed to load prompt, attempting to fall back to cache:", e);
-    const prompt = await state.promptCache.get({
-      slug,
-      projectId,
-      projectName,
-      version: version ?? "latest",
-    });
-    if (!prompt) {
-      throw new Error(
-        `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[
-          projectName ?? projectId,
-        ]} (not found on server or in local cache): ${e}`,
-      );
+    let prompt;
+    if (id) {
+      prompt = await state.promptCache.get({ id });
+      if (!prompt) {
+        throw new Error(
+          `Prompt with id ${id} not found (not found on server or in local cache): ${e}`,
+        );
+      }
+    } else {
+      prompt = await state.promptCache.get({
+        slug,
+        projectId,
+        projectName,
+        version: version ?? "latest",
+      });
+      if (!prompt) {
+        throw new Error(
+          `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[
+            projectName ?? projectId,
+          ]} (not found on server or in local cache): ${e}`,
+        );
+      }
     }
     return prompt;
   }
 
   if (!("objects" in response) || response.objects.length === 0) {
-    throw new Error(
-      `Prompt ${slug} not found in ${[projectName ?? projectId]}`,
-    );
+    if (id) {
+      throw new Error(`Prompt with id ${id} not found.`);
+    } else {
+      throw new Error(
+        `Prompt ${slug} not found in ${[projectName ?? projectId]}`,
+      );
+    }
   } else if (response.objects.length > 1) {
-    throw new Error(
-      `Multiple prompts found with slug ${slug} in project ${
-        projectName ?? projectId
-      }. This should never happen.`,
-    );
+    if (id) {
+      throw new Error(
+        `Multiple prompts found with id ${id}. This should never happen.`,
+      );
+    } else {
+      throw new Error(
+        `Multiple prompts found with slug ${slug} in project ${
+          projectName ?? projectId
+        }. This should never happen.`,
+      );
+    }
   }
 
   const metadata = promptSchema.parse(response["objects"][0]);
   const prompt = new Prompt(metadata, defaults || {}, noTrace);
   try {
-    await state.promptCache.set(
-      { slug, projectId, projectName, version: version ?? "latest" },
-      prompt,
-    );
+    if (id) {
+      await state.promptCache.set({ id }, prompt);
+    } else if (slug) {
+      await state.promptCache.set(
+        { slug, projectId, projectName, version: version ?? "latest" },
+        prompt,
+      );
+    }
   } catch (e) {
     console.warn("Failed to set prompt in cache:", e);
   }
