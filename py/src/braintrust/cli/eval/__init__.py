@@ -1,31 +1,25 @@
 import asyncio
 import fnmatch
-import importlib
 import logging
 import os
 import sys
-from dataclasses import dataclass, field
-from threading import Lock
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
-from .. import login
-from ..framework import (
+from braintrust import login
+from braintrust.cli.eval.models import EvaluatorOpts, EvaluatorState, FileHandle, LoadedEvaluator
+from braintrust.dev.server import run_dev_server
+from braintrust.framework import (
     BaseExperiment,
-    Evaluator,
     EvaluatorInstance,
     ReporterDef,
-    _evals,
-    _set_lazy_load,
-    bcolors,
     default_reporter,
     init_experiment,
     parse_filters,
-    report_evaluator_result,
     run_evaluator,
     set_thread_pool_max_workers,
 )
-from ..logger import Dataset
-from ..util import eprint
+from braintrust.logger import Dataset
+from braintrust.util import eprint
 
 INCLUDE = [
     "**/eval_*.py",
@@ -35,62 +29,7 @@ EXCLUDE = ["**/site-packages/**"]
 _logger = logging.getLogger("braintrust.eval")
 
 
-_import_lock = Lock()
-
-
-@dataclass
-class FileHandle:
-    in_file: str
-
-    def rebuild(self):
-        in_file = os.path.abspath(self.in_file)
-
-        with _import_lock:
-            with _set_lazy_load(True):
-                _evals.clear()
-
-                try:
-                    # https://stackoverflow.com/questions/67631/how-can-i-import-a-module-dynamically-given-the-full-path
-                    spec = importlib.util.spec_from_file_location("eval", in_file)
-                    module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(module)
-
-                    ret = _evals.copy()
-                finally:
-                    _evals.clear()
-
-        return ret
-
-    def watch(self):
-        raise NotImplementedError
-
-
-@dataclass
-class EvaluatorOpts:
-    verbose: bool
-    no_send_logs: bool
-    no_progress_bars: bool
-    terminate_on_failure: bool
-    watch: bool
-    filters: List[str]
-    list: bool
-    jsonl: bool
-
-
-@dataclass
-class LoadedEvaluator:
-    handle: FileHandle
-    evaluator: Evaluator
-    reporter: Optional[Union[ReporterDef, str]] = None
-
-
-@dataclass
-class EvaluatorState:
-    evaluators: List[LoadedEvaluator] = field(default_factory=list)
-    reporters: Dict[str, ReporterDef] = field(default_factory=dict)
-
-
-def update_evaluators(eval_state: EvaluatorState, handles, terminate_on_failure):
+def update_evaluators(eval_state: EvaluatorState, handles: List[FileHandle], terminate_on_failure: bool):
     for handle in handles:
         try:
             module_evals = handle.rebuild()
@@ -102,7 +41,7 @@ def update_evaluators(eval_state: EvaluatorState, handles, terminate_on_failure)
                 continue
 
         for evaluator in module_evals.evaluators.values():
-            if not isinstance(evaluator, EvaluatorInstance):
+            if not isinstance(evaluator, EvaluatorInstance):  # pyright: ignore[reportUnnecessaryIsInstance]
                 continue
 
             eval_state.evaluators.append(
@@ -110,7 +49,7 @@ def update_evaluators(eval_state: EvaluatorState, handles, terminate_on_failure)
             )
 
         for reporter_name, reporter in module_evals.reporters.items():
-            if not isinstance(reporter, ReporterDef):
+            if not isinstance(reporter, ReporterDef):  # pyright: ignore[reportUnnecessaryIsInstance]
                 continue
 
             if reporter_name in eval_state.reporters:
@@ -215,7 +154,7 @@ async def run_once(handles: List[FileHandle], evaluator_opts: EvaluatorOpts) -> 
     return all_success
 
 
-def check_match(path_input, include_patterns, exclude_patterns):
+def check_match(path_input: str, include_patterns: list[str], exclude_patterns: list[str]):
     p = os.path.abspath(path_input)
     if include_patterns:
         include = False
@@ -237,9 +176,9 @@ def check_match(path_input, include_patterns, exclude_patterns):
     return True
 
 
-def collect_files(input_path):
+def collect_files(input_path: str):
     if os.path.isdir(input_path):
-        for root, dirs, files in os.walk(input_path):
+        for root, _, files in os.walk(input_path):
             for file in files:
                 fname = os.path.join(root, file)
                 if check_match(fname, INCLUDE, EXCLUDE):
@@ -253,10 +192,10 @@ def collect_files(input_path):
         yield input_path
 
 
-def initialize_handles(files):
+def initialize_handles(files: list[str]):
     input_paths = files if len(files) > 0 else ["."]
 
-    fnames = set()
+    fnames: set[str] = set()
     for path in input_paths:
         for fname in collect_files(path):
             fnames.add(os.path.abspath(fname))
@@ -264,7 +203,7 @@ def initialize_handles(files):
     return [FileHandle(in_file=fname) for fname in fnames]
 
 
-def run(args):
+def run(args: Any):
     if args.num_workers:
         set_thread_pool_max_workers(args.num_workers)
 
@@ -293,6 +232,17 @@ def run(args):
 
     handles = initialize_handles(args.files)
 
+    if args.dev:
+        objects = EvaluatorState()
+        update_evaluators(objects, handles, terminate_on_failure=evaluator_opts.terminate_on_failure)
+
+        run_dev_server(
+            objects.evaluators,
+            host=args.dev_host,
+            port=args.dev_port,
+        )
+        return
+
     if not evaluator_opts.no_send_logs:
         login(
             api_key=args.api_key,
@@ -304,7 +254,7 @@ def run(args):
         sys.exit(1)
 
 
-def build_parser(subparsers, parent_parser):
+def build_parser(subparsers: Any, parent_parser: Any):
     parser = subparsers.add_parser(
         "eval",
         help="Run evals locally.",
@@ -367,6 +317,23 @@ def build_parser(subparsers, parent_parser):
         "files",
         nargs="*",
         help="A list of files or directories to run. If no files are specified, the current directory is used.",
+    )
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Run in development mode",
+    )
+    parser.add_argument(
+        "--dev-host",
+        type=str,
+        default="localhost",
+        help="The host to bind the dev server to. Defaults to localhost. Set to 0.0.0.0 to bind to all interfaces.",
+    )
+    parser.add_argument(
+        "--dev-port",
+        type=int,
+        default=8300,
+        help="The port to bind the dev server to. Defaults to 8300.",
     )
 
     parser.set_defaults(func=run)
