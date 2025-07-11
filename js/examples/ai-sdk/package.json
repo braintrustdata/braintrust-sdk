@@ -1,0 +1,14 @@
+{
+  "name": "braintrust-ai-sdk-example",
+  "version": "1.0.0",
+  "description": "Example demonstrating Braintrust AI SDK wrapper with tool calls",
+  "type": "module",
+  "scripts": {
+    "start": "node tool-calls-example.js"
+  },
+  "dependencies": {
+    "ai": "^4.1.0",
+    "@ai-sdk/openai": "^1.1.0",
+    "zod": "^3.22.0"
+  }
+}
