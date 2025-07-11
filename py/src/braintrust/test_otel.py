@@ -131,6 +131,11 @@ def test_braintrust_otel_enable_import_behavior(monkeypatch, uninstall_braintrus
             if isinstance(processor.span_exporter, otel_module.OtelExporter):
                 braintrust_exporter_found = True
                 break
+        elif isinstance(processor, otel_module.Processor):
+            # Check if the processor's exporter is our OtelExporter
+            if isinstance(processor.exporter, otel_module.OtelExporter):
+                braintrust_exporter_found = True
+                break
 
     assert braintrust_exporter_found, "OtelExporter was not added to the global tracer provider"
 
@@ -327,6 +332,72 @@ def test_braintrust_otel_filter_llm_enable_environment_variable():
             os.environ["BRAINTRUST_OTEL_FILTER_LLM_ENABLE"] = original_value
         else:
             os.environ.pop("BRAINTRUST_OTEL_FILTER_LLM_ENABLE", None)
+
+
+def test_processor_class():
+    """Test the new Processor class."""
+    if not OTEL_INSTALLED:
+        pytest.skip("OpenTelemetry not installed, skipping test")
+
+    from braintrust.otel import Processor
+
+    # Test basic processor without filtering
+    with pytest.MonkeyPatch.context() as m:
+        m.setenv("BRAINTRUST_API_KEY", "test-api-key")
+        processor = Processor()
+
+        # Should have the span processor interface
+        assert hasattr(processor, "on_start")
+        assert hasattr(processor, "on_end")
+        assert hasattr(processor, "shutdown")
+        assert hasattr(processor, "force_flush")
+        assert callable(processor.on_start)
+        assert callable(processor.on_end)
+        assert callable(processor.shutdown)
+        assert callable(processor.force_flush)
+
+        # Should have access to underlying components
+        assert hasattr(processor, "exporter")
+        assert hasattr(processor, "processor")
+
+    # Test processor with LLM filtering
+    with pytest.MonkeyPatch.context() as m:
+        m.setenv("BRAINTRUST_API_KEY", "test-api-key")
+        processor_with_filtering = Processor(enable_llm_filtering=True)
+
+        # Should have the same interface
+        assert hasattr(processor_with_filtering, "on_start")
+        assert hasattr(processor_with_filtering, "on_end")
+        assert hasattr(processor_with_filtering, "shutdown")
+        assert hasattr(processor_with_filtering, "force_flush")
+
+    # Test processor with custom parameters
+    with pytest.MonkeyPatch.context() as m:
+        m.setenv("BRAINTRUST_API_KEY", "test-api-key")
+
+        def custom_filter(span):
+            return span.name.startswith("test_")
+
+        processor_custom = Processor(
+            api_key="explicit-key",
+            parent="project:test",
+            api_url="https://custom.example.com",
+            enable_llm_filtering=True,
+            custom_filter=custom_filter,
+            headers={"X-Test-Header": "test"},
+        )
+
+        # Should have the same interface
+        assert hasattr(processor_custom, "on_start")
+        assert hasattr(processor_custom, "on_end")
+        assert hasattr(processor_custom, "shutdown")
+        assert hasattr(processor_custom, "force_flush")
+
+        # Check that the exporter was created with the right parameters
+        exporter = processor_custom.exporter
+        assert exporter.parent == "project:test"
+        assert exporter._endpoint == "https://custom.example.com/otel/v1/traces"
+        assert exporter._headers["Authorization"] == "Bearer explicit-key"
 
 
 class TestLLMSpanFiltering:
