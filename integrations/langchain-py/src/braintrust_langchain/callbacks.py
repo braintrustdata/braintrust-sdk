@@ -10,6 +10,7 @@ from typing import (
     Optional,
     Pattern,
     Sequence,
+    Set,
     TypedDict,
     Union,
     cast,
@@ -57,6 +58,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         self.exclude_metadata_props = exclude_metadata_props or re.compile(
             r"^(l[sc]_|langgraph_|__pregel_|checkpoint_ns)"
         )
+        self.skipped_runs: Set[UUID] = set()
 
     def _start_span(
         self,
@@ -276,6 +278,7 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
 
         # avoids extra logs that seem not as useful esp. with langgraph
         if "langsmith:hidden" in tags:
+            self.skipped_runs.add(run_id)
             return
 
         self._start_span(
@@ -294,6 +297,10 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         tags: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> Any:
+        if run_id in self.skipped_runs:
+            self.skipped_runs.discard(run_id)
+            return
+
         self._end_span(run_id, output=output_from_chain_values(outputs), tags=tags)
 
     def on_llm_start(
