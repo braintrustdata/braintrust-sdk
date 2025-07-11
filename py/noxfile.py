@@ -108,6 +108,21 @@ def test_braintrust_core(session):
 
 
 @nox.session()
+def test_otel_installed(session):
+    """Test OtelExporter with OpenTelemetry installed."""
+    _install_test_deps(session)
+    session.install("opentelemetry-api", "opentelemetry-sdk", "opentelemetry-exporter-otlp-proto-http")
+    _run_tests(session, "braintrust/test_otel.py", env={"PY_OTEL_INSTALLED": "1"})
+
+
+@nox.session()
+def test_otel_not_installed(session):
+    _install_test_deps(session)
+    session.run("python", "-c", f"import opentelemetry", success_codes=ERROR_CODES, silent=True)
+    _run_tests(session, "braintrust/test_otel.py", env={"PY_OTEL_INSTALLED": "0"})
+
+
+@nox.session()
 def pylint(session):
     # pylint needs everything so we don't trigger missing import errors
     session.install(".[all]")
@@ -169,8 +184,9 @@ def _run_core_tests(session):
     _run_tests(session, SRC_DIR, ignore_path=WRAPPER_DIR)
 
 
-def _run_tests(session, test_path, ignore_path=""):
+def _run_tests(session, test_path, ignore_path="", env=None):
     """Run tests against a wheel or the source code. Paths should be relative and start with braintrust."""
+    env = env.copy() if env else {}
     wheel_flag = "--wheel" in session.posargs
     common_args = ["--disable-vcr"] if "--disable-vcr" in session.posargs else []
     if not wheel_flag:
@@ -181,7 +197,7 @@ def _run_tests(session, test_path, ignore_path=""):
         ]
         if ignore_path:
             test_args.append(f"--ignore=src/{ignore_path}")
-        session.run(*test_args, *common_args)
+        session.run(*test_args, *common_args, env=env)
         return
 
     # Running the tests from the wheel involves a bit of gymnastics to ensure we don't import
@@ -200,7 +216,7 @@ def _run_tests(session, test_path, ignore_path=""):
         # This env var is used to detect if we're running from the wheel.
         # It proved very helpful because it's very easy
         # to accidentally import local modules from the source directory.
-        env = {"BRAINTRUST_TESTING_WHEEL": "1"}
+        env["BRAINTRUST_TESTING_WHEEL"] = "1"
         session.run(pytest_path, abs_test_path, ignore, *common_args, env=env)
 
     # And a final note ... if it's not clear from above, we include test files in our wheel, which
