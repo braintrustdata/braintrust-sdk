@@ -4,7 +4,7 @@ import os
 
 # Set environment variables at the top before any imports
 os.environ["BRAINTRUST_OTEL_ENABLE"] = "true"
-os.environ.setdefault("BRAINTRUST_PARENT", "project_name:auto-configure-example")
+os.environ.setdefault("BRAINTRUST_PARENT", "project_name:otel-examples")
 
 import time
 

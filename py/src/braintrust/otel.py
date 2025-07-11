@@ -22,9 +22,99 @@ except ImportError:
             )
 
 
+LLM_PREFIXES = ("gen_ai.", "braintrust.", "llm.", "ai.")
+
+
+class LLMSpanProcessor:
+    """
+    A span processor that filters spans to only export LLM-related telemetry.
+
+    Only LLM-related spans and root spans will be forwarded to the inner processor.
+    This dramatically reduces telemetry volume while preserving LLM observability.
+
+    Example:
+        > processor = LLMSpanProcessor(BatchSpanProcessor(OTLPSpanExporter()))
+        > provider = TracerProvider()
+        > provider.add_span_processor(processor)
+    """
+
+    def __init__(self, processor, custom_filter=None):
+        """
+        Initialize the LLM span processor.
+
+        Args:
+            processor: The wrapped span processor that will receive filtered spans
+            custom_filter: Optional callable that takes a span and returns:
+                          True to keep, False to drop,
+                          None to not influence the decision
+        """
+        self._processor = processor
+        self._custom_filter = custom_filter
+
+    def on_start(self, span, parent_context=None):
+        """Forward span start events to the inner processor."""
+        self._processor.on_start(span, parent_context)
+
+    def on_end(self, span):
+        """Apply filtering logic and conditionally forward span end events."""
+        if self._should_keep_llm_span(span):
+            self._processor.on_end(span)
+
+    def shutdown(self):
+        """Shutdown the inner processor."""
+        self._processor.shutdown()
+
+    def force_flush(self, timeout_millis=30000):
+        """Force flush the inner processor."""
+        return self._processor.force_flush(timeout_millis)
+
+    def _should_keep_llm_span(self, span):
+        """
+        Keep spans if:
+        1. It's a root span (no parent)
+        2. Custom filter returns True/False (if provided)
+        3. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', or 'ai.'
+        4. Any attribute name starts with those prefixes
+        """
+        if not span:
+            return False
+
+        # Braintrust requires root spans, so always keep them
+        if span.parent is None:
+            return True
+
+        # Apply custom filter if provided
+        if self._custom_filter:
+            custom_result = self._custom_filter(span)
+            if custom_result is True:
+                return True
+            elif custom_result is False:
+                return False
+            # custom_result is None - continue with default logic
+
+        if span.name.startswith(LLM_PREFIXES):
+            return True
+
+        if span.attributes:
+            for attr_name in span.attributes.keys():
+                if attr_name.startswith(LLM_PREFIXES):
+                    return True
+
+        return False
+
+
 class OtelExporter(OTLPSpanExporter):
     """
     A subclass of OTLPSpanExporter configured for Braintrust.
+
+    Environment Variables:
+    - BRAINTRUST_OTEL_ENABLE: Set to "true" to automatically configure OpenTelemetry
+      with this exporter at import time.
+    - BRAINTRUST_OTEL_FILTER_LLM_ENABLE: Set to "true" to automatically wrap the
+      exporter with LLMSpanProcessor for filtering only LLM-related spans.
+    - BRAINTRUST_API_KEY: Your Braintrust API key.
+    - BRAINTRUST_PARENT: Parent identifier (e.g., "project_name:test").
+    - BRAINTRUST_API_URL: Base URL for Braintrust API (defaults to https://api.braintrust.dev).
     """
 
     def __init__(
@@ -97,8 +187,16 @@ def _auto_configure_braintrust_otel():
         # Create our exporter
         exporter = OtelExporter()
 
-        # Add our exporter to the global tracer provider
+        # Create the base span processor
         span_processor = BatchSpanProcessor(exporter)
+
+        # Check if LLM filtering is enabled
+        filter_llm_enabled = os.environ.get("BRAINTRUST_OTEL_FILTER_LLM_ENABLE", "").lower() == "true"
+        if filter_llm_enabled:
+            # Wrap the processor with LLM filtering
+            span_processor = LLMSpanProcessor(span_processor)
+
+        # Add our processor to the global tracer provider
         provider.add_span_processor(span_processor)
     except Exception as e:
         logging.warning(f"Failed to auto-configure Braintrust OpenTelemetry exporter: {e}")
