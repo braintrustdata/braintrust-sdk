@@ -4,7 +4,11 @@ import warnings
 from typing import Any, Dict, Optional
 
 try:
+    from opentelemetry import trace
     from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+    OTEL_AVAILABLE = True
 except ImportError:
     warnings.warn(
         "OpenTelemetry packages are not installed. "
@@ -13,13 +17,30 @@ except ImportError:
         stacklevel=2,
     )
 
-    # Create a stub class if OpenTelemetry is not available
+    # Create stub classes if OpenTelemetry is not available
     class OTLPSpanExporter:
         def __init__(self, *args, **kwargs):
             raise ImportError(
                 "OpenTelemetry packages are not installed. "
                 "Install them with: pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp-proto-http"
             )
+
+    class BatchSpanProcessor:
+        def __init__(self, *args, **kwargs):
+            raise ImportError(
+                "OpenTelemetry packages are not installed. "
+                "Install them with: pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp-proto-http"
+            )
+
+    class trace:
+        @staticmethod
+        def get_tracer_provider():
+            raise ImportError(
+                "OpenTelemetry packages are not installed. "
+                "Install them with: pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp-proto-http"
+            )
+
+    OTEL_AVAILABLE = False
 
 
 LLM_PREFIXES = ("gen_ai.", "braintrust.", "llm.", "ai.")
@@ -44,6 +65,7 @@ class LLMSpanProcessor:
 
         Args:
             processor: The wrapped span processor that will receive filtered spans
+                      (e.g., BatchSpanProcessor, SimpleSpanProcessor)
             custom_filter: Optional callable that takes a span and returns:
                           True to keep, False to drop,
                           None to not influence the decision
@@ -107,6 +129,9 @@ class OtelExporter(OTLPSpanExporter):
     """
     A subclass of OTLPSpanExporter configured for Braintrust.
 
+    For most use cases, consider using the Processor class instead, which provides
+    a more convenient all-in-one interface.
+
     Environment Variables:
     - BRAINTRUST_OTEL_ENABLE: Set to "true" to automatically configure OpenTelemetry
       with this exporter at import time.
@@ -159,12 +184,96 @@ class OtelExporter(OTLPSpanExporter):
         super().__init__(endpoint=endpoint, headers=exporter_headers, **kwargs)
 
 
+class Processor:
+    """
+    A convenient all-in-one span processor for Braintrust OpenTelemetry integration.
+
+    This class combines the OtelExporter, BatchSpanProcessor, and optionally LLMSpanProcessor
+    into a single easy-to-use processor that can be directly added to a TracerProvider.
+
+    Example:
+        > processor = Processor()
+        > provider.add_span_processor(processor)
+
+        > processor = Processor(enable_llm_filtering=True)
+        > provider.add_span_processor(processor)
+    """
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        parent: Optional[str] = None,
+        api_url: Optional[str] = None,
+        enable_llm_filtering: bool = False,
+        custom_filter=None,
+        headers: Optional[Dict[str, str]] = None,
+    ):
+        """
+        Initialize the Processor.
+
+        Args:
+            api_key: Braintrust API key. Defaults to BRAINTRUST_API_KEY env var.
+            parent: Parent identifier (e.g., "project_name:test"). Defaults to BRAINTRUST_PARENT env var.
+            api_url: Base URL for Braintrust API. Defaults to BRAINTRUST_API_URL env var or https://api.braintrust.dev.
+            enable_llm_filtering: Whether to enable LLM span filtering. Defaults to False.
+            custom_filter: Optional custom filter function for LLM filtering.
+            headers: Additional headers to include in requests.
+        """
+        # Create the exporter
+        # Convert api_url to the full endpoint URL that OtelExporter expects
+        exporter_url = None
+        if api_url:
+            exporter_url = f"{api_url.rstrip('/')}/otel/v1/traces"
+
+        self._exporter = OtelExporter(url=exporter_url, api_key=api_key, parent=parent, headers=headers)
+
+        # Create the processor chain
+        if not OTEL_AVAILABLE:
+            raise ImportError(
+                "OpenTelemetry packages are not installed. "
+                "Install them with: pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp-proto-http"
+            )
+
+        # Always create a BatchSpanProcessor first
+        batch_processor = BatchSpanProcessor(self._exporter)
+
+        if enable_llm_filtering:
+            # Wrap the BatchSpanProcessor with LLM filtering
+            self._processor = LLMSpanProcessor(batch_processor, custom_filter=custom_filter)
+        else:
+            # Use BatchSpanProcessor directly
+            self._processor = batch_processor
+
+    def on_start(self, span, parent_context=None):
+        """Forward span start events to the inner processor."""
+        self._processor.on_start(span, parent_context)
+
+    def on_end(self, span):
+        """Forward span end events to the inner processor."""
+        self._processor.on_end(span)
+
+    def shutdown(self):
+        """Shutdown the inner processor."""
+        self._processor.shutdown()
+
+    def force_flush(self, timeout_millis=30000):
+        """Force flush the inner processor."""
+        return self._processor.force_flush(timeout_millis)
+
+    @property
+    def exporter(self):
+        """Access to the underlying OtelExporter."""
+        return self._exporter
+
+    @property
+    def processor(self):
+        """Access to the underlying span processor."""
+        return self._processor
+
+
 def _auto_configure_braintrust_otel():
     """Auto-configure OpenTelemetry with Braintrust exporter if BRAINTRUST_OTEL_ENABLE is set."""
-    try:
-        from opentelemetry import trace
-        from opentelemetry.sdk.trace.export import BatchSpanProcessor
-    except ImportError:
+    if not OTEL_AVAILABLE:
         logging.warning(
             "BRAINTRUST_OTEL_ENABLE is set but OpenTelemetry packages are not installed. "
             "Install them with: pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp-proto-http"
@@ -184,20 +293,14 @@ def _auto_configure_braintrust_otel():
         return
 
     try:
-        # Create our exporter
-        exporter = OtelExporter()
-
-        # Create the base span processor
-        span_processor = BatchSpanProcessor(exporter)
-
         # Check if LLM filtering is enabled
         filter_llm_enabled = os.environ.get("BRAINTRUST_OTEL_FILTER_LLM_ENABLE", "").lower() == "true"
-        if filter_llm_enabled:
-            # Wrap the processor with LLM filtering
-            span_processor = LLMSpanProcessor(span_processor)
+
+        # Create our processor using the new Processor class
+        processor = Processor(enable_llm_filtering=filter_llm_enabled)
 
         # Add our processor to the global tracer provider
-        provider.add_span_processor(span_processor)
+        provider.add_span_processor(processor)
     except Exception as e:
         logging.warning(f"Failed to auto-configure Braintrust OpenTelemetry exporter: {e}")
 
