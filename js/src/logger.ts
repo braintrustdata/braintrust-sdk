@@ -4488,23 +4488,17 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
       const { output, expected: expectedRecord, metadata } = record;
       const expected = (expectedRecord ?? output) as Expected;
 
-      const baseCase: any = {
+      // Note: We always include expected and metadata fields to maintain type signature alignment.
+      // This ensures that when the type signature includes `| null | undefined`, the fields
+      // are still present in the runtime object. While this may incorrectly include fields
+      // when Metadata/Expected = void, it's preferable to incorrectly excluding them when
+      // the type signature expects them to be present.
+      yield {
         input: record.input as Input,
         tags: record.tags,
-      };
-
-      if (metadata !== undefined && metadata !== null) {
-        baseCase.metadata = metadata as Metadata;
-      }
-
-      if (isEmpty(expected)) {
-        yield baseCase as EvalCase<Input, Expected, Metadata>;
-      } else {
-        yield {
-          ...baseCase,
-          expected: expected,
-        } as EvalCase<Input, Expected, Metadata>;
-      }
+        expected: expected as Expected,
+        metadata: metadata as Metadata,
+      } as unknown as EvalCase<Input, Expected, Metadata>;
     }
   }
 }
