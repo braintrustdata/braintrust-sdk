@@ -713,22 +713,24 @@ async function collectFiles(
 // In addition to marking node_modules external, explicitly mark
 // our packages (braintrust and autoevals) external, in case they're
 // installed in a relative path.
-function createMarkKnownPackagesExternalPlugin(additionalPackages: string[] = []) {
+function createMarkKnownPackagesExternalPlugin(
+  additionalPackages: string[] = [],
+) {
   return {
     name: "make-known-packages-external",
     setup(build: esbuild.PluginBuild) {
       // Mark known packages as external
       const knownPackages = [
         "braintrust",
-        "autoevals", 
+        "autoevals",
         "@braintrust/",
         "config",
         "lightningcss",
         "@mapbox/node-pre-gyp",
-        ...additionalPackages
+        ...additionalPackages,
       ];
       const knownPackagesFilter = new RegExp(
-        `^(${knownPackages.map(pkg => pkg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`
+        `^(${knownPackages.map((pkg) => pkg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`,
       );
       build.onResolve({ filter: knownPackagesFilter }, (args) => ({
         path: args.path,
