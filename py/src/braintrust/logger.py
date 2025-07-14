@@ -2826,6 +2826,7 @@ class ExperimentDatasetIterator:
                 "input": value.get("input"),
                 "expected": expected if expected is not None else output,
                 "tags": value.get("tags"),
+                "metadata": value.get("metadata"),
                 "id": value["id"],
                 "_xact_id": value["_xact_id"],
             }
