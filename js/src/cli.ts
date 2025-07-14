@@ -1024,7 +1024,7 @@ function addCompileArgs(parser: ArgumentParser) {
   });
   parser.add_argument("--external-packages", {
     nargs: "*",
-    help: "Additional packages to mark as external during bundling (space-separated list).",
+    help: "Additional packages to mark as external during bundling. These packages will not be included in the bundle and must be available at runtime. Use this to resolve bundling errors with native modules or problematic dependencies. Example: --external-packages sqlite3 fsevents @mapbox/node-pre-gyp",
   });
 }
 
