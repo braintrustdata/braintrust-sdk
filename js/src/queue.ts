@@ -1,15 +1,15 @@
 export const DEFAULT_QUEUE_SIZE = 15000;
 
-// Global override for queue size - null means use instance maxSize
-let _overrideMaxQueueSize: number | null = null;
+// Global flag to enable/disable queue size limits - false means unlimited (default)
+let _useQueueSizeLimit = false;
 
 /**
- * Override the maximum queue size globally for all queue instances.
- * @param size - The new maximum size, or null to use each instance's original maxSize.
- *               Use Infinity for unlimited queues.
+ * Enable or disable queue size limits globally for all queue instances.
+ * @param enabled - true to use instance maxSize limits, false for unlimited queues (default).
  */
-export function overrideMaxQueueSize(size: number | null) {
-  _overrideMaxQueueSize = size;
+export function setQueueSizeLimitEnabled(enabled: boolean) {
+  console.log("setQueueSizeLimitEnabled", enabled);
+  _useQueueSizeLimit = enabled;
 }
 
 // A simple queue that drops oldest items when full. Uses a plain array
@@ -32,16 +32,13 @@ export class Queue<T> {
   push(...items: T[]): T[] {
     const dropped: T[] = [];
 
-    // Use override size if set, otherwise use instance maxSize
-    const maxSize = _overrideMaxQueueSize ?? this.maxSize;
-
     for (const item of items) {
-      if (maxSize === Infinity) {
-        // For unlimited queues, just add items without dropping
+      if (!_useQueueSizeLimit) {
+        // For unlimited queues (default), just add items without dropping
         this.items.push(item);
       } else {
         // For bounded queues, drop new items when full
-        if (this.items.length >= maxSize) {
+        if (this.items.length >= this.maxSize) {
           dropped.push(item);
         } else {
           this.items.push(item);

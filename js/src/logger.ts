@@ -2,7 +2,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 
-import { Queue, DEFAULT_QUEUE_SIZE, overrideMaxQueueSize } from "./queue";
+import { Queue, DEFAULT_QUEUE_SIZE, setQueueSizeLimitEnabled } from "./queue";
 import {
   _urljoin,
   AnyDatasetRecord,
@@ -2970,6 +2970,10 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
     project_name: projectName,
     project_id: projectId,
   };
+
+  // Enable bounded queue for initLogger() calls
+  // By default queues are unlimited, but initLogger() enables the size limit
+  setQueueSizeLimitEnabled(true);
 
   const state = stateArg ?? _globalState;
   const lazyMetadata: LazyValue<OrgProjectMetadata> = new LazyValue(

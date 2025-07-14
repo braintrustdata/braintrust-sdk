@@ -1,8 +1,11 @@
 import { expect, test } from "vitest";
-import { Queue, overrideMaxQueueSize } from "./queue";
+import { Queue, setQueueSizeLimitEnabled } from "./queue";
 
 test("Queue basic operations", () => {
   const queue = new Queue<number>(3);
+
+  // Enable size limit for this test
+  setQueueSizeLimitEnabled(true);
 
   // Empty queue
   expect(queue.length()).toBe(0);
@@ -26,9 +29,15 @@ test("Queue basic operations", () => {
   expect(drained).toEqual([1, 2, 3]);
   expect(queue.length()).toBe(0);
   expect(queue.peek()).toBe(undefined);
+
+  // Reset to default for other tests
+  setQueueSizeLimitEnabled(false);
 });
 
 test("Queue edge cases", () => {
+  // Enable size limit for this test
+  setQueueSizeLimitEnabled(true);
+
   // Capacity 1
   const q1 = new Queue<number>(1);
   q1.push(1);
@@ -36,12 +45,15 @@ test("Queue edge cases", () => {
   expect(dropped).toEqual([2]);
   expect(q1.drain()).toEqual([1]);
 
-  // Negative maxSize defaults to 5000
+  // Negative maxSize defaults to 15000
   const q2 = new Queue<number>(-1);
   const items = Array.from({ length: 100 }, (_, i) => i);
   const droppedItems = q2.push(...items);
   expect(droppedItems).toEqual([]);
   expect(q2.length()).toBe(100);
+
+  // Reset to default for other tests
+  setQueueSizeLimitEnabled(false);
 });
 
 test("Queue clear operation", () => {
@@ -55,48 +67,44 @@ test("Queue clear operation", () => {
   expect(queue.drain()).toEqual([]);
 });
 
-test("Queue responds to global max size override changes", () => {
+test("Queue responds to global size limit enable/disable", () => {
   const queue = new Queue<number>(2);
 
-  // Start with no override (uses instance maxSize)
-  overrideMaxQueueSize(null);
+  // Start with unlimited (default behavior)
+  setQueueSizeLimitEnabled(false);
+
+  // Fill queue beyond capacity
+  queue.push(1, 2, 3, 4, 5);
+  expect(queue.length()).toBe(5);
+
+  // Should not drop items when unlimited
+  const dropped1 = queue.push(6, 7, 8);
+  expect(dropped1).toEqual([]);
+  expect(queue.length()).toBe(8);
+  expect(queue.drain()).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+
+  // Enable size limit
+  setQueueSizeLimitEnabled(true);
 
   // Fill queue to capacity
-  queue.push(1, 2);
+  queue.push(9, 10);
   expect(queue.length()).toBe(2);
 
   // Should drop new item when at capacity
-  const dropped1 = queue.push(3);
-  expect(dropped1).toEqual([3]);
+  const dropped2 = queue.push(11);
+  expect(dropped2).toEqual([11]);
   expect(queue.length()).toBe(2);
-  expect(queue.drain()).toEqual([1, 2]);
+  expect(queue.drain()).toEqual([9, 10]);
 
-  // Switch to unlimited queue
-  overrideMaxQueueSize(Infinity);
+  // Disable size limit again
+  setQueueSizeLimitEnabled(false);
 
-  // Fill queue again
-  queue.push(4, 5);
-  expect(queue.length()).toBe(2);
-
-  // Should not drop items when unlimited
-  const dropped2 = queue.push(6, 7, 8);
-  expect(dropped2).toEqual([]);
-  expect(queue.length()).toBe(5);
-  expect(queue.drain()).toEqual([4, 5, 6, 7, 8]);
-
-  // Switch to different size override
-  overrideMaxQueueSize(3);
-
-  // Fill queue to capacity
-  queue.push(9, 10, 11);
+  // Should allow unlimited again
+  const dropped3 = queue.push(12, 13, 14);
+  expect(dropped3).toEqual([]);
   expect(queue.length()).toBe(3);
-
-  // Should drop new item when exceeding override size
-  const dropped3 = queue.push(12);
-  expect(dropped3).toEqual([12]);
-  expect(queue.length()).toBe(3);
-  expect(queue.drain()).toEqual([9, 10, 11]);
+  expect(queue.drain()).toEqual([12, 13, 14]);
 
   // Reset to default for other tests
-  overrideMaxQueueSize(null);
+  setQueueSizeLimitEnabled(false);
 });
