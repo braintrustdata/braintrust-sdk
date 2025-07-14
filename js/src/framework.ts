@@ -6,10 +6,14 @@ import {
   SSEProgressEventData,
 } from "@braintrust/core/typespecs";
 import { queue } from "async";
-import { _setUseUnlimitedQueue } from "./queue";
+import { overrideMaxQueueSize } from "./queue";
 
 // Set unlimited queue for eval files (this happens when framework module is loaded)
-_setUseUnlimitedQueue(true);
+// We use Infinity to ensure no logging data is dropped during evaluations.
+// In evals, we're almost certainly likely running in a dedicated process, so we don't
+// need to worry about OOM'ing customer processes.
+overrideMaxQueueSize(Infinity);
+
 import chalk from "chalk";
 import pluralize from "pluralize";
 import { GenericFunction } from "./framework-types";

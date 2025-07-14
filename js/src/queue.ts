@@ -1,10 +1,15 @@
 export const DEFAULT_QUEUE_SIZE = 15000;
 
-// Global flag to control queue size based on init() vs initLogger()
-let _useUnlimitedQueue = false;
+// Global override for queue size - null means use instance maxSize
+let _overrideMaxQueueSize: number | null = null;
 
-export function _setUseUnlimitedQueue(unlimited: boolean) {
-  _useUnlimitedQueue = unlimited;
+/**
+ * Override the maximum queue size globally for all queue instances.
+ * @param size - The new maximum size, or null to use each instance's original maxSize.
+ *               Use Infinity for unlimited queues.
+ */
+export function overrideMaxQueueSize(size: number | null) {
+  _overrideMaxQueueSize = size;
 }
 
 // A simple queue that drops oldest items when full. Uses a plain array
@@ -12,7 +17,6 @@ export function _setUseUnlimitedQueue(unlimited: boolean) {
 export class Queue<T> {
   private items: Array<T> = [];
   private maxSize: number;
-  private unlimited: boolean;
 
   constructor(maxSize: number) {
     if (maxSize < 1) {
@@ -22,27 +26,26 @@ export class Queue<T> {
       maxSize = DEFAULT_QUEUE_SIZE;
     }
 
-    // Check global flag to use unlimited queue for init() calls
-    this.unlimited = _useUnlimitedQueue;
-    this.maxSize = this.unlimited ? Infinity : maxSize;
+    this.maxSize = maxSize;
   }
 
   push(...items: T[]): T[] {
     const dropped: T[] = [];
 
+    // Use override size if set, otherwise use instance maxSize
+    const maxSize = _overrideMaxQueueSize ?? this.maxSize;
+
     for (const item of items) {
-      if (this.unlimited) {
+      if (maxSize === Infinity) {
         // For unlimited queues, just add items without dropping
         this.items.push(item);
       } else {
-        // For bounded queues, drop oldest items when full
-        if (this.items.length >= this.maxSize) {
-          const droppedItem = this.items.shift();
-          if (droppedItem !== undefined) {
-            dropped.push(droppedItem);
-          }
+        // For bounded queues, drop new items when full
+        if (this.items.length >= maxSize) {
+          dropped.push(item);
+        } else {
+          this.items.push(item);
         }
-        this.items.push(item);
       }
     }
 
