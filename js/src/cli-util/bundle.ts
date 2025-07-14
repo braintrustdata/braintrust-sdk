@@ -33,6 +33,7 @@ export async function bundleCommand(args: BundleArgs) {
     mode: "bundle",
     files: args.files,
     tsconfig: args.tsconfig,
+    externalPackages: args.external_packages,
   });
 
   try {
