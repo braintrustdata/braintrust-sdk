@@ -708,7 +708,7 @@ class TestExceptionGroupHandling(TestCase):
 
     @pytest.mark.skipif(sys.version_info < (3, 11), reason="ExceptionGroup requires Python 3.11+")
     def test_stringify_exception_with_exception_group(self):
-        """Test that stringify_exception doesn't show ExceptionGroup sub-exceptions"""
+        """Test that stringify_exception properly shows ExceptionGroup sub-exceptions"""
         from braintrust.logger import stringify_exception
 
         try:
@@ -716,17 +716,18 @@ class TestExceptionGroupHandling(TestCase):
             exc2 = ValueError("Invalid configuration")
             raise ExceptionGroup("Multiple failures", [exc1, exc2])
         except ExceptionGroup as eg:
-            # Current implementation
+            # After fix, stringify_exception properly formats ExceptionGroups
             result = stringify_exception(type(eg), eg, eg.__traceback__)
 
-            # The current implementation only shows the main exception
+            # The main exception is shown
             self.assertIn("ExceptionGroup: Multiple failures", result)
             self.assertIn("(2 sub-exceptions)", result)
 
-            # But it doesn't show the actual sub-exceptions
-            self.assertNotIn("ConnectionRefusedError", result)
-            self.assertNotIn("Invalid configuration", result)
-            self.assertNotIn("port 8080", result)
+            # And now sub-exceptions are properly shown
+            self.assertIn("ConnectionRefusedError", result)
+            self.assertIn("[Errno 61] Connection refused on port 8080", result)
+            self.assertIn("ValueError", result)
+            self.assertIn("Invalid configuration", result)
 
     @pytest.mark.skipif(sys.version_info < (3, 11), reason="ExceptionGroup requires Python 3.11+")
     def test_format_exception_shows_sub_exceptions(self):
@@ -751,9 +752,7 @@ class TestExceptionGroupHandling(TestCase):
 
     @pytest.mark.skipif(sys.version_info < (3, 11), reason="ExceptionGroup requires Python 3.11+")
     def test_exception_group_from_async_task_group(self):
-        """Test ExceptionGroup from asyncio.TaskGroup is not properly formatted"""
-        import traceback
-
+        """Test ExceptionGroup from asyncio.TaskGroup is properly formatted"""
         from braintrust.logger import stringify_exception
 
         async def failing_task():
@@ -767,18 +766,39 @@ class TestExceptionGroupHandling(TestCase):
         try:
             asyncio.run(main_task())
         except ExceptionGroup as eg:
-            # Test how this would be formatted by stringify_exception
+            # Test how this is formatted by stringify_exception
             result = stringify_exception(type(eg), eg, eg.__traceback__)
 
             # Check that it shows the ExceptionGroup
             self.assertIn("ExceptionGroup", result)
             self.assertIn("2 sub-exceptions", result)
 
-            # But sub-exception details are missing with current implementation
-            self.assertNotIn("ConnectionRefusedError", result)
-            self.assertNotIn("Connection refused", result)
+            # After fix, sub-exception details are properly shown
+            self.assertIn("ConnectionRefusedError", result)
+            self.assertIn("Connection refused", result)
 
-            # Compare with format_exception which does show sub-exceptions
-            full_format = "".join(traceback.format_exception(type(eg), eg, eg.__traceback__))
-            self.assertIn("ConnectionRefusedError", full_format)
-            self.assertIn("Connection refused", full_format)
+    @pytest.mark.skipif(sys.version_info < (3, 11), reason="ExceptionGroup requires Python 3.11+")
+    def test_stringify_exception_shows_sub_exceptions_after_fix(self):
+        """Test that stringify_exception properly shows ExceptionGroup sub-exceptions after fix"""
+        from braintrust.logger import stringify_exception
+
+        try:
+            exc1 = ConnectionRefusedError("[Errno 61] Connection refused on port 8080")
+            exc2 = ValueError("Invalid configuration")
+            raise ExceptionGroup("Multiple failures", [exc1, exc2])
+        except ExceptionGroup as eg:
+            result = stringify_exception(type(eg), eg, eg.__traceback__)
+
+            # These assertions SHOULD pass once the bug is fixed
+            self.assertIn("ExceptionGroup: Multiple failures", result)
+            self.assertIn("(2 sub-exceptions)", result)
+
+            # Sub-exceptions SHOULD be shown (but aren't with current implementation)
+            self.assertIn(
+                "ConnectionRefusedError",
+                result,
+                "Sub-exception ConnectionRefusedError should be visible in the traceback",
+            )
+            self.assertIn("Connection refused on port 8080", result, "Sub-exception error message should be visible")
+            self.assertIn("ValueError", result, "Sub-exception ValueError should be visible in the traceback")
+            self.assertIn("Invalid configuration", result, "Sub-exception error message should be visible")
