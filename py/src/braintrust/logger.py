@@ -1325,6 +1325,7 @@ def load_prompt(
     slug: Optional[str] = None,
     version: Optional[Union[str, int]] = None,
     project_id: Optional[str] = None,
+    id: Optional[str] = None,
     defaults: Optional[Mapping[str, Any]] = None,
     no_trace: bool = False,
     app_url: Optional[str] = None,
@@ -1338,62 +1339,92 @@ def load_prompt(
     :param slug: The slug of the prompt to load.
     :param version: An optional version of the prompt (to read). If not specified, the latest version will be used.
     :param project_id: The id of the project to load the prompt from. This takes precedence over `project` if specified.
+    :param id: The id of a specific prompt to load. If specified, this takes precedence over all other parameters (project, slug, version).
     :param defaults: (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
     :param no_trace: If true, do not include logging metadata for this prompt when build() is called.
     :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
-    :param project_id: The id of the project to load the prompt from. This takes precedence over `project` if specified.
     :returns: The prompt object.
     """
 
-    if not project and not project_id:
+    if id:
+        # When loading by ID, we don't need project or slug
+        pass
+    elif not project and not project_id:
         raise ValueError("Must specify at least one of project or project_id")
-    if not slug:
+    elif not slug:
         raise ValueError("Must specify slug")
 
     def compute_metadata():
         try:
             login(org_name=org_name, api_key=api_key, app_url=app_url)
-            args = _populate_args(
-                {
-                    "project_name": project,
-                    "project_id": project_id,
-                    "slug": slug,
-                    "version": version,
-                },
-            )
-            response = _state.api_conn().get_json("/v1/prompt", args)
+            if id:
+                # Load prompt by ID using the /v1/prompt/{id} endpoint
+                response = _state.api_conn().get_json(f"/v1/prompt/{id}", {})
+                # Wrap single prompt response in objects array to match list API format
+                if response is not None:
+                    response = {"objects": [response]}
+            else:
+                args = _populate_args(
+                    {
+                        "project_name": project,
+                        "project_id": project_id,
+                        "slug": slug,
+                        "version": version,
+                    },
+                )
+                response = _state.api_conn().get_json("/v1/prompt", args)
         except Exception as server_error:
             eprint(f"Failed to load prompt, attempting to fall back to cache: {server_error}")
             try:
-                return _state._prompt_cache.get(
-                    slug,
+                if id:
+                    return _state._prompt_cache.get(id=id)
+                else:
+                    return _state._prompt_cache.get(
+                        slug,
+                        version=str(version) if version else "latest",
+                        project_id=project_id,
+                        project_name=project,
+                    )
+            except Exception as cache_error:
+                if id:
+                    raise ValueError(
+                        f"Prompt with id {id} not found (not found on server or in local cache): {cache_error}"
+                    ) from server_error
+                else:
+                    raise ValueError(
+                        f"Prompt {slug} (version {version or 'latest'}) not found in {project or project_id} (not found on server or in local cache): {cache_error}"
+                    ) from server_error
+        if response is None or "objects" not in response or len(response["objects"]) == 0:
+            if id:
+                raise ValueError(f"Prompt with id {id} not found.")
+            else:
+                raise ValueError(f"Prompt {slug} not found in project {project or project_id}.")
+        elif len(response["objects"]) > 1:
+            if id:
+                raise ValueError(f"Multiple prompts found with id {id}. This should never happen.")
+            else:
+                raise ValueError(
+                    f"Multiple prompts found with slug {slug} in project {project or project_id}. This should never happen."
+                )
+        resp_prompt = response["objects"][0]
+        prompt = PromptSchema.from_dict_deep(resp_prompt)
+        try:
+            if id:
+                _state._prompt_cache.set(
+                    prompt,
+                    id=id,
+                )
+            elif slug:
+                _state._prompt_cache.set(
+                    prompt,
+                    slug=slug,
                     version=str(version) if version else "latest",
                     project_id=project_id,
                     project_name=project,
                 )
-            except Exception as cache_error:
-                raise ValueError(
-                    f"Prompt {slug} (version {version or 'latest'}) not found in {project or project_id} (not found on server or in local cache): {cache_error}"
-                ) from server_error
-        if response is None or "objects" not in response or len(response["objects"]) == 0:
-            raise ValueError(f"Prompt {slug} not found in project {project or project_id}.")
-        elif len(response["objects"]) > 1:
-            raise ValueError(
-                f"Multiple prompts found with slug {slug} in project {project or project_id}. This should never happen."
-            )
-        resp_prompt = response["objects"][0]
-        prompt = PromptSchema.from_dict_deep(resp_prompt)
-        try:
-            _state._prompt_cache.set(
-                slug,
-                str(version) if version else "latest",
-                prompt,
-                project_id=project_id,
-                project_name=project,
-            )
         except Exception as e:
             eprint(f"Failed to store prompt in cache: {e}")
         return prompt
@@ -2787,6 +2818,7 @@ class ExperimentDatasetIterator:
                 "input": value.get("input"),
                 "expected": expected if expected is not None else output,
                 "tags": value.get("tags"),
+                "metadata": value.get("metadata"),
                 "id": value["id"],
                 "_xact_id": value["_xact_id"],
             }

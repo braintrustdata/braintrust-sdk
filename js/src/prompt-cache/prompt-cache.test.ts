@@ -350,4 +350,68 @@ describe("PromptCache", () => {
       expect(newerResult).toEqual(testPrompt);
     });
   });
+
+  describe("ID-based caching", () => {
+    it("should store and retrieve a prompt by ID", async () => {
+      const promptId = "test-prompt-id-123";
+      await cache.set({ id: promptId }, testPrompt);
+      const result = await cache.get({ id: promptId });
+      expect(result).toEqual(testPrompt);
+    });
+
+    it("should keep ID-based cache independent of slug-based cache", async () => {
+      const promptId = "test-prompt-id-456";
+
+      // Store by ID
+      await cache.set({ id: promptId }, testPrompt);
+
+      // Store same prompt by slug
+      await cache.set(testKey, testPrompt);
+
+      // Retrieve by ID
+      const resultById = await cache.get({ id: promptId });
+      expect(resultById).toEqual(testPrompt);
+
+      // Retrieve by slug
+      const resultBySlug = await cache.get(testKey);
+      expect(resultBySlug).toEqual(testPrompt);
+
+      // Modify the prompt stored by ID
+      const modifiedPrompt = new Prompt(
+        {
+          ...testPrompt.metadata,
+          name: "modified-prompt",
+        },
+        {},
+        false,
+      );
+      await cache.set({ id: promptId }, modifiedPrompt);
+
+      // Verify ID-based retrieval gets modified version
+      const resultByIdModified = await cache.get({ id: promptId });
+      expect(resultByIdModified?.name).toBe("modified-prompt");
+
+      // Verify slug-based retrieval still gets original
+      const resultBySlugUnchanged = await cache.get(testKey);
+      expect(resultBySlugUnchanged?.name).toBe("test-prompt");
+    });
+
+    it("should return undefined for non-existent ID", async () => {
+      const result = await cache.get({ id: "missing-prompt-id" });
+      expect(result).toBeUndefined();
+    });
+
+    it("should handle ID cache with disk persistence", async () => {
+      const promptId = "persistent-prompt-id";
+
+      // Fill memory cache to force disk storage
+      await cache.set(testKey, testPrompt);
+      await cache.set({ ...testKey, slug: "prompt2" }, testPrompt);
+      await cache.set({ id: promptId }, testPrompt);
+
+      // The ID-based prompt should be retrievable (from disk if evicted from memory)
+      const result = await cache.get({ id: promptId });
+      expect(result).toEqual(testPrompt);
+    });
+  });
 });
