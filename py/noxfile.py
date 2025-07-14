@@ -131,6 +131,7 @@ def pylint(session):
     session.install(".[all]")
     session.install("-r", "requirements-dev.txt")
     session.install(*VENDOR_PACKAGES)
+    session.install("opentelemetry.instrumentation.openai")
 
     result = session.run("git", "ls-files", "**/*.py", silent=True, log=False)
     files = result.strip().splitlines()
