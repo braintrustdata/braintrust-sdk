@@ -1026,40 +1026,23 @@ export type Environment = z.infer<typeof environmentSchema>;
 
 export const createEnvironmentSchema = z
   .object({
-    name: z.string().describe("Name of the environment"),
-    slug: z
-      .string()
-      .describe(
-        "A url-friendly, unique identifier for the environment within an organization",
-      ),
-    description: z
+    name: environmentSchema.shape.name,
+    slug: environmentSchema.shape.slug,
+    description: environmentSchema.shape.description,
+    org_name: z
       .string()
       .nullish()
-      .describe("Textual description of the environment"),
-    org_id: z
-      .string()
-      .uuid()
-      .describe("Unique identifier for the organization"),
+      .describe(
+        `For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, or in case you want to explicitly assert the organization you are modifying, you may specify the name of the organization.`,
+      ),
   })
   .openapi("CreateEnvironment");
 
 export const patchEnvironmentSchema = z
   .object({
-    name: z.string().nullish().describe("Name of the environment"),
-    slug: z
-      .string()
-      .nullish()
-      .describe(
-        "A url-friendly, unique identifier for the environment within an organization",
-      ),
-    description: z
-      .string()
-      .nullish()
-      .describe("Textual description of the environment"),
-    org_id: z
-      .string()
-      .uuid()
-      .describe("Unique identifier for the organization"),
+    name: environmentSchema.shape.name.nullish(),
+    slug: environmentSchema.shape.slug.nullish(),
+    description: environmentSchema.shape.description.nullish(),
   })
   .openapi("PatchEnvironment");
 
