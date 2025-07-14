@@ -14,10 +14,6 @@ X_LEGACY_CACHED_HEADER = "x-cached"
 X_CACHED_HEADER = "x-bt-cached"
 
 
-# ---------------------------------------------------------
-# Base classes and config
-# ---------------------------------------------------------
-
 # LiteLLM's representation to Braintrust's representation
 TOKEN_NAME_MAP: dict[str, str] = {
     # chat API
@@ -76,11 +72,6 @@ class AsyncResponseWrapper:
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._response, name)
-
-
-# ---------------------------------------------------------
-# LiteLLM wrapper
-# ---------------------------------------------------------
 
 
 class CompletionWrapper:
@@ -536,11 +527,6 @@ def wrap_litellm(litellm_module: Any) -> LiteLLMWrapper:
     :return: Wrapped litellm module with tracing
     """
     return LiteLLMWrapper(litellm_module)
-
-
-# ---------------------------------------------------------
-# Utility methods
-# ---------------------------------------------------------
 
 
 def _update_span_payload_from_params(params: dict[str, Any], input_key: str = "input") -> dict[str, Any]:
