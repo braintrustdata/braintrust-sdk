@@ -149,7 +149,11 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         dataset_record_id: Optional[str] = None,
     ) -> Any:
         if run_id not in self.spans:
-            raise ValueError(f"No span exists for run_id {run_id} (this is likely a bug)")
+            return
+
+        if run_id in self.skipped_runs:
+            self.skipped_runs.discard(run_id)
+            return
 
         span = self.spans.pop(run_id)
 
@@ -184,9 +188,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,  # TODO: response=
     ) -> Any:
-        if run_id not in self.spans:
-            return
-
         self._end_span(run_id, error=str(error))
 
     def on_chain_error(
@@ -197,9 +198,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,  # TODO: some metadata
     ) -> Any:
-        if run_id not in self.spans:
-            return
-
         self._end_span(run_id, error=str(error))
 
     def on_tool_error(
@@ -210,9 +208,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        if run_id not in self.spans:
-            return
-
         self._end_span(run_id, error=str(error))
 
     def on_retriever_error(
@@ -223,9 +218,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        if run_id not in self.spans:
-            return
-
         self._end_span(run_id, error=str(error))
 
     # Agent Methods
@@ -254,9 +246,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        if run_id not in self.spans:
-            return
-
         self._end_span(run_id, output=finish.return_values)  # type: ignore
 
     def on_chain_start(
@@ -297,10 +286,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         tags: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> Any:
-        if run_id in self.skipped_runs:
-            self.skipped_runs.discard(run_id)
-            return
-
         self._end_span(run_id, output=output_from_chain_values(outputs), tags=tags)
 
     def on_llm_start(
@@ -438,9 +423,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        if run_id not in self.spans:
-            return
-
         self._end_span(run_id, output=output_from_tool_output(output))
 
     def on_retriever_start(
@@ -478,9 +460,6 @@ class BraintrustCallbackHandler(BaseCallbackHandler):
         parent_run_id: Optional[UUID] = None,
         **kwargs: Any,
     ) -> Any:
-        if run_id not in self.spans:
-            return
-
         self._end_span(run_id, output=documents)
 
     def on_llm_new_token(
@@ -564,7 +543,7 @@ def output_from_generations(generations: Union[List[List[Any]], List[Any]]) -> L
     parsed: List[Any] = []
     for batch in generations:
         if isinstance(batch, list):
-            parsed.extend(map(parse_generation, batch))
+            parsed.extend(map(parse_generation, batch))  # pyright: ignore
         else:
             parsed.append(parse_generation(batch))
     return parsed
