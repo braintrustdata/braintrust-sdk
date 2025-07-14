@@ -6,6 +6,10 @@ import {
   SSEProgressEventData,
 } from "@braintrust/core/typespecs";
 import { queue } from "async";
+import { _setUseUnlimitedQueue } from "./queue";
+
+// Set unlimited queue for eval files (this happens when framework module is loaded)
+_setUseUnlimitedQueue(true);
 import chalk from "chalk";
 import pluralize from "pluralize";
 import { GenericFunction } from "./framework-types";
