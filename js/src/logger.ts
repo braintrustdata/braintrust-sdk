@@ -2971,8 +2971,8 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
     project_id: projectId,
   };
 
-  // Enable bounded queue for initLogger() calls
-  // By default queues are unlimited, but initLogger() enables the size limit
+  // When initLogger is called, we actually enable the queue size limit. We do this because
+  // initLogger is used for production obsservability and we don't want to OOM customer's apps.
   setQueueSizeLimitEnabled(true);
 
   const state = stateArg ?? _globalState;

@@ -1,6 +1,10 @@
 export const DEFAULT_QUEUE_SIZE = 15000;
 
 // Global flag to enable/disable queue size limits - false means unlimited (default)
+// When customers are doing experiments (e.g. npx braintrust eval) we don't want to drop
+// any data, and aren't really at risk of OOM'ing "real customers" processes. If customers
+// are using initLogger (aka observing production data) we enforce queue limits to ensure we
+// never OOM.
 let _useQueueSizeLimit = false;
 
 /**
