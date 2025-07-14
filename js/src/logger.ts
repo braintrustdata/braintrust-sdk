@@ -4473,9 +4473,11 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     return this.state;
   }
 
-  public async *asDataset<Input, Expected>(): AsyncGenerator<
-    EvalCase<Input, Expected, void>
-  > {
+  public async *asDataset<
+    Input,
+    Expected,
+    Metadata = DefaultMetadataType,
+  >(): AsyncGenerator<EvalCase<Input, Expected, Metadata>> {
     const records = this.fetch();
 
     for await (const record of records) {
@@ -4483,21 +4485,20 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
         continue;
       }
 
-      const { output, expected: expectedRecord } = record;
+      const { output, expected: expectedRecord, metadata } = record;
       const expected = (expectedRecord ?? output) as Expected;
 
-      if (isEmpty(expected)) {
-        yield {
-          input: record.input as Input,
-          tags: record.tags,
-        } as EvalCase<Input, Expected, void>;
-      } else {
-        yield {
-          input: record.input as Input,
-          expected: expected,
-          tags: record.tags,
-        } as unknown as EvalCase<Input, Expected, void>;
-      }
+      // Note: We always include expected and metadata fields to maintain type signature alignment.
+      // This ensures that when the type signature includes `| null | undefined`, the fields
+      // are still present in the runtime object. While this may incorrectly include fields
+      // when Metadata/Expected = void, it's preferable to incorrectly excluding them when
+      // the type signature expects them to be present.
+      yield {
+        input: record.input as Input,
+        tags: record.tags,
+        expected: expected as Expected,
+        metadata: metadata as Metadata,
+      } as unknown as EvalCase<Input, Expected, Metadata>;
     }
   }
 }
