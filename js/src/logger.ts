@@ -2,7 +2,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 
-import { Queue, DEFAULT_QUEUE_SIZE, setQueueSizeLimitEnabled } from "./queue";
+import { Queue, DEFAULT_QUEUE_SIZE } from "./queue";
 import {
   _urljoin,
   AnyDatasetRecord,
@@ -611,6 +611,10 @@ export class BraintrustState {
 
   public disable() {
     this._bgLogger.get().disable();
+  }
+
+  public enforceQueueSizeLimit(enforce: boolean) {
+    this._bgLogger.get().enforceQueueSizeLimit(enforce);
   }
 }
 
@@ -2373,6 +2377,10 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public disable() {
     this._disabled = true;
   }
+
+  public enforceQueueSizeLimit(enforce: boolean) {
+    this.queue.enforceQueueSizeLimit(enforce);
+  }
 }
 
 type InitOpenOption<IsOpen extends boolean> = {
@@ -2490,6 +2498,10 @@ export function init<IsOpen extends boolean = false>(
   }
 
   const state = stateArg ?? _globalState;
+
+  // Ensure unlimited queue for init() calls (experiments)
+  // Experiments should never drop data
+  state.enforceQueueSizeLimit(false);
 
   if (open) {
     if (isEmpty(experiment)) {
@@ -2971,11 +2983,11 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
     project_id: projectId,
   };
 
-  // When initLogger is called, we actually enable the queue size limit. We do this because
-  // initLogger is used for production obsservability and we don't want to OOM customer's apps.
-  setQueueSizeLimitEnabled(true);
-
   const state = stateArg ?? _globalState;
+
+  // Enable queue size limit enforcement for initLogger() calls
+  // This ensures production observability doesn't OOM customer processes
+  state.enforceQueueSizeLimit(true);
   const lazyMetadata: LazyValue<OrgProjectMetadata> = new LazyValue(
     async () => {
       // Otherwise actually log in.

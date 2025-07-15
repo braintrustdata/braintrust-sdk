@@ -1,26 +1,11 @@
 export const DEFAULT_QUEUE_SIZE = 15000;
 
-// Global flag to enable/disable queue size limits - false means unlimited (default)
-// When customers are doing experiments (e.g. npx braintrust eval) we don't want to drop
-// any data, and aren't really at risk of OOM'ing "real customers" processes. If customers
-// are using initLogger (aka observing production data) we enforce queue limits to ensure we
-// never OOM.
-let _useQueueSizeLimit = false;
-
-/**
- * Enable or disable queue size limits globally for all queue instances.
- * @param enabled - true to use instance maxSize limits, false for unlimited queues (default).
- */
-export function setQueueSizeLimitEnabled(enabled: boolean) {
-  console.log("setQueueSizeLimitEnabled", enabled);
-  _useQueueSizeLimit = enabled;
-}
-
 // A simple queue that drops oldest items when full. Uses a plain array
 // that can grow for unlimited queues or drops oldest items for bounded queues.
 export class Queue<T> {
   private items: Array<T> = [];
   private maxSize: number;
+  private enforceSizeLimit = false;
 
   constructor(maxSize: number) {
     if (maxSize < 1) {
@@ -33,11 +18,19 @@ export class Queue<T> {
     this.maxSize = maxSize;
   }
 
+  /**
+   * Set queue size limit enforcement. When enabled, the queue will drop new items
+   * when it reaches maxSize. When disabled (default), the queue can grow unlimited.
+   */
+  enforceQueueSizeLimit(enforce: boolean) {
+    this.enforceSizeLimit = enforce;
+  }
+
   push(...items: T[]): T[] {
     const dropped: T[] = [];
 
     for (const item of items) {
-      if (!_useQueueSizeLimit) {
+      if (!this.enforceSizeLimit) {
         // For unlimited queues (default), just add items without dropping
         this.items.push(item);
       } else {
