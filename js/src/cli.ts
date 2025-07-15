@@ -709,36 +709,7 @@ async function collectFiles(
   return files;
 }
 
-// Inspired by https://github.com/evanw/esbuild/issues/619
-// In addition to marking node_modules external, explicitly mark
-// our packages (braintrust and autoevals) external, in case they're
-// installed in a relative path.
-function createMarkKnownPackagesExternalPlugin(
-  additionalPackages: string[] = [],
-) {
-  return {
-    name: "make-known-packages-external",
-    setup(build: esbuild.PluginBuild) {
-      // Mark known packages as external
-      const knownPackages = [
-        "braintrust",
-        "autoevals",
-        "@braintrust/",
-        "config",
-        "lightningcss",
-        "@mapbox/node-pre-gyp",
-        ...additionalPackages,
-      ];
-      const knownPackagesFilter = new RegExp(
-        `^(${knownPackages.map((pkg) => pkg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`,
-      );
-      build.onResolve({ filter: knownPackagesFilter }, (args) => ({
-        path: args.path,
-        external: true,
-      }));
-    },
-  };
-}
+import { createMarkKnownPackagesExternalPlugin } from "./cli-util/external-packages-plugin";
 
 // Inspired by and modified from https://github.com/evanw/esbuild/issues/1051
 const nativeNodeModulesPlugin = {
