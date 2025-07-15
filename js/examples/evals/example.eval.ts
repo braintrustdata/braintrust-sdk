@@ -1,7 +1,7 @@
 import { Eval } from "braintrust";
 import { Levenshtein } from "autoevals";
 
-const NUM_EXAMPLES = 10000;
+const NUM_EXAMPLES = 10;
 
 Eval("queue-test", {
   data: () => {
