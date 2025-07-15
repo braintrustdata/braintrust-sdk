@@ -295,18 +295,21 @@ async function initFile({
   bundleFile,
   tsconfig,
   plugins,
+  externalPackages,
 }: {
   inFile: string;
   outFile: string;
   bundleFile: string;
   tsconfig?: string;
   plugins?: PluginMaker[];
+  externalPackages?: string[];
 }): Promise<FileHandle> {
   const buildOptions = buildOpts({
     fileName: inFile,
     outFile,
     tsconfig,
     plugins,
+    externalPackages,
   });
   const ctx = await esbuild.context(buildOptions);
 
@@ -343,6 +346,7 @@ async function initFile({
           outFile: bundleFile,
           tsconfig,
           plugins,
+          externalPackages,
         }),
         external: [],
         write: true,
@@ -705,22 +709,7 @@ async function collectFiles(
   return files;
 }
 
-// Inspired by https://github.com/evanw/esbuild/issues/619
-// In addition to marking node_modules external, explicitly mark
-// our packages (braintrust and autoevals) external, in case they're
-// installed in a relative path.
-const markKnownPackagesExternalPlugin = {
-  name: "make-known-packages-external",
-  setup(build: esbuild.PluginBuild) {
-    // Mark known packages as external
-    const knownPackagesFilter =
-      /^(braintrust|autoevals|@braintrust\/|config|lightningcss)/;
-    build.onResolve({ filter: knownPackagesFilter }, (args) => ({
-      path: args.path,
-      external: true,
-    }));
-  },
-};
+import { createMarkKnownPackagesExternalPlugin } from "./cli-util/external-packages-plugin";
 
 // Inspired by and modified from https://github.com/evanw/esbuild/issues/1051
 const nativeNodeModulesPlugin = {
@@ -792,15 +781,17 @@ function buildOpts({
   outFile,
   tsconfig,
   plugins: argPlugins,
+  externalPackages,
 }: {
   fileName: string;
   outFile: string;
   tsconfig?: string;
   plugins?: PluginMaker[];
+  externalPackages?: string[];
 }): esbuild.BuildOptions {
   const plugins = [
     nativeNodeModulesPlugin,
-    markKnownPackagesExternalPlugin,
+    createMarkKnownPackagesExternalPlugin(externalPackages),
     ...(argPlugins || []).map((fn) => fn(fileName)),
   ];
   return {
@@ -823,11 +814,13 @@ export async function initializeHandles({
   mode,
   plugins,
   tsconfig,
+  externalPackages,
 }: {
   files: string[];
   mode: "eval" | "bundle";
   plugins?: PluginMaker[];
   tsconfig?: string;
+  externalPackages?: string[];
 }): Promise<Record<string, FileHandle>> {
   const files: Record<string, boolean> = {};
   const inputPaths = inputFiles.length > 0 ? inputFiles : ["."];
@@ -870,6 +863,7 @@ export async function initializeHandles({
         bundleFile,
         plugins,
         tsconfig,
+        externalPackages,
       }),
     );
   }
@@ -930,6 +924,7 @@ async function run(args: RunArgs) {
     mode: "eval",
     tsconfig: args.tsconfig,
     plugins,
+    externalPackages: args.external_packages,
   });
 
   if (args.dev) {
@@ -999,6 +994,10 @@ function addCompileArgs(parser: ArgumentParser) {
   });
   parser.add_argument("--tsconfig", {
     help: "Specify a custom tsconfig.json file to use.",
+  });
+  parser.add_argument("--external-packages", {
+    nargs: "*",
+    help: "Additional packages to mark as external during bundling. These packages will not be included in the bundle and must be available at runtime. Use this to resolve bundling errors with native modules or problematic dependencies. Example: --external-packages sqlite3 fsevents @mapbox/node-pre-gyp",
   });
 }
 
