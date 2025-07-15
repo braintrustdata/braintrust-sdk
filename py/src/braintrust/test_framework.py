@@ -3,13 +3,7 @@ from typing import List, Optional
 
 import pytest
 
-from .framework import (
-    EvalCase,
-    EvalResultWithSummary,
-    Evaluator,
-    build_local_summary,
-    run_evaluator,
-)
+from .framework import EvalCase, EvalResultWithSummary, Evaluator, build_local_summary, run_evaluator
 from .score import Score, Scorer
 
 
