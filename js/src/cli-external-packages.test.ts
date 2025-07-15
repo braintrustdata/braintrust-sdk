@@ -93,11 +93,16 @@ describe("External Packages Plugin", () => {
       expect(filter.test("braintrust/core")).toBe(true);
       expect(filter.test("braintrust/dist/index.js")).toBe(true);
       expect(filter.test("@braintrust/core/lib/utils")).toBe(true);
-      expect(filter.test("@mapbox/node-pre-gyp/lib/util/nw-pre-gyp/index.html")).toBe(true);
+      expect(
+        filter.test("@mapbox/node-pre-gyp/lib/util/nw-pre-gyp/index.html"),
+      ).toBe(true);
     });
 
     it("should handle special characters in package names", () => {
-      const additionalPackages = ["@scope/package-with-dashes", "package.with.dots"];
+      const additionalPackages = [
+        "@scope/package-with-dashes",
+        "package.with.dots",
+      ];
       const plugin = createMarkKnownPackagesExternalPlugin(additionalPackages);
       const mockBuild = {
         onResolve: vi.fn(),
@@ -196,29 +201,81 @@ describe("External Packages Plugin", () => {
 
       // Test prefix matching for @braintrust/ (ends with /)
       const braintrustPrefixTests = [
-        { input: "@braintrust/core", expected: true, description: "Should match @braintrust/ prefix" },
-        { input: "@braintrust/utils", expected: true, description: "Should match @braintrust/ prefix" },
-        { input: "@braintrust/core/lib/index.js", expected: true, description: "Should match @braintrust/ prefix with subpath" },
-        { input: "@braintrust-other/core", expected: false, description: "Should not match similar but different scope" },
+        {
+          input: "@braintrust/core",
+          expected: true,
+          description: "Should match @braintrust/ prefix",
+        },
+        {
+          input: "@braintrust/utils",
+          expected: true,
+          description: "Should match @braintrust/ prefix",
+        },
+        {
+          input: "@braintrust/core/lib/index.js",
+          expected: true,
+          description: "Should match @braintrust/ prefix with subpath",
+        },
+        {
+          input: "@braintrust-other/core",
+          expected: false,
+          description: "Should not match similar but different scope",
+        },
       ];
 
       // Test exact matching for config (doesn't end with /)
       const configExactTests = [
-        { input: "config", expected: true, description: "Should match config exactly" },
-        { input: "config/local", expected: true, description: "Should match config with subpath" },
-        { input: "config-loader", expected: false, description: "Should not match config with suffix" },
-        { input: "my-config", expected: false, description: "Should not match config with prefix" },
+        {
+          input: "config",
+          expected: true,
+          description: "Should match config exactly",
+        },
+        {
+          input: "config/local",
+          expected: true,
+          description: "Should match config with subpath",
+        },
+        {
+          input: "config-loader",
+          expected: false,
+          description: "Should not match config with suffix",
+        },
+        {
+          input: "my-config",
+          expected: false,
+          description: "Should not match config with prefix",
+        },
       ];
 
       // Test exact matching for braintrust (doesn't end with /)
       const braintrustExactTests = [
-        { input: "braintrust", expected: true, description: "Should match braintrust exactly" },
-        { input: "braintrust/core", expected: true, description: "Should match braintrust with subpath" },
-        { input: "braintrust-extended", expected: false, description: "Should not match braintrust with suffix" },
-        { input: "my-braintrust", expected: false, description: "Should not match braintrust with prefix" },
+        {
+          input: "braintrust",
+          expected: true,
+          description: "Should match braintrust exactly",
+        },
+        {
+          input: "braintrust/core",
+          expected: true,
+          description: "Should match braintrust with subpath",
+        },
+        {
+          input: "braintrust-extended",
+          expected: false,
+          description: "Should not match braintrust with suffix",
+        },
+        {
+          input: "my-braintrust",
+          expected: false,
+          description: "Should not match braintrust with prefix",
+        },
       ];
 
-      const allTests = [...braintrustPrefixTests, ...configExactTests, ...braintrustExactTests];
+      const allTests = [
+        ...braintrustPrefixTests,
+        ...configExactTests,
+        ...braintrustExactTests,
+      ];
 
       allTests.forEach((test) => {
         const result = filter.test(test.input);

@@ -199,7 +199,10 @@ describe("Parameter Flow Integration", () => {
       externalPackages: bundleArgs.external_packages,
     };
 
-    expect(initializeHandlesParams.externalPackages).toEqual(["sharp", "canvas"]);
+    expect(initializeHandlesParams.externalPackages).toEqual([
+      "sharp",
+      "canvas",
+    ]);
 
     // This would be passed to buildOpts
     const buildOptsParams = {
