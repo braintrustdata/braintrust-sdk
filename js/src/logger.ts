@@ -612,6 +612,10 @@ export class BraintrustState {
   public disable() {
     this._bgLogger.get().disable();
   }
+
+  public enforceQueueSizeLimit(enforce: boolean) {
+    this._bgLogger.get().enforceQueueSizeLimit(enforce);
+  }
 }
 
 let _globalState: BraintrustState;
@@ -2373,6 +2377,10 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public disable() {
     this._disabled = true;
   }
+
+  public enforceQueueSizeLimit(enforce: boolean) {
+    this.queue.enforceQueueSizeLimit(enforce);
+  }
 }
 
 type InitOpenOption<IsOpen extends boolean> = {
@@ -2490,6 +2498,10 @@ export function init<IsOpen extends boolean = false>(
   }
 
   const state = stateArg ?? _globalState;
+
+  // Ensure unlimited queue for init() calls (experiments)
+  // Experiments should never drop data
+  state.enforceQueueSizeLimit(false);
 
   if (open) {
     if (isEmpty(experiment)) {
@@ -2970,7 +2982,12 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
     project_name: projectName,
     project_id: projectId,
   };
+
   const state = stateArg ?? _globalState;
+
+  // Enable queue size limit enforcement for initLogger() calls
+  // This ensures production observability doesn't OOM customer processes
+  state.enforceQueueSizeLimit(true);
   const lazyMetadata: LazyValue<OrgProjectMetadata> = new LazyValue(
     async () => {
       // Otherwise actually log in.
@@ -4473,9 +4490,11 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     return this.state;
   }
 
-  public async *asDataset<Input, Expected>(): AsyncGenerator<
-    EvalCase<Input, Expected, void>
-  > {
+  public async *asDataset<
+    Input,
+    Expected,
+    Metadata = DefaultMetadataType,
+  >(): AsyncGenerator<EvalCase<Input, Expected, Metadata>> {
     const records = this.fetch();
 
     for await (const record of records) {
@@ -4483,21 +4502,20 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
         continue;
       }
 
-      const { output, expected: expectedRecord } = record;
+      const { output, expected: expectedRecord, metadata } = record;
       const expected = (expectedRecord ?? output) as Expected;
 
-      if (isEmpty(expected)) {
-        yield {
-          input: record.input as Input,
-          tags: record.tags,
-        } as EvalCase<Input, Expected, void>;
-      } else {
-        yield {
-          input: record.input as Input,
-          expected: expected,
-          tags: record.tags,
-        } as unknown as EvalCase<Input, Expected, void>;
-      }
+      // Note: We always include expected and metadata fields to maintain type signature alignment.
+      // This ensures that when the type signature includes `| null | undefined`, the fields
+      // are still present in the runtime object. While this may incorrectly include fields
+      // when Metadata/Expected = void, it's preferable to incorrectly excluding them when
+      // the type signature expects them to be present.
+      yield {
+        input: record.input as Input,
+        tags: record.tags,
+        expected: expected as Expected,
+        metadata: metadata as Metadata,
+      } as unknown as EvalCase<Input, Expected, Metadata>;
     }
   }
 }
