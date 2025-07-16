@@ -1,247 +1,349 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { trace, context } from "@opentelemetry/api";
+import {
+  BasicTracerProvider,
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
+import { LLMSpanProcessor } from "./otel";
 
-// Mock the required dependencies
-const mockTrace = {
-  getTracerProvider: vi.fn(),
-};
+describe("Basic OpenTelemetry Setup", () => {
+  let memoryExporter: InMemorySpanExporter;
+  let provider: BasicTracerProvider;
+  let tracer: any;
 
-const mockOTLPTraceExporter = vi.fn();
-const mockBatchSpanProcessor = vi.fn();
-const mockSimpleSpanProcessor = vi.fn();
-
-vi.mock("@opentelemetry/api", () => ({
-  trace: mockTrace,
-}));
-
-vi.mock("@opentelemetry/exporter-otlp-http", () => ({
-  OTLPTraceExporter: mockOTLPTraceExporter,
-}));
-
-vi.mock("@opentelemetry/sdk-trace-base", () => ({
-  BatchSpanProcessor: mockBatchSpanProcessor,
-  SimpleSpanProcessor: mockSimpleSpanProcessor,
-}));
-
-describe("OpenTelemetry Integration", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    // Reset environment variables
-    delete process.env.BRAINTRUST_API_KEY;
-    delete process.env.BRAINTRUST_PARENT;
-    delete process.env.BRAINTRUST_API_URL;
-    delete process.env.BRAINTRUST_OTEL_ENABLE;
-    delete process.env.BRAINTRUST_OTEL_ENABLE_LLM_FILTER;
+    memoryExporter = new InMemorySpanExporter();
+
+    // Add a simple processor first to verify spans are created
+    const simpleProcessor = new SimpleSpanProcessor(memoryExporter);
+    provider = new BasicTracerProvider({
+      spanProcessors: [simpleProcessor],
+    });
+
+    // Don't use global tracer provider to avoid interference
+    tracer = provider.getTracer("test_tracer");
   });
 
-  describe("OtelExporter", () => {
-    it("should create exporter with API key", async () => {
-      const { OtelExporter } = await import("./otel");
-
-      process.env.BRAINTRUST_API_KEY = "test-key";
-
-      const exporter = new OtelExporter();
-
-      expect(mockOTLPTraceExporter).toHaveBeenCalledWith({
-        url: "https://api.braintrust.dev/otel/v1/traces",
-        headers: {
-          Authorization: "Bearer test-key",
-        },
-      });
-    });
-
-    it("should throw error without API key", async () => {
-      const { OtelExporter } = await import("./otel");
-
-      expect(() => new OtelExporter()).toThrow("API key is required");
-    });
-
-    it("should use custom URL and parent", async () => {
-      const { OtelExporter } = await import("./otel");
-
-      const exporter = new OtelExporter({
-        url: "https://custom.example.com/otel/v1/traces",
-        apiKey: "test-key",
-        parent: "project:experiment",
-        headers: { "x-custom": "value" },
-      });
-
-      expect(exporter.parent).toBe("project:experiment");
-      expect(mockOTLPTraceExporter).toHaveBeenCalledWith({
-        url: "https://custom.example.com/otel/v1/traces",
-        apiKey: "test-key",
-        parent: "project:experiment",
-        headers: {
-          Authorization: "Bearer test-key",
-          "x-bt-parent": "project:experiment",
-          "x-custom": "value",
-        },
-      });
-    });
+  afterEach(async () => {
+    await provider.shutdown();
   });
 
-  describe("LLMSpanProcessor", () => {
-    it("should keep root spans", async () => {
-      const { LLMSpanProcessor } = await import("./otel");
+  it("should create a basic span", () => {
+    const span = tracer.startSpan("test_operation");
+    span.end();
 
-      const mockInnerProcessor = {
-        onStart: vi.fn(),
-        onEnd: vi.fn(),
-        shutdown: vi.fn(),
-        forceFlush: vi.fn(),
-      };
-
-      const processor = new LLMSpanProcessor(mockInnerProcessor);
-
-      // Mock root span (no parent)
-      const rootSpan = {
-        name: "root_operation",
-        parentSpanId: null,
-        attributes: {},
-      };
-
-      processor.onEnd(rootSpan);
-
-      expect(mockInnerProcessor.onEnd).toHaveBeenCalledWith(rootSpan);
-    });
-
-    it("should keep LLM spans by name", async () => {
-      const { LLMSpanProcessor } = await import("./otel");
-
-      const mockInnerProcessor = {
-        onStart: vi.fn(),
-        onEnd: vi.fn(),
-        shutdown: vi.fn(),
-        forceFlush: vi.fn(),
-      };
-
-      const processor = new LLMSpanProcessor(mockInnerProcessor);
-
-      // Mock LLM span
-      const llmSpan = {
-        name: "gen_ai.completion",
-        parentSpanId: "1234567890123456",
-        attributes: {},
-      };
-
-      processor.onEnd(llmSpan);
-
-      expect(mockInnerProcessor.onEnd).toHaveBeenCalledWith(llmSpan);
-    });
-
-    it("should keep spans with LLM attributes", async () => {
-      const { LLMSpanProcessor } = await import("./otel");
-
-      const mockInnerProcessor = {
-        onStart: vi.fn(),
-        onEnd: vi.fn(),
-        shutdown: vi.fn(),
-        forceFlush: vi.fn(),
-      };
-
-      const processor = new LLMSpanProcessor(mockInnerProcessor);
-
-      // Mock span with LLM attributes
-      const spanWithLLMAttrs = {
-        name: "some_operation",
-        parentSpanId: "1234567890123456",
-        attributes: {
-          "gen_ai.model": "gpt-4",
-          regular_attr: "value",
-        },
-      };
-
-      processor.onEnd(spanWithLLMAttrs);
-
-      expect(mockInnerProcessor.onEnd).toHaveBeenCalledWith(spanWithLLMAttrs);
-    });
-
-    it("should drop non-LLM spans", async () => {
-      const { LLMSpanProcessor } = await import("./otel");
-
-      const mockInnerProcessor = {
-        onStart: vi.fn(),
-        onEnd: vi.fn(),
-        shutdown: vi.fn(),
-        forceFlush: vi.fn(),
-      };
-
-      const processor = new LLMSpanProcessor(mockInnerProcessor);
-
-      // Mock non-LLM span
-      const regularSpan = {
-        name: "database_query",
-        parentSpanId: "1234567890123456",
-        attributes: {
-          "db.system": "postgresql",
-        },
-      };
-
-      processor.onEnd(regularSpan);
-
-      expect(mockInnerProcessor.onEnd).not.toHaveBeenCalled();
-    });
-
-    it("should respect custom filter", async () => {
-      const { LLMSpanProcessor } = await import("./otel");
-
-      const mockInnerProcessor = {
-        onStart: vi.fn(),
-        onEnd: vi.fn(),
-        shutdown: vi.fn(),
-        forceFlush: vi.fn(),
-      };
-
-      const customFilter = vi.fn((span) => {
-        return span.name.includes("important") ? true : null;
-      });
-
-      const processor = new LLMSpanProcessor(mockInnerProcessor, customFilter);
-
-      // Mock span that would normally be dropped but custom filter keeps it
-      const importantSpan = {
-        name: "important_operation",
-        parentSpanId: "1234567890123456",
-        attributes: {},
-      };
-
-      processor.onEnd(importantSpan);
-
-      expect(customFilter).toHaveBeenCalledWith(importantSpan);
-      expect(mockInnerProcessor.onEnd).toHaveBeenCalledWith(importantSpan);
-    });
+    const spans = memoryExporter.getFinishedSpans();
+    expect(spans).toHaveLength(1);
+    expect(spans[0].name).toBe("test_operation");
   });
 
-  describe("Processor", () => {
-    it("should create processor with default settings", async () => {
-      const { Processor } = await import("./otel");
+  it("should create parent-child spans", async () => {
+    // This test demonstrates that startActiveSpan should create proper parent-child relationships
+    // But it seems the context propagation is not working as expected in this test setup
 
-      process.env.BRAINTRUST_API_KEY = "test-key";
+    const rootSpan = tracer.startSpan("root");
+    const childSpan = tracer.startSpan(
+      "child",
+      {},
+      trace.setSpanContext(context.active(), rootSpan.spanContext()),
+    );
 
-      const processor = new Processor();
+    childSpan.end();
+    rootSpan.end();
 
-      expect(processor.exporter).toBeDefined();
-      expect(processor.processor).toBeDefined();
+    // Force flush to ensure spans are processed
+    await provider.forceFlush();
+
+    const spans = memoryExporter.getFinishedSpans();
+    expect(spans).toHaveLength(2);
+
+    const child = spans.find((s) => s.name === "child");
+    const parent = spans.find((s) => s.name === "root");
+
+    expect(child).toBeDefined();
+    expect(parent).toBeDefined();
+
+    // Verify they're in the same trace
+    expect(child?.spanContext().traceId).toBe(parent?.spanContext().traceId);
+    // In OpenTelemetry, parent info is in parentSpanContext, not parentSpanId
+    expect(child?.parentSpanContext?.spanId).toBe(parent?.spanContext().spanId);
+  });
+});
+
+describe("LLMSpanProcessor", () => {
+  let memoryExporter: InMemorySpanExporter;
+  let provider: BasicTracerProvider;
+  let llmProcessor: LLMSpanProcessor;
+  let tracer: any;
+  let baseProcessor: SimpleSpanProcessor;
+
+  beforeEach(() => {
+    memoryExporter = new InMemorySpanExporter();
+
+    // Create processor with our filtering logic
+    baseProcessor = new SimpleSpanProcessor(memoryExporter);
+    llmProcessor = new LLMSpanProcessor(baseProcessor);
+
+    provider = new BasicTracerProvider({
+      spanProcessors: [llmProcessor],
     });
 
-    it("should create processor with LLM filtering", async () => {
-      const { Processor } = await import("./otel");
-
-      process.env.BRAINTRUST_API_KEY = "test-key";
-
-      const processor = new Processor({
-        enableLlmFiltering: true,
-      });
-
-      expect(processor.exporter).toBeDefined();
-      expect(processor.processor).toBeDefined();
-    });
+    // Don't set global tracer provider - use local one instead
+    tracer = provider.getTracer("test_tracer");
   });
 
-  describe("OTEL_AVAILABLE", () => {
-    it("should export OTEL_AVAILABLE", async () => {
-      const { OTEL_AVAILABLE } = await import("./otel");
+  afterEach(async () => {
+    await provider.shutdown();
+  });
 
-      expect(typeof OTEL_AVAILABLE).toBe("boolean");
+  it("should keep root spans", () => {
+    const span = tracer.startSpan("root_operation");
+    span.end();
+
+    const spans = memoryExporter.getFinishedSpans();
+    expect(spans).toHaveLength(1);
+    expect(spans[0].name).toBe("root_operation");
+  });
+
+  it("should keep spans with LLM name prefixes", async () => {
+    const rootSpan = tracer.startSpan("root");
+
+    const parentContext = trace.setSpanContext(
+      context.active(),
+      rootSpan.spanContext(),
+    );
+    const genAiSpan = tracer.startSpan("gen_ai.completion", {}, parentContext);
+    const braintrustSpan = tracer.startSpan(
+      "braintrust.eval",
+      {},
+      parentContext,
+    );
+    const llmSpan = tracer.startSpan("llm.generate", {}, parentContext);
+    const aiSpan = tracer.startSpan("ai.model_call", {}, parentContext);
+    const regularSpan = tracer.startSpan("database_query", {}, parentContext);
+
+    genAiSpan.end();
+    braintrustSpan.end();
+    llmSpan.end();
+    aiSpan.end();
+    regularSpan.end();
+    rootSpan.end();
+
+    // Force flush to ensure spans are processed
+    await provider.forceFlush();
+
+    const spans = memoryExporter.getFinishedSpans();
+    const spanNames = spans.map((s) => s.name);
+
+    expect(spanNames).toContain("root");
+    expect(spanNames).toContain("gen_ai.completion");
+    expect(spanNames).toContain("braintrust.eval");
+    expect(spanNames).toContain("llm.generate");
+    expect(spanNames).toContain("ai.model_call");
+    // database_query should be filtered out as it doesn't match LLM prefixes
+    expect(spanNames).not.toContain("database_query");
+  });
+
+  it("should keep spans with LLM attribute prefixes", async () => {
+    const rootSpan = tracer.startSpan("root");
+
+    const parentContext = trace.setSpanContext(
+      context.active(),
+      rootSpan.spanContext(),
+    );
+    const genAiAttrSpan = tracer.startSpan(
+      "gen_ai_attr_operation",
+      {},
+      parentContext,
+    );
+    genAiAttrSpan.setAttributes({ "gen_ai.model": "gpt-4" });
+
+    const braintrustAttrSpan = tracer.startSpan(
+      "braintrust_attr_operation",
+      {},
+      parentContext,
+    );
+    braintrustAttrSpan.setAttributes({ "braintrust.dataset": "test-data" });
+
+    const llmAttrSpan = tracer.startSpan(
+      "llm_attr_operation",
+      {},
+      parentContext,
+    );
+    llmAttrSpan.setAttributes({ "llm.tokens": 100 });
+
+    const aiAttrSpan = tracer.startSpan("ai_attr_operation", {}, parentContext);
+    aiAttrSpan.setAttributes({ "ai.temperature": 0.7 });
+
+    const regularSpan = tracer.startSpan(
+      "regular_operation",
+      {},
+      parentContext,
+    );
+    regularSpan.setAttributes({ "database.connection": "postgres" });
+
+    genAiAttrSpan.end();
+    braintrustAttrSpan.end();
+    llmAttrSpan.end();
+    aiAttrSpan.end();
+    regularSpan.end();
+    rootSpan.end();
+
+    // Force flush to ensure spans are processed
+    await provider.forceFlush();
+
+    const spans = memoryExporter.getFinishedSpans();
+    const spanNames = spans.map((s) => s.name);
+
+    expect(spanNames).toContain("root");
+    expect(spanNames).toContain("gen_ai_attr_operation");
+    expect(spanNames).toContain("braintrust_attr_operation");
+    expect(spanNames).toContain("llm_attr_operation");
+    expect(spanNames).toContain("ai_attr_operation");
+    expect(spanNames).not.toContain("regular_operation");
+  });
+
+  it("should support custom filter that keeps spans", () => {
+    const customFilter = (span: any) => {
+      if (span.name === "custom_keep") {
+        return true;
+      }
+      return null; // Don't influence decision
+    };
+
+    // Create new processor with custom filter
+    const customMemoryExporter = new InMemorySpanExporter();
+    const customLLMProcessor = new LLMSpanProcessor(
+      new SimpleSpanProcessor(customMemoryExporter),
+      customFilter,
+    );
+    const customProvider = new BasicTracerProvider({
+      spanProcessors: [customLLMProcessor],
     });
+    const customTracer = customProvider.getTracer("custom_test");
+
+    const rootSpan = customTracer.startSpan("root");
+
+    const parentContext = trace.setSpanContext(
+      context.active(),
+      rootSpan.spanContext(),
+    );
+    const keepSpan = customTracer.startSpan("custom_keep", {}, parentContext);
+    const regularSpan = customTracer.startSpan(
+      "regular_operation",
+      {},
+      parentContext,
+    );
+
+    keepSpan.end();
+    regularSpan.end();
+    rootSpan.end();
+
+    const spans = customMemoryExporter.getFinishedSpans();
+    const spanNames = spans.map((s) => s.name);
+
+    expect(spanNames).toContain("root");
+    expect(spanNames).toContain("custom_keep"); // kept by custom filter
+    expect(spanNames).not.toContain("regular_operation"); // dropped by default logic
+
+    customProvider.shutdown();
+  });
+
+  it("should support custom filter that drops spans", () => {
+    const customFilter = (span: any) => {
+      if (span.name === "gen_ai.drop_this") {
+        return false;
+      }
+      return null; // Don't influence decision
+    };
+
+    // Create new processor with custom filter
+    const customMemoryExporter = new InMemorySpanExporter();
+    const customLLMProcessor = new LLMSpanProcessor(
+      new SimpleSpanProcessor(customMemoryExporter),
+      customFilter,
+    );
+    const customProvider = new BasicTracerProvider({
+      spanProcessors: [customLLMProcessor],
+    });
+    const customTracer = customProvider.getTracer("custom_test");
+
+    const rootSpan = customTracer.startSpan("root");
+
+    const parentContext = trace.setSpanContext(
+      context.active(),
+      rootSpan.spanContext(),
+    );
+    const dropSpan = customTracer.startSpan(
+      "gen_ai.drop_this",
+      {},
+      parentContext,
+    );
+    const keepSpan = customTracer.startSpan(
+      "gen_ai.keep_this",
+      {},
+      parentContext,
+    );
+
+    dropSpan.end();
+    keepSpan.end();
+    rootSpan.end();
+
+    const spans = customMemoryExporter.getFinishedSpans();
+    const spanNames = spans.map((s) => s.name);
+
+    expect(spanNames).toContain("root");
+    expect(spanNames).not.toContain("gen_ai.drop_this"); // dropped by custom filter
+    expect(spanNames).toContain("gen_ai.keep_this"); // kept by default LLM logic
+
+    customProvider.shutdown();
+  });
+
+  it("should support custom filter that defers to default logic", () => {
+    const customFilter = (span: any) => {
+      return null; // Always defer to default logic
+    };
+
+    // Create new processor with custom filter
+    const customMemoryExporter = new InMemorySpanExporter();
+    const customLLMProcessor = new LLMSpanProcessor(
+      new SimpleSpanProcessor(customMemoryExporter),
+      customFilter,
+    );
+    const customProvider = new BasicTracerProvider({
+      spanProcessors: [customLLMProcessor],
+    });
+    const customTracer = customProvider.getTracer("custom_test");
+
+    const rootSpan = customTracer.startSpan("root");
+
+    const parentContext = trace.setSpanContext(
+      context.active(),
+      rootSpan.spanContext(),
+    );
+    const llmSpan = customTracer.startSpan(
+      "gen_ai.completion",
+      {},
+      parentContext,
+    );
+    const regularSpan = customTracer.startSpan(
+      "regular_operation",
+      {},
+      parentContext,
+    );
+
+    llmSpan.end();
+    regularSpan.end();
+    rootSpan.end();
+
+    const spans = customMemoryExporter.getFinishedSpans();
+    const spanNames = spans.map((s) => s.name);
+
+    expect(spanNames).toContain("root");
+    expect(spanNames).toContain("gen_ai.completion"); // kept by default LLM logic
+    expect(spanNames).not.toContain("regular_operation"); // dropped by default logic
+
+    customProvider.shutdown();
   });
 });

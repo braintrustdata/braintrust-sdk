@@ -9,12 +9,13 @@ help:
 	@echo "  make install-optional-deps - Install optional dependencies"
 	@echo "  make test               - Run all tests (core + wrappers)"
 	@echo "  make test-core          - Run core tests only"
+	@echo "  make test-otel          - Run OpenTelemetry tests"
 	@echo "  make test-openai        - Run OpenAI wrapper tests"
 	@echo "  make test-anthropic     - Run Anthropic wrapper tests"
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
 
-.PHONY: help bench build clean test test-core test-openai test-anthropic test-latest install-optional-deps
+.PHONY: help bench build clean test test-core test-otel test-openai test-anthropic test-latest install-optional-deps
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -31,6 +32,17 @@ test-anthropic-%:
 	pnpm prune
 	$(call pnpm_install_no_save,@anthropic-ai/sdk@$*)
 	pnpm test:anthropic
+
+# -------------------------------------------------------------------------------------------------
+# OpenTelemetry testing
+# -------------------------------------------------------------------------------------------------
+
+.PHONY: test-otel
+
+test-otel:
+	pnpm prune
+	npm_config_save=false npm_config_lockfile=false pnpm add "@opentelemetry/api" "@opentelemetry/sdk-trace-base" "@opentelemetry/exporter-otlp-http" "@opentelemetry/resources" "@opentelemetry/semantic-conventions"
+	pnpm test -- src/otel.test.ts
 
 # -------------------------------------------------------------------------------------------------
 # OpenAI testing
@@ -66,10 +78,10 @@ test-core:
 	pnpm test
 
 # Test everything
-test: test-core test-openai test-anthropic
+test: test-core test-otel test-openai test-anthropic
 
 # Test the core and the latest versions of wrappers.
-test-latest: test-core test-anthropic-latest test-openai-latest
+test-latest: test-core test-otel test-anthropic-latest test-openai-latest
 
 prune:
 	pnpm prune
