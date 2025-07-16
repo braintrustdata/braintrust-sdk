@@ -1,16 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { trace, context } from "@opentelemetry/api";
+import { trace, context, Tracer } from "@opentelemetry/api";
 import {
   BasicTracerProvider,
   InMemorySpanExporter,
   SimpleSpanProcessor,
+  ReadableSpan,
 } from "@opentelemetry/sdk-trace-base";
 import { LLMSpanProcessor } from "./otel";
 
 describe("Basic OpenTelemetry Setup", () => {
   let memoryExporter: InMemorySpanExporter;
   let provider: BasicTracerProvider;
-  let tracer: any;
+  let tracer: Tracer;
 
   beforeEach(() => {
     memoryExporter = new InMemorySpanExporter();
@@ -75,7 +76,7 @@ describe("LLMSpanProcessor", () => {
   let memoryExporter: InMemorySpanExporter;
   let provider: BasicTracerProvider;
   let llmProcessor: LLMSpanProcessor;
-  let tracer: any;
+  let tracer: Tracer;
   let baseProcessor: SimpleSpanProcessor;
 
   beforeEach(() => {
@@ -205,7 +206,7 @@ describe("LLMSpanProcessor", () => {
   });
 
   it("should support custom filter that keeps spans", () => {
-    const customFilter = (span: any) => {
+    const customFilter = (span: ReadableSpan) => {
       if (span.name === "custom_keep") {
         return true;
       }
@@ -251,7 +252,7 @@ describe("LLMSpanProcessor", () => {
   });
 
   it("should support custom filter that drops spans", () => {
-    const customFilter = (span: any) => {
+    const customFilter = (span: ReadableSpan) => {
       if (span.name === "gen_ai.drop_this") {
         return false;
       }
@@ -301,7 +302,7 @@ describe("LLMSpanProcessor", () => {
   });
 
   it("should support custom filter that defers to default logic", () => {
-    const customFilter = (span: any) => {
+    const customFilter = (span: ReadableSpan) => {
       return null; // Always defer to default logic
     };
 
