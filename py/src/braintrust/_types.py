@@ -501,14 +501,14 @@ class ChatCompletionMessageParam5(TypedDict):
 
 
 class ChatCompletionMessageParam6(TypedDict):
-    role: Literal["model"]
-    content: NotRequired[Optional[str]]
-
-
-class ChatCompletionMessageParam7(TypedDict):
     content: NotRequired[Optional[Union[str, Sequence[ChatCompletionContentPartText]]]]
     role: Literal["developer"]
     name: NotRequired[Optional[str]]
+
+
+class ChatCompletionMessageParam7(TypedDict):
+    role: Literal["model"]
+    content: NotRequired[Optional[str]]
 
 
 ChatCompletionMessageParam = Union[
