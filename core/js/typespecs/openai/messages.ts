@@ -4,15 +4,7 @@ import { z } from "zod";
 extendZodWithOpenApi(z);
 
 export const messageRoleSchema = z
-  .enum([
-    "system",
-    "user",
-    "assistant",
-    "function",
-    "tool",
-    "model",
-    "developer",
-  ])
+  .enum(["system", "user", "assistant", "function", "tool", "model"])
   .openapi("MessageRole");
 export type MessageRole = z.infer<typeof messageRoleSchema>;
 
@@ -34,15 +26,6 @@ const chatCompletionSystemMessageParamSchema = z.object({
     z.array(chatCompletionContentPartTextSchema).openapi({ title: "array" }),
   ]),
   role: z.literal("system"),
-  name: z.string().optional(),
-});
-
-const chatCompletionDeveloperMessageParamSchema = z.object({
-  content: z.union([
-    z.string().default("").openapi({ title: "text" }),
-    z.array(chatCompletionContentPartTextSchema).openapi({ title: "array" }),
-  ]),
-  role: z.literal("developer"),
   name: z.string().optional(),
 });
 
@@ -170,7 +153,6 @@ const chatCompletionFallbackMessageParamSchema = z.object({
     "assistant",
     "tool",
     "function",
-    "developer",
   ]),
   content: z.string().nullish(),
 });
@@ -180,7 +162,6 @@ export const chatCompletionOpenAIMessageParamSchema = z.union([
   chatCompletionAssistantMessageParamSchema.openapi({ title: "assistant" }),
   chatCompletionToolMessageParamSchema.openapi({ title: "tool" }),
   chatCompletionFunctionMessageParamSchema.openapi({ title: "function" }),
-  chatCompletionDeveloperMessageParamSchema.openapi({ title: "developer" }),
 ]);
 
 export const chatCompletionMessageParamSchema = z
