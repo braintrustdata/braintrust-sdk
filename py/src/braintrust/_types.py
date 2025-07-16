@@ -505,6 +505,12 @@ class ChatCompletionMessageParam6(TypedDict):
     content: NotRequired[Optional[str]]
 
 
+class ChatCompletionMessageParam7(TypedDict):
+    content: NotRequired[Optional[Union[str, Sequence[ChatCompletionContentPartText]]]]
+    role: Literal["developer"]
+    name: NotRequired[Optional[str]]
+
+
 ChatCompletionMessageParam = Union[
     ChatCompletionMessageParam1,
     ChatCompletionMessageParam2,
@@ -512,6 +518,7 @@ ChatCompletionMessageParam = Union[
     ChatCompletionMessageParam4,
     ChatCompletionMessageParam5,
     ChatCompletionMessageParam6,
+    ChatCompletionMessageParam7,
 ]
 
 
