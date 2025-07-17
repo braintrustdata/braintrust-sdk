@@ -3,7 +3,11 @@
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 import { objectNullish } from "../src/zod_util";
-import { ObjectType, datetimeStringSchema } from "./common_types";
+import {
+  ObjectType,
+  datetimeStringSchema,
+  generateBaseTableOpSchema,
+} from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
@@ -838,17 +842,6 @@ export const appLimitParamSchema = z.coerce
   .nonnegative()
   .describe("Limit the number of objects to return")
   .openapi("AppLimit");
-
-function generateBaseTableOpSchema(objectName: string) {
-  return z.object({
-    org_name: z
-      .string()
-      .nullish()
-      .describe(
-        `For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, you may specify the name of the organization the ${objectName} belongs in.`,
-      ),
-  });
-}
 
 // Pagination for listing data objects.
 
