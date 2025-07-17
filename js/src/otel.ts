@@ -269,7 +269,16 @@ export class BraintrustSpanProcessor {
       "https://api.braintrust.dev";
 
     // Get parent from options or environment
-    const parent = options.parent || process.env.BRAINTRUST_PARENT;
+    let parent = options.parent || process.env.BRAINTRUST_PARENT;
+
+    // Default parent if not provided
+    if (!parent) {
+      parent = "project_name:default-otel-project";
+      console.info(
+        `No parent specified, using default: ${parent}. ` +
+          "Configure with BRAINTRUST_PARENT environment variable or parent parameter.",
+      );
+    }
 
     // Create OTLP exporter
     let exporter: any;
@@ -281,7 +290,7 @@ export class BraintrustSpanProcessor {
       const headers = {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        ...(parent && { "x-bt-parent": parent }),
+        "x-bt-parent": parent,
         ...options.headers,
       };
 

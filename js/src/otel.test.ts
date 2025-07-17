@@ -458,4 +458,51 @@ describe("BraintrustSpanProcessor", () => {
     await expect(processor.shutdown()).resolves.toBeUndefined();
     await expect(processor.forceFlush()).resolves.toBeUndefined();
   });
+
+  it("should use default parent when none is provided", () => {
+    process.env.BRAINTRUST_API_KEY = "test-api-key";
+    delete process.env.BRAINTRUST_PARENT;
+
+    const consoleSpy = vi.spyOn(console, "info");
+
+    const processor = new BraintrustSpanProcessor();
+
+    expect(processor).toBeDefined();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "No parent specified, using default: project_name:default-otel-project. " +
+        "Configure with BRAINTRUST_PARENT environment variable or parent parameter.",
+    );
+
+    consoleSpy.mockRestore();
+  });
+
+  it("should not use default parent when BRAINTRUST_PARENT is set", () => {
+    process.env.BRAINTRUST_API_KEY = "test-api-key";
+    process.env.BRAINTRUST_PARENT = "my-project:my-experiment";
+
+    const consoleSpy = vi.spyOn(console, "info");
+
+    const processor = new BraintrustSpanProcessor();
+
+    expect(processor).toBeDefined();
+    expect(consoleSpy).not.toHaveBeenCalled();
+
+    consoleSpy.mockRestore();
+  });
+
+  it("should not use default parent when parent option is provided", () => {
+    process.env.BRAINTRUST_API_KEY = "test-api-key";
+    delete process.env.BRAINTRUST_PARENT;
+
+    const consoleSpy = vi.spyOn(console, "info");
+
+    const processor = new BraintrustSpanProcessor({
+      parent: "option-project:option-experiment",
+    });
+
+    expect(processor).toBeDefined();
+    expect(consoleSpy).not.toHaveBeenCalled();
+
+    consoleSpy.mockRestore();
+  });
 });
