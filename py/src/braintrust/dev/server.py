@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import json
 from dataclasses import asdict
 from typing import Annotated, Any, AsyncGenerator, List, Optional, Union, cast
@@ -155,7 +156,11 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
                         raise HTTPException(status_code=400, detail="Evaluator requires task")
 
                     async def task(input: Any, hooks: EvalHooks[Any]):
-                        result = serialized_task(input, hooks)
+                        task_args = [input]
+                        if len(inspect.signature(serialized_task).parameters) == 2:
+                            task_args.append(hooks)
+                        result = serialized_task(*task_args)
+
                         await message_queue.put(
                             serialize_sse_event(
                                 "progress",
