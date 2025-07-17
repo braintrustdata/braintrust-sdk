@@ -68,7 +68,7 @@ class EvaluatorState:
 
 
 class InvokeParent(BaseModel):
-    object_type: SpanObjectTypeV3
+    object_type: str
     object_id: Optional[str] = None
     row_ids: Optional[SpanRowIdsV2] = None
     propagated_event: Optional[Dict[str, Any]] = None

@@ -1,5 +1,7 @@
+import asyncio
+import json
 from dataclasses import asdict
-from typing import Annotated, Any, List, Optional, Union, cast
+from typing import Annotated, Any, AsyncGenerator, List, Optional, Union, cast
 
 import uvicorn
 from fastapi import FastAPI
@@ -7,7 +9,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.params import Depends
 from fastapi.requests import Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
 
 from braintrust.cli.eval.models import (
@@ -19,7 +21,16 @@ from braintrust.dev.dataset import get_dataset
 from braintrust.dev.errors import format_validation_errors
 from braintrust.dev.security import BraintrustApiKey
 from braintrust.dev.utils import get_any
-from braintrust.framework import EvalAsync, Evaluator, scorer_name
+from braintrust.framework import (
+    EvalAsync,
+    EvalHooks,
+    EvalResultWithSummary,
+    Evaluator,
+    ReporterDef,
+    call_user_fn,
+    scorer_name,
+)
+from braintrust.framework import report_evaluator_result as base_report_evaluator_result
 from braintrust.http_headers import BT_CURSOR_HEADER, BT_FOUND_EXISTING_HEADER, BT_PARENT
 from braintrust.logger import Dataset
 from braintrust.util import eprint
@@ -134,25 +145,119 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
 
         serialized = asdict(evaluator)
 
-        # remove extras
-        serialized.pop("project_name", None)
-        serialized.pop("eval_name", None)
+        if eval.stream:
+            message_queue: asyncio.Queue[Optional[str]] = asyncio.Queue()
 
-        summary = await EvalAsync(
-            **{
-                # type: ignore
-                **serialized,
-                **{
-                    "name": "worker-thread",
-                    "data": eval_data["data"],
-                    "scores": [{"name": scorer_name(score, i)} for i, score in enumerate(evaluator.scores)],
+            async def stream_eval() -> AsyncGenerator[str, None]:
+                try:
+                    serialized_task = serialized.pop("task", None)
+                    if not serialized_task:
+                        raise HTTPException(status_code=400, detail="Evaluator requires task")
+
+                    async def task(input: Any, hooks: EvalHooks[Any]):
+                        result = serialized_task(input, hooks)
+                        await message_queue.put(
+                            serialize_sse_event(
+                                "progress",
+                                json.dumps(
+                                    {
+                                        "format": "code",
+                                        "output_type": "completion",
+                                        "event": "json_delta",
+                                        "data": json.dumps(result),
+                                        "id": hooks.span.id,
+                                        "name": "basic [experimentName=My basic eval]",
+                                        "object_type": "task",
+                                    }
+                                ),
+                            )
+                        )
+                        return result
+
+                    # remove extras
+                    serialized.pop("name", None)
+                    serialized.pop("data", None)
+                    serialized.pop("scores", None)
+                    serialized.pop("project_name", None)
+                    serialized.pop("eval_name", None)
+
+                    async def run_eval():
+                        result = await EvalAsync(
+                            **serialized,
+                            name="worker-thread",
+                            data=eval_data["data"],
+                            scores=[{"name": scorer_name(score, i)} for i, score in enumerate(evaluator.scores)],
+                            task=task,
+                        )
+
+                        summary = result.summary.as_dict()
+
+                        await message_queue.put(
+                            serialize_sse_event(
+                                "summary",
+                                json.dumps(
+                                    {
+                                        "projectName": summary["project_name"],
+                                        "experimentName": summary["experiment_name"],
+                                        "projectId": summary["project_id"],
+                                        "experimentId": summary["experiment_id"],
+                                        "projectUrl": summary["project_url"],
+                                        "experimentUrl": summary["experiment_url"],
+                                        "comparisonExperimentName": summary["comparison_experiment_name"],
+                                        "scores": summary["scores"],
+                                        "metrics": summary["metrics"],
+                                    }
+                                ),
+                            )
+                        )
+                        await message_queue.put(serialize_sse_event("done", ""))
+                        await message_queue.put(None)
+
+                        return summary
+
+                    eval_task = asyncio.create_task(run_eval())
+
+                    while True:
+                        message = await message_queue.get()
+                        if message is None:
+                            break
+                        yield message
+
+                    # Wait for the eval to complete
+                    await eval_task
+                except Exception as e:
+                    await message_queue.put(serialize_sse_event("error", str(e)))
+                    await message_queue.put(None)
+
+            return StreamingResponse(
+                stream_eval(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
                 },
-            }
-        )
+            )
 
-        return summary.summary
+        else:
+            summary = await EvalAsync(
+                **{
+                    # type: ignore
+                    **serialized,
+                    **{
+                        "name": "worker-thread",
+                        "data": eval_data["data"],
+                        "scores": [{"name": scorer_name(score, i)} for i, score in enumerate(evaluator.scores)],
+                    },
+                },
+            )
+
+            return summary.summary
 
     uvicorn.run(app, host=host, port=port)
+
+
+def serialize_sse_event(event: str, data: str) -> str:
+    return f"event: {event}\ndata: {data}\n\n"
 
 
 def call_evaluator_data(dataset: Union[Dataset, List[Any]]):
@@ -161,5 +266,15 @@ def call_evaluator_data(dataset: Union[Dataset, List[Any]]):
     base_experiment: Optional[str] = None
     if get_any(data_result, "_type", None) == "BaseExperiment":
         base_experiment = getattr(data_result, "name", None)
+
+    # Ensure all data items have an 'input' field
+    if isinstance(data_result, list):
+        processed_data = []
+        for item in data_result:
+            if isinstance(item, dict) and "input" not in item:
+                # Add a default input if missing
+                item = {**item, "input": None}
+            processed_data.append(item)
+        data_result = processed_data
 
     return {"data": data_result, "baseExperiment": base_experiment}
