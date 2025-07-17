@@ -43,25 +43,25 @@ except ImportError:
     OTEL_AVAILABLE = False
 
 
-LLM_PREFIXES = ("gen_ai.", "braintrust.", "llm.", "ai.")
+FILTER_PREFIXES = ("gen_ai.", "braintrust.", "llm.", "ai.")
 
 
-class LLMSpanProcessor:
+class FilterSpanProcessor:
     """
-    A span processor that filters spans to only export LLM-related telemetry.
+    A span processor that filters spans to only export filtered telemetry.
 
-    Only LLM-related spans and root spans will be forwarded to the inner processor.
-    This dramatically reduces telemetry volume while preserving LLM observability.
+    Only filtered spans and root spans will be forwarded to the inner processor.
+    This dramatically reduces telemetry volume while preserving important observability.
 
     Example:
-        > processor = LLMSpanProcessor(BatchSpanProcessor(OTLPSpanExporter()))
+        > processor = FilterSpanProcessor(BatchSpanProcessor(OTLPSpanExporter()))
         > provider = TracerProvider()
         > provider.add_span_processor(processor)
     """
 
     def __init__(self, processor, custom_filter=None):
         """
-        Initialize the LLM span processor.
+        Initialize the filter span processor.
 
         Args:
             processor: The wrapped span processor that will receive filtered spans
@@ -79,7 +79,7 @@ class LLMSpanProcessor:
 
     def on_end(self, span):
         """Apply filtering logic and conditionally forward span end events."""
-        if self._should_keep_llm_span(span):
+        if self._should_keep_filtered_span(span):
             self._processor.on_end(span)
 
     def shutdown(self):
@@ -90,7 +90,7 @@ class LLMSpanProcessor:
         """Force flush the inner processor."""
         return self._processor.force_flush(timeout_millis)
 
-    def _should_keep_llm_span(self, span):
+    def _should_keep_filtered_span(self, span):
         """
         Keep spans if:
         1. It's a root span (no parent)
@@ -114,12 +114,12 @@ class LLMSpanProcessor:
                 return False
             # custom_result is None - continue with default logic
 
-        if span.name.startswith(LLM_PREFIXES):
+        if span.name.startswith(FILTER_PREFIXES):
             return True
 
         if span.attributes:
             for attr_name in span.attributes.keys():
-                if attr_name.startswith(LLM_PREFIXES):
+                if attr_name.startswith(FILTER_PREFIXES):
                     return True
 
         return False
@@ -135,8 +135,8 @@ class OtelExporter(OTLPSpanExporter):
     Environment Variables:
     - BRAINTRUST_OTEL_ENABLE: Set to "true" to automatically configure OpenTelemetry
       with this exporter at import time.
-    - BRAINTRUST_OTEL_ENABLE_LLM_FILTER: Set to "true" to automatically wrap the
-      exporter with LLMSpanProcessor for filtering only LLM-related spans.
+    - BRAINTRUST_OTEL_ENABLE_FILTER: Set to "true" to automatically wrap the
+      exporter with FilterSpanProcessor for filtering only filtered spans.
     - BRAINTRUST_API_KEY: Your Braintrust API key.
     - BRAINTRUST_PARENT: Parent identifier (e.g., "project_name:test").
     - BRAINTRUST_API_URL: Base URL for Braintrust API (defaults to https://api.braintrust.dev).
@@ -188,14 +188,14 @@ class Processor:
     """
     A convenient all-in-one span processor for Braintrust OpenTelemetry integration.
 
-    This class combines the OtelExporter, BatchSpanProcessor, and optionally LLMSpanProcessor
+    This class combines the OtelExporter, BatchSpanProcessor, and optionally FilterSpanProcessor
     into a single easy-to-use processor that can be directly added to a TracerProvider.
 
     Example:
         > processor = Processor()
         > provider.add_span_processor(processor)
 
-        > processor = Processor(enable_llm_filtering=True)
+        > processor = Processor(enable_filtering=True)
         > provider.add_span_processor(processor)
     """
 
@@ -204,7 +204,7 @@ class Processor:
         api_key: Optional[str] = None,
         parent: Optional[str] = None,
         api_url: Optional[str] = None,
-        enable_llm_filtering: bool = False,
+        enable_filtering: bool = False,
         custom_filter=None,
         headers: Optional[Dict[str, str]] = None,
     ):
@@ -215,7 +215,7 @@ class Processor:
             api_key: Braintrust API key. Defaults to BRAINTRUST_API_KEY env var.
             parent: Parent identifier (e.g., "project_name:test"). Defaults to BRAINTRUST_PARENT env var.
             api_url: Base URL for Braintrust API. Defaults to BRAINTRUST_API_URL env var or https://api.braintrust.dev.
-            enable_llm_filtering: Whether to enable LLM span filtering. Defaults to False.
+            enable_filtering: Whether to enable span filtering. Defaults to False.
             custom_filter: Optional custom filter function for LLM filtering.
             headers: Additional headers to include in requests.
         """
@@ -237,9 +237,9 @@ class Processor:
         # Always create a BatchSpanProcessor first
         batch_processor = BatchSpanProcessor(self._exporter)
 
-        if enable_llm_filtering:
-            # Wrap the BatchSpanProcessor with LLM filtering
-            self._processor = LLMSpanProcessor(batch_processor, custom_filter=custom_filter)
+        if enable_filtering:
+            # Wrap the BatchSpanProcessor with filtering
+            self._processor = FilterSpanProcessor(batch_processor, custom_filter=custom_filter)
         else:
             # Use BatchSpanProcessor directly
             self._processor = batch_processor
@@ -293,11 +293,11 @@ def _auto_configure_braintrust_otel():
         return
 
     try:
-        # Check if LLM filtering is enabled
-        filter_llm_enabled = os.environ.get("BRAINTRUST_OTEL_ENABLE_LLM_FILTER", "").lower() == "true"
+        # Check if filtering is enabled
+        filter_enabled = os.environ.get("BRAINTRUST_OTEL_ENABLE_FILTER", "").lower() == "true"
 
         # Create our processor using the new Processor class
-        processor = Processor(enable_llm_filtering=filter_llm_enabled)
+        processor = Processor(enable_filtering=filter_enabled)
 
         # Add our processor to the global tracer provider
         provider.add_span_processor(processor)

@@ -3,9 +3,10 @@ import {
   SpanProcessor,
   ReadableSpan,
   Span,
+  BatchSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
 
-const LLM_PREFIXES = ["gen_ai.", "braintrust.", "llm.", "ai."] as const;
+const FILTER_PREFIXES = ["gen_ai.", "braintrust.", "llm.", "ai."] as const;
 
 /**
  * Custom filter function type for span filtering.
@@ -17,24 +18,24 @@ export type CustomSpanFilter = (
 ) => boolean | null | undefined;
 
 /**
- * A span processor that filters spans to only export LLM-related telemetry.
+ * A span processor that filters spans to only export filtered telemetry.
  *
- * Only LLM-related spans and root spans will be forwarded to the inner processor.
- * This dramatically reduces telemetry volume while preserving LLM observability.
+ * Only filtered spans and root spans will be forwarded to the inner processor.
+ * This dramatically reduces telemetry volume while preserving important observability.
  *
  * @example
  * ```typescript
- * const processor = new LLMSpanProcessor(new BatchSpanProcessor(new OTLPTraceExporter()));
+ * const processor = new FilterSpanProcessor(new BatchSpanProcessor(new OTLPTraceExporter()));
  * const provider = new TracerProvider();
  * provider.addSpanProcessor(processor);
  * ```
  */
-export class LLMSpanProcessor implements SpanProcessor {
+export class FilterSpanProcessor implements SpanProcessor {
   private readonly processor: SpanProcessor;
   private readonly customFilter: CustomSpanFilter | undefined;
 
   /**
-   * Initialize the LLM span processor.
+   * Initialize the filter span processor.
    *
    * @param processor - The wrapped span processor that will receive filtered spans
    * @param customFilter - Optional function that takes a span and returns:
@@ -57,7 +58,8 @@ export class LLMSpanProcessor implements SpanProcessor {
    * Apply filtering logic and conditionally forward span end events.
    */
   onEnd(span: ReadableSpan): void {
-    if (this.shouldKeepLlmSpan(span)) {
+    const shouldKeep = this.shouldKeepFilteredSpan(span);
+    if (shouldKeep) {
       this.processor.onEnd(span);
     }
   }
@@ -77,7 +79,7 @@ export class LLMSpanProcessor implements SpanProcessor {
   }
 
   /**
-   * Determine if a span should be kept based on LLM filtering criteria.
+   * Determine if a span should be kept based on filtering criteria.
    *
    * Keep spans if:
    * 1. It's a root span (no parent)
@@ -85,7 +87,7 @@ export class LLMSpanProcessor implements SpanProcessor {
    * 3. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', or 'ai.'
    * 4. Any attribute name starts with those prefixes
    */
-  private shouldKeepLlmSpan(span: ReadableSpan): boolean {
+  private shouldKeepFilteredSpan(span: ReadableSpan): boolean {
     if (!span) {
       return false;
     }
@@ -107,7 +109,7 @@ export class LLMSpanProcessor implements SpanProcessor {
     }
 
     // Check span name
-    if (LLM_PREFIXES.some((prefix) => span.name.startsWith(prefix))) {
+    if (FILTER_PREFIXES.some((prefix) => span.name.startsWith(prefix))) {
       return true;
     }
 
@@ -117,7 +119,7 @@ export class LLMSpanProcessor implements SpanProcessor {
       const attributeNames = Object.keys(attributes);
       if (
         attributeNames.some((name) =>
-          LLM_PREFIXES.some((prefix) => name.startsWith(prefix)),
+          FILTER_PREFIXES.some((prefix) => name.startsWith(prefix)),
         )
       ) {
         return true;
@@ -125,5 +127,143 @@ export class LLMSpanProcessor implements SpanProcessor {
     }
 
     return false;
+  }
+}
+
+interface BraintrustSpanProcessorOptions {
+  /**
+   * Braintrust API key. If not provided, will use BRAINTRUST_API_KEY environment variable.
+   */
+  apiKey?: string;
+  /**
+   * Braintrust API URL. Defaults to https://api.braintrust.dev
+   */
+  apiUrl?: string;
+  /**
+   * Braintrust parent project name (e.g., "project_name:otel_examples")
+   */
+  parent?: string;
+  /**
+   * Whether to enable span filtering. Defaults to false.
+   */
+  enableFiltering?: boolean;
+  /**
+   * Custom filter function for span filtering
+   */
+  customFilter?: CustomSpanFilter;
+  /**
+   * Additional headers to send with telemetry data
+   */
+  headers?: Record<string, string>;
+  /**
+   * Batch span processor options
+   */
+  batchOptions?: {
+    maxExportBatchSize?: number;
+    exportTimeoutMillis?: number;
+    scheduledDelayMillis?: number;
+  };
+}
+
+/**
+ * A span processor that sends OpenTelemetry spans to Braintrust.
+ *
+ * This processor uses a BatchSpanProcessor and an OTLP exporter configured
+ * to send data to Braintrust's telemetry endpoint. Span filtering is disabled
+ * by default but can be enabled with the enableFiltering option.
+ *
+ * @example
+ * ```typescript
+ * const processor = new BraintrustSpanProcessor({
+ *   apiKey: 'your-api-key',
+ *   apiUrl: 'https://api.braintrust.dev'
+ * });
+ * const provider = new TracerProvider();
+ * provider.addSpanProcessor(processor);
+ * ```
+ *
+ * @example With span filtering enabled:
+ * ```typescript
+ * const processor = new BraintrustSpanProcessor({
+ *   apiKey: 'your-api-key',
+ *   enableFiltering: true
+ * });
+ * ```
+ */
+export class BraintrustSpanProcessor implements SpanProcessor {
+  private readonly processor: SpanProcessor;
+  private readonly filterProcessor: SpanProcessor;
+
+  constructor(options: BraintrustSpanProcessorOptions = {}) {
+    // Get API key from options or environment
+    const apiKey = options.apiKey || process.env.BRAINTRUST_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        "Braintrust API key is required. Set BRAINTRUST_API_KEY environment variable or pass apiKey option.",
+      );
+    }
+
+    // Default API URL
+    const apiUrl = options.apiUrl || "https://api.braintrust.dev";
+
+    // Create OTLP exporter
+    let exporter: any;
+    try {
+      const {
+        OTLPTraceExporter,
+      } = require("@opentelemetry/exporter-trace-otlp-http");
+
+      const headers = {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        ...(options.parent && { "x-bt-parent": options.parent }),
+        ...options.headers,
+      };
+
+      exporter = new OTLPTraceExporter({
+        url: `${apiUrl}/otel/v1/traces`,
+        headers,
+      });
+    } catch (error) {
+      throw new Error(
+        "Failed to create OTLP exporter. Make sure @opentelemetry/exporter-trace-otlp-http is installed.",
+      );
+    }
+
+    // Create batch processor with the exporter
+    const batchOptions = options.batchOptions || {};
+    this.processor = new BatchSpanProcessor(exporter, {
+      maxExportBatchSize: batchOptions.maxExportBatchSize || 100,
+      exportTimeoutMillis: batchOptions.exportTimeoutMillis || 30000,
+      scheduledDelayMillis: batchOptions.scheduledDelayMillis || 1000,
+    });
+
+    // Conditionally wrap with filtering based on enableFiltering flag
+    if (options.enableFiltering === true) {
+      // Only enable filtering if explicitly requested
+      this.filterProcessor = new FilterSpanProcessor(
+        this.processor,
+        options.customFilter,
+      );
+    } else {
+      // Use the batch processor directly without filtering (default behavior)
+      this.filterProcessor = this.processor;
+    }
+  }
+
+  onStart(span: Span, parentContext: Context): void {
+    this.filterProcessor.onStart(span, parentContext);
+  }
+
+  onEnd(span: ReadableSpan): void {
+    this.filterProcessor.onEnd(span);
+  }
+
+  shutdown(): Promise<void> {
+    return this.filterProcessor.shutdown();
+  }
+
+  forceFlush(): Promise<void> {
+    return this.filterProcessor.forceFlush();
   }
 }
