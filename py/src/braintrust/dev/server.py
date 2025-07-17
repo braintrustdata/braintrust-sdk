@@ -102,7 +102,7 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
             eval_defs[name] = cast(
                 ListEvals,
                 {
-                    "parameters": None,  # TODO: no parameters in evaluator
+                    # "parameters": None,  # TODO: no parameters in evaluator
                     "scores": [{"name": scorer_name(score, i)} for i, score in enumerate(evaluator.scores)],
                 },
             )
