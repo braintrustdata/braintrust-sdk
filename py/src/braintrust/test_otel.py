@@ -82,9 +82,11 @@ def test_otel_exporter_with_explicit_params():
     assert exporter._headers == expected_headers
 
 
-def test_otel_exporter_no_parent():
+def test_otel_exporter_no_parent(caplog):
     if not OTEL_INSTALLED:
         pytest.skip("OpenTelemetry not installed, skipping test")
+
+    import logging
 
     from braintrust.otel import OtelExporter
 
@@ -92,8 +94,16 @@ def test_otel_exporter_no_parent():
         m.setenv("BRAINTRUST_API_KEY", "test-api-key")
         m.delenv("BRAINTRUST_PARENT", raising=False)
 
-        exporter = OtelExporter()
-        assert exporter.parent is None
+        # Capture log messages
+        with caplog.at_level(logging.INFO):
+            exporter = OtelExporter()
+
+        # Check that default parent is set
+        assert exporter.parent == "project_name:default-otel-project"
+
+        # Check that logging message is shown
+        assert "No parent specified, using default: project_name:default-otel-project" in caplog.text
+        assert "Configure with BRAINTRUST_PARENT environment variable or parent parameter" in caplog.text
 
 
 def test_braintrust_api_url_env_var():
@@ -117,17 +127,19 @@ def test_braintrust_api_url_env_var():
     with pytest.MonkeyPatch.context() as m:
         m.setenv("BRAINTRUST_API_KEY", "custom-key")
         m.setenv("BRAINTRUST_API_URL", "https://custom.braintrust.dev")
+        m.delenv("BRAINTRUST_PARENT", raising=False)
 
         exporter = OtelExporter()
 
         assert exporter._endpoint == "https://custom.braintrust.dev/otel/v1/traces"
-        expected_headers = {"Authorization": "Bearer custom-key"}
+        expected_headers = {"Authorization": "Bearer custom-key", "x-bt-parent": "project_name:default-otel-project"}
         assert exporter._headers == expected_headers
 
     # Test custom API URL with trailing slash
     with pytest.MonkeyPatch.context() as m:
         m.setenv("BRAINTRUST_API_KEY", "custom-key")
         m.setenv("BRAINTRUST_API_URL", "https://custom.example.com/")
+        m.delenv("BRAINTRUST_PARENT", raising=False)
 
         exporter = OtelExporter()
 

@@ -12,7 +12,7 @@ try:
 except ImportError:
     warnings.warn(
         "OpenTelemetry packages are not installed. "
-        "Install them with: pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp-proto-http",
+        "Install optional OpenTelemetry dependencies with: pip install braintrust[otel]",
         UserWarning,
         stacklevel=2,
     )
@@ -22,14 +22,14 @@ except ImportError:
         def __init__(self, *args, **kwargs):
             raise ImportError(
                 "OpenTelemetry packages are not installed. "
-                "Install them with: pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp-proto-http"
+                "Install optional OpenTelemetry dependencies with: pip install braintrust[otel]"
             )
 
     class BatchSpanProcessor:
         def __init__(self, *args, **kwargs):
             raise ImportError(
                 "OpenTelemetry packages are not installed. "
-                "Install them with: pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp-proto-http"
+                "Install optional OpenTelemetry dependencies with: pip install braintrust[otel]"
             )
 
     class trace:
@@ -37,7 +37,7 @@ except ImportError:
         def get_tracer_provider():
             raise ImportError(
                 "OpenTelemetry packages are not installed. "
-                "Install them with: pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp-proto-http"
+                "Install optional OpenTelemetry dependencies with: pip install braintrust[otel]"
             )
 
     OTEL_AVAILABLE = False
@@ -167,6 +167,14 @@ class OtelExporter(OTLPSpanExporter):
                 "API key is required. Provide it via api_key parameter or BRAINTRUST_API_KEY environment variable."
             )
 
+        # Default parent if not provided
+        if not parent:
+            parent = "project_name:default-otel-project"
+            logging.info(
+                f"No parent specified, using default: {parent}. "
+                "Configure with BRAINTRUST_PARENT environment variable or parent parameter."
+            )
+
         exporter_headers = {
             "Authorization": f"Bearer {api_key}",
             **headers,
@@ -227,7 +235,7 @@ class BraintrustSpanProcessor:
         if not OTEL_AVAILABLE:
             raise ImportError(
                 "OpenTelemetry packages are not installed. "
-                "Install them with: pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp-proto-http"
+                "Install optional OpenTelemetry dependencies with: pip install braintrust[otel]"
             )
 
         # Always create a BatchSpanProcessor first
