@@ -9,13 +9,15 @@ help:
 	@echo "  make install-optional-deps - Install optional dependencies"
 	@echo "  make test               - Run all tests (core + wrappers)"
 	@echo "  make test-core          - Run core tests only"
-	@echo "  make test-otel          - Run OpenTelemetry tests"
+	@echo "  make test-otel          - Run OpenTelemetry tests (both installed and missing)"
+	@echo "  make test-otel-installed - Run OpenTelemetry tests with library installed"
+	@echo "  make test-otel-missing  - Run OpenTelemetry tests without library"
 	@echo "  make test-openai        - Run OpenAI wrapper tests"
 	@echo "  make test-anthropic     - Run Anthropic wrapper tests"
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
 
-.PHONY: help bench build clean test test-core test-otel test-openai test-anthropic test-latest install-optional-deps
+.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-latest install-optional-deps
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -37,12 +39,24 @@ test-anthropic-%:
 # OpenTelemetry testing
 # -------------------------------------------------------------------------------------------------
 
-.PHONY: test-otel
+.PHONY: test-otel test-otel-installed test-otel-missing
 
-test-otel:
+test-otel-installed:
 	pnpm prune
 	npm_config_save=false npm_config_lockfile=false pnpm add "@opentelemetry/api" "@opentelemetry/sdk-trace-base" "@opentelemetry/exporter-otlp-http" "@opentelemetry/resources" "@opentelemetry/semantic-conventions"
 	pnpm test -- src/otel.test.ts
+
+test-otel-missing:
+	pnpm prune
+	# Verify OpenTelemetry packages are not installed
+	@echo "Verifying OpenTelemetry packages are not installed..."
+	@if pnpm list @opentelemetry/api 2>/dev/null | grep -q "@opentelemetry/api"; then \
+		echo "ERROR: @opentelemetry/api is installed, but test requires it to be missing"; \
+		exit 1; \
+	fi
+	pnpm test -- src/otel-no-deps.test.ts --reporter=verbose
+
+test-otel: test-otel-installed test-otel-missing
 
 # -------------------------------------------------------------------------------------------------
 # OpenAI testing
@@ -82,6 +96,7 @@ test: test-core test-otel test-openai test-anthropic
 
 # Test the core and the latest versions of wrappers.
 test-latest: test-core test-otel test-anthropic-latest test-openai-latest
+
 
 prune:
 	pnpm prune

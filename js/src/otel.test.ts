@@ -6,7 +6,7 @@ import {
   SimpleSpanProcessor,
   ReadableSpan,
 } from "@opentelemetry/sdk-trace-base";
-import { AISpanProcessor, BraintrustSpanProcessor } from "./otel";
+import { AISpanProcessor, BraintrustSpanProcessor } from ".";
 
 describe("Basic OpenTelemetry Setup", () => {
   let memoryExporter: InMemorySpanExporter;

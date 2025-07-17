@@ -27,4 +27,4 @@ export { LazyValue } from "./util";
 export * from "./wrappers/oai";
 export { wrapAISDKModel } from "./wrappers/ai-sdk";
 export { wrapAnthropic } from "./wrappers/anthropic";
-export { AISpanProcessor } from "./otel";
+export { AISpanProcessor, BraintrustSpanProcessor } from "./otel";

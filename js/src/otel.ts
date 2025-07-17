@@ -1,10 +1,33 @@
-import { Context } from "@opentelemetry/api";
-import {
-  SpanProcessor,
-  ReadableSpan,
-  Span,
-  BatchSpanProcessor,
-} from "@opentelemetry/sdk-trace-base";
+// Conditional imports for OpenTelemetry to handle missing dependencies gracefully
+let otelApi: typeof import("@opentelemetry/api") | null = null;
+let otelSdk: typeof import("@opentelemetry/sdk-trace-base") | null = null;
+let OTEL_AVAILABLE = false;
+
+try {
+  otelApi = require("@opentelemetry/api");
+  otelSdk = require("@opentelemetry/sdk-trace-base");
+  OTEL_AVAILABLE = true;
+} catch (error) {
+  console.warn(
+    "OpenTelemetry packages are not installed. " +
+      "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
+  );
+  OTEL_AVAILABLE = false;
+}
+
+// Type aliases for when OpenTelemetry is available
+type Context = typeof otelApi extends null
+  ? never
+  : import("@opentelemetry/api").Context;
+type SpanProcessor = typeof otelSdk extends null
+  ? never
+  : import("@opentelemetry/sdk-trace-base").SpanProcessor;
+type ReadableSpan = typeof otelSdk extends null
+  ? never
+  : import("@opentelemetry/sdk-trace-base").ReadableSpan;
+type Span = typeof otelSdk extends null
+  ? never
+  : import("@opentelemetry/sdk-trace-base").Span;
 
 const FILTER_PREFIXES = ["gen_ai.", "braintrust.", "llm.", "ai."] as const;
 
@@ -30,7 +53,15 @@ export type CustomSpanFilter = (
  * provider.addSpanProcessor(processor);
  * ```
  */
-export class AISpanProcessor implements SpanProcessor {
+export class AISpanProcessor {
+  private static checkOtelAvailable(): void {
+    if (!OTEL_AVAILABLE) {
+      throw new Error(
+        "OpenTelemetry packages are not installed. " +
+          "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
+      );
+    }
+  }
   private readonly processor: SpanProcessor;
   private readonly customFilter: CustomSpanFilter | undefined;
 
@@ -43,6 +74,7 @@ export class AISpanProcessor implements SpanProcessor {
    *                      null/undefined to not influence the decision
    */
   constructor(processor: SpanProcessor, customFilter?: CustomSpanFilter) {
+    AISpanProcessor.checkOtelAvailable();
     this.processor = processor;
     this.customFilter = customFilter;
   }
@@ -196,11 +228,21 @@ interface BraintrustSpanProcessorOptions {
  * const processor = new BraintrustSpanProcessor();
  * ```
  */
-export class BraintrustSpanProcessor implements SpanProcessor {
+export class BraintrustSpanProcessor {
+  private static checkOtelAvailable(): void {
+    if (!OTEL_AVAILABLE) {
+      throw new Error(
+        "OpenTelemetry packages are not installed. " +
+          "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
+      );
+    }
+  }
   private readonly processor: SpanProcessor;
   private readonly aiSpanProcessor: SpanProcessor;
 
   constructor(options: BraintrustSpanProcessorOptions = {}) {
+    BraintrustSpanProcessor.checkOtelAvailable();
+
     // Get API key from options or environment
     const apiKey = options.apiKey || process.env.BRAINTRUST_API_KEY;
     if (!apiKey) {
@@ -243,7 +285,10 @@ export class BraintrustSpanProcessor implements SpanProcessor {
     }
 
     // Create batch processor with the exporter
-    this.processor = new BatchSpanProcessor(exporter);
+    if (!otelSdk) {
+      throw new Error("OpenTelemetry SDK not available");
+    }
+    this.processor = new otelSdk.BatchSpanProcessor(exporter);
 
     // Conditionally wrap with filtering based on filterAISpans flag
     if (options.filterAISpans === true) {
