@@ -20,6 +20,7 @@ import {
   getEventObjectType,
   getEventObjectDescription,
   objectReferenceSchema,
+  generateBaseTableOpSchema,
 } from "./common_types";
 import { customTypes } from "./custom_types";
 import { capitalize } from "../src/string_util";
@@ -1032,12 +1033,7 @@ export const createEnvironmentSchema = z
     name: environmentSchema.shape.name,
     slug: environmentSchema.shape.slug,
     description: environmentSchema.shape.description,
-    org_name: z
-      .string()
-      .nullish()
-      .describe(
-        `For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, or in case you want to explicitly assert the organization you are modifying, you may specify the name of the organization.`,
-      ),
+    org_name: generateBaseTableOpSchema("environment").shape.org_name,
   })
   .openapi("CreateEnvironment");
 
