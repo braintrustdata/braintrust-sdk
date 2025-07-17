@@ -12,6 +12,7 @@ with open(os.path.join(dir_name, "README.md"), "r", encoding="utf-8") as f:
     long_description = f.read()
 
 install_requires = [
+    "aiohttp",
     "GitPython",
     "requests",
     "chevron",
