@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { trace, context, Tracer } from "@opentelemetry/api";
 import {
   BasicTracerProvider,
@@ -6,7 +6,7 @@ import {
   SimpleSpanProcessor,
   ReadableSpan,
 } from "@opentelemetry/sdk-trace-base";
-import { LLMSpanProcessor } from "./otel";
+import { FilterSpanProcessor, BraintrustSpanProcessor } from "./otel";
 
 describe("Basic OpenTelemetry Setup", () => {
   let memoryExporter: InMemorySpanExporter;
@@ -72,10 +72,10 @@ describe("Basic OpenTelemetry Setup", () => {
   });
 });
 
-describe("LLMSpanProcessor", () => {
+describe("FilterSpanProcessor", () => {
   let memoryExporter: InMemorySpanExporter;
   let provider: BasicTracerProvider;
-  let llmProcessor: LLMSpanProcessor;
+  let filterProcessor: FilterSpanProcessor;
   let tracer: Tracer;
   let baseProcessor: SimpleSpanProcessor;
 
@@ -84,10 +84,10 @@ describe("LLMSpanProcessor", () => {
 
     // Create processor with our filtering logic
     baseProcessor = new SimpleSpanProcessor(memoryExporter);
-    llmProcessor = new LLMSpanProcessor(baseProcessor);
+    filterProcessor = new FilterSpanProcessor(baseProcessor);
 
     provider = new BasicTracerProvider({
-      spanProcessors: [llmProcessor],
+      spanProcessors: [filterProcessor],
     });
 
     // Don't set global tracer provider - use local one instead
@@ -107,7 +107,7 @@ describe("LLMSpanProcessor", () => {
     expect(spans[0].name).toBe("root_operation");
   });
 
-  it("should keep spans with LLM name prefixes", async () => {
+  it("should keep spans with filtered name prefixes", async () => {
     const rootSpan = tracer.startSpan("root");
 
     const parentContext = trace.setSpanContext(
@@ -142,11 +142,11 @@ describe("LLMSpanProcessor", () => {
     expect(spanNames).toContain("braintrust.eval");
     expect(spanNames).toContain("llm.generate");
     expect(spanNames).toContain("ai.model_call");
-    // database_query should be filtered out as it doesn't match LLM prefixes
+    // database_query should be filtered out as it doesn't match filtered prefixes
     expect(spanNames).not.toContain("database_query");
   });
 
-  it("should keep spans with LLM attribute prefixes", async () => {
+  it("should keep spans with filtered attribute prefixes", async () => {
     const rootSpan = tracer.startSpan("root");
 
     const parentContext = trace.setSpanContext(
@@ -215,12 +215,12 @@ describe("LLMSpanProcessor", () => {
 
     // Create new processor with custom filter
     const customMemoryExporter = new InMemorySpanExporter();
-    const customLLMProcessor = new LLMSpanProcessor(
+    const customFilterProcessor = new FilterSpanProcessor(
       new SimpleSpanProcessor(customMemoryExporter),
       customFilter,
     );
     const customProvider = new BasicTracerProvider({
-      spanProcessors: [customLLMProcessor],
+      spanProcessors: [customFilterProcessor],
     });
     const customTracer = customProvider.getTracer("custom_test");
 
@@ -261,12 +261,12 @@ describe("LLMSpanProcessor", () => {
 
     // Create new processor with custom filter
     const customMemoryExporter = new InMemorySpanExporter();
-    const customLLMProcessor = new LLMSpanProcessor(
+    const customFilterProcessor = new FilterSpanProcessor(
       new SimpleSpanProcessor(customMemoryExporter),
       customFilter,
     );
     const customProvider = new BasicTracerProvider({
-      spanProcessors: [customLLMProcessor],
+      spanProcessors: [customFilterProcessor],
     });
     const customTracer = customProvider.getTracer("custom_test");
 
@@ -296,7 +296,7 @@ describe("LLMSpanProcessor", () => {
 
     expect(spanNames).toContain("root");
     expect(spanNames).not.toContain("gen_ai.drop_this"); // dropped by custom filter
-    expect(spanNames).toContain("gen_ai.keep_this"); // kept by default LLM logic
+    expect(spanNames).toContain("gen_ai.keep_this"); // kept by default filter logic
 
     customProvider.shutdown();
   });
@@ -308,12 +308,12 @@ describe("LLMSpanProcessor", () => {
 
     // Create new processor with custom filter
     const customMemoryExporter = new InMemorySpanExporter();
-    const customLLMProcessor = new LLMSpanProcessor(
+    const customFilterProcessor = new FilterSpanProcessor(
       new SimpleSpanProcessor(customMemoryExporter),
       customFilter,
     );
     const customProvider = new BasicTracerProvider({
-      spanProcessors: [customLLMProcessor],
+      spanProcessors: [customFilterProcessor],
     });
     const customTracer = customProvider.getTracer("custom_test");
 
@@ -342,9 +342,167 @@ describe("LLMSpanProcessor", () => {
     const spanNames = spans.map((s) => s.name);
 
     expect(spanNames).toContain("root");
-    expect(spanNames).toContain("gen_ai.completion"); // kept by default LLM logic
+    expect(spanNames).toContain("gen_ai.completion"); // kept by default filter logic
     expect(spanNames).not.toContain("regular_operation"); // dropped by default logic
 
     customProvider.shutdown();
+  });
+});
+
+describe("BraintrustSpanProcessor", () => {
+  let originalEnv: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    originalEnv = { ...process.env };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+    vi.restoreAllMocks();
+  });
+
+  it("should create BraintrustSpanProcessor with API key from environment", () => {
+    process.env.BRAINTRUST_API_KEY = "test-api-key";
+
+    expect(() => {
+      new BraintrustSpanProcessor();
+    }).not.toThrow();
+  });
+
+  it("should create BraintrustSpanProcessor with API key from options", () => {
+    expect(() => {
+      new BraintrustSpanProcessor({
+        apiKey: "test-api-key",
+      });
+    }).not.toThrow();
+  });
+
+  it("should throw error when no API key is provided", () => {
+    delete process.env.BRAINTRUST_API_KEY;
+
+    expect(() => {
+      new BraintrustSpanProcessor();
+    }).toThrow("Braintrust API key is required");
+  });
+
+  it("should use default API URL when not provided", () => {
+    process.env.BRAINTRUST_API_KEY = "test-api-key";
+
+    const processor = new BraintrustSpanProcessor();
+    expect(processor).toBeDefined();
+  });
+
+  it("should use custom API URL when provided", () => {
+    const processor = new BraintrustSpanProcessor({
+      apiKey: "test-api-key",
+      apiUrl: "https://custom.api.url",
+    });
+    expect(processor).toBeDefined();
+  });
+
+  it("should support custom headers", () => {
+    const processor = new BraintrustSpanProcessor({
+      apiKey: "test-api-key",
+      headers: {
+        "X-Custom-Header": "custom-value",
+      },
+    });
+    expect(processor).toBeDefined();
+  });
+
+  it("should support custom batch options", () => {
+    const processor = new BraintrustSpanProcessor({
+      apiKey: "test-api-key",
+      batchOptions: {
+        maxExportBatchSize: 50,
+        exportTimeoutMillis: 15000,
+        scheduledDelayMillis: 500,
+      },
+    });
+    expect(processor).toBeDefined();
+  });
+
+  it("should support custom filter function", () => {
+    const customFilter = (span: ReadableSpan) => {
+      return span.name.includes("important");
+    };
+
+    const processor = new BraintrustSpanProcessor({
+      apiKey: "test-api-key",
+      customFilter,
+    });
+    expect(processor).toBeDefined();
+  });
+
+  it("should support parent option", () => {
+    const processor = new BraintrustSpanProcessor({
+      apiKey: "test-api-key",
+      parent: "project_name:otel_examples",
+    });
+    expect(processor).toBeDefined();
+  });
+
+  it("should disable filtering by default", () => {
+    const processor = new BraintrustSpanProcessor({
+      apiKey: "test-api-key",
+    });
+    expect(processor).toBeDefined();
+  });
+
+  it("should enable filtering when enableFiltering is true", () => {
+    const processor = new BraintrustSpanProcessor({
+      apiKey: "test-api-key",
+      enableFiltering: true,
+    });
+    expect(processor).toBeDefined();
+  });
+
+  it("should disable filtering when enableFiltering is false", () => {
+    const processor = new BraintrustSpanProcessor({
+      apiKey: "test-api-key",
+      enableFiltering: false,
+    });
+    expect(processor).toBeDefined();
+  });
+
+  it("should implement SpanProcessor interface", () => {
+    process.env.BRAINTRUST_API_KEY = "test-api-key";
+
+    const processor = new BraintrustSpanProcessor();
+
+    expect(typeof processor.onStart).toBe("function");
+    expect(typeof processor.onEnd).toBe("function");
+    expect(typeof processor.shutdown).toBe("function");
+    expect(typeof processor.forceFlush).toBe("function");
+  });
+
+  it("should forward span lifecycle methods to FilterSpanProcessor", async () => {
+    process.env.BRAINTRUST_API_KEY = "test-api-key";
+
+    const processor = new BraintrustSpanProcessor();
+
+    // Create a mock span
+    const mockSpan = {
+      spanContext: () => ({ traceId: "test-trace", spanId: "test-span" }),
+      end: vi.fn(),
+      setAttributes: vi.fn(),
+      name: "test-span",
+      attributes: {},
+      parentSpanContext: undefined,
+    } as any;
+
+    // Test onStart
+    expect(() => {
+      processor.onStart(mockSpan, context.active());
+    }).not.toThrow();
+
+    // Test onEnd
+    expect(() => {
+      processor.onEnd(mockSpan);
+    }).not.toThrow();
+
+    // Test shutdown and forceFlush
+    await expect(processor.shutdown()).resolves.toBeUndefined();
+    await expect(processor.forceFlush()).resolves.toBeUndefined();
   });
 });
