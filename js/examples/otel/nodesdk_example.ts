@@ -2,7 +2,6 @@
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { BraintrustSpanProcessor } from "../../src";
 import { trace } from "@opentelemetry/api";
-import OpenAI from "openai";
 
 const sdk = new NodeSDK({
   serviceName: "my-service",

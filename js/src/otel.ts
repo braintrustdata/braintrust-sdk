@@ -15,19 +15,30 @@ try {
   OTEL_AVAILABLE = false;
 }
 
-// Type aliases for when OpenTelemetry is available
-type Context = typeof otelApi extends null
-  ? never
-  : import("@opentelemetry/api").Context;
-type SpanProcessor = typeof otelSdk extends null
-  ? never
-  : import("@opentelemetry/sdk-trace-base").SpanProcessor;
-type ReadableSpan = typeof otelSdk extends null
-  ? never
-  : import("@opentelemetry/sdk-trace-base").ReadableSpan;
-type Span = typeof otelSdk extends null
-  ? never
-  : import("@opentelemetry/sdk-trace-base").Span;
+// Type definitions that don't depend on OpenTelemetry being installed
+interface Context {
+  [key: string]: any;
+}
+
+interface SpanProcessor {
+  onStart(span: Span, parentContext?: Context): void;
+  onEnd(span: ReadableSpan): void;
+  shutdown(): Promise<void>;
+  forceFlush(): Promise<void>;
+}
+
+interface ReadableSpan {
+  name: string;
+  parentSpanContext?: { spanId: string; traceId: string };
+  attributes?: Record<string, any>;
+  spanContext(): { spanId: string; traceId: string };
+}
+
+interface Span extends ReadableSpan {
+  end(): void;
+  setAttributes(attributes: Record<string, any>): void;
+  setStatus(status: { code: number; message?: string }): void;
+}
 
 const FILTER_PREFIXES = ["gen_ai.", "braintrust.", "llm.", "ai."] as const;
 
