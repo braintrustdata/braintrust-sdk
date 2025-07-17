@@ -25,12 +25,12 @@ export type CustomSpanFilter = (
  *
  * @example
  * ```typescript
- * const processor = new FilterSpanProcessor(new BatchSpanProcessor(new OTLPTraceExporter()));
+ * const processor = new AISpanProcessor(new BatchSpanProcessor(new OTLPTraceExporter()));
  * const provider = new TracerProvider();
  * provider.addSpanProcessor(processor);
  * ```
  */
-export class FilterSpanProcessor implements SpanProcessor {
+export class AISpanProcessor implements SpanProcessor {
   private readonly processor: SpanProcessor;
   private readonly customFilter: CustomSpanFilter | undefined;
 
@@ -144,9 +144,9 @@ interface BraintrustSpanProcessorOptions {
    */
   parent?: string;
   /**
-   * Whether to enable span filtering. Defaults to false.
+   * Whether to enable AI span filtering. Defaults to false.
    */
-  enableFiltering?: boolean;
+  filterAiSpans?: boolean;
   /**
    * Custom filter function for span filtering
    */
@@ -162,7 +162,7 @@ interface BraintrustSpanProcessorOptions {
  *
  * This processor uses a BatchSpanProcessor and an OTLP exporter configured
  * to send data to Braintrust's telemetry endpoint. Span filtering is disabled
- * by default but can be enabled with the enableFiltering option.
+ * by default but can be enabled with the filterAiSpans option.
  *
  * Environment Variables:
  * - BRAINTRUST_API_KEY: Your Braintrust API key
@@ -183,7 +183,7 @@ interface BraintrustSpanProcessorOptions {
  * ```typescript
  * const processor = new BraintrustSpanProcessor({
  *   apiKey: 'your-api-key',
- *   enableFiltering: true
+ *   filterAiSpans: true
  * });
  * ```
  *
@@ -198,7 +198,7 @@ interface BraintrustSpanProcessorOptions {
  */
 export class BraintrustSpanProcessor implements SpanProcessor {
   private readonly processor: SpanProcessor;
-  private readonly filterProcessor: SpanProcessor;
+  private readonly aiSpanProcessor: SpanProcessor;
 
   constructor(options: BraintrustSpanProcessorOptions = {}) {
     // Get API key from options or environment
@@ -245,32 +245,32 @@ export class BraintrustSpanProcessor implements SpanProcessor {
     // Create batch processor with the exporter
     this.processor = new BatchSpanProcessor(exporter);
 
-    // Conditionally wrap with filtering based on enableFiltering flag
-    if (options.enableFiltering === true) {
+    // Conditionally wrap with filtering based on filterAiSpans flag
+    if (options.filterAiSpans === true) {
       // Only enable filtering if explicitly requested
-      this.filterProcessor = new FilterSpanProcessor(
+      this.aiSpanProcessor = new AISpanProcessor(
         this.processor,
         options.customFilter,
       );
     } else {
       // Use the batch processor directly without filtering (default behavior)
-      this.filterProcessor = this.processor;
+      this.aiSpanProcessor = this.processor;
     }
   }
 
   onStart(span: Span, parentContext: Context): void {
-    this.filterProcessor.onStart(span, parentContext);
+    this.aiSpanProcessor.onStart(span, parentContext);
   }
 
   onEnd(span: ReadableSpan): void {
-    this.filterProcessor.onEnd(span);
+    this.aiSpanProcessor.onEnd(span);
   }
 
   shutdown(): Promise<void> {
-    return this.filterProcessor.shutdown();
+    return this.aiSpanProcessor.shutdown();
   }
 
   forceFlush(): Promise<void> {
-    return this.filterProcessor.forceFlush();
+    return this.aiSpanProcessor.forceFlush();
   }
 }

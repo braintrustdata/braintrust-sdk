@@ -6,7 +6,7 @@ import {
   SimpleSpanProcessor,
   ReadableSpan,
 } from "@opentelemetry/sdk-trace-base";
-import { FilterSpanProcessor, BraintrustSpanProcessor } from "./otel";
+import { AISpanProcessor, BraintrustSpanProcessor } from "./otel";
 
 describe("Basic OpenTelemetry Setup", () => {
   let memoryExporter: InMemorySpanExporter;
@@ -72,10 +72,10 @@ describe("Basic OpenTelemetry Setup", () => {
   });
 });
 
-describe("FilterSpanProcessor", () => {
+describe("AISpanProcessor", () => {
   let memoryExporter: InMemorySpanExporter;
   let provider: BasicTracerProvider;
-  let filterProcessor: FilterSpanProcessor;
+  let filterProcessor: AISpanProcessor;
   let tracer: Tracer;
   let baseProcessor: SimpleSpanProcessor;
 
@@ -84,7 +84,7 @@ describe("FilterSpanProcessor", () => {
 
     // Create processor with our filtering logic
     baseProcessor = new SimpleSpanProcessor(memoryExporter);
-    filterProcessor = new FilterSpanProcessor(baseProcessor);
+    filterProcessor = new AISpanProcessor(baseProcessor);
 
     provider = new BasicTracerProvider({
       spanProcessors: [filterProcessor],
@@ -215,7 +215,7 @@ describe("FilterSpanProcessor", () => {
 
     // Create new processor with custom filter
     const customMemoryExporter = new InMemorySpanExporter();
-    const customFilterProcessor = new FilterSpanProcessor(
+    const customFilterProcessor = new AISpanProcessor(
       new SimpleSpanProcessor(customMemoryExporter),
       customFilter,
     );
@@ -261,7 +261,7 @@ describe("FilterSpanProcessor", () => {
 
     // Create new processor with custom filter
     const customMemoryExporter = new InMemorySpanExporter();
-    const customFilterProcessor = new FilterSpanProcessor(
+    const customFilterProcessor = new AISpanProcessor(
       new SimpleSpanProcessor(customMemoryExporter),
       customFilter,
     );
@@ -308,7 +308,7 @@ describe("FilterSpanProcessor", () => {
 
     // Create new processor with custom filter
     const customMemoryExporter = new InMemorySpanExporter();
-    const customFilterProcessor = new FilterSpanProcessor(
+    const customFilterProcessor = new AISpanProcessor(
       new SimpleSpanProcessor(customMemoryExporter),
       customFilter,
     );
@@ -466,18 +466,18 @@ describe("BraintrustSpanProcessor", () => {
     expect(processor).toBeDefined();
   });
 
-  it("should enable filtering when enableFiltering is true", () => {
+  it("should enable filtering when filterAiSpans is true", () => {
     const processor = new BraintrustSpanProcessor({
       apiKey: "test-api-key",
-      enableFiltering: true,
+      filterAiSpans: true,
     });
     expect(processor).toBeDefined();
   });
 
-  it("should disable filtering when enableFiltering is false", () => {
+  it("should disable filtering when filterAiSpans is false", () => {
     const processor = new BraintrustSpanProcessor({
       apiKey: "test-api-key",
-      enableFiltering: false,
+      filterAiSpans: false,
     });
     expect(processor).toBeDefined();
   });
@@ -493,7 +493,7 @@ describe("BraintrustSpanProcessor", () => {
     expect(typeof processor.forceFlush).toBe("function");
   });
 
-  it("should forward span lifecycle methods to FilterSpanProcessor", async () => {
+  it("should forward span lifecycle methods to AISpanProcessor", async () => {
     process.env.BRAINTRUST_API_KEY = "test-api-key";
 
     const processor = new BraintrustSpanProcessor();

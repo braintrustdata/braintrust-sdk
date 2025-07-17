@@ -291,7 +291,7 @@ def test_braintrust_otel_enable_no_global_provider(monkeypatch, uninstall_braint
         print("No warning was logged - auto-configuration may have succeeded or failed silently")
 
 
-def test_braintrust_otel_filter_enable_environment_variable():
+def test_braintrust_otel_filter_ai_spans_environment_variable():
     if not OTEL_INSTALLED:
         pytest.skip("OpenTelemetry not installed, skipping test")
 
@@ -299,23 +299,23 @@ def test_braintrust_otel_filter_enable_environment_variable():
 
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-    from braintrust.otel import FilterSpanProcessor
+    from braintrust.otel import AISpanProcessor
 
     # Test that the environment variable is properly read
-    original_value = os.environ.get("BRAINTRUST_OTEL_ENABLE_FILTER")
+    original_value = os.environ.get("BRAINTRUST_OTEL_FILTER_AI_SPANS")
 
     try:
         # Test true value
-        os.environ["BRAINTRUST_OTEL_ENABLE_FILTER"] = "true"
-        assert os.environ.get("BRAINTRUST_OTEL_ENABLE_FILTER", "").lower() == "true"
+        os.environ["BRAINTRUST_OTEL_FILTER_AI_SPANS"] = "true"
+        assert os.environ.get("BRAINTRUST_OTEL_FILTER_AI_SPANS", "").lower() == "true"
 
         # Test false value
-        os.environ["BRAINTRUST_OTEL_ENABLE_FILTER"] = "false"
-        assert os.environ.get("BRAINTRUST_OTEL_ENABLE_FILTER", "").lower() == "false"
+        os.environ["BRAINTRUST_OTEL_FILTER_AI_SPANS"] = "false"
+        assert os.environ.get("BRAINTRUST_OTEL_FILTER_AI_SPANS", "").lower() == "false"
 
         # Test empty value
-        os.environ["BRAINTRUST_OTEL_ENABLE_FILTER"] = ""
-        assert os.environ.get("BRAINTRUST_OTEL_ENABLE_FILTER", "").lower() == ""
+        os.environ["BRAINTRUST_OTEL_FILTER_AI_SPANS"] = ""
+        assert os.environ.get("BRAINTRUST_OTEL_FILTER_AI_SPANS", "").lower() == ""
 
         # Test FilterSpanProcessor can be instantiated
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -323,7 +323,7 @@ def test_braintrust_otel_filter_enable_environment_variable():
 
         memory_exporter = InMemorySpanExporter()
         simple_processor = SimpleSpanProcessor(memory_exporter)
-        filter_processor = FilterSpanProcessor(simple_processor)
+        filter_processor = AISpanProcessor(simple_processor)
 
         # Verify it has the expected attributes
         assert hasattr(filter_processor, "_processor")
@@ -334,9 +334,9 @@ def test_braintrust_otel_filter_enable_environment_variable():
     finally:
         # Restore original value
         if original_value is not None:
-            os.environ["BRAINTRUST_OTEL_ENABLE_FILTER"] = original_value
+            os.environ["BRAINTRUST_OTEL_FILTER_AI_SPANS"] = original_value
         else:
-            os.environ.pop("BRAINTRUST_OTEL_ENABLE_FILTER", None)
+            os.environ.pop("BRAINTRUST_OTEL_FILTER_AI_SPANS", None)
 
 
 def test_braintrust_span_processor_class():
@@ -367,7 +367,7 @@ def test_braintrust_span_processor_class():
     # Test processor with LLM filtering
     with pytest.MonkeyPatch.context() as m:
         m.setenv("BRAINTRUST_API_KEY", "test-api-key")
-        processor_with_filtering = BraintrustSpanProcessor(enable_filtering=True)
+        processor_with_filtering = BraintrustSpanProcessor(filter_ai_spans=True)
 
         # Should have the same interface
         assert hasattr(processor_with_filtering, "on_start")
@@ -386,7 +386,7 @@ def test_braintrust_span_processor_class():
             api_key="explicit-key",
             parent="project:test",
             api_url="https://custom.example.com",
-            enable_filtering=True,
+            filter_ai_spans=True,
             custom_filter=custom_filter,
             headers={"X-Test-Header": "test"},
         )
@@ -407,20 +407,20 @@ def test_braintrust_span_processor_class():
 class TestSpanFiltering:
     def setup_method(self):
         if not OTEL_INSTALLED:
-            pytest.skip("OpenTelemetry not installed, skipping FilterSpanProcessor tests")
+            pytest.skip("OpenTelemetry not installed, skipping AISpanProcessor tests")
 
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-        from braintrust.otel import FilterSpanProcessor
+        from braintrust.otel import AISpanProcessor
 
         self.memory_exporter = InMemorySpanExporter()
         self.provider = TracerProvider()
 
         # Create processor with our filtering logic
         base_processor = SimpleSpanProcessor(self.memory_exporter)
-        self.filtering_processor = FilterSpanProcessor(base_processor)
+        self.filtering_processor = AISpanProcessor(base_processor)
 
         self.provider.add_span_processor(self.filtering_processor)
         self.tracer = self.provider.get_tracer("test_tracer")
@@ -527,10 +527,10 @@ class TestSpanFiltering:
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-        from braintrust.otel import FilterSpanProcessor
+        from braintrust.otel import AISpanProcessor
 
         memory_exporter = InMemorySpanExporter()
-        processor = FilterSpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=custom_filter)
+        processor = AISpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=custom_filter)
         provider = TracerProvider()
         provider.add_span_processor(processor)
         tracer = provider.get_tracer(__name__)
@@ -559,10 +559,10 @@ class TestSpanFiltering:
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-        from braintrust.otel import FilterSpanProcessor
+        from braintrust.otel import AISpanProcessor
 
         memory_exporter = InMemorySpanExporter()
-        processor = FilterSpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=custom_filter)
+        processor = AISpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=custom_filter)
         provider = TracerProvider()
         provider.add_span_processor(processor)
         tracer = provider.get_tracer(__name__)
@@ -589,10 +589,10 @@ class TestSpanFiltering:
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-        from braintrust.otel import FilterSpanProcessor
+        from braintrust.otel import AISpanProcessor
 
         memory_exporter = InMemorySpanExporter()
-        processor = FilterSpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=custom_filter)
+        processor = AISpanProcessor(SimpleSpanProcessor(memory_exporter), custom_filter=custom_filter)
         provider = TracerProvider()
         provider.add_span_processor(processor)
         tracer = provider.get_tracer(__name__)
@@ -616,7 +616,7 @@ class TestSpanFiltering:
         from opentelemetry.sdk.trace.export import SimpleSpanProcessor
         from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-        from braintrust.otel import FilterSpanProcessor
+        from braintrust.otel import AISpanProcessor
 
         all_spans_exporter = InMemorySpanExporter()
         filtered_spans_exporter = InMemorySpanExporter()
@@ -625,7 +625,7 @@ class TestSpanFiltering:
         all_processor = SimpleSpanProcessor(all_spans_exporter)
 
         # Processor that filters LLM spans
-        filtered_processor = FilterSpanProcessor(SimpleSpanProcessor(filtered_spans_exporter))
+        filtered_processor = AISpanProcessor(SimpleSpanProcessor(filtered_spans_exporter))
 
         # Set up provider with both processors
         provider = TracerProvider()

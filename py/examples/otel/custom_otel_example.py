@@ -5,9 +5,9 @@ import time
 
 # Set environment variables
 os.environ.setdefault("BRAINTRUST_PARENT", "project_name:otel-examples")
-os.environ.setdefault("BRAINTRUST_OTEL_ENABLE_LLM_FILTER", "false")
+os.environ.setdefault("BRAINTRUST_OTEL_FILTER_AI_SPANS", "false")
 
-from braintrust.otel import Processor
+from braintrust.otel import BraintrustSpanProcessor
 from openai import OpenAI
 from opentelemetry import trace
 from opentelemetry.instrumentation.openai import OpenAIInstrumentor
@@ -29,7 +29,7 @@ def my_custom_filter(span):
 
 
 # Create a single processor with all the available options
-processor = Processor(
+processor = BraintrustSpanProcessor(
     api_url="https://api.braintrust.dev",  # Base URL for Braintrust API
     custom_filter=my_custom_filter,  # Custom filter function
 )

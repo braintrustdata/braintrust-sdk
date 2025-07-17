@@ -46,7 +46,7 @@ except ImportError:
 FILTER_PREFIXES = ("gen_ai.", "braintrust.", "llm.", "ai.")
 
 
-class FilterSpanProcessor:
+class AISpanProcessor:
     """
     A span processor that filters spans to only export filtered telemetry.
 
@@ -54,7 +54,7 @@ class FilterSpanProcessor:
     This dramatically reduces telemetry volume while preserving important observability.
 
     Example:
-        > processor = FilterSpanProcessor(BatchSpanProcessor(OTLPSpanExporter()))
+        > processor = AISpanProcessor(BatchSpanProcessor(OTLPSpanExporter()))
         > provider = TracerProvider()
         > provider.add_span_processor(processor)
     """
@@ -135,8 +135,8 @@ class OtelExporter(OTLPSpanExporter):
     Environment Variables:
     - BRAINTRUST_OTEL_ENABLE: Set to "true" to automatically configure OpenTelemetry
       with this exporter at import time.
-    - BRAINTRUST_OTEL_ENABLE_FILTER: Set to "true" to automatically wrap the
-      exporter with FilterSpanProcessor for filtering only filtered spans.
+    - BRAINTRUST_OTEL_FILTER_AI_SPANS: Set to "true" to automatically wrap the
+      exporter with AISpanProcessor for filtering only AI spans.
     - BRAINTRUST_API_KEY: Your Braintrust API key.
     - BRAINTRUST_PARENT: Parent identifier (e.g., "project_name:test").
     - BRAINTRUST_API_URL: Base URL for Braintrust API (defaults to https://api.braintrust.dev).
@@ -188,14 +188,14 @@ class BraintrustSpanProcessor:
     """
     A convenient all-in-one span processor for Braintrust OpenTelemetry integration.
 
-    This class combines the OtelExporter, BatchSpanProcessor, and optionally FilterSpanProcessor
+    This class combines the OtelExporter, BatchSpanProcessor, and optionally AISpanProcessor
     into a single easy-to-use processor that can be directly added to a TracerProvider.
 
     Example:
         > processor = BraintrustSpanProcessor()
         > provider.add_span_processor(processor)
 
-        > processor = BraintrustSpanProcessor(enable_filtering=True)
+        > processor = BraintrustSpanProcessor(filter_ai_spans=True)
         > provider.add_span_processor(processor)
     """
 
@@ -204,7 +204,7 @@ class BraintrustSpanProcessor:
         api_key: Optional[str] = None,
         parent: Optional[str] = None,
         api_url: Optional[str] = None,
-        enable_filtering: bool = False,
+        filter_ai_spans: bool = False,
         custom_filter=None,
         headers: Optional[Dict[str, str]] = None,
     ):
@@ -215,7 +215,7 @@ class BraintrustSpanProcessor:
             api_key: Braintrust API key. Defaults to BRAINTRUST_API_KEY env var.
             parent: Parent identifier (e.g., "project_name:test"). Defaults to BRAINTRUST_PARENT env var.
             api_url: Base URL for Braintrust API. Defaults to BRAINTRUST_API_URL env var or https://api.braintrust.dev.
-            enable_filtering: Whether to enable span filtering. Defaults to False.
+            filter_ai_spans: Whether to enable AI span filtering. Defaults to False.
             custom_filter: Optional custom filter function for filtering.
             headers: Additional headers to include in requests.
         """
@@ -237,9 +237,9 @@ class BraintrustSpanProcessor:
         # Always create a BatchSpanProcessor first
         batch_processor = BatchSpanProcessor(self._exporter)
 
-        if enable_filtering:
+        if filter_ai_spans:
             # Wrap the BatchSpanProcessor with filtering
-            self._processor = FilterSpanProcessor(batch_processor, custom_filter=custom_filter)
+            self._processor = AISpanProcessor(batch_processor, custom_filter=custom_filter)
         else:
             # Use BatchSpanProcessor directly
             self._processor = batch_processor
@@ -294,10 +294,10 @@ def _auto_configure_braintrust_otel():
 
     try:
         # Check if filtering is enabled
-        filter_enabled = os.environ.get("BRAINTRUST_OTEL_ENABLE_FILTER", "").lower() == "true"
+        ai_filter_enabled = os.environ.get("BRAINTRUST_OTEL_FILTER_AI_SPANS", "").lower() == "true"
 
         # Create our processor using the new BraintrustSpanProcessor class
-        processor = BraintrustSpanProcessor(enable_filtering=filter_enabled)
+        processor = BraintrustSpanProcessor(filter_ai_spans=ai_filter_enabled)
 
         # Add our processor to the global tracer provider
         provider.add_span_processor(processor)
