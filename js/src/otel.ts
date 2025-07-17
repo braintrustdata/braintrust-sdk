@@ -10,7 +10,7 @@ try {
 } catch (error) {
   console.warn(
     "OpenTelemetry packages are not installed. " +
-      "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
+      "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
   );
   OTEL_AVAILABLE = false;
 }
@@ -69,7 +69,7 @@ export class AISpanProcessor {
     if (!OTEL_AVAILABLE) {
       throw new Error(
         "OpenTelemetry packages are not installed. " +
-          "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
+          "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
       );
     }
   }
@@ -244,7 +244,7 @@ export class BraintrustSpanProcessor {
     if (!OTEL_AVAILABLE) {
       throw new Error(
         "OpenTelemetry packages are not installed. " +
-          "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
+          "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
       );
     }
   }

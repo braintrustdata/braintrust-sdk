@@ -44,8 +44,8 @@ test-anthropic-%:
 
 test-otel-installed:
 	pnpm prune
-	npm_config_save=false npm_config_lockfile=false pnpm add "@opentelemetry/api" "@opentelemetry/sdk-trace-base" "@opentelemetry/exporter-otlp-http"
-	pnpm test -- src/otel.test.ts
+	npm_config_save=false npm_config_lockfile=false pnpm add "@opentelemetry/api" "@opentelemetry/sdk-trace-base" "@opentelemetry/exporter-trace-otlp-http"
+	pnpm test:otel
 
 test-otel-missing:
 	pnpm prune
@@ -55,7 +55,7 @@ test-otel-missing:
 		echo "ERROR: @opentelemetry/api is installed, but test requires it to be missing"; \
 		exit 1; \
 	fi
-	pnpm test -- src/otel-no-deps.test.ts --reporter=verbose
+	pnpm test:otel-no-deps
 
 test-otel: test-otel-installed test-otel-missing
 
