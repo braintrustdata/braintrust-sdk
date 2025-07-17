@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""
+Filtered OpenTelemetry example with Braintrust integration.
+
+This example shows how to use BraintrustSpanProcessor with AI span filtering enabled
+and custom filter functions. Only AI-related spans and root spans will be sent to Braintrust.
+"""
 
 import os
 import time
@@ -40,10 +46,10 @@ provider.add_span_processor(processor)
 # Create a tracer and generate some spans
 tracer = trace.get_tracer(__name__)
 
-print("Creating spans to demonstrate filtering behavior...")
+print("Creating spans to demonstrate AI span filtering behavior...")
 
 # Create spans to test the filtering behavior
-with tracer.start_as_current_span("custom.otel.example") as main_span:
+with tracer.start_as_current_span("filtered.otel.example") as main_span:
     main_span.set_attribute("request_id", "12345")
     main_span.set_attribute("user_id", "demo-user")
 

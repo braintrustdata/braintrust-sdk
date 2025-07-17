@@ -133,10 +133,6 @@ class OtelExporter(OTLPSpanExporter):
     a more convenient all-in-one interface.
 
     Environment Variables:
-    - BRAINTRUST_OTEL_ENABLE: Set to "true" to automatically configure OpenTelemetry
-      with this exporter at import time.
-    - BRAINTRUST_OTEL_FILTER_AI_SPANS: Set to "true" to automatically wrap the
-      exporter with AISpanProcessor for filtering only AI spans.
     - BRAINTRUST_API_KEY: Your Braintrust API key.
     - BRAINTRUST_PARENT: Parent identifier (e.g., "project_name:test").
     - BRAINTRUST_API_URL: Base URL for Braintrust API (defaults to https://api.braintrust.dev).
@@ -269,42 +265,3 @@ class BraintrustSpanProcessor:
     def processor(self):
         """Access to the underlying span processor."""
         return self._processor
-
-
-def _auto_configure_braintrust_otel():
-    """Auto-configure OpenTelemetry with Braintrust exporter if BRAINTRUST_OTEL_ENABLE is set."""
-    if not OTEL_AVAILABLE:
-        logging.warning(
-            "BRAINTRUST_OTEL_ENABLE is set but OpenTelemetry packages are not installed. "
-            "Install them with: pip install opentelemetry-api opentelemetry-sdk opentelemetry-exporter-otlp-proto-http"
-        )
-        return
-
-    # Get the global tracer provider
-    provider = trace.get_tracer_provider()
-
-    # Check if the provider has the add_span_processor method
-    if not hasattr(provider, "add_span_processor"):
-        logging.warning(
-            "BRAINTRUST_OTEL_ENABLE is set but no tracer provider is set up. "
-            "Please set a TracerProvider first. "
-            "See: https://opentelemetry.io/docs/instrumentation/python/getting-started/"
-        )
-        return
-
-    try:
-        # Check if filtering is enabled
-        ai_filter_enabled = os.environ.get("BRAINTRUST_OTEL_FILTER_AI_SPANS", "").lower() == "true"
-
-        # Create our processor using the new BraintrustSpanProcessor class
-        processor = BraintrustSpanProcessor(filter_ai_spans=ai_filter_enabled)
-
-        # Add our processor to the global tracer provider
-        provider.add_span_processor(processor)
-    except Exception as e:
-        logging.warning(f"Failed to auto-configure Braintrust OpenTelemetry exporter: {e}")
-
-
-# Auto-configure OpenTelemetry if BRAINTRUST_OTEL_ENABLE is set
-if os.environ.get("BRAINTRUST_OTEL_ENABLE", "").lower() == "true":
-    _auto_configure_braintrust_otel()

@@ -146,7 +146,7 @@ interface BraintrustSpanProcessorOptions {
   /**
    * Whether to enable AI span filtering. Defaults to false.
    */
-  filterAiSpans?: boolean;
+  filterAISpans?: boolean;
   /**
    * Custom filter function for span filtering
    */
@@ -162,7 +162,7 @@ interface BraintrustSpanProcessorOptions {
  *
  * This processor uses a BatchSpanProcessor and an OTLP exporter configured
  * to send data to Braintrust's telemetry endpoint. Span filtering is disabled
- * by default but can be enabled with the filterAiSpans option.
+ * by default but can be enabled with the filterAISpans option.
  *
  * Environment Variables:
  * - BRAINTRUST_API_KEY: Your Braintrust API key
@@ -183,7 +183,7 @@ interface BraintrustSpanProcessorOptions {
  * ```typescript
  * const processor = new BraintrustSpanProcessor({
  *   apiKey: 'your-api-key',
- *   filterAiSpans: true
+ *   filterAISpans: true
  * });
  * ```
  *
@@ -245,8 +245,8 @@ export class BraintrustSpanProcessor implements SpanProcessor {
     // Create batch processor with the exporter
     this.processor = new BatchSpanProcessor(exporter);
 
-    // Conditionally wrap with filtering based on filterAiSpans flag
-    if (options.filterAiSpans === true) {
+    // Conditionally wrap with filtering based on filterAISpans flag
+    if (options.filterAISpans === true) {
       // Only enable filtering if explicitly requested
       this.aiSpanProcessor = new AISpanProcessor(
         this.processor,

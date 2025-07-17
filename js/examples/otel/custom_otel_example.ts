@@ -15,7 +15,7 @@ const provider = new BasicTracerProvider({
     // Add Braintrust span processor with filtering enabled
     new BraintrustSpanProcessor({
       parent: "project_name:custom_otel_examples",
-      filterAiSpans: true,
+      filterAISpans: true,
     }),
   ],
 });

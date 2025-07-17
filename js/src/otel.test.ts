@@ -466,18 +466,18 @@ describe("BraintrustSpanProcessor", () => {
     expect(processor).toBeDefined();
   });
 
-  it("should enable filtering when filterAiSpans is true", () => {
+  it("should enable filtering when filterAISpans is true", () => {
     const processor = new BraintrustSpanProcessor({
       apiKey: "test-api-key",
-      filterAiSpans: true,
+      filterAISpans: true,
     });
     expect(processor).toBeDefined();
   });
 
-  it("should disable filtering when filterAiSpans is false", () => {
+  it("should disable filtering when filterAISpans is false", () => {
     const processor = new BraintrustSpanProcessor({
       apiKey: "test-api-key",
-      filterAiSpans: false,
+      filterAISpans: false,
     });
     expect(processor).toBeDefined();
   });
