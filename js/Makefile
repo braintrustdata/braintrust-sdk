@@ -43,7 +43,7 @@ test-anthropic-%:
 
 test-otel-installed:
 	pnpm prune
-	npm_config_save=false npm_config_lockfile=false pnpm add "@opentelemetry/api" "@opentelemetry/sdk-trace-base" "@opentelemetry/exporter-otlp-http" "@opentelemetry/resources" "@opentelemetry/semantic-conventions"
+	npm_config_save=false npm_config_lockfile=false pnpm add "@opentelemetry/api" "@opentelemetry/sdk-trace-base" "@opentelemetry/exporter-otlp-http"
 	pnpm test -- src/otel.test.ts
 
 test-otel-missing:
