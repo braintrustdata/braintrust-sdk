@@ -1,13 +1,13 @@
 // custom_otel_example.ts
 import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import { trace } from "@opentelemetry/api";
-import { BraintrustSpanProcessor } from "../../src/otel";
+import { BraintrustSpanProcessor } from "../../src";
 
 const provider = new BasicTracerProvider({
   spanProcessors: [
     // Add Braintrust span processor with filtering enabled
     new BraintrustSpanProcessor({
-      parent: "project_name:custom_otel_examples",
+      parent: "project_name:otel_examples",
       filterAISpans: true,
     }),
   ],
@@ -23,7 +23,7 @@ console.log("BRAINTRUST_API_KEY set:", !!process.env.BRAINTRUST_API_KEY);
 const tracer = trace.getTracer("custom-braintrust-service", "1.0.0");
 
 async function makeRequest() {
-  return tracer.startActiveSpan("user_request", async (rootSpan) => {
+  return tracer.startActiveSpan("custom.user_request", async (rootSpan) => {
     rootSpan.setAttributes({
       "user.request": "custom_example",
       "request.timestamp": new Date().toISOString(),

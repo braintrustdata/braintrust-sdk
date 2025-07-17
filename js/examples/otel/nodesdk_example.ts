@@ -1,14 +1,14 @@
 // nodesdk_example.ts
 import { NodeSDK } from "@opentelemetry/sdk-node";
-import { BraintrustSpanProcessor } from "../../src/otel";
+import { BraintrustSpanProcessor } from "../../src";
 import { trace } from "@opentelemetry/api";
 import OpenAI from "openai";
 
 const sdk = new NodeSDK({
   serviceName: "my-service",
   spanProcessor: new BraintrustSpanProcessor({
-    parent: "project_name:otel_examples",
-    enableFiltering: true,
+    parent: "project_name:otel-examples",
+    filterAISpans: true,
   }),
 });
 
@@ -21,7 +21,7 @@ console.log("OPENAI_API_KEY set:", !!process.env.OPENAI_API_KEY);
 const tracer = trace.getTracer("my-service", "1.0.0");
 
 async function makeRequest() {
-  return tracer.startActiveSpan("user_request", async (rootSpan) => {
+  return tracer.startActiveSpan("nodesdk.example", async (rootSpan) => {
     rootSpan.setAttributes({
       "user.request": "openai_chat",
       "request.timestamp": new Date().toISOString(),
