@@ -2,9 +2,10 @@ import importlib
 import os
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Any, Dict, List, Literal, Optional, TypedDict, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel
+from typing_extensions import TypedDict
 
 from braintrust.framework import Evaluator, Filter, ReporterDef, _evals, _set_lazy_load
 from braintrust.prompt import PromptData

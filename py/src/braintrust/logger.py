@@ -35,7 +35,6 @@ from typing import (
     Set,
     Tuple,
     Type,
-    TypedDict,
     TypeVar,
     Union,
     cast,
@@ -48,6 +47,7 @@ import exceptiongroup
 import requests
 import urllib3
 from requests.adapters import HTTPAdapter
+from typing_extensions import TypedDict
 from urllib3.util.retry import Retry
 
 from braintrust.functions.stream import BraintrustStream

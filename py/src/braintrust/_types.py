@@ -6,9 +6,9 @@ Auto-generated file -- do not modify.
 
 from __future__ import annotations
 
-from typing import Any, Literal, Mapping, Optional, Sequence, TypedDict, Union
+from typing import Any, Literal, Mapping, Optional, Sequence, Union
 
-from typing_extensions import NotRequired
+from typing_extensions import NotRequired, TypedDict
 
 SpanType = Literal["llm", "score", "function", "eval", "task", "tool"]
 
