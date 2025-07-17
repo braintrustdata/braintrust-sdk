@@ -166,6 +166,7 @@ export const functionIdSchema = z
       .object({
         inline_prompt: promptDataSchema.optional(),
         inline_function: z.record(z.unknown()), // This creates a circular dependency
+        function_type: functionTypeEnum.optional(),
         name: z.string().nullish().describe("The name of the inline function"),
       })
       .describe("Inline function definition")
@@ -173,6 +174,7 @@ export const functionIdSchema = z
     z
       .object({
         inline_prompt: promptDataSchema,
+        function_type: functionTypeEnum.optional(),
         name: z.string().nullish().describe("The name of the inline prompt"),
       })
       .describe("Inline prompt definition")
