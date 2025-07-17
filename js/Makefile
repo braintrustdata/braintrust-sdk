@@ -16,8 +16,9 @@ help:
 	@echo "  make test-anthropic     - Run Anthropic wrapper tests"
 	@echo "  make bench              - Run queue performance benchmarks"
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
+	@echo "  make publish-beta       - Publish beta version to npm"
 
-.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-latest install-optional-deps
+.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-latest install-optional-deps publish-beta
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -106,6 +107,9 @@ docs:
 
 build:
 	pnpm run build
+
+publish-beta: build
+	pnpm publish --tag beta
 
 bench:
 	npx tsx src/queue.bench.ts
