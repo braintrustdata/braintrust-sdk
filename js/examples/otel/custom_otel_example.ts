@@ -1,17 +1,10 @@
 // custom_otel_example.ts
-import {
-  BasicTracerProvider,
-  BatchSpanProcessor,
-  ConsoleSpanExporter,
-} from "@opentelemetry/sdk-trace-base";
-import { registerInstrumentations } from "@opentelemetry/instrumentation";
+import { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import { trace } from "@opentelemetry/api";
 import { BraintrustSpanProcessor } from "../../src/otel";
 
 const provider = new BasicTracerProvider({
   spanProcessors: [
-    // Add console exporter for local debugging
-    new BatchSpanProcessor(new ConsoleSpanExporter()),
     // Add Braintrust span processor with filtering enabled
     new BraintrustSpanProcessor({
       parent: "project_name:custom_otel_examples",
@@ -21,13 +14,6 @@ const provider = new BasicTracerProvider({
 });
 
 trace.setGlobalTracerProvider(provider); // sets the global tracer provider
-
-registerInstrumentations({
-  tracerProvider: provider,
-  instrumentations: [
-    /* add your instrumentations here */
-  ],
-});
 
 console.log(
   "OpenTelemetry BasicTracerProvider started with BraintrustSpanProcessor",
