@@ -1,6 +1,6 @@
 // Conditional imports for OpenTelemetry to handle missing dependencies gracefully
-let otelApi: typeof import("@opentelemetry/api") | null = null;
-let otelSdk: typeof import("@opentelemetry/sdk-trace-base") | null = null;
+let otelApi: any = null;
+let otelSdk: any = null;
 let OTEL_AVAILABLE = false;
 
 try {
