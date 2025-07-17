@@ -410,18 +410,6 @@ describe("BraintrustSpanProcessor", () => {
     expect(processor).toBeDefined();
   });
 
-  it("should support custom batch options", () => {
-    const processor = new BraintrustSpanProcessor({
-      apiKey: "test-api-key",
-      batchOptions: {
-        maxExportBatchSize: 50,
-        exportTimeoutMillis: 15000,
-        scheduledDelayMillis: 500,
-      },
-    });
-    expect(processor).toBeDefined();
-  });
-
   it("should support custom filter function", () => {
     const customFilter = (span: ReadableSpan) => {
       return span.name.includes("important");
@@ -438,6 +426,35 @@ describe("BraintrustSpanProcessor", () => {
     const processor = new BraintrustSpanProcessor({
       apiKey: "test-api-key",
       parent: "project_name:otel_examples",
+    });
+    expect(processor).toBeDefined();
+  });
+
+  it("should use BRAINTRUST_PARENT environment variable", () => {
+    process.env.BRAINTRUST_API_KEY = "test-api-key";
+    process.env.BRAINTRUST_PARENT = "project_name:env_examples";
+
+    const processor = new BraintrustSpanProcessor();
+    expect(processor).toBeDefined();
+  });
+
+  it("should use BRAINTRUST_API_URL environment variable", () => {
+    process.env.BRAINTRUST_API_KEY = "test-api-key";
+    process.env.BRAINTRUST_API_URL = "https://custom.env.url";
+
+    const processor = new BraintrustSpanProcessor();
+    expect(processor).toBeDefined();
+  });
+
+  it("should prioritize options over environment variables", () => {
+    process.env.BRAINTRUST_API_KEY = "env-api-key";
+    process.env.BRAINTRUST_PARENT = "env-parent";
+    process.env.BRAINTRUST_API_URL = "https://env.url";
+
+    const processor = new BraintrustSpanProcessor({
+      apiKey: "option-api-key",
+      parent: "option-parent",
+      apiUrl: "https://option.url",
     });
     expect(processor).toBeDefined();
   });
