@@ -2,6 +2,7 @@ import logging
 import os
 import warnings
 from typing import Any, Dict, Optional
+from urllib.parse import urljoin
 
 try:
     from opentelemetry import trace
@@ -157,7 +158,10 @@ class OtelExporter(OTLPSpanExporter):
             **kwargs: Additional arguments passed to OTLPSpanExporter.
         """
         base_url = os.environ.get("BRAINTRUST_API_URL", "https://api.braintrust.dev")
-        endpoint = url or f"{base_url.rstrip('/')}/otel/v1/traces"
+        # Ensure base_url ends with / for proper joining
+        if not base_url.endswith("/"):
+            base_url += "/"
+        endpoint = url or urljoin(base_url, "otel/v1/traces")
         api_key = api_key or os.environ.get("BRAINTRUST_API_KEY")
         parent = parent or os.environ.get("BRAINTRUST_PARENT")
         headers = headers or {}

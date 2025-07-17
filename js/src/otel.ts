@@ -263,10 +263,15 @@ export class BraintrustSpanProcessor {
     }
 
     // Get API URL from options or environment
-    const apiUrl =
+    let apiUrl =
       options.apiUrl ||
       process.env.BRAINTRUST_API_URL ||
       "https://api.braintrust.dev";
+
+    // Ensure apiUrl ends with / for proper joining
+    if (!apiUrl.endsWith("/")) {
+      apiUrl += "/";
+    }
 
     // Get parent from options or environment
     let parent = options.parent || process.env.BRAINTRUST_PARENT;
@@ -295,7 +300,7 @@ export class BraintrustSpanProcessor {
       };
 
       exporter = new OTLPTraceExporter({
-        url: `${apiUrl}/otel/v1/traces`,
+        url: new URL("otel/v1/traces", apiUrl).href,
         headers,
       });
     } catch (error) {
