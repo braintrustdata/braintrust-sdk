@@ -136,11 +136,11 @@ interface BraintrustSpanProcessorOptions {
    */
   apiKey?: string;
   /**
-   * Braintrust API URL. Defaults to https://api.braintrust.dev
+   * Braintrust API URL. If not provided, will use BRAINTRUST_API_URL environment variable. Defaults to https://api.braintrust.dev
    */
   apiUrl?: string;
   /**
-   * Braintrust parent project name (e.g., "project_name:otel_examples")
+   * Braintrust parent project name (e.g., "project_name:otel_examples"). If not provided, will use BRAINTRUST_PARENT environment variable.
    */
   parent?: string;
   /**
@@ -155,14 +155,6 @@ interface BraintrustSpanProcessorOptions {
    * Additional headers to send with telemetry data
    */
   headers?: Record<string, string>;
-  /**
-   * Batch span processor options
-   */
-  batchOptions?: {
-    maxExportBatchSize?: number;
-    exportTimeoutMillis?: number;
-    scheduledDelayMillis?: number;
-  };
 }
 
 /**
@@ -171,6 +163,11 @@ interface BraintrustSpanProcessorOptions {
  * This processor uses a BatchSpanProcessor and an OTLP exporter configured
  * to send data to Braintrust's telemetry endpoint. Span filtering is disabled
  * by default but can be enabled with the enableFiltering option.
+ *
+ * Environment Variables:
+ * - BRAINTRUST_API_KEY: Your Braintrust API key
+ * - BRAINTRUST_PARENT: Parent identifier (e.g., "project_name:test")
+ * - BRAINTRUST_API_URL: Base URL for Braintrust API (defaults to https://api.braintrust.dev)
  *
  * @example
  * ```typescript
@@ -189,6 +186,15 @@ interface BraintrustSpanProcessorOptions {
  *   enableFiltering: true
  * });
  * ```
+ *
+ * @example Using environment variables:
+ * ```typescript
+ * // Set environment variables:
+ * // BRAINTRUST_API_KEY=your-api-key
+ * // BRAINTRUST_PARENT=project_name:test
+ * // BRAINTRUST_API_URL=https://api.braintrust.dev
+ * const processor = new BraintrustSpanProcessor();
+ * ```
  */
 export class BraintrustSpanProcessor implements SpanProcessor {
   private readonly processor: SpanProcessor;
@@ -203,8 +209,14 @@ export class BraintrustSpanProcessor implements SpanProcessor {
       );
     }
 
-    // Default API URL
-    const apiUrl = options.apiUrl || "https://api.braintrust.dev";
+    // Get API URL from options or environment
+    const apiUrl =
+      options.apiUrl ||
+      process.env.BRAINTRUST_API_URL ||
+      "https://api.braintrust.dev";
+
+    // Get parent from options or environment
+    const parent = options.parent || process.env.BRAINTRUST_PARENT;
 
     // Create OTLP exporter
     let exporter: any;
@@ -216,7 +228,7 @@ export class BraintrustSpanProcessor implements SpanProcessor {
       const headers = {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        ...(options.parent && { "x-bt-parent": options.parent }),
+        ...(parent && { "x-bt-parent": parent }),
         ...options.headers,
       };
 
@@ -231,12 +243,7 @@ export class BraintrustSpanProcessor implements SpanProcessor {
     }
 
     // Create batch processor with the exporter
-    const batchOptions = options.batchOptions || {};
-    this.processor = new BatchSpanProcessor(exporter, {
-      maxExportBatchSize: batchOptions.maxExportBatchSize || 100,
-      exportTimeoutMillis: batchOptions.exportTimeoutMillis || 30000,
-      scheduledDelayMillis: batchOptions.scheduledDelayMillis || 1000,
-    });
+    this.processor = new BatchSpanProcessor(exporter);
 
     // Conditionally wrap with filtering based on enableFiltering flag
     if (options.enableFiltering === true) {

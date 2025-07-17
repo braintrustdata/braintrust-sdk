@@ -139,7 +139,7 @@ def test_braintrust_otel_enable_import_behavior(monkeypatch, uninstall_braintrus
             if isinstance(processor.span_exporter, otel_module.OtelExporter):
                 braintrust_exporter_found = True
                 break
-        elif isinstance(processor, otel_module.Processor):
+        elif isinstance(processor, otel_module.BraintrustSpanProcessor):
             # Check if the processor's exporter is our OtelExporter
             if isinstance(processor.exporter, otel_module.OtelExporter):
                 braintrust_exporter_found = True
@@ -339,16 +339,16 @@ def test_braintrust_otel_filter_enable_environment_variable():
             os.environ.pop("BRAINTRUST_OTEL_ENABLE_FILTER", None)
 
 
-def test_processor_class():
+def test_braintrust_span_processor_class():
     if not OTEL_INSTALLED:
         pytest.skip("OpenTelemetry not installed, skipping test")
 
-    from braintrust.otel import Processor
+    from braintrust.otel import BraintrustSpanProcessor
 
     # Test basic processor without filtering
     with pytest.MonkeyPatch.context() as m:
         m.setenv("BRAINTRUST_API_KEY", "test-api-key")
-        processor = Processor()
+        processor = BraintrustSpanProcessor()
 
         # Should have the span processor interface
         assert hasattr(processor, "on_start")
@@ -367,7 +367,7 @@ def test_processor_class():
     # Test processor with LLM filtering
     with pytest.MonkeyPatch.context() as m:
         m.setenv("BRAINTRUST_API_KEY", "test-api-key")
-        processor_with_filtering = Processor(enable_filtering=True)
+        processor_with_filtering = BraintrustSpanProcessor(enable_filtering=True)
 
         # Should have the same interface
         assert hasattr(processor_with_filtering, "on_start")
@@ -382,7 +382,7 @@ def test_processor_class():
         def custom_filter(span):
             return span.name.startswith("test_")
 
-        processor_custom = Processor(
+        processor_custom = BraintrustSpanProcessor(
             api_key="explicit-key",
             parent="project:test",
             api_url="https://custom.example.com",

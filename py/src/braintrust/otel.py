@@ -184,7 +184,7 @@ class OtelExporter(OTLPSpanExporter):
         super().__init__(endpoint=endpoint, headers=exporter_headers, **kwargs)
 
 
-class Processor:
+class BraintrustSpanProcessor:
     """
     A convenient all-in-one span processor for Braintrust OpenTelemetry integration.
 
@@ -192,10 +192,10 @@ class Processor:
     into a single easy-to-use processor that can be directly added to a TracerProvider.
 
     Example:
-        > processor = Processor()
+        > processor = BraintrustSpanProcessor()
         > provider.add_span_processor(processor)
 
-        > processor = Processor(enable_filtering=True)
+        > processor = BraintrustSpanProcessor(enable_filtering=True)
         > provider.add_span_processor(processor)
     """
 
@@ -209,14 +209,14 @@ class Processor:
         headers: Optional[Dict[str, str]] = None,
     ):
         """
-        Initialize the Processor.
+        Initialize the BraintrustSpanProcessor.
 
         Args:
             api_key: Braintrust API key. Defaults to BRAINTRUST_API_KEY env var.
             parent: Parent identifier (e.g., "project_name:test"). Defaults to BRAINTRUST_PARENT env var.
             api_url: Base URL for Braintrust API. Defaults to BRAINTRUST_API_URL env var or https://api.braintrust.dev.
             enable_filtering: Whether to enable span filtering. Defaults to False.
-            custom_filter: Optional custom filter function for LLM filtering.
+            custom_filter: Optional custom filter function for filtering.
             headers: Additional headers to include in requests.
         """
         # Create the exporter
@@ -296,8 +296,8 @@ def _auto_configure_braintrust_otel():
         # Check if filtering is enabled
         filter_enabled = os.environ.get("BRAINTRUST_OTEL_ENABLE_FILTER", "").lower() == "true"
 
-        # Create our processor using the new Processor class
-        processor = Processor(enable_filtering=filter_enabled)
+        # Create our processor using the new BraintrustSpanProcessor class
+        processor = BraintrustSpanProcessor(enable_filtering=filter_enabled)
 
         # Add our processor to the global tracer provider
         provider.add_span_processor(processor)
