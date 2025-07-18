@@ -4,16 +4,19 @@ from braintrust.cli.eval.models import (
     RunEvalData,
 )
 from braintrust.dev.errors import DatasetNotFoundError
-from braintrust.logger import _internal_get_global_state, init_dataset
+from braintrust.logger import BraintrustState, init_dataset
 
 
-def get_dataset(data: RunEvalData):
+def get_dataset(state: BraintrustState, data: RunEvalData):
     if isinstance(data, ProjectAndDataset):
-        return init_dataset(project=data.project_name, name=data.dataset_name, _internal_btql=data._internal_btql)  # type: ignore[reportPrivateUsage]
+        return init_dataset(
+            state=state, project=data.project_name, name=data.dataset_name, _internal_btql=data._internal_btql
+        )  # type: ignore[reportPrivateUsage]
 
     if isinstance(data, DatasetId):
-        dataset_info = get_dataset_by_id(data.dataset_id)
+        dataset_info = get_dataset_by_id(state, data.dataset_id)
         return init_dataset(
+            state=state,
             project=dataset_info["projectId"],
             name=dataset_info["dataset"],
             _internal_btql=data._internal_btql,  # type: ignore[reportPrivateUsage]
@@ -22,8 +25,7 @@ def get_dataset(data: RunEvalData):
     return data.data
 
 
-def get_dataset_by_id(dataset_id: str):
-    state = _internal_get_global_state()
+def get_dataset_by_id(state: BraintrustState, dataset_id: str):
     dataset = state.app_conn().post_json("api/dataset/get", {"id": dataset_id})
 
     if not dataset:

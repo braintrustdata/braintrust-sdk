@@ -117,16 +117,19 @@ class InlinePrompt(BaseModel):
     name: Optional[str] = None
 
 
+ScoreFunctionId = Union[
+    FunctionId,
+    ProjectNameSlug,
+    GlobalFunction,
+    PromptSessionId,
+    InlineCodeFunction,
+    InlineFunctionDef,
+    InlinePrompt,
+]
+
+
 class Score(BaseModel):
-    function_id: Union[
-        FunctionId,
-        ProjectNameSlug,
-        GlobalFunction,
-        PromptSessionId,
-        InlineCodeFunction,
-        InlineFunctionDef,
-        InlinePrompt,
-    ]
+    function_id: ScoreFunctionId
     name: str
 
 

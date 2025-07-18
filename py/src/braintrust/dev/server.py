@@ -15,25 +15,24 @@ from starlette.middleware.cors import CORSMiddleware
 
 from braintrust.cli.eval.models import (
     EvalRequest,
-    EvaluatorOpts,
     ListEvals,
     LoadedEvaluator,
+    ScoreFunctionId,
 )
 from braintrust.dev.dataset import get_dataset
 from braintrust.dev.errors import format_validation_errors
 from braintrust.dev.security import BraintrustApiKey
 from braintrust.dev.utils import get_any
 from braintrust.framework import (
-    BaseExperiment,
-    Eval,
+    EvalAsync,
+    EvalCase,
     EvalHooks,
     Evaluator,
-    init_experiment,
-    run_evaluator,
+    ScorerLike,
     scorer_name,
 )
 from braintrust.http_headers import BT_CURSOR_HEADER, BT_FOUND_EXISTING_HEADER, BT_PARENT
-from braintrust.logger import Dataset, flush
+from braintrust.logger import BraintrustState, Dataset, flush, get_span_parent_object
 from braintrust.util import eprint
 
 
@@ -108,7 +107,9 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
         return {"status": "ok"}
 
     @app.get("/list")
-    async def list_evals(api_key: Annotated[str, Depends(api_key_scheme)]):  # pyright: ignore[reportUnusedFunction]
+    async def list_evals(
+        state: Annotated[BraintrustState, Depends(api_key_scheme)]
+    ):  # pyright: ignore[reportUnusedFunction]
         eval_defs: dict[str, ListEvals] = {}
         for name, evaluator in all_evaluators.items():
             eval_defs[name] = cast(
@@ -123,7 +124,7 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
 
     @app.post("/eval")
     async def run_eval(  # pyright: ignore[reportUnusedFunction]
-        api_key: Annotated[str, Depends(api_key_scheme)], eval: EvalRequest
+        state: Annotated[BraintrustState, Depends(api_key_scheme)], eval: EvalRequest
     ):
         try:
             evaluator = all_evaluators[eval.name]
@@ -139,7 +140,7 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
         if parameters is not None and eval.parameters is None:
             raise HTTPException(status_code=400, detail="Evaluator requires parameters")
 
-        resolved_dataset = get_dataset(eval.data)
+        resolved_dataset = get_dataset(state, eval.data)
         eval_data = call_evaluator_data(resolved_dataset)
 
         eprint(f"Starting eval {evaluator.eval_name}")
@@ -172,42 +173,34 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
             return result
 
         async def evaluate():
-            result = await run_evaluator_task(
-                Evaluator(
-                    project_name=evaluator.project_name,
-                    eval_name=evaluator.eval_name,
-                    data=eval_data["data"],
-                    task=evaluator.task if not eval.stream else progress_task,
-                    scores=[{"name": scorer_name(score, i)} for i, score in enumerate(evaluator.scores)],
-                    experiment_name=evaluator.experiment_name,
-                    metadata=evaluator.metadata,
-                    trial_count=evaluator.trial_count,
-                    is_public=evaluator.is_public,
-                    update=evaluator.update,
-                    timeout=evaluator.timeout,
-                    max_concurrency=evaluator.max_concurrency,
-                    project_id=evaluator.project_id,
-                    base_experiment_name=evaluator.base_experiment_name,
-                    base_experiment_id=evaluator.base_experiment_id,
-                    git_metadata_settings=evaluator.git_metadata_settings,
-                    repo_info=evaluator.repo_info,
-                    error_score_handler=evaluator.error_score_handler,
-                    description=evaluator.description,
-                    summarize_scores=evaluator.summarize_scores,
-                ),
-                None,
-                EvaluatorOpts(
-                    no_progress_bars=True,
-                    filters=[],
-                    verbose=True,
-                    no_send_logs=False,
-                    terminate_on_failure=False,
-                    watch=False,
-                    list=False,
-                    jsonl=False,
-                ),
+            scores = evaluator.scores
+            if eval.scores:
+                scores += [make_scorer(state, score.name, score.function_id) for score in eval.scores]
+
+            result = await EvalAsync(
+                name=evaluator.eval_name,
+                data=eval_data["data"],
+                task=progress_task,
+                scores=scores,
+                experiment_name=evaluator.experiment_name,
+                trial_count=evaluator.trial_count,
+                metadata=evaluator.metadata,
+                is_public=evaluator.is_public,
+                update=evaluator.update,
+                timeout=evaluator.timeout,
+                max_concurrency=evaluator.max_concurrency,
+                project_id=evaluator.project_id,
+                base_experiment_name=evaluator.base_experiment_name,
+                base_experiment_id=evaluator.base_experiment_id,
+                git_metadata_settings=evaluator.git_metadata_settings,
+                repo_info=evaluator.repo_info,
+                error_score_handler=evaluator.error_score_handler,
+                description=evaluator.description,
+                summarize_scores=evaluator.summarize_scores,
+                state=state,
             )
 
+            # we're done
             await message_queue.put(None)
 
             return result
@@ -224,8 +217,6 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
                     yield message
 
                 result = await eval_task
-
-                flush()
 
                 summary = result.summary.as_dict()
 
@@ -278,38 +269,25 @@ def call_evaluator_data(dataset: Union[Dataset, List[Any]]):
     return {"data": data_result, "baseExperiment": base_experiment}
 
 
-async def run_evaluator_task(evaluator: Evaluator[Any, Any], position: Optional[int], opts: EvaluatorOpts):
-    experiment = None
-    if not opts.no_send_logs:
-        base_experiment_name = None
-        if isinstance(evaluator.data, BaseExperiment):
-            base_experiment_name = evaluator.data.name
-
-        dataset = None
-        if isinstance(evaluator.data, Dataset):
-            dataset = evaluator.data
-
-        # NOTE: This code is duplicated with _EvalCommon in py/src/braintrust/framework.py.
-        # Make sure to update those arguments if you change this.
-        experiment = init_experiment(
-            project_name=evaluator.project_name,
-            project_id=evaluator.project_id,
-            experiment_name=evaluator.experiment_name,
-            description=evaluator.description,
-            metadata=evaluator.metadata,
-            is_public=evaluator.is_public,
-            update=evaluator.update,
-            base_experiment=base_experiment_name,
-            base_experiment_id=evaluator.base_experiment_id,
-            git_metadata_settings=evaluator.git_metadata_settings,
-            repo_info=evaluator.repo_info,
-            dataset=dataset,
+def make_scorer(state: BraintrustState, name: str, score: ScoreFunctionId) -> ScorerLike[Any, Any]:
+    def scorer(input: EvalCase[Any, Any]):
+        request = {
+            **asdict(score),
+            "input": input,
+            "parent": get_span_parent_object().export(),
+            "stream": False,
+            "mode": "auto",
+            "strict": True,
+        }
+        result = state.proxy_conn().post(
+            "function/invoke",
+            request,
+            headers={
+                "Accept": "application/json",
+            },
         )
+        return result.json()
 
-    try:
-        return await run_evaluator(
-            experiment, evaluator, position if not opts.no_progress_bars else None, opts.filters
-        )
-    finally:
-        if experiment:
-            experiment.flush()
+    scorer.__name__ = name
+
+    return scorer

@@ -308,8 +308,26 @@ NOOP_SPAN: Span = _NoopSpan()
 NOOP_SPAN_PERMALINK = "https://www.braintrust.dev/noop-span"
 
 
+@dataclasses.dataclass
+class LoginOptions:
+    app_url: Optional[str] = None
+    api_key: Optional[str] = None
+    org_name: Optional[str] = None
+
+
+@dataclasses.dataclass
+class FullLoginOptions(LoginOptions):
+    force_login: bool = False
+
+    def as_login_options(self):
+        login_options = dataclasses.asdict(self)
+        login_options.pop("force_login")
+        return LoginOptions(**login_options)
+
+
 class BraintrustState:
-    def __init__(self):
+    def __init__(self, login_params: Optional[LoginOptions] = None):
+        self.login_params = login_params or LoginOptions()
         self.id = str(uuid.uuid4())
         self.current_experiment: Optional[Experiment] = None
         self.current_logger: Optional[Logger] = None
@@ -408,6 +426,42 @@ class BraintrustState:
     # Should only be called by the login function.
     def login_replace_api_conn(self, api_conn: "HTTPConnection"):
         self._global_bg_logger.get().internal_replace_api_conn(api_conn)
+
+    def login(self, options: Optional[FullLoginOptions] = None):
+        options = options or FullLoginOptions()
+        if self.api_url and not options.force_login:
+            return
+
+        new_state = login_to_state(
+            LoginOptions(
+                **{
+                    **dataclasses.asdict(self.login_params),
+                    **clean_dict(dataclasses.asdict(options.as_login_options())),
+                }
+            )
+        )
+
+        self.copy_login_info(new_state)
+
+    def copy_login_info(self, other: "BraintrustState"):
+        self.app_url = other.app_url
+        self.app_public_url = other.app_public_url
+        self.login_token = other.login_token
+        self.org_id = other.org_id
+        self.org_name = other.org_name
+        self.api_url = other.api_url
+        self.proxy_url = other.proxy_url
+        self.logged_in = other.logged_in
+        self.git_metadata_settings = other.git_metadata_settings
+
+        self._app_conn = other._app_conn
+        self._api_conn = other._api_conn
+        self.login_replace_api_conn(self.api_conn())
+        self._proxy_conn = other._proxy_conn
+
+
+def clean_dict(obj: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: v for (k, v) in obj.items() if v is not None}
 
 
 _state: BraintrustState = None  # type: ignore
@@ -1005,6 +1059,7 @@ def init(
     project_id: Optional[str] = ...,
     base_experiment_id: Optional[str] = ...,
     repo_info: Optional[RepoInfo] = ...,
+    state: Optional[BraintrustState] = ...,
 ) -> "Experiment":
     ...
 
@@ -1028,6 +1083,7 @@ def init(
     project_id: Optional[str] = ...,
     base_experiment_id: Optional[str] = ...,
     repo_info: Optional[RepoInfo] = ...,
+    state: Optional[BraintrustState] = ...,
 ) -> "ReadonlyExperiment":
     ...
 
@@ -1050,6 +1106,7 @@ def init(
     project_id: Optional[str] = None,
     base_experiment_id: Optional[str] = None,
     repo_info: Optional[RepoInfo] = None,
+    state: Optional[BraintrustState] = None,
 ) -> Union["Experiment", "ReadonlyExperiment"]:
     """
     Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
@@ -1076,6 +1133,8 @@ def init(
     :returns: The experiment object.
     """
 
+    state_obj = state or _state
+
     if project is None and project_id is None:
         raise ValueError("Must specify at least one of project or project_id")
 
@@ -1087,15 +1146,15 @@ def init(
             raise ValueError(f"Cannot open an experiment without specifying its name")
 
         def compute_metadata():
-            login(org_name=org_name, api_key=api_key, app_url=app_url)
+            state_obj.login(FullLoginOptions(org_name=org_name, api_key=api_key, app_url=app_url))
             args = {
                 "experiment_name": experiment,
                 "project_name": project,
                 "project_id": project_id,
-                "org_name": _state.org_name,
+                "org_name": state_obj.org_name,
             }
 
-            response = _state.app_conn().post_json("api/experiment/get", args)
+            response = state_obj.app_conn().post_json("api/experiment/get", args)
             if len(response) == 0:
                 raise ValueError(f"Experiment {experiment} not found in project {project}.")
 
@@ -1114,11 +1173,11 @@ def init(
 
     # pylint: disable=function-redefined
     def compute_metadata():
-        login(org_name=org_name, api_key=api_key, app_url=app_url)
+        state_obj.login(FullLoginOptions(org_name=org_name, api_key=api_key, app_url=app_url))
         args = {
             "project_name": project,
             "project_id": project_id,
-            "org_id": _state.org_id,
+            "org_id": state_obj.org_id,
             "update": update,
         }
 
@@ -1131,7 +1190,7 @@ def init(
         if repo_info:
             repo_info_arg = repo_info
         else:
-            merged_git_metadata_settings = _state.git_metadata_settings
+            merged_git_metadata_settings = state_obj.git_metadata_settings
             if git_metadata_settings is not None:
                 merged_git_metadata_settings = GitMetadataSettings.merge(
                     merged_git_metadata_settings, git_metadata_settings
@@ -1160,7 +1219,7 @@ def init(
 
         while True:
             try:
-                response = _state.app_conn().post_json("api/experiment/register", args)
+                response = state_obj.app_conn().post_json("api/experiment/register", args)
                 break
             except AugmentedHTTPError as e:
                 if args.get("base_experiment") is not None and "base experiment" in str(e):
@@ -1178,9 +1237,9 @@ def init(
             ),
         )
 
-    ret = Experiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset)
+    ret = Experiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset, state=state_obj)
     if set_current:
-        _state.current_experiment = ret
+        state_obj.current_experiment = ret
     return ret
 
 
@@ -1202,6 +1261,8 @@ def init_dataset(
     metadata: Optional[Metadata] = None,
     use_output: bool = DEFAULT_IS_LEGACY_DATASET,
     _internal_btql: Optional[Dict[str, Any]] = None,
+    state: Optional[BraintrustState] = None,
+    force_login: bool = False,
 ) -> "Dataset":
     """
     Create a new dataset in a specified project. If the project does not exist, it will be created.
@@ -1219,16 +1280,17 @@ def init_dataset(
     :param use_output: (Deprecated) If True, records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This option will be removed in a future version of Braintrust.
     :returns: The dataset object.
     """
+    state_obj = state or _state
 
     def compute_metadata():
-        login(org_name=org_name, api_key=api_key, app_url=app_url)
+        state_obj.login(FullLoginOptions(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login))
         args = _populate_args(
-            {"project_name": project, "project_id": project_id, "org_id": _state.org_id},
+            {"project_name": project, "project_id": project_id, "org_id": state_obj.org_id},
             dataset_name=name,
             description=description,
             metadata=metadata,
         )
-        response = _state.app_conn().post_json("api/dataset/register", args)
+        response = state_obj.app_conn().post_json("api/dataset/register", args)
         resp_project = response["project"]
         resp_dataset = response["dataset"]
         return ProjectDatasetMetadata(
@@ -1237,6 +1299,7 @@ def init_dataset(
         )
 
     return Dataset(
+        state=state_obj,
         lazy_metadata=LazyValue(compute_metadata, use_mutex=True),
         version=version,
         legacy=use_output,
@@ -2843,7 +2906,9 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         self,
         lazy_metadata: LazyValue[ProjectExperimentMetadata],
         dataset: Optional["Dataset"] = None,
+        state: Optional[BraintrustState] = None,
     ):
+        self.state = state
         self._lazy_metadata = lazy_metadata
         self.dataset = dataset
         self.last_start_time = time.time()
@@ -2884,7 +2949,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
         self._lazy_metadata.get()
-        return _state
+        return self.state or _state
 
     def log(
         self,
@@ -3113,7 +3178,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
     def flush(self) -> None:
         """Flush any pending rows to the server."""
 
-        _state.global_bg_logger().flush()
+        self._get_state().global_bg_logger().flush()
 
     def _start_span_impl(
         self,
@@ -3562,7 +3627,10 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         version: Union[None, int, str] = None,
         legacy: bool = DEFAULT_IS_LEGACY_DATASET,
         _internal_btql: Optional[Dict[str, Any]] = None,
+        state: Optional[BraintrustState] = None,
     ):
+        self.state = state
+
         if legacy:
             eprint(
                 f"""Records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". Please update your code to use "expected", and use `braintrust.init_dataset()` with `use_output=False`, which will become the default in a future version of Braintrust."""
@@ -3606,7 +3674,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
         self._lazy_metadata.get()
-        return _state
+        return self.state or _state
 
     def _validate_event(
         self,
@@ -3699,7 +3767,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
 
         self._clear_cache()  # We may be able to optimize this
         self.new_records += 1
-        _state.global_bg_logger().log(args)
+        self._get_state().global_bg_logger().log(args)
         return row_id
 
     def update(
@@ -3734,7 +3802,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         )
 
         self._clear_cache()  # We may be able to optimize this
-        _state.global_bg_logger().log(args)
+        self._get_state().global_bg_logger().log(args)
         return id
 
     def delete(self, id: str) -> str:
@@ -3761,7 +3829,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
                 dataset_id=self.id,
             )
 
-        _state.global_bg_logger().log(LazyValue(compute_args, use_mutex=False))
+        self._get_state().global_bg_logger().log(LazyValue(compute_args, use_mutex=False))
         return id
 
     def summarize(self, summarize_data: bool = True) -> "DatasetSummary":
@@ -3808,7 +3876,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
     def flush(self) -> None:
         """Flush any pending rows to the server."""
 
-        _state.global_bg_logger().flush()
+        self._get_state().global_bg_logger().flush()
 
     def __enter__(self) -> "Dataset":
         return self
@@ -4528,3 +4596,84 @@ def _get_org_name(org_name: Optional[str] = None) -> Optional[str]:
 
 def _get_error_link(msg="") -> str:
     return f"https://www.braintrust.dev/error-generating-link?msg={encode_uri_component(msg)}"
+
+
+@dataclasses.dataclass
+class OrgInfo(SerializableDataClass):
+    id: str
+    name: str
+    api_url: Optional[str]
+    git_metadata: Optional[str]
+    proxy_url: Optional[str]
+    realtime_url: Optional[str]
+
+
+@dataclasses.dataclass
+class LoginResponse(SerializableDataClass):
+    org_info: List[OrgInfo]
+
+
+def login_to_state(
+    options: LoginOptions,
+):
+    app_url = options.app_url or os.getenv("BRAINTRUST_APP_URL") or "https://www.braintrust.dev"
+    api_key = options.api_key or os.getenv("BRAINTRUST_API_KEY")
+    org_name = options.org_name or os.getenv("BRAINTRUST_ORG_NAME")
+    app_public_url = os.getenv("BRAINTRUS_APP_PUBLIC_URL") or app_url
+
+    state = BraintrustState(options)
+
+    state.app_url = app_url
+    state.app_public_url = app_public_url
+
+    if not api_key:
+        raise ValueError("Please specify an api key (e.g. by setting BRAINTRUST_API_KEY).")
+
+    resp = requests.post(
+        _urljoin(state.app_url, "/api/apikey/login"),
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+    )
+
+    resp.raise_for_status()
+
+    info = LoginResponse.from_dict_deep(resp.json())
+
+    _save_org_info(state, info.org_info, org_name)
+
+    conn = state.api_conn()
+    conn.set_token(api_key)
+
+    if not conn:
+        raise RuntimeError("Conn should be set at this point (a bug)")
+
+    conn.make_long_lived()
+
+    state.app_conn().set_token(api_key)
+    if state.proxy_url:
+        state.proxy_conn().set_token(api_key)
+
+    state.login_token = conn.token
+    state.logged_in = True
+
+    state.login_replace_api_conn(conn)
+
+    return state
+
+
+def _save_org_info(state: BraintrustState, org_info: List[OrgInfo], org_name: Optional[str]):
+    if len(org_info) == 0:
+        raise ValueError("This user is not part of any organizations.")
+
+    for org in org_info:
+        if org_name is None or org.name == org_name:
+            state.org_id = org.id
+            state.org_name = org.name
+            state.api_url = os.getenv("BRAINTRUST_API_URL") or org.api_url
+            state.proxy_url = os.getenv("BRAINTRUST_PROXY_URL") or org.proxy_url
+            # TODO: git metadata
+            break
+
+    if state.org_id is None:
+        raise ValueError(
+            f"Organization {org_name} not found. Must be one of {', '.join(org.name for org in org_info)}"
+        )
