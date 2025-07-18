@@ -2,7 +2,7 @@ import asyncio
 import inspect
 import json
 from dataclasses import asdict
-from typing import Annotated, Any, AsyncGenerator, List, Optional, Union, cast
+from typing import Annotated, Any, AsyncGenerator, Dict, List, Optional, Union, cast
 
 import uvicorn
 from fastapi import FastAPI
@@ -124,8 +124,10 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
 
     @app.post("/eval")
     async def run_eval(  # pyright: ignore[reportUnusedFunction]
-        state: Annotated[BraintrustState, Depends(api_key_scheme)], eval: EvalRequest
+        state: Annotated[BraintrustState, Depends(api_key_scheme)], eval_raw: Dict[str, Any]
     ):
+        eval = EvalRequest.from_dict_deep(eval_raw)
+
         try:
             evaluator = all_evaluators[eval.name]
         except KeyError:

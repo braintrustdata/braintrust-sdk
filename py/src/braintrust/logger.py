@@ -1169,7 +1169,7 @@ def init(
             )
 
         lazy_metadata = LazyValue(compute_metadata, use_mutex=True)
-        return ReadonlyExperiment(lazy_metadata=lazy_metadata)
+        return ReadonlyExperiment(lazy_metadata=lazy_metadata, state=state_obj)
 
     # pylint: disable=function-redefined
     def compute_metadata():
@@ -3226,11 +3226,9 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
     A read-only view of an experiment, initialized by passing `open=True` to `init()`.
     """
 
-    def __init__(
-        self,
-        lazy_metadata: LazyValue[ProjectExperimentMetadata],
-    ):
+    def __init__(self, lazy_metadata: LazyValue[ProjectExperimentMetadata], state: Optional[BraintrustState] = None):
         self._lazy_metadata = lazy_metadata
+        self.state = state
 
         ObjectFetcher.__init__(
             self,
@@ -3246,7 +3244,7 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
         self._lazy_metadata.get()
-        return _state
+        return self.state or _state
 
     def as_dataset(self) -> Iterator[_ExperimentDatasetEvent]:
         return ExperimentDatasetIterator(self.fetch())

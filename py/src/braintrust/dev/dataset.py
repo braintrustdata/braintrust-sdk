@@ -17,7 +17,7 @@ def get_dataset(state: BraintrustState, data: RunEvalData):
         dataset_info = get_dataset_by_id(state, data.dataset_id)
         return init_dataset(
             state=state,
-            project=dataset_info["projectId"],
+            project_id=dataset_info["projectId"],
             name=dataset_info["dataset"],
             _internal_btql=data._internal_btql,  # type: ignore[reportPrivateUsage]
         )

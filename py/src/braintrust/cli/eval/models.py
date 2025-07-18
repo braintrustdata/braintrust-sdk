@@ -9,8 +9,8 @@ from typing_extensions import TypedDict
 
 from braintrust.framework import Evaluator, Filter, ReporterDef, _evals, _set_lazy_load
 from braintrust.prompt import PromptData
+from braintrust.serializable_data_class import SerializableDataClass
 from braintrust.span_identifier_v2 import SpanRowIdsV2
-from braintrust.span_identifier_v3 import SpanObjectTypeV3
 
 _import_lock = Lock()
 
@@ -158,12 +158,14 @@ class ListEvals(BaseModel):
     scores: list[ListEvalsScore]
 
 
-class DatasetId(BaseModel):
+@dataclass
+class DatasetId(SerializableDataClass):
     dataset_id: str
     _internal_btql: Optional[Dict[str, Any]] = None
 
 
-class ProjectAndDataset(BaseModel):
+@dataclass
+class ProjectAndDataset(SerializableDataClass):
     project_name: str
     dataset_name: str
     _internal_btql: Optional[Dict[str, Any]] = None
@@ -176,10 +178,11 @@ class DatasetRows(BaseModel):
 RunEvalData = Union[DatasetId, ProjectAndDataset, DatasetRows]
 
 
-class EvalRequest(BaseModel):
+@dataclass
+class EvalRequest(SerializableDataClass):
     name: str
-    parameters: Optional[EvalParameters] = None
     data: RunEvalData
+    parameters: Optional[EvalParameters] = None
     parent: Optional[InvokeParent] = None
     scores: Optional[List[Score]] = None
     stream: Optional[bool] = False
