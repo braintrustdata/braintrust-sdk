@@ -30,6 +30,6 @@ def get_dataset_by_id(dataset_id: str):
         raise DatasetNotFoundError
 
     return {
-        "projectId": dataset[0].project_id,
-        "dataset": dataset[0].name,
+        "projectId": dataset[0]["project_id"],
+        "dataset": dataset[0]["name"],
     }

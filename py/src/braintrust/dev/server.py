@@ -15,6 +15,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from braintrust.cli.eval.models import (
     EvalRequest,
+    EvaluatorOpts,
     ListEvals,
     LoadedEvaluator,
 )
@@ -23,17 +24,16 @@ from braintrust.dev.errors import format_validation_errors
 from braintrust.dev.security import BraintrustApiKey
 from braintrust.dev.utils import get_any
 from braintrust.framework import (
-    EvalAsync,
+    BaseExperiment,
+    Eval,
     EvalHooks,
-    EvalResultWithSummary,
     Evaluator,
-    ReporterDef,
-    call_user_fn,
+    init_experiment,
+    run_evaluator,
     scorer_name,
 )
-from braintrust.framework import report_evaluator_result as base_report_evaluator_result
 from braintrust.http_headers import BT_CURSOR_HEADER, BT_FOUND_EXISTING_HEADER, BT_PARENT
-from braintrust.logger import Dataset
+from braintrust.logger import Dataset, flush
 from braintrust.util import eprint
 
 
@@ -144,95 +144,97 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
 
         eprint(f"Starting eval {evaluator.eval_name}")
 
-        serialized = asdict(evaluator)
+        message_queue: asyncio.Queue[Optional[str]] = asyncio.Queue()
+
+        async def progress_task(input: Any, hooks: EvalHooks[Any]):
+            task_args = [input]
+            if len(inspect.signature(evaluator.task).parameters) == 2:
+                task_args.append(hooks)
+
+            result = evaluator.task(*task_args)
+
+            await message_queue.put(
+                serialize_sse_event(
+                    "progress",
+                    json.dumps(
+                        {
+                            "format": "code",
+                            "output_type": "completion",
+                            "event": "json_delta",
+                            "data": json.dumps(result),
+                            "id": hooks.span.id,
+                            "name": "Say Hi Bot",
+                            "object_type": "task",
+                        }
+                    ),
+                )
+            )
+            return result
+
+        async def evaluate():
+            result = await run_evaluator_task(
+                Evaluator(
+                    project_name=evaluator.project_name,
+                    eval_name=evaluator.eval_name,
+                    data=eval_data["data"],
+                    task=evaluator.task if not eval.stream else progress_task,
+                    scores=[{"name": scorer_name(score, i)} for i, score in enumerate(evaluator.scores)],
+                    experiment_name=evaluator.experiment_name,
+                    metadata=evaluator.metadata,
+                    trial_count=evaluator.trial_count,
+                    is_public=evaluator.is_public,
+                    update=evaluator.update,
+                    timeout=evaluator.timeout,
+                    max_concurrency=evaluator.max_concurrency,
+                    project_id=evaluator.project_id,
+                    base_experiment_name=evaluator.base_experiment_name,
+                    base_experiment_id=evaluator.base_experiment_id,
+                    git_metadata_settings=evaluator.git_metadata_settings,
+                    repo_info=evaluator.repo_info,
+                    error_score_handler=evaluator.error_score_handler,
+                    description=evaluator.description,
+                    summarize_scores=evaluator.summarize_scores,
+                ),
+                None,
+                EvaluatorOpts(
+                    no_progress_bars=True,
+                    filters=[],
+                    verbose=True,
+                    no_send_logs=False,
+                    terminate_on_failure=False,
+                    watch=False,
+                    list=False,
+                    jsonl=False,
+                ),
+            )
+
+            await message_queue.put(None)
+
+            return result
+
+        eval_task = asyncio.create_task(evaluate())
 
         if eval.stream:
-            message_queue: asyncio.Queue[Optional[str]] = asyncio.Queue()
 
             async def stream_eval() -> AsyncGenerator[str, None]:
-                try:
-                    serialized_task = serialized.pop("task", None)
-                    if not serialized_task:
-                        raise HTTPException(status_code=400, detail="Evaluator requires task")
+                while True:
+                    message = await message_queue.get()
+                    if message is None:
+                        break
+                    yield message
 
-                    async def task(input: Any, hooks: EvalHooks[Any]):
-                        task_args = [input]
-                        if len(inspect.signature(serialized_task).parameters) == 2:
-                            task_args.append(hooks)
-                        result = serialized_task(*task_args)
+                result = await eval_task
 
-                        await message_queue.put(
-                            serialize_sse_event(
-                                "progress",
-                                json.dumps(
-                                    {
-                                        "format": "code",
-                                        "output_type": "completion",
-                                        "event": "json_delta",
-                                        "data": json.dumps(result),
-                                        "id": hooks.span.id,
-                                        "name": "basic [experimentName=My basic eval]",
-                                        "object_type": "task",
-                                    }
-                                ),
-                            )
-                        )
-                        return result
+                flush()
 
-                    # remove extras
-                    serialized.pop("name", None)
-                    serialized.pop("data", None)
-                    serialized.pop("scores", None)
-                    serialized.pop("project_name", None)
-                    serialized.pop("eval_name", None)
+                summary = result.summary.as_dict()
 
-                    async def run_eval():
-                        result = await EvalAsync(
-                            **serialized,
-                            name="worker-thread",
-                            data=eval_data["data"],
-                            scores=[{"name": scorer_name(score, i)} for i, score in enumerate(evaluator.scores)],
-                            task=task,
-                        )
+                yield serialize_sse_event(
+                    "summary",
+                    json.dumps({"projectName": "Say Hi Bot", "experimentName": "Say Hi Bot", "scores": {}}),
+                )
 
-                        summary = result.summary.as_dict()
-
-                        await message_queue.put(
-                            serialize_sse_event(
-                                "summary",
-                                json.dumps(
-                                    {
-                                        "projectName": summary["project_name"],
-                                        "experimentName": summary["experiment_name"],
-                                        "projectId": summary["project_id"],
-                                        "experimentId": summary["experiment_id"],
-                                        "projectUrl": summary["project_url"],
-                                        "experimentUrl": summary["experiment_url"],
-                                        "comparisonExperimentName": summary["comparison_experiment_name"],
-                                        "scores": summary["scores"],
-                                        "metrics": summary["metrics"],
-                                    }
-                                ),
-                            )
-                        )
-                        await message_queue.put(serialize_sse_event("done", ""))
-                        await message_queue.put(None)
-
-                        return summary
-
-                    eval_task = asyncio.create_task(run_eval())
-
-                    while True:
-                        message = await message_queue.get()
-                        if message is None:
-                            break
-                        yield message
-
-                    # Wait for the eval to complete
-                    await eval_task
-                except Exception as e:
-                    await message_queue.put(serialize_sse_event("error", str(e)))
-                    await message_queue.put(None)
+                yield serialize_sse_event("done", "")
 
             return StreamingResponse(
                 stream_eval(),
@@ -243,20 +245,11 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
                 },
             )
 
-        else:
-            summary = await EvalAsync(
-                **{
-                    # type: ignore
-                    **serialized,
-                    **{
-                        "name": "worker-thread",
-                        "data": eval_data["data"],
-                        "scores": [{"name": scorer_name(score, i)} for i, score in enumerate(evaluator.scores)],
-                    },
-                },
-            )
+        result = await eval_task
 
-            return summary.summary
+        flush()
+
+        return result.summary
 
     uvicorn.run(app, host=host, port=port)
 
@@ -283,3 +276,40 @@ def call_evaluator_data(dataset: Union[Dataset, List[Any]]):
         data_result = processed_data
 
     return {"data": data_result, "baseExperiment": base_experiment}
+
+
+async def run_evaluator_task(evaluator: Evaluator[Any, Any], position: Optional[int], opts: EvaluatorOpts):
+    experiment = None
+    if not opts.no_send_logs:
+        base_experiment_name = None
+        if isinstance(evaluator.data, BaseExperiment):
+            base_experiment_name = evaluator.data.name
+
+        dataset = None
+        if isinstance(evaluator.data, Dataset):
+            dataset = evaluator.data
+
+        # NOTE: This code is duplicated with _EvalCommon in py/src/braintrust/framework.py.
+        # Make sure to update those arguments if you change this.
+        experiment = init_experiment(
+            project_name=evaluator.project_name,
+            project_id=evaluator.project_id,
+            experiment_name=evaluator.experiment_name,
+            description=evaluator.description,
+            metadata=evaluator.metadata,
+            is_public=evaluator.is_public,
+            update=evaluator.update,
+            base_experiment=base_experiment_name,
+            base_experiment_id=evaluator.base_experiment_id,
+            git_metadata_settings=evaluator.git_metadata_settings,
+            repo_info=evaluator.repo_info,
+            dataset=dataset,
+        )
+
+    try:
+        return await run_evaluator(
+            experiment, evaluator, position if not opts.no_progress_bars else None, opts.filters
+        )
+    finally:
+        if experiment:
+            experiment.flush()

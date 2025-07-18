@@ -13,8 +13,10 @@ class BraintrustApiKey(HTTPBearer):
         auth = await super().__call__(request)
         assert auth is not None
 
+        org_name = request.headers.get("x-bt-org-name")
+
         try:
-            login(api_key=auth.credentials)
+            login(api_key=auth.credentials, org_name=org_name)
         except Exception as e:
             if "Invalid API key" in str(e):
                 if self.auto_error:
