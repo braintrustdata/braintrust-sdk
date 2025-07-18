@@ -1,6 +1,6 @@
 {
   "name": "braintrust",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "SDK for integrating Braintrust",
   "repository": {
     "type": "git",
@@ -51,9 +51,11 @@
     "docs": "npx typedoc --options typedoc.json src/index.ts",
     "prepublishOnly": "../../scripts/node_prepublish_sdk.py",
     "postpublish": "../../scripts/node_postpublish_sdk.py",
-    "test": "vitest run --exclude src/wrappers/anthropic.test.ts --exclude src/wrappers/oai.test.ts",
+    "test": "vitest run --exclude src/wrappers/anthropic.test.ts --exclude src/wrappers/oai.test.ts --exclude src/otel.test.ts --exclude src/otel-no-deps.test.ts",
     "test:anthropic": "vitest run src/wrappers/anthropic.test.ts",
-    "test:openai": "vitest run src/wrappers/oai.test.ts"
+    "test:openai": "vitest run src/wrappers/oai.test.ts",
+    "test:otel": "vitest run src/otel.test.ts",
+    "test:otel-no-deps": "vitest run src/otel-no-deps.test.ts --reporter=verbose"
   },
   "author": "",
   "license": "MIT",
