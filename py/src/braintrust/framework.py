@@ -38,6 +38,7 @@ from typing_extensions import NotRequired, Protocol, TypedDict
 from .git_fields import GitMetadataSettings, RepoInfo
 from .logger import (
     NOOP_SPAN,
+    BraintrustState,
     Dataset,
     Experiment,
     ExperimentSummary,
@@ -380,6 +381,8 @@ class Evaluator(Generic[Input, Output]):
     Whether to summarize the scores of the experiment after it has run.
     """
 
+    state: Optional[BraintrustState] = None
+
 
 @dataclasses.dataclass
 class EvalResultWithSummary(SerializableDataClass, Generic[Input, Output]):
@@ -610,6 +613,7 @@ def _EvalCommon(
     description: Optional[str],
     summarize_scores: bool,
     error_score_handler: Optional[ErrorScoreHandler] = None,
+    state: Optional[BraintrustState] = None,
 ) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary[Input, Output]]]:
     """
     This helper is needed because in case of `_lazy_load`, we need to update
@@ -643,6 +647,7 @@ def _EvalCommon(
         error_score_handler=error_score_handler,
         description=description,
         summarize_scores=summarize_scores,
+        state=state,
     )
 
     if _lazy_load:
@@ -683,6 +688,7 @@ def _EvalCommon(
             git_metadata_settings=evaluator.git_metadata_settings,
             repo_info=evaluator.repo_info,
             dataset=dataset,
+            state=state,
         )
 
         async def run_to_completion():
@@ -717,6 +723,7 @@ async def EvalAsync(
     error_score_handler: Optional[ErrorScoreHandler] = None,
     description: Optional[str] = None,
     summarize_scores: bool = True,
+    state: Optional[BraintrustState] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -786,6 +793,7 @@ async def EvalAsync(
         repo_info=repo_info,
         description=description,
         summarize_scores=summarize_scores,
+        state=state,
     )
 
     return await f()
@@ -815,6 +823,7 @@ def Eval(
     error_score_handler: Optional[ErrorScoreHandler] = None,
     description: Optional[str] = None,
     summarize_scores: bool = True,
+    state: Optional[BraintrustState] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -886,6 +895,7 @@ def Eval(
         error_score_handler=error_score_handler,
         description=description,
         summarize_scores=summarize_scores,
+        state=state,
     )
 
     # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
@@ -1037,9 +1047,15 @@ class DictEvalHooks(Dict[str, Any]):
 
 
 def init_experiment(
-    project_name: Optional[str] = None, experiment_name: Optional[str] = None, set_current: bool = False, **kwargs: Any
+    project_name: Optional[str] = None,
+    experiment_name: Optional[str] = None,
+    set_current: bool = False,
+    state: Optional[BraintrustState] = None,
+    **kwargs: Any,
 ) -> Experiment:
-    ret = _init_experiment(project=project_name, experiment=experiment_name, set_current=set_current, **kwargs)
+    ret = _init_experiment(
+        project=project_name, experiment=experiment_name, set_current=set_current, state=state, **kwargs
+    )
     summary = ret.summarize(summarize_scores=False)
     eprint(f"Experiment {ret.name} is running at {summary.experiment_url}")
     return ret
@@ -1072,14 +1088,18 @@ def set_thread_pool_max_workers(max_workers):
         obj.set_max_workers(max_workers)
 
 
-def _scorer_name(scorer, scorer_idx):
-    def helper():
+def scorer_name(scorer: EvalScorer[Any, Any], scorer_idx: int) -> str:
+    def helper() -> str:
         if hasattr(scorer, "_name"):
-            return scorer._name()
-        elif hasattr(scorer, "__name__"):
-            return scorer.__name__
-        else:
-            return type(scorer).__name__
+            try:
+                return scorer._name()  # type: ignore
+            except TypeError:
+                ...
+
+        if hasattr(scorer, "__name__"):
+            return scorer.__name__  # type: ignore
+
+        return type(scorer).__name__
 
     ret = helper()
     if ret == "<lambda>":
@@ -1162,7 +1182,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
 
     # First, resolve the scorers if they are classes
     scorers = [scorer() if inspect.isclass(scorer) and is_scorer(scorer) else scorer for scorer in evaluator.scores]
-    scorer_names = [_scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
+    scorer_names = [scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
     unhandled_scores = scorer_names
 
     async def run_evaluator_task(datum):

@@ -4,9 +4,10 @@ import sys
 import threading
 import urllib.parse
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Generic, Literal, Mapping, Optional, Set, Tuple, TypedDict, TypeVar, Union
+from typing import Any, Callable, Dict, Generic, Literal, Mapping, Optional, Set, Tuple, TypeVar, Union
 
 from requests import HTTPError, Response
+from typing_extensions import TypedDict
 
 GLOBAL_PROJECT = "Global"
 BT_IS_ASYNC_ATTRIBUTE = "_BT_IS_ASYNC"

@@ -1,10 +1,13 @@
 """
 Utilities for working with audit headers.
 """
+
 import base64
 import gzip
 import json
-from typing import List, TypedDict
+from typing import List
+
+from typing_extensions import TypedDict
 
 
 class AuditResource(TypedDict):
@@ -18,4 +21,4 @@ def parse_audit_resources(hdr: str) -> List[AuditResource]:
     if j["v"] == 1:
         return json.loads(gzip.decompress(base64.b64decode(j["p"])))
     else:
-        raise ValueError(f'Unsupported audit resources protocol version: {j["v"]}')
+        raise ValueError(f"Unsupported audit resources protocol version: {j['v']}")
