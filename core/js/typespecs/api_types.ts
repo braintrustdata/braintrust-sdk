@@ -1045,4 +1045,22 @@ export const patchEnvironmentSchema = z
   })
   .openapi("PatchEnvironment");
 
+export const environmentObjectSchema = z
+  .object({
+    id: z
+      .string()
+      .uuid()
+      .describe("Unique identifier for the environment object association"),
+    object_type: z
+      .string()
+      .describe("Type of object being associated with environment"),
+    object_id: z.string().describe("Unique identifier for the object"),
+    object_version: z.string().describe("Version of the object (xact_id)"),
+    created: datetimeStringSchema.describe(
+      "Date when the association was created",
+    ),
+  })
+  .openapi("EnvironmentObject");
+export type EnvironmentObject = z.infer<typeof environmentObjectSchema>;
+
 export type AsyncScoringControl = z.infer<typeof asyncScoringControlSchema>;
