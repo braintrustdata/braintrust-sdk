@@ -339,7 +339,7 @@ export function postProcessPrompt(prompt: LanguageModelV1Prompt): Message[] {
   });
 }
 
-function postProcessOutput(
+export function postProcessOutput(
   text: string | undefined,
   toolCalls: LanguageModelV1FunctionToolCall[] | undefined,
   finishReason: LanguageModelV1FinishReason,
@@ -353,8 +353,22 @@ function postProcessOutput(
         (toolCalls
           ? toolCalls.length === 1 && toolCalls[0].toolName === "json"
             ? toolCalls[0].args
-            : JSON.stringify(toolCalls)
+            : ""
           : ""),
+      ...(toolCalls &&
+      toolCalls.length > 0 &&
+      !(toolCalls.length === 1 && toolCalls[0].toolName === "json")
+        ? {
+            tool_calls: toolCalls.map((toolCall) => ({
+              id: toolCall.toolCallId,
+              type: "function" as const,
+              function: {
+                name: toolCall.toolName,
+                arguments: toolCall.args,
+              },
+            })),
+          }
+        : {}),
     },
     finish_reason: finishReason,
   };
