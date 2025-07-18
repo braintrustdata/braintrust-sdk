@@ -92,11 +92,6 @@ export const retentionAutomationConfigSchema = z.object({
   object_type: retentionObjectTypeEnum.describe(
     "The object type that the retention policy applies to",
   ),
-  object_id: z
-    .string()
-    .uuid()
-    .nullable()
-    .describe("The object id that the retention policy applies to"),
   retention_days: z
     .number()
     .min(1)
