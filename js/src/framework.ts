@@ -6,6 +6,7 @@ import {
   SSEProgressEventData,
 } from "@braintrust/core/typespecs";
 import { queue } from "async";
+
 import chalk from "chalk";
 import pluralize from "pluralize";
 import { GenericFunction } from "./framework-types";

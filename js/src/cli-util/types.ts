@@ -14,6 +14,7 @@ export interface AuthArgs {
 export interface CompileArgs {
   tsconfig?: string;
   terminate_on_failure: boolean;
+  external_packages?: string[];
 }
 
 export interface RunArgs extends CommonArgs, AuthArgs, CompileArgs {
