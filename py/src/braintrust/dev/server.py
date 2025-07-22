@@ -156,23 +156,19 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
 
             result = evaluator.task(*task_args)
 
-            await message_queue.put(
-                serialize_sse_event(
-                    "progress",
-                    json.dumps(
-                        {
-                            "format": "code",
-                            "output_type": "completion",
-                            "event": "json_delta",
-                            "data": json.dumps(result),
-                            "id": hooks.span.id,
-                            "name": "Say Hi Bot",
-                            "object_type": "task",
-                        }
-                    ),
+            hooks.report_progress(format="code", output_type="completion", event="json_delta", data=json.dumps(result))
+
+            return result
+
+        def stream(**data: Any):
+            asyncio.create_task(
+                message_queue.put(
+                    serialize_sse_event(
+                        "progress",
+                        json.dumps(data),
+                    )
                 )
             )
-            return result
 
         async def evaluate():
             scores = evaluator.scores
@@ -200,6 +196,7 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
                 description=evaluator.description,
                 summarize_scores=evaluator.summarize_scores,
                 state=state,
+                stream=stream,
             )
 
             # we're done

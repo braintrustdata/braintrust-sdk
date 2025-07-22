@@ -28,9 +28,9 @@ from typing import (
     Type,
     TypeVar,
     Union,
+    cast,
 )
 
-import exceptiongroup
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 from typing_extensions import NotRequired, Protocol, TypedDict
@@ -130,6 +130,62 @@ class EvalResult(SerializableDataClass, Generic[Input, Output]):
     exc_info: Optional[str] = None
 
 
+FunctionObjectType = Literal["prompt", "tool", "scorer", "task", "agent"]
+
+EventObject = Literal["project_logs", "experiment", "dataset", "prompt", "function", "prompt_session"]
+
+FunctionFormat = Literal["llm", "code", "global", "graph"]
+
+
+@dataclasses.dataclass
+class ObjectReference(SerializableDataClass):
+    object_type: EventObject
+    object_id: str
+    id: str
+    _xact_id: Optional[str]
+    created: Optional[str]
+
+
+FunctionOutputType = Literal["completion", "score", "any"]
+
+
+SSEProgressEventDataEvent = Literal[
+    "reasoning_delta", "text_delta", "json_delta", "error", "console", "start", "done", "progress"
+]
+
+
+@dataclasses.dataclass
+class SSEProgressEventData(SerializableDataClass):
+    id: str
+    object_type: FunctionObjectType
+    origin: Optional[ObjectReference]
+    format: FunctionFormat
+    output_type: FunctionOutputType
+    name: str
+    event: SSEProgressEventDataEvent
+    data: str  # this is the text_delta or json_delta
+
+
+@dataclasses.dataclass
+class TaskProgressEvent(SerializableDataClass):
+    format: FunctionFormat
+    output_type: FunctionOutputType
+    event: SSEProgressEventDataEvent
+    data: str  # this is the text_delta or json_delta
+
+
+class ReportProgress(Protocol):
+    def __call__(
+        self,
+        *,
+        format: FunctionFormat,
+        output_type: FunctionOutputType,
+        event: Literal["reasoning_delta", "text_delta", "json_delta", "error", "console", "start", "done", "progress"],
+        data: str,
+    ) -> None:
+        ...
+
+
 class EvalHooks(abc.ABC, Generic[Output]):
     """
     An object that can be used to add metadata to an evaluation. This is passed to the `task` function.
@@ -172,6 +228,11 @@ class EvalHooks(abc.ABC, Generic[Output]):
         as keyword arguments, e.g. `hooks.meta(foo="bar")`.
         """
         ...
+
+    report_progress: ReportProgress
+    """
+    Report progress that will show up in the playground.
+    """
 
 
 class EvalScorerArgs(SerializableDataClass, Generic[Input, Output]):
@@ -599,6 +660,22 @@ def _make_eval_name(name: str, experiment_name: Optional[str]):
     return out
 
 
+class StreamProgress(Protocol):
+    def __call__(
+        self,
+        *,
+        id: str,
+        object_type: FunctionObjectType,
+        origin: Optional[ObjectReference],
+        format: FunctionFormat,
+        output_type: FunctionOutputType,
+        name: str,
+        event: SSEProgressEventDataEvent,
+        data: str,  # this is the text_delta or json_delta
+    ) -> None:
+        ...
+
+
 def _EvalCommon(
     name: str,
     data: EvalData[Input, Output],
@@ -621,6 +698,7 @@ def _EvalCommon(
     summarize_scores: bool,
     error_score_handler: Optional[ErrorScoreHandler] = None,
     state: Optional[BraintrustState] = None,
+    stream: Optional[StreamProgress] = None,
 ) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary[Input, Output]]]:
     """
     This helper is needed because in case of `_lazy_load`, we need to update
@@ -700,7 +778,7 @@ def _EvalCommon(
 
         async def run_to_completion():
             try:
-                ret = await run_evaluator(experiment, evaluator, 0, [])
+                ret = await run_evaluator(experiment, evaluator, 0, [], stream=stream)
                 reporter.report_eval(evaluator, ret, verbose=True, jsonl=False)
                 return ret
             finally:
@@ -731,6 +809,7 @@ async def EvalAsync(
     description: Optional[str] = None,
     summarize_scores: bool = True,
     state: Optional[BraintrustState] = None,
+    stream: Optional[StreamProgress] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -801,6 +880,7 @@ async def EvalAsync(
         description=description,
         summarize_scores=summarize_scores,
         state=state,
+        stream=stream,
     )
 
     return await f()
@@ -831,6 +911,7 @@ def Eval(
     description: Optional[str] = None,
     summarize_scores: bool = True,
     state: Optional[BraintrustState] = None,
+    stream: Optional[StreamProgress] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -903,6 +984,7 @@ def Eval(
         description=description,
         summarize_scores=summarize_scores,
         state=state,
+        stream=stream,
     )
 
     # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
@@ -1020,12 +1102,19 @@ def evaluate_filter(object, filter: Filter):
 
 
 class DictEvalHooks(Dict[str, Any]):
-    def __init__(self, metadata: Optional[Any] = None, expected: Optional[Any] = None, trial_index: int = 0):
+    def __init__(
+        self,
+        report_progress: ReportProgress,
+        metadata: Optional[Any] = None,
+        expected: Optional[Any] = None,
+        trial_index: int = 0,
+    ):
         if metadata is not None:
             self.update({"metadata": metadata})
         if expected is not None:
             self.update({"expected": expected})
         self.update({"trial_index": trial_index})
+        self._report_progress = report_progress
         self._span = None
 
     @property
@@ -1056,6 +1145,15 @@ class DictEvalHooks(Dict[str, Any]):
             self.update({"metadata": {}})
 
         self.get("metadata").update(info)  # type: ignore
+
+    def report_progress(
+        self,
+        format: FunctionFormat,
+        output_type: FunctionOutputType,
+        event: Literal["reasoning_delta", "text_delta", "json_delta", "error", "console", "start", "done", "progress"],
+        data: str,
+    ) -> None:
+        self._report_progress(format=format, output_type=output_type, event=event, data=data)
 
 
 def init_experiment(
@@ -1124,10 +1222,11 @@ async def run_evaluator(
     evaluator: Evaluator[Input, Output],
     position: Optional[int],
     filters: List[Filter],
+    stream: Optional[StreamProgress] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """Wrapper on _run_evaluator_internal that times out execution after evaluator.timeout."""
     results = await asyncio.wait_for(
-        _run_evaluator_internal(experiment, evaluator, position, filters), evaluator.timeout
+        _run_evaluator_internal(experiment, evaluator, position, filters, stream), evaluator.timeout
     )
 
     if experiment:
@@ -1148,7 +1247,13 @@ def default_error_score_handler(
     return scores
 
 
-async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Optional[int], filters: List[Filter]):
+async def _run_evaluator_internal(
+    experiment,
+    evaluator: Evaluator,
+    position: Optional[int],
+    filters: List[Filter],
+    stream: Optional[StreamProgress] = None,
+):
     event_loop = asyncio.get_event_loop()
 
     async def await_or_run_scorer(root_span, scorer, name, **kwargs):
@@ -1207,28 +1312,63 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
         exc_info = None
         scores = {}
 
+        event_dataset = (
+            experiment.dataset
+            if experiment.dataset
+            else evaluator.data
+            if isinstance(evaluator.data, Dataset)
+            else None
+        )
+
+        base_event = {
+            "name": "eval",
+            "span_attributes": {"type": SpanTypeAttribute.EVAL},
+            "input": datum.input,
+            "expected": datum.expected,
+            "tags": datum.tags,
+            "origin": {
+                "object_type": "dataset",
+                "object_id": experiment.dataset.id,
+                "id": datum.id,
+                "created": datum.created,
+                "_xact_id": datum._xact_id,
+            }
+            if event_dataset and datum.id and datum._xact_id
+            else None,
+        }
+
         if experiment:
-            root_span = experiment.start_span(
-                "eval",
-                span_attributes={"type": SpanTypeAttribute.EVAL},
-                input=datum.input,
-                expected=datum.expected,
-                tags=datum.tags,
-                origin={
-                    "object_type": "dataset",
-                    "object_id": experiment.dataset.id,
-                    "id": datum.id,
-                    "created": datum.created,
-                    "_xact_id": datum._xact_id,
-                }
-                if experiment.dataset and datum.id and datum._xact_id
-                else None,
-            )
+            root_span = experiment.start_span(**base_event)
         else:
             root_span = NOOP_SPAN
+
         with root_span:
             try:
-                hooks = DictEvalHooks(metadata, expected=datum.expected, trial_index=trial_index)
+
+                def report_progress(
+                    format: FunctionFormat,
+                    output_type: FunctionOutputType,
+                    event: SSEProgressEventDataEvent,
+                    data: str,
+                ):
+                    if stream:
+                        stream(
+                            id=root_span.id,
+                            format=format,
+                            output_type=output_type,
+                            event=event,
+                            data=data,
+                            origin=cast(ObjectReference, base_event["origin"]),
+                            name=evaluator.eval_name,
+                            object_type="task",
+                        )
+
+                hooks = DictEvalHooks(
+                    report_progress=report_progress,
+                    metadata=metadata,
+                    expected=datum.expected,
+                    trial_index=trial_index,
+                )
 
                 # Check if the task takes a hooks argument
                 task_args = [datum.input]

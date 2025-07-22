@@ -67,52 +67,61 @@ class EvaluatorState:
     reporters: Dict[str, ReporterDef[Any, Any, Any]] = field(default_factory=dict)
 
 
-class InvokeParent(BaseModel):
+@dataclass
+class InvokeParent(SerializableDataClass):
     object_type: str
     object_id: Optional[str] = None
     row_ids: Optional[SpanRowIdsV2] = None
     propagated_event: Optional[Dict[str, Any]] = None
 
 
-class FunctionId(BaseModel):
+@dataclass
+class FunctionId(SerializableDataClass):
     function_id: str
     version: Optional[str] = None
 
 
-class ProjectNameSlug(BaseModel):
+@dataclass
+class ProjectNameSlug(SerializableDataClass):
     project_name: str
     slug: str
     version: Optional[str] = None
 
 
-class GlobalFunction(BaseModel):
+@dataclass
+class GlobalFunction(SerializableDataClass):
     global_function: str
 
 
-class PromptSessionId(BaseModel):
+@dataclass
+class PromptSessionId(SerializableDataClass):
     prompt_session_id: str
     prompt_session_function_id: str
     version: Optional[str] = None
 
 
-class RuntimeContext(BaseModel):
+@dataclass
+class RuntimeContext(SerializableDataClass):
     runtime: Union[Literal["node"], Literal["python"]]
     version: str
 
 
-class InlineCodeFunction(BaseModel):
+@dataclass
+class InlineCodeFunction(SerializableDataClass):
     inline_context: RuntimeContext
     code: str
     name: Optional[str] = None
 
 
-class InlineFunctionDef(BaseModel):
+@dataclass
+class InlineFunctionDef(SerializableDataClass):
     inline_prompt: PromptData
     inline_function: Dict[str, Any]
     name: Optional[str] = None
 
 
-class InlinePrompt(BaseModel):
+@dataclass
+class InlinePrompt(SerializableDataClass):
     inline_prompt: PromptData
     name: Optional[str] = None
 
@@ -128,18 +137,21 @@ ScoreFunctionId = Union[
 ]
 
 
-class Score(BaseModel):
+@dataclass
+class Score(SerializableDataClass):
     function_id: ScoreFunctionId
     name: str
 
 
-class EvalParametersPrompt(TypedDict):
+@dataclass
+class EvalParametersPrompt(SerializableDataClass):
     type: Literal["prompt"]
     default: Optional[PromptData]
     description: Optional[str]
 
 
-class EvalParametersData(TypedDict):
+@dataclass
+class EvalParametersData(SerializableDataClass):
     type: Literal["data"]
     schema: dict[str, Any]
     default: Optional[Any]
@@ -171,7 +183,8 @@ class ProjectAndDataset(SerializableDataClass):
     _internal_btql: Optional[Dict[str, Any]] = None
 
 
-class DatasetRows(BaseModel):
+@dataclass
+class DatasetRows(SerializableDataClass):
     data: List[Any]
 
 
