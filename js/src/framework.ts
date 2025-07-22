@@ -26,7 +26,6 @@ import {
   Span,
   StartSpanArgs,
   init as _initExperiment,
-  currentExperiment,
   currentSpan,
   flush,
   logError as logSpanError,
@@ -910,7 +909,7 @@ async function runEvaluatorInternal(
                 metadata,
                 expected,
                 span,
-                experiment: experiment || currentExperiment(),
+                experiment,
                 parameters: parameters ?? {},
                 reportProgress: (event: TaskProgressEvent) => {
                   stream?.({

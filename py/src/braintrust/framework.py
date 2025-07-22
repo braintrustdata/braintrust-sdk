@@ -45,7 +45,6 @@ from .logger import (
     ScoreSummary,
     Span,
     _ExperimentDatasetEvent,
-    current_experiment,
     stringify_exception,
 )
 from .logger import init as _init_experiment
@@ -1033,7 +1032,7 @@ class DictEvalHooks(Dict[str, Any]):
 
     @property
     def experiment(self) -> Optional["Experiment"]:
-        return self._experiment or current_experiment()
+        return self._experiment
 
     def set_span(self, span: Optional[Span]):
         self._span = span
