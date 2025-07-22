@@ -429,4 +429,203 @@ describe("runEvaluator", () => {
       expect(vi.getTimerCount()).toBe(0);
     });
   });
+
+  describe("experiment propagation", () => {
+    // Mock experiment class for testing
+    class MockExperiment {
+      constructor(
+        public name: string = "test-experiment",
+        public id: string = "test-id",
+      ) {}
+    }
+
+    test("experiment is propagated to hooks when provided", async () => {
+      const capturedExperiments: (MockExperiment | undefined)[] = [];
+      const mockExperiment = new MockExperiment("my-experiment");
+
+      const out = await runEvaluator(
+        mockExperiment as any, // Cast to Experiment type for testing
+        {
+          projectName: "proj",
+          evalName: "eval",
+          data: [{ input: 1, expected: 2 }],
+          task: async (input: number, hooks) => {
+            capturedExperiments.push(hooks.experiment as MockExperiment);
+            return input * 2;
+          },
+          scores: [],
+        },
+        new NoopProgressReporter(),
+        [],
+        undefined,
+      );
+
+      expect(capturedExperiments).toHaveLength(1);
+      expect(capturedExperiments[0]).toBeDefined();
+      expect(capturedExperiments[0]?.name).toBe("my-experiment");
+      expect(capturedExperiments[0]?.id).toBe("test-id");
+    });
+
+    test("experiment is undefined when not provided", async () => {
+      const capturedExperiments: (any | undefined)[] = [];
+
+      const out = await runEvaluator(
+        null, // No experiment provided
+        {
+          projectName: "proj",
+          evalName: "eval", 
+          data: [{ input: 1, expected: 2 }],
+          task: async (input: number, hooks) => {
+            capturedExperiments.push(hooks.experiment);
+            return input * 2;
+          },
+          scores: [],
+        },
+        new NoopProgressReporter(),
+        [],
+        undefined,
+      );
+
+      expect(capturedExperiments).toHaveLength(1);
+      expect(capturedExperiments[0]).toBeNull(); // Should be null when no experiment
+    });
+
+    test("experiment propagation works with multiple tasks", async () => {
+      const capturedExperiments: (MockExperiment | undefined)[] = [];
+      const mockExperiment = new MockExperiment("multi-task-experiment");
+
+      const out = await runEvaluator(
+        mockExperiment as any,
+        {
+          projectName: "proj",
+          evalName: "eval",
+          data: [
+            { input: 1, expected: 2 },
+            { input: 2, expected: 4 },
+            { input: 3, expected: 6 },
+          ],
+          task: async (input: number, hooks) => {
+            capturedExperiments.push(hooks.experiment as MockExperiment);
+            return input * 2;
+          },
+          scores: [],
+        },
+        new NoopProgressReporter(),
+        [],
+        undefined,
+      );
+
+      expect(capturedExperiments).toHaveLength(3);
+      capturedExperiments.forEach((exp) => {
+        expect(exp).toBeDefined();
+        expect(exp?.name).toBe("multi-task-experiment");
+        expect(exp?.id).toBe("test-id");
+      });
+    });
+
+    test("experiment propagation works alongside other hook properties", async () => {
+      const capturedHooks: any[] = [];
+      const mockExperiment = new MockExperiment("full-hooks-test");
+
+      const out = await runEvaluator(
+        mockExperiment as any,
+        {
+          projectName: "proj",
+          evalName: "eval",
+          data: [{ input: 1, expected: 2, metadata: { test: "value" } }],
+          task: async (input: number, hooks) => {
+            capturedHooks.push({
+              experiment: hooks.experiment,
+              metadata: hooks.metadata,
+              expected: hooks.expected,
+              span: hooks.span,
+              parameters: hooks.parameters,
+              hasReportProgress: typeof hooks.reportProgress === "function",
+              hasMeta: typeof hooks.meta === "function",
+            });
+            return input * 2;
+          },
+          scores: [],
+        },
+        new NoopProgressReporter(),
+        [],
+        undefined,
+      );
+
+      expect(capturedHooks).toHaveLength(1);
+      const hook = capturedHooks[0];
+      
+      // Verify experiment is present
+      expect(hook.experiment).toBeDefined();
+      expect(hook.experiment.name).toBe("full-hooks-test");
+      
+      // Verify other hook properties still work
+      expect(hook.metadata).toBeDefined();
+      expect(hook.metadata.test).toBe("value");
+      expect(hook.expected).toBe(2);
+      expect(hook.span).toBeDefined();
+      expect(hook.parameters).toBeDefined();
+      expect(hook.hasReportProgress).toBe(true);
+      expect(hook.hasMeta).toBe(true);
+    });
+
+    test("tasks without hooks parameter still work with experiment", async () => {
+      const mockExperiment = new MockExperiment("no-hooks-task");
+
+      // Task without hooks parameter should still work
+      const out = await runEvaluator(
+        mockExperiment as any,
+        {
+          projectName: "proj", 
+          evalName: "eval",
+          data: [{ input: 1, expected: 2 }],
+          task: async (input: number) => {
+            // This task doesn't use hooks, so it shouldn't get them
+            return input * 2;
+          },
+          scores: [],
+        },
+        new NoopProgressReporter(),
+        [],
+        undefined,
+      );
+
+      expect(out.results).toHaveLength(1);
+      expect(out.results[0].output).toBe(2);
+      expect(out.results[0].error).toBeUndefined();
+    });
+
+    test("experiment in hooks is consistent with provided experiment", async () => {
+      const experiments = [
+        new MockExperiment("exp-1", "id-1"),
+        new MockExperiment("exp-2", "id-2"), 
+      ];
+
+      for (const experiment of experiments) {
+        const capturedExperiment: MockExperiment[] = [];
+
+        await runEvaluator(
+          experiment as any,
+          {
+            projectName: "proj",
+            evalName: "eval",
+            data: [{ input: 1 }],
+            task: async (input: number, hooks) => {
+              capturedExperiment.push(hooks.experiment as MockExperiment);
+              return input;
+            },
+            scores: [],
+          },
+          new NoopProgressReporter(),
+          [],
+          undefined,
+        );
+
+        expect(capturedExperiment).toHaveLength(1);
+        expect(capturedExperiment[0]).toBe(experiment); // Should be the exact same object
+        expect(capturedExperiment[0].name).toBe(experiment.name);
+        expect(capturedExperiment[0].id).toBe(experiment.id);
+      }
+    });
+  });
 });

@@ -4,12 +4,14 @@ from typing import List, Optional
 import pytest
 
 from .framework import (
+    DictEvalHooks,
     EvalCase,
     EvalResultWithSummary,
     Evaluator,
     build_local_summary,
     run_evaluator,
 )
+from .logger import Experiment, init_experiment
 from .score import Score, Scorer
 
 
@@ -158,3 +160,148 @@ async def test_run_evaluator_with_many_scorers():
     for scorer_name in scorer_names:
         assert scorer_name in result.summary.scores
         assert result.summary.scores[scorer_name].score == 1.0
+
+
+class MockExperiment:
+    """Mock experiment for testing purposes."""
+    def __init__(self, name="test-experiment", id="test-id"):
+        self.name = name
+        self.id = id
+
+
+def test_dict_eval_hooks_experiment_propagation():
+    """Test that DictEvalHooks properly handles experiment propagation."""
+    # Test with explicit experiment
+    experiment = MockExperiment("my-experiment")
+    hooks = DictEvalHooks(
+        metadata={"test": "value"},
+        expected="expected_output",
+        experiment=experiment
+    )
+    
+    assert hooks.experiment is not None
+    assert hooks.experiment.name == "my-experiment"
+    assert hooks.experiment.id == "test-id"
+    
+    # Test with no experiment
+    hooks_no_exp = DictEvalHooks(
+        metadata={"test": "value"},
+        expected="expected_output"
+    )
+    
+    assert hooks_no_exp.experiment is None
+    
+    # Test that other properties still work
+    assert hooks.metadata["test"] == "value"
+    assert hooks.expected == "expected_output"
+    assert hooks_no_exp.metadata["test"] == "value"
+    assert hooks_no_exp.expected == "expected_output"
+
+
+def test_dict_eval_hooks_experiment_setter():
+    """Test that DictEvalHooks experiment can be set after construction."""
+    hooks = DictEvalHooks()
+    assert hooks.experiment is None
+    
+    experiment = MockExperiment("set-later")
+    hooks.set_experiment(experiment)
+    assert hooks.experiment is not None
+    assert hooks.experiment.name == "set-later"
+    
+    # Test setting to None
+    hooks.set_experiment(None)
+    assert hooks.experiment is None
+
+
+@pytest.mark.asyncio
+async def test_experiment_propagation_in_evaluation():
+    """Test that experiment is properly propagated to hooks during evaluation."""
+    captured_experiments = []
+    
+    def task_with_experiment_access(input_value, hooks):
+        # Capture the experiment from hooks for verification
+        captured_experiments.append(hooks.experiment)
+        return input_value * 2
+    
+    data = [EvalCase(input=1, expected=2)]
+    
+    # Test with no experiment (experiment=None)
+    evaluator_no_exp = Evaluator(
+        project_name="test-project",
+        eval_name="test-no-experiment",
+        data=data,
+        task=task_with_experiment_access,
+        scores=[],
+        experiment_name=None,
+        metadata=None,
+    )
+    
+    result = await run_evaluator(experiment=None, evaluator=evaluator_no_exp, position=None, filters=[])
+    
+    assert len(captured_experiments) == 1
+    assert captured_experiments[0] is None  # No experiment should be None
+    
+    # Clear captured experiments for next test
+    captured_experiments.clear()
+    
+    # Test with experiment provided
+    experiment = MockExperiment("test-with-experiment")
+    
+    result_with_exp = await run_evaluator(
+        experiment=experiment, 
+        evaluator=evaluator_no_exp, 
+        position=None, 
+        filters=[]
+    )
+    
+    assert len(captured_experiments) == 1
+    assert captured_experiments[0] is not None
+    assert captured_experiments[0].name == "test-with-experiment"
+
+
+@pytest.mark.asyncio
+async def test_experiment_propagation_task_signature_flexibility():
+    """Test that experiment propagation works with different task signatures."""
+    captured_hooks = []
+    
+    def task_with_hooks(input_value, hooks):
+        captured_hooks.append(hooks)
+        return input_value
+    
+    def task_without_hooks(input_value):
+        return input_value
+    
+    data = [EvalCase(input=1, expected=1)]
+    experiment = MockExperiment("flexible-test")
+    
+    # Test task that accepts hooks
+    evaluator_with_hooks = Evaluator(
+        project_name="test-project",
+        eval_name="test-with-hooks",
+        data=data,
+        task=task_with_hooks,
+        scores=[],
+        experiment_name=None,
+        metadata=None,
+    )
+    
+    await run_evaluator(experiment=experiment, evaluator=evaluator_with_hooks, position=None, filters=[])
+    
+    assert len(captured_hooks) == 1
+    assert captured_hooks[0].experiment is not None
+    assert captured_hooks[0].experiment.name == "flexible-test"
+    
+    # Test task that doesn't accept hooks (should still work)
+    evaluator_without_hooks = Evaluator(
+        project_name="test-project",
+        eval_name="test-without-hooks",
+        data=data,
+        task=task_without_hooks,
+        scores=[],
+        experiment_name=None,
+        metadata=None,
+    )
+    
+    result = await run_evaluator(experiment=experiment, evaluator=evaluator_without_hooks, position=None, filters=[])
+    assert len(result.results) == 1
+    assert result.results[0].output == 1
