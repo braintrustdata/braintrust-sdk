@@ -162,6 +162,13 @@ class EvalHooks(abc.ABC, Generic[Output]):
         Access the experiment under which the task is run. Also accessible via braintrust.current_experiment()
         """
 
+    @property
+    @abc.abstractmethod
+    def trial_index(self) -> int:
+        """
+        The index of the current trial (0-based). This is useful when trial_count > 1.
+        """
+
     @abc.abstractmethod
     def meta(self, **info: Any) -> None:
         """
@@ -1010,11 +1017,12 @@ def evaluate_filter(object, filter: Filter):
 
 
 class DictEvalHooks(Dict[str, Any]):
-    def __init__(self, metadata: Optional[Any] = None, expected: Optional[Any] = None, experiment: Optional["Experiment"] = None):
+    def __init__(self, metadata: Optional[Any] = None, expected: Optional[Any] = None, experiment: Optional["Experiment"] = None, trial_index: int = 0):
         if metadata is not None:
             self.update({"metadata": metadata})
         if expected is not None:
             self.update({"expected": expected})
+        self.update({"trial_index": trial_index})
         self._span = None
         self._experiment = experiment
 
@@ -1025,6 +1033,10 @@ class DictEvalHooks(Dict[str, Any]):
     @property
     def expected(self):
         return self.get("expected")
+
+    @property
+    def trial_index(self) -> int:
+        return self.get("trial_index", 0)
 
     @property
     def span(self) -> Optional[Span]:
@@ -1180,7 +1192,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
     scorer_names = [_scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
     unhandled_scores = scorer_names
 
-    async def run_evaluator_task(datum):
+    async def run_evaluator_task(datum, trial_index=0):
         if isinstance(datum, dict):
             datum = EvalCase.from_dict(datum)
 
@@ -1211,7 +1223,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             root_span = NOOP_SPAN
         with root_span:
             try:
-                hooks = DictEvalHooks(metadata, expected=datum.expected, experiment=experiment)
+                hooks = DictEvalHooks(metadata, expected=datum.expected, experiment=experiment, trial_index=trial_index)
 
                 # Check if the task takes a hooks argument
                 task_args = [datum.input]
@@ -1356,8 +1368,8 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
         disable=position is None,
     ) as pbar:
         async for datum in pbar:
-            for _ in range(evaluator.trial_count):
-                tasks.append(asyncio.create_task(with_max_concurrency(run_evaluator_task(datum))))
+            for trial_index in range(evaluator.trial_count):
+                tasks.append(asyncio.create_task(with_max_concurrency(run_evaluator_task(datum, trial_index))))
 
     results = []
     for task in std_tqdm(tasks, desc=f"{evaluator.eval_name} (tasks)", position=position, disable=position is None):
