@@ -45,6 +45,7 @@ from .logger import (
     ScoreSummary,
     Span,
     _ExperimentDatasetEvent,
+    current_experiment,
     stringify_exception,
 )
 from .logger import init as _init_experiment
@@ -153,6 +154,13 @@ class EvalHooks(abc.ABC, Generic[Output]):
     def span(self) -> Span:
         """
         Access the span under which the task is run. Also accessible via braintrust.current_span()
+        """
+
+    @property
+    @abc.abstractmethod
+    def experiment(self) -> Optional["Experiment"]:
+        """
+        Access the experiment under which the task is run. Also accessible via braintrust.current_experiment()
         """
 
     @abc.abstractmethod
@@ -1003,12 +1011,13 @@ def evaluate_filter(object, filter: Filter):
 
 
 class DictEvalHooks(Dict[str, Any]):
-    def __init__(self, metadata: Optional[Any] = None, expected: Optional[Any] = None):
+    def __init__(self, metadata: Optional[Any] = None, expected: Optional[Any] = None, experiment: Optional["Experiment"] = None):
         if metadata is not None:
             self.update({"metadata": metadata})
         if expected is not None:
             self.update({"expected": expected})
         self._span = None
+        self._experiment = experiment
 
     @property
     def metadata(self):
@@ -1022,8 +1031,15 @@ class DictEvalHooks(Dict[str, Any]):
     def span(self) -> Optional[Span]:
         return self._span
 
+    @property
+    def experiment(self) -> Optional["Experiment"]:
+        return self._experiment or current_experiment()
+
     def set_span(self, span: Optional[Span]):
         self._span = span
+
+    def set_experiment(self, experiment: Optional["Experiment"]):
+        self._experiment = experiment
 
     def meta(self, **info: Any):
         warnings.warn(
@@ -1196,7 +1212,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             root_span = NOOP_SPAN
         with root_span:
             try:
-                hooks = DictEvalHooks(metadata, expected=datum.expected)
+                hooks = DictEvalHooks(metadata, expected=datum.expected, experiment=experiment)
 
                 # Check if the task takes a hooks argument
                 task_args = [datum.input]
