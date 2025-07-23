@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import abc
 import time
 from collections.abc import AsyncGenerator, Generator
 from types import TracebackType
