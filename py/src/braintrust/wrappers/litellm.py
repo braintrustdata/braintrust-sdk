@@ -590,7 +590,8 @@ def prettify_params(params: dict[str, Any]) -> dict[str, Any]:
     return ret
 
 
-def _try_to_dict(obj: Any) -> dict[str, Any]:
+
+def _try_to_dict(obj: Any) -> dict[str, Any] | Any:
     """Try to convert an object to a dictionary."""
     if isinstance(obj, dict):
         return obj
@@ -611,6 +612,7 @@ def _try_to_dict(obj: Any) -> dict[str, Any]:
         except Exception:
             pass
     return obj
+
 
 
 def serialize_response_format(response_format: Any) -> Any:
