@@ -76,6 +76,7 @@ export const monitorViewOptionsSchema = z
     rangeValue: z.string().nullish(),
     frameStart: z.string().nullish(),
     frameEnd: z.string().nullish(),
+    tzUTC: z.boolean().nullish(),
     chartVisibility: z.record(z.boolean()).nullish(),
     projectId: z.string().nullish(),
     type: z.enum(["project", "experiment"]).nullish(),

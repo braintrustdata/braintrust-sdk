@@ -1,14 +1,11 @@
-export const DEFAULT_QUEUE_SIZE = 5000;
+export const DEFAULT_QUEUE_SIZE = 15000;
 
-// A simple queue that drops oldest items when full. It uses a circular
-// buffer to store items so that dropping oldest things in the queue
-// is O(1) time.
+// A simple queue that drops oldest items when full. Uses a plain array
+// that can grow for unlimited queues or drops oldest items for bounded queues.
 export class Queue<T> {
-  private buffer: Array<T>;
-  private head: number = 0; // the index of the first item in the queue
-  private tail: number = 0; // the index of the next item to be added
-  private size: number = 0; // the number of items in the queue
-  private capacity: number; // the maximum number of items the queue can hold
+  private items: Array<T> = [];
+  private maxSize: number;
+  private enforceSizeLimit = false;
 
   constructor(maxSize: number) {
     if (maxSize < 1) {
@@ -17,68 +14,57 @@ export class Queue<T> {
       );
       maxSize = DEFAULT_QUEUE_SIZE;
     }
-    this.capacity = maxSize;
-    this.buffer = new Array(this.capacity);
+
+    this.maxSize = maxSize;
+  }
+
+  /**
+   * Set queue size limit enforcement. When enabled, the queue will drop new items
+   * when it reaches maxSize. When disabled (default), the queue can grow unlimited.
+   */
+  enforceQueueSizeLimit(enforce: boolean) {
+    this.enforceSizeLimit = enforce;
   }
 
   push(...items: T[]): T[] {
     const dropped: T[] = [];
 
     for (const item of items) {
-      if (this.size === this.capacity) {
-        const droppedItem = this.buffer[this.head];
-        if (droppedItem !== undefined) {
-          dropped.push(droppedItem);
-        }
-        this.head = (this.head + 1) % this.capacity;
+      if (!this.enforceSizeLimit) {
+        // For unlimited queues (default), just add items without dropping
+        this.items.push(item);
       } else {
-        this.size++;
+        // For bounded queues, drop new items when full
+        if (this.items.length >= this.maxSize) {
+          dropped.push(item);
+        } else {
+          this.items.push(item);
+        }
       }
-
-      this.buffer[this.tail] = item;
-      this.tail = (this.tail + 1) % this.capacity;
     }
 
     return dropped;
   }
 
   peek(): T | undefined {
-    if (this.size === 0) {
-      return undefined;
-    }
-    return this.buffer[this.head];
+    return this.items[0];
   }
 
   drain(): T[] {
-    const items: T[] = [];
-    if (this.size === 0) {
-      return items;
-    }
-
-    if (this.head < this.tail) {
-      items.push(...this.buffer.slice(this.head, this.tail));
-      this.buffer.fill(undefined as T, this.head, this.tail);
-    } else {
-      items.push(...this.buffer.slice(this.head));
-      items.push(...this.buffer.slice(0, this.tail));
-      this.buffer.fill(undefined as T, this.head, this.capacity);
-      this.buffer.fill(undefined as T, 0, this.tail);
-    }
-
-    this.head = 0;
-    this.tail = 0;
-    this.size = 0;
+    const items = [...this.items];
+    this.items = [];
     return items;
   }
 
   clear(): void {
-    this.buffer.fill(undefined as T);
-    this.head = 0;
-    this.tail = 0;
-    this.size = 0;
+    this.items = [];
   }
 
   length(): number {
-    return this.size;
+    return this.items.length;
+  }
+
+  get capacity(): number {
+    return this.maxSize;
   }
 }

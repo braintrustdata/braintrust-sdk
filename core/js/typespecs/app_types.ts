@@ -3,7 +3,11 @@
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 import { objectNullish } from "../src/zod_util";
-import { ObjectType, datetimeStringSchema } from "./common_types";
+import {
+  ObjectType,
+  datetimeStringSchema,
+  generateBaseTableOpSchema,
+} from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
@@ -825,17 +829,6 @@ export const appLimitParamSchema = z.coerce
   .describe("Limit the number of objects to return")
   .openapi("AppLimit");
 
-function generateBaseTableOpSchema(objectName: string) {
-  return z.object({
-    org_name: z
-      .string()
-      .nullish()
-      .describe(
-        `For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, you may specify the name of the organization the ${objectName} belongs in.`,
-      ),
-  });
-}
-
 // Pagination for listing data objects.
 
 export const startingAfterSchema = z
@@ -1233,6 +1226,15 @@ export const patchOrganizationMembersSchema = z
           .array()
           .nullish()
           .describe("Emails of users to invite"),
+        service_accounts: z
+          .array(
+            z.object({
+              name: z.string(),
+              token_name: z.string().nullish(),
+            }),
+          )
+          .nullish()
+          .describe("Service accounts to create"),
         send_invite_emails: z
           .boolean()
           .nullish()

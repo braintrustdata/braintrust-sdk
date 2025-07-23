@@ -15,11 +15,23 @@ from braintrust import prompt
 from braintrust.prompt_cache import disk_cache, lru_cache
 
 
-def _create_cache_key(project_id: Optional[str], project_name: Optional[str], slug: str, version: str) -> str:
-    """Creates a unique cache key from project identifier, slug and version."""
+def _create_cache_key(
+    project_id: Optional[str],
+    project_name: Optional[str],
+    slug: Optional[str],
+    version: str = "latest",
+    id: Optional[str] = None,
+) -> str:
+    """Creates a unique cache key from project identifier, slug and version, or from ID."""
+    if id:
+        # When caching by ID, we don't need project or slug
+        return f"id:{id}"
+
     prefix = project_id or project_name
     if not prefix:
         raise ValueError("Either project_id or project_name must be provided")
+    if not slug:
+        raise ValueError("Slug must be provided when not using ID")
     return f"{prefix}:{slug}:{version}"
 
 
@@ -48,25 +60,31 @@ class PromptCache:
         self.disk_cache = disk_cache
 
     def get(
-        self, slug: str, version: str, project_id: Optional[str] = None, project_name: Optional[str] = None
+        self,
+        slug: Optional[str] = None,
+        version: str = "latest",
+        project_id: Optional[str] = None,
+        project_name: Optional[str] = None,
+        id: Optional[str] = None,
     ) -> prompt.PromptSchema:
         """
         Retrieve a prompt from the cache.
 
         Args:
-            slug: The unique identifier for the prompt within its project.
-            version: The version of the prompt.
+            slug: The unique identifier for the prompt within its project. Required if id is not provided.
+            version: The version of the prompt. Defaults to "latest".
             project_id: The ID of the project containing the prompt.
             project_name: The name of the project containing the prompt.
+            id: The ID of a specific prompt. If provided, slug and project parameters are ignored.
 
         Returns:
             The cached Prompt object.
 
         Raises:
-            ValueError: If neither project_id nor project_name is provided.
+            ValueError: If neither project_id nor project_name is provided (when not using id).
             KeyError: If the prompt is not found in the cache.
         """
-        cache_key = _create_cache_key(project_id, project_name, slug, version)
+        cache_key = _create_cache_key(project_id, project_name, slug, version, id)
 
         # First check memory cache.
         try:
@@ -88,27 +106,29 @@ class PromptCache:
 
     def set(
         self,
-        slug: str,
-        version: str,
         value: prompt.PromptSchema,
+        slug: Optional[str] = None,
+        version: str = "latest",
         project_id: Optional[str] = None,
         project_name: Optional[str] = None,
+        id: Optional[str] = None,
     ) -> None:
         """
         Store a prompt in the cache.
 
         Args:
-            slug: The unique identifier for the prompt within its project.
-            version: The version of the prompt.
+            slug: The unique identifier for the prompt within its project. Required if id is not provided.
+            version: The version of the prompt. Defaults to "latest".
             value: The Prompt object to store.
             project_id: The ID of the project containing the prompt.
             project_name: The name of the project containing the prompt.
+            id: The ID of a specific prompt. If provided, slug and project parameters are ignored.
 
         Raises:
-            ValueError: If neither project_id nor project_name is provided.
+            ValueError: If neither project_id nor project_name is provided (when not using id).
             RuntimeError: If there is an error writing to the disk cache.
         """
-        cache_key = _create_cache_key(project_id, project_name, slug, version)
+        cache_key = _create_cache_key(project_id, project_name, slug, version, id)
 
         # Update memory cache.
         self.memory_cache.set(cache_key, value)
