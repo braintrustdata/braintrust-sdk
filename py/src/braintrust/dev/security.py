@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import Request
 from fastapi.exceptions import HTTPException
 from fastapi.security import HTTPBearer
-from starlette.status import HTTP_403_FORBIDDEN
+from starlette.status import HTTP_401_UNAUTHORIZED
 
 from braintrust.logger import BraintrustState, LoginOptions, login_to_state
 
@@ -21,7 +21,7 @@ class BraintrustApiKey(HTTPBearer):
         except Exception as e:
             error = e
             if "Invalid API key" in str(e):
-                error = HTTPException(status_code=HTTP_403_FORBIDDEN, detail=str(e))
+                error = HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=str(e))
             raise error
 
         return state

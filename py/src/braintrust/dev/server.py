@@ -121,7 +121,7 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
             eval_defs[name] = cast(
                 ListEvals,
                 {
-                    # "parameters": None,  # TODO: no parameters in evaluator
+                    "parameters": None,  # TODO: no parameters in evaluator
                     "scores": [{"name": scorer_name(score, i)} for i, score in enumerate(evaluator.scores)],
                 },
             )
@@ -183,7 +183,7 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
                 scores += [make_scorer(state, score.name, score.function_id) for score in eval.scores]
 
             result = await EvalAsync(
-                name=evaluator.eval_name,
+                name="worker-thread",
                 data=eval_data["data"],  # type:ignore
                 task=progress_task,
                 scores=scores,
