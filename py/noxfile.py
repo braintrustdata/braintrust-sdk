@@ -41,6 +41,7 @@ VENDOR_PACKAGES = (
     "pydantic_ai",
     "autoevals",
     "braintrust_core",
+    "litellm",
     "opentelemetry-api",
     "opentelemetry-sdk",
     "opentelemetry-exporter-otlp-proto-http",
@@ -49,6 +50,7 @@ VENDOR_PACKAGES = (
 # Test matrix
 ANTHROPIC_VERSIONS = (LATEST, "0.50.0", "0.49.0", "0.48.0")
 OPENAI_VERSIONS = (LATEST, "1.77.0", "1.71", "1.91", "1.92")
+LITELLM_VERSIONS = (LATEST, "1.74.0")
 PYDANTIC_AI_VERSIONS = (LATEST, "0.1.9")
 AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
 
@@ -86,6 +88,15 @@ def test_openai(session, version):
     _install_test_deps(session)
     _install(session, "openai", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_openai.py")
+    _run_core_tests(session)
+
+
+@nox.session()
+@nox.parametrize("version", LITELLM_VERSIONS, ids=LITELLM_VERSIONS)
+def test_litellm(session, version):
+    _install_test_deps(session)
+    _install(session, "litellm", version)
+    _run_tests(session, f"{WRAPPER_DIR}/test_litellm.py")
     _run_core_tests(session)
 
 
