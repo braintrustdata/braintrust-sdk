@@ -59,3 +59,4 @@ from .oai import wrap_openai
 from .types import *
 from .util import BT_IS_ASYNC_ATTRIBUTE, MarkAsyncWrapper
 from .wrappers.anthropic import wrap_anthropic
+from .wrappers.litellm import wrap_litellm

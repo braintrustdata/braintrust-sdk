@@ -46,6 +46,16 @@ class AsyncResponseWrapper:
     def __getattr__(self, name: str) -> Any:
         return getattr(self._response, name)
 
+    @property
+    def __class__(self):  # type: ignore
+        return self._response.__class__
+
+    def __str__(self) -> str:
+        return str(self._response)
+
+    def __repr__(self) -> str:
+        return repr(self._response)
+
 
 def log_headers(response: Any, span: Span):
     cached_value = response.headers.get(X_CACHED_HEADER) or response.headers.get(X_LEGACY_CACHED_HEADER)
