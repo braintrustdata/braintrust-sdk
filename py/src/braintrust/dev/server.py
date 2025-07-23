@@ -15,6 +15,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from braintrust.cli.eval.models import (
     EvalRequest,
+    InvokeParent,
     ListEvals,
     LoadedEvaluator,
     ScoreFunctionId,
@@ -28,15 +29,20 @@ from braintrust.framework import (
     EvalCase,
     EvalHooks,
     Evaluator,
+    ObjectReference,
     ScorerLike,
     scorer_name,
 )
 from braintrust.http_headers import BT_CURSOR_HEADER, BT_FOUND_EXISTING_HEADER, BT_PARENT
-from braintrust.logger import BraintrustState, Dataset, flush, get_span_parent_object
+from braintrust.logger import BraintrustState, Dataset, get_span_parent_object
+from braintrust.span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from braintrust.util import eprint
 
 
 def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost", port: int = 8300):
+    global _lazy_load
+    _lazy_load = False
+
     app = FastAPI()
 
     @app.exception_handler(Exception)
@@ -155,20 +161,21 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
                 task_args.append(hooks)
 
             result = evaluator.task(*task_args)
+            if inspect.iscoroutine(result):
+                result = await result
 
-            hooks.report_progress(format="code", output_type="completion", event="json_delta", data=json.dumps(result))
+            await hooks.report_progress(
+                format="code", output_type="completion", event="json_delta", data=json.dumps(result)
+            )
 
             return result
 
-        def stream(**data: Any):
-            asyncio.create_task(
-                message_queue.put(
-                    serialize_sse_event(
-                        "progress",
-                        json.dumps(data),
-                    )
-                )
-            )
+        async def stream(**data: Any):
+            origin = cast(Optional[ObjectReference], data.pop("origin", None))
+            if origin:
+                data["origin"] = origin.as_dict()
+
+            await message_queue.put(serialize_sse_event("progress", json.dumps(data)))
 
         async def evaluate():
             scores = evaluator.scores
@@ -177,7 +184,7 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
 
             result = await EvalAsync(
                 name=evaluator.eval_name,
-                data=eval_data["data"],
+                data=eval_data["data"],  # type:ignore
                 task=progress_task,
                 scores=scores,
                 experiment_name=evaluator.experiment_name,
@@ -197,6 +204,7 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
                 summarize_scores=evaluator.summarize_scores,
                 state=state,
                 stream=stream,
+                parent=parse_parent(eval.parent),
             )
 
             # we're done
@@ -221,8 +229,10 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
 
                 yield serialize_sse_event(
                     "summary",
-                    json.dumps({"projectName": "Say Hi Bot", "experimentName": "Say Hi Bot", "scores": {}}),
+                    json.dumps({snake_to_camel(key): value for key, value in clean(summary).items()}),
                 )
+
+                # yield serialize_sse_event("progress", json.dumps({"type": "done", "data": ""}))
 
                 yield serialize_sse_event("done", "")
 
@@ -237,14 +247,33 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
 
         result = await eval_task
 
-        flush()
-
         return result.summary
 
     uvicorn.run(app, host=host, port=port)
 
 
-def serialize_sse_event(event: str, data: str) -> str:
+EMPTY = (None, [], {}, (), "")
+
+
+def snake_to_camel(snake_str: str) -> str:
+    components = snake_str.split("_")
+    return components[0] + "".join(x.title() for x in components[1:])
+
+
+def clean(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: clean(v) for k, v in obj.items() if clean(v) not in EMPTY and not k.startswith("_")}
+
+    if isinstance(obj, list):
+        return [clean(item) for item in obj if clean(item) not in EMPTY]
+
+    if isinstance(obj, str):
+        return obj.strip()
+
+    return obj
+
+
+def serialize_sse_event(event: str, data: Any) -> str:
     return f"event: {event}\ndata: {data}\n\n"
 
 
@@ -289,4 +318,35 @@ def make_scorer(state: BraintrustState, name: str, score: ScoreFunctionId) -> Sc
 
     scorer.__name__ = name
 
-    return scorer
+    return cast(ScorerLike[Any, Any], scorer)
+
+
+def parse_parent(parent: Optional[Union[InvokeParent, str]]):
+    if parent is None:
+        return None
+
+    if isinstance(parent, str):
+        return parent
+
+    object_type = SpanObjectTypeV3.PROJECT_LOGS
+    if parent.object_type == "experiment":
+        object_type = SpanObjectTypeV3.EXPERIMENT
+    elif parent.object_type == "playground_logs":
+        object_type = SpanObjectTypeV3.PLAYGROUND_LOGS
+
+    row_id = None
+    span_id = None
+    root_span_id = None
+
+    if parent.row_ids is not None:
+        row_id = parent.row_ids.row_id
+        span_id = parent.row_ids.span_id
+        root_span_id = parent.row_ids.root_span_id
+
+    return SpanComponentsV3(
+        object_type=object_type,
+        object_id=parent.object_id,
+        row_id=row_id,
+        span_id=span_id,
+        root_span_id=root_span_id,
+    ).to_str()

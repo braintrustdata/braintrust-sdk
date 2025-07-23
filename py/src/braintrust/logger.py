@@ -331,6 +331,10 @@ class BraintrustState:
         self.id = str(uuid.uuid4())
         self.current_experiment: Optional[Experiment] = None
         self.current_logger: Optional[Logger] = None
+        self.current_parent: contextvars.ContextVar[str] = contextvars.ContextVar(
+            "braintrust_current_parent", default=""
+        )
+
         self.current_span: contextvars.ContextVar[Span] = contextvars.ContextVar(
             "braintrust_current_span", default=NOOP_SPAN
         )
@@ -391,14 +395,14 @@ class BraintrustState:
         if not self._app_conn:
             if not self.app_url:
                 raise RuntimeError("Must initialize app_url before requesting app_conn")
-            self._app_conn = HTTPConnection(self.app_url, adapter=_http_adapter)
+            self._app_conn = HTTPConnection(self.app_url, adapter=_http_adapter, state=self)
         return self._app_conn
 
     def api_conn(self):
         if not self._api_conn:
             if not self.api_url:
                 raise RuntimeError("Must initialize api_url before requesting api_conn")
-            self._api_conn = HTTPConnection(self.api_url, adapter=_http_adapter)
+            self._api_conn = HTTPConnection(self.api_url, adapter=_http_adapter, state=self)
         return self._api_conn
 
     def proxy_conn(self):
@@ -408,7 +412,7 @@ class BraintrustState:
         if not self._proxy_conn:
             if not self.proxy_url:
                 raise RuntimeError("Must initialize proxy_url before requesting proxy_conn")
-            self._proxy_conn = HTTPConnection(self.proxy_url, adapter=_http_adapter)
+            self._proxy_conn = HTTPConnection(self.proxy_url, adapter=_http_adapter, state=self)
         return self._proxy_conn
 
     def user_info(self) -> Mapping[str, Any]:
@@ -533,17 +537,21 @@ class RetryRequestExceptionsAdapter(HTTPAdapter):
 
 
 class HTTPConnection:
-    def __init__(self, base_url: str, adapter: Optional[HTTPAdapter] = None):
+    def __init__(self, base_url: str, adapter: Optional[HTTPAdapter] = None, state: Optional[BraintrustState] = None):
         self.base_url = base_url
         self.token = None
         self.adapter = adapter
+        self.state = state
 
         self._reset(total=0)
+
+    def _get_state(self):
+        return self.state or _state
 
     def ping(self) -> bool:
         try:
             resp = self.get("ping")
-            _state.set_user_info_if_null(resp.json())
+            self._get_state().set_user_info_if_null(resp.json())
             return resp.ok
         except requests.exceptions.ConnectionError:
             return False
@@ -1307,11 +1315,17 @@ def init_dataset(
     )
 
 
-def _compute_logger_metadata(project_name: Optional[str] = None, project_id: Optional[str] = None):
-    login()
-    org_id = _state.org_id
+def _compute_logger_metadata(
+    project_name: Optional[str] = None, project_id: Optional[str] = None, state: Optional[BraintrustState] = None
+):
+    state_obj = state or _state
+    state_obj.login()
+
+    org_id = state_obj.org_id
+    assert org_id is not None
+
     if project_id is None:
-        response = _state.app_conn().post_json(
+        response = state_obj.app_conn().post_json(
             "api/project/register",
             {
                 "project_name": project_name or GLOBAL_PROJECT,
@@ -1324,9 +1338,9 @@ def _compute_logger_metadata(project_name: Optional[str] = None, project_id: Opt
             project=ObjectMetadata(id=resp_project["id"], name=resp_project["name"], full_info=resp_project),
         )
     elif project_name is None:
-        response = _state.app_conn().get_json("api/project", {"id": project_id})
+        response = state_obj.app_conn().get_json("api/project", {"id": project_id})
         return OrgProjectMetadata(
-            org_id=org_id, project=ObjectMetadata(id=project_id, name=response["name"], full_info=response)
+            org_id=org_id, project=ObjectMetadata(id=project_id, name=response["name"], full_info=cast(Any, response))
         )
     else:
         return OrgProjectMetadata(
@@ -1343,6 +1357,7 @@ def init_logger(
     org_name: Optional[str] = None,
     force_login: bool = False,
     set_current: bool = True,
+    state: Optional[BraintrustState] = None,
 ) -> "Logger":
     """
     Create a new logger in a specified project. If the project does not exist, it will be created.
@@ -1361,6 +1376,8 @@ def init_logger(
 
     compute_metadata_args = dict(project_name=project, project_id=project_id)
 
+    state_obj = state or _state
+
     link_args = {
         "app_url": app_url,
         "org_name": org_name,
@@ -1370,16 +1387,17 @@ def init_logger(
 
     def compute_metadata():
         login(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login)
-        return _compute_logger_metadata(**compute_metadata_args)
+        return _compute_logger_metadata(state=state_obj, **compute_metadata_args)
 
     ret = Logger(
         lazy_metadata=LazyValue(compute_metadata, use_mutex=True),
         async_flush=async_flush,
         compute_metadata_args=compute_metadata_args,
         link_args=link_args,
+        state=state_obj,
     )
     if set_current:
-        _state.current_logger = ret
+        state_obj.current_logger = ret
     return ret
 
 
@@ -1394,6 +1412,7 @@ def load_prompt(
     app_url: Optional[str] = None,
     api_key: Optional[str] = None,
     org_name: Optional[str] = None,
+    state: Optional[BraintrustState] = None,
 ) -> "Prompt":
     """
     Loads a prompt from the specified project.
@@ -1420,12 +1439,14 @@ def load_prompt(
     elif not slug:
         raise ValueError("Must specify slug")
 
+    state_obj = state or _state
+
     def compute_metadata():
         try:
             login(org_name=org_name, api_key=api_key, app_url=app_url)
             if id:
                 # Load prompt by ID using the /v1/prompt/{id} endpoint
-                response = _state.api_conn().get_json(f"/v1/prompt/{id}", {})
+                response = state_obj.api_conn().get_json(f"/v1/prompt/{id}", {})
                 # Wrap single prompt response in objects array to match list API format
                 if response is not None:
                     response = {"objects": [response]}
@@ -1438,14 +1459,14 @@ def load_prompt(
                         "version": version,
                     },
                 )
-                response = _state.api_conn().get_json("/v1/prompt", args)
+                response = state_obj.api_conn().get_json("/v1/prompt", args)
         except Exception as server_error:
             eprint(f"Failed to load prompt, attempting to fall back to cache: {server_error}")
             try:
                 if id:
-                    return _state._prompt_cache.get(id=id)
+                    return state_obj._prompt_cache.get(id=id)
                 else:
-                    return _state._prompt_cache.get(
+                    return state_obj._prompt_cache.get(
                         slug,
                         version=str(version) if version else "latest",
                         project_id=project_id,
@@ -1476,12 +1497,12 @@ def load_prompt(
         prompt = PromptSchema.from_dict_deep(resp_prompt)
         try:
             if id:
-                _state._prompt_cache.set(
+                state_obj._prompt_cache.set(
                     prompt,
                     id=id,
                 )
             elif slug:
-                _state._prompt_cache.set(
+                state_obj._prompt_cache.set(
                     prompt,
                     slug=slug,
                     version=str(version) if version else "latest",
@@ -1505,7 +1526,7 @@ def login(
     api_key: Optional[str] = None,
     org_name: Optional[str] = None,
     force_login: bool = False,
-) -> None:
+) -> BraintrustState:
     """
     Log into Braintrust. This will prompt you for your API token, which you can find at
     https://www.braintrust.dev/app/token. This method is called automatically by `init()`.
@@ -1527,7 +1548,7 @@ def login(
             # We have already logged in. If any provided login inputs disagree
             # with our existing settings, raise an Exception warning the user to
             # try again with `force_login=True`.
-            def check_updated_param(varname, arg, orig):
+            def check_updated_param(varname: str, arg: Optional[str], orig: Optional[str]):
                 if arg is not None and orig is not None and arg != orig:
                     raise Exception(
                         f"Re-logging in with different {varname} ({arg}) than original ({orig}). To force re-login, pass `force_login=True`"
@@ -1537,87 +1558,14 @@ def login(
             check_updated_param("app_url", app_url, _state.app_url)
             check_updated_param("api_key", sanitized_api_key, _state.login_token)
             check_updated_param("org_name", org_name, _state.org_name)
-            return
+            return _state
 
-        app_url = _get_app_url(app_url)
+        _state.login(FullLoginOptions(app_url=app_url, api_key=api_key, org_name=org_name, force_login=force_login))
 
-        app_public_url = os.environ.get("BRAINTRUST_APP_PUBLIC_URL", app_url)
-
-        if api_key is None:
-            api_key = os.environ.get("BRAINTRUST_API_KEY")
-
-        org_name = _get_org_name(org_name)
-
-        _state.reset_login_info()
-
-        _state.app_url = app_url
-        _state.app_public_url = app_public_url
-        _state.org_name = org_name
-
-        conn = None
-        if api_key == TEST_API_KEY:
-            # a small hook for pseudo-logins
-            test_org_info = [
-                {
-                    "id": "test-org-id",
-                    "name": org_name or "test-org-name",
-                    "api_url": "https://api.braintrust.ai",
-                    "proxy_url": "https://proxy.braintrust.ai",
-                }
-            ]
-            _check_org_info(test_org_info, org_name)
-            _state.login_token = TEST_API_KEY
-            _state.logged_in = True
-            return
-        elif api_key is not None:
-            app_conn = HTTPConnection(_state.app_url, adapter=_http_adapter)
-            app_conn.set_token(api_key)
-            resp = app_conn.post("api/apikey/login")
-            if not resp.ok:
-                masked_api_key = mask_api_key(api_key)
-                raise ValueError(f"Invalid API key {masked_api_key}: [{resp.status_code}] {resp.text}")
-            info = resp.json()
-
-            _check_org_info(info["org_info"], org_name)
-
-            if not _state.api_url:
-                if org_name:
-                    raise ValueError(
-                        f"Unable to log into organization '{org_name}'."
-                        " Are you sure this credential is scoped to the organization?"
-                    )
-                else:
-                    raise ValueError("Unable to log into any organization with the provided credential.")
-
-            conn = _state.api_conn()
-            conn.set_token(api_key)
-
-        if not conn:
-            raise ValueError(
-                "Could not login to Braintrust. You may need to set BRAINTRUST_API_KEY in your environment."
-            )
-
-        # make_long_lived() allows the connection to retry if it breaks, which we're okay with after
-        # this point because we know the connection _can_ successfully ping.
-        conn.make_long_lived()
-
-        # Same for the app conn, which we know is valid because we have
-        # successfully logged in.
-        _state.app_conn().make_long_lived()
-
-        # Set the same token in the API
-        _state.app_conn().set_token(conn.token)
-        if _state.proxy_url:
-            _state.proxy_conn().set_token(conn.token)
-            _state.proxy_conn().make_long_lived()
-        _state.login_token = conn.token
-        _state.logged_in = True
-
-        # Replace the global logger's api_conn with this one.
-        _state.login_replace_api_conn(conn)
+        return _state
 
 
-def log(**event: Any) -> str:
+def log(state: Optional[BraintrustState] = None, **event: Any) -> str:
     """
     Log a single event to the current experiment. The event will be batched and uploaded behind the scenes.
 
@@ -1627,7 +1575,7 @@ def log(**event: Any) -> str:
     eprint(
         "braintrust.log is deprecated and will be removed in a future version of braintrust. Use `experiment.log` instead."
     )
-    e = current_experiment()
+    e = current_experiment(state=state)
     if not e:
         raise Exception("Not initialized. Please call init() first")
     return e.log(**event)
@@ -1653,39 +1601,39 @@ def summarize(summarize_scores: bool = True, comparison_experiment_id: Optional[
     )
 
 
-def current_experiment() -> Optional["Experiment"]:
+def current_experiment(state: Optional[BraintrustState] = None) -> Optional["Experiment"]:
     """Returns the currently-active experiment (set by `braintrust.init(...)`). Returns None if no current experiment has been set."""
+    state_obj = state or _state
+    return state_obj.current_experiment
 
-    return _state.current_experiment
 
-
-def current_logger() -> Optional["Logger"]:
+def current_logger(state: Optional[BraintrustState] = None) -> Optional["Logger"]:
     """Returns the currently-active logger (set by `braintrust.init_logger(...)`). Returns None if no current logger has been set."""
+    state_obj = state or _state
+    return state_obj.current_logger
 
-    return _state.current_logger
 
-
-def current_span() -> Span:
+def current_span(state: Optional[BraintrustState] = None) -> Span:
     """Return the currently-active span for logging (set by running a span under a context manager). If there is no active span, returns a no-op span object, which supports the same interface as spans but does no logging.
 
     See `Span` for full details.
     """
+    state_obj = state or _state
+    return state_obj.current_span.get()
 
-    return _state.current_span.get()
 
-
-def get_span_parent_object() -> Union["Logger", "Experiment", Span]:
+def get_span_parent_object(state: Optional[BraintrustState] = None) -> Union["Logger", "Experiment", Span]:
     """Mainly for internal use. Return the parent object for starting a span in a global context."""
 
-    parent_span = current_span()
+    parent_span = current_span(state=state)
     if parent_span != NOOP_SPAN:
         return parent_span
 
-    experiment = current_experiment()
+    experiment = current_experiment(state=state)
     if experiment:
         return experiment
 
-    logger = current_logger()
+    logger = current_logger(state=state)
     if logger:
         return logger
 
@@ -1723,11 +1671,11 @@ def traced(f: F) -> F:
 
 
 @overload
-def traced(*span_args: Any, **span_kwargs: Any) -> Callable[[F], F]:
+def traced(*span_args: Any, state: Optional[BraintrustState] = None, **span_kwargs: Any) -> Callable[[F], F]:
     """Decorator to trace the wrapped function when used with arguments."""
 
 
-def traced(*span_args: Any, **span_kwargs: Any) -> Callable[[F], F]:
+def traced(*span_args: Any, state: Optional[BraintrustState] = None, **span_kwargs: Any) -> Callable[[F], F]:
     """Decorator to trace the wrapped function. Can either be applied bare (`@traced`) or by providing arguments (`@traced(*span_args, **span_kwargs)`), which will be forwarded to the created span. See `Span.start_span` for full details on the span arguments.
 
     It checks the following (in precedence order):
@@ -1762,7 +1710,7 @@ def traced(*span_args: Any, **span_kwargs: Any) -> Callable[[F], F]:
 
         @wraps(f)
         def wrapper_sync(*f_args, **f_kwargs):
-            with start_span(*span_args, **span_kwargs) as span:
+            with start_span(*span_args, state=state, **span_kwargs) as span:
                 if trace_io:
                     _try_log_input(span, f_sig, f_args, f_kwargs)
                 ret = f(*f_args, **f_kwargs)
@@ -1772,7 +1720,7 @@ def traced(*span_args: Any, **span_kwargs: Any) -> Callable[[F], F]:
 
         @wraps(f)
         async def wrapper_async(*f_args, **f_kwargs):
-            with start_span(*span_args, **span_kwargs) as span:
+            with start_span(*span_args, state=state, **span_kwargs) as span:
                 if trace_io:
                     _try_log_input(span, f_sig, f_args, f_kwargs)
                 ret = await f(*f_args, **f_kwargs)
@@ -1782,7 +1730,7 @@ def traced(*span_args: Any, **span_kwargs: Any) -> Callable[[F], F]:
 
         @wraps(f)
         async def wrapper_async_gen(*f_args, **f_kwargs):
-            with start_span(*span_args, **span_kwargs) as span:
+            with start_span(*span_args, state=state, **span_kwargs) as span:
                 if trace_io:
                     _try_log_input(span, f_sig, f_args, f_kwargs)
                 async_gen = f(*f_args, **f_kwargs)
@@ -1814,6 +1762,7 @@ def start_span(
     set_current: Optional[bool] = None,
     parent: Optional[str] = None,
     propagated_event: Optional[Dict[str, Any]] = None,
+    state: Optional[BraintrustState] = None,
     **event: Any,
 ) -> Span:
     """Lower-level alternative to `@traced` for starting a span at the toplevel. It creates a span under the first active object (using the same precedence order as `@traced`), or if `parent` is specified, under the specified parent row, or returns a no-op span object.
@@ -1822,16 +1771,22 @@ def start_span(
 
     See `Span.start_span` for full details.
     """
+    state_obj = state or _state
+    parent_str = parent if parent is not None else state_obj.current_parent.get()
 
-    if parent:
-        components = SpanComponentsV3.from_str(parent)
-        if components.row_id and components.span_id and components.root_span_id:
-            parent_span_ids = ParentSpanIds(span_id=components.span_id, root_span_id=components.root_span_id)
-        else:
-            parent_span_ids = None
+    components = SpanComponentsV3.from_str(parent_str) if parent_str else None
+
+    if components:
+        parent_span_ids = (
+            ParentSpanIds(span_id=components.span_id, root_span_id=components.root_span_id)
+            if components.row_id and components.span_id and components.root_span_id
+            else None
+        )
         return SpanImpl(
             parent_object_type=components.object_type,
-            parent_object_id=LazyValue(_span_components_to_object_id_lambda(components), use_mutex=False),
+            parent_object_id=LazyValue(
+                _span_components_to_object_id_lambda(components, state=state_obj), use_mutex=False
+            ),
             parent_compute_object_metadata_args=components.compute_object_metadata_args,
             parent_span_ids=parent_span_ids,
             name=name,
@@ -1841,6 +1796,7 @@ def start_span(
             set_current=set_current,
             propagated_event=coalesce(propagated_event, components.propagated_event),
             event=event,
+            state=state_obj,
         )
     else:
         return get_span_parent_object().start_span(
@@ -1855,31 +1811,10 @@ def start_span(
         )
 
 
-def flush():
+def flush(state: Optional[BraintrustState] = None):
     """Flush any pending rows to the server."""
-
-    _state.global_bg_logger().flush()
-
-
-def _check_org_info(org_info, org_name):
-    global _state
-
-    if len(org_info) == 0:
-        raise ValueError("This user is not part of any organizations.")
-
-    for orgs in org_info:
-        if org_name is None or orgs["name"] == org_name:
-            _state.org_id = orgs["id"]
-            _state.org_name = orgs["name"]
-            _state.api_url = os.environ.get("BRAINTRUST_API_URL", orgs["api_url"])
-            _state.proxy_url = os.environ.get("BRAINTRUST_PROXY_URL", orgs["proxy_url"])
-            _state.git_metadata_settings = GitMetadataSettings(**(orgs.get("git_metadata") or {}))
-            break
-
-    if _state.org_id is None:
-        raise ValueError(
-            f"Organization {org_name} not found. Must be one of {', '.join([x['name'] for x in org_info])}"
-        )
+    state_obj = state or _state
+    state_obj.global_bg_logger().flush()
 
 
 def _populate_args(d, **kwargs):
@@ -2669,6 +2604,7 @@ def _update_span_impl(
     parent_object_type: SpanObjectTypeV3,
     parent_object_id: LazyValue[str],
     id: str,
+    state: Optional[BraintrustState] = None,
     **event: Any,
 ):
     update_event = _validate_and_sanitize_experiment_log_partial_args(
@@ -2692,10 +2628,12 @@ def _update_span_impl(
             },
         )
 
-    _state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
+    state_obj = state or _state
+
+    state_obj.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
 
 
-def update_span(exported: str, **event: Any) -> None:
+def update_span(exported: str, state: Optional[BraintrustState] = None, **event: Any) -> None:
     """
     Update a span using the output of `span.export()`. It is important that you only resume updating
     to a span once the original span has been fully written and flushed, since otherwise updates to
@@ -2709,12 +2647,14 @@ def update_span(exported: str, **event: Any) -> None:
             "Cannot specify id when updating a span with `update_span`. Use the output of `span.export()` instead."
         )
 
+    state_obj = state or _state
+
     components = SpanComponentsV3.from_str(exported)
     if not components.row_id:
         raise ValueError("Exported span must have a row_id")
     return _update_span_impl(
         parent_object_type=components.object_type,
-        parent_object_id=LazyValue(_span_components_to_object_id_lambda(components), use_mutex=False),
+        parent_object_id=LazyValue(_span_components_to_object_id_lambda(components, state=state_obj), use_mutex=False),
         id=components.row_id,
         **event,
     )
@@ -2726,7 +2666,9 @@ class ParentSpanIds:
     root_span_id: str
 
 
-def _span_components_to_object_id_lambda(components: SpanComponentsV3) -> Callable[[], str]:
+def _span_components_to_object_id_lambda(
+    components: SpanComponentsV3, state: Optional[BraintrustState] = None
+) -> Callable[[], str]:
     if components.object_id:
         captured_object_id = components.object_id
         return lambda: captured_object_id
@@ -2735,21 +2677,23 @@ def _span_components_to_object_id_lambda(components: SpanComponentsV3) -> Callab
         raise Exception("Impossible: compute_object_metadata_args not supported for experiments")
     elif components.object_type == SpanObjectTypeV3.PROJECT_LOGS:
         captured_compute_object_metadata_args = components.compute_object_metadata_args
-        return lambda: _compute_logger_metadata(**captured_compute_object_metadata_args).project.id
+        return lambda: _compute_logger_metadata(state=state, **captured_compute_object_metadata_args).project.id
     else:
         raise Exception(f"Unknown object type: {components.object_type}")
 
 
-def span_components_to_object_id(components: SpanComponentsV3) -> str:
+def span_components_to_object_id(components: SpanComponentsV3, state: Optional[BraintrustState] = None) -> str:
     """
     Utility function to resolve the object ID of a SpanComponentsV3 object. This
     function may trigger a login to braintrust if the object ID is encoded
     lazily.
     """
-    return _span_components_to_object_id_lambda(components)()
+    return _span_components_to_object_id_lambda(components, state=state)()
 
 
-def permalink(slug: str, org_name: Optional[str] = None, app_url: Optional[str] = None) -> str:
+def permalink(
+    slug: str, org_name: Optional[str] = None, app_url: Optional[str] = None, state: Optional[BraintrustState] = None
+) -> str:
     """
     Format a permalink to the Braintrust application for viewing the span represented by the provided `slug`.
 
@@ -2782,7 +2726,7 @@ def permalink(slug: str, org_name: Optional[str] = None, app_url: Optional[str] 
         components = SpanComponentsV3.from_str(slug)
 
         object_type = str(components.object_type)
-        object_id = span_components_to_object_id(components)
+        object_id = span_components_to_object_id(components, state=state)
         id = components.row_id
 
         if not id:
@@ -2804,6 +2748,7 @@ def _start_span_parent_args(
     parent_compute_object_metadata_args: Optional[Dict[str, Any]],
     parent_span_ids: Optional[ParentSpanIds],
     propagated_event: Optional[Dict[str, Any]],
+    state: Optional[BraintrustState] = None,
 ) -> Dict[str, Any]:
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
@@ -2812,7 +2757,7 @@ def _start_span_parent_args(
             parent_object_type == parent_components.object_type
         ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
 
-        parent_components_object_id_lambda = _span_components_to_object_id_lambda(parent_components)
+        parent_components_object_id_lambda = _span_components_to_object_id_lambda(parent_components, state=state)
 
         def compute_parent_object_id():
             parent_components_object_id = parent_components_object_id_lambda()
@@ -3076,6 +3021,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
             parent_object_type=self._parent_object_type(),
             parent_object_id=self._lazy_id,
             id=id,
+            state=self._get_state(),
             **event,
         )
 
@@ -3199,6 +3145,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
                 parent_compute_object_metadata_args=None,
                 parent_span_ids=None,
                 propagated_event=propagated_event,
+                state=self.state,
             ),
             name=name,
             type=type,
@@ -3276,6 +3223,7 @@ class SpanImpl(Span):
         propagated_event: Optional[Dict[str, Any]] = None,
         span_id: Optional[str] = None,
         root_span_id: Optional[str] = None,
+        state: Optional[BraintrustState] = None,
     ):
         if span_attributes is None:
             span_attributes = SpanAttributes()
@@ -3283,6 +3231,7 @@ class SpanImpl(Span):
             event = {}
         if type is None and not parent_span_ids:
             type = default_root_type
+        self.state = state or _state
 
         self.set_current = coalesce(set_current, True)
         self._logged_end_time: Optional[float] = None
@@ -3411,7 +3360,7 @@ class SpanImpl(Span):
                 ).object_id_fields(),
             )
 
-        _state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
+        self.state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
 
     def log_feedback(self, **event: Any) -> None:
         return _log_feedback_impl(
@@ -3444,6 +3393,7 @@ class SpanImpl(Span):
                 parent_compute_object_metadata_args=self.parent_compute_object_metadata_args,
                 parent_span_ids=parent_span_ids,
                 propagated_event=coalesce(propagated_event, self.propagated_event),
+                state=self.state,
             ),
             name=name,
             type=type,
@@ -3484,7 +3434,7 @@ class SpanImpl(Span):
     def link(self) -> str:
         parent_type, info = self._get_parent_info()
         if parent_type == SpanObjectTypeV3.PROJECT_LOGS:
-            cur_logger = _state.current_logger
+            cur_logger = self.state.current_logger
             if not cur_logger:
                 return NOOP_SPAN_PERMALINK
             base_url = cur_logger._get_link_base_url()
@@ -3500,8 +3450,8 @@ class SpanImpl(Span):
             else:
                 return _get_error_link("no-project-id-or-name")
         elif parent_type == SpanObjectTypeV3.EXPERIMENT:
-            app_url = _state.app_url or _get_app_url()
-            org_name = _state.org_name or _get_org_name()
+            app_url = self.state.app_url or _get_app_url()
+            org_name = self.state.org_name or _get_org_name()
             if not app_url or not org_name:
                 return _get_error_link("provide-app-url-or-org-name")
             base_url = f"{app_url}/app/{org_name}"
@@ -3516,7 +3466,7 @@ class SpanImpl(Span):
 
     def permalink(self) -> str:
         try:
-            return permalink(self.export())
+            return permalink(self.export(), state=self.state)
         except Exception as e:
             if "BRAINTRUST_API_KEY" in str(e):
                 return _get_error_link("login-or-provide-org-name")
@@ -3529,11 +3479,11 @@ class SpanImpl(Span):
     def flush(self) -> None:
         """Flush any pending rows to the server."""
 
-        _state.global_bg_logger().flush()
+        self.state.global_bg_logger().flush()
 
     def __enter__(self) -> Span:
         if self.set_current:
-            self._context_token = _state.current_span.set(self)
+            self._context_token = self.state.current_span.set(self)
         return self
 
     def __exit__(self, exc_type, exc_value, tb) -> None:
@@ -3542,7 +3492,7 @@ class SpanImpl(Span):
                 self.log_internal(dict(error=stringify_exception(exc_type, exc_value, tb)))
         finally:
             if self.set_current:
-                _state.current_span.reset(self._context_token)
+                self.state.current_span.reset(self._context_token)
 
             self.end()
 
@@ -4168,6 +4118,7 @@ class Logger(Exportable):
         async_flush: bool = True,
         compute_metadata_args: Optional[Dict] = None,
         link_args: Optional[Dict] = None,
+        state: Optional[BraintrustState] = None,
     ):
         self._lazy_metadata = lazy_metadata
         self.async_flush = async_flush
@@ -4175,6 +4126,7 @@ class Logger(Exportable):
         self.last_start_time = time.time()
         self._lazy_id = LazyValue(lambda: self.id, use_mutex=False)
         self._called_start_span = False
+        self.state = state
         # unresolved args about the org / project. Use these as potential
         # fallbacks when generating links
         self._link_args = link_args
@@ -4198,7 +4150,7 @@ class Logger(Exportable):
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
         self._lazy_metadata.get()
-        return _state
+        return self.state or _state
 
     def log(
         self,
@@ -4327,6 +4279,7 @@ class Logger(Exportable):
             parent_object_type=self._parent_object_type(),
             parent_object_id=self._lazy_id,
             id=id,
+            state=self._get_state(),
             **event,
         )
 
@@ -4351,6 +4304,7 @@ class Logger(Exportable):
                 parent_compute_object_metadata_args=self._compute_metadata_args,
                 parent_span_ids=None,
                 propagated_event=propagated_event,
+                state=self.state,
             ),
             name=name,
             type=type,
@@ -4392,8 +4346,8 @@ class Logger(Exportable):
         # the url and org name can be passed into init_logger, resolved by login or provided as env variables
         # so this resolves all of those things. It's possible we never have an org name if the user has not
         # yet logged in and there is nothing else configured.
-        app_url = _state.app_url or self._link_args.get("app_url") or _get_app_url()
-        org_name = _state.org_name or self._link_args.get("org_name") or _get_org_name()
+        app_url = self._get_state().app_url or self._link_args.get("app_url") or _get_app_url()
+        org_name = self._get_state().org_name or self._link_args.get("org_name") or _get_org_name()
         if not app_url or not org_name:
             return None
         return f"{app_url}/app/{org_name}"
@@ -4405,7 +4359,7 @@ class Logger(Exportable):
         """
         Flush any pending logs to the server.
         """
-        _state.global_bg_logger().flush()
+        self._get_state().global_bg_logger().flush()
 
 
 @dataclasses.dataclass
@@ -4600,10 +4554,10 @@ def _get_error_link(msg="") -> str:
 class OrgInfo(SerializableDataClass):
     id: str
     name: str
-    api_url: Optional[str]
-    git_metadata: Optional[str]
-    proxy_url: Optional[str]
-    realtime_url: Optional[str]
+    api_url: Optional[str] = None
+    git_metadata: Optional[GitMetadataSettings] = None
+    proxy_url: Optional[str] = None
+    realtime_url: Optional[str] = None
 
 
 @dataclasses.dataclass
@@ -4624,35 +4578,58 @@ def login_to_state(
     state.app_url = app_url
     state.app_public_url = app_public_url
 
-    if not api_key:
-        raise ValueError("Please specify an api key (e.g. by setting BRAINTRUST_API_KEY).")
+    conn = None
+    if api_key == TEST_API_KEY:
+        # a small hook for pseudo-logins
+        test_org_info = [
+            OrgInfo(
+                id="test-org-id",
+                name=org_name or "test-org-name",
+                api_url="https://api.braintrust.ai",
+                proxy_url="https://proxy.braintrust.ai",
+            )
+        ]
+        _save_org_info(state, test_org_info, org_name)
+        state.login_token = TEST_API_KEY
+        state.logged_in = True
+        return state
 
-    resp = requests.post(
-        _urljoin(state.app_url, "/api/apikey/login"),
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
-    )
+    if api_key is not None:
+        app_conn = HTTPConnection(state.app_url, adapter=_http_adapter, state=state)
+        app_conn.set_token(api_key)
+        resp = app_conn.post("api/apikey/login")
+        if not resp.ok:
+            masked_api_key = mask_api_key(api_key)
+            raise ValueError(f"Invalid API key {masked_api_key}: [{resp.status_code}] {resp.text}")
 
-    resp.raise_for_status()
+        info = LoginResponse.from_dict_deep(resp.json())
 
-    info = LoginResponse.from_dict_deep(resp.json())
+        _save_org_info(state, info.org_info, org_name)
 
-    _save_org_info(state, info.org_info, org_name)
-
-    conn = state.api_conn()
-    conn.set_token(api_key)
+        conn = state.api_conn()
+        conn.set_token(api_key)
 
     if not conn:
-        raise RuntimeError("Conn should be set at this point (a bug)")
+        raise ValueError("Could not login to Braintrust. You may need to set BRAINTRUST_API_KEY in your environment.")
 
+    # make_long_lived() allows the connection to retry if it breaks, which we're okay with after
+    # this point because we know the connection _can_ successfully ping.
     conn.make_long_lived()
 
+    # Same for the app conn, which we know is valid because we have
+    # successfully logged in.
+    state.app_conn().make_long_lived()
+
+    # Set the same token in the API
     state.app_conn().set_token(api_key)
     if state.proxy_url:
         state.proxy_conn().set_token(api_key)
+        state.proxy_conn().make_long_lived()
 
     state.login_token = conn.token
     state.logged_in = True
 
+    # Replace the global logger's api_conn with this one.
     state.login_replace_api_conn(conn)
 
     return state
@@ -4668,10 +4645,19 @@ def _save_org_info(state: BraintrustState, org_info: List[OrgInfo], org_name: Op
             state.org_name = org.name
             state.api_url = os.getenv("BRAINTRUST_API_URL") or org.api_url
             state.proxy_url = os.getenv("BRAINTRUST_PROXY_URL") or org.proxy_url
-            # TODO: git metadata
+            state.git_metadata_settings = org.git_metadata
             break
 
     if state.org_id is None:
         raise ValueError(
             f"Organization {org_name} not found. Must be one of {', '.join(org.name for org in org_info)}"
         )
+
+
+def with_parent(parent: str, callback: Callable[[], Any], state: Optional[BraintrustState] = None):
+    state_obj = state or _state
+    token = state_obj.current_parent.set(parent)
+    try:
+        return callback()
+    finally:
+        state_obj.current_parent.reset(token)

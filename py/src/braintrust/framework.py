@@ -28,7 +28,6 @@ from typing import (
     Type,
     TypeVar,
     Union,
-    cast,
 )
 
 from tqdm.asyncio import tqdm as async_tqdm
@@ -37,7 +36,6 @@ from typing_extensions import NotRequired, Protocol, TypedDict
 
 from .git_fields import GitMetadataSettings, RepoInfo
 from .logger import (
-    NOOP_SPAN,
     BraintrustState,
     Dataset,
     Experiment,
@@ -46,7 +44,10 @@ from .logger import (
     ScoreSummary,
     Span,
     _ExperimentDatasetEvent,
+    flush,
+    start_span,
     stringify_exception,
+    with_parent,
 )
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
@@ -182,7 +183,7 @@ class ReportProgress(Protocol):
         output_type: FunctionOutputType,
         event: Literal["reasoning_delta", "text_delta", "json_delta", "error", "console", "start", "done", "progress"],
         data: str,
-    ) -> None:
+    ) -> Awaitable[None]:
         ...
 
 
@@ -672,7 +673,7 @@ class StreamProgress(Protocol):
         name: str,
         event: SSEProgressEventDataEvent,
         data: str,  # this is the text_delta or json_delta
-    ) -> None:
+    ) -> Awaitable[None]:
         ...
 
 
@@ -699,6 +700,7 @@ def _EvalCommon(
     error_score_handler: Optional[ErrorScoreHandler] = None,
     state: Optional[BraintrustState] = None,
     stream: Optional[StreamProgress] = None,
+    parent: Optional[str] = None,
 ) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary[Input, Output]]]:
     """
     This helper is needed because in case of `_lazy_load`, we need to update
@@ -750,6 +752,7 @@ def _EvalCommon(
             )
 
         reporter = reporter or default_reporter
+        assert reporter is not None
 
         if base_experiment_name is None and isinstance(evaluator.data, BaseExperiment):
             base_experiment_name = evaluator.data.name
@@ -760,29 +763,39 @@ def _EvalCommon(
 
         # NOTE: This code is duplicated with run_evaluator_task in py/src/braintrust/cli/eval.py.
         # Make sure to update those arguments if you change this.
-        experiment = init_experiment(
-            project_name=evaluator.project_name if evaluator.project_id is None else None,
-            project_id=evaluator.project_id,
-            experiment_name=evaluator.experiment_name,
-            description=evaluator.description,
-            metadata=evaluator.metadata,
-            is_public=evaluator.is_public,
-            update=evaluator.update,
-            base_experiment=base_experiment_name,
-            base_experiment_id=base_experiment_id,
-            git_metadata_settings=evaluator.git_metadata_settings,
-            repo_info=evaluator.repo_info,
-            dataset=dataset,
-            state=state,
+        experiment = (
+            init_experiment(
+                project_name=evaluator.project_name if evaluator.project_id is None else None,
+                project_id=evaluator.project_id,
+                experiment_name=evaluator.experiment_name,
+                description=evaluator.description,
+                metadata=evaluator.metadata,
+                is_public=evaluator.is_public,
+                update=evaluator.update,
+                base_experiment=base_experiment_name,
+                base_experiment_id=base_experiment_id,
+                git_metadata_settings=evaluator.git_metadata_settings,
+                repo_info=evaluator.repo_info,
+                dataset=dataset,
+                state=state,
+            )
+            if parent is None
+            else None
         )
 
         async def run_to_completion():
             try:
-                ret = await run_evaluator(experiment, evaluator, 0, [], stream=stream)
-                reporter.report_eval(evaluator, ret, verbose=True, jsonl=False)
+                if parent:
+                    ret = await with_parent(parent, lambda: run_evaluator(None, evaluator, 0, [], stream=stream))
+                else:
+                    ret = await run_evaluator(experiment, evaluator, 0, [], stream=stream)
+                reporter.report_eval(evaluator, ret, True, False)
                 return ret
             finally:
-                experiment.flush()
+                if experiment:
+                    experiment.flush()
+                elif parent:
+                    flush()
 
         return run_to_completion
 
@@ -810,6 +823,7 @@ async def EvalAsync(
     summarize_scores: bool = True,
     state: Optional[BraintrustState] = None,
     stream: Optional[StreamProgress] = None,
+    parent: Optional[str] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -857,6 +871,7 @@ async def EvalAsync(
     :param error_score_handler: Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
     :param description: An optional description for the experiment.
     :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
+    :param parent: If specified, instead of creating a new experiment object, the Eval() will populate the object or span specified by this parent.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
     f = _EvalCommon(
@@ -881,6 +896,7 @@ async def EvalAsync(
         summarize_scores=summarize_scores,
         state=state,
         stream=stream,
+        parent=parent,
     )
 
     return await f()
@@ -1146,14 +1162,14 @@ class DictEvalHooks(Dict[str, Any]):
 
         self.get("metadata").update(info)  # type: ignore
 
-    def report_progress(
+    async def report_progress(
         self,
         format: FunctionFormat,
         output_type: FunctionOutputType,
         event: Literal["reasoning_delta", "text_delta", "json_delta", "error", "console", "start", "done", "progress"],
         data: str,
     ) -> None:
-        self._report_progress(format=format, output_type=output_type, event=event, data=data)
+        await self._report_progress(format=format, output_type=output_type, event=event, data=data)
 
 
 def init_experiment(
@@ -1248,7 +1264,7 @@ def default_error_score_handler(
 
 
 async def _run_evaluator_internal(
-    experiment,
+    experiment: Optional[Experiment],
     evaluator: Evaluator,
     position: Optional[int],
     filters: List[Filter],
@@ -1302,7 +1318,7 @@ async def _run_evaluator_internal(
     scorer_names = [scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
     unhandled_scores = scorer_names
 
-    async def run_evaluator_task(datum, trial_index=0):
+    async def run_evaluator_task(datum: Union[Dict[str, Any], EvalCase[Any, Any]], trial_index: int = 0):
         if isinstance(datum, dict):
             datum = EvalCase.from_dict(datum)
 
@@ -1314,51 +1330,55 @@ async def _run_evaluator_internal(
 
         event_dataset = (
             experiment.dataset
-            if experiment.dataset
+            if experiment and experiment.dataset
             else evaluator.data
             if isinstance(evaluator.data, Dataset)
             else None
         )
 
-        base_event = {
-            "name": "eval",
-            "span_attributes": {"type": SpanTypeAttribute.EVAL},
-            "input": datum.input,
-            "expected": datum.expected,
-            "tags": datum.tags,
-            "origin": {
-                "object_type": "dataset",
-                "object_id": experiment.dataset.id,
-                "id": datum.id,
-                "created": datum.created,
-                "_xact_id": datum._xact_id,
-            }
+        origin = (
+            ObjectReference(
+                object_type="dataset",
+                object_id=event_dataset.id,
+                id=datum.id,
+                created=datum.created,
+                _xact_id=datum._xact_id,
+            )
             if event_dataset and datum.id and datum._xact_id
-            else None,
-        }
+            else None
+        )
 
+        start_span_fn = start_span
         if experiment:
-            root_span = experiment.start_span(**base_event)
-        else:
-            root_span = NOOP_SPAN
+            start_span_fn = experiment.start_span
+
+        root_span = start_span_fn(
+            name="eval",
+            span_attributes={"type": SpanTypeAttribute.EVAL},
+            input=datum.input,
+            expected=datum.expected,
+            tags=datum.tags,
+            origin=origin,
+            state=evaluator.state if not experiment else None,
+        )
 
         with root_span:
             try:
 
-                def report_progress(
+                async def report_progress(
                     format: FunctionFormat,
                     output_type: FunctionOutputType,
                     event: SSEProgressEventDataEvent,
                     data: str,
                 ):
                     if stream:
-                        stream(
+                        await stream(
                             id=root_span.id,
                             format=format,
                             output_type=output_type,
                             event=event,
                             data=data,
-                            origin=cast(ObjectReference, base_event["origin"]),
+                            origin=origin,
                             name=evaluator.eval_name,
                             object_type="task",
                         )
@@ -1435,6 +1455,8 @@ async def _run_evaluator_internal(
                 # Python3.10 has a different set of arguments to format_exception than earlier versions,
                 # so just capture the stack trace here.
                 exc_info = traceback.format_exc()
+            finally:
+                root_span.end()
 
         return EvalResult(
             input=datum.input,
