@@ -45,6 +45,7 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
 
     app = FastAPI()
 
+    # TODO: if streaming should handle this better!
     @app.exception_handler(Exception)
     async def global_exception_handler(_: Request, exc: Exception):  # pyright: ignore[reportUnusedFunction]
         return JSONResponse(
@@ -121,7 +122,7 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
             eval_defs[name] = cast(
                 ListEvals,
                 {
-                    "parameters": None,  # TODO: no parameters in evaluator
+                    # "parameters": None,  # TODO: no parameters in evaluator
                     "scores": [{"name": scorer_name(score, i)} for i, score in enumerate(evaluator.scores)],
                 },
             )
@@ -247,7 +248,7 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
 
         result = await eval_task
 
-        return result.summary
+        return {snake_to_camel(key): value for key, value in clean(result.summary.as_dict()).items()}
 
     uvicorn.run(app, host=host, port=port)
 

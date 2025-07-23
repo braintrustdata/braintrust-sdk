@@ -3135,6 +3135,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         set_current: Optional[bool] = None,
         parent: Optional[str] = None,
         propagated_event: Optional[Dict[str, Any]] = None,
+        state: Optional[BraintrustState] = None,
         **event: Any,
     ) -> Span:
         return SpanImpl(
@@ -3145,7 +3146,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
                 parent_compute_object_metadata_args=None,
                 parent_span_ids=None,
                 propagated_event=propagated_event,
-                state=self.state,
+                state=state or self.state,
             ),
             name=name,
             type=type,
