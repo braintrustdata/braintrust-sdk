@@ -78,7 +78,7 @@ def _get_base_branch_ancestor(remote=None):
         return None
 
 
-def get_past_n_ancestors(n=200, remote=None):
+def get_past_n_ancestors(n=1000, remote=None):
     with _gitlock:
         repo = _current_repo()
         if repo is None:
