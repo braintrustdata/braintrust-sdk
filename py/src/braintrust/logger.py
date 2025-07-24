@@ -324,7 +324,7 @@ class BraintrustState:
         )
 
         def default_get_api_conn():
-            login()
+            self.login()
             return self.api_conn()
 
         # Any time we re-log in, we directly update the api_conn inside the
@@ -448,6 +448,7 @@ class BraintrustState:
         self._api_conn = other._api_conn
         self.login_replace_api_conn(self.api_conn())
         self._proxy_conn = other._proxy_conn
+        self._user_info = other._user_info
 
 
 _state: BraintrustState = None  # type: ignore
@@ -523,17 +524,18 @@ class HTTPConnection:
         self.base_url = base_url
         self.token = None
         self.adapter = adapter
-        self.state = state
+        self._state = state
 
         self._reset(total=0)
 
-    def _get_state(self):
-        return self.state or _state
+    @property
+    def state(self):
+        return self._state or _state
 
     def ping(self) -> bool:
         try:
             resp = self.get("ping")
-            self._get_state().set_user_info_if_null(resp.json())
+            self.state.set_user_info_if_null(resp.json())
             return resp.ok
         except requests.exceptions.ConnectionError:
             return False
@@ -2116,7 +2118,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
         return self._refetch()
 
     @abstractmethod
-    def _get_state(self) -> BraintrustState:
+    def _get_logged_in_state(self) -> BraintrustState:
         ...
 
     @property
@@ -2125,7 +2127,7 @@ class ObjectFetcher(ABC, Generic[TMapping]):
         ...
 
     def _refetch(self) -> List[TMapping]:
-        state = self._get_state()
+        state = self._get_logged_in_state()
         if self._fetched_data is None:
             cursor = None
             data = None
@@ -2835,7 +2837,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         dataset: Optional["Dataset"] = None,
         state: Optional[BraintrustState] = None,
     ):
-        self.state = state
+        self._state = state
         self._lazy_metadata = lazy_metadata
         self.dataset = dataset
         self.last_start_time = time.time()
@@ -2865,6 +2867,10 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
     def project(self) -> ObjectMetadata:
         return self._lazy_metadata.get().project
 
+    @property
+    def state(self) -> BraintrustState:
+        return self._state or _state
+
     @staticmethod
     def _parent_object_type():
         return SpanObjectTypeV3.EXPERIMENT
@@ -2873,10 +2879,10 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
     def __getattr__(self, name: str) -> Any:
         return self._lazy_metadata.get().experiment.full_info[name]
 
-    def _get_state(self) -> BraintrustState:
+    def _get_logged_in_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
         self._lazy_metadata.get()
-        return self.state or _state
+        return self.state
 
     def log(
         self,
@@ -3003,12 +3009,12 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
             parent_object_type=self._parent_object_type(),
             parent_object_id=self._lazy_id,
             id=id,
-            state=self._get_state(),
+            state=self.state,
             **event,
         )
 
     def fetch_base_experiment(self) -> Optional[ExperimentIdentifier]:
-        state = self._get_state()
+        state = self._get_logged_in_state()
         conn = state.app_conn()
 
         resp = conn.post("/api/base_experiment/get_id", json={"id": self.id})
@@ -3037,7 +3043,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         # includes the new experiment.
         self.flush()
 
-        state = self._get_state()
+        state = self._get_logged_in_state()
         project_url = f"{state.app_public_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
         experiment_url = f"{project_url}/experiments/{encode_uri_component(self.name)}"
 
@@ -3106,7 +3112,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
     def flush(self) -> None:
         """Flush any pending rows to the server."""
 
-        self._get_state().global_bg_logger().flush()
+        self.state.global_bg_logger().flush()
 
     def _start_span_impl(
         self,
@@ -3158,7 +3164,7 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
 
     def __init__(self, lazy_metadata: LazyValue[ProjectExperimentMetadata], state: Optional[BraintrustState] = None):
         self._lazy_metadata = lazy_metadata
-        self.state = state
+        self._state = state
 
         ObjectFetcher.__init__(
             self,
@@ -3168,13 +3174,17 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
         )
 
     @property
+    def state(self) -> BraintrustState:
+        return self._state or _state
+
+    @property
     def id(self) -> str:
         return self._lazy_metadata.get().experiment.id
 
-    def _get_state(self) -> BraintrustState:
+    def _get_logged_in_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
         self._lazy_metadata.get()
-        return self.state or _state
+        return self.state
 
     def as_dataset(self) -> Iterator[_ExperimentDatasetEvent]:
         return ExperimentDatasetIterator(self.fetch())
@@ -3208,13 +3218,14 @@ class SpanImpl(Span):
         root_span_id: Optional[str] = None,
         state: Optional[BraintrustState] = None,
     ):
+        self._state = state
+
         if span_attributes is None:
             span_attributes = SpanAttributes()
         if event is None:
             event = {}
         if type is None and not parent_span_ids:
             type = default_root_type
-        self.state = state
 
         self.set_current = coalesce(set_current, True)
         self._logged_end_time: Optional[float] = None
@@ -3284,8 +3295,9 @@ class SpanImpl(Span):
     def id(self) -> str:
         return self._id
 
-    def _get_state(self):
-        return self.state or _state
+    @property
+    def state(self) -> BraintrustState:
+        return self._state or _state
 
     def set_attributes(
         self,
@@ -3346,7 +3358,7 @@ class SpanImpl(Span):
                 ).object_id_fields(),
             )
 
-        self._get_state().global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
+        self.state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
 
     def log_feedback(self, **event: Any) -> None:
         return _log_feedback_impl(
@@ -3379,7 +3391,7 @@ class SpanImpl(Span):
                 parent_compute_object_metadata_args=self.parent_compute_object_metadata_args,
                 parent_span_ids=parent_span_ids,
                 propagated_event=coalesce(propagated_event, self.propagated_event),
-                state=self._get_state(),
+                state=self.state,
             ),
             name=name,
             type=type,
@@ -3420,7 +3432,7 @@ class SpanImpl(Span):
     def link(self) -> str:
         parent_type, info = self._get_parent_info()
         if parent_type == SpanObjectTypeV3.PROJECT_LOGS:
-            cur_logger = self._get_state().current_logger
+            cur_logger = self.state.current_logger
             if not cur_logger:
                 return NOOP_SPAN_PERMALINK
             base_url = cur_logger._get_link_base_url()
@@ -3436,8 +3448,8 @@ class SpanImpl(Span):
             else:
                 return _get_error_link("no-project-id-or-name")
         elif parent_type == SpanObjectTypeV3.EXPERIMENT:
-            app_url = self._get_state().app_url or _get_app_url()
-            org_name = self._get_state().org_name or _get_org_name()
+            app_url = self.state.app_url or _get_app_url()
+            org_name = self.state.org_name or _get_org_name()
             if not app_url or not org_name:
                 return _get_error_link("provide-app-url-or-org-name")
             base_url = f"{app_url}/app/{org_name}"
@@ -3452,7 +3464,7 @@ class SpanImpl(Span):
 
     def permalink(self) -> str:
         try:
-            return permalink(self.export(), state=self._get_state())
+            return permalink(self.export(), state=self.state)
         except Exception as e:
             if "BRAINTRUST_API_KEY" in str(e):
                 return _get_error_link("login-or-provide-org-name")
@@ -3465,11 +3477,11 @@ class SpanImpl(Span):
     def flush(self) -> None:
         """Flush any pending rows to the server."""
 
-        self._get_state().global_bg_logger().flush()
+        self.state.global_bg_logger().flush()
 
     def __enter__(self) -> Span:
         if self.set_current:
-            self._context_token = self._get_state().current_span.set(self)
+            self._context_token = self.state.current_span.set(self)
         return self
 
     def __exit__(self, exc_type, exc_value, tb) -> None:
@@ -3478,7 +3490,7 @@ class SpanImpl(Span):
                 self.log_internal(dict(error=stringify_exception(exc_type, exc_value, tb)))
         finally:
             if self.set_current:
-                self._get_state().current_span.reset(self._context_token)
+                self.state.current_span.reset(self._context_token)
 
             self.end()
 
@@ -3563,7 +3575,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         _internal_btql: Optional[Dict[str, Any]] = None,
         state: Optional[BraintrustState] = None,
     ):
-        self.state = state
+        self._state = state
 
         if legacy:
             eprint(
@@ -3601,14 +3613,18 @@ class Dataset(ObjectFetcher[DatasetEvent]):
     def project(self):
         return self._lazy_metadata.get().project
 
+    @property
+    def state(self) -> BraintrustState:
+        return self._state or _state
+
     # Capture all metadata attributes which aren't covered by existing methods.
     def __getattr__(self, name: str) -> Any:
         return self._lazy_metadata.get().dataset.full_info[name]
 
-    def _get_state(self) -> BraintrustState:
+    def _get_logged_in_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
         self._lazy_metadata.get()
-        return self.state or _state
+        return self.state
 
     def _validate_event(
         self,
@@ -3701,7 +3717,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
 
         self._clear_cache()  # We may be able to optimize this
         self.new_records += 1
-        self._get_state().global_bg_logger().log(args)
+        self.state.global_bg_logger().log(args)
         return row_id
 
     def update(
@@ -3736,7 +3752,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         )
 
         self._clear_cache()  # We may be able to optimize this
-        self._get_state().global_bg_logger().log(args)
+        self.state.global_bg_logger().log(args)
         return id
 
     def delete(self, id: str) -> str:
@@ -3763,7 +3779,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
                 dataset_id=self.id,
             )
 
-        self._get_state().global_bg_logger().log(LazyValue(compute_args, use_mutex=False))
+        self.state.global_bg_logger().log(LazyValue(compute_args, use_mutex=False))
         return id
 
     def summarize(self, summarize_data: bool = True) -> "DatasetSummary":
@@ -3776,7 +3792,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         # Flush our events to the API, and to the data warehouse, to ensure that the link we print
         # includes the new experiment.
         self.flush()
-        state = self._get_state()
+        state = self._get_logged_in_state()
         project_url = f"{state.app_public_url}/app/{encode_uri_component(state.org_name)}/p/{encode_uri_component(self.project.name)}"
         dataset_url = f"{project_url}/datasets/{encode_uri_component(self.name)}"
 
@@ -3810,7 +3826,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
     def flush(self) -> None:
         """Flush any pending rows to the server."""
 
-        self._get_state().global_bg_logger().flush()
+        self.state.global_bg_logger().flush()
 
     def __enter__(self) -> "Dataset":
         return self
@@ -4106,13 +4122,13 @@ class Logger(Exportable):
         link_args: Optional[Dict] = None,
         state: Optional[BraintrustState] = None,
     ):
+        self._state = state
         self._lazy_metadata = lazy_metadata
         self.async_flush = async_flush
         self._compute_metadata_args = compute_metadata_args
         self.last_start_time = time.time()
         self._lazy_id = LazyValue(lambda: self.id, use_mutex=False)
         self._called_start_span = False
-        self.state = state
         # unresolved args about the org / project. Use these as potential
         # fallbacks when generating links
         self._link_args = link_args
@@ -4129,14 +4145,18 @@ class Logger(Exportable):
     def id(self) -> str:
         return self.project.id
 
+    @property
+    def state(self) -> BraintrustState:
+        return self._state or _state
+
     @staticmethod
     def _parent_object_type():
         return SpanObjectTypeV3.PROJECT_LOGS
 
-    def _get_state(self) -> BraintrustState:
+    def _get_logged_in_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
         self._lazy_metadata.get()
-        return self.state or _state
+        return self.state
 
     def log(
         self,
@@ -4265,7 +4285,7 @@ class Logger(Exportable):
             parent_object_type=self._parent_object_type(),
             parent_object_id=self._lazy_id,
             id=id,
-            state=self._get_state(),
+            state=self.state,
             **event,
         )
 
@@ -4290,7 +4310,7 @@ class Logger(Exportable):
                 parent_compute_object_metadata_args=self._compute_metadata_args,
                 parent_span_ids=None,
                 propagated_event=propagated_event,
-                state=self._get_state(),
+                state=self.state,
             ),
             name=name,
             type=type,
@@ -4332,8 +4352,8 @@ class Logger(Exportable):
         # the url and org name can be passed into init_logger, resolved by login or provided as env variables
         # so this resolves all of those things. It's possible we never have an org name if the user has not
         # yet logged in and there is nothing else configured.
-        app_url = self._get_state().app_url or self._link_args.get("app_url") or _get_app_url()
-        org_name = self._get_state().org_name or self._link_args.get("org_name") or _get_org_name()
+        app_url = self.state.app_url or self._link_args.get("app_url") or _get_app_url()
+        org_name = self.state.org_name or self._link_args.get("org_name") or _get_org_name()
         if not app_url or not org_name:
             return None
         return f"{app_url}/app/{org_name}"
@@ -4345,7 +4365,7 @@ class Logger(Exportable):
         """
         Flush any pending logs to the server.
         """
-        self._get_state().global_bg_logger().flush()
+        self.state.global_bg_logger().flush()
 
 
 @dataclasses.dataclass
