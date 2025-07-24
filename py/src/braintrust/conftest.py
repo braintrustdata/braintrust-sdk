@@ -11,14 +11,22 @@ def override_app_url_for_tests():
     This fixture ensures that tests always use the production URL (https://www.braintrust.dev)
     regardless of the local development environment settings. This prevents test failures
     when BRAINTRUST_APP_URL is set to localhost for development.
+
+    Also clears BRAINTRUST_API_KEY to ensure tests run in a consistent logged-out state
+    unless explicitly logged in via test helpers.
     """
     original_app_url = os.environ.get("BRAINTRUST_APP_URL")
     original_app_public_url = os.environ.get("BRAINTRUST_APP_PUBLIC_URL")
+    original_api_key = os.environ.get("BRAINTRUST_API_KEY")
 
     # Set to production URL for consistent test behavior
     os.environ["BRAINTRUST_APP_URL"] = "https://www.braintrust.dev"
     if "BRAINTRUST_APP_PUBLIC_URL" in os.environ:
         del os.environ["BRAINTRUST_APP_PUBLIC_URL"]
+
+    # Clear API key for consistent logged-out test behavior
+    if "BRAINTRUST_API_KEY" in os.environ:
+        del os.environ["BRAINTRUST_API_KEY"]
 
     try:
         yield
@@ -31,3 +39,7 @@ def override_app_url_for_tests():
 
         if original_app_public_url is not None:
             os.environ["BRAINTRUST_APP_PUBLIC_URL"] = original_app_public_url
+
+        # Restore original API key
+        if original_api_key is not None:
+            os.environ["BRAINTRUST_API_KEY"] = original_api_key
