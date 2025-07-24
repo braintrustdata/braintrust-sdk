@@ -6,7 +6,7 @@ from fastapi.exceptions import HTTPException
 from fastapi.security import HTTPBearer
 from starlette.status import HTTP_401_UNAUTHORIZED
 
-from braintrust.logger import BraintrustState, LoginOptions, login_to_state
+from braintrust.logger import BraintrustState, login_to_state
 
 
 class BraintrustApiKey(HTTPBearer):
@@ -29,4 +29,4 @@ class BraintrustApiKey(HTTPBearer):
 
 @lru_cache(maxsize=32)
 def cached_login(api_key: str, org_name: Optional[str] = None):
-    return login_to_state(LoginOptions(api_key=api_key, org_name=org_name))
+    return login_to_state(api_key=api_key, org_name=org_name)

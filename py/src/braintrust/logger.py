@@ -308,26 +308,10 @@ NOOP_SPAN: Span = _NoopSpan()
 NOOP_SPAN_PERMALINK = "https://www.braintrust.dev/noop-span"
 
 
-@dataclasses.dataclass
-class LoginOptions:
-    app_url: Optional[str] = None
-    api_key: Optional[str] = None
-    org_name: Optional[str] = None
-
-
-@dataclasses.dataclass
-class FullLoginOptions(LoginOptions):
-    force_login: bool = False
-
-    def as_login_options(self):
-        login_options = dataclasses.asdict(self)
-        login_options.pop("force_login")
-        return LoginOptions(**login_options)
-
-
 class BraintrustState:
-    def __init__(self, login_params: Optional[LoginOptions] = None):
-        self.login_params = login_params or LoginOptions()
+    def __init__(self, app_url: Optional[str] = None, api_key: Optional[str] = None, org_name: Optional[str] = None):
+        self.login_params = dict(app_url=app_url, api_key=api_key, org_name=org_name)
+
         self.id = str(uuid.uuid4())
         self.current_experiment: Optional[Experiment] = None
         self.current_logger: Optional[Logger] = None
@@ -431,18 +415,20 @@ class BraintrustState:
     def login_replace_api_conn(self, api_conn: "HTTPConnection"):
         self._global_bg_logger.get().internal_replace_api_conn(api_conn)
 
-    def login(self, options: Optional[FullLoginOptions] = None):
-        options = options or FullLoginOptions()
-        if self.api_url and not options.force_login:
+    def login(
+        self,
+        app_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        org_name: Optional[str] = None,
+        force_login: bool = False,
+    ):
+        if self.api_url and not force_login:
             return
 
         new_state = login_to_state(
-            LoginOptions(
-                **{
-                    **dataclasses.asdict(self.login_params),
-                    **clean_dict(dataclasses.asdict(options.as_login_options())),
-                }
-            )
+            app_url=app_url or self.login_params.get("app_url"),
+            api_key=api_key or self.login_params.get("api_key"),
+            org_name=org_name or self.login_params.get("org_name"),
         )
 
         self.copy_login_info(new_state)
@@ -462,10 +448,6 @@ class BraintrustState:
         self._api_conn = other._api_conn
         self.login_replace_api_conn(self.api_conn())
         self._proxy_conn = other._proxy_conn
-
-
-def clean_dict(obj: Dict[str, Any]) -> Dict[str, Any]:
-    return {k: v for (k, v) in obj.items() if v is not None}
 
 
 _state: BraintrustState = None  # type: ignore
@@ -1154,7 +1136,7 @@ def init(
             raise ValueError(f"Cannot open an experiment without specifying its name")
 
         def compute_metadata():
-            state_obj.login(FullLoginOptions(org_name=org_name, api_key=api_key, app_url=app_url))
+            state_obj.login(org_name=org_name, api_key=api_key, app_url=app_url)
             args = {
                 "experiment_name": experiment,
                 "project_name": project,
@@ -1181,7 +1163,7 @@ def init(
 
     # pylint: disable=function-redefined
     def compute_metadata():
-        state_obj.login(FullLoginOptions(org_name=org_name, api_key=api_key, app_url=app_url))
+        state_obj.login(org_name=org_name, api_key=api_key, app_url=app_url)
         args = {
             "project_name": project,
             "project_id": project_id,
@@ -1291,7 +1273,7 @@ def init_dataset(
     state_obj = state or _state
 
     def compute_metadata():
-        state_obj.login(FullLoginOptions(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login))
+        state_obj.login(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login)
         args = _populate_args(
             {"project_name": project, "project_id": project_id, "org_id": state_obj.org_id},
             dataset_name=name,
@@ -1386,7 +1368,7 @@ def init_logger(
     }
 
     def compute_metadata():
-        login(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login)
+        state_obj.login(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login)
         return _compute_logger_metadata(state=state_obj, **compute_metadata_args)
 
     ret = Logger(
@@ -1560,7 +1542,7 @@ def login(
             check_updated_param("org_name", org_name, _state.org_name)
             return _state
 
-        _state.login(FullLoginOptions(app_url=app_url, api_key=api_key, org_name=org_name, force_login=force_login))
+        _state.login(app_url=app_url, api_key=api_key, org_name=org_name, force_login=force_login)
 
         return _state
 
@@ -4567,19 +4549,20 @@ class LoginResponse(SerializableDataClass):
 
 
 def login_to_state(
-    options: LoginOptions,
+    app_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    org_name: Optional[str] = None,
 ):
-    app_url = options.app_url or os.getenv("BRAINTRUST_APP_URL") or "https://www.braintrust.dev"
-    api_key = options.api_key or os.getenv("BRAINTRUST_API_KEY")
-    org_name = options.org_name or os.getenv("BRAINTRUST_ORG_NAME")
-    app_public_url = os.getenv("BRAINTRUS_APP_PUBLIC_URL") or app_url
+    app_url = _get_app_url(app_url)
+    api_key = api_key or os.getenv("BRAINTRUST_API_KEY")
+    org_name = _get_org_name(org_name)
+    app_public_url = os.getenv("BRAINTRUST_APP_PUBLIC_URL") or app_url
 
-    state = BraintrustState(options)
+    state = BraintrustState(app_url=app_url, api_key=api_key, org_name=org_name)
 
     state.app_url = app_url
     state.app_public_url = app_public_url
 
-    conn = None
     if api_key == TEST_API_KEY:
         # a small hook for pseudo-logins
         test_org_info = [
@@ -4595,6 +4578,7 @@ def login_to_state(
         state.logged_in = True
         return state
 
+    conn = None
     if api_key is not None:
         app_conn = HTTPConnection(state.app_url, adapter=_http_adapter, state=state)
         app_conn.set_token(api_key)
@@ -4612,6 +4596,8 @@ def login_to_state(
 
     if not conn:
         raise ValueError("Could not login to Braintrust. You may need to set BRAINTRUST_API_KEY in your environment.")
+
+    assert api_key is not None
 
     # make_long_lived() allows the connection to retry if it breaks, which we're okay with after
     # this point because we know the connection _can_ successfully ping.
