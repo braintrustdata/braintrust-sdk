@@ -1,7 +1,7 @@
 import pytest
 
 from braintrust import logger
-from braintrust.logger import ObjectMetadata, OrgProjectMetadata, _internal_reset_global_state, _MemoryBackgroundLogger
+from braintrust.logger import ObjectMetadata, OrgProjectMetadata
 from braintrust.util import LazyValue
 
 # Fake API key for testing only - this will not work with actual API calls

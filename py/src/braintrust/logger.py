@@ -3214,7 +3214,7 @@ class SpanImpl(Span):
             event = {}
         if type is None and not parent_span_ids:
             type = default_root_type
-        self.state = state or _state
+        self.state = state
 
         self.set_current = coalesce(set_current, True)
         self._logged_end_time: Optional[float] = None
@@ -3284,6 +3284,9 @@ class SpanImpl(Span):
     def id(self) -> str:
         return self._id
 
+    def _get_state(self):
+        return self.state or _state
+
     def set_attributes(
         self,
         name: Optional[str] = None,
@@ -3343,7 +3346,7 @@ class SpanImpl(Span):
                 ).object_id_fields(),
             )
 
-        self.state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
+        self._get_state().global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
 
     def log_feedback(self, **event: Any) -> None:
         return _log_feedback_impl(
@@ -3376,7 +3379,7 @@ class SpanImpl(Span):
                 parent_compute_object_metadata_args=self.parent_compute_object_metadata_args,
                 parent_span_ids=parent_span_ids,
                 propagated_event=coalesce(propagated_event, self.propagated_event),
-                state=self.state,
+                state=self._get_state(),
             ),
             name=name,
             type=type,
@@ -3417,7 +3420,7 @@ class SpanImpl(Span):
     def link(self) -> str:
         parent_type, info = self._get_parent_info()
         if parent_type == SpanObjectTypeV3.PROJECT_LOGS:
-            cur_logger = self.state.current_logger
+            cur_logger = self._get_state().current_logger
             if not cur_logger:
                 return NOOP_SPAN_PERMALINK
             base_url = cur_logger._get_link_base_url()
@@ -3433,8 +3436,8 @@ class SpanImpl(Span):
             else:
                 return _get_error_link("no-project-id-or-name")
         elif parent_type == SpanObjectTypeV3.EXPERIMENT:
-            app_url = self.state.app_url or _get_app_url()
-            org_name = self.state.org_name or _get_org_name()
+            app_url = self._get_state().app_url or _get_app_url()
+            org_name = self._get_state().org_name or _get_org_name()
             if not app_url or not org_name:
                 return _get_error_link("provide-app-url-or-org-name")
             base_url = f"{app_url}/app/{org_name}"
@@ -3449,7 +3452,7 @@ class SpanImpl(Span):
 
     def permalink(self) -> str:
         try:
-            return permalink(self.export(), state=self.state)
+            return permalink(self.export(), state=self._get_state())
         except Exception as e:
             if "BRAINTRUST_API_KEY" in str(e):
                 return _get_error_link("login-or-provide-org-name")
@@ -3462,11 +3465,11 @@ class SpanImpl(Span):
     def flush(self) -> None:
         """Flush any pending rows to the server."""
 
-        self.state.global_bg_logger().flush()
+        self._get_state().global_bg_logger().flush()
 
     def __enter__(self) -> Span:
         if self.set_current:
-            self._context_token = self.state.current_span.set(self)
+            self._context_token = self._get_state().current_span.set(self)
         return self
 
     def __exit__(self, exc_type, exc_value, tb) -> None:
@@ -3475,7 +3478,7 @@ class SpanImpl(Span):
                 self.log_internal(dict(error=stringify_exception(exc_type, exc_value, tb)))
         finally:
             if self.set_current:
-                self.state.current_span.reset(self._context_token)
+                self._get_state().current_span.reset(self._context_token)
 
             self.end()
 
@@ -4287,7 +4290,7 @@ class Logger(Exportable):
                 parent_compute_object_metadata_args=self._compute_metadata_args,
                 parent_span_ids=None,
                 propagated_event=propagated_event,
-                state=self.state,
+                state=self._get_state(),
             ),
             name=name,
             type=type,
