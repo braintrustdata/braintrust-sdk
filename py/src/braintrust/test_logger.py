@@ -14,10 +14,10 @@ from braintrust.test_helpers import (
     assert_dict_matches,
     assert_logged_out,
     init_test_logger,
-    simulate_login,  # noqa # pyright: ignore
+    simulate_login,  # noqa: F401 # type: ignore[reportUnusedImport]
     simulate_logout,
-    with_memory_logger,  # noqa # pyright: ignore
-    with_simulate_login,  # noqa # pyright: ignore
+    with_memory_logger,  # noqa: F401 # type: ignore[reportUnusedImport]
+    with_simulate_login,  # noqa: F401 # type: ignore[reportUnusedImport]
 )
 
 

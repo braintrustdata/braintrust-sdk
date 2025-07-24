@@ -5,8 +5,6 @@ import time
 import unittest
 from typing import Any
 
-import pytest
-
 from braintrust import prompt
 from braintrust.prompt_cache import disk_cache
 

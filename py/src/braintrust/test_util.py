@@ -1,5 +1,5 @@
 import unittest
-from typing import List, Optional, Tuple
+from typing import List
 
 import pytest
 
