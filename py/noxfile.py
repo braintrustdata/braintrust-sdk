@@ -12,8 +12,6 @@ works with and without different dependencies. A few commands to check out:
 
 import glob
 import os
-import site
-import subprocess
 import tempfile
 
 import nox

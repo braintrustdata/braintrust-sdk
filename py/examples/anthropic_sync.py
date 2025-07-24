@@ -3,9 +3,6 @@
 An app demonstrating how to wrap the sync Anthropic Client.
 """
 
-import os
-import random
-import time
 
 import anthropic
 import braintrust
