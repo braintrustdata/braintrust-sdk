@@ -12,8 +12,6 @@ works with and without different dependencies. A few commands to check out:
 
 import glob
 import os
-import site
-import subprocess
 import tempfile
 
 import nox
@@ -215,7 +213,7 @@ def _run_tests(session, test_path, ignore_path="", env=None):
         ]
         if ignore_path:
             test_args.append(f"--ignore=src/{ignore_path}")
-        session.run(*test_args, *common_args, env=env)
+        session.run(*test_args, *common_args, *session.posargs, env=env)
         return
 
     # Running the tests from the wheel involves a bit of gymnastics to ensure we don't import
@@ -235,7 +233,7 @@ def _run_tests(session, test_path, ignore_path="", env=None):
         # It proved very helpful because it's very easy
         # to accidentally import local modules from the source directory.
         env["BRAINTRUST_TESTING_WHEEL"] = "1"
-        session.run(pytest_path, abs_test_path, ignore, *common_args, env=env)
+        session.run(pytest_path, abs_test_path, ignore, *common_args, *session.posargs, env=env)
 
     # And a final note ... if it's not clear from above, we include test files in our wheel, which
     # is perhaps not ideal?

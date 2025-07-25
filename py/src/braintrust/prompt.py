@@ -1,8 +1,9 @@
+import json
 from dataclasses import dataclass
 from typing import List, Literal, Optional, Union
 
 from .serializable_data_class import SerializableDataClass
-from .types import PromptOptions
+from .types import ChatCompletionMessageParam, ModelParams, PromptOptions, ToolFunctionDefinition
 
 # Keep these definitions in sync with sdk/core/js/typespecs/prompt.ts.
 
@@ -82,3 +83,33 @@ class PromptSchema(SerializableDataClass):
 
 
 BRAINTRUST_PARAMS = ["use_cache"]
+
+
+def prompt_definition_to_prompt_data(
+    prompt: Optional[str] = None,
+    messages: Optional[List[ChatCompletionMessageParam]] = None,
+    model: Optional[str] = None,
+    params: Optional[ModelParams] = None,
+    tools: Optional[List[ToolFunctionDefinition]] = None,
+):
+    prompt_data = {}
+    if messages is not None:
+        prompt_data["prompt"] = {
+            "type": "chat",
+            "messages": messages,
+        }
+        if tools and len(tools) > 0:
+            prompt_data["prompt"]["tools"] = json.dumps(tools)
+    else:
+        assert prompt is not None
+        prompt_data["prompt"] = {
+            "type": "completion",
+            "content": prompt,
+        }
+
+    options: PromptOptions = {"model": model}
+    if params is not None:
+        options["params"] = params
+    prompt_data["options"] = options
+
+    return PromptData.from_dict(prompt_data)

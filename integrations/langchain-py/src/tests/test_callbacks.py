@@ -25,9 +25,9 @@ from .fixtures import (
     CHAT_MATH,
     CHAT_SAY_HELLO,
     CHAT_TOOL_CALCULATOR,
-    logs,  # type: ignore[reportUnusedImport]
-    mock_braintrust,  # type: ignore[reportUnusedImport]
-    setup,  # type: ignore[reportUnusedImport]
+    logs,  # noqa: F401 # type: ignore[reportUnusedImport]
+    mock_braintrust,  # noqa: F401 # type: ignore[reportUnusedImport]
+    setup,  # noqa: F401 # type: ignore[reportUnusedImport]
 )
 from .helpers import assert_matches_object, find_spans_by_attributes, logs_to_spans, mock_openai
 from .types import LogRequest
@@ -215,15 +215,15 @@ def test_tool_usage(logs: List[LogRequest]):
                                         "input": {
                                             "properties": {
                                                 "number1": {
-                                                    "description": "The first " "number to " "operate " "on.",
+                                                    "description": "The first number to operate on.",
                                                     "type": "number",
                                                 },
                                                 "number2": {
-                                                    "description": "The " "second " "number to " "operate " "on.",
+                                                    "description": "The second number to operate on.",
                                                     "type": "number",
                                                 },
                                                 "operation": {
-                                                    "description": "The " "type of " "operation " "to " "execute.",
+                                                    "description": "The type of operation to execute.",
                                                     "enum": ["add", "subtract", "multiply", "divide"],
                                                     "type": "string",
                                                 },

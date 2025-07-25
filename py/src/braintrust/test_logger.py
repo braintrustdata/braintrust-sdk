@@ -1,5 +1,4 @@
 import asyncio
-import inspect
 import os
 import time
 from typing import AsyncGenerator, List
@@ -15,10 +14,10 @@ from braintrust.test_helpers import (
     assert_dict_matches,
     assert_logged_out,
     init_test_logger,
-    simulate_login,
+    simulate_login,  # noqa: F401 # type: ignore[reportUnusedImport]
     simulate_logout,
-    with_memory_logger,
-    with_simulate_login,
+    with_memory_logger,  # noqa: F401 # type: ignore[reportUnusedImport]
+    with_simulate_login,  # noqa: F401 # type: ignore[reportUnusedImport]
 )
 
 

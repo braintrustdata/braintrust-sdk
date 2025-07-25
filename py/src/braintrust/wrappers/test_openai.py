@@ -1,15 +1,12 @@
 import asyncio
 import time
-from typing import Any, Dict, Optional
 
 import openai
 import pytest
-from openai import AsyncOpenAI, OpenAI
+from openai import AsyncOpenAI
 from openai._types import NOT_GIVEN
 
 from braintrust import logger, wrap_openai
-from braintrust.oai import _is_not_given
-from braintrust.span_types import SpanTypeAttribute
 from braintrust.test_helpers import assert_dict_matches, init_test_logger
 from braintrust.wrappers.test_utils import assert_metrics_are_valid
 

@@ -12,7 +12,7 @@ import hashlib
 import json
 import logging
 import os
-from typing import Any, Callable, Generic, List, Optional, TypeVar
+from typing import Any, Callable, Generic, Optional, TypeVar
 
 T = TypeVar("T")
 

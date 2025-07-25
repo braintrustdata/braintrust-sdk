@@ -21,10 +21,11 @@ install_requires = [
     "sseclient-py",
     "python-slugify",
     "typing_extensions>=4.1.0",
+    "jsonschema",
 ]
 
 extras_require = {
-    "cli": ["boto3", "psycopg2-binary", "uv"],
+    "cli": ["boto3", "psycopg2-binary", "uv", "fastapi", "uvicorn", "pydantic"],
     "doc": ["pydoc-markdown"],
     "openai-agents": ["openai-agents"],
     "otel": ["opentelemetry-api", "opentelemetry-sdk", "opentelemetry-exporter-otlp-proto-http"],

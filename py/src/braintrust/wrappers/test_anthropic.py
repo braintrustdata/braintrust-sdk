@@ -2,19 +2,13 @@
 Tests to ensure we reliably wrap the Anthropic API.
 """
 
-import asyncio
-import os
 import time
-import unittest
-from typing import Any, Dict
 
 import anthropic
 import pytest
 
 from braintrust import logger
-from braintrust.logger import ObjectMetadata, OrgProjectMetadata
 from braintrust.test_helpers import init_test_logger
-from braintrust.util import LazyValue
 from braintrust.wrappers.anthropic import wrap_anthropic
 
 TEST_ORG_ID = "test-org-123"

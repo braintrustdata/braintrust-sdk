@@ -10,7 +10,6 @@ from typing import Dict, Optional
 from uuid import UUID
 
 from .span_identifier_v2 import SpanComponentsV2
-from .util import coalesce
 
 
 def _try_make_uuid(s):

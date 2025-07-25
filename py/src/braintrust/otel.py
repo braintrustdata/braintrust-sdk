@@ -1,7 +1,7 @@
 import logging
 import os
 import warnings
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 from urllib.parse import urljoin
 
 try:

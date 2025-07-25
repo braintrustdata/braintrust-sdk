@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import asyncio
-import time
 
 import braintrust
 from anthropic import AsyncAnthropic

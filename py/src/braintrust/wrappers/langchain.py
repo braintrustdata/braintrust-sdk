@@ -1,7 +1,6 @@
 import contextvars
 import logging
-import sys
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 import braintrust

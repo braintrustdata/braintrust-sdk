@@ -1,6 +1,6 @@
 import dataclasses
 import json
-from typing import Dict, Union, get_origin
+from typing import Any, Dict, Union, get_origin
 
 
 class SerializableDataClass:
@@ -24,7 +24,7 @@ class SerializableDataClass:
         return cls(**filtered)
 
     @classmethod
-    def from_dict_deep(cls, d: Dict):
+    def from_dict_deep(cls, d: Dict[str, Any]):
         """Deserialize the object from a dictionary. This method
         is deep and will call from_dict_deep() on nested objects."""
         fields = {f.name: f for f in dataclasses.fields(cls)}

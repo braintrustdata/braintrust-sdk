@@ -5,7 +5,7 @@
 import base64
 import dataclasses
 import json
-from enum import Enum, auto
+from enum import Enum
 from typing import Dict, Optional
 from uuid import UUID
 

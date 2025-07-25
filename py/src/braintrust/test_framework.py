@@ -1,5 +1,4 @@
-import asyncio
-from typing import List, Optional
+from typing import List
 
 import pytest
 
@@ -8,7 +7,6 @@ from .framework import (
     EvalHooks,
     EvalResultWithSummary,
     Evaluator,
-    build_local_summary,
     run_evaluator,
 )
 from .score import Score, Scorer
