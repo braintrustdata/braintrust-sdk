@@ -113,11 +113,7 @@ test-core:
 	pnpm test
 
 # Test everything
-<<<<<<< HEAD
-test: test-core test-openai test-anthropic test-ai-sdk
-=======
-test: test-core test-otel test-openai test-anthropic
->>>>>>> main
+test: test-core test-otel test-openai test-anthropic test-ai-sdk
 
 # Test the core and the latest versions of wrappers.
 test-latest: test-core test-otel test-anthropic-latest test-openai-latest
