@@ -88,6 +88,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
 
     try {
       const ret = await this.model.doGenerate(options);
+      const metrics = this.parseMetrics(ret, startTime);
       span.log({
         input: postProcessPrompt(prompt),
         metadata: {
@@ -100,18 +101,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
               : {}),
         },
         output: postProcessOutput(ret.text, ret.toolCalls, ret.finishReason),
-        metrics: {
-          time_to_first_token: getCurrentUnixTimestamp() - startTime,
-          tokens: !isEmpty(ret.usage)
-            ? ret.usage.promptTokens + ret.usage.completionTokens
-            : undefined,
-          prompt_tokens: ret.usage?.promptTokens,
-          completion_tokens: ret.usage?.completionTokens,
-          cached: parseCachedHeader(
-            ret.rawResponse?.headers?.[X_CACHED_HEADER] ??
-              ret.rawResponse?.headers?.[LEGACY_CACHED_HEADER],
-          ),
-        },
+        metrics,
       });
       return ret;
     } finally {
@@ -211,6 +201,11 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
               controller.enqueue(chunk);
             },
             async flush(controller) {
+              const streamMetrics = this.parseStreamMetrics(
+                ret,
+                usage,
+                time_to_first_token,
+              );
               span.log({
                 output: postProcessOutput(
                   fullText,
@@ -219,18 +214,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
                     : undefined,
                   finishReason!,
                 ),
-                metrics: {
-                  time_to_first_token,
-                  tokens: !isEmpty(usage)
-                    ? usage.promptTokens + usage.completionTokens
-                    : undefined,
-                  prompt_tokens: usage?.promptTokens,
-                  completion_tokens: usage?.completionTokens,
-                  cached: parseCachedHeader(
-                    ret.rawResponse?.headers?.[X_CACHED_HEADER] ??
-                      ret.rawResponse?.headers?.[LEGACY_CACHED_HEADER],
-                  ),
-                },
+                metrics: streamMetrics,
               });
               end();
               controller.terminate();
@@ -241,6 +225,91 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
     } finally {
       end();
     }
+  }
+
+  private parseMetrics(ret: any, startTime: number) {
+    const metrics = {
+      time_to_first_token: getCurrentUnixTimestamp() - startTime,
+      tokens: !isEmpty(ret.usage)
+        ? ret.usage.promptTokens + ret.usage.completionTokens
+        : undefined,
+      prompt_tokens: ret.usage?.promptTokens,
+      completion_tokens: ret.usage?.completionTokens,
+      cached: parseCachedHeader(
+        ret.rawResponse?.headers?.[X_CACHED_HEADER] ??
+          ret.rawResponse?.headers?.[LEGACY_CACHED_HEADER],
+      ),
+    };
+
+    // Handle Anthropic cached tokens
+    if (this.provider === "anthropic" && ret.rawResponse?.body) {
+      const anthropicCachedTokens = this.parseAnthropicCachedTokens(
+        ret.rawResponse.body,
+      );
+      Object.assign(metrics, anthropicCachedTokens);
+    }
+
+    return metrics;
+  }
+
+  private parseStreamMetrics(
+    ret: any,
+    usage: any,
+    time_to_first_token: number | undefined,
+  ) {
+    const metrics = {
+      time_to_first_token,
+      tokens: !isEmpty(usage)
+        ? usage.promptTokens + usage.completionTokens
+        : undefined,
+      prompt_tokens: usage?.promptTokens,
+      completion_tokens: usage?.completionTokens,
+      cached: parseCachedHeader(
+        ret.rawResponse?.headers?.[X_CACHED_HEADER] ??
+          ret.rawResponse?.headers?.[LEGACY_CACHED_HEADER],
+      ),
+    };
+
+    // Handle Anthropic cached tokens
+    if (this.provider === "anthropic" && ret.rawResponse?.body) {
+      const anthropicCachedTokens = this.parseAnthropicCachedTokens(
+        ret.rawResponse.body,
+      );
+      Object.assign(metrics, anthropicCachedTokens);
+    }
+
+    return metrics;
+  }
+
+  private parseAnthropicCachedTokens(body: any) {
+    const metrics: Record<string, number> = {};
+
+    if (body?.usage) {
+      const usage = body.usage;
+
+      // Map Anthropic cached token fields to our standard format
+      if (usage.cache_read_input_tokens !== undefined) {
+        metrics.prompt_cached_tokens = usage.cache_read_input_tokens;
+      }
+      if (usage.cache_creation_input_tokens !== undefined) {
+        metrics.prompt_cache_creation_tokens =
+          usage.cache_creation_input_tokens;
+      }
+
+      // Log these for debugging
+      if (
+        metrics.prompt_cached_tokens ||
+        metrics.prompt_cache_creation_tokens
+      ) {
+        console.log("Anthropic cached tokens:", {
+          cache_read_input_tokens: usage.cache_read_input_tokens,
+          cache_creation_input_tokens: usage.cache_creation_input_tokens,
+          mapped_to: metrics,
+        });
+      }
+    }
+
+    return metrics;
   }
 }
 
