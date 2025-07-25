@@ -1,13 +1,13 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Literal, Optional, TypeVar, Union, cast
 
-from braintrust_core.serializable_data_class import SerializableDataClass
 from jsonschema.exceptions import SchemaError, ValidationError
 from jsonschema.validators import validate
 from referencing.jsonschema import Schema
 
 from braintrust.logger import Prompt
 from braintrust.prompt import PromptData, prompt_definition_to_prompt_data
+from braintrust.serializable_data_class import SerializableDataClass
 from braintrust.types import PromptDefinitionWithTools
 from braintrust.util import get_any
 

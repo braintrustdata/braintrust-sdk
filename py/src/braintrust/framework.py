@@ -373,12 +373,6 @@ class Evaluator(Generic[Input, Output, Parameters]):
     that takes `input`, `output`, and `expected` arguments and returns a `Score` object. The function can be async.
     """
 
-    parameters_schema: Optional[Parameters]
-    """
-    A set of parameters that will be passed to the evaluator.
-    Can contain array values that will be converted to single values in the task.
-    """
-
     experiment_name: Optional[str]
     """
     Optional experiment name. If not specified, a name will be generated automatically.
@@ -390,6 +384,12 @@ class Evaluator(Generic[Input, Output, Parameters]):
     relevant, that you can use to help find and analyze examples later. For example, you could log the `prompt`,
     example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata` can be any
     JSON-serializable type, but its keys must be strings.
+    """
+
+    parameters_schema: Optional[Parameters] = None
+    """
+    A set of parameters that will be passed to the evaluator.
+    Can contain array values that will be converted to single values in the task.
     """
 
     trial_count: int = 1
