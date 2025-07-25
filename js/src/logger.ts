@@ -612,6 +612,10 @@ export class BraintrustState {
   public disable() {
     this._bgLogger.get().disable();
   }
+
+  public enforceQueueSizeLimit(enforce: boolean) {
+    this._bgLogger.get().enforceQueueSizeLimit(enforce);
+  }
 }
 
 let _globalState: BraintrustState;
@@ -2373,6 +2377,10 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   public disable() {
     this._disabled = true;
   }
+
+  public enforceQueueSizeLimit(enforce: boolean) {
+    this.queue.enforceQueueSizeLimit(enforce);
+  }
 }
 
 type InitOpenOption<IsOpen extends boolean> = {
@@ -2490,6 +2498,10 @@ export function init<IsOpen extends boolean = false>(
   }
 
   const state = stateArg ?? _globalState;
+
+  // Ensure unlimited queue for init() calls (experiments)
+  // Experiments should never drop data
+  state.enforceQueueSizeLimit(false);
 
   if (open) {
     if (isEmpty(experiment)) {
@@ -2970,7 +2982,12 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
     project_name: projectName,
     project_id: projectId,
   };
+
   const state = stateArg ?? _globalState;
+
+  // Enable queue size limit enforcement for initLogger() calls
+  // This ensures production observability doesn't OOM customer processes
+  state.enforceQueueSizeLimit(true);
   const lazyMetadata: LazyValue<OrgProjectMetadata> = new LazyValue(
     async () => {
       // Otherwise actually log in.
@@ -3000,6 +3017,7 @@ type LoadPromptOptions = FullLoginOptions & {
   projectId?: string;
   slug?: string;
   version?: string;
+  id?: string;
   defaults?: DefaultPromptArgs;
   noTrace?: boolean;
   state?: BraintrustState;
@@ -3013,6 +3031,7 @@ type LoadPromptOptions = FullLoginOptions & {
  * @param options.projectId The id of the project to load the prompt from. This takes precedence over `projectName` if specified.
  * @param options.slug The slug of the prompt to load.
  * @param options.version An optional version of the prompt (to read). If not specified, the latest version will be used.
+ * @param options.id The id of a specific prompt to load. If specified, this takes precedence over all other parameters (project, slug, version).
  * @param options.defaults (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
  * @param options.noTrace If true, do not include logging metadata for this prompt when build() is called.
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
@@ -3036,6 +3055,7 @@ export async function loadPrompt({
   projectId,
   slug,
   version,
+  id,
   defaults,
   noTrace = false,
   appUrl,
@@ -3045,11 +3065,11 @@ export async function loadPrompt({
   forceLogin,
   state: stateArg,
 }: LoadPromptOptions) {
-  if (isEmpty(projectName) && isEmpty(projectId)) {
+  if (id) {
+    // When loading by ID, we don't need project or slug
+  } else if (isEmpty(projectName) && isEmpty(projectId)) {
     throw new Error("Must specify either projectName or projectId");
-  }
-
-  if (isEmpty(slug)) {
+  } else if (isEmpty(slug)) {
     throw new Error("Must specify slug");
   }
 
@@ -3063,49 +3083,82 @@ export async function loadPrompt({
       fetch,
       forceLogin,
     });
-    response = await state.apiConn().get_json("v1/prompt", {
-      project_name: projectName,
-      project_id: projectId,
-      slug,
-      version,
-    });
+    if (id) {
+      // Load prompt by ID using the /v1/prompt/{id} endpoint
+      response = await state.apiConn().get_json(`v1/prompt/${id}`, {});
+      // Wrap single prompt response in objects array to match list API format
+      if (response) {
+        response = { objects: [response] };
+      }
+    } else {
+      response = await state.apiConn().get_json("v1/prompt", {
+        project_name: projectName,
+        project_id: projectId,
+        slug,
+        version,
+      });
+    }
   } catch (e) {
     console.warn("Failed to load prompt, attempting to fall back to cache:", e);
-    const prompt = await state.promptCache.get({
-      slug,
-      projectId,
-      projectName,
-      version: version ?? "latest",
-    });
-    if (!prompt) {
-      throw new Error(
-        `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[
-          projectName ?? projectId,
-        ]} (not found on server or in local cache): ${e}`,
-      );
+    let prompt;
+    if (id) {
+      prompt = await state.promptCache.get({ id });
+      if (!prompt) {
+        throw new Error(
+          `Prompt with id ${id} not found (not found on server or in local cache): ${e}`,
+        );
+      }
+    } else {
+      prompt = await state.promptCache.get({
+        slug,
+        projectId,
+        projectName,
+        version: version ?? "latest",
+      });
+      if (!prompt) {
+        throw new Error(
+          `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[
+            projectName ?? projectId,
+          ]} (not found on server or in local cache): ${e}`,
+        );
+      }
     }
     return prompt;
   }
 
   if (!("objects" in response) || response.objects.length === 0) {
-    throw new Error(
-      `Prompt ${slug} not found in ${[projectName ?? projectId]}`,
-    );
+    if (id) {
+      throw new Error(`Prompt with id ${id} not found.`);
+    } else {
+      throw new Error(
+        `Prompt ${slug} not found in ${[projectName ?? projectId]}`,
+      );
+    }
   } else if (response.objects.length > 1) {
-    throw new Error(
-      `Multiple prompts found with slug ${slug} in project ${
-        projectName ?? projectId
-      }. This should never happen.`,
-    );
+    if (id) {
+      throw new Error(
+        `Multiple prompts found with id ${id}. This should never happen.`,
+      );
+    } else {
+      throw new Error(
+        `Multiple prompts found with slug ${slug} in project ${
+          projectName ?? projectId
+        }. This should never happen.`,
+      );
+    }
   }
 
   const metadata = promptSchema.parse(response["objects"][0]);
   const prompt = new Prompt(metadata, defaults || {}, noTrace);
   try {
-    await state.promptCache.set(
-      { slug, projectId, projectName, version: version ?? "latest" },
-      prompt,
-    );
+    if (id) {
+      await state.promptCache.set({ id }, prompt);
+    } else if (slug) {
+      await state.promptCache.set(
+        { slug, projectId, projectName, version: version ?? "latest" },
+        prompt,
+      );
+    }
   } catch (e) {
     console.warn("Failed to set prompt in cache:", e);
   }
@@ -3811,11 +3864,36 @@ function extractAttachments(
   attachments: BaseAttachment[],
 ): void {
   for (const [key, value] of Object.entries(event)) {
+    if (!value) {
+      continue;
+    }
+
     // Base case: Attachment or ExternalAttachment.
     if (value instanceof BaseAttachment) {
       attachments.push(value);
       event[key] = value.reference;
       continue; // Attachment cannot be nested.
+    }
+
+    // Skip if this is already just a reference (no uploader field)
+    if (value?.type === BRAINTRUST_ATTACHMENT && value.key && !value.uploader) {
+      // This is already just a reference, skip it
+      continue;
+    }
+
+    // Somewhere in our pipeline we're serializing the attachment and then deserializing it.
+    // This loses the instanceof identity of the attachment, so we need to recreate it because
+    // the above instance check doesn't catch it.
+    if (value?.reference?.type === BRAINTRUST_ATTACHMENT && value?.uploader) {
+      // This looks like a serialized Attachment object, recreate it properly
+      const attachment = new Attachment({
+        data: value.dataDebugString,
+        filename: value.reference.filename,
+        contentType: value.reference.content_type,
+      });
+      attachments.push(attachment);
+      event[key] = attachment.reference;
+      continue;
     }
 
     // Base case: non-object.
@@ -4412,9 +4490,11 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     return this.state;
   }
 
-  public async *asDataset<Input, Expected>(): AsyncGenerator<
-    EvalCase<Input, Expected, void>
-  > {
+  public async *asDataset<
+    Input,
+    Expected,
+    Metadata = DefaultMetadataType,
+  >(): AsyncGenerator<EvalCase<Input, Expected, Metadata>> {
     const records = this.fetch();
 
     for await (const record of records) {
@@ -4422,21 +4502,20 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
         continue;
       }
 
-      const { output, expected: expectedRecord } = record;
+      const { output, expected: expectedRecord, metadata } = record;
       const expected = (expectedRecord ?? output) as Expected;
 
-      if (isEmpty(expected)) {
-        yield {
-          input: record.input as Input,
-          tags: record.tags,
-        } as EvalCase<Input, Expected, void>;
-      } else {
-        yield {
-          input: record.input as Input,
-          expected: expected,
-          tags: record.tags,
-        } as unknown as EvalCase<Input, Expected, void>;
-      }
+      // Note: We always include expected and metadata fields to maintain type signature alignment.
+      // This ensures that when the type signature includes `| null | undefined`, the fields
+      // are still present in the runtime object. While this may incorrectly include fields
+      // when Metadata/Expected = void, it's preferable to incorrectly excluding them when
+      // the type signature expects them to be present.
+      yield {
+        input: record.input as Input,
+        tags: record.tags,
+        expected: expected as Expected,
+        metadata: metadata as Metadata,
+      } as unknown as EvalCase<Input, Expected, Metadata>;
     }
   }
 }

@@ -130,3 +130,14 @@ export const objectReferenceSchema = z
   .openapi("ObjectReference");
 
 export type ObjectReference = z.infer<typeof objectReferenceSchema>;
+
+export function generateBaseTableOpSchema(objectName: string) {
+  return z.object({
+    org_name: z
+      .string()
+      .nullish()
+      .describe(
+        `For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, you may specify the name of the organization the ${objectName} belongs in.`,
+      ),
+  });
+}

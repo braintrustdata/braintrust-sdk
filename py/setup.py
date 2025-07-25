@@ -27,6 +27,7 @@ extras_require = {
     "cli": ["boto3", "psycopg2-binary", "uv"],
     "doc": ["pydoc-markdown"],
     "openai-agents": ["openai-agents"],
+    "otel": ["opentelemetry-api", "opentelemetry-sdk", "opentelemetry-exporter-otlp-proto-http"],
 }
 
 extras_require["all"] = sorted({package for packages in extras_require.values() for package in packages})

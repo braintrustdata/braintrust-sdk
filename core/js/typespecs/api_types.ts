@@ -20,6 +20,7 @@ import {
   getEventObjectType,
   getEventObjectDescription,
   objectReferenceSchema,
+  generateBaseTableOpSchema,
 } from "./common_types";
 import { customTypes } from "./custom_types";
 import { capitalize } from "../src/string_util";
@@ -32,6 +33,7 @@ import {
 } from "../src/db_fields";
 import { spanTypeAttributeValues } from "../src/span_types";
 import { objectNullish } from "../src/zod_util";
+import { functionTypeEnum } from "./functions";
 
 const auditSourcesSchema = z.enum(VALID_SOURCES);
 
@@ -410,6 +412,8 @@ export const promptSessionEventSchema = z
     ),
     prompt_data: customTypes.unknown.describe("Data about the prompt"),
     function_data: customTypes.unknown.describe("Data about the function"),
+    // An empty (unspecified) function_type is equivalent to "task".
+    function_type: functionTypeEnum.nullish(),
     object_data: customTypes.unknown.describe("Data about the mapped data"),
     completion: customTypes.unknown.describe("Data about the completion"),
     tags: promptSessionEventBaseSchema.shape.tags,
@@ -992,5 +996,74 @@ export const asyncScoringControlSchema = z
     }),
   ])
   .openapi("AsyncScoringControl");
+
+export const environmentSchema = z
+  .object({
+    id: z.string().uuid().describe("Unique identifier for the environment"),
+    org_id: z
+      .string()
+      .uuid()
+      .describe(
+        "Unique identifier for the organization that the environment belongs under",
+      ),
+    name: z.string().describe("Name of the environment"),
+    slug: z
+      .string()
+      .describe(
+        "A url-friendly, unique identifier for the environment within an organization",
+      ),
+    description: z
+      .string()
+      .nullish()
+      .describe("Textual description of the environment"),
+    created: datetimeStringSchema
+      .nullish()
+      .describe("Date of environment creation"),
+    deleted_at: datetimeStringSchema
+      .nullish()
+      .describe(
+        "Date of environment deletion, or null if the environment is still active",
+      ),
+  })
+  .openapi("Environment");
+export type Environment = z.infer<typeof environmentSchema>;
+
+export const createEnvironmentSchema = z
+  .object({
+    name: environmentSchema.shape.name,
+    slug: environmentSchema.shape.slug,
+    description: environmentSchema.shape.description,
+    org_name: generateBaseTableOpSchema("environment").shape.org_name,
+  })
+  .openapi("CreateEnvironment");
+
+export const patchEnvironmentSchema = z
+  .object({
+    name: environmentSchema.shape.name.nullish(),
+    slug: environmentSchema.shape.slug.nullish(),
+    description: environmentSchema.shape.description.nullish(),
+  })
+  .openapi("PatchEnvironment");
+
+export const environmentObjectSchema = z
+  .object({
+    id: z
+      .string()
+      .uuid()
+      .describe("Unique identifier for the environment object association"),
+    object_type: z
+      .string()
+      .describe("Type of object being associated with environment"),
+    object_id: z.string().describe("Unique identifier for the object"),
+    object_version: z.string().describe("Version of the object (xact_id)"),
+    environment_slug: z
+      .string()
+      .describe("Slug of the environment that the object is associated with"),
+    created: datetimeStringSchema.describe(
+      "Date when the association was created",
+    ),
+  })
+  .openapi("EnvironmentObject");
+export type EnvironmentObject = z.infer<typeof environmentObjectSchema>;
 
 export type AsyncScoringControl = z.infer<typeof asyncScoringControlSchema>;

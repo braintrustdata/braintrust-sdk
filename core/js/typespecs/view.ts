@@ -61,6 +61,9 @@ export const tableViewOptionsSchema = z
     symbolGrouping: chartSelectionType.nullish(),
     xAxisAggregation: z.enum(["avg", "sum", "min", "max", "all"]).nullish(),
     chartAnnotations: z.array(annotationDataSchema).nullish(),
+    timeRangeFilter: z
+      .union([z.string(), z.object({ from: z.string(), to: z.string() })])
+      .nullish(),
   })
   .strip()
   .openapi({ title: "TableViewOptions" });
@@ -73,6 +76,7 @@ export const monitorViewOptionsSchema = z
     rangeValue: z.string().nullish(),
     frameStart: z.string().nullish(),
     frameEnd: z.string().nullish(),
+    tzUTC: z.boolean().nullish(),
     chartVisibility: z.record(z.boolean()).nullish(),
     projectId: z.string().nullish(),
     type: z.enum(["project", "experiment"]).nullish(),

@@ -6,6 +6,7 @@ import {
   SSEProgressEventData,
 } from "@braintrust/core/typespecs";
 import { queue } from "async";
+
 import chalk from "chalk";
 import pluralize from "pluralize";
 import { GenericFunction } from "./framework-types";
@@ -138,6 +139,10 @@ export interface EvalHooks<
    * Report progress that will show up in the playground.
    */
   reportProgress: (progress: TaskProgressEvent) => void;
+  /**
+   * The index of the current trial (0-based). This is useful when trialCount > 1.
+   */
+  trialIndex: number;
 }
 
 // This happens to be compatible with ScorerArgs defined in @braintrust/core.
@@ -832,13 +837,16 @@ async function runEvaluatorInternal(
     data = dataResult;
   }
 
-  data = data
+  const dataWithTrials = data
     .filter((d) => filters.every((f) => evaluateFilter(d, f)))
     .flatMap((datum) =>
-      [...Array(evaluator.trialCount ?? 1).keys()].map(() => datum),
+      [...Array(evaluator.trialCount ?? 1).keys()].map((trialIndex) => ({
+        datum,
+        trialIndex,
+      })),
     );
 
-  progressReporter.start(evaluator.evalName, data.length);
+  progressReporter.start(evaluator.evalName, dataWithTrials.length);
   interface EvalResult {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     input: any;
@@ -853,7 +861,13 @@ async function runEvaluatorInternal(
   const results: EvalResult[] = [];
   const q = queue(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async (datum: EvalCase<any, any, any>) => {
+    async ({
+      datum,
+      trialIndex,
+    }: {
+      datum: EvalCase<any, any, any>;
+      trialIndex: number;
+    }) => {
       const eventDataset: Dataset | undefined = experiment
         ? experiment.dataset
         : Dataset.isDataset(evaluator.data)
@@ -914,6 +928,7 @@ async function runEvaluatorInternal(
                     object_type: "task",
                   });
                 },
+                trialIndex,
               });
               if (outputResult instanceof Promise) {
                 output = await outputResult;
@@ -1098,9 +1113,9 @@ async function runEvaluatorInternal(
         return await experiment.traced(callback, baseEvent);
       }
     },
-    Math.max(evaluator.maxConcurrency ?? data.length, 1),
+    Math.max(evaluator.maxConcurrency ?? dataWithTrials.length, 1),
   );
-  q.push(data);
+  q.push(dataWithTrials);
 
   const cancel = async () => {
     await new Promise((_, reject) => {

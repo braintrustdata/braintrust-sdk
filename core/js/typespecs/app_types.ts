@@ -3,7 +3,11 @@
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 import { objectNullish } from "../src/zod_util";
-import { ObjectType, datetimeStringSchema } from "./common_types";
+import {
+  ObjectType,
+  datetimeStringSchema,
+  generateBaseTableOpSchema,
+} from "./common_types";
 import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
@@ -14,6 +18,7 @@ import {
   automationConfigSchema,
   btqlExportAutomationConfigSchema,
   logAutomationConfigSchema,
+  retentionAutomationConfigSchema,
 } from "./automations";
 extendZodWithOpenApi(z);
 
@@ -570,6 +575,11 @@ export const projectScoreCategory = z
   .openapi("ProjectScoreCategory");
 export type ProjectScoreCategory = z.infer<typeof projectScoreCategory>;
 
+const webhookAutomationActionSchema = z.object({
+  type: z.literal("webhook").describe("The type of action to take"),
+  url: z.string().describe("The webhook URL to send the request to"),
+});
+
 const projectAutomationBaseSchema =
   generateBaseTableSchema("project automation");
 export const projectAutomationSchema = z
@@ -587,6 +597,7 @@ export const projectAutomationSchema = z
   .openapi("ProjectAutomation");
 
 export type ProjectAutomation = z.infer<typeof projectAutomationSchema>;
+
 export const logAutomationSchema = projectAutomationSchema.merge(
   z.object({
     config: logAutomationConfigSchema,
@@ -601,6 +612,13 @@ export const btqlExportAutomationSchema = projectAutomationSchema.merge(
 );
 export type BtqlExportAutomation = z.infer<typeof btqlExportAutomationSchema>;
 
+export const retentionAutomationSchema = projectAutomationSchema.merge(
+  z.object({
+    config: retentionAutomationConfigSchema,
+  }),
+);
+export type RetentionAutomation = z.infer<typeof retentionAutomationSchema>;
+
 export const onlineScoreConfigSchema = z
   .object({
     sampling_rate: z
@@ -611,6 +629,7 @@ export const onlineScoreConfigSchema = z
     scorers: z
       .array(savedFunctionIdSchema)
       .describe("The list of scorers to use for online scoring"),
+    btql_filter: z.string().nullish().describe("Filter logs using BTQL"),
     apply_to_root_span: z
       .boolean()
       .nullish()
@@ -627,9 +646,15 @@ export const onlineScoreConfigSchema = z
       .nullish()
       .describe("Whether to skip adding scorer spans when computing scores"),
   })
-  .refine((val) => val.apply_to_root_span || val.apply_to_span_names?.length, {
-    message: "Online scoring rule does not apply to any rows",
-  })
+  .refine(
+    (val) =>
+      val.apply_to_root_span ||
+      val.apply_to_span_names?.length ||
+      val.btql_filter,
+    {
+      message: "Online scoring rule does not apply to any rows",
+    },
+  )
   .openapi("OnlineScoreConfig");
 export type OnlineScoreConfig = z.infer<typeof onlineScoreConfigSchema>;
 
@@ -817,17 +842,6 @@ export const appLimitParamSchema = z.coerce
   .nonnegative()
   .describe("Limit the number of objects to return")
   .openapi("AppLimit");
-
-function generateBaseTableOpSchema(objectName: string) {
-  return z.object({
-    org_name: z
-      .string()
-      .nullish()
-      .describe(
-        `For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, you may specify the name of the organization the ${objectName} belongs in.`,
-      ),
-  });
-}
 
 // Pagination for listing data objects.
 
@@ -1226,6 +1240,15 @@ export const patchOrganizationMembersSchema = z
           .array()
           .nullish()
           .describe("Emails of users to invite"),
+        service_accounts: z
+          .array(
+            z.object({
+              name: z.string(),
+              token_name: z.string().nullish(),
+            }),
+          )
+          .nullish()
+          .describe("Service accounts to create"),
         send_invite_emails: z
           .boolean()
           .nullish()

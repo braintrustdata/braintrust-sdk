@@ -28,3 +28,8 @@ export * from "./wrappers/oai";
 export { AISDKMiddleware } from "./wrappers/ai-sdk-v2";
 export { wrapAISDKModel } from "./wrappers/ai-sdk-v1";
 export { wrapAnthropic } from "./wrappers/anthropic";
+export {
+  AISpanProcessor,
+  BraintrustSpanProcessor,
+  BraintrustExporter,
+} from "./otel";

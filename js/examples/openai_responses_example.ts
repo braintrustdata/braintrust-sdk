@@ -24,9 +24,11 @@ async function main() {
     stream: true,
   });
 
+  let count = 0;
   for await (const event of stream) {
-    console.log(event);
+    count++;
   }
+  console.log("streamed", count, "events");
 }
 
-main();
+main().catch(console.error);
