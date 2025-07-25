@@ -348,24 +348,16 @@ export function postProcessOutput(
     index: 0,
     message: {
       role: "assistant",
-      content:
-        text ??
-        (toolCalls
-          ? toolCalls.length === 1 && toolCalls[0].toolName === "json"
-            ? toolCalls[0].args
-            : ""
-          : ""),
-      ...(toolCalls &&
-      toolCalls.length > 0 &&
-      !(toolCalls.length === 1 && toolCalls[0].toolName === "json")
+      content: text ?? "",
+      ...(toolCalls && toolCalls.length > 0
         ? {
             tool_calls: toolCalls.map((toolCall) => ({
               id: toolCall.toolCallId,
-              type: "function" as const,
               function: {
                 name: toolCall.toolName,
                 arguments: toolCall.args,
               },
+              type: "function" as const,
             })),
           }
         : {}),

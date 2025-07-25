@@ -73,43 +73,30 @@ describe("postProcessOutput", () => {
     const toolCalls: LanguageModelV1FunctionToolCall[] = [
       {
         toolCallType: "function",
-
         toolCallId: "call_abc123",
-
         toolName: "get_weather",
-
         args: '{"location": "San Francisco", "unit": "celsius"}',
       },
     ];
 
     const result = postProcessOutput(undefined, toolCalls, "tool-calls");
-
-    // Tool calls should be properly formatted in OpenAI format
-
     expect(result).toEqual({
       index: 0,
-
       message: {
         role: "assistant",
-
         content: "",
-
         tool_calls: [
           {
             id: "call_abc123",
-
             type: "function",
-
             function: {
               name: "get_weather",
-
               arguments: '{"location": "San Francisco", "unit": "celsius"}',
             },
           },
         ],
       },
-
-      finish_reason: "tool_calls",
+      finish_reason: "tool-calls",
     });
   });
 });
