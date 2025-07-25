@@ -144,10 +144,6 @@ export interface EvalHooks<
    */
   reportProgress: (progress: TaskProgressEvent) => void;
   /**
-   * The experiment under which the task is run. Also accessible via currentExperiment()
-   */
-  experiment: Experiment | undefined;
-  /**
    * The index of the current trial (0-based). This is useful when trialCount > 1.
    */
   trialIndex: number;
@@ -926,7 +922,7 @@ async function runEvaluatorInternal(
                 metadata,
                 expected,
                 span,
-                experiment,
+                experiment: experiment ?? undefined,
                 parameters: parameters ?? {},
                 reportProgress: (event: TaskProgressEvent) => {
                   stream?.({
