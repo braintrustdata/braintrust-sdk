@@ -21,7 +21,16 @@ import {
   parseCachedHeader,
   X_CACHED_HEADER,
 } from "./oai";
-import { z } from "zod";
+
+interface LLMMetrics {
+  time_to_first_token?: number;
+  tokens?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  cached?: number;
+  prompt_cached_tokens?: number;
+  prompt_cache_creation_tokens?: number;
+}
 
 /**
  * Wrap an ai-sdk model (created with `.chat()`, `.completion()`, etc.) to add tracing. If Braintrust is
@@ -231,24 +240,10 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
   }
 
   private parseMetrics(
-    ret: {
-      text?: string;
-      toolCalls?: LanguageModelV1FunctionToolCall[];
-      finishReason: LanguageModelV1FinishReason;
-      usage?: {
-        promptTokens: number;
-        completionTokens: number;
-      };
-      rawResponse?: {
-        headers?: Record<string, string>;
-        body?: unknown;
-      };
-      warnings?: LanguageModelV1CallWarning[];
-      logprobs?: LanguageModelV1LogProbs;
-    },
+    ret: Awaited<ReturnType<LanguageModelV1["doGenerate"]>>,
     startTime: number,
-  ) {
-    const metrics = {
+  ): LLMMetrics {
+    const metrics: LLMMetrics = {
       time_to_first_token: getCurrentUnixTimestamp() - startTime,
       tokens: !isEmpty(ret.usage)
         ? ret.usage.promptTokens + ret.usage.completionTokens
@@ -261,26 +256,48 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
       ),
     };
 
-    // Handle Anthropic cached tokens
-    if (this.provider === "anthropic" && ret.rawResponse?.body) {
-      const anthropicCachedTokens = this.parseAnthropicCachedTokens(
-        ret.rawResponse.body,
-      );
-      Object.assign(metrics, anthropicCachedTokens);
+    // Handle Anthropic cached tokens from providerMetadata
+    if (this.provider === "anthropic" && ret.providerMetadata?.anthropic) {
+      const anthropicMetadata = ret.providerMetadata.anthropic;
+      if (typeof anthropicMetadata === "object" && anthropicMetadata !== null) {
+        if (
+          "cacheReadInputTokens" in anthropicMetadata &&
+          typeof anthropicMetadata.cacheReadInputTokens === "number"
+        ) {
+          metrics.prompt_cached_tokens = anthropicMetadata.cacheReadInputTokens;
+        }
+        if (
+          "cacheCreationInputTokens" in anthropicMetadata &&
+          typeof anthropicMetadata.cacheCreationInputTokens === "number"
+        ) {
+          metrics.prompt_cache_creation_tokens =
+            anthropicMetadata.cacheCreationInputTokens;
+        }
+
+        // Log these for debugging
+        if (
+          metrics.prompt_cached_tokens ||
+          metrics.prompt_cache_creation_tokens
+        ) {
+          console.log("Anthropic cached tokens:", {
+            cacheReadInputTokens: anthropicMetadata.cacheReadInputTokens,
+            cacheCreationInputTokens:
+              anthropicMetadata.cacheCreationInputTokens,
+            mapped_to: {
+              prompt_cached_tokens: metrics.prompt_cached_tokens,
+              prompt_cache_creation_tokens:
+                metrics.prompt_cache_creation_tokens,
+            },
+          });
+        }
+      }
     }
 
     return metrics;
   }
 
   private parseStreamMetrics(
-    ret: {
-      stream: ReadableStream;
-      rawResponse?: {
-        headers?: Record<string, string>;
-        body?: unknown;
-      };
-      warnings?: LanguageModelV1CallWarning[];
-    },
+    ret: Awaited<ReturnType<LanguageModelV1["doStream"]>>,
     usage:
       | {
           promptTokens: number;
@@ -288,8 +305,8 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
         }
       | undefined,
     time_to_first_token: number | undefined,
-  ) {
-    const metrics = {
+  ): LLMMetrics {
+    const metrics: LLMMetrics = {
       time_to_first_token,
       tokens: !isEmpty(usage)
         ? usage.promptTokens + usage.completionTokens
@@ -302,53 +319,41 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
       ),
     };
 
-    // Handle Anthropic cached tokens
-    if (this.provider === "anthropic" && ret.rawResponse?.body) {
-      const anthropicCachedTokens = this.parseAnthropicCachedTokens(
-        ret.rawResponse.body,
-      );
-      Object.assign(metrics, anthropicCachedTokens);
-    }
+    // Handle Anthropic cached tokens from providerMetadata
+    if (this.provider === "anthropic" && ret.providerMetadata?.anthropic) {
+      const anthropicMetadata = ret.providerMetadata.anthropic;
+      if (typeof anthropicMetadata === "object" && anthropicMetadata !== null) {
+        if (
+          "cacheReadInputTokens" in anthropicMetadata &&
+          typeof anthropicMetadata.cacheReadInputTokens === "number"
+        ) {
+          metrics.prompt_cached_tokens = anthropicMetadata.cacheReadInputTokens;
+        }
+        if (
+          "cacheCreationInputTokens" in anthropicMetadata &&
+          typeof anthropicMetadata.cacheCreationInputTokens === "number"
+        ) {
+          metrics.prompt_cache_creation_tokens =
+            anthropicMetadata.cacheCreationInputTokens;
+        }
 
-    return metrics;
-  }
-
-  private parseAnthropicCachedTokens(body: unknown) {
-    const metrics: Record<string, number> = {};
-
-    const AnthropicUsageSchema = z
-      .object({
-        usage: z
-          .object({
-            cache_read_input_tokens: z.number().optional(),
-            cache_creation_input_tokens: z.number().optional(),
-          })
-          .optional(),
-      })
-      .optional();
-
-    const parsed = AnthropicUsageSchema.safeParse(body);
-    if (!parsed.success || !parsed.data?.usage) {
-      return metrics;
-    }
-
-    const usage = parsed.data.usage;
-
-    // Map Anthropic cached token fields to our standard format
-    if (usage.cache_read_input_tokens !== undefined) {
-      metrics.prompt_cached_tokens = usage.cache_read_input_tokens;
-    }
-    if (usage.cache_creation_input_tokens !== undefined) {
-      metrics.prompt_cache_creation_tokens = usage.cache_creation_input_tokens;
-    }
-
-    // Log these for debugging
-    if (metrics.prompt_cached_tokens || metrics.prompt_cache_creation_tokens) {
-      console.log("Anthropic cached tokens:", {
-        cache_read_input_tokens: usage.cache_read_input_tokens,
-        cache_creation_input_tokens: usage.cache_creation_input_tokens,
-        mapped_to: metrics,
-      });
+        // Log these for debugging
+        if (
+          metrics.prompt_cached_tokens ||
+          metrics.prompt_cache_creation_tokens
+        ) {
+          console.log("Anthropic cached tokens:", {
+            cacheReadInputTokens: anthropicMetadata.cacheReadInputTokens,
+            cacheCreationInputTokens:
+              anthropicMetadata.cacheCreationInputTokens,
+            mapped_to: {
+              prompt_cached_tokens: metrics.prompt_cached_tokens,
+              prompt_cache_creation_tokens:
+                metrics.prompt_cache_creation_tokens,
+            },
+          });
+        }
+      }
     }
 
     return metrics;
