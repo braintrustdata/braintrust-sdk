@@ -13,12 +13,15 @@ import {
   LanguageModelV1StreamPart,
   LanguageModelV1TextPart,
   LanguageModelV1ToolCallPart,
+  LanguageModelV1CallWarning,
+  LanguageModelV1LogProbs,
 } from "@ai-sdk/provider";
 import {
   LEGACY_CACHED_HEADER,
   parseCachedHeader,
   X_CACHED_HEADER,
 } from "./oai";
+import { z } from "zod";
 
 /**
  * Wrap an ai-sdk model (created with `.chat()`, `.completion()`, etc.) to add tracing. If Braintrust is
@@ -227,7 +230,24 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
     }
   }
 
-  private parseMetrics(ret: any, startTime: number) {
+  private parseMetrics(
+    ret: {
+      text?: string;
+      toolCalls?: LanguageModelV1FunctionToolCall[];
+      finishReason: LanguageModelV1FinishReason;
+      usage?: {
+        promptTokens: number;
+        completionTokens: number;
+      };
+      rawResponse?: {
+        headers?: Record<string, string>;
+        body?: unknown;
+      };
+      warnings?: LanguageModelV1CallWarning[];
+      logprobs?: LanguageModelV1LogProbs;
+    },
+    startTime: number,
+  ) {
     const metrics = {
       time_to_first_token: getCurrentUnixTimestamp() - startTime,
       tokens: !isEmpty(ret.usage)
@@ -253,8 +273,20 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
   }
 
   private parseStreamMetrics(
-    ret: any,
-    usage: any,
+    ret: {
+      stream: ReadableStream;
+      rawResponse?: {
+        headers?: Record<string, string>;
+        body?: unknown;
+      };
+      warnings?: LanguageModelV1CallWarning[];
+    },
+    usage:
+      | {
+          promptTokens: number;
+          completionTokens: number;
+        }
+      | undefined,
     time_to_first_token: number | undefined,
   ) {
     const metrics = {
@@ -281,32 +313,42 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
     return metrics;
   }
 
-  private parseAnthropicCachedTokens(body: any) {
+  private parseAnthropicCachedTokens(body: unknown) {
     const metrics: Record<string, number> = {};
 
-    if (body?.usage) {
-      const usage = body.usage;
+    const AnthropicUsageSchema = z
+      .object({
+        usage: z
+          .object({
+            cache_read_input_tokens: z.number().optional(),
+            cache_creation_input_tokens: z.number().optional(),
+          })
+          .optional(),
+      })
+      .optional();
 
-      // Map Anthropic cached token fields to our standard format
-      if (usage.cache_read_input_tokens !== undefined) {
-        metrics.prompt_cached_tokens = usage.cache_read_input_tokens;
-      }
-      if (usage.cache_creation_input_tokens !== undefined) {
-        metrics.prompt_cache_creation_tokens =
-          usage.cache_creation_input_tokens;
-      }
+    const parsed = AnthropicUsageSchema.safeParse(body);
+    if (!parsed.success || !parsed.data?.usage) {
+      return metrics;
+    }
 
-      // Log these for debugging
-      if (
-        metrics.prompt_cached_tokens ||
-        metrics.prompt_cache_creation_tokens
-      ) {
-        console.log("Anthropic cached tokens:", {
-          cache_read_input_tokens: usage.cache_read_input_tokens,
-          cache_creation_input_tokens: usage.cache_creation_input_tokens,
-          mapped_to: metrics,
-        });
-      }
+    const usage = parsed.data.usage;
+
+    // Map Anthropic cached token fields to our standard format
+    if (usage.cache_read_input_tokens !== undefined) {
+      metrics.prompt_cached_tokens = usage.cache_read_input_tokens;
+    }
+    if (usage.cache_creation_input_tokens !== undefined) {
+      metrics.prompt_cache_creation_tokens = usage.cache_creation_input_tokens;
+    }
+
+    // Log these for debugging
+    if (metrics.prompt_cached_tokens || metrics.prompt_cache_creation_tokens) {
+      console.log("Anthropic cached tokens:", {
+        cache_read_input_tokens: usage.cache_read_input_tokens,
+        cache_creation_input_tokens: usage.cache_creation_input_tokens,
+        mapped_to: metrics,
+      });
     }
 
     return metrics;
