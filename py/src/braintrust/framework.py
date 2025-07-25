@@ -695,6 +695,14 @@ class StreamProgress(Protocol):
         ...
 
 
+class OnStart(Protocol):
+    def __call__(
+        self,
+        summary: ExperimentSummary,
+    ) -> Awaitable[None]:
+        ...
+
+
 def _EvalCommon(
     name: str,
     data: EvalData[Input, Output],
@@ -721,6 +729,7 @@ def _EvalCommon(
     state: Optional[BraintrustState] = None,
     stream: Optional[StreamProgress] = None,
     parent: Optional[str] = None,
+    on_start: Optional[OnStart] = None,
 ) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary[Input, Output]]]:
     """
     This helper is needed because in case of `_lazy_load`, we need to update
@@ -805,6 +814,10 @@ def _EvalCommon(
         )
 
         async def run_to_completion():
+            if experiment and on_start:
+                summary = experiment.summarize(summarize_scores=False)
+                await on_start(summary)
+
             try:
                 if parent:
                     ret = await with_parent(
@@ -849,6 +862,7 @@ async def EvalAsync(
     state: Optional[BraintrustState] = None,
     stream: Optional[StreamProgress] = None,
     parent: Optional[str] = None,
+    on_start: Optional[OnStart] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -899,6 +913,7 @@ async def EvalAsync(
     :param parameters: Optional, the parameters to use for this specific task execution.
     :param parameters_schema: Optional, the schema to use for validating the parameters.
     :param parent: If specified, instead of creating a new experiment object, the Eval() will populate the object or span specified by this parent.
+    :param on_start: Optional callback to be called when the experiment starts.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
     f = _EvalCommon(
@@ -926,6 +941,7 @@ async def EvalAsync(
         state=state,
         stream=stream,
         parent=parent,
+        on_start=on_start,
     )
 
     return await f()
@@ -959,6 +975,7 @@ def Eval(
     summarize_scores: bool = True,
     state: Optional[BraintrustState] = None,
     stream: Optional[StreamProgress] = None,
+    on_start: Optional[OnStart] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -1008,6 +1025,7 @@ def Eval(
     :param parameters: Optional, the parameters to use for this specific task execution.
     :param parameters_schema: Optional, the schema to use for validating the parameters.
     :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
+    :param on_start: Optional callback function to execute when the experiment starts.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
 
@@ -1036,6 +1054,7 @@ def Eval(
         summarize_scores=summarize_scores,
         state=state,
         stream=stream,
+        on_start=on_start,
     )
 
     # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no

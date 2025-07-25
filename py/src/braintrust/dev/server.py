@@ -37,7 +37,7 @@ from braintrust.framework import (
     scorer_name,
 )
 from braintrust.http_headers import BT_CURSOR_HEADER, BT_FOUND_EXISTING_HEADER, BT_PARENT
-from braintrust.logger import BraintrustState, Dataset, get_span_parent_object
+from braintrust.logger import BraintrustState, Dataset, ExperimentSummary, get_span_parent_object
 from braintrust.parameters import EvalParameters, validate_parameters
 from braintrust.prompt import prompt_definition_to_prompt_data
 from braintrust.span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
@@ -185,48 +185,53 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
 
             await message_queue.put(serialize_sse_event("progress", json.dumps(data)))
 
+        async def on_start(metadata: ExperimentSummary):
+            await message_queue.put(serialize_sse_event("start", json.dumps(metadata.as_dict())))
+
         async def evaluate():
-            scores = evaluator.scores
-            if eval.scores:
-                eval_scores = [
-                    score
-                    if isinstance(score, Score)  # type: ignore  # TODO: why is from_dict_deep not working?
-                    else Score.from_dict_deep(score)
-                    for score in eval.scores
-                ]
-                scores += [make_scorer(state, score.name, score.function_id) for score in eval_scores]
+            try:
+                scores = evaluator.scores
+                if eval.scores:
+                    # TODO: why is from_dict_deep not working?
+                    eval_scores = [
+                        score if isinstance(score, Score) else Score.from_dict_deep(score)  # type: ignore
+                        for score in eval.scores
+                    ]
+                    scores += [make_scorer(state, score.name, score.function_id) for score in eval_scores]
 
-            result = await EvalAsync(
-                name="worker-thread",
-                data=eval_data["data"],  # type:ignore
-                task=progress_task,
-                scores=scores,
-                experiment_name=evaluator.experiment_name,
-                trial_count=evaluator.trial_count,
-                metadata=evaluator.metadata,
-                is_public=evaluator.is_public,
-                update=evaluator.update,
-                timeout=evaluator.timeout,
-                max_concurrency=evaluator.max_concurrency,
-                project_id=evaluator.project_id,
-                base_experiment_name=evaluator.base_experiment_name,
-                base_experiment_id=evaluator.base_experiment_id,
-                git_metadata_settings=evaluator.git_metadata_settings,
-                repo_info=evaluator.repo_info,
-                error_score_handler=evaluator.error_score_handler,
-                description=evaluator.description,
-                summarize_scores=evaluator.summarize_scores,
-                state=state,
-                stream=stream,
-                parent=parse_parent(eval.parent),
-                parameters_schema=evaluator.parameters_schema,
-                parameters=eval.parameters,
-            )
-
-            # we're done
-            await message_queue.put(None)
-
-            return result
+                result = await EvalAsync(
+                    name="worker-thread",
+                    data=eval_data["data"],  # type:ignore
+                    task=progress_task,
+                    scores=scores,
+                    experiment_name=evaluator.experiment_name,
+                    trial_count=evaluator.trial_count,
+                    metadata=evaluator.metadata,
+                    is_public=evaluator.is_public,
+                    update=evaluator.update,
+                    timeout=evaluator.timeout,
+                    max_concurrency=evaluator.max_concurrency,
+                    project_id=evaluator.project_id,
+                    base_experiment_name=evaluator.base_experiment_name,
+                    base_experiment_id=evaluator.base_experiment_id,
+                    git_metadata_settings=evaluator.git_metadata_settings,
+                    repo_info=evaluator.repo_info,
+                    error_score_handler=evaluator.error_score_handler,
+                    description=evaluator.description,
+                    summarize_scores=evaluator.summarize_scores,
+                    state=state,
+                    stream=stream,
+                    parent=parse_parent(eval.parent),
+                    parameters_schema=evaluator.parameters_schema,
+                    parameters=eval.parameters,
+                    on_start=on_start,
+                )
+                return result
+            except Exception as e:
+                await message_queue.put(serialize_sse_event("error", json.dumps({"error": str(e)})))
+            finally:
+                # we're done
+                await message_queue.put(None)
 
         eval_task = asyncio.create_task(evaluate())
 
@@ -241,7 +246,7 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
 
                 result = await eval_task
 
-                summary = result.summary.as_dict()
+                summary = result.summary.as_dict() if result else {}
 
                 yield serialize_sse_event(
                     "summary",
@@ -263,7 +268,7 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
 
         result = await eval_task
 
-        return {snake_to_camel(key): value for key, value in clean(result.summary.as_dict()).items()}
+        return {snake_to_camel(key): value for key, value in clean(result.summary.as_dict() if result else {}).items()}
 
     uvicorn.run(app, host=host, port=port)
 
