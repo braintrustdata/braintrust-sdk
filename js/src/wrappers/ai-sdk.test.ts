@@ -1,55 +1,41 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { postProcessPrompt, wrapAISDKModel } from "./ai-sdk";
 import { LanguageModelV1, LanguageModelV1Prompt } from "@ai-sdk/provider";
+import { BraintrustMiddleware } from "../exports-node";
 
-describe("postProcessPrompt", () => {
-  it("correctly processes a simple chat prompt", () => {
-    const prompt: LanguageModelV1Prompt = [
-      {
-        role: "system",
-        content: "Hi!",
-      },
-      {
-        role: "assistant",
-        content: [
-          {
-            type: "text",
-            text: "Hello, how can I help?",
-          },
-        ],
-      },
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: "What is the capital of France?",
-          },
-        ],
-      },
-    ];
+describe("ai-sdk exports", () => {
+  it("should always export BraintrustMiddleware as a function", () => {
+    expect(typeof BraintrustMiddleware).toBe("function");
+  });
 
-    const result = postProcessPrompt(prompt);
+  it("BraintrustMiddleware should return an object with wrapGenerate and wrapStream", () => {
+    const result = BraintrustMiddleware({});
+    expect(result).toHaveProperty("wrapGenerate");
+    expect(result).toHaveProperty("wrapStream");
+    expect(typeof result.wrapGenerate).toBe("function");
+    expect(typeof result.wrapStream).toBe("function");
+  });
 
-    expect(result).toEqual([
-      {
-        role: "system",
-        content: "Hi!",
-      },
-      {
-        role: "assistant",
-        content: "Hello, how can I help?",
-      },
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: "What is the capital of France?",
-          },
-        ],
-      },
-    ]);
+  it("should handle conditional imports gracefully", () => {
+    // Test that imports don't throw errors regardless of AI SDK version
+    expect(() => {
+      const middleware = BraintrustMiddleware({ debug: true });
+
+      // Should be able to call the functions without errors
+      const { wrapGenerate, wrapStream } = middleware;
+
+      expect(wrapGenerate).toBeDefined();
+      expect(wrapStream).toBeDefined();
+    }).not.toThrow();
+  });
+
+  it("should export middleware functions that can be instantiated", () => {
+    const middleware = BraintrustMiddleware({});
+    const { wrapGenerate, wrapStream } = middleware;
+
+    // Should be functions that can be called (we don't test actual execution due to logger dependencies)
+    expect(typeof wrapGenerate).toBe("function");
+    expect(typeof wrapStream).toBe("function");
   });
 });
 

@@ -22,7 +22,6 @@ from typing import (
     Iterable,
     Iterator,
     List,
-    Literal,
     Optional,
     Sequence,
     Type,
@@ -30,7 +29,6 @@ from typing import (
     Union,
 )
 
-import exceptiongroup
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 from typing_extensions import NotRequired, Protocol, TypedDict

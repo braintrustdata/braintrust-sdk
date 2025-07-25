@@ -1,7 +1,6 @@
 import json
 import logging
 import re
-import textwrap
 from hashlib import md5
 
 # pylint: disable=no-name-in-module

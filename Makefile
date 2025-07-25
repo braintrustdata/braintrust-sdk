@@ -50,7 +50,6 @@ nox:
 	nox -f integrations/langchain-py/noxfile.py
 
 pylint:
-
 	cd py && make lint
 
 

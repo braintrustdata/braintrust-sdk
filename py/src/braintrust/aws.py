@@ -1,6 +1,3 @@
-import sys
-from functools import cached_property
-
 import boto3
 
 
