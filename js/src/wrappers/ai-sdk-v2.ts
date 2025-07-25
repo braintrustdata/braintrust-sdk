@@ -1,32 +1,40 @@
 import { SpanTypeAttribute } from "@braintrust/core";
 import { startSpan } from "../logger";
 
-// Minimal interface definitions that match AI SDK v2 without importing it
-interface LanguageModelV2Middleware {
-  wrapGenerate?: (params: {
-    doGenerate: () => Promise<{
-      content: any;
-      usage?: any;
-      finishReason?: string;
-    }>;
-    params: any;
-  }) => Promise<{
-    content: any;
-    usage?: any;
-    finishReason?: string;
-  }>;
-  wrapStream?: (params: {
-    doStream: () => Promise<{
-      stream: any;
-      response?: any;
-      [key: string]: any;
-    }>;
-    params: any;
-  }) => Promise<{
-    stream: any;
-    response?: any;
-    [key: string]: any;
-  }>;
+// Minimal interface definitions that are compatible with AI SDK v2
+// We use generic types to avoid conflicts with the actual AI SDK types
+
+interface ModelCallOptions {
+  prompt?: string;
+  system?: string;
+  messages?: unknown[];
+  model?: string;
+  providerOptions?: Record<string, unknown>;
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+  topK?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  seed?: number;
+  [key: string]: unknown;
+}
+
+// Generic middleware interface that works with any AI SDK types
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+interface LanguageModelV2Middleware<TModel = any, TCallOptions = any> {
+  wrapGenerate?: (options: {
+    doGenerate: () => any /* eslint-disable-line @typescript-eslint/no-explicit-any */;
+    doStream: () => any /* eslint-disable-line @typescript-eslint/no-explicit-any */;
+    params: TCallOptions;
+    model: TModel;
+  }) => Promise<any> /* eslint-disable-line @typescript-eslint/no-explicit-any */;
+  wrapStream?: (options: {
+    doGenerate: () => any /* eslint-disable-line @typescript-eslint/no-explicit-any */;
+    doStream: () => any /* eslint-disable-line @typescript-eslint/no-explicit-any */;
+    params: TCallOptions;
+    model: TModel;
+  }) => Promise<any> /* eslint-disable-line @typescript-eslint/no-explicit-any */;
 }
 
 /**
@@ -39,7 +47,9 @@ export interface MiddlewareConfig {
   name?: string;
 }
 
-function detectProviderFromResult(result: any): string | undefined {
+function detectProviderFromResult(result: {
+  providerMetadata?: Record<string, unknown>;
+}): string | undefined {
   if (!result?.providerMetadata) {
     return undefined;
   }
@@ -48,7 +58,16 @@ function detectProviderFromResult(result: any): string | undefined {
   return keys.length > 0 ? keys[0] : undefined;
 }
 
-function extractModelFromResult(result: any): string | undefined {
+function extractModelFromResult(result: {
+  response?: {
+    modelId?: string;
+  };
+  request?: {
+    body?: {
+      model?: string;
+    };
+  };
+}): string | undefined {
   // For generateText, model is in response.modelId
   if (result?.response?.modelId) {
     return result.response.modelId;
@@ -66,8 +85,10 @@ function camelToSnake(str: string): string {
   return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 }
 
-function extractModelParameters(params: any): Record<string, any> {
-  const modelParams: Record<string, any> = {};
+function extractModelParameters(
+  params: ModelCallOptions,
+): Record<string, unknown> {
+  const modelParams: Record<string, unknown> = {};
 
   // Parameters to exclude from metadata (already captured elsewhere or not relevant)
   const excludeKeys = new Set([
@@ -88,30 +109,42 @@ function extractModelParameters(params: any): Record<string, any> {
   return modelParams;
 }
 
-function normalizeUsageMetrics(usage: any): Record<string, number> {
-  if (!usage) {
-    return {};
+function getNumberProperty(obj: unknown, key: string): number | undefined {
+  if (!obj || typeof obj !== "object" || !(key in obj)) {
+    return undefined;
   }
+  const value = Reflect.get(obj, key);
+  return typeof value === "number" ? value : undefined;
+}
 
+function normalizeUsageMetrics(usage: unknown): Record<string, number> {
   const metrics: Record<string, number> = {};
 
   // AI SDK provides these standard fields
-  if (typeof usage.inputTokens === "number") {
-    metrics.prompt_tokens = usage.inputTokens;
+  const inputTokens = getNumberProperty(usage, "inputTokens");
+  if (inputTokens !== undefined) {
+    metrics.prompt_tokens = inputTokens;
   }
-  if (typeof usage.outputTokens === "number") {
-    metrics.completion_tokens = usage.outputTokens;
+
+  const outputTokens = getNumberProperty(usage, "outputTokens");
+  if (outputTokens !== undefined) {
+    metrics.completion_tokens = outputTokens;
   }
-  if (typeof usage.totalTokens === "number") {
-    metrics.tokens = usage.totalTokens;
+
+  const totalTokens = getNumberProperty(usage, "totalTokens");
+  if (totalTokens !== undefined) {
+    metrics.tokens = totalTokens;
   }
 
   // Additional fields that may exist
-  if (typeof usage.reasoningTokens === "number") {
-    metrics.completion_reasoning_tokens = usage.reasoningTokens;
+  const reasoningTokens = getNumberProperty(usage, "reasoningTokens");
+  if (reasoningTokens !== undefined) {
+    metrics.completion_reasoning_tokens = reasoningTokens;
   }
-  if (typeof usage.cachedInputTokens === "number") {
-    metrics.prompt_cached_tokens = usage.cachedInputTokens;
+
+  const cachedInputTokens = getNumberProperty(usage, "cachedInputTokens");
+  if (cachedInputTokens !== undefined) {
+    metrics.prompt_cached_tokens = cachedInputTokens;
   }
 
   return metrics;
@@ -138,9 +171,8 @@ function normalizeUsageMetrics(usage: any): Record<string, number> {
  */
 export function AISDKMiddleware(
   config: MiddlewareConfig = {},
-): LanguageModelV2Middleware {
-  const { debug = false, name = "BraintrustMiddleware" } = config;
-
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): LanguageModelV2Middleware<any, any> {
   return {
     wrapGenerate: async ({ doGenerate, params }) => {
       const spanArgs = {
@@ -161,7 +193,7 @@ export function AISDKMiddleware(
       try {
         const result = await doGenerate();
 
-        const metadata: Record<string, any> = {};
+        const metadata: Record<string, unknown> = {};
 
         const provider = detectProviderFromResult(result);
         if (provider !== undefined) {
@@ -213,15 +245,16 @@ export function AISDKMiddleware(
         const { stream, ...rest } = await doStream();
 
         const textChunks: string[] = [];
-        let finalUsage: any = {};
-        let finalFinishReason: string | undefined = undefined;
-        let providerMetadata: any = {};
+        let finalUsage: unknown = {};
+        let finalFinishReason: unknown = undefined;
+        let providerMetadata: Record<string, unknown> = {};
 
         const transformStream = new TransformStream({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           transform(chunk: any, controller: any) {
             try {
               // Collect text deltas
-              if (chunk.type === "text-delta") {
+              if (chunk.type === "text-delta" && chunk.delta) {
                 textChunks.push(chunk.delta);
               }
 
@@ -247,7 +280,7 @@ export function AISDKMiddleware(
             try {
               // Log the final aggregated result when stream completes
               const generatedText = textChunks.join("");
-              const output = generatedText
+              const output: unknown = generatedText
                 ? [{ type: "text", text: generatedText }]
                 : [];
 
@@ -258,7 +291,7 @@ export function AISDKMiddleware(
                 ...rest,
               };
 
-              const metadata: Record<string, any> = {};
+              const metadata: Record<string, unknown> = {};
 
               const provider = detectProviderFromResult(resultForDetection);
               if (provider !== undefined) {

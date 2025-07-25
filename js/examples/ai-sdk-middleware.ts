@@ -1,7 +1,6 @@
 #!/usr/bin/env tsx
 
 import { openai } from "@ai-sdk/openai";
-import { anthropic } from "@ai-sdk/anthropic";
 import { generateText, streamText, wrapLanguageModel } from "ai";
 import { initLogger, AISDKMiddleware } from "../src/index";
 
@@ -17,11 +16,6 @@ const wrappedOpenAI = wrapLanguageModel({
   middleware: AISDKMiddleware({ debug: false, name: "OpenAIMiddleware" }),
 });
 
-const wrappedAnthropic = wrapLanguageModel({
-  model: anthropic("claude-3-haiku-20240307"),
-  middleware: AISDKMiddleware({ debug: false, name: "AnthropicMiddleware" }),
-});
-
 async function exampleGenerateText() {
   console.log("=== Generate Text Examples ===\n");
 
@@ -34,16 +28,6 @@ async function exampleGenerateText() {
   });
   console.log("Response:", openaiResult.text);
   console.log();
-
-  // Anthropic example
-  console.log("Anthropic Generate Text:");
-  const anthropicResult = await generateText({
-    model: wrappedAnthropic,
-    prompt: "What is the capital of Italy?",
-    system: "Provide a concise answer.",
-  });
-  console.log("Response:", anthropicResult.text);
-  console.log();
 }
 
 async function exampleStreamText() {
@@ -51,7 +35,7 @@ async function exampleStreamText() {
 
   // OpenAI streaming example
   console.log("OpenAI Stream Text:");
-  const openaiStream = await streamText({
+  const openaiStream = streamText({
     model: wrappedOpenAI,
     prompt: "Write a short haiku about programming.",
     system: "Write only the haiku, no additional text.",
@@ -62,21 +46,8 @@ async function exampleStreamText() {
     process.stdout.write(chunk);
     openaiText += chunk;
   }
-  console.log("\n");
 
-  // Anthropic streaming example
-  console.log("Anthropic Stream Text:");
-  const anthropicStream = await streamText({
-    model: wrappedAnthropic,
-    prompt: "Write a short haiku about nature.",
-    system: "Write only the haiku, no additional text.",
-  });
-
-  let anthropicText = "";
-  for await (const chunk of anthropicStream.textStream) {
-    process.stdout.write(chunk);
-    anthropicText += chunk;
-  }
+  console.log(openaiText);
   console.log("\n");
 }
 
