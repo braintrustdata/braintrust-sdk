@@ -57,14 +57,14 @@ class EvaluatorOpts:
 @dataclass
 class LoadedEvaluator:
     handle: FileHandle
-    evaluator: Evaluator[Any, Any]
-    reporter: Optional[Union[ReporterDef[Any, Any, Any], str]] = None
+    evaluator: Evaluator[Any, Any, Any]
+    reporter: Optional[Union[ReporterDef[Any, Any, Any, Any], str]] = None
 
 
 @dataclass
 class EvaluatorState:
     evaluators: List[LoadedEvaluator] = field(default_factory=list)
-    reporters: Dict[str, ReporterDef[Any, Any, Any]] = field(default_factory=dict)
+    reporters: Dict[str, ReporterDef[Any, Any, Any, Any]] = field(default_factory=dict)
 
 
 @dataclass
@@ -199,3 +199,21 @@ class EvalRequest(SerializableDataClass):
     parent: Optional[InvokeParent] = None
     scores: Optional[List[Score]] = None
     stream: Optional[bool] = False
+
+
+@dataclass
+class EvalParameterPrompt(SerializableDataClass):
+    type: Literal["prompt"]
+    default: Optional[PromptData] = None
+    description: Optional[str] = None
+
+
+@dataclass
+class EvalParameterData(SerializableDataClass):
+    type: Literal["data"]
+    schema: Dict[str, Any]  # JSON Schema
+    default: Optional[Any] = None
+    description: Optional[str] = None
+
+
+EvalParametersSerialized = Dict[str, Union[EvalParameterPrompt, EvalParameterData]]

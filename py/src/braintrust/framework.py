@@ -34,6 +34,8 @@ from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 from typing_extensions import NotRequired, Protocol, TypedDict
 
+from braintrust.parameters import Parameters, validate_parameters
+
 from .git_fields import GitMetadataSettings, RepoInfo
 from .logger import (
     BraintrustState,
@@ -208,6 +210,14 @@ class EvalHooks(abc.ABC, Generic[Output]):
 
     @property
     @abc.abstractmethod
+    def parameters(self) -> Dict[str, Any]:
+        """
+        The current parameters being used for this specific task execution.
+        Array parameters are converted to single values.
+        """
+
+    @property
+    @abc.abstractmethod
     def span(self) -> Span:
         """
         Access the span under which the task is run. Also accessible via braintrust.current_span()
@@ -326,7 +336,7 @@ ErrorScoreHandler = Callable[[Span, EvalCase[Input, Output], List[str]], Optiona
 
 
 @dataclasses.dataclass
-class Evaluator(Generic[Input, Output]):
+class Evaluator(Generic[Input, Output, Parameters]):
     """
     An evaluator is an abstraction that defines an evaluation dataset, a task to run on the dataset, and a set of
     scorers to evaluate the results of the task. Each method attribute can be synchronous or asynchronous (for
@@ -361,6 +371,12 @@ class Evaluator(Generic[Input, Output]):
     """
     A list of scorers to evaluate the results of the task. Each scorer can be a Scorer object or a function
     that takes `input`, `output`, and `expected` arguments and returns a `Score` object. The function can be async.
+    """
+
+    parameters_schema: Optional[Parameters]
+    """
+    A set of parameters that will be passed to the evaluator.
+    Can contain array values that will be converted to single values in the task.
     """
 
     experiment_name: Optional[str]
@@ -520,7 +536,7 @@ async def call_user_fn(event_loop, fn, **kwargs):
 
 
 @dataclasses.dataclass
-class ReporterDef(SerializableDataClass, Generic[Input, Output, EvalReport]):
+class ReporterDef(SerializableDataClass, Generic[Input, Output, Parameters, EvalReport]):
     """
     A reporter takes an evaluator and its result and returns a report.
     """
@@ -531,7 +547,7 @@ class ReporterDef(SerializableDataClass, Generic[Input, Output, EvalReport]):
     """
 
     report_eval: Callable[
-        [Evaluator[Input, Output], EvalResultWithSummary[Input, Output], bool, bool],
+        [Evaluator[Input, Output, Parameters], EvalResultWithSummary[Input, Output], bool, bool],
         Union[EvalReport, Awaitable[EvalReport]],
     ]
     """
@@ -546,7 +562,7 @@ class ReporterDef(SerializableDataClass, Generic[Input, Output, EvalReport]):
 
     async def _call_report_eval(
         self,
-        evaluator: Evaluator[Input, Output],
+        evaluator: Evaluator[Input, Output, Parameters],
         result: EvalResultWithSummary[Input, Output],
         verbose: bool,
         jsonl: bool,
@@ -564,15 +580,17 @@ class ReporterDef(SerializableDataClass, Generic[Input, Output, EvalReport]):
 
 
 @dataclasses.dataclass
-class EvaluatorInstance(SerializableDataClass, Generic[Input, Output, EvalReport]):
-    evaluator: Evaluator[Input, Output]
-    reporter: Optional[Union[ReporterDef[Input, Output, EvalReport], str]]
+class EvaluatorInstance(SerializableDataClass, Generic[Input, Output, Parameters, EvalReport]):
+    evaluator: Evaluator[Input, Output, Parameters]
+    reporter: Optional[Union[ReporterDef[Input, Output, Parameters, EvalReport], str]]
 
 
 @dataclasses.dataclass
-class EvaluatorFile(SerializableDataClass):
-    evaluators: Dict[str, EvaluatorInstance] = dataclasses.field(default_factory=dict)
-    reporters: Dict[str, ReporterDef] = dataclasses.field(default_factory=dict)
+class EvaluatorFile(SerializableDataClass, Generic[Input, Output, Parameters, EvalReport]):
+    evaluators: Dict[str, EvaluatorInstance[Input, Output, Parameters, EvalReport]] = dataclasses.field(
+        default_factory=dict
+    )
+    reporters: Dict[str, ReporterDef[Input, Output, Parameters, EvalReport]] = dataclasses.field(default_factory=dict)
 
     def clear(self):
         self.evaluators.clear()
@@ -687,7 +705,7 @@ def _EvalCommon(
     metadata: Optional[Metadata],
     is_public: bool,
     update: bool,
-    reporter: Optional[ReporterDef[Input, Output, EvalReport]],
+    reporter: Optional[ReporterDef[Input, Output, Parameters, EvalReport]],
     timeout: Optional[float],
     max_concurrency: Optional[int],
     project_id: Optional[str],
@@ -697,6 +715,8 @@ def _EvalCommon(
     repo_info: Optional[RepoInfo],
     description: Optional[str],
     summarize_scores: bool,
+    parameters_schema: Optional[Parameters] = None,
+    parameters: Optional[Dict[str, Any]] = None,
     error_score_handler: Optional[ErrorScoreHandler] = None,
     state: Optional[BraintrustState] = None,
     stream: Optional[StreamProgress] = None,
@@ -721,6 +741,7 @@ def _EvalCommon(
         scores=scores,
         experiment_name=experiment_name,
         trial_count=trial_count,
+        parameters_schema=parameters_schema,
         metadata=metadata,
         is_public=is_public,
         update=update,
@@ -786,9 +807,11 @@ def _EvalCommon(
         async def run_to_completion():
             try:
                 if parent:
-                    ret = await with_parent(parent, lambda: run_evaluator(None, evaluator, 0, [], stream=stream))
+                    ret = await with_parent(
+                        parent, lambda: run_evaluator(None, evaluator, 0, [], stream=stream, parameters=parameters)
+                    )
                 else:
-                    ret = await run_evaluator(experiment, evaluator, 0, [], stream=stream)
+                    ret = await run_evaluator(experiment, evaluator, 0, [], stream=stream, parameters=parameters)
                 reporter.report_eval(evaluator, ret, True, False)
                 return ret
             finally:
@@ -810,7 +833,7 @@ async def EvalAsync(
     metadata: Optional[Metadata] = None,
     is_public: bool = False,
     update: bool = False,
-    reporter: Optional[ReporterDef[Input, Output, EvalReport]] = None,
+    reporter: Optional[ReporterDef[Input, Output, Parameters, EvalReport]] = None,
     timeout: Optional[float] = None,
     max_concurrency: Optional[int] = None,
     project_id: Optional[str] = None,
@@ -819,6 +842,8 @@ async def EvalAsync(
     git_metadata_settings: Optional[GitMetadataSettings] = None,
     repo_info: Optional[RepoInfo] = None,
     error_score_handler: Optional[ErrorScoreHandler] = None,
+    parameters_schema: Optional[Parameters] = None,
+    parameters: Optional[Dict[str, Any]] = None,
     description: Optional[str] = None,
     summarize_scores: bool = True,
     state: Optional[BraintrustState] = None,
@@ -871,6 +896,8 @@ async def EvalAsync(
     :param error_score_handler: Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
     :param description: An optional description for the experiment.
     :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
+    :param parameters: Optional, the parameters to use for this specific task execution.
+    :param parameters_schema: Optional, the schema to use for validating the parameters.
     :param parent: If specified, instead of creating a new experiment object, the Eval() will populate the object or span specified by this parent.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
@@ -894,6 +921,8 @@ async def EvalAsync(
         repo_info=repo_info,
         description=description,
         summarize_scores=summarize_scores,
+        parameters_schema=parameters_schema,
+        parameters=parameters,
         state=state,
         stream=stream,
         parent=parent,
@@ -915,7 +944,7 @@ def Eval(
     metadata: Optional[Metadata] = None,
     is_public: bool = False,
     update: bool = False,
-    reporter: Optional[ReporterDef[Input, Output, EvalReport]] = None,
+    reporter: Optional[ReporterDef[Input, Output, Parameters, EvalReport]] = None,
     timeout: Optional[float] = None,
     max_concurrency: Optional[int] = None,
     project_id: Optional[str] = None,
@@ -924,6 +953,8 @@ def Eval(
     git_metadata_settings: Optional[GitMetadataSettings] = None,
     repo_info: Optional[RepoInfo] = None,
     error_score_handler: Optional[ErrorScoreHandler] = None,
+    parameters_schema: Optional[Parameters] = None,
+    parameters: Optional[Dict[str, Any]] = None,
     description: Optional[str] = None,
     summarize_scores: bool = True,
     state: Optional[BraintrustState] = None,
@@ -974,6 +1005,8 @@ def Eval(
     :param repo_info: Optionally explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
     :param error_score_handler: Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
     :param description: An optional description for the experiment.
+    :param parameters: Optional, the parameters to use for this specific task execution.
+    :param parameters_schema: Optional, the schema to use for validating the parameters.
     :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
@@ -998,6 +1031,8 @@ def Eval(
         repo_info=repo_info,
         error_score_handler=error_score_handler,
         description=description,
+        parameters_schema=parameters_schema,
+        parameters=parameters,
         summarize_scores=summarize_scores,
         state=state,
         stream=stream,
@@ -1029,7 +1064,7 @@ def Eval(
 def Reporter(
     name: str,
     report_eval: Callable[
-        [Evaluator[Input, Output], EvalResultWithSummary[Input, Output], bool, bool],
+        [Evaluator[Input, Output, Parameters], EvalResultWithSummary[Input, Output], bool, bool],
         Union[EvalReport, Awaitable[EvalReport]],
     ],
     report_run: Callable[[List[EvalReport], bool, bool], Union[bool, Awaitable[bool]]],
@@ -1123,12 +1158,15 @@ class DictEvalHooks(Dict[str, Any]):
         report_progress: ReportProgress,
         metadata: Optional[Any] = None,
         expected: Optional[Any] = None,
+        parameters: Optional[Parameters] = None,
         trial_index: int = 0,
     ):
         if metadata is not None:
             self.update({"metadata": metadata})
         if expected is not None:
             self.update({"expected": expected})
+        if parameters is not None:
+            self.update({"parameters": parameters})
         self.update({"trial_index": trial_index})
         self._report_progress = report_progress
         self._span = None
@@ -1140,6 +1178,10 @@ class DictEvalHooks(Dict[str, Any]):
     @property
     def expected(self):
         return self.get("expected")
+
+    @property
+    def parameters(self):
+        return self.get("parameters")
 
     @property
     def trial_index(self) -> int:
@@ -1235,14 +1277,16 @@ def scorer_name(scorer: EvalScorer[Any, Any], scorer_idx: int) -> str:
 
 async def run_evaluator(
     experiment: Optional[Experiment],
-    evaluator: Evaluator[Input, Output],
+    evaluator: Evaluator[Input, Output, Parameters],
     position: Optional[int],
     filters: List[Filter],
     stream: Optional[StreamProgress] = None,
+    parameters: Optional[Dict[str, Any]] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """Wrapper on _run_evaluator_internal that times out execution after evaluator.timeout."""
     results = await asyncio.wait_for(
-        _run_evaluator_internal(experiment, evaluator, position, filters, stream), evaluator.timeout
+        _run_evaluator_internal(experiment, evaluator, position, filters, stream, parameters=parameters),
+        evaluator.timeout,
     )
 
     if experiment:
@@ -1265,10 +1309,11 @@ def default_error_score_handler(
 
 async def _run_evaluator_internal(
     experiment: Optional[Experiment],
-    evaluator: Evaluator,
+    evaluator: Evaluator[Any, Any, Any],
     position: Optional[int],
     filters: List[Filter],
     stream: Optional[StreamProgress] = None,
+    parameters: Optional[Dict[str, Any]] = None,
 ):
     event_loop = asyncio.get_event_loop()
 
@@ -1317,6 +1362,8 @@ async def _run_evaluator_internal(
     scorers = [scorer() if inspect.isclass(scorer) and is_scorer(scorer) else scorer for scorer in evaluator.scores]
     scorer_names = [scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
     unhandled_scores = scorer_names
+
+    clean_parameters = validate_parameters(parameters or {}, evaluator.parameters_schema or {})
 
     async def run_evaluator_task(datum: Union[Dict[str, Any], EvalCase[Any, Any]], trial_index: int = 0):
         if isinstance(datum, dict):
@@ -1388,6 +1435,7 @@ async def _run_evaluator_internal(
                     metadata=metadata,
                     expected=datum.expected,
                     trial_index=trial_index,
+                    parameters=clean_parameters or {},
                 )
 
                 # Check if the task takes a hooks argument
@@ -1545,7 +1593,7 @@ async def _run_evaluator_internal(
 
 
 def build_local_summary(
-    evaluator: Evaluator[Input, Output], results: List[EvalResultWithSummary[Input, Output]]
+    evaluator: Evaluator[Input, Output, Parameters], results: List[EvalResultWithSummary[Input, Output]]
 ) -> ExperimentSummary:
     scores_by_name = defaultdict(lambda: (0, 0))
     for result in results:

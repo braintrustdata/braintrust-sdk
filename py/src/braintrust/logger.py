@@ -67,7 +67,7 @@ from .git_fields import GitMetadataSettings, RepoInfo
 from .gitutil import get_past_n_ancestors, get_repo_info
 from .merge_row_batch import batch_items, merge_row_batch
 from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record
-from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptMessage, PromptSchema, TextPart
+from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptData, PromptMessage, PromptSchema, TextPart
 from .prompt_cache.disk_cache import DiskCache
 from .prompt_cache.lru_cache import LRUCache
 from .prompt_cache.prompt_cache import PromptCache
@@ -4075,6 +4075,26 @@ class Prompt:
             return self.prompt.tools
         else:
             return self.options[x]
+
+    @classmethod
+    def from_prompt_data(cls, *, name: str, prompt_data: PromptData):
+        return cls(
+            lazy_metadata=LazyValue(
+                lambda: PromptSchema(
+                    id="",
+                    project_id="",
+                    _xact_id="",
+                    name=name,
+                    slug=name,
+                    prompt_data=prompt_data,
+                    description=None,
+                    tags=None,
+                ),
+                use_mutex=False,
+            ),
+            defaults={},
+            no_trace=False,
+        )
 
 
 class Project:

@@ -212,3 +212,12 @@ def add_azure_blob_headers(headers: Dict[str, str], url: str) -> None:
     # there is no way to avoid including this.
     if "blob.core.windows.net" in url:
         headers["x-ms-blob-type"] = "BlockBlob"
+
+
+def get_any(obj: Any, key: str, default: Optional[Any] = None):
+    for accessor in [lambda: getattr(obj, key), lambda: obj[key]]:
+        try:
+            return accessor()
+        except (AttributeError, KeyError, TypeError):
+            continue
+    return default

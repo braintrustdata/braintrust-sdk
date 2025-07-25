@@ -21,6 +21,7 @@ install_requires = [
     "sseclient-py",
     "python-slugify",
     "typing_extensions>=4.1.0",
+    "jsonschema",
 ]
 
 extras_require = {

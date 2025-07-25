@@ -14,16 +14,19 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
 
 from braintrust.cli.eval.models import (
+    EvalParameterData,
+    EvalParameterPrompt,
+    EvalParametersSerialized,
     EvalRequest,
     InvokeParent,
     ListEvals,
     LoadedEvaluator,
+    Score,
     ScoreFunctionId,
 )
 from braintrust.dev.dataset import get_dataset
 from braintrust.dev.errors import format_validation_errors
 from braintrust.dev.security import BraintrustApiKey
-from braintrust.dev.utils import get_any
 from braintrust.framework import (
     EvalAsync,
     EvalCase,
@@ -35,8 +38,10 @@ from braintrust.framework import (
 )
 from braintrust.http_headers import BT_CURSOR_HEADER, BT_FOUND_EXISTING_HEADER, BT_PARENT
 from braintrust.logger import BraintrustState, Dataset, get_span_parent_object
+from braintrust.parameters import EvalParameters, validate_parameters
+from braintrust.prompt import prompt_definition_to_prompt_data
 from braintrust.span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
-from braintrust.util import eprint
+from braintrust.util import eprint, get_any
 
 
 def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost", port: int = 8300):
@@ -69,7 +74,7 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
             content=jsonable_encoder({"error": format_validation_errors(exc.errors())}),
         )
 
-    all_evaluators: dict[str, Evaluator[Any, Any]] = {}
+    all_evaluators: dict[str, Evaluator[Any, Any, Any]] = {}
 
     for evaluator in evaluators:
         all_evaluators[evaluator.evaluator.eval_name] = evaluator.evaluator  # pyright: ignore[reportUnknownMemberType]
@@ -121,10 +126,14 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
         for name, evaluator in all_evaluators.items():
             eval_defs[name] = cast(
                 ListEvals,
-                {
-                    # "parameters": None,  # TODO: no parameters in evaluator
-                    "scores": [{"name": scorer_name(score, i)} for i, score in enumerate(evaluator.scores)],
-                },
+                clean(
+                    {
+                        "parameters": make_eval_parameters_schema(evaluator.parameters_schema)
+                        if evaluator.parameters_schema
+                        else None,
+                        "scores": [{"name": scorer_name(score, i)} for i, score in enumerate(evaluator.scores)],
+                    }
+                ),
             )
 
         return eval_defs
@@ -140,14 +149,12 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
         except KeyError:
             raise HTTPException(status_code=404, detail=f"Evaluator {eval.name} not found")
 
-        # XXX: as of writing all python evaluators do not support parameters
-        parameters = getattr(evaluator, "parameters", None)
-        if parameters is None and eval.parameters:
-            raise HTTPException(status_code=400, detail="Evaluator does not support parameters")
-
-        # TODO: more elaborate parameter validation (see validateParameters in TS)
-        if parameters is not None and eval.parameters is None:
-            raise HTTPException(status_code=400, detail="Evaluator requires parameters")
+        if evaluator.parameters_schema:
+            try:
+                validate_parameters(eval.parameters or {}, evaluator.parameters_schema)
+            except Exception as e:
+                print(f"Error validating parameters: {e}")
+                raise HTTPException(status_code=400, detail=str(e))
 
         resolved_dataset = get_dataset(state, eval.data)
         eval_data = call_evaluator_data(resolved_dataset)
@@ -157,11 +164,11 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
         message_queue: asyncio.Queue[Optional[str]] = asyncio.Queue()
 
         async def progress_task(input: Any, hooks: EvalHooks[Any]):
-            task_args = [input]
             if len(inspect.signature(evaluator.task).parameters) == 2:
-                task_args.append(hooks)
+                result = evaluator.task(input, hooks=hooks)  # type: ignore
+            else:
+                result = evaluator.task(input)  # type: ignore
 
-            result = evaluator.task(*task_args)
             if inspect.iscoroutine(result):
                 result = await result
 
@@ -181,7 +188,13 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
         async def evaluate():
             scores = evaluator.scores
             if eval.scores:
-                scores += [make_scorer(state, score.name, score.function_id) for score in eval.scores]
+                eval_scores = [
+                    score
+                    if isinstance(score, Score)  # type: ignore  # TODO: why is from_dict_deep not working?
+                    else Score.from_dict_deep(score)
+                    for score in eval.scores
+                ]
+                scores += [make_scorer(state, score.name, score.function_id) for score in eval_scores]
 
             result = await EvalAsync(
                 name="worker-thread",
@@ -206,6 +219,8 @@ def run_dev_server(evaluators: List[LoadedEvaluator], *, host: str = "localhost"
                 state=state,
                 stream=stream,
                 parent=parse_parent(eval.parent),
+                parameters_schema=evaluator.parameters_schema,
+                parameters=eval.parameters,
             )
 
             # we're done
@@ -351,3 +366,29 @@ def parse_parent(parent: Optional[Union[InvokeParent, str]]):
         span_id=span_id,
         root_span_id=root_span_id,
     ).to_str()
+
+
+def make_eval_parameters_schema(parameters: EvalParameters) -> EvalParametersSerialized:
+    params: EvalParametersSerialized = {}
+    for name, value in parameters.items():
+        if get_any(value, "type") == "prompt":
+            default = get_any(value, "default")
+            params[name] = cast(
+                EvalParameterPrompt,
+                {
+                    "type": "prompt",
+                    "default": value and prompt_definition_to_prompt_data(default),
+                    "description": get_any(value, "description"),
+                },
+            )
+        else:
+            params[name] = cast(
+                EvalParameterData,
+                {
+                    "type": "data",
+                    "schema": value,  # already a json schema
+                    "default": get_any(value, "default"),
+                    "description": get_any(value, "description"),
+                },
+            )
+    return params
