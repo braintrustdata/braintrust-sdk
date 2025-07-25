@@ -22,7 +22,7 @@ import {
   X_CACHED_HEADER,
 } from "./oai";
 
-interface LLMMetrics {
+interface LLMMetrics extends Record<string, unknown> {
   time_to_first_token?: number;
   tokens?: number;
   prompt_tokens?: number;
@@ -30,6 +30,11 @@ interface LLMMetrics {
   cached?: number;
   prompt_cached_tokens?: number;
   prompt_cache_creation_tokens?: number;
+}
+
+interface AnthropicMetadata {
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
 }
 
 /**
@@ -155,6 +160,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
 
     try {
       const ret = await this.model.doStream(options);
+      const self = this;
 
       let time_to_first_token: number | undefined = undefined;
       let usage:
@@ -213,7 +219,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
               controller.enqueue(chunk);
             },
             async flush(controller) {
-              const streamMetrics = this.parseStreamMetrics(
+              const streamMetrics = self.parseStreamMetrics(
                 ret,
                 usage,
                 time_to_first_token,
@@ -286,48 +292,44 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
     };
 
     // Handle Anthropic cached tokens from providerMetadata
-    this.addAnthropicCachedTokens(ret, metrics);
+    // For streaming, providerMetadata might not be available, so we skip it
+    if ("providerMetadata" in ret) {
+      this.addAnthropicCachedTokens(ret as any, metrics);
+    }
 
     return metrics;
   }
 
   private addAnthropicCachedTokens(
-    ret: { providerMetadata?: { anthropic?: unknown } },
+    ret: { providerMetadata?: { anthropic?: unknown } } | undefined,
     metrics: LLMMetrics,
   ): void {
+    if (!ret) return;
     if (this.provider === "anthropic" && ret.providerMetadata?.anthropic) {
-      const anthropicMetadata = ret.providerMetadata.anthropic;
-      if (typeof anthropicMetadata === "object" && anthropicMetadata !== null) {
-        if (
-          "cacheReadInputTokens" in anthropicMetadata &&
-          typeof anthropicMetadata.cacheReadInputTokens === "number"
-        ) {
-          metrics.prompt_cached_tokens = anthropicMetadata.cacheReadInputTokens;
-        }
-        if (
-          "cacheCreationInputTokens" in anthropicMetadata &&
-          typeof anthropicMetadata.cacheCreationInputTokens === "number"
-        ) {
-          metrics.prompt_cache_creation_tokens =
-            anthropicMetadata.cacheCreationInputTokens;
-        }
+      const anthropicMetadata = ret.providerMetadata
+        .anthropic as AnthropicMetadata;
 
-        // Log these for debugging
-        if (
-          metrics.prompt_cached_tokens ||
-          metrics.prompt_cache_creation_tokens
-        ) {
-          console.log("Anthropic cached tokens:", {
-            cacheReadInputTokens: anthropicMetadata.cacheReadInputTokens,
-            cacheCreationInputTokens:
-              anthropicMetadata.cacheCreationInputTokens,
-            mapped_to: {
-              prompt_cached_tokens: metrics.prompt_cached_tokens,
-              prompt_cache_creation_tokens:
-                metrics.prompt_cache_creation_tokens,
-            },
-          });
-        }
+      if (anthropicMetadata.cacheReadInputTokens !== undefined) {
+        metrics.prompt_cached_tokens = anthropicMetadata.cacheReadInputTokens;
+      }
+      if (anthropicMetadata.cacheCreationInputTokens !== undefined) {
+        metrics.prompt_cache_creation_tokens =
+          anthropicMetadata.cacheCreationInputTokens;
+      }
+
+      // Log these for debugging
+      if (
+        metrics.prompt_cached_tokens ||
+        metrics.prompt_cache_creation_tokens
+      ) {
+        console.log("Anthropic cached tokens:", {
+          cacheReadInputTokens: anthropicMetadata.cacheReadInputTokens,
+          cacheCreationInputTokens: anthropicMetadata.cacheCreationInputTokens,
+          mapped_to: {
+            prompt_cached_tokens: metrics.prompt_cached_tokens,
+            prompt_cache_creation_tokens: metrics.prompt_cache_creation_tokens,
+          },
+        });
       }
     }
   }
