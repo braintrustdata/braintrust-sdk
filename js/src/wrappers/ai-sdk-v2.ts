@@ -55,7 +55,7 @@ function detectProviderFromResult(result: {
   }
 
   const keys = Object.keys(result.providerMetadata); // e.g. "openai", "anthropic"
-  return keys.length > 0 ? keys[0] : undefined;
+  return keys?.at(0);
 }
 
 function extractModelFromResult(result: {
@@ -161,15 +161,15 @@ function normalizeUsageMetrics(usage: unknown): Record<string, number> {
  * ```typescript
  * import { wrapLanguageModel } from "ai";
  * import { openai } from "@ai-sdk/openai";
- * import { AISDKMiddleware } from "braintrust";
+ * import { BraintrustMiddleware } from "braintrust";
  *
  * const model = wrapLanguageModel({
  *   model: openai("gpt-4"),
- *   middleware: AISDKMiddleware({ debug: true, name: "MyMiddleware" })
+ *   middleware: BraintrustMiddleware({ debug: true, name: "MyMiddleware" })
  * });
  * ```
  */
-export function AISDKMiddleware(
+export function BraintrustMiddleware(
   config: MiddlewareConfig = {},
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): LanguageModelV2Middleware<any, any> {

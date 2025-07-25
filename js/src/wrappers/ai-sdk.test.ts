@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
-import { AISDKMiddleware } from "../exports-node";
+import { BraintrustMiddleware } from "../exports-node";
 
 describe("ai-sdk exports", () => {
-  it("should always export AISDKMiddleware as a function", () => {
-    expect(typeof AISDKMiddleware).toBe("function");
+  it("should always export BraintrustMiddleware as a function", () => {
+    expect(typeof BraintrustMiddleware).toBe("function");
   });
 
-  it("AISDKMiddleware should return an object with wrapGenerate and wrapStream", () => {
-    const result = AISDKMiddleware({});
+  it("BraintrustMiddleware should return an object with wrapGenerate and wrapStream", () => {
+    const result = BraintrustMiddleware({});
     expect(result).toHaveProperty("wrapGenerate");
     expect(result).toHaveProperty("wrapStream");
     expect(typeof result.wrapGenerate).toBe("function");
@@ -17,7 +17,7 @@ describe("ai-sdk exports", () => {
   it("should handle conditional imports gracefully", () => {
     // Test that imports don't throw errors regardless of AI SDK version
     expect(() => {
-      const middleware = AISDKMiddleware({ debug: true });
+      const middleware = BraintrustMiddleware({ debug: true });
 
       // Should be able to call the functions without errors
       const { wrapGenerate, wrapStream } = middleware;
@@ -28,7 +28,7 @@ describe("ai-sdk exports", () => {
   });
 
   it("should export middleware functions that can be instantiated", () => {
-    const middleware = AISDKMiddleware({});
+    const middleware = BraintrustMiddleware({});
     const { wrapGenerate, wrapStream } = middleware;
 
     // Should be functions that can be called (we don't test actual execution due to logger dependencies)

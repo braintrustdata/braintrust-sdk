@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { postProcessPrompt } from "./ai-sdk-v1";
-import { AISDKMiddleware } from "../exports-node";
+import { BraintrustMiddleware } from "../exports-node";
 import { LanguageModelV1Prompt } from "@ai-sdk/provider";
 
 describe("postProcessPrompt", () => {
@@ -53,11 +53,11 @@ describe("postProcessPrompt", () => {
     ]);
   });
 
-  it("should import AISDKMiddleware from braintrust package", () => {
-    expect(typeof AISDKMiddleware).toBe("function");
+  it("should import BraintrustMiddleware from braintrust package", () => {
+    expect(typeof BraintrustMiddleware).toBe("function");
 
     // Should be able to call it and get middleware object back
-    const middleware = AISDKMiddleware({});
+    const middleware = BraintrustMiddleware({});
     expect(middleware).toHaveProperty("wrapGenerate");
     expect(middleware).toHaveProperty("wrapStream");
     expect(typeof middleware.wrapGenerate).toBe("function");

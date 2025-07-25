@@ -2,7 +2,7 @@
 
 import { openai } from "@ai-sdk/openai";
 import { generateText, streamText, wrapLanguageModel } from "ai";
-import { initLogger, AISDKMiddleware } from "../src/index";
+import { initLogger, BraintrustMiddleware } from "braintrust";
 
 // Initialize Braintrust logging
 initLogger({
@@ -13,7 +13,7 @@ initLogger({
 // The middleware automatically detects providers (OpenAI, Anthropic, or any custom provider)
 const wrappedOpenAI = wrapLanguageModel({
   model: openai("gpt-3.5-turbo"),
-  middleware: AISDKMiddleware({ debug: false, name: "OpenAIMiddleware" }),
+  middleware: BraintrustMiddleware({ debug: false, name: "OpenAIMiddleware" }),
 });
 
 async function exampleGenerateText() {
@@ -56,7 +56,7 @@ async function exampleErrorHandling() {
 
   const invalidModel = wrapLanguageModel({
     model: openai("invalid-model-name"),
-    middleware: AISDKMiddleware({ debug: true, name: "ErrorMiddleware" }),
+    middleware: BraintrustMiddleware({ debug: true, name: "ErrorMiddleware" }),
   });
 
   try {

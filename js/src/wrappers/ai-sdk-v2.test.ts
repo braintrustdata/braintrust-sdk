@@ -9,7 +9,7 @@ import {
 import { generateText, streamText, wrapLanguageModel } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
-import { AISDKMiddleware } from "../exports-node";
+import { BraintrustMiddleware } from "../exports-node";
 import {
   _exportsForTestingOnly,
   Logger,
@@ -46,11 +46,11 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
   let testLogger: TestBackgroundLogger;
   let logger: Logger<true>;
   let rawModel = openai(testModelName);
-  let wrappedModel = wrapLanguageModel({
+  const wrappedModel = wrapLanguageModel({
     model: rawModel,
-    middleware: AISDKMiddleware({ debug: true, name: "TestMiddleware" }),
+    middleware: BraintrustMiddleware({ debug: true, name: "TestMiddleware" }),
   });
-  let models = [rawModel, wrappedModel];
+  const models = [rawModel, wrappedModel];
 
   beforeAll(async () => {
     await _exportsForTestingOnly.simulateLoginForTests();
@@ -191,7 +191,10 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
     // Create a model with an invalid model name to force an error
     const invalidModel = wrapLanguageModel({
       model: openai("invalid-model-name-that-does-not-exist"),
-      middleware: AISDKMiddleware({ debug: true, name: "ErrorTestMiddleware" }),
+      middleware: BraintrustMiddleware({
+        debug: true,
+        name: "ErrorTestMiddleware",
+      }),
     });
 
     try {
@@ -231,7 +234,7 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
     const anthropicModel = anthropic(testAnthropicModelName);
     const wrappedAnthropicModel = wrapLanguageModel({
       model: anthropicModel,
-      middleware: AISDKMiddleware({
+      middleware: BraintrustMiddleware({
         debug: true,
         name: "AnthropicTestMiddleware",
       }),
@@ -346,7 +349,7 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
     const anthropicModel = anthropic(testAnthropicModelName);
     const wrappedAnthropicModel = wrapLanguageModel({
       model: anthropicModel,
-      middleware: AISDKMiddleware({
+      middleware: BraintrustMiddleware({
         debug: true,
         name: "AnthropicParamsTestMiddleware",
       }),
@@ -410,11 +413,11 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
     expect(true).toBe(true); // The enhanced detection is tested in integration
   });
 
-  test("should import AISDKMiddleware from braintrust package", async () => {
-    expect(typeof AISDKMiddleware).toBe("function");
+  test("should import BraintrustMiddleware from braintrust package", async () => {
+    expect(typeof BraintrustMiddleware).toBe("function");
 
     // Should be able to call it and get middleware object back
-    const middleware = AISDKMiddleware({});
+    const middleware = BraintrustMiddleware({});
     expect(middleware).toHaveProperty("wrapGenerate");
     expect(middleware).toHaveProperty("wrapStream");
     expect(typeof middleware.wrapGenerate).toBe("function");
