@@ -155,6 +155,13 @@ class EvalHooks(abc.ABC, Generic[Output]):
 
     @property
     @abc.abstractmethod
+    def experiment(self) -> Optional["Experiment"]:
+        """
+        Access the experiment under which the task is run. Also accessible via braintrust.current_experiment()
+        """
+
+    @property
+    @abc.abstractmethod
     def trial_index(self) -> int:
         """
         The index of the current trial (0-based). This is useful when trial_count > 1.
@@ -1008,13 +1015,14 @@ def evaluate_filter(object, filter: Filter):
 
 
 class DictEvalHooks(Dict[str, Any]):
-    def __init__(self, metadata: Optional[Any] = None, expected: Optional[Any] = None, trial_index: int = 0):
+    def __init__(self, metadata: Optional[Any] = None, expected: Optional[Any] = None, experiment: Optional["Experiment"] = None, trial_index: int = 0):
         if metadata is not None:
             self.update({"metadata": metadata})
         if expected is not None:
             self.update({"expected": expected})
         self.update({"trial_index": trial_index})
         self._span = None
+        self._experiment = experiment
 
     @property
     def metadata(self):
@@ -1032,8 +1040,15 @@ class DictEvalHooks(Dict[str, Any]):
     def span(self) -> Optional[Span]:
         return self._span
 
+    @property
+    def experiment(self) -> Optional["Experiment"]:
+        return self._experiment
+
     def set_span(self, span: Optional[Span]):
         self._span = span
+
+    def set_experiment(self, experiment: Optional["Experiment"]):
+        self._experiment = experiment
 
     def meta(self, **info: Any):
         warnings.warn(
@@ -1206,7 +1221,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             root_span = NOOP_SPAN
         with root_span:
             try:
-                hooks = DictEvalHooks(metadata, expected=datum.expected, trial_index=trial_index)
+                hooks = DictEvalHooks(metadata, expected=datum.expected, experiment=experiment, trial_index=trial_index)
 
                 # Check if the task takes a hooks argument
                 task_args = [datum.input]
