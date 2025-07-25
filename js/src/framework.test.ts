@@ -610,6 +610,7 @@ test("trialIndex is passed to task", async () => {
     },
     new NoopProgressReporter(),
     [],
+    undefined,
   );
 
   // Should have 3 results (one for each trial)
@@ -649,6 +650,7 @@ test("trialIndex with multiple inputs", async () => {
     },
     new NoopProgressReporter(),
     [],
+    undefined,
   );
 
   // Should have 4 results total (2 inputs × 2 trials)
