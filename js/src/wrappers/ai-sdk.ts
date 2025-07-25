@@ -257,41 +257,7 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
     };
 
     // Handle Anthropic cached tokens from providerMetadata
-    if (this.provider === "anthropic" && ret.providerMetadata?.anthropic) {
-      const anthropicMetadata = ret.providerMetadata.anthropic;
-      if (typeof anthropicMetadata === "object" && anthropicMetadata !== null) {
-        if (
-          "cacheReadInputTokens" in anthropicMetadata &&
-          typeof anthropicMetadata.cacheReadInputTokens === "number"
-        ) {
-          metrics.prompt_cached_tokens = anthropicMetadata.cacheReadInputTokens;
-        }
-        if (
-          "cacheCreationInputTokens" in anthropicMetadata &&
-          typeof anthropicMetadata.cacheCreationInputTokens === "number"
-        ) {
-          metrics.prompt_cache_creation_tokens =
-            anthropicMetadata.cacheCreationInputTokens;
-        }
-
-        // Log these for debugging
-        if (
-          metrics.prompt_cached_tokens ||
-          metrics.prompt_cache_creation_tokens
-        ) {
-          console.log("Anthropic cached tokens:", {
-            cacheReadInputTokens: anthropicMetadata.cacheReadInputTokens,
-            cacheCreationInputTokens:
-              anthropicMetadata.cacheCreationInputTokens,
-            mapped_to: {
-              prompt_cached_tokens: metrics.prompt_cached_tokens,
-              prompt_cache_creation_tokens:
-                metrics.prompt_cache_creation_tokens,
-            },
-          });
-        }
-      }
-    }
+    this.addAnthropicCachedTokens(ret, metrics);
 
     return metrics;
   }
@@ -320,6 +286,15 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
     };
 
     // Handle Anthropic cached tokens from providerMetadata
+    this.addAnthropicCachedTokens(ret, metrics);
+
+    return metrics;
+  }
+
+  private addAnthropicCachedTokens(
+    ret: { providerMetadata?: { anthropic?: unknown } },
+    metrics: LLMMetrics,
+  ): void {
     if (this.provider === "anthropic" && ret.providerMetadata?.anthropic) {
       const anthropicMetadata = ret.providerMetadata.anthropic;
       if (typeof anthropicMetadata === "object" && anthropicMetadata !== null) {
@@ -355,8 +330,6 @@ class BraintrustLanguageModelWrapper implements LanguageModelV1 {
         }
       }
     }
-
-    return metrics;
   }
 }
 
