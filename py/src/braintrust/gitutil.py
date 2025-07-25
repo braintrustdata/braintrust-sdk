@@ -4,7 +4,7 @@ import re
 import subprocess
 import threading
 from functools import lru_cache as _cache
-from typing import List, Optional
+from typing import Optional
 
 from .git_fields import GitMetadataSettings, RepoInfo
 

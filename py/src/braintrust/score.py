@@ -1,6 +1,5 @@
 import dataclasses
 import inspect
-import sys
 import warnings
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional

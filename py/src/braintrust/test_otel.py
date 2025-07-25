@@ -1,8 +1,6 @@
 # pylint: disable=not-context-manager
-import importlib
 import os
 import sys
-import warnings
 
 import pytest
 
@@ -151,8 +149,6 @@ def test_braintrust_otel_filter_ai_spans_environment_variable():
         pytest.skip("OpenTelemetry not installed, skipping test")
 
     import os
-
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
     from braintrust.otel import AISpanProcessor
 
