@@ -1,5 +1,10 @@
 """Re-exports generated typespecs that are considered public API."""
 
+from dataclasses import dataclass
+from typing import List, Optional, Union
+
+from braintrust.serializable_data_class import SerializableDataClass
+
 from ._types import (
     AttachmentReference,  # noqa: F401 # type: ignore[reportUnusedImport]
     AttachmentStatus,  # noqa: F401 # type: ignore[reportUnusedImport]
@@ -15,3 +20,22 @@ from ._types import (
     SpanType,  # noqa: F401 # type: ignore[reportUnusedImport]
     ToolFunctionDefinition,  # noqa: F401 # type: ignore[reportUnusedImport]
 )
+
+
+@dataclass
+class PromptContentsPromptAndParamsAndTools(SerializableDataClass):
+    prompt: str
+    model: Optional[str] = None
+    params: Optional[ModelParams] = None
+    tools: Optional[List[ToolFunctionDefinition]] = None
+
+
+@dataclass
+class PromptContentsMessagesAndParamsAndTools(SerializableDataClass):
+    messages: List[ChatCompletionMessageParam]
+    model: Optional[str] = None
+    params: Optional[ModelParams] = None
+    tools: Optional[List[ToolFunctionDefinition]] = None
+
+
+PromptDefinitionWithTools = Union[PromptContentsPromptAndParamsAndTools, PromptContentsMessagesAndParamsAndTools]

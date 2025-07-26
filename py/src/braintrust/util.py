@@ -4,9 +4,10 @@ import sys
 import threading
 import urllib.parse
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Generic, Literal, Mapping, Optional, Set, Tuple, TypedDict, TypeVar, Union
+from typing import Any, Callable, Dict, Generic, Literal, Mapping, Optional, Set, Tuple, TypeVar, Union
 
 from requests import HTTPError, Response
+from typing_extensions import TypedDict
 
 GLOBAL_PROJECT = "Global"
 BT_IS_ASYNC_ATTRIBUTE = "_BT_IS_ASYNC"
@@ -211,3 +212,12 @@ def add_azure_blob_headers(headers: Dict[str, str], url: str) -> None:
     # there is no way to avoid including this.
     if "blob.core.windows.net" in url:
         headers["x-ms-blob-type"] = "BlockBlob"
+
+
+def get_any(obj: Any, key: str, default: Optional[Any] = None):
+    for accessor in [lambda: getattr(obj, key), lambda: obj[key]]:
+        try:
+            return accessor()
+        except (AttributeError, KeyError, TypeError):
+            continue
+    return default

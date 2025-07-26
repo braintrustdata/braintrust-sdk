@@ -1,20 +1,21 @@
 import dataclasses
-import json
-from typing import Any, Callable, Dict, List, Optional, Union, overload
+from typing import Any, Callable, Dict, List, Optional, Union, cast, overload
 
 import slugify
 
 from braintrust.logger import api_conn, app_conn, login
+from braintrust.prompt import prompt_definition_to_prompt_data
 
 from .framework import _is_lazy_load, bcolors  # type: ignore
 from .types import (
     ChatCompletionMessageParam,
     IfExists,
     ModelParams,
-    PromptData,
-    PromptOptions,
     SavedFunctionId,
     ToolFunctionDefinition,
+)
+from .types import (
+    PromptData as PromptDataDict,
 )
 from .util import eprint
 
@@ -61,7 +62,7 @@ class CodePrompt:
     project: "Project"
     name: str
     slug: str
-    prompt: PromptData
+    prompt: PromptDataDict
     tool_functions: List[Union[CodeFunction, SavedFunctionId]]
     description: Optional[str]
     function_type: Optional[str]
@@ -243,30 +244,19 @@ class PromptBuilder:
                 # ToolFunctionDefinition
                 raw_tools.append(tool)
 
-        prompt_data: PromptData = {}
-        if messages is not None:
-            prompt_data["prompt"] = {
-                "type": "chat",
-                "messages": messages,
-            }
-            if len(raw_tools) > 0:
-                prompt_data["prompt"]["tools"] = json.dumps(raw_tools)
-        else:
-            assert prompt is not None
-            prompt_data["prompt"] = {
-                "type": "completion",
-                "content": prompt,
-            }
-        options: PromptOptions = {"model": model}
-        if params is not None:
-            options["params"] = params
-        prompt_data["options"] = options
+        prompt_data = prompt_definition_to_prompt_data(
+            prompt=prompt,
+            messages=messages,
+            model=model,
+            params=params,
+            tools=raw_tools,
+        )
 
         p = CodePrompt(
             project=self.project,
             name=name,
             slug=slug,
-            prompt=prompt_data,
+            prompt=cast(PromptDataDict, prompt_data.as_dict()),
             tool_functions=tool_functions,
             description=description,
             function_type=None,
@@ -404,7 +394,7 @@ class ScorerBuilder:
             assert model is not None
             assert use_cot is not None
             assert choice_scores is not None
-            prompt_data: PromptData = {}
+            prompt_data: PromptDataDict = {}
             if messages is not None:
                 assert prompt is None
                 prompt_data["prompt"] = {
