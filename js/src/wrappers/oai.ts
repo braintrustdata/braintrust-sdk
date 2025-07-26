@@ -42,7 +42,7 @@ declare global {
  * not configured, nothing will be traced. If this is not an `OpenAI` object, this function is
  * a no-op.
  *
- * Currently, this only supports the `v4` API.
+ * Currently, this supports both the `v4` and `v5` API.
  *
  * @param openai
  * @returns The wrapped `OpenAI` object.
@@ -70,10 +70,17 @@ export function wrapOpenAI<T extends object>(openai: T): T {
 globalThis.__inherited_braintrust_wrap_openai = wrapOpenAI;
 
 export function wrapOpenAIv4<T extends OpenAILike>(openai: T): T {
-  const completionProxy = createEndpointProxy(
-    openai.chat.completions,
-    wrapChatCompletion,
-  );
+  const completionProxy = new Proxy(openai.chat.completions, {
+    get(target, name, receiver) {
+      const baseVal = Reflect.get(target, name, receiver);
+      if (name === "create") {
+        return wrapChatCompletion(baseVal.bind(target));
+      } else if (name === "parse") {
+        return wrapBetaChatCompletionParse(baseVal.bind(target));
+      }
+      return baseVal;
+    },
+  });
 
   const chatProxy = new Proxy(openai.chat, {
     get(target, name, receiver) {

@@ -418,6 +418,55 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.isTrue(m.prompt_tokens > 0);
     assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
   });
+
+  test("openai.chat.completions.parse (v5 GA method)", async () => {
+    // Test that the parse method is properly wrapped in the GA namespace (v5)
+    if (!oai.chat?.completions?.parse) {
+      // Skip if parse method not available (older SDK version)
+      return;
+    }
+
+    assert.lengthOf(await backgroundLogger.drain(), 0);
+
+    // Use a simple schema for testing
+    const schema = {
+      type: "object",
+      properties: {
+        answer: { type: "number" },
+      },
+      required: ["answer"],
+    };
+
+    const start = getCurrentUnixTimestamp();
+    const result = await client.chat.completions.parse({
+      messages: [{ role: "user", content: "What is 2 + 2?" }],
+      model: TEST_MODEL,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "math_response",
+          schema: schema,
+        },
+      },
+    });
+    const end = getCurrentUnixTimestamp();
+
+    assert.ok(result);
+
+    const spans = await backgroundLogger.drain();
+    assert.lengthOf(spans, 1);
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const span = spans[0] as any;
+    assert.equal(span.span_attributes.name, "Chat Completion");
+    assert.equal(span.span_attributes.type, "llm");
+    assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.metadata.provider, "openai");
+    const m = span.metrics;
+    assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
+    assert.isTrue(m.tokens > 0);
+    assert.isTrue(m.prompt_tokens > 0);
+    assert.isTrue(m.time_to_first_token > 0);
+  });
 });
 
 test("parseMetricsFromUsage", () => {
