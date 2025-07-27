@@ -1395,4 +1395,496 @@ def build_local_summary(
     )
 
 
-__all__ = ["Evaluator", "Eval", "EvalAsync", "Score", "EvalCase", "EvalHooks", "BaseExperiment", "Reporter"]
+def _run_eval_sync(
+    name: str,
+    data: EvalData[Input, Output],
+    task: EvalTask[Input, Output],
+    scores: Sequence[EvalScorer[Input, Output]],
+    experiment_name: Optional[str],
+    trial_count: int,
+    metadata: Optional[Metadata],
+    is_public: bool,
+    update: bool,
+    reporter: Optional[ReporterDef[Input, Output, EvalReport]],
+    timeout: Optional[float],
+    max_concurrency: Optional[int],
+    project_id: Optional[str],
+    base_experiment_name: Optional[str],
+    base_experiment_id: Optional[str],
+    git_metadata_settings: Optional[GitMetadataSettings],
+    repo_info: Optional[RepoInfo],
+    error_score_handler: Optional[ErrorScoreHandler],
+    description: Optional[str],
+    summarize_scores: bool,
+) -> EvalResultWithSummary[Input, Output]:
+    """Internal function to run evaluation synchronously."""
+
+    eval_name = _make_eval_name(name, experiment_name)
+
+    if isinstance(reporter, str):
+        raise ValueError(
+            "Must specify a reporter object, not a name. Can only specify reporter names when running 'braintrust eval'"
+        )
+
+    reporter = reporter or default_reporter
+
+    evaluator = Evaluator(
+        eval_name=eval_name,
+        project_name=name,
+        data=data,
+        task=task,
+        scores=scores,
+        experiment_name=experiment_name,
+        trial_count=trial_count,
+        metadata=metadata,
+        is_public=is_public,
+        update=update,
+        timeout=timeout,
+        max_concurrency=max_concurrency,
+        project_id=project_id,
+        base_experiment_name=base_experiment_name,
+        base_experiment_id=base_experiment_id,
+        git_metadata_settings=git_metadata_settings,
+        repo_info=repo_info,
+        error_score_handler=error_score_handler,
+        description=description,
+        summarize_scores=summarize_scores,
+    )
+
+    if base_experiment_name is None and isinstance(evaluator.data, BaseExperiment):
+        base_experiment_name = evaluator.data.name
+
+    dataset = None
+    if isinstance(evaluator.data, Dataset):
+        dataset = evaluator.data
+
+    experiment = init_experiment(
+        project_name=evaluator.project_name if evaluator.project_id is None else None,
+        project_id=evaluator.project_id,
+        experiment_name=evaluator.experiment_name,
+        description=evaluator.description,
+        metadata=evaluator.metadata,
+        is_public=evaluator.is_public,
+        update=evaluator.update,
+        base_experiment=base_experiment_name,
+        base_experiment_id=base_experiment_id,
+        git_metadata_settings=evaluator.git_metadata_settings,
+        repo_info=evaluator.repo_info,
+        dataset=dataset,
+    )
+
+    try:
+        results = _run_evaluator_sync(experiment, evaluator, timeout)
+
+        if experiment:
+            summary = experiment.summarize(summarize_scores=evaluator.summarize_scores)
+        else:
+            summary = build_local_summary(evaluator, results)
+
+        ret = EvalResultWithSummary(results=results, summary=summary)
+        reporter.report_eval(evaluator, ret, verbose=True, jsonl=False)
+        return ret
+    finally:
+        experiment.flush()
+
+
+def _run_evaluator_sync(
+    experiment: Optional[Experiment],
+    evaluator: Evaluator[Input, Output],
+    timeout: Optional[float],
+) -> List[EvalResult[Input, Output]]:
+    """Run evaluator synchronously without any async code."""
+
+    from queue import Queue
+    from threading import Thread
+
+    # Resolve scorers if they are classes
+    scorers = [scorer() if inspect.isclass(scorer) and is_scorer(scorer) else scorer for scorer in evaluator.scores]
+    scorer_names = [_scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
+
+    def run_scorer_sync(scorer, name, **kwargs):
+        """Run a scorer synchronously."""
+        root_span = kwargs.pop("root_span", None)
+
+        with (
+            root_span.start_span(name=name, span_attributes={"type": SpanTypeAttribute.SCORE}, input=dict(**kwargs))
+            if root_span
+            else NOOP_SPAN
+        ) as span:
+
+            # Get the scoring function
+            score_fn = scorer
+            if hasattr(scorer, "eval_async"):
+                # If scorer only has async version, we can't use it in sync mode
+                raise ValueError(f"Scorer {name} only supports async evaluation. Use Eval() or EvalAsync() instead.")
+
+            # Call the scorer
+            result = score_fn(**kwargs)
+
+            if isinstance(result, dict):
+                try:
+                    result = Score.from_dict(result)
+                except Exception as e:
+                    raise ValueError(f"When returning a dict, it must be a valid Score object. Got: {result}") from e
+
+            if isinstance(result, Iterable) and not isinstance(result, (str, bytes)):
+                for s in result:
+                    if not is_score(s):
+                        raise ValueError(
+                            f"When returning an array of scores, each score must be a valid Score object. Got: {s}"
+                        )
+                result = list(result)
+            elif is_score(result):
+                result = [result]
+            else:
+                result = [Score(name=name, score=result)]
+
+            def get_other_fields(s):
+                return {k: v for k, v in s.as_dict().items() if k not in ["metadata", "name"]}
+
+            result_metadata = {r.name: r.metadata for r in result} if len(result) != 1 else result[0].metadata
+            result_output = (
+                {r.name: get_other_fields(r) for r in result} if len(result) != 1 else get_other_fields(result[0])
+            )
+
+            scores = {r.name: r.score for r in result}
+            span.log(output=result_output, metadata=result_metadata, scores=scores)
+            return result
+
+    def run_task_with_timeout(task_fn, args, timeout_seconds):
+        """Run a task with timeout using threading."""
+        result_queue = Queue()
+        exception_queue = Queue()
+
+        def worker():
+            try:
+                result = task_fn(*args)
+                result_queue.put(result)
+            except Exception as e:
+                exception_queue.put((e, traceback.format_exc()))
+
+        thread = Thread(target=worker)
+        thread.daemon = True
+        thread.start()
+        thread.join(timeout=timeout_seconds)
+
+        if thread.is_alive():
+            # Task timed out
+            raise TimeoutError(f"Task timed out after {timeout_seconds} seconds")
+
+        if not exception_queue.empty():
+            error, exc_info = exception_queue.get()
+            raise error
+
+        return result_queue.get()
+
+    def run_evaluator_task_sync(datum, trial_index=0):
+        """Run a single evaluation task synchronously."""
+        if isinstance(datum, dict):
+            datum = EvalCase.from_dict(datum)
+
+        metadata = {**(datum.metadata or {})}
+        output = None
+        error = None
+        exc_info = None
+        scores = {}
+        unhandled_scores = scorer_names.copy()
+
+        if experiment:
+            root_span = experiment.start_span(
+                "eval",
+                span_attributes={"type": SpanTypeAttribute.EVAL},
+                input=datum.input,
+                expected=datum.expected,
+                tags=datum.tags,
+                origin={
+                    "object_type": "dataset",
+                    "object_id": experiment.dataset.id,
+                    "id": datum.id,
+                    "created": datum.created,
+                    "_xact_id": datum._xact_id,
+                }
+                if experiment.dataset and datum.id and datum._xact_id
+                else None,
+            )
+        else:
+            root_span = NOOP_SPAN
+
+        with root_span:
+            try:
+                hooks = DictEvalHooks(metadata, expected=datum.expected, trial_index=trial_index)
+
+                # Check if the task takes a hooks argument
+                task_args = [datum.input]
+                try:
+                    if len(inspect.signature(evaluator.task).parameters) == 2:
+                        task_args.append(hooks)
+                except:
+                    pass
+
+                with root_span.start_span("task", span_attributes={"type": SpanTypeAttribute.TASK}) as span:
+                    hooks.set_span(span)
+
+                    # Run the task
+                    if bt_iscoroutinefunction(evaluator.task):
+                        raise ValueError(
+                            "Async tasks are not supported in EvalSync. Use Eval() or EvalAsync() instead."
+                        )
+
+                    output = evaluator.task(*task_args)
+                    span.log(input=task_args[0], output=output)
+
+                root_span.log(output=output, metadata=metadata)
+
+                # Run scorers
+                failing_scorers_and_exceptions = []
+                for scorer, name in zip(scorers, scorer_names):
+                    try:
+                        score_results = run_scorer_sync(
+                            scorer,
+                            name,
+                            root_span=root_span,
+                            input=datum.input,
+                            expected=datum.expected,
+                            metadata=metadata,
+                            output=output,
+                        )
+                        for score in score_results:
+                            scores[score.name] = score.score
+                            if name in unhandled_scores:
+                                unhandled_scores.remove(name)
+                    except Exception as e:
+                        exc_info_str = traceback.format_exc()
+                        failing_scorers_and_exceptions.append((name, e, exc_info_str))
+
+                if failing_scorers_and_exceptions:
+                    scorer_errors = {
+                        scorer_name: exc_info for scorer_name, _, exc_info in failing_scorers_and_exceptions
+                    }
+                    metadata["scorer_errors"] = scorer_errors
+                    root_span.log(metadata=metadata)
+                    names = ", ".join(scorer_errors.keys())
+                    exceptions = [x[1] for x in failing_scorers_and_exceptions]
+                    unhandled_scores = list(scorer_errors.keys())
+                    eprint(
+                        f"Found exceptions for the following scorers: {names}",
+                        exceptions,
+                    )
+
+            except Exception as e:
+                exc_type, exc_value, tb = sys.exc_info()
+                root_span.log(error=stringify_exception(exc_type, exc_value, tb))
+
+                error = e
+                exc_info = traceback.format_exc()
+
+        return EvalResult(
+            input=datum.input,
+            expected=datum.expected,
+            metadata=metadata,
+            tags=list(datum.tags) if datum.tags else None,
+            output=output,
+            scores={
+                **(
+                    evaluator.error_score_handler(root_span, datum, unhandled_scores) or {}
+                    if evaluator.error_score_handler is not None and unhandled_scores
+                    else {}
+                ),
+                **scores,
+            },
+            error=error,
+            exc_info=exc_info,
+        )
+
+    # Get data iterator
+    data_iterator = evaluator.data
+
+    if inspect.isclass(data_iterator):
+        data_iterator = data_iterator()
+
+    if isinstance(data_iterator, BaseExperiment):
+        if experiment is None:
+            raise ValueError(
+                "Cannot use BaseExperiment() without connecting to Braintrust (you most likely set --no-send-logs)"
+            )
+        base_experiment_name = data_iterator.name
+        if base_experiment_name is None:
+            base_experiment = experiment.fetch_base_experiment()
+            if base_experiment is None:
+                raise Exception("BaseExperiment() failed to fetch base experiment")
+            base_experiment_name = base_experiment.name
+        data_iterator = _init_experiment(
+            project=evaluator.project_name if evaluator.project_id is None else None,
+            project_id=evaluator.project_id,
+            experiment=base_experiment_name,
+            open=True,
+            set_current=False,
+        ).as_dataset()
+
+    if inspect.isfunction(data_iterator) or inspect.isroutine(data_iterator):
+        data_iterator = data_iterator()
+
+    if inspect.isasyncgen(data_iterator):
+        raise ValueError("Async generators are not supported in EvalSync. Use Eval() or EvalAsync() instead.")
+
+    # Process data items
+    results = []
+    data_items = list(data_iterator)
+    total_tasks = len(data_items) * evaluator.trial_count
+
+    with std_tqdm(total=total_tasks, desc=f"{evaluator.eval_name}") as pbar:
+        for datum in data_items:
+            for trial_index in range(evaluator.trial_count):
+                if timeout:
+                    result = run_task_with_timeout(run_evaluator_task_sync, (datum, trial_index), timeout)
+                else:
+                    result = run_evaluator_task_sync(datum, trial_index)
+
+                results.append(result)
+                pbar.update(1)
+
+    return results
+
+
+def EvalSync(
+    name: str,
+    data: EvalData[Input, Output],
+    task: EvalTask[Input, Output],
+    scores: Sequence[EvalScorer[Input, Output]],
+    experiment_name: Optional[str] = None,
+    trial_count: int = 1,
+    metadata: Optional[Metadata] = None,
+    is_public: bool = False,
+    update: bool = False,
+    reporter: Optional[ReporterDef[Input, Output, EvalReport]] = None,
+    timeout: Optional[float] = None,
+    max_concurrency: Optional[int] = None,
+    project_id: Optional[str] = None,
+    base_experiment_name: Optional[str] = None,
+    base_experiment_id: Optional[str] = None,
+    git_metadata_settings: Optional[GitMetadataSettings] = None,
+    repo_info: Optional[RepoInfo] = None,
+    error_score_handler: Optional[ErrorScoreHandler] = None,
+    description: Optional[str] = None,
+    summarize_scores: bool = True,
+) -> EvalResultWithSummary[Input, Output]:
+    """
+    A function you can use to define an evaluator that runs synchronously without any async code.
+    This is useful in environments where async is not supported or desired.
+
+    Example:
+    ```python
+    EvalSync(
+        name="my-evaluator",
+        data=lambda: [
+            EvalCase(input=1, expected=2),
+            EvalCase(input=2, expected=4),
+        ],
+        task=lambda input, hooks: input * 2,
+        scores=[
+            NumericDiff,
+        ],
+    )
+    ```
+
+    :param name: The name of the evaluator. This corresponds to a project name in Braintrust.
+    :param data: Returns an iterator over the evaluation dataset. Each element of the iterator should be a `EvalCase`.
+    :param task: Runs the evaluation task on a single input. The `hooks` object can be used to add metadata to the evaluation.
+    :param scores: A list of scorers to evaluate the results of the task. Each scorer can be a Scorer object or a function
+    that takes an `EvalScorerArgs` object and returns a `Score` object.
+    :param experiment_name: (Optional) Experiment name. If not specified, a name will be generated automatically.
+    :param trial_count: The number of times to run the evaluator per input. This is useful for evaluating applications that
+    have non-deterministic behavior and gives you both a stronger aggregate measure and a sense of the variance in the results.
+    :param metadata: (Optional) A dictionary with additional data about the test example, model outputs, or just about
+    anything else that's relevant, that you can use to help find and analyze examples later. For example, you could log
+    the `prompt`, example's `id`, or anything else that would be useful to slice/dice later. The values in `metadata`
+    can be any JSON-serializable type, but its keys must be strings.
+    :param is_public: (Optional) Whether the experiment should be public. Defaults to false.
+    :param reporter: (Optional) A reporter that takes an evaluator and its result and returns a report.
+    :param timeout: (Optional) The duration, in seconds, after which to time out the evaluation.
+    Defaults to None, in which case there is no timeout.
+    :param project_id: (Optional) If specified, uses the given project ID instead of the evaluator's name to identify the project.
+    :param base_experiment_name: An optional experiment name to use as a base. If specified, the new experiment will be
+    summarized and compared to this experiment.
+    :param base_experiment_id: An optional experiment id to use as a base. If specified, the new experiment will be
+    summarized and compared to this experiment. This takes precedence over `base_experiment_name` if specified.
+    :param git_metadata_settings: Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
+    :param repo_info: Optionally explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
+    :param error_score_handler: Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
+    :param description: An optional description for the experiment.
+    :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
+    :return: An `EvalResultWithSummary` object, which contains all results and a summary.
+    """
+
+    if _is_lazy_load():
+        # When lazy loading, we need to register the evaluator but not run it
+        eval_name = _make_eval_name(name, experiment_name)
+
+        global _evals
+        if eval_name in _evals.evaluators:
+            eval_name = f"{eval_name}_{len(_evals.evaluators)}"
+
+        evaluator = Evaluator(
+            eval_name=eval_name,
+            project_name=name,
+            data=data,
+            task=task,
+            scores=scores,
+            experiment_name=experiment_name,
+            trial_count=trial_count,
+            metadata=metadata,
+            is_public=is_public,
+            update=update,
+            timeout=timeout,
+            max_concurrency=max_concurrency,
+            project_id=project_id,
+            base_experiment_name=base_experiment_name,
+            base_experiment_id=base_experiment_id,
+            git_metadata_settings=git_metadata_settings,
+            repo_info=repo_info,
+            error_score_handler=error_score_handler,
+            description=description,
+            summarize_scores=summarize_scores,
+        )
+
+        _evals.evaluators[eval_name] = EvaluatorInstance(evaluator=evaluator, reporter=reporter)
+
+        # Return empty summary when lazy loading
+        return EvalResultWithSummary(summary=build_local_summary(evaluator, []), results=[])
+
+    # When not lazy loading, run the evaluation synchronously
+    return _run_eval_sync(
+        name=name,
+        data=data,
+        task=task,
+        scores=scores,
+        experiment_name=experiment_name,
+        trial_count=trial_count,
+        metadata=metadata,
+        is_public=is_public,
+        update=update,
+        reporter=reporter,
+        timeout=timeout,
+        max_concurrency=max_concurrency,
+        project_id=project_id,
+        base_experiment_name=base_experiment_name,
+        base_experiment_id=base_experiment_id,
+        git_metadata_settings=git_metadata_settings,
+        repo_info=repo_info,
+        error_score_handler=error_score_handler,
+        description=description,
+        summarize_scores=summarize_scores,
+    )
+
+
+__all__ = [
+    "Evaluator",
+    "Eval",
+    "EvalAsync",
+    "EvalSync",
+    "Score",
+    "EvalCase",
+    "EvalHooks",
+    "BaseExperiment",
+    "Reporter",
+]
