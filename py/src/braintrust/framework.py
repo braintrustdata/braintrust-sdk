@@ -194,8 +194,7 @@ class SyncScorerLike(Protocol, Generic[Input, Output]):
 
     def __call__(
         self, input: Input, output: Output, expected: Optional[Output] = None, **kwargs: Any
-    ) -> OneOrMoreScores:
-        ...
+    ) -> OneOrMoreScores: ...
 
 
 # Asynchronous scorer interface
@@ -205,8 +204,9 @@ class AsyncScorerLike(Protocol, Generic[Input, Output]):
     The framework will prefer this interface if available.
     """
 
-    async def eval_async(self, output: Output, expected: Optional[Output] = None, **kwargs: Any) -> OneOrMoreScores:
-        ...
+    async def eval_async(
+        self, output: Output, expected: Optional[Output] = None, **kwargs: Any
+    ) -> OneOrMoreScores: ...
 
 
 # Union type for any kind of scorer (for typing)
@@ -1097,6 +1097,168 @@ def _scorer_name(scorer, scorer_idx):
     return ret
 
 
+# Common helper functions for reducing duplication between sync and async paths
+
+
+def _process_score_result(result, scorer_name):
+    """Process scorer result into standardized Score objects."""
+    if isinstance(result, dict):
+        try:
+            result = Score.from_dict(result)
+        except Exception as e:
+            raise ValueError(f"When returning a dict, it must be a valid Score object. Got: {result}") from e
+
+    if isinstance(result, Iterable) and not isinstance(result, (str, bytes)):
+        for s in result:
+            if not is_score(s):
+                raise ValueError(
+                    f"When returning an array of scores, each score must be a valid Score object. Got: {s}"
+                )
+        result = list(result)
+    elif is_score(result):
+        result = [result]
+    else:
+        result = [Score(name=scorer_name, score=result)]
+
+    return result
+
+
+def _prepare_score_logging(result):
+    """Prepare score data for span logging."""
+
+    def get_other_fields(s):
+        return {k: v for k, v in s.as_dict().items() if k not in ["metadata", "name"]}
+
+    result_metadata = {r.name: r.metadata for r in result} if len(result) != 1 else result[0].metadata
+    result_output = {r.name: get_other_fields(r) for r in result} if len(result) != 1 else get_other_fields(result[0])
+    scores = {r.name: r.score for r in result}
+
+    return result_output, result_metadata, scores
+
+
+def _prepare_task_args(task, datum, hooks):
+    """Prepare arguments for task execution."""
+    task_args = [datum.input]
+    try:
+        if len(inspect.signature(task).parameters) == 2:
+            task_args.append(hooks)
+    except:
+        pass
+    return task_args
+
+
+def _create_eval_result(
+    datum,
+    output,
+    scores,
+    metadata,
+    error=None,
+    exc_info=None,
+    unhandled_scores=None,
+    error_score_handler=None,
+    root_span=None,
+):
+    """Create EvalResult from evaluation data."""
+    return EvalResult(
+        input=datum.input,
+        expected=datum.expected,
+        metadata=metadata,
+        tags=list(datum.tags) if datum.tags else None,
+        output=output,
+        scores={
+            **(
+                error_score_handler(root_span, datum, unhandled_scores) or {}
+                if error_score_handler is not None and unhandled_scores
+                else {}
+            ),
+            **scores,
+        },
+        error=error,
+        exc_info=exc_info,
+    )
+
+
+def _create_root_span(experiment, datum):
+    """Create root span for evaluation task."""
+    if experiment:
+        return experiment.start_span(
+            "eval",
+            span_attributes={"type": SpanTypeAttribute.EVAL},
+            input=datum.input,
+            expected=datum.expected,
+            tags=datum.tags,
+            origin=(
+                {
+                    "object_type": "dataset",
+                    "object_id": experiment.dataset.id,
+                    "id": datum.id,
+                    "created": datum.created,
+                    "_xact_id": datum._xact_id,
+                }
+                if experiment.dataset and datum.id and datum._xact_id
+                else None
+            ),
+        )
+    else:
+        return NOOP_SPAN
+
+
+def _resolve_scorers(evaluator):
+    """Resolve scorer classes and return (scorers, scorer_names)."""
+    scorers = [scorer() if inspect.isclass(scorer) and is_scorer(scorer) else scorer for scorer in evaluator.scores]
+    scorer_names = [_scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
+    return scorers, scorer_names
+
+
+def _handle_scorer_errors(failing_scorers_and_exceptions, metadata, root_span):
+    """Handle scorer errors and update metadata."""
+    if failing_scorers_and_exceptions:
+        scorer_errors = {scorer_name: exc_info for scorer_name, _, exc_info in failing_scorers_and_exceptions}
+        metadata["scorer_errors"] = scorer_errors
+        root_span.log(metadata=metadata)
+        names = ", ".join(scorer_errors.keys())
+        exceptions = [x[1] for x in failing_scorers_and_exceptions]
+        unhandled_scores = list(scorer_errors.keys())
+        eprint(
+            f"Found exceptions for the following scorers: {names}",
+            exceptions,
+        )
+        return unhandled_scores
+    return None
+
+
+def _prepare_data_iterator(evaluator, experiment):
+    """Prepare data iterator for evaluation."""
+    data_iterator = evaluator.data
+
+    if inspect.isclass(data_iterator):
+        data_iterator = data_iterator()
+
+    if isinstance(data_iterator, BaseExperiment):
+        if experiment is None:
+            raise ValueError(
+                "Cannot use BaseExperiment() without connecting to Braintrust (you most likely set --no-send-logs)"
+            )
+        base_experiment_name = data_iterator.name
+        if base_experiment_name is None:
+            base_experiment = experiment.fetch_base_experiment()
+            if base_experiment is None:
+                raise Exception("BaseExperiment() failed to fetch base experiment")
+            base_experiment_name = base_experiment.name
+        data_iterator = _init_experiment(
+            project=evaluator.project_name if evaluator.project_id is None else None,
+            project_id=evaluator.project_id,
+            experiment=base_experiment_name,
+            open=True,
+            set_current=False,
+        ).as_dataset()
+
+    if inspect.isfunction(data_iterator) or inspect.isroutine(data_iterator):
+        data_iterator = data_iterator()
+
+    return data_iterator
+
+
 async def run_evaluator(
     experiment: Optional[Experiment],
     evaluator: Evaluator[Input, Output],
@@ -1140,39 +1302,14 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             scorer_args = kwargs
 
             result = await call_user_fn(event_loop, score, **scorer_args)
-            if isinstance(result, dict):
-                try:
-                    result = Score.from_dict(result)
-                except Exception as e:
-                    raise ValueError(f"When returning a dict, it must be a valid Score object. Got: {result}") from e
+            result = _process_score_result(result, name)
+            result_output, result_metadata, scores = _prepare_score_logging(result)
 
-            if isinstance(result, Iterable):
-                for s in result:
-                    if not is_score(s):
-                        raise ValueError(
-                            f"When returning an array of scores, each score must be a valid Score object. Got: {s}"
-                        )
-                result = list(result)
-            elif is_score(result):
-                result = [result]
-            else:
-                result = [Score(name=name, score=result)]
-
-            def get_other_fields(s):
-                return {k: v for k, v in s.as_dict().items() if k not in ["metadata", "name"]}
-
-            result_metadata = {r.name: r.metadata for r in result} if len(result) != 1 else result[0].metadata
-            result_output = (
-                {r.name: get_other_fields(r) for r in result} if len(result) != 1 else get_other_fields(result[0])
-            )
-
-            scores = {r.name: r.score for r in result}
             span.log(output=result_output, metadata=result_metadata, scores=scores)
             return result
 
     # First, resolve the scorers if they are classes
-    scorers = [scorer() if inspect.isclass(scorer) and is_scorer(scorer) else scorer for scorer in evaluator.scores]
-    scorer_names = [_scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
+    scorers, scorer_names = _resolve_scorers(evaluator)
     unhandled_scores = scorer_names
 
     async def run_evaluator_task(datum, trial_index=0):
@@ -1185,36 +1322,11 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
         exc_info = None
         scores = {}
 
-        if experiment:
-            root_span = experiment.start_span(
-                "eval",
-                span_attributes={"type": SpanTypeAttribute.EVAL},
-                input=datum.input,
-                expected=datum.expected,
-                tags=datum.tags,
-                origin={
-                    "object_type": "dataset",
-                    "object_id": experiment.dataset.id,
-                    "id": datum.id,
-                    "created": datum.created,
-                    "_xact_id": datum._xact_id,
-                }
-                if experiment.dataset and datum.id and datum._xact_id
-                else None,
-            )
-        else:
-            root_span = NOOP_SPAN
+        root_span = _create_root_span(experiment, datum)
         with root_span:
             try:
                 hooks = DictEvalHooks(metadata, expected=datum.expected, trial_index=trial_index)
-
-                # Check if the task takes a hooks argument
-                task_args = [datum.input]
-                try:
-                    if len(inspect.signature(evaluator.task).parameters) == 2:
-                        task_args.append(hooks)
-                except:
-                    pass
+                task_args = _prepare_task_args(evaluator.task, datum, hooks)
 
                 with root_span.start_span("task", span_attributes={"type": SpanTypeAttribute.TASK}) as span:
                     hooks.set_span(span)
@@ -1251,20 +1363,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                         failing_scorers_and_exceptions.append((name, e, exc_info))
 
                 nonlocal unhandled_scores
-                unhandled_scores = None
-                if failing_scorers_and_exceptions:
-                    scorer_errors = {
-                        scorer_name: exc_info for scorer_name, _, exc_info in failing_scorers_and_exceptions
-                    }
-                    metadata["scorer_errors"] = scorer_errors
-                    root_span.log(metadata=metadata)
-                    names = ", ".join(scorer_errors.keys())
-                    exceptions = [x[1] for x in failing_scorers_and_exceptions]
-                    unhandled_scores = list(scorer_errors.keys())
-                    eprint(
-                        f"Found exceptions for the following scorers: {names}",
-                        exceptions,
-                    )
+                unhandled_scores = _handle_scorer_errors(failing_scorers_and_exceptions, metadata, root_span)
             except Exception as e:
                 exc_type, exc_value, tb = sys.exc_info()
                 root_span.log(error=stringify_exception(exc_type, exc_value, tb))
@@ -1274,50 +1373,19 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                 # so just capture the stack trace here.
                 exc_info = traceback.format_exc()
 
-        return EvalResult(
-            input=datum.input,
-            expected=datum.expected,
-            metadata=metadata,
-            tags=list(datum.tags) if datum.tags else None,
+        return _create_eval_result(
+            datum=datum,
             output=output,
-            scores={
-                **(
-                    evaluator.error_score_handler(root_span, datum, unhandled_scores) or {}
-                    if evaluator.error_score_handler is not None and unhandled_scores
-                    else {}
-                ),
-                **scores,
-            },
+            scores=scores,
+            metadata=metadata,
             error=error,
             exc_info=exc_info,
+            unhandled_scores=unhandled_scores,
+            error_score_handler=evaluator.error_score_handler,
+            root_span=root_span,
         )
 
-    data_iterator = evaluator.data
-
-    if inspect.isclass(data_iterator):
-        data_iterator = data_iterator()
-
-    if isinstance(data_iterator, BaseExperiment):
-        if experiment is None:
-            raise ValueError(
-                "Cannot use BaseExperiment() without connecting to Braintrust (you most likely set --no-send-logs)"
-            )
-        base_experiment_name = data_iterator.name
-        if base_experiment_name is None:
-            base_experiment = experiment.fetch_base_experiment()
-            if base_experiment is None:
-                raise Exception("BaseExperiment() failed to fetch base experiment")
-            base_experiment_name = base_experiment.name
-        data_iterator = _init_experiment(
-            project=evaluator.project_name if evaluator.project_id is None else None,
-            project_id=evaluator.project_id,
-            experiment=base_experiment_name,
-            open=True,
-            set_current=False,
-        ).as_dataset()
-
-    if inspect.isfunction(data_iterator) or inspect.isroutine(data_iterator):
-        data_iterator = data_iterator()
+    data_iterator = _prepare_data_iterator(evaluator, experiment)
 
     if not inspect.isasyncgen(data_iterator):
 
@@ -1499,8 +1567,7 @@ def _run_evaluator_sync(
     from threading import Thread
 
     # Resolve scorers if they are classes
-    scorers = [scorer() if inspect.isclass(scorer) and is_scorer(scorer) else scorer for scorer in evaluator.scores]
-    scorer_names = [_scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
+    scorers, scorer_names = _resolve_scorers(evaluator)
 
     def run_scorer_sync(scorer, name, **kwargs):
         """Run a scorer synchronously."""
@@ -1521,33 +1588,10 @@ def _run_evaluator_sync(
             # Call the scorer
             result = score_fn(**kwargs)
 
-            if isinstance(result, dict):
-                try:
-                    result = Score.from_dict(result)
-                except Exception as e:
-                    raise ValueError(f"When returning a dict, it must be a valid Score object. Got: {result}") from e
+            # Process result using common helpers
+            result = _process_score_result(result, name)
+            result_output, result_metadata, scores = _prepare_score_logging(result)
 
-            if isinstance(result, Iterable) and not isinstance(result, (str, bytes)):
-                for s in result:
-                    if not is_score(s):
-                        raise ValueError(
-                            f"When returning an array of scores, each score must be a valid Score object. Got: {s}"
-                        )
-                result = list(result)
-            elif is_score(result):
-                result = [result]
-            else:
-                result = [Score(name=name, score=result)]
-
-            def get_other_fields(s):
-                return {k: v for k, v in s.as_dict().items() if k not in ["metadata", "name"]}
-
-            result_metadata = {r.name: r.metadata for r in result} if len(result) != 1 else result[0].metadata
-            result_output = (
-                {r.name: get_other_fields(r) for r in result} if len(result) != 1 else get_other_fields(result[0])
-            )
-
-            scores = {r.name: r.score for r in result}
             span.log(output=result_output, metadata=result_metadata, scores=scores)
             return result
 
@@ -1590,37 +1634,12 @@ def _run_evaluator_sync(
         scores = {}
         unhandled_scores = scorer_names.copy()
 
-        if experiment:
-            root_span = experiment.start_span(
-                "eval",
-                span_attributes={"type": SpanTypeAttribute.EVAL},
-                input=datum.input,
-                expected=datum.expected,
-                tags=datum.tags,
-                origin={
-                    "object_type": "dataset",
-                    "object_id": experiment.dataset.id,
-                    "id": datum.id,
-                    "created": datum.created,
-                    "_xact_id": datum._xact_id,
-                }
-                if experiment.dataset and datum.id and datum._xact_id
-                else None,
-            )
-        else:
-            root_span = NOOP_SPAN
+        root_span = _create_root_span(experiment, datum)
 
         with root_span:
             try:
                 hooks = DictEvalHooks(metadata, expected=datum.expected, trial_index=trial_index)
-
-                # Check if the task takes a hooks argument
-                task_args = [datum.input]
-                try:
-                    if len(inspect.signature(evaluator.task).parameters) == 2:
-                        task_args.append(hooks)
-                except:
-                    pass
+                task_args = _prepare_task_args(evaluator.task, datum, hooks)
 
                 with root_span.start_span("task", span_attributes={"type": SpanTypeAttribute.TASK}) as span:
                     hooks.set_span(span)
@@ -1657,19 +1676,9 @@ def _run_evaluator_sync(
                         exc_info_str = traceback.format_exc()
                         failing_scorers_and_exceptions.append((name, e, exc_info_str))
 
-                if failing_scorers_and_exceptions:
-                    scorer_errors = {
-                        scorer_name: exc_info for scorer_name, _, exc_info in failing_scorers_and_exceptions
-                    }
-                    metadata["scorer_errors"] = scorer_errors
-                    root_span.log(metadata=metadata)
-                    names = ", ".join(scorer_errors.keys())
-                    exceptions = [x[1] for x in failing_scorers_and_exceptions]
-                    unhandled_scores = list(scorer_errors.keys())
-                    eprint(
-                        f"Found exceptions for the following scorers: {names}",
-                        exceptions,
-                    )
+                unhandled_scores = (
+                    _handle_scorer_errors(failing_scorers_and_exceptions, metadata, root_span) or unhandled_scores
+                )
 
             except Exception as e:
                 exc_type, exc_value, tb = sys.exc_info()
@@ -1678,51 +1687,20 @@ def _run_evaluator_sync(
                 error = e
                 exc_info = traceback.format_exc()
 
-        return EvalResult(
-            input=datum.input,
-            expected=datum.expected,
-            metadata=metadata,
-            tags=list(datum.tags) if datum.tags else None,
+        return _create_eval_result(
+            datum=datum,
             output=output,
-            scores={
-                **(
-                    evaluator.error_score_handler(root_span, datum, unhandled_scores) or {}
-                    if evaluator.error_score_handler is not None and unhandled_scores
-                    else {}
-                ),
-                **scores,
-            },
+            scores=scores,
+            metadata=metadata,
             error=error,
             exc_info=exc_info,
+            unhandled_scores=unhandled_scores,
+            error_score_handler=evaluator.error_score_handler,
+            root_span=root_span,
         )
 
     # Get data iterator
-    data_iterator = evaluator.data
-
-    if inspect.isclass(data_iterator):
-        data_iterator = data_iterator()
-
-    if isinstance(data_iterator, BaseExperiment):
-        if experiment is None:
-            raise ValueError(
-                "Cannot use BaseExperiment() without connecting to Braintrust (you most likely set --no-send-logs)"
-            )
-        base_experiment_name = data_iterator.name
-        if base_experiment_name is None:
-            base_experiment = experiment.fetch_base_experiment()
-            if base_experiment is None:
-                raise Exception("BaseExperiment() failed to fetch base experiment")
-            base_experiment_name = base_experiment.name
-        data_iterator = _init_experiment(
-            project=evaluator.project_name if evaluator.project_id is None else None,
-            project_id=evaluator.project_id,
-            experiment=base_experiment_name,
-            open=True,
-            set_current=False,
-        ).as_dataset()
-
-    if inspect.isfunction(data_iterator) or inspect.isroutine(data_iterator):
-        data_iterator = data_iterator()
+    data_iterator = _prepare_data_iterator(evaluator, experiment)
 
     if inspect.isasyncgen(data_iterator):
         raise ValueError("Async generators are not supported in EvalSync. Use Eval() or EvalAsync() instead.")
