@@ -1112,7 +1112,7 @@ def _process_score_result(result, scorer_name):
         for s in result:
             if not is_score(s):
                 raise ValueError(
-                    f"When returning an array of scores, each score must be a valid Score object. Got: {s}"
+                    f"When returning an array of scores, each score must be a " f"valid Score object. Got: {s}"
                 )
         result = list(result)
     elif is_score(result):
@@ -1574,7 +1574,11 @@ def _run_evaluator_sync(
         root_span = kwargs.pop("root_span", None)
 
         with (
-            root_span.start_span(name=name, span_attributes={"type": SpanTypeAttribute.SCORE}, input=dict(**kwargs))
+            root_span.start_span(
+                name=name,
+                span_attributes={"type": SpanTypeAttribute.SCORE},
+                input=dict(**kwargs),
+            )
             if root_span
             else NOOP_SPAN
         ) as span:
@@ -1583,7 +1587,9 @@ def _run_evaluator_sync(
             score_fn = scorer
             if hasattr(scorer, "eval_async"):
                 # If scorer only has async version, we can't use it in sync mode
-                raise ValueError(f"Scorer {name} only supports async evaluation. Use Eval() or EvalAsync() instead.")
+                raise ValueError(
+                    f"Scorer {name} only supports async evaluation. " "Use Eval() or EvalAsync() instead."
+                )
 
             # Call the scorer
             result = score_fn(**kwargs)
@@ -1647,7 +1653,7 @@ def _run_evaluator_sync(
                     # Run the task
                     if bt_iscoroutinefunction(evaluator.task):
                         raise ValueError(
-                            "Async tasks are not supported in EvalSync. Use Eval() or EvalAsync() instead."
+                            "Async tasks are not supported in EvalSync. " "Use Eval() or EvalAsync() instead."
                         )
 
                     output = evaluator.task(*task_args)
