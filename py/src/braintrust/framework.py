@@ -1517,6 +1517,7 @@ def _run_eval_sync(
         error_score_handler=error_score_handler,
         description=description,
         summarize_scores=summarize_scores,
+        is_sync=True,  # Mark this as a sync evaluator
     )
 
     if base_experiment_name is None and isinstance(evaluator.data, BaseExperiment):
