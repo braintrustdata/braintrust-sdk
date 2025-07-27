@@ -12,9 +12,9 @@ from langchain_openai import ChatOpenAI
 
 from .fixtures import (
     CHAT_MATH,
-    logs,  # type: ignore[reportUnusedImport]
-    mock_braintrust,  # type: ignore[reportUnusedImport]
-    setup,  # type: ignore[reportUnusedImport]
+    logs,  # noqa: F401 # type: ignore[reportUnusedImport]
+    mock_braintrust,  # noqa: F401 # type: ignore[reportUnusedImport]
+    setup,  # noqa: F401 # type: ignore[reportUnusedImport]
 )
 from .helpers import assert_matches_object, logs_to_spans, mock_openai
 from .types import LogRequest

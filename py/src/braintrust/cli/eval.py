@@ -16,11 +16,9 @@ from ..framework import (
     ReporterDef,
     _evals,
     _set_lazy_load,
-    bcolors,
     default_reporter,
     init_experiment,
     parse_filters,
-    report_evaluator_result,
     run_evaluator,
     set_thread_pool_max_workers,
 )

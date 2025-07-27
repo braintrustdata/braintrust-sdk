@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import warnings
 from contextlib import contextmanager

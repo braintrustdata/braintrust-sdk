@@ -50,7 +50,7 @@ def _pydantic_to_json_schema(m):
 
 def _check_uv():
     try:
-        import uv as _
+        import uv as _  # noqa: F401 # type: ignore[reportUnusedImport]
     except ImportError:
         raise ValueError(
             textwrap.dedent(

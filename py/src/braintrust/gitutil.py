@@ -4,7 +4,7 @@ import re
 import subprocess
 import threading
 from functools import lru_cache as _cache
-from typing import List, Optional
+from typing import Optional
 
 from .git_fields import GitMetadataSettings, RepoInfo
 
@@ -78,7 +78,7 @@ def _get_base_branch_ancestor(remote=None):
         return None
 
 
-def get_past_n_ancestors(n=10, remote=None):
+def get_past_n_ancestors(n=1000, remote=None):
     with _gitlock:
         repo = _current_repo()
         if repo is None:

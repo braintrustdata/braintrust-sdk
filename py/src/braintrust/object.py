@@ -1,6 +1,3 @@
-from typing import Any, Mapping
-
-from .db_fields import MERGE_PATHS_FIELD
 from .types import DatasetEvent
 
 DEFAULT_IS_LEGACY_DATASET = False

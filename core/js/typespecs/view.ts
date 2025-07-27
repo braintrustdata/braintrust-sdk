@@ -45,6 +45,15 @@ export const annotationDataSchema = z.object({
   text: z.string(),
 });
 
+const allAggregationTypeEnum = z.enum([
+  "avg",
+  "sum",
+  "min",
+  "max",
+  "median",
+  "all",
+]);
+
 export const tableViewOptionsSchema = z
   .object({
     columnVisibility: z.record(z.boolean()).nullish(),
@@ -59,7 +68,13 @@ export const tableViewOptionsSchema = z
     yMetric: chartSelectionType.nullish(),
     xAxis: chartSelectionType.nullish(),
     symbolGrouping: chartSelectionType.nullish(),
-    xAxisAggregation: z.enum(["avg", "sum", "min", "max", "all"]).nullish(),
+    xAxisAggregation: z
+      .string()
+      .pipe(allAggregationTypeEnum.catch("avg"))
+      .describe(
+        `One of ${allAggregationTypeEnum.options.map((opt) => `'${opt}'`).join(", ")}`,
+      )
+      .nullish(),
     chartAnnotations: z.array(annotationDataSchema).nullish(),
     timeRangeFilter: z
       .union([z.string(), z.object({ from: z.string(), to: z.string() })])
