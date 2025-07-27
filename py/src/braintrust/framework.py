@@ -194,7 +194,8 @@ class SyncScorerLike(Protocol, Generic[Input, Output]):
 
     def __call__(
         self, input: Input, output: Output, expected: Optional[Output] = None, **kwargs: Any
-    ) -> OneOrMoreScores: ...
+    ) -> OneOrMoreScores:
+        ...
 
 
 # Asynchronous scorer interface
@@ -204,9 +205,8 @@ class AsyncScorerLike(Protocol, Generic[Input, Output]):
     The framework will prefer this interface if available.
     """
 
-    async def eval_async(
-        self, output: Output, expected: Optional[Output] = None, **kwargs: Any
-    ) -> OneOrMoreScores: ...
+    async def eval_async(self, output: Output, expected: Optional[Output] = None, **kwargs: Any) -> OneOrMoreScores:
+        ...
 
 
 # Union type for any kind of scorer (for typing)
