@@ -520,10 +520,10 @@ describe("runEvaluator", () => {
 
       expect(capturedHooks).toHaveLength(1);
       const hook = capturedHooks[0];
-      
+
       // Verify experiment is undefined when no experiment provided
       expect(hook.experiment).toBeUndefined();
-      
+
       // Verify other hook properties still work
       expect(hook.metadata).toBeDefined();
       expect(hook.metadata.test).toBe("value");
@@ -540,7 +540,7 @@ describe("runEvaluator", () => {
       const out = await runEvaluator(
         null,
         {
-          projectName: "proj", 
+          projectName: "proj",
           evalName: "eval",
           data: [{ input: 1, expected: 2 }],
           task: async (input: number) => {

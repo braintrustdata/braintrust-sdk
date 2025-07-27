@@ -10,7 +10,6 @@ from .framework import (
     Evaluator,
     run_evaluator,
 )
-from .logger import Experiment, init_experiment
 from .score import Score, Scorer
 
 
@@ -163,6 +162,7 @@ async def test_run_evaluator_with_many_scorers():
 
 class MockExperiment:
     """Mock experiment for testing purposes."""
+
     def __init__(self, name="test-experiment", id="test-id"):
         self.name = name
         self.id = id
@@ -172,24 +172,17 @@ def test_dict_eval_hooks_experiment_propagation():
     """Test that DictEvalHooks properly handles experiment propagation."""
     # Test with explicit experiment
     experiment = MockExperiment("my-experiment")
-    hooks = DictEvalHooks(
-        metadata={"test": "value"},
-        expected="expected_output",
-        experiment=experiment
-    )
-    
+    hooks = DictEvalHooks(metadata={"test": "value"}, expected="expected_output", experiment=experiment)
+
     assert hooks.experiment is not None
     assert hooks.experiment.name == "my-experiment"
     assert hooks.experiment.id == "test-id"
-    
+
     # Test with no experiment
-    hooks_no_exp = DictEvalHooks(
-        metadata={"test": "value"},
-        expected="expected_output"
-    )
-    
+    hooks_no_exp = DictEvalHooks(metadata={"test": "value"}, expected="expected_output")
+
     assert hooks_no_exp.experiment is None
-    
+
     # Test that other properties still work
     assert hooks.metadata["test"] == "value"
     assert hooks.expected == "expected_output"
@@ -201,12 +194,12 @@ def test_dict_eval_hooks_experiment_setter():
     """Test that DictEvalHooks experiment can be set after construction."""
     hooks = DictEvalHooks()
     assert hooks.experiment is None
-    
+
     experiment = MockExperiment("set-later")
     hooks.set_experiment(experiment)
     assert hooks.experiment is not None
     assert hooks.experiment.name == "set-later"
-    
+
     # Test setting to None
     hooks.set_experiment(None)
     assert hooks.experiment is None
@@ -216,14 +209,14 @@ def test_dict_eval_hooks_experiment_setter():
 async def test_experiment_propagation_in_evaluation():
     """Test that experiment is properly propagated to hooks during evaluation."""
     captured_experiments = []
-    
+
     def task_with_experiment_access(input_value, hooks):
         # Capture the experiment from hooks for verification
         captured_experiments.append(hooks.experiment)
         return input_value * 2
-    
+
     data = [EvalCase(input=1, expected=2)]
-    
+
     # Test with no experiment (experiment=None)
     evaluator_no_exp = Evaluator(
         project_name="test-project",
@@ -234,25 +227,20 @@ async def test_experiment_propagation_in_evaluation():
         experiment_name=None,
         metadata=None,
     )
-    
+
     result = await run_evaluator(experiment=None, evaluator=evaluator_no_exp, position=None, filters=[])
-    
+
     assert len(captured_experiments) == 1
     assert captured_experiments[0] is None  # No experiment should be None
-    
+
     # Clear captured experiments for next test
     captured_experiments.clear()
-    
+
     # Test with experiment provided
     experiment = MockExperiment("test-with-experiment")
-    
-    result_with_exp = await run_evaluator(
-        experiment=experiment, 
-        evaluator=evaluator_no_exp, 
-        position=None, 
-        filters=[]
-    )
-    
+
+    result_with_exp = await run_evaluator(experiment=experiment, evaluator=evaluator_no_exp, position=None, filters=[])
+
     assert len(captured_experiments) == 1
     assert captured_experiments[0] is not None
     assert captured_experiments[0].name == "test-with-experiment"
@@ -262,17 +250,17 @@ async def test_experiment_propagation_in_evaluation():
 async def test_experiment_propagation_task_signature_flexibility():
     """Test that experiment propagation works with different task signatures."""
     captured_hooks = []
-    
+
     def task_with_hooks(input_value, hooks):
         captured_hooks.append(hooks)
         return input_value
-    
+
     def task_without_hooks(input_value):
         return input_value
-    
+
     data = [EvalCase(input=1, expected=1)]
     experiment = MockExperiment("flexible-test")
-    
+
     # Test task that accepts hooks
     evaluator_with_hooks = Evaluator(
         project_name="test-project",
@@ -283,13 +271,13 @@ async def test_experiment_propagation_task_signature_flexibility():
         experiment_name=None,
         metadata=None,
     )
-    
+
     await run_evaluator(experiment=experiment, evaluator=evaluator_with_hooks, position=None, filters=[])
-    
+
     assert len(captured_hooks) == 1
     assert captured_hooks[0].experiment is not None
     assert captured_hooks[0].experiment.name == "flexible-test"
-    
+
     # Test task that doesn't accept hooks (should still work)
     evaluator_without_hooks = Evaluator(
         project_name="test-project",
@@ -300,7 +288,7 @@ async def test_experiment_propagation_task_signature_flexibility():
         experiment_name=None,
         metadata=None,
     )
-    
+
     result = await run_evaluator(experiment=experiment, evaluator=evaluator_without_hooks, position=None, filters=[])
     assert len(result.results) == 1
     assert result.results[0].output == 1
@@ -390,17 +378,13 @@ async def test_hooks_trial_index_multiple_inputs():
 async def test_hooks_experiment_and_trial_index_together():
     """Test that both experiment and trial_index work together."""
     captured_data = []
-    
+
     def task_with_both(input_value, hooks):
-        captured_data.append({
-            'input': input_value,
-            'experiment': hooks.experiment,
-            'trial_index': hooks.trial_index
-        })
+        captured_data.append({"input": input_value, "experiment": hooks.experiment, "trial_index": hooks.trial_index})
         return input_value * 2
-    
+
     experiment = MockExperiment("combined-test")
-    
+
     evaluator = Evaluator(
         project_name="test-project",
         eval_name="test-combined",
@@ -411,16 +395,16 @@ async def test_hooks_experiment_and_trial_index_together():
         metadata=None,
         trial_count=2,
     )
-    
+
     result = await run_evaluator(experiment=experiment, evaluator=evaluator, position=None, filters=[])
-    
+
     # Should have 2 results (2 trials)
     assert len(result.results) == 2
     assert len(captured_data) == 2
-    
+
     # Both trials should have the same experiment but different trial_index
     for i, data in enumerate(captured_data):
-        assert data['input'] == 5
-        assert data['experiment'] is not None
-        assert data['experiment'].name == "combined-test"
-        assert data['trial_index'] == i  # Should be 0 and 1
+        assert data["input"] == 5
+        assert data["experiment"] is not None
+        assert data["experiment"].name == "combined-test"
+        assert data["trial_index"] == i  # Should be 0 and 1

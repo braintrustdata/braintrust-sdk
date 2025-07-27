@@ -201,8 +201,7 @@ class SyncScorerLike(Protocol, Generic[Input, Output]):
 
     def __call__(
         self, input: Input, output: Output, expected: Optional[Output] = None, **kwargs: Any
-    ) -> OneOrMoreScores:
-        ...
+    ) -> OneOrMoreScores: ...
 
 
 # Asynchronous scorer interface
@@ -212,8 +211,9 @@ class AsyncScorerLike(Protocol, Generic[Input, Output]):
     The framework will prefer this interface if available.
     """
 
-    async def eval_async(self, output: Output, expected: Optional[Output] = None, **kwargs: Any) -> OneOrMoreScores:
-        ...
+    async def eval_async(
+        self, output: Output, expected: Optional[Output] = None, **kwargs: Any
+    ) -> OneOrMoreScores: ...
 
 
 # Union type for any kind of scorer (for typing)
@@ -1015,7 +1015,13 @@ def evaluate_filter(object, filter: Filter):
 
 
 class DictEvalHooks(Dict[str, Any]):
-    def __init__(self, metadata: Optional[Any] = None, expected: Optional[Any] = None, experiment: Optional["Experiment"] = None, trial_index: int = 0):
+    def __init__(
+        self,
+        metadata: Optional[Any] = None,
+        expected: Optional[Any] = None,
+        experiment: Optional["Experiment"] = None,
+        trial_index: int = 0,
+    ):
         if metadata is not None:
             self.update({"metadata": metadata})
         if expected is not None:
@@ -1207,21 +1213,25 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                 input=datum.input,
                 expected=datum.expected,
                 tags=datum.tags,
-                origin={
-                    "object_type": "dataset",
-                    "object_id": experiment.dataset.id,
-                    "id": datum.id,
-                    "created": datum.created,
-                    "_xact_id": datum._xact_id,
-                }
-                if experiment.dataset and datum.id and datum._xact_id
-                else None,
+                origin=(
+                    {
+                        "object_type": "dataset",
+                        "object_id": experiment.dataset.id,
+                        "id": datum.id,
+                        "created": datum.created,
+                        "_xact_id": datum._xact_id,
+                    }
+                    if experiment.dataset and datum.id and datum._xact_id
+                    else None
+                ),
             )
         else:
             root_span = NOOP_SPAN
         with root_span:
             try:
-                hooks = DictEvalHooks(metadata, expected=datum.expected, experiment=experiment, trial_index=trial_index)
+                hooks = DictEvalHooks(
+                    metadata, expected=datum.expected, experiment=experiment, trial_index=trial_index
+                )
 
                 # Check if the task takes a hooks argument
                 task_args = [datum.input]
