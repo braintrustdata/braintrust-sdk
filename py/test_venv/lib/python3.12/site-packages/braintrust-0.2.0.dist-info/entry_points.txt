@@ -1,0 +1,2 @@
+[console_scripts]
+braintrust = braintrust.cli.__main__:main
