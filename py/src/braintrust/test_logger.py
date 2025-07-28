@@ -699,3 +699,35 @@ def test_traced_sync_function(with_memory_logger):
             },
         },
     )
+
+
+def test_log_size_limit(with_simulate_login):
+    """Test that log records exceeding 10MB are rejected."""
+    experiment = braintrust.init(project="test_project", experiment="test_log_size")
+    
+    # Create a large string that will exceed 10MB when serialized
+    # 10MB = 10 * 1024 * 1024 = 10485760 bytes
+    # Create a string slightly larger than 10MB
+    large_data = "x" * (11 * 1024 * 1024)  # 11MB of 'x' characters
+    
+    # Test that logging large data raises an exception
+    with pytest.raises(Exception) as exc_info:
+        experiment.log(
+            input="test input",
+            output=large_data,
+            metadata={"test": "size limit"}
+        )
+    
+    assert "Log record size" in str(exc_info.value)
+    assert "exceeds the 10MB limit" in str(exc_info.value)
+    
+    # Test that data just under the limit works fine
+    small_data = "x" * (9 * 1024 * 1024)  # 9MB of 'x' characters
+    # This should not raise an exception
+    experiment.log(
+        input="test input",
+        output=small_data,
+        metadata={"test": "under size limit"}
+    )
+    
+    experiment.close()

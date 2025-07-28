@@ -598,7 +598,13 @@ def construct_logs3_data(items: Sequence[str]):
 
 def _check_json_serializable(event):
     try:
-        return bt_dumps(event)
+        json_str = bt_dumps(event)
+        # Check if the JSON string exceeds 10MB (10 * 1024 * 1024 bytes)
+        size_bytes = len(json_str.encode('utf-8'))
+        size_limit = 10 * 1024 * 1024  # 10MB
+        if size_bytes > size_limit:
+            raise Exception(f"Log record size ({size_bytes} bytes) exceeds the 10MB limit")
+        return json_str
     except TypeError as e:
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
