@@ -96,6 +96,7 @@ export const monitorViewOptionsSchema = z
     projectId: z.string().nullish(),
     type: z.enum(["project", "experiment"]).nullish(),
     groupBy: z.string().nullish(),
+    filters: z.string().array().nullish(),
   })
   .strip();
 
