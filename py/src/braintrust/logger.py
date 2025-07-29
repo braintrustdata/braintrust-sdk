@@ -119,6 +119,15 @@ def _get_max_log_size():
     return _MAX_LOG_SIZE
 
 
+def _format_bytes(num_bytes):
+    """Format bytes as human-readable string."""
+    for unit in ["B", "KB", "MB", "GB"]:
+        if abs(num_bytes) < 1024.0:
+            return f"{num_bytes:.1f}{unit}"
+        num_bytes /= 1024.0
+    return f"{num_bytes:.1f}TB"
+
+
 class Exportable(ABC):
     @abstractmethod
     def export(self) -> str:
@@ -617,7 +626,10 @@ def _check_json_serializable(event):
         size_bytes = len(json_str.encode("utf-8"))
         max_log_size = _get_max_log_size()
         if size_bytes > max_log_size:
-            raise Exception(f"Log record size ({size_bytes} bytes) exceeds the {max_log_size} byte limit")
+            raise Exception(
+                f"Log record size ({_format_bytes(size_bytes)}) exceeds the {_format_bytes(max_log_size)} limit. "
+                f"Set BRAINTRUST_MAX_LOG_SIZE_BYTES environment variable to increase the limit."
+            )
         return json_str
     except TypeError as e:
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e

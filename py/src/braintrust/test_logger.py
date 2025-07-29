@@ -726,7 +726,8 @@ def test_log_size_limit(with_memory_logger):
 
         assert "Log record size" in str(exc_info.value)
         assert "exceeds the" in str(exc_info.value)
-        assert "byte limit" in str(exc_info.value)
+        assert "10.0MB limit" in str(exc_info.value)
+        assert "BRAINTRUST_MAX_LOG_SIZE_BYTES" in str(exc_info.value)
 
         # Test that data just under the limit works fine
         small_data = "x" * (9 * 1024 * 1024)  # 9MB of 'x' characters
@@ -752,7 +753,8 @@ def test_log_size_limit(with_memory_logger):
             span3.end()
 
         assert "Log record size" in str(exc_info.value)
-        assert str(5 * 1024 * 1024) in str(exc_info.value)  # Should mention 5MB limit
+        assert "5.0MB limit" in str(exc_info.value)
+        assert "BRAINTRUST_MAX_LOG_SIZE_BYTES" in str(exc_info.value)
 
     finally:
         # Restore original env var value

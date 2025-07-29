@@ -104,6 +104,19 @@ function getMaxLogSizeBytes(): number {
   return _maxLogSizeBytes;
 }
 
+function formatBytes(numBytes: number): string {
+  const units = ["B", "KB", "MB", "GB"];
+  let unitIndex = 0;
+  let size = Math.abs(numBytes);
+
+  while (size >= 1024.0 && unitIndex < units.length - 1) {
+    size /= 1024.0;
+    unitIndex++;
+  }
+
+  return `${size.toFixed(1)}${units[unitIndex]}`;
+}
+
 export type SetCurrentArg = { setCurrent?: boolean };
 
 type StartSpanEventArgs = ExperimentLogPartialArgs & Partial<IdField>;
@@ -3866,7 +3879,8 @@ function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
   const maxLogSize = getMaxLogSizeBytes();
   if (sizeBytes > maxLogSize) {
     throw new Error(
-      `Log record size (${sizeBytes} bytes) exceeds the ${maxLogSize} byte limit`,
+      `Log record size (${formatBytes(sizeBytes)}) exceeds the ${formatBytes(maxLogSize)} limit. ` +
+        `Set BRAINTRUST_MAX_LOG_SIZE_BYTES environment variable to increase the limit.`,
     );
   }
 

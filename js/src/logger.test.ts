@@ -741,8 +741,9 @@ describe("log size limit", () => {
     };
 
     expect(() => deepCopyEvent(event)).toThrow(
-      /Log record size .* exceeds the .* byte limit/,
+      /Log record size.*exceeds the.*10\.0MB limit/,
     );
+    expect(() => deepCopyEvent(event)).toThrow(/BRAINTRUST_MAX_LOG_SIZE_BYTES/);
   });
 
   test("accepts log records under the limit", () => {
@@ -774,7 +775,8 @@ describe("log size limit", () => {
     };
 
     expect(() => deepCopyEvent(event)).toThrow(
-      /Log record size .* exceeds the 5242880 byte limit/,
+      /Log record size.*exceeds the.*5\.0MB limit/,
     );
+    expect(() => deepCopyEvent(event)).toThrow(/BRAINTRUST_MAX_LOG_SIZE_BYTES/);
   });
 });
