@@ -737,6 +737,10 @@ def test_log_size_limit(with_memory_logger):
 
         # Test with custom limit
         os.environ["BRAINTRUST_MAX_LOG_SIZE"] = str(5 * 1024 * 1024)  # 5MB
+        # Reset the cached value
+        import braintrust.logger
+
+        braintrust.logger._MAX_LOG_SIZE = None
 
         # Create data that exceeds 5MB but is less than 10MB
         medium_data = "x" * (6 * 1024 * 1024)  # 6MB of 'x' characters
@@ -756,3 +760,7 @@ def test_log_size_limit(with_memory_logger):
             os.environ["BRAINTRUST_MAX_LOG_SIZE"] = original_max_log_size
         elif "BRAINTRUST_MAX_LOG_SIZE" in os.environ:
             del os.environ["BRAINTRUST_MAX_LOG_SIZE"]
+        # Reset the cached value
+        import braintrust.logger
+
+        braintrust.logger._MAX_LOG_SIZE = None

@@ -103,6 +103,20 @@ TMutableMapping = TypeVar("TMutableMapping", bound=MutableMapping[str, Any])
 TEST_API_KEY = "___TEST_API_KEY__"
 
 DEFAULT_APP_URL = "https://www.braintrust.dev"
+DEFAULT_MAX_LOG_SIZE = 10 * 1024 * 1024  # 10MB
+
+# Lazy initialization of max log size
+_MAX_LOG_SIZE = None
+
+
+def _get_max_log_size():
+    global _MAX_LOG_SIZE
+    if _MAX_LOG_SIZE is None:
+        try:
+            _MAX_LOG_SIZE = int(os.environ.get("BRAINTRUST_MAX_LOG_SIZE", str(DEFAULT_MAX_LOG_SIZE)))
+        except ValueError:
+            _MAX_LOG_SIZE = DEFAULT_MAX_LOG_SIZE
+    return _MAX_LOG_SIZE
 
 
 class Exportable(ABC):
@@ -599,14 +613,11 @@ def construct_logs3_data(items: Sequence[str]):
 def _check_json_serializable(event):
     try:
         json_str = bt_dumps(event)
-        # Check if the JSON string exceeds the configured limit (default 10MB)
+        # Check if the JSON string exceeds the configured limit
         size_bytes = len(json_str.encode("utf-8"))
-        try:
-            size_limit = int(os.environ.get("BRAINTRUST_MAX_LOG_SIZE", str(10 * 1024 * 1024)))  # Default 10MB
-        except ValueError:
-            size_limit = 10 * 1024 * 1024  # Fallback to 10MB if env var is invalid
-        if size_bytes > size_limit:
-            raise Exception(f"Log record size ({size_bytes} bytes) exceeds the {size_limit} byte limit")
+        max_log_size = _get_max_log_size()
+        if size_bytes > max_log_size:
+            raise Exception(f"Log record size ({size_bytes} bytes) exceeds the {max_log_size} byte limit")
         return json_str
     except TypeError as e:
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
