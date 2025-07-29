@@ -3,7 +3,6 @@ import { z } from "zod";
 extendZodWithOpenApi(z);
 import { promptDataSchema } from "./prompt";
 import { chatCompletionMessageParamSchema } from "./openai/messages";
-import { customTypes } from "./custom_types";
 import { gitMetadataSettingsSchema, repoInfoSchema } from "./git_types";
 import { objectReferenceSchema } from "./common_types";
 import { graphDataSchema } from "./graph";
@@ -214,7 +213,7 @@ export const invokeParent = z.union([
         .nullish()
         .describe("Identifiers for the row to to log a subspan under"),
       propagated_event: z
-        .record(customTypes.unknown)
+        .record(z.unknown())
         .nullish()
         .describe(
           "Include these properties in every span created under this parent",
@@ -231,12 +230,14 @@ export const invokeParent = z.union([
 ]);
 
 export const invokeFunctionNonIdArgsSchema = z.object({
-  input: customTypes.unknown
+  input: z
+    .unknown()
     .optional()
     .describe(
       "Argument to the function, which can be any JSON serializable value",
     ),
-  expected: customTypes.unknown
+  expected: z
+    .unknown()
     .optional()
     .describe("The expected output of the function"),
   metadata: z
@@ -325,7 +326,7 @@ export const runEvalSchema = z
         "An optional name for the experiment created by this eval. If it conflicts with an existing experiment, it will be suffixed with a unique identifier.",
       ),
     metadata: z
-      .record(customTypes.unknown)
+      .record(z.unknown())
       .optional()
       .describe(
         "Optional experiment-level metadata to store about the evaluation. You can later use this to slice & dice across experiments.",
@@ -520,7 +521,7 @@ export const scoreSchema = z
       name: z.string(),
       score: z.number().min(0).max(1).nullable().default(null), // Sometimes we get an empty value over the wire
       metadata: z
-        .record(customTypes.unknown)
+        .record(z.unknown())
         .optional()
         .transform((data) => data ?? undefined),
     }),
