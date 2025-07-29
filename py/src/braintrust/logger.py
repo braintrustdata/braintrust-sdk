@@ -600,7 +600,7 @@ def _check_json_serializable(event):
     try:
         json_str = bt_dumps(event)
         # Check if the JSON string exceeds the configured limit (default 10MB)
-        size_bytes = len(json_str.encode('utf-8'))
+        size_bytes = len(json_str.encode("utf-8"))
         try:
             size_limit = int(os.environ.get("BRAINTRUST_MAX_LOG_SIZE", str(10 * 1024 * 1024)))  # Default 10MB
         except ValueError:
