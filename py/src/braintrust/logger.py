@@ -599,11 +599,14 @@ def construct_logs3_data(items: Sequence[str]):
 def _check_json_serializable(event):
     try:
         json_str = bt_dumps(event)
-        # Check if the JSON string exceeds 10MB (10 * 1024 * 1024 bytes)
+        # Check if the JSON string exceeds the configured limit (default 10MB)
         size_bytes = len(json_str.encode('utf-8'))
-        size_limit = 10 * 1024 * 1024  # 10MB
+        try:
+            size_limit = int(os.environ.get("BRAINTRUST_MAX_LOG_SIZE", str(10 * 1024 * 1024)))  # Default 10MB
+        except ValueError:
+            size_limit = 10 * 1024 * 1024  # Fallback to 10MB if env var is invalid
         if size_bytes > size_limit:
-            raise Exception(f"Log record size ({size_bytes} bytes) exceeds the 10MB limit")
+            raise Exception(f"Log record size ({size_bytes} bytes) exceeds the {size_limit} byte limit")
         return json_str
     except TypeError as e:
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
