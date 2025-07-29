@@ -706,12 +706,12 @@ def test_log_size_limit(with_memory_logger):
     init_test_logger(__name__)
 
     # Save original env var value
-    original_max_log_size = os.environ.get("BRAINTRUST_MAX_LOG_SIZE")
+    original_max_log_size = os.environ.get("BRAINTRUST_MAX_LOG_SIZE_BYTES")
 
     try:
         # Test with default 10MB limit
         if original_max_log_size is not None:
-            del os.environ["BRAINTRUST_MAX_LOG_SIZE"]
+            del os.environ["BRAINTRUST_MAX_LOG_SIZE_BYTES"]
 
         # Create a large string that will exceed 10MB when serialized
         # 10MB = 10 * 1024 * 1024 = 10485760 bytes
@@ -736,7 +736,7 @@ def test_log_size_limit(with_memory_logger):
         span2.end()
 
         # Test with custom limit
-        os.environ["BRAINTRUST_MAX_LOG_SIZE"] = str(5 * 1024 * 1024)  # 5MB
+        os.environ["BRAINTRUST_MAX_LOG_SIZE_BYTES"] = str(5 * 1024 * 1024)  # 5MB
         # Reset the cached value
         import braintrust.logger
 
@@ -757,9 +757,9 @@ def test_log_size_limit(with_memory_logger):
     finally:
         # Restore original env var value
         if original_max_log_size is not None:
-            os.environ["BRAINTRUST_MAX_LOG_SIZE"] = original_max_log_size
-        elif "BRAINTRUST_MAX_LOG_SIZE" in os.environ:
-            del os.environ["BRAINTRUST_MAX_LOG_SIZE"]
+            os.environ["BRAINTRUST_MAX_LOG_SIZE_BYTES"] = original_max_log_size
+        elif "BRAINTRUST_MAX_LOG_SIZE_BYTES" in os.environ:
+            del os.environ["BRAINTRUST_MAX_LOG_SIZE_BYTES"]
         # Reset the cached value
         import braintrust.logger
 

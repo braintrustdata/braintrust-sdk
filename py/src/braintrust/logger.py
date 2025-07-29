@@ -113,7 +113,7 @@ def _get_max_log_size():
     global _MAX_LOG_SIZE
     if _MAX_LOG_SIZE is None:
         try:
-            _MAX_LOG_SIZE = int(os.environ.get("BRAINTRUST_MAX_LOG_SIZE", str(DEFAULT_MAX_LOG_SIZE)))
+            _MAX_LOG_SIZE = int(os.environ.get("BRAINTRUST_MAX_LOG_SIZE_BYTES", str(DEFAULT_MAX_LOG_SIZE)))
         except ValueError:
             _MAX_LOG_SIZE = DEFAULT_MAX_LOG_SIZE
     return _MAX_LOG_SIZE
