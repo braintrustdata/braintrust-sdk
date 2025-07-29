@@ -701,8 +701,10 @@ def test_traced_sync_function(with_memory_logger):
     )
 
 
-def test_log_size_limit(with_simulate_login):
+def test_log_size_limit(with_memory_logger):
     """Test that log records exceeding the size limit are rejected."""
+    init_test_logger(__name__)
+
     # Save original env var value
     original_max_log_size = os.environ.get("BRAINTRUST_MAX_LOG_SIZE")
 
@@ -711,8 +713,6 @@ def test_log_size_limit(with_simulate_login):
         if original_max_log_size is not None:
             del os.environ["BRAINTRUST_MAX_LOG_SIZE"]
 
-        experiment = braintrust.init(project="test_project", experiment="test_log_size_default")
-
         # Create a large string that will exceed 10MB when serialized
         # 10MB = 10 * 1024 * 1024 = 10485760 bytes
         # Create a string slightly larger than 10MB
@@ -720,7 +720,9 @@ def test_log_size_limit(with_simulate_login):
 
         # Test that logging large data raises an exception
         with pytest.raises(Exception) as exc_info:
-            experiment.log(input="test input", output=large_data, metadata={"test": "size limit"})
+            span = logger.start_span(name="test_large_log")
+            span.log(output=large_data)
+            span.end()
 
         assert "Log record size" in str(exc_info.value)
         assert "exceeds the" in str(exc_info.value)
@@ -729,26 +731,24 @@ def test_log_size_limit(with_simulate_login):
         # Test that data just under the limit works fine
         small_data = "x" * (9 * 1024 * 1024)  # 9MB of 'x' characters
         # This should not raise an exception
-        experiment.log(input="test input", output=small_data, metadata={"test": "under size limit"})
-
-        experiment.close()
+        span2 = logger.start_span(name="test_small_log")
+        span2.log(output=small_data)
+        span2.end()
 
         # Test with custom limit
         os.environ["BRAINTRUST_MAX_LOG_SIZE"] = str(5 * 1024 * 1024)  # 5MB
-
-        experiment2 = braintrust.init(project="test_project", experiment="test_log_size_custom")
 
         # Create data that exceeds 5MB but is less than 10MB
         medium_data = "x" * (6 * 1024 * 1024)  # 6MB of 'x' characters
 
         # This should now raise an exception with 5MB limit
         with pytest.raises(Exception) as exc_info:
-            experiment2.log(input="test input", output=medium_data, metadata={"test": "custom size limit"})
+            span3 = logger.start_span(name="test_custom_limit")
+            span3.log(output=medium_data)
+            span3.end()
 
         assert "Log record size" in str(exc_info.value)
         assert str(5 * 1024 * 1024) in str(exc_info.value)  # Should mention 5MB limit
-
-        experiment2.close()
 
     finally:
         # Restore original env var value
