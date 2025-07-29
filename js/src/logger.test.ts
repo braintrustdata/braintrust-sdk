@@ -705,3 +705,76 @@ test("startSpan support ids with nested parent chain", () => {
   expect(span.spanParents).toEqual(["111", "222", "456"]);
   span.end();
 });
+
+describe("log size limit", () => {
+  let originalEnv: string | undefined;
+
+  beforeEach(() => {
+    // Save original env var
+    originalEnv = process.env.BRAINTRUST_MAX_LOG_SIZE_BYTES;
+    // Reset the cached value
+    (_exportsForTestingOnly as any)._maxLogSizeBytes = null;
+  });
+
+  afterEach(() => {
+    // Restore original env var
+    if (originalEnv !== undefined) {
+      process.env.BRAINTRUST_MAX_LOG_SIZE_BYTES = originalEnv;
+    } else {
+      delete process.env.BRAINTRUST_MAX_LOG_SIZE_BYTES;
+    }
+    // Reset the cached value
+    (_exportsForTestingOnly as any)._maxLogSizeBytes = null;
+  });
+
+  test("rejects log records exceeding default 10MB limit", () => {
+    // Ensure no custom limit is set
+    delete process.env.BRAINTRUST_MAX_LOG_SIZE_BYTES;
+
+    // Create a large string that will exceed 10MB when serialized
+    const largeData = "x".repeat(11 * 1024 * 1024); // 11MB of 'x' characters
+
+    const event: Partial<BackgroundLogEvent> = {
+      input: "test input",
+      output: largeData,
+      metadata: { test: "size limit" },
+    };
+
+    expect(() => deepCopyEvent(event)).toThrow(
+      /Log record size .* exceeds the .* byte limit/,
+    );
+  });
+
+  test("accepts log records under the limit", () => {
+    // Create data just under 10MB
+    const smallData = "x".repeat(9 * 1024 * 1024); // 9MB of 'x' characters
+
+    const event: Partial<BackgroundLogEvent> = {
+      input: "test input",
+      output: smallData,
+      metadata: { test: "under size limit" },
+    };
+
+    expect(() => deepCopyEvent(event)).not.toThrow();
+  });
+
+  test("respects custom size limit from environment variable", () => {
+    // Set a custom 5MB limit
+    process.env.BRAINTRUST_MAX_LOG_SIZE_BYTES = String(5 * 1024 * 1024);
+    // Reset the cached value to pick up the new env var
+    (_exportsForTestingOnly as any)._maxLogSizeBytes = null;
+
+    // Create data that exceeds 5MB but is less than 10MB
+    const mediumData = "x".repeat(6 * 1024 * 1024); // 6MB of 'x' characters
+
+    const event: Partial<BackgroundLogEvent> = {
+      input: "test input",
+      output: mediumData,
+      metadata: { test: "custom size limit" },
+    };
+
+    expect(() => deepCopyEvent(event)).toThrow(
+      /Log record size .* exceeds the 5242880 byte limit/,
+    );
+  });
+});
