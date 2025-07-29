@@ -628,7 +628,7 @@ def _check_json_serializable(event):
         if size_bytes > max_log_size:
             raise Exception(
                 f"Log record size ({_format_bytes(size_bytes)}) exceeds the {_format_bytes(max_log_size)} limit. "
-                f"Set BRAINTRUST_MAX_LOG_SIZE_BYTES environment variable to increase the limit."
+                f"Set the BRAINTRUST_MAX_LOG_SIZE_BYTES environment variable to increase the limit."
             )
         return json_str
     except TypeError as e:

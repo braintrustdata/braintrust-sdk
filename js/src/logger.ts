@@ -3880,7 +3880,7 @@ function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
   if (sizeBytes > maxLogSize) {
     throw new Error(
       `Log record size (${formatBytes(sizeBytes)}) exceeds the ${formatBytes(maxLogSize)} limit. ` +
-        `Set BRAINTRUST_MAX_LOG_SIZE_BYTES environment variable to increase the limit.`,
+        `Set the BRAINTRUST_MAX_LOG_SIZE_BYTES environment variable to increase the limit.`,
     );
   }
 
