@@ -220,6 +220,31 @@ export const apiKeySchema = z
   .openapi("ApiKey");
 export type ApiKey = z.infer<typeof apiKeySchema>;
 
+const serviceTokenBaseSchema = generateBaseTableSchema("service token");
+export const serviceTokenSchema = z
+  .object({
+    id: serviceTokenBaseSchema.shape.id,
+    created: serviceTokenBaseSchema.shape.created,
+    name: serviceTokenBaseSchema.shape.name,
+    preview_name: z.string(),
+    user_id: serviceTokenBaseSchema.shape.id.nullish(),
+    user_email: z
+      .string()
+      .nullish()
+      .describe("The service account email (not routable)"),
+    user_given_name: z
+      .string()
+      .nullish()
+      .describe("The service account given name"),
+    user_family_name: z
+      .string()
+      .nullish()
+      .describe("The service account family name"),
+    org_id: organizationSchema.shape.id.nullish(),
+  })
+  .openapi("ServiceToken");
+export type ServiceToken = z.infer<typeof serviceTokenSchema>;
+
 export const spanFieldOrderItem = z.object({
   object_type: z.string(),
   column_id: z.string(),
@@ -574,11 +599,6 @@ export const projectScoreCategory = z
   .describe("For categorical-type project scores, defines a single category")
   .openapi("ProjectScoreCategory");
 export type ProjectScoreCategory = z.infer<typeof projectScoreCategory>;
-
-const webhookAutomationActionSchema = z.object({
-  type: z.literal("webhook").describe("The type of action to take"),
-  url: z.string().describe("The webhook URL to send the request to"),
-});
 
 const projectAutomationBaseSchema =
   generateBaseTableSchema("project automation");
@@ -1220,6 +1240,41 @@ export const createApiKeyOutputSchema = apiKeySchema
   )
   .openapi("CreateApiKeyOutput");
 
+export const createServiceTokenSchema = z.object({
+  name: z
+    .string()
+    .describe("Name of the service token. Does not have to be unique"),
+  org_id: z
+    .string()
+    .uuid()
+    .describe("The organization ID this service token should be scoped to."),
+  account_id: z
+    .string()
+    .describe("The service account ID this service token should belong to."),
+});
+
+export const deleteServiceTokenSchema = z
+  .object({
+    id: z.string().uuid().describe(`Unique identifier for the service token.`),
+    org_id: z
+      .string()
+      .uuid()
+      .describe("The organization ID this service token is scoped to."),
+  })
+  .openapi("DeleteServiceToken");
+
+export const createServiceTokenOutputSchema = serviceTokenSchema
+  .merge(
+    z.object({
+      key: z
+        .string()
+        .describe(
+          "The raw service token. It will only be exposed this one time",
+        ),
+    }),
+  )
+  .openapi("CreateServiceTokenOutput");
+
 export const organizationMembersSchema = z
   .object({
     members: userSchema.pick({ id: true, email: true }).array(),
@@ -1461,6 +1516,11 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
   api_key: {
     object: apiKeySchema,
     create: createApiKeySchema,
+  },
+  service_token: {
+    object: serviceTokenSchema,
+    create: createServiceTokenSchema,
+    delete: deleteServiceTokenSchema,
   },
   ai_secret: {
     object: aiSecretSchema,

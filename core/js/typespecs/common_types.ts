@@ -62,6 +62,7 @@ export const objectTypes = z.enum([
   "view",
   "organization",
   "api_key",
+  "service_token",
   "ai_secret",
   "env_var",
 ]);
