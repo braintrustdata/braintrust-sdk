@@ -994,6 +994,9 @@ export const asyncScoringControlSchema = z
     z.object({
       kind: z.literal("state_force_reselect"),
     }),
+    z.object({
+      kind: z.literal("state_enabled_force_rescore"),
+    }),
   ])
   .openapi("AsyncScoringControl");
 
