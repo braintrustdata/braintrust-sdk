@@ -97,7 +97,10 @@ export const monitorViewOptionsSchema = z
     type: z.enum(["project", "experiment"]).nullish(),
     groupBy: z.string().nullish(),
     searchFilter: z.string().nullish(),
-    btqlFilters: z.string().array().nullish(),
+    btqlFilters: z
+      .object({ btql: z.string(), label: z.string() })
+      .array()
+      .nullish(),
   })
   .strip();
 
