@@ -28,6 +28,7 @@ export * from "./wrappers/oai";
 export { BraintrustMiddleware } from "./wrappers/ai-sdk-v2";
 export { wrapAISDKModel } from "./wrappers/ai-sdk-v1";
 export { wrapAnthropic } from "./wrappers/anthropic";
+export { BraintrustTracingProcessor } from "./wrappers/openai-agents";
 export {
   AISpanProcessor,
   BraintrustSpanProcessor,
