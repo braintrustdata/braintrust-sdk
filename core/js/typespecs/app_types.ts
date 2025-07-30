@@ -8,7 +8,6 @@ import {
   datetimeStringSchema,
   generateBaseTableOpSchema,
 } from "./common_types";
-import { customTypes } from "./custom_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
 import { functionDataSchema, functionTypeEnum } from "./functions";
@@ -63,7 +62,7 @@ function generateBaseTableSchema(
       .nullish()
       .describe(`Identifies the user who created the ${objectName}`),
     metadata: z
-      .record(customTypes.unknown)
+      .record(z.unknown())
       .nullish()
       .describe(`User-controlled metadata about the ${objectName}`),
   });
@@ -155,7 +154,7 @@ export const aiSecretSchema = z
     org_id: organizationSchema.shape.id,
     name: aiSecretBaseSchema.shape.name,
     type: z.string().nullish(),
-    metadata: z.record(customTypes.unknown).nullish(),
+    metadata: z.record(z.unknown()).nullish(),
     preview_secret: z.string().nullish(),
   })
   .openapi("AISecret");
@@ -378,8 +377,8 @@ export const functionSchema = promptSchemaObject
         .nullish(),
       function_schema: z
         .object({
-          parameters: customTypes.unknown,
-          returns: customTypes.unknown.optional(),
+          parameters: z.unknown(),
+          returns: z.unknown().optional(),
         })
         .nullish()
         .describe("JSON schema for the function's parameters and return type"),
