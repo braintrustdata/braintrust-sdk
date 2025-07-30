@@ -113,18 +113,18 @@ export class BraintrustTracingProcessor {
     if (this.spans.has(trace.traceId)) {
       return Promise.resolve();
     }
-    
+
     if (this.logger) {
       const span = this.logger.startSpan({
         name: trace.name,
         type: SpanTypeAttribute.TASK,
       });
-      // Log basic trace info immediately  
+      // Log basic trace info immediately
       span.log({
         input: "Agent workflow started",
         metadata: {
-          ...trace.metadata || {},
-        }
+          ...(trace.metadata || {}),
+        },
       });
       this.spans.set(trace.traceId, span);
     } else {
@@ -134,10 +134,10 @@ export class BraintrustTracingProcessor {
       });
       // Log basic trace info immediately
       span.log({
-        input: "Agent workflow started", 
+        input: "Agent workflow started",
         metadata: {
-          ...trace.metadata || {},
-        }
+          ...(trace.metadata || {}),
+        },
       });
       this.spans.set(trace.traceId, span);
     }
