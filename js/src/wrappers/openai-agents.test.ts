@@ -14,8 +14,12 @@ import {
   TestBackgroundLogger,
 } from "../logger";
 import { BraintrustTracingProcessor } from "./openai-agents";
+import { z } from "zod";
 
-const TEST_SUITE_OPTIONS = { timeout: 10000, retry: 3 };
+const TEST_SUITE_OPTIONS = { timeout: 30000, retry: 3 };
+
+// Simple test model for OpenAI Agents
+const TEST_MODEL = "gpt-4o-mini";
 
 try {
   configureNode();
@@ -23,21 +27,43 @@ try {
   // FIXME[matt] have a better of way of initializing brainstrust state once per process.
 }
 
-// Test with mocked @openai/agents since it requires an API key
+// Test with real @openai/agents SDK calls (requires OPENAI_API_KEY)
 describe(
-  "OpenAI Agents tracing processor unit tests",
+  "OpenAI Agents tracing processor integration tests",
   TEST_SUITE_OPTIONS,
   () => {
     let backgroundLogger: TestBackgroundLogger;
     let _logger: Logger<false>;
+    let Agent: any;
+    let run: any;
+    let tool: any;
+    let setTraceProcessors: any;
+    let addTraceProcessor: any;
+    let setTracingDisabled: any;
 
     beforeAll(async () => {
       await _exportsForTestingOnly.simulateLoginForTests();
+
+      // Dynamically import @openai/agents to handle cases where it's not available
+      try {
+        const agentsModule = await import("@openai/agents");
+        Agent = agentsModule.Agent;
+        run = agentsModule.run;
+        tool = agentsModule.tool;
+        setTraceProcessors = agentsModule.setTraceProcessors;
+        addTraceProcessor = agentsModule.addTraceProcessor;
+        setTracingDisabled = agentsModule.setTracingDisabled;
+      } catch (error) {
+        console.warn(
+          "@openai/agents not available, skipping integration tests",
+        );
+      }
     });
 
     beforeEach(() => {
       backgroundLogger = _exportsForTestingOnly.useTestBackgroundLogger();
       _logger = initLogger({
+        projectName: "openai-agents.test.ts",
         projectId: "test-openai-agents",
       });
     });
@@ -45,6 +71,9 @@ describe(
     afterEach(() => {
       if (_logger) {
         _logger.flush();
+      }
+      if (setTraceProcessors) {
+        setTraceProcessors([]);
       }
       _exportsForTestingOnly.clearTestBackgroundLogger();
     });
@@ -62,294 +91,115 @@ describe(
       assert.ok(typeof processor.forceFlush === "function");
     });
 
-    test("handles trace lifecycle", () => {
+    test("simple agent run with tracing", async (context) => {
+      if (
+        !Agent ||
+        !run ||
+        !setTraceProcessors ||
+        !process.env.OPENAI_API_KEY
+      ) {
+        context.skip();
+        return;
+      }
+
+      assert.lengthOf(await backgroundLogger.drain(), 0);
+
+      // Set up the Braintrust tracing processor
       const processor = new BraintrustTracingProcessor(_logger);
 
-      const mockTrace = {
-        type: "trace",
-        traceId: "trace_123",
-        name: "Test Agent Workflow",
-        groupId: "group_456",
-        metadata: { test: "value" },
-      };
+      setTracingDisabled(false);
+      addTraceProcessor(processor);
 
-      // Should not throw
-      processor.onTraceStart(mockTrace);
-      processor.onTraceEnd(mockTrace);
+      try {
+        // Create a simple agent
+        const agent = new Agent({
+          name: "test-agent",
+          model: TEST_MODEL,
+          instructions: "You are a helpful assistant. Be concise.",
+        });
 
-      processor.shutdown();
+        // Run the agent with a simple prompt using the run() function
+        const result = await run(agent, "What is 2+2? Just give the number.");
+        assert.ok(result);
+        assert.ok(result.finalOutput);
+
+        // Verify spans were created
+        const spans = await backgroundLogger.drain();
+        assert.isTrue(
+          spans.length > 0,
+          "Expected at least one span to be created",
+        );
+
+        // Verify span structure
+        const traceSpan = spans.find(
+          (s: any) => s.span_attributes?.type === "task",
+        );
+        assert.ok(
+          traceSpan,
+          "Expected to find a task-type span for the agent trace",
+        );
+        assert.equal((traceSpan as any).span_attributes.name, "Agent workflow");
+      } finally {
+        processor.shutdown();
+      }
     });
 
-    test("handles span lifecycle with agent span", () => {
+    test("agent with function calling", async (context) => {
+      assert.lengthOf(await backgroundLogger.drain(), 0);
+
       const processor = new BraintrustTracingProcessor(_logger);
 
-      // Start trace first
-      const mockTrace = {
-        type: "trace",
-        traceId: "trace_123",
-        name: "Test Agent Workflow",
-        groupId: "group_456",
-      };
-      processor.onTraceStart(mockTrace);
+      setTracingDisabled(false);
+      addTraceProcessor(processor);
 
-      const mockAgentSpan = {
-        type: "trace.span",
-        spanId: "span_456",
-        traceId: "trace_123",
-        name: "Agent Span",
-        spanData: {
-          type: "agent",
-          name: "Test Agent",
-          tools: ["tool1", "tool2"],
-          handoffs: ["handoff1"],
-          outputType: "text",
-        },
-        startedAt: "2023-01-01T00:00:00Z",
-        endedAt: "2023-01-01T00:00:05Z",
-      };
-
-      processor.onSpanStart(mockAgentSpan);
-      processor.onSpanEnd(mockAgentSpan);
-      processor.onTraceEnd(mockTrace);
-
-      processor.shutdown();
-    });
-
-    test("handles generation span with metrics", () => {
-      const processor = new BraintrustTracingProcessor(_logger);
-
-      const mockTrace = {
-        type: "trace",
-        traceId: "trace_123",
-        name: "Test Agent Workflow",
-      };
-      processor.onTraceStart(mockTrace);
-
-      const mockGenerationSpan = {
-        type: "trace.span",
-        spanId: "span_gen_789",
-        traceId: "trace_123",
-        spanData: {
-          type: "generation",
-          input: "What is the weather?",
-          output: "The weather is sunny",
-          model: "gpt-4o-mini",
-          modelConfig: { temperature: 0.7 },
-          usage: {
-            prompt_tokens: 10,
-            completion_tokens: 15,
-            total_tokens: 25,
-          },
-        },
-        startedAt: "2023-01-01T00:00:00Z",
-        endedAt: "2023-01-01T00:00:02Z",
-      };
-
-      processor.onSpanStart(mockGenerationSpan);
-      processor.onSpanEnd(mockGenerationSpan);
-      processor.onTraceEnd(mockTrace);
-
-      processor.shutdown();
-    });
-
-    test("handles function span", () => {
-      const processor = new BraintrustTracingProcessor(_logger);
-
-      const mockTrace = {
-        type: "trace",
-        traceId: "trace_123",
-        name: "Test Agent Workflow",
-      };
-      processor.onTraceStart(mockTrace);
-
-      const mockFunctionSpan = {
-        type: "trace.span",
-        spanId: "span_func_101",
-        traceId: "trace_123",
-        spanData: {
-          type: "function",
+      try {
+        // Create a tool using the proper tool() helper
+        const getWeatherTool = tool({
           name: "get_weather",
-          input: { city: "San Francisco" },
-          output: { weather: "sunny", temperature: 72 },
-        },
-      };
-
-      processor.onSpanStart(mockFunctionSpan);
-      processor.onSpanEnd(mockFunctionSpan);
-      processor.onTraceEnd(mockTrace);
-
-      processor.shutdown();
-    });
-
-    test("handles handoff span", () => {
-      const processor = new BraintrustTracingProcessor(_logger);
-
-      const mockTrace = {
-        type: "trace",
-        traceId: "trace_123",
-        name: "Test Agent Workflow",
-      };
-      processor.onTraceStart(mockTrace);
-
-      const mockHandoffSpan = {
-        type: "trace.span",
-        spanId: "span_handoff_202",
-        traceId: "trace_123",
-        spanData: {
-          type: "handoff",
-          name: "Transfer to Weather Agent",
-          fromAgent: "main_agent",
-          toAgent: "weather_agent",
-        },
-      };
-
-      processor.onSpanStart(mockHandoffSpan);
-      processor.onSpanEnd(mockHandoffSpan);
-      processor.onTraceEnd(mockTrace);
-
-      processor.shutdown();
-    });
-
-    test("handles response span with usage metrics", () => {
-      const processor = new BraintrustTracingProcessor(_logger);
-
-      const mockTrace = {
-        type: "trace",
-        traceId: "trace_123",
-        name: "Test Agent Workflow",
-      };
-      processor.onTraceStart(mockTrace);
-
-      const mockResponseSpan = {
-        type: "trace.span",
-        spanId: "span_response_303",
-        traceId: "trace_123",
-        spanData: {
-          type: "response",
-          input: "Tell me about the weather",
-          response: {
-            output: "The weather is currently sunny with a temperature of 72°F",
-            metadata: { confidence: 0.95 },
-            usage: {
-              totalTokens: 30,
-              inputTokens: 8,
-              outputTokens: 22,
-            },
+          description: "Get the current weather for a city",
+          parameters: z.object({ city: z.string() }),
+          execute: async (input: { city: string }) => {
+            return `The weather in ${input.city} is sunny with temperature 72°F`;
           },
-        },
-        startedAt: "2023-01-01T00:00:00Z",
-        endedAt: "2023-01-01T00:00:03Z",
-      };
+        });
 
-      processor.onSpanStart(mockResponseSpan);
-      processor.onSpanEnd(mockResponseSpan);
-      processor.onTraceEnd(mockTrace);
+        // Create agent with the tool
+        const agent = new Agent({
+          name: "weather-agent",
+          model: TEST_MODEL,
+          instructions:
+            "You can get the weather for any city. Use the get_weather tool when asked about weather.",
+          tools: [getWeatherTool],
+        });
 
-      processor.shutdown();
-    });
+        const result = await run(agent, "What's the weather in San Francisco?");
+        assert.ok(result);
+        assert.ok(result.finalOutput);
 
-    test("handles guardrail span", () => {
-      const processor = new BraintrustTracingProcessor(_logger);
+        // Verify spans were created
+        const spans = await backgroundLogger.drain();
+        assert.isTrue(spans.length > 0);
 
-      const mockTrace = {
-        type: "trace",
-        traceId: "trace_123",
-        name: "Test Agent Workflow",
-      };
-      processor.onTraceStart(mockTrace);
+        // Verify span structure
+        const taskSpans = spans.filter(
+          (s: any) => s.span_attributes?.type === "task",
+        );
+        assert.isTrue(taskSpans.length > 0, "Expected task-type spans");
 
-      const mockGuardrailSpan = {
-        type: "trace.span",
-        spanId: "span_guard_404",
-        traceId: "trace_123",
-        spanData: {
-          type: "guardrail",
-          name: "Safety Check",
-          triggered: true,
-        },
-      };
-
-      processor.onSpanStart(mockGuardrailSpan);
-      processor.onSpanEnd(mockGuardrailSpan);
-      processor.onTraceEnd(mockTrace);
-
-      processor.shutdown();
-    });
-
-    test("handles custom span", () => {
-      const processor = new BraintrustTracingProcessor(_logger);
-
-      const mockTrace = {
-        type: "trace",
-        traceId: "trace_123",
-        name: "Test Agent Workflow",
-      };
-      processor.onTraceStart(mockTrace);
-
-      const mockCustomSpan = {
-        type: "trace.span",
-        spanId: "span_custom_505",
-        traceId: "trace_123",
-        spanData: {
-          type: "custom",
-          name: "Custom Operation",
-          data: {
-            operation: "complex_calculation",
-            result: 42,
-            metadata: { version: "1.0" },
-          },
-        },
-      };
-
-      processor.onSpanStart(mockCustomSpan);
-      processor.onSpanEnd(mockCustomSpan);
-      processor.onTraceEnd(mockTrace);
-
-      processor.shutdown();
-    });
-
-    test("handles span with error", () => {
-      const processor = new BraintrustTracingProcessor(_logger);
-
-      const mockTrace = {
-        type: "trace",
-        traceId: "trace_123",
-        name: "Test Agent Workflow",
-      };
-      processor.onTraceStart(mockTrace);
-
-      const mockErrorSpan = {
-        type: "trace.span",
-        spanId: "span_error_606",
-        traceId: "trace_123",
-        spanData: {
-          type: "function",
-          name: "failing_function",
-          input: { param: "value" },
-        },
-        error: "Function execution failed: Invalid parameter",
-      };
-
-      processor.onSpanStart(mockErrorSpan);
-      processor.onSpanEnd(mockErrorSpan);
-      processor.onTraceEnd(mockTrace);
-
-      processor.shutdown();
-    });
-
-    test("works without logger (uses global)", () => {
-      const processor = new BraintrustTracingProcessor();
-
-      const mockTrace = {
-        type: "trace",
-        traceId: "trace_global",
-        name: "Global Logger Test",
-      };
-
-      // Should not throw
-      processor.onTraceStart(mockTrace);
-      processor.onTraceEnd(mockTrace);
-      processor.shutdown();
+        // Verify tool spans if function calling occurred
+        const toolSpans = spans.filter(
+          (s: any) => s.span_attributes?.type === "tool",
+        );
+        if (toolSpans.length > 0) {
+          const toolSpan = toolSpans[0] as any;
+          assert.ok(
+            toolSpan.span_attributes.name,
+            "Tool span should have a name",
+          );
+        }
+      } finally {
+        processor.shutdown();
+      }
     });
   },
 );

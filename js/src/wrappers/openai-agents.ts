@@ -108,11 +108,23 @@ export class BraintrustTracingProcessor {
     this.logger = logger;
   }
 
-  onTraceStart(trace: AgentsTrace): void {
+  onTraceStart(trace: AgentsTrace): Promise<void> {
+    // Check if we already have a span for this trace to avoid duplicates
+    if (this.spans.has(trace.traceId)) {
+      return Promise.resolve();
+    }
+    
     if (this.logger) {
       const span = this.logger.startSpan({
         name: trace.name,
         type: SpanTypeAttribute.TASK,
+      });
+      // Log basic trace info immediately  
+      span.log({
+        input: "Agent workflow started",
+        metadata: {
+          ...trace.metadata || {},
+        }
       });
       this.spans.set(trace.traceId, span);
     } else {
@@ -120,16 +132,25 @@ export class BraintrustTracingProcessor {
         name: trace.name,
         type: SpanTypeAttribute.TASK,
       });
+      // Log basic trace info immediately
+      span.log({
+        input: "Agent workflow started", 
+        metadata: {
+          ...trace.metadata || {},
+        }
+      });
       this.spans.set(trace.traceId, span);
     }
+    return Promise.resolve();
   }
 
-  onTraceEnd(trace: AgentsTrace): void {
+  onTraceEnd(trace: AgentsTrace): Promise<void> {
     const span = this.spans.get(trace.traceId);
     if (span) {
       span.end();
       this.spans.delete(trace.traceId);
     }
+    return Promise.resolve();
   }
 
   private extractAgentLogData(span: AgentsSpan): Record<string, any> {
@@ -271,8 +292,8 @@ export class BraintrustTracingProcessor {
     }
   }
 
-  onSpanStart(span: AgentsSpan): void {
-    if (!span.spanId || !span.traceId) return;
+  onSpanStart(span: AgentsSpan): Promise<void> {
+    if (!span.spanId || !span.traceId) return Promise.resolve();
 
     // Find parent span - could be another span or the root trace
     let parentSpan: Span | undefined;
@@ -287,10 +308,11 @@ export class BraintrustTracingProcessor {
       });
       this.spans.set(span.spanId, childSpan);
     }
+    return Promise.resolve();
   }
 
-  onSpanEnd(span: AgentsSpan): void {
-    if (!span.spanId) return;
+  onSpanEnd(span: AgentsSpan): Promise<void> {
+    if (!span.spanId) return Promise.resolve();
 
     const braintrustSpan = this.spans.get(span.spanId);
     if (braintrustSpan) {
@@ -302,17 +324,20 @@ export class BraintrustTracingProcessor {
       braintrustSpan.end();
       this.spans.delete(span.spanId);
     }
+    return Promise.resolve();
   }
 
-  shutdown(): void {
+  shutdown(): Promise<void> {
     if (this.logger && typeof this.logger.flush === "function") {
       this.logger.flush();
     }
+    return Promise.resolve();
   }
 
-  forceFlush(): void {
+  forceFlush(): Promise<void> {
     if (this.logger && typeof this.logger.flush === "function") {
       this.logger.flush();
     }
+    return Promise.resolve();
   }
 }
