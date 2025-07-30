@@ -15,13 +15,4 @@ export default defineConfig([
     external: ["zod"],
     dts: true,
   },
-  {
-    entry: ["typespecs/index.ts"],
-    format: ["cjs", "esm"],
-    outDir: "typespecs-stainless/dist",
-    dts: true,
-    env: {
-      BRAINTRUST_TYPESPECS_MODE: "stainless",
-    },
-  },
 ]);
