@@ -85,6 +85,38 @@ import {
 } from "./util";
 import { lintTemplate } from "./mustache-utils";
 
+// Default max log size: 10MB
+const DEFAULT_MAX_LOG_SIZE_BYTES = 10 * 1024 * 1024;
+
+// Lazy initialization of max log size
+let _maxLogSizeBytes: number | null = null;
+
+function getMaxLogSizeBytes(): number {
+  if (_maxLogSizeBytes === null) {
+    const envValue = iso.getEnv("BRAINTRUST_MAX_LOG_SIZE_BYTES");
+    if (envValue) {
+      const parsed = parseInt(envValue, 10);
+      _maxLogSizeBytes = isNaN(parsed) ? DEFAULT_MAX_LOG_SIZE_BYTES : parsed;
+    } else {
+      _maxLogSizeBytes = DEFAULT_MAX_LOG_SIZE_BYTES;
+    }
+  }
+  return _maxLogSizeBytes;
+}
+
+function formatBytes(numBytes: number): string {
+  const units = ["B", "KB", "MB", "GB"];
+  let unitIndex = 0;
+  let size = Math.abs(numBytes);
+
+  while (size >= 1024.0 && unitIndex < units.length - 1) {
+    size /= 1024.0;
+    unitIndex++;
+  }
+
+  return `${size.toFixed(1)}${units[unitIndex]}`;
+}
+
 export type SetCurrentArg = { setCurrent?: boolean };
 
 type StartSpanEventArgs = ExperimentLogPartialArgs & Partial<IdField>;
@@ -3841,6 +3873,17 @@ function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
     }
     return v;
   });
+
+  // Check if the serialized event exceeds the configured size limit
+  const sizeBytes = new TextEncoder().encode(serialized).length;
+  const maxLogSize = getMaxLogSizeBytes();
+  if (sizeBytes > maxLogSize) {
+    throw new Error(
+      `Log record size (${formatBytes(sizeBytes)}) exceeds the ${formatBytes(maxLogSize)} limit. ` +
+        `Set the BRAINTRUST_MAX_LOG_SIZE_BYTES environment variable to increase the limit.`,
+    );
+  }
+
   const x = JSON.parse(serialized, (_k, v) => {
     const parsedAttachment = savedAttachmentSchema.safeParse(v);
     if (parsedAttachment.success) {
@@ -5911,4 +5954,10 @@ export const _exportsForTestingOnly = {
   simulateLoginForTests,
   simulateLogoutForTests,
   setInitialTestState,
+  get _maxLogSizeBytes() {
+    return _maxLogSizeBytes;
+  },
+  set _maxLogSizeBytes(value: number | null) {
+    _maxLogSizeBytes = value;
+  },
 };

@@ -699,3 +699,70 @@ def test_traced_sync_function(with_memory_logger):
             },
         },
     )
+
+
+def test_log_size_limit(with_memory_logger):
+    """Test that log records exceeding the size limit are rejected."""
+    init_test_logger(__name__)
+
+    # Save original env var value
+    original_max_log_size = os.environ.get("BRAINTRUST_MAX_LOG_SIZE_BYTES")
+
+    try:
+        # Test with default 10MB limit
+        if original_max_log_size is not None:
+            del os.environ["BRAINTRUST_MAX_LOG_SIZE_BYTES"]
+
+        # Create a large string that will exceed 10MB when serialized
+        # 10MB = 10 * 1024 * 1024 = 10485760 bytes
+        # Create a string slightly larger than 10MB
+        large_data = "x" * (11 * 1024 * 1024)  # 11MB of 'x' characters
+
+        # Test that logging large data raises an exception
+        with pytest.raises(Exception) as exc_info:
+            span = logger.start_span(name="test_large_log")
+            span.log(output=large_data)
+            span.end()
+
+        assert "Log record size" in str(exc_info.value)
+        assert "exceeds the" in str(exc_info.value)
+        assert "10.0MB limit" in str(exc_info.value)
+        assert "BRAINTRUST_MAX_LOG_SIZE_BYTES" in str(exc_info.value)
+
+        # Test that data just under the limit works fine
+        small_data = "x" * (9 * 1024 * 1024)  # 9MB of 'x' characters
+        # This should not raise an exception
+        span2 = logger.start_span(name="test_small_log")
+        span2.log(output=small_data)
+        span2.end()
+
+        # Test with custom limit
+        os.environ["BRAINTRUST_MAX_LOG_SIZE_BYTES"] = str(5 * 1024 * 1024)  # 5MB
+        # Reset the cached value
+        import braintrust.logger
+
+        braintrust.logger._MAX_LOG_SIZE = None
+
+        # Create data that exceeds 5MB but is less than 10MB
+        medium_data = "x" * (6 * 1024 * 1024)  # 6MB of 'x' characters
+
+        # This should now raise an exception with 5MB limit
+        with pytest.raises(Exception) as exc_info:
+            span3 = logger.start_span(name="test_custom_limit")
+            span3.log(output=medium_data)
+            span3.end()
+
+        assert "Log record size" in str(exc_info.value)
+        assert "5.0MB limit" in str(exc_info.value)
+        assert "BRAINTRUST_MAX_LOG_SIZE_BYTES" in str(exc_info.value)
+
+    finally:
+        # Restore original env var value
+        if original_max_log_size is not None:
+            os.environ["BRAINTRUST_MAX_LOG_SIZE_BYTES"] = original_max_log_size
+        elif "BRAINTRUST_MAX_LOG_SIZE_BYTES" in os.environ:
+            del os.environ["BRAINTRUST_MAX_LOG_SIZE_BYTES"]
+        # Reset the cached value
+        import braintrust.logger
+
+        braintrust.logger._MAX_LOG_SIZE = None
