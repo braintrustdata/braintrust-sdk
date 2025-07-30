@@ -699,3 +699,33 @@ def test_traced_sync_function(with_memory_logger):
             },
         },
     )
+
+
+def test_span_set_current(with_memory_logger):
+    """Test that span.set_current() makes the span accessible via current_span()."""
+    init_test_logger(__name__)
+
+    # Store initial current span
+    initial_current = braintrust.current_span()
+
+    # Start a span that can be set as current (default behavior)
+    span1 = logger.start_span(name="test-span-1")
+
+    # Initially, it should not be the current span
+    assert braintrust.current_span() != span1
+
+    # Call set_current() on the span
+    span1.set_current()
+
+    # Verify it's now the current span
+    assert braintrust.current_span() == span1
+
+    # Test that spans with set_current=False cannot be set as current
+    span2 = logger.start_span(name="test-span-2", set_current=False)
+    span2.set_current()  # This should not change the current span
+
+    # Current span should still be span1
+    assert braintrust.current_span() == span1
+
+    span1.end()
+    span2.end()
