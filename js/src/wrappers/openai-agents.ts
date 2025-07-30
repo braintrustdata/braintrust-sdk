@@ -1,13 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { SpanTypeAttribute } from "@braintrust/core";
-import {
-  Span,
-  StartSpanArgs,
-  startSpan,
-  Experiment,
-  Logger,
-} from "../logger";
-import { getCurrentUnixTimestamp } from "../util";
+import { Span, startSpan, Experiment, Logger } from "../logger";
 
 // TypeScript interfaces for @openai/agents types to avoid direct dependencies
 interface AgentsTrace {
@@ -57,7 +50,7 @@ interface AgentsSpan {
 
 function spanTypeFromAgents(span: AgentsSpan): SpanTypeAttribute {
   const spanType = span.spanData?.type;
-  
+
   if (spanType === "agent" || spanType === "handoff" || spanType === "custom") {
     return SpanTypeAttribute.TASK;
   } else if (spanType === "function" || spanType === "guardrail") {
@@ -71,11 +64,11 @@ function spanTypeFromAgents(span: AgentsSpan): SpanTypeAttribute {
 
 function spanNameFromAgents(span: AgentsSpan): string {
   const spanData = span.spanData;
-  
+
   if (spanData?.name) {
     return spanData.name;
   }
-  
+
   switch (spanData?.type) {
     case "generation":
       return "Generation";
@@ -93,11 +86,6 @@ function spanNameFromAgents(span: AgentsSpan): string {
   }
 }
 
-function timestampFromIso(timestamp?: string): number | undefined {
-  if (!timestamp) return undefined;
-  return new Date(timestamp).getTime() / 1000;
-}
-
 function timestampElapsed(end?: string, start?: string): number | undefined {
   if (!start || !end) return undefined;
   const startTime = new Date(start).getTime();
@@ -113,10 +101,10 @@ function timestampElapsed(end?: string, start?: string): number | undefined {
  *     If `undefined`, the current span, experiment, or logger will be selected exactly as in `startSpan`.
  */
 export class BraintrustTracingProcessor {
-  private logger?: Span | Experiment | Logger;
+  private logger?: Span | Experiment | Logger<any>;
   private spans: Map<string, Span> = new Map();
 
-  constructor(logger?: Span | Experiment | Logger) {
+  constructor(logger?: Span | Experiment | Logger<any>) {
     this.logger = logger;
   }
 
@@ -125,15 +113,12 @@ export class BraintrustTracingProcessor {
       const span = this.logger.startSpan({
         name: trace.name,
         type: SpanTypeAttribute.TASK,
-        id: trace.traceId,
-        root_span_id: trace.traceId,
       });
       this.spans.set(trace.traceId, span);
     } else {
       const span = startSpan({
         name: trace.name,
         type: SpanTypeAttribute.TASK,
-        id: trace.traceId,
       });
       this.spans.set(trace.traceId, span);
     }
@@ -161,15 +146,15 @@ export class BraintrustTracingProcessor {
   private extractResponseLogData(span: AgentsSpan): Record<string, any> {
     const spanData = span.spanData;
     const data: Record<string, any> = {};
-    
+
     if (spanData?.input !== undefined) {
       data.input = spanData.input;
     }
-    
+
     if (spanData?.response?.output !== undefined) {
       data.output = spanData.response.output;
     }
-    
+
     if (spanData?.response) {
       data.metadata = spanData.response.metadata || {};
       // Add other response fields to metadata
@@ -182,15 +167,17 @@ export class BraintrustTracingProcessor {
     if (ttft !== undefined) {
       data.metrics.time_to_first_token = ttft;
     }
-    
+
     if (spanData?.response?.usage) {
       const usage = spanData.response.usage;
       if (usage.totalTokens) data.metrics.tokens = usage.totalTokens;
       if (usage.inputTokens) data.metrics.prompt_tokens = usage.inputTokens;
-      if (usage.outputTokens) data.metrics.completion_tokens = usage.outputTokens;
+      if (usage.outputTokens)
+        data.metrics.completion_tokens = usage.outputTokens;
       // Also check for alternate field names
       if (usage.promptTokens) data.metrics.prompt_tokens = usage.promptTokens;
-      if (usage.completionTokens) data.metrics.completion_tokens = usage.completionTokens;
+      if (usage.completionTokens)
+        data.metrics.completion_tokens = usage.completionTokens;
     }
 
     return data;
@@ -226,7 +213,7 @@ export class BraintrustTracingProcessor {
   private extractGenerationLogData(span: AgentsSpan): Record<string, any> {
     const spanData = span.spanData;
     const metrics: Record<string, any> = {};
-    
+
     const ttft = timestampElapsed(span.endedAt, span.startedAt);
     if (ttft !== undefined) {
       metrics.time_to_first_token = ttft;
@@ -235,10 +222,12 @@ export class BraintrustTracingProcessor {
     const usage = spanData?.usage || {};
     if (usage.prompt_tokens) metrics.prompt_tokens = usage.prompt_tokens;
     else if (usage.input_tokens) metrics.prompt_tokens = usage.input_tokens;
-    
-    if (usage.completion_tokens) metrics.completion_tokens = usage.completion_tokens;
-    else if (usage.output_tokens) metrics.completion_tokens = usage.output_tokens;
-    
+
+    if (usage.completion_tokens)
+      metrics.completion_tokens = usage.completion_tokens;
+    else if (usage.output_tokens)
+      metrics.completion_tokens = usage.output_tokens;
+
     if (usage.total_tokens) metrics.tokens = usage.total_tokens;
     else if (usage.input_tokens && usage.output_tokens) {
       metrics.tokens = usage.input_tokens + usage.output_tokens;
@@ -261,7 +250,7 @@ export class BraintrustTracingProcessor {
 
   private extractLogData(span: AgentsSpan): Record<string, any> {
     const spanType = span.spanData?.type;
-    
+
     switch (spanType) {
       case "agent":
         return this.extractAgentLogData(span);
@@ -284,19 +273,17 @@ export class BraintrustTracingProcessor {
 
   onSpanStart(span: AgentsSpan): void {
     if (!span.spanId || !span.traceId) return;
-    
+
     // Find parent span - could be another span or the root trace
     let parentSpan: Span | undefined;
     if (span.traceId) {
       parentSpan = this.spans.get(span.traceId);
     }
-    
+
     if (parentSpan) {
       const childSpan = parentSpan.startSpan({
-        id: span.spanId,
         name: spanNameFromAgents(span),
         type: spanTypeFromAgents(span),
-        start_time: timestampFromIso(span.startedAt),
       });
       this.spans.set(span.spanId, childSpan);
     }
@@ -304,7 +291,7 @@ export class BraintrustTracingProcessor {
 
   onSpanEnd(span: AgentsSpan): void {
     if (!span.spanId) return;
-    
+
     const braintrustSpan = this.spans.get(span.spanId);
     if (braintrustSpan) {
       const logData = this.extractLogData(span);
@@ -312,7 +299,7 @@ export class BraintrustTracingProcessor {
         error: span.error,
         ...logData,
       });
-      braintrustSpan.end(timestampFromIso(span.endedAt));
+      braintrustSpan.end();
       this.spans.delete(span.spanId);
     }
   }
