@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { SpanTypeAttribute } from "@braintrust/core";
 import { Span, startSpan, Experiment, Logger } from "../logger";
+import { parseMetricsFromUsage } from "./oai_responses";
 
 // TypeScript interfaces for @openai/agents types to avoid direct dependencies
 interface AgentsTrace {
@@ -211,16 +212,24 @@ export class BraintrustTracingProcessor {
       data.metrics.time_to_first_token = ttft;
     }
 
+    // Extract model info and usage from the OpenAI response object
+    const responseOutput = spanData?._response;
+    if (responseOutput) {
+      // Add model to metadata
+      if (!data.metadata) data.metadata = {};
+      if (responseOutput.model) {
+        data.metadata.model = responseOutput.model;
+      }
+
+      // Extract usage metrics using the existing OpenAI parser
+      const usageMetrics = parseMetricsFromUsage(responseOutput.usage);
+      Object.assign(data.metrics, usageMetrics);
+    }
+
+    // Fallback to legacy response structure
     if (spanData?.response?.usage) {
-      const usage = spanData.response.usage;
-      if (usage.totalTokens) data.metrics.tokens = usage.totalTokens;
-      if (usage.inputTokens) data.metrics.prompt_tokens = usage.inputTokens;
-      if (usage.outputTokens)
-        data.metrics.completion_tokens = usage.outputTokens;
-      // Also check for alternate field names
-      if (usage.promptTokens) data.metrics.prompt_tokens = usage.promptTokens;
-      if (usage.completionTokens)
-        data.metrics.completion_tokens = usage.completionTokens;
+      const usageMetrics = parseMetricsFromUsage(spanData.response.usage);
+      Object.assign(data.metrics, usageMetrics);
     }
 
     return data;
