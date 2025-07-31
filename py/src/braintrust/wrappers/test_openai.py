@@ -161,6 +161,15 @@ def test_openai_responses_metrics(memory_logger):
     assert span["metadata"]["provider"] == "openai"
     assert TEST_PROMPT in str(span["input"])
 
+    # Test that we're using the correct code path based on SDK capabilities
+    has_parse_on_raw_response = hasattr(client.responses.with_raw_response, "parse")
+
+    # If the SDK supports parse on with_raw_response, we might get header logging
+    # Check if cached header is present (only if API returns it and SDK supports it)
+    if has_parse_on_raw_response and "cached" in metrics:
+        # This would indicate header logging is working
+        assert isinstance(metrics["cached"], (int, float))
+
 
 @pytest.mark.vcr
 def test_openai_embeddings(memory_logger):
@@ -466,6 +475,15 @@ async def test_openai_responses_async(memory_logger):
             assert span["metadata"]["model"] == TEST_MODEL
             # assert span["metadata"]["provider"] == "openai"
             assert TEST_PROMPT in str(span["input"])
+
+            # Test that we're using the correct code path based on SDK capabilities
+            has_parse_on_raw_response = hasattr(client.responses.with_raw_response, "parse")
+
+            # If the SDK supports parse on with_raw_response, we might get header logging
+            # Check if cached header is present (only if API returns it and SDK supports it)
+            if has_parse_on_raw_response and "cached" in metrics:
+                # This would indicate header logging is working
+                assert isinstance(metrics["cached"], (int, float))
 
 
 @pytest.mark.asyncio

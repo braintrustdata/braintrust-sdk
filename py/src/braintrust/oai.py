@@ -663,9 +663,13 @@ class ResponsesV1Wrapper(NamedWrapper):
         return ResponseWrapper(self.__responses.with_raw_response.create, None).create(*args, **kwargs)
 
     def parse(self, *args: Any, **kwargs: Any) -> Any:
-        # Note: parse doesn't have a with_raw_response equivalent, so we call it directly
-        # This means we won't get header logging, but we'll still get tracing
-        return ResponseWrapper(self.__responses.parse, None).create(*args, **kwargs)
+        # Try to use with_raw_response.parse if it exists (newer SDK versions)
+        # Otherwise fall back to direct parse call
+        if hasattr(self.__responses.with_raw_response, "parse"):
+            return ResponseWrapper(self.__responses.with_raw_response.parse, None).create(*args, **kwargs)
+        else:
+            # Older SDK versions - parse doesn't have a with_raw_response equivalent
+            return ResponseWrapper(self.__responses.parse, None).create(*args, **kwargs)
 
 
 class AsyncResponsesV1Wrapper(NamedWrapper):
@@ -678,9 +682,13 @@ class AsyncResponsesV1Wrapper(NamedWrapper):
         return AsyncResponseWrapper(response)
 
     async def parse(self, *args: Any, **kwargs: Any) -> Any:
-        # Note: parse doesn't have a with_raw_response equivalent, so we call it directly
-        # This means we won't get header logging, but we'll still get tracing
-        response = await ResponseWrapper(None, self.__responses.parse).acreate(*args, **kwargs)
+        # Try to use with_raw_response.parse if it exists (newer SDK versions)
+        # Otherwise fall back to direct parse call
+        if hasattr(self.__responses.with_raw_response, "parse"):
+            response = await ResponseWrapper(None, self.__responses.with_raw_response.parse).acreate(*args, **kwargs)
+        else:
+            # Older SDK versions - parse doesn't have a with_raw_response equivalent
+            response = await ResponseWrapper(None, self.__responses.parse).acreate(*args, **kwargs)
         return AsyncResponseWrapper(response)
 
 
