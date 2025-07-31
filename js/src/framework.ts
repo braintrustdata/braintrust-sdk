@@ -131,6 +131,10 @@ export interface EvalHooks<
    */
   span: Span;
   /**
+   * The experiment under which the task is run. Also accessible via currentExperiment()
+   */
+  experiment: Experiment | undefined;
+  /**
    * The current parameters being used for this specific task execution.
    * Array parameters are converted to single values.
    */
@@ -918,6 +922,7 @@ async function runEvaluatorInternal(
                 metadata,
                 expected,
                 span,
+                experiment: experiment ?? undefined,
                 parameters: parameters ?? {},
                 reportProgress: (event: TaskProgressEvent) => {
                   stream?.({

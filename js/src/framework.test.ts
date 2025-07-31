@@ -429,6 +429,167 @@ describe("runEvaluator", () => {
       expect(vi.getTimerCount()).toBe(0);
     });
   });
+
+  describe("experiment propagation", () => {
+    // For these tests, we'll capture the experiment passed to hooks
+    // but use null for the actual runEvaluator since we're not testing
+    // the full experiment functionality, just hook propagation
+
+    test("experiment is undefined in hooks when no experiment provided", async () => {
+      const capturedExperiments: (any | undefined)[] = [];
+
+      const out = await runEvaluator(
+        null, // No experiment provided
+        {
+          projectName: "proj",
+          evalName: "eval",
+          data: [{ input: 1, expected: 2 }],
+          task: async (input: number, hooks) => {
+            capturedExperiments.push(hooks.experiment);
+            return input * 2;
+          },
+          scores: [],
+        },
+        new NoopProgressReporter(),
+        [],
+        undefined,
+      );
+
+      expect(capturedExperiments).toHaveLength(1);
+      expect(capturedExperiments[0]).toBeUndefined();
+    });
+
+    test("experiment propagation works with multiple data points", async () => {
+      const capturedExperiments: (any | undefined)[] = [];
+
+      const out = await runEvaluator(
+        null,
+        {
+          projectName: "proj",
+          evalName: "eval",
+          data: [
+            { input: 1, expected: 2 },
+            { input: 2, expected: 4 },
+            { input: 3, expected: 6 },
+          ],
+          task: async (input: number, hooks) => {
+            capturedExperiments.push(hooks.experiment);
+            return input * 2;
+          },
+          scores: [],
+        },
+        new NoopProgressReporter(),
+        [],
+        undefined,
+      );
+
+      expect(capturedExperiments).toHaveLength(3);
+      capturedExperiments.forEach((exp) => {
+        expect(exp).toBeUndefined();
+      });
+    });
+
+    test("experiment in hooks works alongside other hook properties", async () => {
+      const capturedHooks: any[] = [];
+
+      const out = await runEvaluator(
+        null,
+        {
+          projectName: "proj",
+          evalName: "eval",
+          data: [{ input: 1, expected: 2, metadata: { test: "value" } }],
+          task: async (input: number, hooks) => {
+            capturedHooks.push({
+              experiment: hooks.experiment,
+              metadata: hooks.metadata,
+              expected: hooks.expected,
+              span: hooks.span,
+              parameters: hooks.parameters,
+              hasReportProgress: typeof hooks.reportProgress === "function",
+              hasMeta: typeof hooks.meta === "function",
+              trialIndex: hooks.trialIndex,
+            });
+            return input * 2;
+          },
+          scores: [],
+        },
+        new NoopProgressReporter(),
+        [],
+        undefined,
+      );
+
+      expect(capturedHooks).toHaveLength(1);
+      const hook = capturedHooks[0];
+
+      // Verify experiment is undefined when no experiment provided
+      expect(hook.experiment).toBeUndefined();
+
+      // Verify other hook properties still work
+      expect(hook.metadata).toBeDefined();
+      expect(hook.metadata.test).toBe("value");
+      expect(hook.expected).toBe(2);
+      expect(hook.span).toBeDefined();
+      expect(hook.parameters).toBeDefined();
+      expect(hook.hasReportProgress).toBe(true);
+      expect(hook.hasMeta).toBe(true);
+      expect(hook.trialIndex).toBe(0);
+    });
+
+    test("tasks without hooks parameter still work when no experiment", async () => {
+      // Task without hooks parameter should still work
+      const out = await runEvaluator(
+        null,
+        {
+          projectName: "proj",
+          evalName: "eval",
+          data: [{ input: 1, expected: 2 }],
+          task: async (input: number) => {
+            // This task doesn't use hooks, so it shouldn't get them
+            return input * 2;
+          },
+          scores: [],
+        },
+        new NoopProgressReporter(),
+        [],
+        undefined,
+      );
+
+      expect(out.results).toHaveLength(1);
+      expect(out.results[0].output).toBe(2);
+      expect(out.results[0].error).toBeUndefined();
+    });
+
+    test("experiment and trialIndex work together in hooks", async () => {
+      const capturedHooks: any[] = [];
+
+      const out = await runEvaluator(
+        null,
+        {
+          projectName: "proj",
+          evalName: "eval",
+          data: [{ input: 1, expected: 2 }],
+          task: async (input: number, hooks) => {
+            capturedHooks.push({
+              experiment: hooks.experiment,
+              trialIndex: hooks.trialIndex,
+            });
+            return input * 2;
+          },
+          scores: [],
+          trialCount: 3,
+        },
+        new NoopProgressReporter(),
+        [],
+        undefined,
+      );
+
+      expect(capturedHooks).toHaveLength(3);
+      capturedHooks.forEach((hook, index) => {
+        expect(hook.experiment).toBeUndefined();
+        expect(hook.trialIndex).toBe(index);
+      });
+    });
+  });
 });
 
 test("trialIndex is passed to task", async () => {
@@ -449,6 +610,7 @@ test("trialIndex is passed to task", async () => {
     },
     new NoopProgressReporter(),
     [],
+    undefined,
   );
 
   // Should have 3 results (one for each trial)
@@ -488,6 +650,7 @@ test("trialIndex with multiple inputs", async () => {
     },
     new NoopProgressReporter(),
     [],
+    undefined,
   );
 
   // Should have 4 results total (2 inputs × 2 trials)
