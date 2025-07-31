@@ -941,6 +941,53 @@ def test_openai_responses_not_given_filtering(memory_logger):
     for k in ["max_output_tokens", "tools", "top_p", "store"]:
         assert k not in meta
 
+    # Test responses.parse with NOT_GIVEN filtering
+    class NumberAnswer(BaseModel):
+        value: int
+        reasoning: str
+
+    # Make a parse call with NOT_GIVEN for optional parameters
+    parse_response = client.responses.parse(
+        model=TEST_MODEL,
+        input=TEST_PROMPT,
+        text_format=NumberAnswer,
+        max_output_tokens=NOT_GIVEN,
+        tools=NOT_GIVEN,
+        temperature=0.7,  # one real parameter
+        top_p=NOT_GIVEN,
+        metadata=NOT_GIVEN,
+        store=NOT_GIVEN,
+    )
+
+    # Verify the API call worked normally
+    assert parse_response
+    assert parse_response.output_parsed
+    assert parse_response.output_parsed.value == 24
+    assert parse_response.output_parsed.reasoning
+
+    # Check the logged span for parse
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+
+    assert_dict_matches(
+        span,
+        {
+            "input": TEST_PROMPT,
+            "metadata": {
+                "model": TEST_MODEL,
+                "provider": "openai",
+                "temperature": 0.7,
+                "text_format": lambda tf: tf is not None and "NumberAnswer" in str(tf),
+            },
+        },
+    )
+    # Verify NOT_GIVEN values are not in the logged metadata
+    meta = span["metadata"]
+    assert "NOT_GIVEN" not in str(meta)
+    for k in ["max_output_tokens", "tools", "top_p", "store"]:
+        assert k not in meta
+
 
 @pytest.mark.vcr
 def test_openai_parallel_tool_calls(memory_logger):
