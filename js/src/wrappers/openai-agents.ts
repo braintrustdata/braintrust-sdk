@@ -24,6 +24,9 @@ interface AgentsSpan {
     outputType?: string;
     input?: any;
     output?: any;
+    // OpenAI agents library underscore fields
+    _input?: any;
+    _response?: any;
     response?: {
       output?: any;
       metadata?: Record<string, any>;
@@ -46,6 +49,7 @@ interface AgentsSpan {
   startedAt?: string;
   endedAt?: string;
   error?: string;
+  toJSON?: () => Record<string, any>;
 }
 
 function spanTypeFromAgents(span: AgentsSpan): SpanTypeAttribute {
@@ -155,24 +159,42 @@ export class BraintrustTracingProcessor {
 
   private extractAgentLogData(span: AgentsSpan): Record<string, any> {
     const spanData = span.spanData;
-    return {
+    const data: Record<string, any> = {
       metadata: {
         tools: spanData?.tools,
         handoffs: spanData?.handoffs,
         outputType: spanData?.outputType,
       },
     };
+
+    // Check for input and output at spanData level
+    if (spanData?.input !== undefined) {
+      data.input = spanData.input;
+    }
+    if (spanData?.output !== undefined) {
+      data.output = spanData.output;
+    }
+
+    return data;
   }
 
   private extractResponseLogData(span: AgentsSpan): Record<string, any> {
     const spanData = span.spanData;
     const data: Record<string, any> = {};
 
+    // Check for input - regular field first, then underscore fallback
     if (spanData?.input !== undefined) {
       data.input = spanData.input;
+    } else if (spanData?._input !== undefined) {
+      data.input = spanData._input;
     }
 
-    if (spanData?.response?.output !== undefined) {
+    // Check for output - regular field first, then underscore fallback
+    if (spanData?.output !== undefined) {
+      data.output = spanData.output;
+    } else if (spanData?._response !== undefined) {
+      data.output = spanData._response.output;
+    } else if (spanData?.response?.output !== undefined) {
       data.output = spanData.response.output;
     }
 
@@ -312,17 +334,21 @@ export class BraintrustTracingProcessor {
   }
 
   onSpanEnd(span: AgentsSpan): Promise<void> {
+    console.log("onSpanEnd", span.type, span.spanData?.type);
     if (!span.spanId) return Promise.resolve();
 
     const braintrustSpan = this.spans.get(span.spanId);
     if (braintrustSpan) {
       const logData = this.extractLogData(span);
+      console.log("logData", JSON.stringify(logData, null, 2));
       braintrustSpan.log({
         error: span.error,
         ...logData,
       });
       braintrustSpan.end();
       this.spans.delete(span.spanId);
+    } else {
+      console.warn(`No span found for ID: ${span.spanId}`);
     }
     return Promise.resolve();
   }
