@@ -17,3 +17,6 @@ dist
 **/.claude/settings.local.json
 CLAUDE.local.md
 .zed
+
+# Python test virtual environments
+py/test_venv/
