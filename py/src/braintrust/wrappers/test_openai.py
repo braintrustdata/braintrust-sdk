@@ -139,7 +139,7 @@ def test_openai_responses_metrics(memory_logger):
     # No spans should be generated with unwrapped client
     assert not memory_logger.pop()
 
-    # Now test with wrapped client - should generate spans but currently doesn't (BUG)
+    # Now test with wrapped client - should generate spans
     start = time.time()
     parse_response = client.responses.parse(model=TEST_MODEL, input=TEST_PROMPT, text_format=NumberAnswer)
     end = time.time()
@@ -150,9 +150,9 @@ def test_openai_responses_metrics(memory_logger):
     assert parse_response.output_parsed.value == 24
     assert parse_response.output_parsed.reasoning
 
-    # This should generate spans but currently doesn't - this is the bug
+    # Verify spans are generated
     spans = memory_logger.pop()
-    assert len(spans) == 1  # This will fail, demonstrating the bug
+    assert len(spans) == 1
     span = spans[0]
     assert span
     metrics = span["metrics"]
@@ -169,6 +169,8 @@ def test_openai_responses_metrics(memory_logger):
     if has_parse_on_raw_response and "cached" in metrics:
         # This would indicate header logging is working
         assert isinstance(metrics["cached"], (int, float))
+    assert 0 <= metrics.get("prompt_cached_tokens", 0)
+    assert 0 <= metrics.get("completion_reasoning_tokens", 0)
 
 
 @pytest.mark.vcr
@@ -453,7 +455,7 @@ async def test_openai_responses_async(memory_logger):
             # No spans should be generated with unwrapped client
             assert not memory_logger.pop()
         else:
-            # Test wrapped client - should generate spans but currently doesn't (BUG)
+            # Test wrapped client
             start = time.time()
             parse_response = await client.responses.parse(
                 model=TEST_MODEL, input=TEST_PROMPT, text_format=NumberAnswer
@@ -466,8 +468,9 @@ async def test_openai_responses_async(memory_logger):
             assert parse_response.output_parsed.value == 24
             assert parse_response.output_parsed.reasoning
 
+            # Verify spans were created
             spans = memory_logger.pop()
-            assert len(spans) == 1  # This will fail, demonstrating the bug
+            assert len(spans) == 1
             span = spans[0]
             assert span
             metrics = span["metrics"]
