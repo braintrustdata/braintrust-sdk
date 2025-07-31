@@ -662,6 +662,11 @@ class ResponsesV1Wrapper(NamedWrapper):
     def create(self, *args: Any, **kwargs: Any) -> Any:
         return ResponseWrapper(self.__responses.with_raw_response.create, None).create(*args, **kwargs)
 
+    def parse(self, *args: Any, **kwargs: Any) -> Any:
+        # Note: parse doesn't have a with_raw_response equivalent, so we call it directly
+        # This means we won't get header logging, but we'll still get tracing
+        return ResponseWrapper(self.__responses.parse, None).create(*args, **kwargs)
+
 
 class AsyncResponsesV1Wrapper(NamedWrapper):
     def __init__(self, responses: Any):
@@ -670,6 +675,12 @@ class AsyncResponsesV1Wrapper(NamedWrapper):
 
     async def create(self, *args: Any, **kwargs: Any) -> Any:
         response = await ResponseWrapper(None, self.__responses.with_raw_response.create).acreate(*args, **kwargs)
+        return AsyncResponseWrapper(response)
+
+    async def parse(self, *args: Any, **kwargs: Any) -> Any:
+        # Note: parse doesn't have a with_raw_response equivalent, so we call it directly
+        # This means we won't get header logging, but we'll still get tracing
+        response = await ResponseWrapper(None, self.__responses.parse).acreate(*args, **kwargs)
         return AsyncResponseWrapper(response)
 
 

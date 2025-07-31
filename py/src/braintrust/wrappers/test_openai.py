@@ -5,6 +5,7 @@ import openai
 import pytest
 from openai import AsyncOpenAI
 from openai._types import NOT_GIVEN
+from pydantic import BaseModel
 
 from braintrust import logger, wrap_openai
 from braintrust.test_helpers import assert_dict_matches, init_test_logger
@@ -118,6 +119,44 @@ def test_openai_responses_metrics(memory_logger):
     assert_metrics_are_valid(metrics, start, end)
     assert 0 <= metrics.get("prompt_cached_tokens", 0)
     assert 0 <= metrics.get("completion_reasoning_tokens", 0)
+    assert span["metadata"]["model"] == TEST_MODEL
+    assert span["metadata"]["provider"] == "openai"
+    assert TEST_PROMPT in str(span["input"])
+
+    # Test responses.parse method
+    class NumberAnswer(BaseModel):
+        value: int
+        reasoning: str
+
+    # First test with unwrapped client - should work but no spans
+    parse_response = unwrapped_client.responses.parse(model=TEST_MODEL, input=TEST_PROMPT, text_format=NumberAnswer)
+    assert parse_response
+    # Access the structured output via text_format
+    assert parse_response.output_parsed
+    assert parse_response.output_parsed.value == 24
+    assert parse_response.output_parsed.reasoning
+
+    # No spans should be generated with unwrapped client
+    assert not memory_logger.pop()
+
+    # Now test with wrapped client - should generate spans but currently doesn't (BUG)
+    start = time.time()
+    parse_response = client.responses.parse(model=TEST_MODEL, input=TEST_PROMPT, text_format=NumberAnswer)
+    end = time.time()
+
+    assert parse_response
+    # Access the structured output via text_format
+    assert parse_response.output_parsed
+    assert parse_response.output_parsed.value == 24
+    assert parse_response.output_parsed.reasoning
+
+    # This should generate spans but currently doesn't - this is the bug
+    spans = memory_logger.pop()
+    assert len(spans) == 1  # This will fail, demonstrating the bug
+    span = spans[0]
+    assert span
+    metrics = span["metrics"]
+    assert_metrics_are_valid(metrics, start, end)
     assert span["metadata"]["model"] == TEST_MODEL
     assert span["metadata"]["provider"] == "openai"
     assert TEST_PROMPT in str(span["input"])
@@ -384,6 +423,49 @@ async def test_openai_responses_async(memory_logger):
         assert span["metadata"]["model"] == TEST_MODEL
         # assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
+
+    # Test responses.parse method
+    class NumberAnswer(BaseModel):
+        value: int
+        reasoning: str
+
+    for client, is_wrapped in clients:
+        if not is_wrapped:
+            # Test unwrapped client first
+            parse_response = await client.responses.parse(
+                model=TEST_MODEL, input=TEST_PROMPT, text_format=NumberAnswer
+            )
+            assert parse_response
+            # Access the structured output via text_format
+            assert parse_response.output_parsed
+            assert parse_response.output_parsed.value == 24
+            assert parse_response.output_parsed.reasoning
+
+            # No spans should be generated with unwrapped client
+            assert not memory_logger.pop()
+        else:
+            # Test wrapped client - should generate spans but currently doesn't (BUG)
+            start = time.time()
+            parse_response = await client.responses.parse(
+                model=TEST_MODEL, input=TEST_PROMPT, text_format=NumberAnswer
+            )
+            end = time.time()
+
+            assert parse_response
+            # Access the structured output via text_format
+            assert parse_response.output_parsed
+            assert parse_response.output_parsed.value == 24
+            assert parse_response.output_parsed.reasoning
+
+            spans = memory_logger.pop()
+            assert len(spans) == 1  # This will fail, demonstrating the bug
+            span = spans[0]
+            assert span
+            metrics = span["metrics"]
+            assert_metrics_are_valid(metrics, start, end)
+            assert span["metadata"]["model"] == TEST_MODEL
+            # assert span["metadata"]["provider"] == "openai"
+            assert TEST_PROMPT in str(span["input"])
 
 
 @pytest.mark.asyncio
