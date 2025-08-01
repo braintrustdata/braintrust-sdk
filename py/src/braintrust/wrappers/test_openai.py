@@ -122,6 +122,9 @@ def test_openai_responses_metrics(memory_logger):
     assert span["metadata"]["model"] == TEST_MODEL
     assert span["metadata"]["provider"] == "openai"
     assert TEST_PROMPT in str(span["input"])
+    assert len(span["output"]) > 0
+    span_output_text = span["output"][0]["content"][0]["text"]
+    assert "24" in span_output_text or "twenty-four" in span_output_text.lower()
 
     # Test responses.parse method
     class NumberAnswer(BaseModel):
