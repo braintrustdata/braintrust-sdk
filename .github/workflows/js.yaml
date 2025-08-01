@@ -7,12 +7,17 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
 
     strategy:
+      fail-fast: false
       matrix:
-        node-version:
-          - 20
+        os: [ubuntu-latest, windows-latest]
+        node-version: [20, 22]
+
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY}}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY}}
 
     steps:
       - uses: actions/checkout@v4
@@ -21,7 +26,6 @@ jobs:
           node-version: ${{ matrix.node-version }}
           registry-url: "https://registry.npmjs.org"
       - uses: pnpm/action-setup@v4
-      - run: |
-          pnpm install
-          pnpm run test
-          pnpm run build
+      - name: "verify ci"
+        shell: bash
+        run: make js-verify-ci

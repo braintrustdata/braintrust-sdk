@@ -2,6 +2,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 
+import { Queue, DEFAULT_QUEUE_SIZE } from "./queue";
 import {
   _urljoin,
   AnyDatasetRecord,
@@ -19,7 +20,6 @@ import {
   IdField,
   IS_MERGE_FIELD,
   LogFeedbackFullArgs,
-  makeLegacyEvent,
   mergeDicts,
   mergeGitMetadataSettings,
   mergeRowBatch,
@@ -38,6 +38,8 @@ import {
 import {
   AnyModelParam,
   AttachmentReference,
+  BraintrustAttachmentReference,
+  ExternalAttachmentReference,
   attachmentReferenceSchema,
   ModelParams,
   responseFormatJsonSchemaSchema,
@@ -57,6 +59,8 @@ import {
   RepoInfo,
   Tools,
   toolsSchema,
+  EXTERNAL_ATTACHMENT,
+  PromptBlockData,
 } from "@braintrust/core/typespecs";
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
@@ -76,8 +80,10 @@ import {
   GLOBAL_PROJECT,
   isEmpty,
   LazyValue,
+  SyncLazyValue,
   runCatchFinally,
 } from "./util";
+import { lintTemplate } from "./mustache-utils";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -92,6 +98,8 @@ export type StartSpanArgs = {
   parent?: string;
   event?: StartSpanEventArgs;
   propagatedEvent?: StartSpanEventArgs;
+  spanId?: string;
+  parentSpanIds?: ParentSpanIds | MultiParentSpanIds;
 };
 
 export type EndSpanArgs = {
@@ -206,9 +214,26 @@ export interface Span extends Exportable {
    * Links can be generated at any time, but they will only become viewable
    * after the span and its root have been flushed to the server and ingested.
    *
-   * @returns A permalink to the span.
+   * This function can block resolving data with the server. For production
+   * applications it's preferable to call {@link Span.link} instead.
+   *
+   * @returns A promise which resolves to a permalink to the span.
    */
   permalink(): Promise<string>;
+
+  /**
+   * Format a link to the Braintrust application for viewing this span.
+   *
+   * Links can be generated at any time, but they will only become viewable
+   * after the span and its root have been flushed to the server and ingested.
+   *
+   * There are some conditions when a Span doesn't have enough information
+   * to return a stable link (e.g. during an unresolved experiment). In this case
+   * or if there's an error generating link, we'll return a placeholder link.
+   *
+   * @returns A link to the span.
+   */
+  link(): string;
 
   /**
    * Flush any pending rows to the server.
@@ -225,6 +250,21 @@ export interface Span extends Exportable {
    */
   setAttributes(args: Omit<StartSpanArgs, "event">): void;
 
+  /**
+   * Start a span with a specific id and parent span ids.
+   */
+  startSpanWithParents(
+    spanId: string,
+    spanParents: string[],
+    args?: StartSpanArgs,
+  ): Span;
+
+  /*
+   * Gets the span's `state` value, which is usually the global logging state (this is
+   * for very advanced purposes only)
+   */
+  state(): BraintrustState;
+
   // For type identification.
   kind: "span";
 }
@@ -238,7 +278,7 @@ export class NoopSpan implements Span {
   public rootSpanId: string;
   public spanParents: string[];
 
-  public kind: "span" = "span";
+  public kind: "span" = "span" as const;
 
   constructor() {
     this.id = "";
@@ -271,7 +311,11 @@ export class NoopSpan implements Span {
   }
 
   public async permalink(): Promise<string> {
-    return "";
+    return NOOP_SPAN_PERMALINK;
+  }
+
+  public link(): string {
+    return NOOP_SPAN_PERMALINK;
   }
 
   public async flush(): Promise<void> {}
@@ -281,9 +325,22 @@ export class NoopSpan implements Span {
   }
 
   public setAttributes(_args: Omit<StartSpanArgs, "event">) {}
+
+  public startSpanWithParents(
+    _spanId: string,
+    _spanParents: string[],
+    _args?: StartSpanArgs,
+  ): Span {
+    return this;
+  }
+
+  public state() {
+    return _internalGetGlobalState();
+  }
 }
 
 export const NOOP_SPAN = new NoopSpan();
+export const NOOP_SPAN_PERMALINK = "https://braintrust.dev/noop-span";
 
 // In certain situations (e.g. the cli), we want separately-compiled modules to
 // use the same state as the toplevel module. This global variable serves as a
@@ -319,7 +376,8 @@ export class BraintrustState {
   // This is preferable to replacing the whole logger, which would create the
   // possibility of multiple loggers floating around, which may not log in a
   // deterministic order.
-  private _bgLogger: BackgroundLogger;
+  private _bgLogger: SyncLazyValue<HTTPBackgroundLogger>;
+  private _overrideBgLogger: BackgroundLogger | null = null;
 
   public appUrl: string | null = null;
   public appPublicUrl: string | null = null;
@@ -353,9 +411,9 @@ export class BraintrustState {
       await this.login({});
       return this.apiConn();
     };
-    this._bgLogger = new BackgroundLogger(
-      new LazyValue(defaultGetLogConn),
-      loginParams,
+    this._bgLogger = new SyncLazyValue(
+      () =>
+        new HTTPBackgroundLogger(new LazyValue(defaultGetLogConn), loginParams),
     );
 
     this.resetLoginInfo();
@@ -404,6 +462,7 @@ export class BraintrustState {
 
     this._appConn = other._appConn;
     this._apiConn = other._apiConn;
+    this.loginReplaceApiConn(this.apiConn());
     this._proxyConn = other._proxyConn;
   }
 
@@ -447,7 +506,7 @@ export class BraintrustState {
     const serializedParsed = loginSchema.safeParse(serialized);
     if (!serializedParsed.success) {
       throw new Error(
-        `Cannot deserialize BraintrustState: ${serializedParsed.error.errors}`,
+        `Cannot deserialize BraintrustState: ${serializedParsed.error.message}`,
       );
     }
     const state = new BraintrustState({ ...opts });
@@ -529,16 +588,54 @@ export class BraintrustState {
   }
 
   public bgLogger(): BackgroundLogger {
-    return this._bgLogger;
+    if (this._overrideBgLogger) {
+      return this._overrideBgLogger;
+    }
+    return this._bgLogger.get();
+  }
+
+  public httpLogger(): HTTPBackgroundLogger {
+    // this is called for configuration in some end-to-end tests so
+    // expose the http bg logger here.
+    return this._bgLogger.get() as HTTPBackgroundLogger;
+  }
+
+  public setOverrideBgLogger(logger: BackgroundLogger | null) {
+    this._overrideBgLogger = logger;
   }
 
   // Should only be called by the login function.
   public loginReplaceApiConn(apiConn: HTTPConnection) {
-    this._bgLogger.internalReplaceApiConn(apiConn);
+    this._bgLogger.get().internalReplaceApiConn(apiConn);
+  }
+
+  public disable() {
+    this._bgLogger.get().disable();
+  }
+
+  public enforceQueueSizeLimit(enforce: boolean) {
+    this._bgLogger.get().enforceQueueSizeLimit(enforce);
   }
 }
 
 let _globalState: BraintrustState;
+
+// Return a TestBackgroundLogger that will intercept logs before they are sent to the server.
+// Used for testing only.
+function useTestBackgroundLogger(): TestBackgroundLogger {
+  const state = _internalGetGlobalState();
+  if (!state) {
+    throw new Error("global state not set yet");
+  }
+
+  const logger = new TestBackgroundLogger();
+  state.setOverrideBgLogger(logger);
+  return logger;
+}
+
+function clearTestBackgroundLogger() {
+  _internalGetGlobalState()?.setOverrideBgLogger(null);
+}
 
 /**
  * This function should be invoked exactly once after configuring the `iso`
@@ -547,7 +644,10 @@ let _globalState: BraintrustState;
  */
 export function _internalSetInitialState() {
   if (_globalState) {
-    throw new Error("Cannot set initial state more than once");
+    console.warn(
+      "global state already set, should only call _internalSetInitialState once",
+    );
+    return;
   }
   _globalState =
     globalThis.__inherited_braintrust_state ||
@@ -563,15 +663,16 @@ export const _internalGetGlobalState = () => _globalState;
 export class FailedHTTPResponse extends Error {
   public status: number;
   public text: string;
-  public data: any;
+  public data: string;
 
-  constructor(status: number, text: string, data: any = null) {
-    super(`${status}: ${text}`);
+  constructor(status: number, text: string, data: string) {
+    super(`${status}: ${text} (${data})`);
     this.status = status;
     this.text = text;
     this.data = data;
   }
 }
+
 async function checkResponse(resp: Response) {
   if (resp.ok) {
     return resp;
@@ -779,6 +880,20 @@ export interface AttachmentParams {
   state?: BraintrustState;
 }
 
+export interface ExternalAttachmentParams {
+  url: string;
+  filename: string;
+  contentType: string;
+  state?: BraintrustState;
+}
+
+export abstract class BaseAttachment {
+  readonly reference!: AttachmentReference;
+  abstract upload(): Promise<AttachmentStatus>;
+  abstract data(): Promise<Blob>;
+  abstract debugInfo(): Record<string, unknown>;
+}
+
 /**
  * Represents an attachment to be uploaded and the associated metadata.
  * `Attachment` objects can be inserted anywhere in an event, allowing you to
@@ -786,11 +901,11 @@ export interface AttachmentParams {
  * object storage and replace the `Attachment` object with an
  * `AttachmentReference`.
  */
-export class Attachment {
+export class Attachment extends BaseAttachment {
   /**
    * The object that replaces this `Attachment` at upload time.
    */
-  readonly reference: AttachmentReference;
+  readonly reference: BraintrustAttachmentReference;
 
   private readonly uploader: LazyValue<AttachmentStatus>;
   private readonly _data: LazyValue<Blob>;
@@ -816,6 +931,7 @@ export class Attachment {
    * `state`: (Optional) For internal use.
    */
   constructor({ data, filename, contentType, state }: AttachmentParams) {
+    super();
     this.reference = {
       type: BRAINTRUST_ATTACHMENT,
       filename,
@@ -983,6 +1099,89 @@ with a Blob/ArrayBuffer, or run the program on Node.js.`,
   }
 }
 
+/**
+ * Represents an attachment that resides in an external object store and the associated metadata.
+ *
+ * `ExternalAttachment` objects can be inserted anywhere in an event, similar to
+ * `Attachment` objects, but they reference files that already exist in an external
+ * object store rather than requiring upload. The SDK will replace the `ExternalAttachment`
+ * object with an `AttachmentReference` during logging.
+ */
+export class ExternalAttachment extends BaseAttachment {
+  /**
+   * The object that replaces this `ExternalAttachment` at upload time.
+   */
+  readonly reference: ExternalAttachmentReference;
+
+  private readonly _data: LazyValue<Blob>;
+  private readonly state?: BraintrustState;
+
+  /**
+   * Construct an external attachment.
+   *
+   * @param param A parameter object with:
+   *
+   * `url`: The fully qualified URL of the file in the external object store.
+   *
+   * `filename`: The desired name of the file in Braintrust after uploading.
+   * This parameter is for visualization purposes only and has no effect on
+   * attachment storage.
+   *
+   * `contentType`: The MIME type of the file.
+   *
+   * `state`: (Optional) For internal use.
+   */
+  constructor({ url, filename, contentType, state }: ExternalAttachmentParams) {
+    super();
+    this.reference = {
+      type: EXTERNAL_ATTACHMENT,
+      filename,
+      content_type: contentType,
+      url,
+    };
+
+    this._data = this.initData();
+  }
+
+  /**
+   * For ExternalAttachment, this is a no-op since the data already resides
+   * in the external object store. It marks the attachment as already uploaded.
+   *
+   * @returns The attachment status, which will always indicate success.
+   */
+  async upload() {
+    return { upload_status: "done" as const };
+  }
+
+  /**
+   * The attachment contents. This is a lazy value that will read the attachment contents from the external object store on first access.
+   */
+  async data() {
+    return this._data.get();
+  }
+
+  /**
+   * A human-readable description for logging and debugging.
+   *
+   * @returns The debug object. The return type is not stable and may change in
+   * a future release.
+   */
+  debugInfo(): Record<string, unknown> {
+    return {
+      url: this.reference.url,
+      reference: this.reference,
+      state: this.state,
+    };
+  }
+
+  private initData(): LazyValue<Blob> {
+    return new LazyValue(async () => {
+      const readonly = new ReadonlyAttachment(this.reference, this.state);
+      return await readonly.data();
+    });
+  }
+}
+
 const attachmentMetadataSchema = z.object({
   downloadUrl: z.string(),
   status: attachmentStatusSchema,
@@ -1026,6 +1225,18 @@ export class ReadonlyAttachment {
   }
 
   /**
+   * Returns the attachment contents as a base64-encoded URL that is suitable
+   * for use in a prompt.
+   *
+   * @returns The attachment contents as a base64-encoded URL.
+   */
+  async asBase64Url(): Promise<string> {
+    const buf = await (await this.data()).arrayBuffer();
+    const base64 = Buffer.from(buf).toString("base64");
+    return `data:${this.reference.content_type};base64,${base64}`;
+  }
+
+  /**
    * Fetch the attachment metadata, which includes a downloadUrl and a status.
    * This will re-fetch the status each time in case it changes over time.
    */
@@ -1033,12 +1244,17 @@ export class ReadonlyAttachment {
     const state = this.state ?? _globalState;
     await state.login({});
 
-    const resp = await state.apiConn().get("/attachment", {
-      key: this.reference.key,
+    const params: Record<string, string> = {
       filename: this.reference.filename,
       content_type: this.reference.content_type,
       org_id: state.orgId || "",
-    });
+    };
+    if (this.reference.type === "braintrust_attachment") {
+      params.key = this.reference.key;
+    } else if (this.reference.type === "external_attachment") {
+      params.url = this.reference.url;
+    }
+    const resp = await state.apiConn().get("/attachment", params);
     if (!resp.ok) {
       const errorStr = JSON.stringify(resp);
       throw new Error(`Invalid response from API server: ${errorStr}`);
@@ -1236,6 +1452,11 @@ interface ParentSpanIds {
   rootSpanId: string;
 }
 
+interface MultiParentSpanIds {
+  parentSpanIds: string[];
+  rootSpanId: string;
+}
+
 function spanComponentsToObjectIdLambda(
   state: BraintrustState,
   components: SpanComponentsV3,
@@ -1287,6 +1508,15 @@ export async function spanComponentsToObjectId({
   )();
 }
 
+export const ERR_PERMALINK = "https://braintrust.dev/error-generating-link";
+
+function getErrPermlink(msg: string) {
+  if (msg == "") {
+    return ERR_PERMALINK;
+  }
+  return `${ERR_PERMALINK}?msg=${encodeURIComponent(msg)}`;
+}
+
 /**
  * Format a permalink to the Braintrust application for viewing the span
  * represented by the provided `slug`.
@@ -1294,7 +1524,7 @@ export async function spanComponentsToObjectId({
  * Links can be generated at any time, but they will only become viewable after
  * the span and its root have been flushed to the server and ingested.
  *
- * If you have a `Span` object, use {@link Span.permalink} instead.
+ * If you have a `Span` object, use {@link Span.link} instead.
  *
  * @param slug The identifier generated from {@link Span.export}.
  * @param opts Optional arguments.
@@ -1311,6 +1541,11 @@ export async function permalink(
     appUrl?: string;
   },
 ): Promise<string> {
+  // Noop spans have an empty slug, so return a dummy permalink.
+  if (slug === "") {
+    return NOOP_SPAN_PERMALINK;
+  }
+
   const state = opts?.state ?? _globalState;
   const getOrgName = async () => {
     if (opts?.orgName) {
@@ -1318,9 +1553,7 @@ export async function permalink(
     }
     await state.login({});
     if (!state.orgName) {
-      throw new Error(
-        "Must either provide orgName explicitly or be logged in to a specific org",
-      );
+      throw new Error("provide-org-or-login"); // this is caught below
     }
     return state.orgName;
   };
@@ -1330,24 +1563,31 @@ export async function permalink(
     }
     await state.login({});
     if (!state.appUrl) {
-      throw new Error("Must either provide appUrl explicitly or be logged in");
+      throw new Error("provide-app-url-or-login"); // this is caught below
     }
     return state.appUrl;
   };
 
-  const components = SpanComponentsV3.fromStr(slug);
-  const object_type = spanObjectTypeV3ToString(components.data.object_type);
-  const [orgName, appUrl, object_id] = await Promise.all([
-    getOrgName(),
-    getAppUrl(),
-    spanComponentsToObjectId({ components, state }),
-  ]);
-  const id = components.data.row_id;
-  if (!id) {
-    throw new Error("Span slug does not refer to an individual row");
+  try {
+    const components = SpanComponentsV3.fromStr(slug);
+    const object_type = spanObjectTypeV3ToString(components.data.object_type);
+    const [orgName, appUrl, object_id] = await Promise.all([
+      getOrgName(),
+      getAppUrl(),
+      spanComponentsToObjectId({ components, state }),
+    ]);
+    const id = components.data.row_id;
+    if (!id) {
+      throw new Error("Span slug does not refer to an individual row");
+    }
+    const urlParams = new URLSearchParams({ object_type, object_id, id });
+    return `${appUrl}/app/${orgName}/object?${urlParams}`;
+  } catch (e) {
+    if (e instanceof FailedHTTPResponse) {
+      return getErrPermlink(`http-error-${e.status}`);
+    }
+    return getErrPermlink(e instanceof Error ? e.message : String(e));
   }
-  const urlParams = new URLSearchParams({ object_type, object_id, id });
-  return `${appUrl}/app/${orgName}/object?${urlParams}`;
 }
 
 // IMPORTANT NOTE: This function may pass arguments which override those in the
@@ -1360,17 +1600,18 @@ function startSpanParentArgs(args: {
   parentObjectType: SpanObjectTypeV3;
   parentObjectId: LazyValue<string>;
   parentComputeObjectMetadataArgs: Record<string, any> | undefined;
-  parentSpanIds: ParentSpanIds | undefined;
+  parentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined;
   propagatedEvent: StartSpanEventArgs | undefined;
 }): {
   parentObjectType: SpanObjectTypeV3;
   parentObjectId: LazyValue<string>;
   parentComputeObjectMetadataArgs: Record<string, any> | undefined;
-  parentSpanIds: ParentSpanIds | undefined;
+  parentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined;
   propagatedEvent: StartSpanEventArgs | undefined;
 } {
   let argParentObjectId: LazyValue<string> | undefined = undefined;
-  let argParentSpanIds: ParentSpanIds | undefined = undefined;
+  let argParentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined =
+    undefined;
   let argPropagatedEvent: StartSpanEventArgs | undefined = undefined;
   if (args.parent) {
     if (args.parentSpanIds) {
@@ -1562,15 +1803,17 @@ export class Logger<IsAsyncFlush extends boolean> implements Exportable {
 
   private startSpanImpl(args?: StartSpanArgs): Span {
     return new SpanImpl({
-      state: this.state,
       ...args,
+      // Sometimes `args` gets passed directly into this function, and it contains an undefined value for `state`.
+      // To ensure that we always use this logger's state, we override the `state` argument no matter what.
+      state: this.state,
       ...startSpanParentArgs({
         state: this.state,
         parent: args?.parent,
         parentObjectType: this.parentObjectType(),
         parentObjectId: this.lazyId,
         parentComputeObjectMetadataArgs: this.computeMetadataArgs,
-        parentSpanIds: undefined,
+        parentSpanIds: args?.parentSpanIds,
         propagatedEvent: args?.propagatedEvent,
       }),
       defaultRootType: SpanTypeAttribute.TASK,
@@ -1671,13 +1914,48 @@ export interface BackgroundLoggerOpts {
   onFlushError?: (error: unknown) => void;
 }
 
+interface BackgroundLogger {
+  log(items: LazyValue<BackgroundLogEvent>[]): void;
+  flush(): Promise<void>;
+}
+
+export class TestBackgroundLogger implements BackgroundLogger {
+  private items: LazyValue<BackgroundLogEvent>[][] = [];
+
+  log(items: LazyValue<BackgroundLogEvent>[]): void {
+    this.items.push(items);
+  }
+
+  async flush(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  async drain(): Promise<BackgroundLogEvent[]> {
+    const items = this.items;
+    this.items = [];
+
+    // get all the values
+    const events: BackgroundLogEvent[] = [];
+    for (const item of items) {
+      for (const event of item) {
+        events.push(await event.get());
+      }
+    }
+
+    const batch = mergeRowBatch(events);
+    return batch.flat();
+  }
+}
+
+const BACKGROUND_LOGGER_BASE_SLEEP_TIME_S = 1.0;
+
 // We should only have one instance of this object per state object in
 // 'BraintrustState._bgLogger'. Be careful about spawning multiple
 // instances of this class, because concurrent BackgroundLoggers will not log to
 // the backend in a deterministic order.
-class BackgroundLogger {
+class HTTPBackgroundLogger implements BackgroundLogger {
   private apiConn: LazyValue<HTTPConnection>;
-  private items: LazyValue<BackgroundLogEvent>[] = [];
+  private queue: Queue<LazyValue<BackgroundLogEvent>>;
   private activeFlush: Promise<void> = Promise.resolve();
   private activeFlushResolved = true;
   private activeFlushError: unknown = undefined;
@@ -1688,10 +1966,12 @@ class BackgroundLogger {
   public maxRequestSize: number = 6 * 1024 * 1024;
   public defaultBatchSize: number = 100;
   public numTries: number = 3;
-  public queueDropExceedingMaxsize: number | undefined = undefined;
+  public queueDropExceedingMaxsize: number = DEFAULT_QUEUE_SIZE;
   public queueDropLoggingPeriod: number = 60;
   public failedPublishPayloadsDir: string | undefined = undefined;
   public allPublishPayloadsDir: string | undefined = undefined;
+
+  private _disabled = false;
 
   private queueDropLoggingState = {
     numDropped: 0,
@@ -1731,6 +2011,8 @@ class BackgroundLogger {
       this.queueDropExceedingMaxsize = queueDropExceedingMaxsizeEnv;
     }
 
+    this.queue = new Queue(this.queueDropExceedingMaxsize);
+
     const queueDropLoggingPeriodEnv = Number(
       iso.getEnv("BRAINTRUST_QUEUE_DROP_LOGGING_PERIOD"),
     );
@@ -1764,17 +2046,12 @@ class BackgroundLogger {
   }
 
   log(items: LazyValue<BackgroundLogEvent>[]) {
-    const [addedItems, droppedItems] = (() => {
-      if (this.queueDropExceedingMaxsize === undefined) {
-        return [items, []];
-      }
-      const numElementsToAdd = Math.min(
-        Math.max(this.queueDropExceedingMaxsize - this.items.length, 0),
-        items.length,
-      );
-      return [items.slice(0, numElementsToAdd), items.slice(numElementsToAdd)];
-    })();
-    this.items.push(...addedItems);
+    if (this._disabled) {
+      return;
+    }
+
+    const droppedItems = this.queue.push(...items);
+
     if (!this.syncFlush) {
       this.triggerActiveFlush();
     }
@@ -1802,11 +2079,15 @@ class BackgroundLogger {
   }
 
   private async flushOnce(args?: { batchSize?: number }): Promise<void> {
+    if (this._disabled) {
+      this.queue.clear();
+      return;
+    }
+
     const batchSize = args?.batchSize ?? this.defaultBatchSize;
 
     // Drain the queue.
-    const wrappedItems = this.items;
-    this.items = [];
+    const wrappedItems = this.queue.drain();
 
     const [allItems, attachments] = await this.unwrapLazyValues(wrappedItems);
     if (allItems.length === 0) {
@@ -1868,7 +2149,7 @@ class BackgroundLogger {
     }
 
     // If more items were added while we were flushing, flush again
-    if (this.items.length > 0) {
+    if (this.queue.length() > 0) {
       await this.flushOnce(args);
     }
   }
@@ -1904,7 +2185,11 @@ class BackgroundLogger {
           throw e;
         } else {
           console.warn(e);
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          const sleepTimeS = BACKGROUND_LOGGER_BASE_SLEEP_TIME_S * 2 ** i;
+          console.info(`Sleeping for ${sleepTimeS}s`);
+          await new Promise((resolve) =>
+            setTimeout(resolve, sleepTimeS * 1000),
+          );
         }
       }
     }
@@ -1915,7 +2200,7 @@ class BackgroundLogger {
     const conn = await this.apiConn.get();
     const dataStr = constructLogs3Data(items);
     if (this.allPublishPayloadsDir) {
-      await BackgroundLogger.writePayloadToDir({
+      await HTTPBackgroundLogger.writePayloadToDir({
         payloadDir: this.allPublishPayloadsDir,
         payload: dataStr,
       });
@@ -1926,16 +2211,8 @@ class BackgroundLogger {
       let error: unknown = undefined;
       try {
         await conn.post_json("logs3", dataStr);
-      } catch {
-        // Fallback to legacy API. Remove once all API endpoints are updated.
-        try {
-          const legacyDataS = constructJsonArray(
-            items.map((r) => JSON.stringify(makeLegacyEvent(JSON.parse(r)))),
-          );
-          await conn.post_json("logs", legacyDataS);
-        } catch (e) {
-          error = e;
-        }
+      } catch (e) {
+        error = e;
       }
       if (error === undefined) {
         return;
@@ -1957,7 +2234,7 @@ class BackgroundLogger {
       }.${retryingText}\nError: ${errorText}`;
 
       if (!isRetrying && this.failedPublishPayloadsDir) {
-        await BackgroundLogger.writePayloadToDir({
+        await HTTPBackgroundLogger.writePayloadToDir({
           payloadDir: this.failedPublishPayloadsDir,
           payload: dataStr,
         });
@@ -1972,7 +2249,11 @@ class BackgroundLogger {
       } else {
         console.warn(errMsg);
         if (isRetrying) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          const sleepTimeS = BACKGROUND_LOGGER_BASE_SLEEP_TIME_S * 2 ** i;
+          console.info(`Sleeping for ${sleepTimeS}s`);
+          await new Promise((resolve) =>
+            setTimeout(resolve, sleepTimeS * 1000),
+          );
         }
       }
     }
@@ -2023,7 +2304,7 @@ class BackgroundLogger {
       const payload = `{"data": ${dataStr}, "attachments": ${attachmentStr}}\n`;
 
       for (const payloadDir of publishPayloadsDir) {
-        await BackgroundLogger.writePayloadToDir({ payloadDir, payload });
+        await HTTPBackgroundLogger.writePayloadToDir({ payloadDir, payload });
       }
     } catch (e) {
       console.error(e);
@@ -2091,6 +2372,14 @@ class BackgroundLogger {
   // Should only be called by BraintrustState.
   public internalReplaceApiConn(apiConn: HTTPConnection) {
     this.apiConn = new LazyValue(async () => apiConn);
+  }
+
+  public disable() {
+    this._disabled = true;
+  }
+
+  public enforceQueueSizeLimit(enforce: boolean) {
+    this.queue.enforceQueueSizeLimit(enforce);
   }
 }
 
@@ -2200,11 +2489,19 @@ export function init<IsOpen extends boolean = false>(
     state: stateArg,
   } = options;
 
+  if (!project && !projectId) {
+    throw new Error("Must specify at least one of project or projectId");
+  }
+
   if (open && update) {
     throw new Error("Cannot open and update an experiment at the same time");
   }
 
   const state = stateArg ?? _globalState;
+
+  // Ensure unlimited queue for init() calls (experiments)
+  // Experiments should never drop data
+  state.enforceQueueSizeLimit(false);
 
   if (open) {
     if (isEmpty(experiment)) {
@@ -2645,6 +2942,7 @@ type InitLoggerOptions<IsAsyncFlush> = FullLoginOptions & {
   projectId?: string;
   setCurrent?: boolean;
   state?: BraintrustState;
+  orgProjectMetadata?: OrgProjectMetadata;
 } & AsyncFlushArg<IsAsyncFlush>;
 
 /**
@@ -2684,9 +2982,15 @@ export function initLogger<IsAsyncFlush extends boolean = true>(
     project_name: projectName,
     project_id: projectId,
   };
+
   const state = stateArg ?? _globalState;
+
+  // Enable queue size limit enforcement for initLogger() calls
+  // This ensures production observability doesn't OOM customer processes
+  state.enforceQueueSizeLimit(true);
   const lazyMetadata: LazyValue<OrgProjectMetadata> = new LazyValue(
     async () => {
+      // Otherwise actually log in.
       await state.login({
         orgName,
         apiKey,
@@ -2713,6 +3017,7 @@ type LoadPromptOptions = FullLoginOptions & {
   projectId?: string;
   slug?: string;
   version?: string;
+  id?: string;
   defaults?: DefaultPromptArgs;
   noTrace?: boolean;
   state?: BraintrustState;
@@ -2726,6 +3031,7 @@ type LoadPromptOptions = FullLoginOptions & {
  * @param options.projectId The id of the project to load the prompt from. This takes precedence over `projectName` if specified.
  * @param options.slug The slug of the prompt to load.
  * @param options.version An optional version of the prompt (to read). If not specified, the latest version will be used.
+ * @param options.id The id of a specific prompt to load. If specified, this takes precedence over all other parameters (project, slug, version).
  * @param options.defaults (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
  * @param options.noTrace If true, do not include logging metadata for this prompt when build() is called.
  * @param options.appUrl The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
@@ -2749,6 +3055,7 @@ export async function loadPrompt({
   projectId,
   slug,
   version,
+  id,
   defaults,
   noTrace = false,
   appUrl,
@@ -2758,11 +3065,11 @@ export async function loadPrompt({
   forceLogin,
   state: stateArg,
 }: LoadPromptOptions) {
-  if (isEmpty(projectName) && isEmpty(projectId)) {
+  if (id) {
+    // When loading by ID, we don't need project or slug
+  } else if (isEmpty(projectName) && isEmpty(projectId)) {
     throw new Error("Must specify either projectName or projectId");
-  }
-
-  if (isEmpty(slug)) {
+  } else if (isEmpty(slug)) {
     throw new Error("Must specify slug");
   }
 
@@ -2776,47 +3083,82 @@ export async function loadPrompt({
       fetch,
       forceLogin,
     });
-    response = await state.apiConn().get_json("v1/prompt", {
-      project_name: projectName,
-      project_id: projectId,
-      slug,
-      version,
-    });
+    if (id) {
+      // Load prompt by ID using the /v1/prompt/{id} endpoint
+      response = await state.apiConn().get_json(`v1/prompt/${id}`, {});
+      // Wrap single prompt response in objects array to match list API format
+      if (response) {
+        response = { objects: [response] };
+      }
+    } else {
+      response = await state.apiConn().get_json("v1/prompt", {
+        project_name: projectName,
+        project_id: projectId,
+        slug,
+        version,
+      });
+    }
   } catch (e) {
     console.warn("Failed to load prompt, attempting to fall back to cache:", e);
-    const prompt = await state.promptCache.get({
-      slug,
-      projectId,
-      projectName,
-      version: version ?? "latest",
-    });
-    if (!prompt) {
-      throw new Error(
-        `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[projectName ?? projectId]} (not found on server or in local cache): ${e}`,
-      );
+    let prompt;
+    if (id) {
+      prompt = await state.promptCache.get({ id });
+      if (!prompt) {
+        throw new Error(
+          `Prompt with id ${id} not found (not found on server or in local cache): ${e}`,
+        );
+      }
+    } else {
+      prompt = await state.promptCache.get({
+        slug,
+        projectId,
+        projectName,
+        version: version ?? "latest",
+      });
+      if (!prompt) {
+        throw new Error(
+          `Prompt ${slug} (version ${version ?? "latest"}) not found in ${[
+            projectName ?? projectId,
+          ]} (not found on server or in local cache): ${e}`,
+        );
+      }
     }
     return prompt;
   }
 
   if (!("objects" in response) || response.objects.length === 0) {
-    throw new Error(
-      `Prompt ${slug} not found in ${[projectName ?? projectId]}`,
-    );
+    if (id) {
+      throw new Error(`Prompt with id ${id} not found.`);
+    } else {
+      throw new Error(
+        `Prompt ${slug} not found in ${[projectName ?? projectId]}`,
+      );
+    }
   } else if (response.objects.length > 1) {
-    throw new Error(
-      `Multiple prompts found with slug ${slug} in project ${
-        projectName ?? projectId
-      }. This should never happen.`,
-    );
+    if (id) {
+      throw new Error(
+        `Multiple prompts found with id ${id}. This should never happen.`,
+      );
+    } else {
+      throw new Error(
+        `Multiple prompts found with slug ${slug} in project ${
+          projectName ?? projectId
+        }. This should never happen.`,
+      );
+    }
   }
 
   const metadata = promptSchema.parse(response["objects"][0]);
   const prompt = new Prompt(metadata, defaults || {}, noTrace);
   try {
-    await state.promptCache.set(
-      { slug, projectId, projectName, version: version ?? "latest" },
-      prompt,
-    );
+    if (id) {
+      await state.promptCache.set({ id }, prompt);
+    } else if (slug) {
+      await state.promptCache.set(
+        { slug, projectId, projectName, version: version ?? "latest" },
+        prompt,
+      );
+    }
   } catch (e) {
     console.warn("Failed to set prompt in cache:", e);
   }
@@ -2926,7 +3268,24 @@ export async function loginToState(options: LoginOptions = {}) {
 
   let conn = null;
 
-  if (apiKey !== undefined) {
+  if (!apiKey) {
+    throw new Error(
+      "Please specify an api key (e.g. by setting BRAINTRUST_API_KEY).",
+    );
+  } else if (apiKey === TEST_API_KEY) {
+    // This is a weird hook that lets us skip logging in and mocking out the org info.
+    const testOrgInfo = [
+      {
+        id: "test-org-id",
+        name: "test-org-name",
+        api_url: "https://braintrust.dev/fake-api-url",
+      },
+    ];
+    state.loggedIn = true;
+    state.loginToken = TEST_API_KEY;
+    _saveOrgInfo(state, testOrgInfo, testOrgInfo[0].name);
+    return state;
+  } else {
     const resp = await checkResponse(
       await fetch(_urljoin(state.appUrl, `/api/apikey/login`), {
         method: "POST",
@@ -2938,7 +3297,7 @@ export async function loginToState(options: LoginOptions = {}) {
     );
     const info = await resp.json();
 
-    _check_org_info(state, info.org_info, orgName);
+    _saveOrgInfo(state, info.org_info, orgName);
     if (!state.apiUrl) {
       if (orgName) {
         throw new Error(
@@ -2953,28 +3312,24 @@ export async function loginToState(options: LoginOptions = {}) {
 
     conn = state.apiConn();
     conn.set_token(apiKey);
-  } else {
-    throw new Error(
-      "Please specify an api key (e.g. by setting BRAINTRUST_API_KEY).",
-    );
+
+    if (!conn) {
+      throw new Error("Conn should be set at this point (a bug)");
+    }
+
+    conn.make_long_lived();
+
+    // Set the same token in the API
+    state.appConn().set_token(apiKey);
+    if (state.proxyUrl) {
+      state.proxyConn().set_token(apiKey);
+    }
+    state.loginToken = conn.token;
+    state.loggedIn = true;
+
+    // Replace the global logger's apiConn with this one.
+    state.loginReplaceApiConn(conn);
   }
-
-  if (!conn) {
-    throw new Error("Conn should be set at this point (a bug)");
-  }
-
-  conn.make_long_lived();
-
-  // Set the same token in the API
-  state.appConn().set_token(apiKey);
-  if (state.proxyUrl) {
-    state.proxyConn().set_token(apiKey);
-  }
-  state.loginToken = conn.token;
-  state.loggedIn = true;
-
-  // Relpace the global logger's apiConn with this one.
-  state.loginReplaceApiConn(conn);
 
   return state;
 }
@@ -3151,7 +3506,10 @@ export function traced<IsAsyncFlush extends boolean = true, R = void>(
  *    messages: [{ role: "user", content: input }],
  *  });
  *  return result.choices[0].message.content ?? "unknown";
- * });
+ * },
+ * // Optional: if you're using a framework like NextJS that minifies your code, specify the function name and it will be used for the span name
+ * { name: "myFunc" },
+ * );
  * ```
  * Now, any calls to `myFunc` will be traced, and the input and output will be logged automatically.
  * If tracing is inactive, i.e. there is no active logger or experiment, it's just a no-op.
@@ -3339,7 +3697,7 @@ export function withParent<R>(
   return (state ?? _globalState).currentParent.run(parent, () => callback());
 }
 
-function _check_org_info(
+function _saveOrgInfo(
   state: BraintrustState,
   org_info: any,
   org_name: string | undefined,
@@ -3452,10 +3810,11 @@ function validateAndSanitizeExperimentLogPartialArgs(
 /**
  * Creates a deep copy of the given event. Replaces references to user objects
  * with placeholder strings to ensure serializability, except for
- * {@link Attachment} objects, which are preserved and not deep-copied.
+ * {@link Attachment} and {@link ExternalAttachment} objects, which are preserved
+ * and not deep-copied.
  */
 function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
-  const attachments: Attachment[] = [];
+  const attachments: BaseAttachment[] = [];
   const IDENTIFIER = "_bt_internal_saved_attachment";
   const savedAttachmentSchema = z.strictObject({ [IDENTIFIER]: z.number() });
 
@@ -3474,7 +3833,7 @@ function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
       return `<dataset>`;
     } else if (v instanceof Logger) {
       return `<logger>`;
-    } else if (v instanceof Attachment) {
+    } else if (v instanceof BaseAttachment) {
       const idx = attachments.push(v);
       return { [IDENTIFIER]: idx - 1 };
     } else if (v instanceof ReadonlyAttachment) {
@@ -3494,21 +3853,47 @@ function deepCopyEvent<T extends Partial<BackgroundLogEvent>>(event: T): T {
 
 /**
  * Helper function for uploading attachments. Recursively extracts `Attachment`
- * values and replaces them with their associated `AttachmentReference` objects.
+ * and `ExternalAttachment` objects and replaces them with their associated
+ * `AttachmentReference` objects.
  *
  * @param event The event to filter. Will be modified in-place.
  * @param attachments Flat array of extracted attachments (output parameter).
  */
 function extractAttachments(
   event: Record<string, any>,
-  attachments: Attachment[],
+  attachments: BaseAttachment[],
 ): void {
   for (const [key, value] of Object.entries(event)) {
-    // Base case: Attachment.
-    if (value instanceof Attachment) {
+    if (!value) {
+      continue;
+    }
+
+    // Base case: Attachment or ExternalAttachment.
+    if (value instanceof BaseAttachment) {
       attachments.push(value);
       event[key] = value.reference;
       continue; // Attachment cannot be nested.
+    }
+
+    // Skip if this is already just a reference (no uploader field)
+    if (value?.type === BRAINTRUST_ATTACHMENT && value.key && !value.uploader) {
+      // This is already just a reference, skip it
+      continue;
+    }
+
+    // Somewhere in our pipeline we're serializing the attachment and then deserializing it.
+    // This loses the instanceof identity of the attachment, so we need to recreate it because
+    // the above instance check doesn't catch it.
+    if (value?.reference?.type === BRAINTRUST_ATTACHMENT && value?.uploader) {
+      // This looks like a serialized Attachment object, recreate it properly
+      const attachment = new Attachment({
+        data: value.dataDebugString,
+        filename: value.reference.filename,
+        contentType: value.reference.content_type,
+      });
+      attachments.push(attachment);
+      event[key] = attachment.reference;
+      continue;
     }
 
     // Base case: non-object.
@@ -3527,12 +3912,17 @@ function extractAttachments(
  *
  * @returns The same event instance as the input.
  */
-function enrichAttachments<T extends Record<string, any>>(event: T): T {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function enrichAttachments<T extends Record<string, any>>(
+  event: T,
+  state: BraintrustState | undefined,
+): T {
   for (const [key, value] of Object.entries(event)) {
     // Base case: AttachmentReference.
     const parsedValue = attachmentReferenceSchema.safeParse(value);
     if (parsedValue.success) {
-      (event as any)[key] = new ReadonlyAttachment(parsedValue.data);
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+      (event as any)[key] = new ReadonlyAttachment(parsedValue.data, state);
       continue;
     }
 
@@ -3542,7 +3932,37 @@ function enrichAttachments<T extends Record<string, any>>(event: T): T {
     }
 
     // Recursive case: object or array:
-    enrichAttachments(value);
+    enrichAttachments(value, state);
+  }
+
+  return event;
+}
+
+/**
+ * Recursively hydrates any `AttachmentReference` into `Attachment` by modifying
+ * the input in-place.
+ *
+ * @returns The same event instance as the input.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function resolveAttachmentsToBase64<T extends Record<string, any>>(
+  event: T,
+  state: BraintrustState | undefined,
+): Promise<T> {
+  for (const [key, value] of Object.entries(event)) {
+    if (value instanceof ReadonlyAttachment) {
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+      (event as any)[key] = await value.asBase64Url();
+      continue;
+    }
+
+    // Base case: non-object.
+    if (!(value instanceof Object)) {
+      continue;
+    }
+
+    // Recursive case: object or array:
+    await resolveAttachmentsToBase64(value, state);
   }
 
   return event;
@@ -3589,6 +4009,9 @@ export type WithTransactionId<R> = R & {
   [TRANSACTION_ID_FIELD]: TransactionId;
 };
 
+export const INTERNAL_BTQL_LIMIT = 1000;
+const MAX_BTQL_ITERATIONS = 10000;
+
 class ObjectFetcher<RecordType>
   implements AsyncIterable<WithTransactionId<RecordType>>
 {
@@ -3597,7 +4020,8 @@ class ObjectFetcher<RecordType>
   constructor(
     private objectType: "dataset" | "experiment",
     private pinnedVersion: string | undefined,
-    private mutateRecord?: (r: any) => RecordType,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private mutateRecord?: (r: any) => WithTransactionId<RecordType>,
     private _internal_btql?: Record<string, unknown>,
   ) {}
 
@@ -3623,8 +4047,10 @@ class ObjectFetcher<RecordType>
   async fetchedData() {
     if (this._fetchedData === undefined) {
       const state = await this.getState();
-      let data = null;
-      if (this._internal_btql) {
+      let data: WithTransactionId<RecordType>[] | undefined = undefined;
+      let cursor = undefined;
+      let iterations = 0;
+      while (true) {
         const resp = await state.apiConn().post(
           `btql`,
           {
@@ -3648,20 +4074,24 @@ class ObjectFetcher<RecordType>
                   },
                 ],
               },
+              cursor,
+              limit: INTERNAL_BTQL_LIMIT,
             },
+            use_columnstore: false,
+            brainstore_realtime: true,
           },
           { headers: { "Accept-Encoding": "gzip" } },
         );
-        data = (await resp.json()).data;
-      } else {
-        const resp = await state.apiConn().get(
-          `v1/${this.objectType}/${await this.id}/fetch`,
-          {
-            version: this.pinnedVersion,
-          },
-          { headers: { "Accept-Encoding": "gzip" } },
-        );
-        data = (await resp.json()).events;
+        const respJson = await resp.json();
+        data = (data ?? []).concat(respJson.data);
+        if (!respJson.cursor) {
+          break;
+        }
+        cursor = respJson.cursor;
+        iterations++;
+        if (iterations > MAX_BTQL_ITERATIONS) {
+          throw new Error("Too many BTQL iterations");
+        }
       }
       this._fetchedData = this.mutateRecord
         ? data?.map(this.mutateRecord)
@@ -3736,7 +4166,7 @@ export class Experiment
     lazyMetadata: LazyValue<ProjectExperimentMetadata>,
     dataset?: AnyDataset,
   ) {
-    super("experiment", undefined, enrichAttachments);
+    super("experiment", undefined, (r) => enrichAttachments(r, state));
     this.lazyMetadata = lazyMetadata;
     this.dataset = dataset;
     this.lastStartTime = getCurrentUnixTimestamp();
@@ -3850,8 +4280,10 @@ export class Experiment
 
   private startSpanImpl(args?: StartSpanArgs): Span {
     return new SpanImpl({
-      state: this.state,
       ...args,
+      // Sometimes `args` gets passed directly into this function, and it contains an undefined value for `state`.
+      // To ensure that we always use this experiment's state, we override the `state` argument no matter what.
+      state: this.state,
       ...startSpanParentArgs({
         state: this.state,
         parent: args?.parent,
@@ -3927,17 +4359,25 @@ export class Experiment
         }
       }
 
-      const results = await state.apiConn().get_json(
-        "/experiment-comparison2",
-        {
-          experiment_id: await this.id,
-          base_experiment_id: comparisonExperimentId,
-        },
-        3,
-      );
+      try {
+        const results = await state.apiConn().get_json(
+          "/experiment-comparison2",
+          {
+            experiment_id: await this.id,
+            base_experiment_id: comparisonExperimentId,
+          },
+          3,
+        );
 
-      scores = results["scores"];
-      metrics = results["metrics"];
+        scores = results["scores"];
+        metrics = results["metrics"];
+      } catch (e) {
+        console.warn(
+          `Failed to fetch experiment scores and metrics: ${e}\n\nView complete results in Braintrust or run experiment.summarize() again.`,
+        );
+        scores = {};
+        metrics = {};
+      }
     }
 
     return {
@@ -3949,7 +4389,7 @@ export class Experiment
       experimentUrl: experimentUrl,
       comparisonExperimentName: comparisonExperimentName,
       scores: scores ?? {},
-      metrics: metrics,
+      metrics: metrics ?? {},
     };
   }
 
@@ -4029,7 +4469,7 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     private state: BraintrustState,
     private readonly lazyMetadata: LazyValue<ProjectExperimentMetadata>,
   ) {
-    super("experiment", undefined, enrichAttachments);
+    super("experiment", undefined, (r) => enrichAttachments(r, state));
   }
 
   public get id(): Promise<string> {
@@ -4050,9 +4490,11 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
     return this.state;
   }
 
-  public async *asDataset<Input, Expected>(): AsyncGenerator<
-    EvalCase<Input, Expected, void>
-  > {
+  public async *asDataset<
+    Input,
+    Expected,
+    Metadata = DefaultMetadataType,
+  >(): AsyncGenerator<EvalCase<Input, Expected, Metadata>> {
     const records = this.fetch();
 
     for await (const record of records) {
@@ -4060,21 +4502,20 @@ export class ReadonlyExperiment extends ObjectFetcher<ExperimentEvent> {
         continue;
       }
 
-      const { output, expected: expectedRecord } = record;
+      const { output, expected: expectedRecord, metadata } = record;
       const expected = (expectedRecord ?? output) as Expected;
 
-      if (isEmpty(expected)) {
-        yield {
-          input: record.input as Input,
-          tags: record.tags,
-        } as EvalCase<Input, Expected, void>;
-      } else {
-        yield {
-          input: record.input as Input,
-          expected: expected,
-          tags: record.tags,
-        } as unknown as EvalCase<Input, Expected, void>;
-      }
+      // Note: We always include expected and metadata fields to maintain type signature alignment.
+      // This ensures that when the type signature includes `| null | undefined`, the fields
+      // are still present in the runtime object. While this may incorrectly include fields
+      // when Metadata/Expected = void, it's preferable to incorrectly excluding them when
+      // the type signature expects them to be present.
+      yield {
+        input: record.input as Input,
+        tags: record.tags,
+        expected: expected as Expected,
+        metadata: metadata as Metadata,
+      } as unknown as EvalCase<Input, Expected, Metadata>;
     }
   }
 }
@@ -4091,7 +4532,7 @@ export function newId() {
  * We suggest using one of the various `traced` methods, instead of creating Spans directly. See {@link Span.startSpan} for full details.
  */
 export class SpanImpl implements Span {
-  private state: BraintrustState;
+  private _state: BraintrustState;
 
   private isMerge: boolean;
   private loggedEndTime: number | undefined;
@@ -4114,11 +4555,12 @@ export class SpanImpl implements Span {
       parentObjectType: SpanObjectTypeV3;
       parentObjectId: LazyValue<string>;
       parentComputeObjectMetadataArgs: Record<string, any> | undefined;
-      parentSpanIds: ParentSpanIds | undefined;
+      parentSpanIds: ParentSpanIds | MultiParentSpanIds | undefined;
       defaultRootType?: SpanType;
+      spanId?: string;
     } & Omit<StartSpanArgs, "parent">,
   ) {
-    this.state = args.state;
+    this._state = args.state;
 
     const spanAttributes = args.spanAttributes ?? {};
     const rawEvent = args.event ?? {};
@@ -4169,10 +4611,13 @@ export class SpanImpl implements Span {
     };
 
     this._id = eventId ?? uuidv4();
-    this._spanId = uuidv4();
+    this._spanId = args.spanId ?? uuidv4();
     if (args.parentSpanIds) {
       this._rootSpanId = args.parentSpanIds.rootSpanId;
-      this._spanParents = [args.parentSpanIds.spanId];
+      this._spanParents =
+        "parentSpanIds" in args.parentSpanIds
+          ? args.parentSpanIds.parentSpanIds
+          : [args.parentSpanIds.spanId];
     } else {
       this._rootSpanId = this._spanId;
       this._spanParents = undefined;
@@ -4203,6 +4648,10 @@ export class SpanImpl implements Span {
 
   public setAttributes(args: Omit<StartSpanArgs, "event">): void {
     this.logInternal({ internalData: { span_attributes: args } });
+  }
+
+  public setSpanParents(parents: string[]): void {
+    this.logInternal({ internalData: { span_parents: parents } });
   }
 
   public log(event: ExperimentLogPartialArgs): void {
@@ -4256,11 +4705,11 @@ export class SpanImpl implements Span {
         object_id: await this.parentObjectId.get(),
       }).objectIdFields(),
     });
-    this.state.bgLogger().log([new LazyValue(computeRecord)]);
+    this._state.bgLogger().log([new LazyValue(computeRecord)]);
   }
 
   public logFeedback(event: Omit<LogFeedbackFullArgs, "id">): void {
-    logFeedbackImpl(this.state, this.parentObjectType, this.parentObjectId, {
+    logFeedbackImpl(this._state, this.parentObjectType, this.parentObjectId, {
       ...event,
       id: this.id,
     });
@@ -4293,10 +4742,10 @@ export class SpanImpl implements Span {
       ? undefined
       : { spanId: this._spanId, rootSpanId: this._rootSpanId };
     return new SpanImpl({
-      state: this.state,
+      state: this._state,
       ...args,
       ...startSpanParentArgs({
-        state: this.state,
+        state: this._state,
         parent: args?.parent,
         parentObjectType: this.parentObjectType,
         parentObjectId: this.parentObjectId,
@@ -4304,6 +4753,31 @@ export class SpanImpl implements Span {
         parentSpanIds,
         propagatedEvent: args?.propagatedEvent ?? this.propagatedEvent,
       }),
+    });
+  }
+
+  public startSpanWithParents(
+    spanId: string,
+    spanParents: string[],
+    args?: StartSpanArgs,
+  ): Span {
+    const parentSpanIds: MultiParentSpanIds = {
+      parentSpanIds: spanParents,
+      rootSpanId: this._rootSpanId,
+    };
+    return new SpanImpl({
+      state: this._state,
+      ...args,
+      ...startSpanParentArgs({
+        state: this._state,
+        parent: args?.parent,
+        parentObjectType: this.parentObjectType,
+        parentObjectId: this.parentObjectId,
+        parentComputeObjectMetadataArgs: this.parentComputeObjectMetadataArgs,
+        parentSpanIds,
+        propagatedEvent: args?.propagatedEvent ?? this.propagatedEvent,
+      }),
+      spanId,
     });
   }
 
@@ -4336,16 +4810,86 @@ export class SpanImpl implements Span {
 
   public async permalink(): Promise<string> {
     return await permalink(await this.export(), {
-      state: this.state,
+      state: this._state,
     });
   }
 
+  public link(): string {
+    if (!this.id) {
+      return NOOP_SPAN_PERMALINK;
+    }
+
+    try {
+      const orgName = this._state.orgName;
+      if (!orgName) {
+        throw new Error("log-in-or-provide-org-name");
+      }
+
+      return this._link(orgName);
+    } catch (e) {
+      return getErrPermlink(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  _link(orgName: string): string {
+    const appUrl = this._state.appUrl || "https://www.braintrust.dev";
+    const baseUrl = `${appUrl}/app/${orgName}`;
+
+    // NOTE[matt]: I believe lazy values should not exist in the span or the logger.
+    // Nothing in this module should have the possibility of blocking with the lone exception of
+    // flush() which should be a clear exception. We shouldn't build on it and
+    // plan to remove it in the future.
+    const args = this.parentComputeObjectMetadataArgs;
+
+    switch (this.parentObjectType) {
+      case SpanObjectTypeV3.PROJECT_LOGS: {
+        // Links to spans require a project id or name. We might not either, so use whatever
+        // we can to make a link without making a roundtrip to the server.
+        const projectID =
+          args?.project_id || this.parentObjectId.getSync().value;
+        const projectName = args?.project_name;
+        if (projectID) {
+          return `${baseUrl}/object?object_type=project_logs&object_id=${projectID}&id=${this._id}`;
+        } else if (projectName) {
+          return `${baseUrl}/p/${projectName}/logs?oid=${this._id}`;
+        } else {
+          return getErrPermlink("provide-project-name-or-id");
+        }
+      }
+      case SpanObjectTypeV3.EXPERIMENT: {
+        // Experiment links require an id, so the sync version will only work after the experiment is
+        // resolved.
+        const expID =
+          args?.experiment_id || this.parentObjectId?.getSync()?.value;
+        if (!expID) {
+          return getErrPermlink("provide-experiment-id");
+        } else {
+          return `${baseUrl}/object?object_type=experiment&object_id=${expID}&id=${this._id}`;
+        }
+      }
+      case SpanObjectTypeV3.PLAYGROUND_LOGS: {
+        // FIXME[matt] I dont believe these are used in the SDK.
+        return NOOP_SPAN_PERMALINK;
+      }
+      default: {
+        // trigger a compile-time error if we add a new object type
+        const _exhaustive: never = this.parentObjectType;
+        _exhaustive;
+        return NOOP_SPAN_PERMALINK;
+      }
+    }
+  }
+
   async flush(): Promise<void> {
-    return await this.state.bgLogger().flush();
+    return await this._state.bgLogger().flush();
   }
 
   public close(args?: EndSpanArgs): number {
     return this.end(args);
+  }
+
+  public state(): BraintrustState {
+    return this._state;
   }
 }
 
@@ -4422,6 +4966,7 @@ export class Dataset<
     legacy?: IsLegacyDataset,
     _internal_btql?: Record<string, unknown>,
   ) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     const isLegacyDataset = (legacy ??
       DEFAULT_IS_LEGACY_DATASET) as IsLegacyDataset;
     if (isLegacyDataset) {
@@ -4433,7 +4978,11 @@ export class Dataset<
       "dataset",
       pinnedVersion,
       (r: AnyDatasetRecord) =>
-        ensureDatasetRecord(enrichAttachments(r), isLegacyDataset),
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        ensureDatasetRecord(
+          enrichAttachments(r, this.state),
+          isLegacyDataset,
+        ) as WithTransactionId<DatasetRecord<IsLegacyDataset>>,
       _internal_btql,
     );
     this.lazyMetadata = lazyMetadata;
@@ -4769,6 +5318,11 @@ export function renderMessage<T extends Message>(
                     case "text":
                       return { ...c, text: render(c.text) };
                     case "image_url":
+                      if (isObject(c.image_url.url)) {
+                        throw new Error(
+                          "Attachments must be replaced with URLs before calling `build()`",
+                        );
+                      }
                       return {
                         ...c,
                         image_url: {
@@ -4831,8 +5385,15 @@ export function deserializePlainStringAsJSON(s: string) {
   }
 }
 
-function renderTemplatedObject(obj: unknown, args: unknown): unknown {
+function renderTemplatedObject(
+  obj: unknown,
+  args: Record<string, unknown>,
+  options: { strict?: boolean },
+): unknown {
   if (typeof obj === "string") {
+    if (options.strict) {
+      lintTemplate(obj, args);
+    }
     return Mustache.render(obj, args, undefined, {
       escape: (value) => {
         if (typeof value === "string") {
@@ -4843,12 +5404,12 @@ function renderTemplatedObject(obj: unknown, args: unknown): unknown {
       },
     });
   } else if (isArray(obj)) {
-    return obj.map((item) => renderTemplatedObject(item, args));
+    return obj.map((item) => renderTemplatedObject(item, args, options));
   } else if (isObject(obj)) {
     return Object.fromEntries(
       Object.entries(obj).map(([key, value]) => [
         key,
-        renderTemplatedObject(value, args),
+        renderTemplatedObject(value, args, options),
       ]),
     );
   }
@@ -4857,7 +5418,8 @@ function renderTemplatedObject(obj: unknown, args: unknown): unknown {
 
 export function renderPromptParams(
   params: ModelParams | undefined,
-  args: unknown,
+  args: Record<string, unknown>,
+  options: { strict?: boolean },
 ): ModelParams | undefined {
   const schemaParsed = z
     .object({
@@ -4873,7 +5435,7 @@ export function renderPromptParams(
     .safeParse(params);
   if (schemaParsed.success) {
     const rawSchema = schemaParsed.data.response_format.json_schema.schema;
-    const templatedSchema = renderTemplatedObject(rawSchema, args);
+    const templatedSchema = renderTemplatedObject(rawSchema, args, options);
     const parsedSchema =
       typeof templatedSchema === "string"
         ? deserializePlainStringAsJSON(templatedSchema).value
@@ -4899,6 +5461,7 @@ export class Prompt<
 > {
   private parsedPromptData: PromptData | undefined;
   private hasParsedPromptData = false;
+  private readonly __braintrust_prompt_marker = true;
 
   constructor(
     private metadata: PromptRowWithId<HasId, HasVersion> | PromptSessionEvent,
@@ -4907,6 +5470,7 @@ export class Prompt<
   ) {}
 
   public get id(): HasId extends true ? string : string | undefined {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return this.metadata.id as HasId extends true ? string : string | undefined;
   }
 
@@ -4931,6 +5495,7 @@ export class Prompt<
   public get version(): HasId extends true
     ? TransactionId
     : TransactionId | undefined {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return this.metadata[TRANSACTION_ID_FIELD] as HasId extends true
       ? TransactionId
       : TransactionId | undefined;
@@ -4938,6 +5503,10 @@ export class Prompt<
 
   public get options(): NonNullable<PromptData["options"]> {
     return this.getParsedPromptData()?.options || {};
+  }
+
+  public get promptData(): PromptData {
+    return this.getParsedPromptData()!;
   }
 
   /**
@@ -4952,11 +5521,44 @@ export class Prompt<
     options: {
       flavor?: Flavor;
       messages?: Message[];
+      strict?: boolean;
     } = {},
   ): CompiledPrompt<Flavor> {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return this.runBuild(buildArgs, {
       flavor: options.flavor ?? "chat",
       messages: options.messages,
+      strict: options.strict,
+    }) as CompiledPrompt<Flavor>;
+  }
+
+  /**
+   * This is a special build method that first resolves attachment references, and then
+   * calls the regular build method. You should use this if you are building prompts from
+   * dataset rows that contain attachments.
+   *
+   * @param buildArgs Args to forward along to the prompt template.
+   */
+  public async buildWithAttachments<
+    Flavor extends "chat" | "completion" = "chat",
+  >(
+    buildArgs: unknown,
+    options: {
+      flavor?: Flavor;
+      messages?: Message[];
+      strict?: boolean;
+      state?: BraintrustState;
+    } = {},
+  ): Promise<CompiledPrompt<Flavor>> {
+    const hydrated =
+      buildArgs instanceof Object
+        ? await resolveAttachmentsToBase64(buildArgs, options.state)
+        : buildArgs;
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return this.runBuild(hydrated, {
+      flavor: options.flavor ?? "chat",
+      messages: options.messages,
+      strict: options.strict,
     }) as CompiledPrompt<Flavor>;
   }
 
@@ -4965,6 +5567,7 @@ export class Prompt<
     options: {
       flavor: Flavor;
       messages?: Message[];
+      strict?: boolean;
     },
   ): CompiledPrompt<Flavor> {
     const { flavor } = options;
@@ -5021,53 +5624,130 @@ export class Prompt<
       ...(dictArgParsed.success ? dictArgParsed.data : {}),
     };
 
+    const renderedPrompt = Prompt.renderPrompt({
+      prompt,
+      buildArgs,
+      options,
+    });
+
     if (flavor === "chat") {
-      if (prompt.type !== "chat") {
+      if (renderedPrompt.type !== "chat") {
         throw new Error(
           "Prompt is a completion prompt. Use buildCompletion() instead",
         );
       }
 
-      const render = (template: string) =>
-        Mustache.render(template, variables, undefined, {
-          escape: (v: unknown) =>
-            typeof v === "string" ? v : JSON.stringify(v),
-        });
-
-      const messages = [
-        ...(prompt.messages || []).map((m) => renderMessage(render, m)),
-        ...(options.messages ?? []),
-      ];
-
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
       return {
-        ...renderPromptParams(params, variables),
+        ...renderPromptParams(params, variables, { strict: options.strict }),
         ...spanInfo,
-        messages: messages,
-        ...(prompt.tools?.trim()
+        messages: renderedPrompt.messages,
+        ...(renderedPrompt.tools
           ? {
-              tools: toolsSchema.parse(
-                JSON.parse(Mustache.render(prompt.tools, variables)),
-              ),
+              tools: toolsSchema.parse(JSON.parse(renderedPrompt.tools)),
             }
           : undefined),
       } as CompiledPrompt<Flavor>;
     } else if (flavor === "completion") {
-      if (prompt.type !== "completion") {
+      if (renderedPrompt.type !== "completion") {
         throw new Error(`Prompt is a chat prompt. Use flavor: 'chat' instead`);
       }
+
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      return {
+        ...renderPromptParams(params, variables, { strict: options.strict }),
+        ...spanInfo,
+        prompt: renderedPrompt.content,
+      } as CompiledPrompt<Flavor>;
+    } else {
+      throw new Error("never!");
+    }
+  }
+
+  static renderPrompt({
+    prompt,
+    buildArgs,
+    options,
+  }: {
+    prompt: PromptBlockData;
+    buildArgs: unknown;
+    options: {
+      strict?: boolean;
+      messages?: Message[];
+    };
+  }): PromptBlockData {
+    const escape = (v: unknown) => {
+      if (v === undefined) {
+        throw new Error("Missing!");
+      } else if (typeof v === "string") {
+        return v;
+      } else if (v instanceof ReadonlyAttachment) {
+        throw new Error(
+          "Use buildWithAttachments() to build prompts with attachments",
+        );
+      } else {
+        return JSON.stringify(v);
+      }
+    };
+
+    const dictArgParsed = z.record(z.unknown()).safeParse(buildArgs);
+    const variables: Record<string, unknown> = {
+      input: buildArgs,
+      ...(dictArgParsed.success ? dictArgParsed.data : {}),
+    };
+
+    if (prompt.type === "chat") {
+      const render = (template: string) => {
+        if (options.strict) {
+          lintTemplate(template, variables);
+        }
+
+        return Mustache.render(template, variables, undefined, {
+          escape,
+        });
+      };
+
+      const baseMessages = (prompt.messages || []).map((m) =>
+        renderMessage(render, m),
+      );
+      const hasSystemPrompt = baseMessages.some((m) => m.role === "system");
+
+      const messages: Message[] = [
+        ...baseMessages,
+        ...(options.messages ?? []).filter(
+          (m) => !(hasSystemPrompt && m.role === "system"),
+        ),
+      ];
+
+      return {
+        type: "chat",
+        messages: messages,
+        ...(prompt.tools?.trim()
+          ? {
+              tools: render(prompt.tools),
+            }
+          : undefined),
+      };
+    } else if (prompt.type === "completion") {
       if (options.messages) {
         throw new Error(
           "extra messages are not supported for completion prompts",
         );
       }
 
+      if (options.strict) {
+        lintTemplate(prompt.content, variables);
+      }
+
       return {
-        ...renderPromptParams(params, variables),
-        ...spanInfo,
-        prompt: Mustache.render(prompt.content, variables),
-      } as CompiledPrompt<Flavor>;
+        type: "completion",
+        content: Mustache.render(prompt.content, variables, undefined, {
+          escape,
+        }),
+      };
     } else {
-      throw new Error("never!");
+      const _: never = prompt;
+      throw new Error(`Invalid prompt type: ${_}`);
     }
   }
 
@@ -5077,6 +5757,28 @@ export class Prompt<
       this.hasParsedPromptData = true;
     }
     return this.parsedPromptData!;
+  }
+
+  public static isPrompt(data: unknown): data is Prompt<boolean, boolean> {
+    return (
+      typeof data === "object" &&
+      data !== null &&
+      "__braintrust_prompt_marker" in data
+    );
+  }
+  public static fromPromptData(
+    name: string,
+    promptData: PromptData,
+  ): Prompt<false, false> {
+    return new Prompt(
+      {
+        name: name,
+        slug: name,
+        prompt_data: promptData,
+      },
+      {},
+      false,
+    );
   }
 }
 
@@ -5175,4 +5877,38 @@ export interface DatasetSummary {
  * Allows accessing helper functions for testing.
  * @internal
  */
-export const _exportsForTestingOnly = { extractAttachments, deepCopyEvent };
+
+// it's used to circumvent login for testing, but won't actually work
+// on the server side.
+const TEST_API_KEY = "___TEST_API_KEY__THIS_IS_NOT_REAL___";
+
+function setInitialTestState() {
+  // a way of setting initial state for tests without any log messages
+  if (!_internalGetGlobalState()) {
+    _internalSetInitialState();
+  }
+}
+// This is a helper function to simulate a login for testing.
+async function simulateLoginForTests() {
+  return await login({
+    apiKey: TEST_API_KEY,
+    appUrl: "https://braintrust.dev",
+  });
+}
+
+// This is a helper function to simulate a logout for testing.
+function simulateLogoutForTests() {
+  _globalState.resetLoginInfo();
+  _globalState.appUrl = "https://www.braintrust.dev";
+  return _globalState;
+}
+
+export const _exportsForTestingOnly = {
+  extractAttachments,
+  deepCopyEvent,
+  useTestBackgroundLogger,
+  clearTestBackgroundLogger,
+  simulateLoginForTests,
+  simulateLogoutForTests,
+  setInitialTestState,
+};

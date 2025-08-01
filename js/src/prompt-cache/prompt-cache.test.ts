@@ -47,6 +47,7 @@ describe("PromptCache", () => {
       diskCache: new DiskCache<Prompt>({
         cacheDir,
         max: 5,
+        logWarnings: false,
       }),
     });
   });
@@ -129,6 +130,37 @@ describe("PromptCache", () => {
       );
     });
 
+    it("should handle odd project names", async () => {
+      const names = [
+        ".",
+        "..",
+        "/a/b/c",
+        "normal",
+        "my\0file.txt",
+        "file*.txT",
+        "what?.txt",
+        " asdf ",
+        "invalid/name",
+        "my<file>.txt",
+      ];
+      for (const name of names) {
+        const p = new Prompt(
+          {
+            project_id: name,
+            name: "test-prompt",
+            slug: "test-prompt",
+            id: "789",
+            _xact_id: "789",
+          },
+          {},
+          false,
+        );
+        await cache.set(p, p);
+        const result = await cache.get(p);
+        expect(result).toEqual(p);
+      }
+    });
+
     it("should handle different versions of the same prompt", async () => {
       const promptV1 = new Prompt(
         {
@@ -196,20 +228,30 @@ describe("PromptCache", () => {
   });
 
   describe("error handling", () => {
-    it("should throw when disk write fails", async () => {
-      // Make cache directory read-only.
-      await fs.mkdir(cacheDir, { recursive: true });
-      await fs.chmod(cacheDir, 0o444);
+    it("should throw never when disk write fails", async () => {
+      // simulate a write failure by using a nonexistent directory
+      // with mkdir false.
+      const nonExistentDir = path.join(
+        tmpdir(),
+        "doesnt-exist",
+        `write-fail-disk-cache-test-${Date.now()}`,
+      );
+      const brokenCache = new PromptCache({
+        memoryCache: new LRUCache({ max: 2 }),
+        diskCache: new DiskCache<Prompt>({
+          cacheDir: nonExistentDir,
+          max: 5,
+          mkdir: false,
+          logWarnings: false,
+        }),
+      });
 
-      // Should throw when disk write fails.
-      await expect(cache.set(testKey, testPrompt)).rejects.toThrow();
+      // Should not throw when disk write fails.
+      await brokenCache.set(testKey, testPrompt);
 
       // Memory cache should still be updated.
-      const result = await cache.get(testKey);
+      const result = await brokenCache.get(testKey);
       expect(result).toEqual(testPrompt);
-
-      // Restore permissions so cleanup can happen.
-      await fs.chmod(cacheDir, 0o777);
     });
 
     it("should handle disk read errors", async () => {
@@ -221,6 +263,7 @@ describe("PromptCache", () => {
         diskCache: new DiskCache<Prompt>({
           cacheDir,
           max: 5,
+          logWarnings: false,
         }),
       });
 
@@ -256,6 +299,7 @@ describe("PromptCache", () => {
         diskCache: new DiskCache<Prompt>({
           cacheDir,
           max: 5,
+          logWarnings: false,
         }),
       });
 
@@ -304,6 +348,70 @@ describe("PromptCache", () => {
         slug: "prompt3",
       });
       expect(newerResult).toEqual(testPrompt);
+    });
+  });
+
+  describe("ID-based caching", () => {
+    it("should store and retrieve a prompt by ID", async () => {
+      const promptId = "test-prompt-id-123";
+      await cache.set({ id: promptId }, testPrompt);
+      const result = await cache.get({ id: promptId });
+      expect(result).toEqual(testPrompt);
+    });
+
+    it("should keep ID-based cache independent of slug-based cache", async () => {
+      const promptId = "test-prompt-id-456";
+
+      // Store by ID
+      await cache.set({ id: promptId }, testPrompt);
+
+      // Store same prompt by slug
+      await cache.set(testKey, testPrompt);
+
+      // Retrieve by ID
+      const resultById = await cache.get({ id: promptId });
+      expect(resultById).toEqual(testPrompt);
+
+      // Retrieve by slug
+      const resultBySlug = await cache.get(testKey);
+      expect(resultBySlug).toEqual(testPrompt);
+
+      // Modify the prompt stored by ID
+      const modifiedPrompt = new Prompt(
+        {
+          ...testPrompt.metadata,
+          name: "modified-prompt",
+        },
+        {},
+        false,
+      );
+      await cache.set({ id: promptId }, modifiedPrompt);
+
+      // Verify ID-based retrieval gets modified version
+      const resultByIdModified = await cache.get({ id: promptId });
+      expect(resultByIdModified?.name).toBe("modified-prompt");
+
+      // Verify slug-based retrieval still gets original
+      const resultBySlugUnchanged = await cache.get(testKey);
+      expect(resultBySlugUnchanged?.name).toBe("test-prompt");
+    });
+
+    it("should return undefined for non-existent ID", async () => {
+      const result = await cache.get({ id: "missing-prompt-id" });
+      expect(result).toBeUndefined();
+    });
+
+    it("should handle ID cache with disk persistence", async () => {
+      const promptId = "persistent-prompt-id";
+
+      // Fill memory cache to force disk storage
+      await cache.set(testKey, testPrompt);
+      await cache.set({ ...testKey, slug: "prompt2" }, testPrompt);
+      await cache.set({ id: promptId }, testPrompt);
+
+      // The ID-based prompt should be retrievable (from disk if evicted from memory)
+      const result = await cache.get({ id: promptId });
+      expect(result).toEqual(testPrompt);
     });
   });
 });

@@ -6,7 +6,9 @@ export {
   Evaluator,
   EvalTask,
   Eval,
+  EvalHooks,
   EvalResult,
+  EvalResultWithSummary,
   EvalScorerArgs,
   EvalScorer,
   EvaluatorDef,
@@ -20,19 +22,14 @@ export {
   defaultErrorScoreHandler,
 } from "./framework";
 export * from "./framework2";
+export * as graph from "./graph-framework";
 export { LazyValue } from "./util";
 export * from "./wrappers/oai";
-export { wrapAISDKModel } from "./wrappers/ai-sdk";
-export type {
-  ParentExperimentIds,
-  ParentProjectLogIds,
-  IdField,
-  InputField,
-  OtherExperimentLogFields,
-  ExperimentLogPartialArgs,
-  ExperimentLogFullArgs,
-  LogFeedbackFullArgs,
-  LogCommentFullArgs,
-  CommentEvent,
-  DatasetRecord,
-} from "@braintrust/core";
+export { BraintrustMiddleware } from "./wrappers/ai-sdk-v2";
+export { wrapAISDKModel } from "./wrappers/ai-sdk-v1";
+export { wrapAnthropic } from "./wrappers/anthropic";
+export {
+  AISpanProcessor,
+  BraintrustSpanProcessor,
+  BraintrustExporter,
+} from "./otel";

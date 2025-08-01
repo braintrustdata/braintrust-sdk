@@ -47,6 +47,7 @@ import { loadModule } from "./functions/load-module";
 import { bundleCommand } from "./cli-util/bundle";
 import { RunArgs } from "./cli-util/types";
 import { pullCommand } from "./cli-util/pull";
+import { runDevServer } from "../dev/server";
 
 // This requires require
 // https://stackoverflow.com/questions/50822310/how-to-import-package-json-in-typescript
@@ -116,6 +117,7 @@ async function initExperiment(
       ? { projectId: evaluator.projectId }
       : { project: evaluator.projectName }),
     experiment: evaluator.experimentName,
+    description: evaluator.description,
     metadata: evaluator.metadata,
     isPublic: evaluator.isPublic,
     update: evaluator.update,
@@ -253,6 +255,7 @@ function buildWatchPluginForEvaluator(
             opts.progressReporter,
             opts.filters,
             undefined,
+            undefined,
           );
           const resolvedReporter = resolveReporter(
             reporter,
@@ -292,18 +295,21 @@ async function initFile({
   bundleFile,
   tsconfig,
   plugins,
+  externalPackages,
 }: {
   inFile: string;
   outFile: string;
   bundleFile: string;
   tsconfig?: string;
   plugins?: PluginMaker[];
+  externalPackages?: string[];
 }): Promise<FileHandle> {
   const buildOptions = buildOpts({
     fileName: inFile,
     outFile,
     tsconfig,
     plugins,
+    externalPackages,
   });
   const ctx = await esbuild.context(buildOptions);
 
@@ -340,6 +346,7 @@ async function initFile({
           outFile: bundleFile,
           tsconfig,
           plugins,
+          externalPackages,
         }),
         external: [],
         write: true,
@@ -481,16 +488,28 @@ async function runAndWatch({
   await new Promise(() => {});
 }
 
-async function runOnce(
+export async function buildEvaluators(
   handles: Record<string, FileHandle>,
   opts: EvaluatorOpts,
-) {
+): Promise<{ evaluators: EvaluatorState; buildResults: BtBuildResult[] }> {
   const buildPromises = Object.values(handles).map((handle) =>
     handle.rebuild(),
   );
 
   const buildResults = await Promise.all(buildPromises);
 
+  const evaluators: EvaluatorState = {
+    evaluators: [],
+    reporters: {},
+  };
+  updateEvaluators(evaluators, buildResults, opts);
+  return { evaluators, buildResults };
+}
+
+async function runOnce(
+  handles: Record<string, FileHandle>,
+  opts: EvaluatorOpts,
+) {
   const bundlePromises = opts.bundle
     ? Object.fromEntries(
         Object.entries(handles).map(([inFile, handle]) => [
@@ -500,11 +519,7 @@ async function runOnce(
       )
     : null;
 
-  const evaluators: EvaluatorState = {
-    evaluators: [],
-    reporters: {},
-  };
-  updateEvaluators(evaluators, buildResults, opts);
+  const { evaluators, buildResults } = await buildEvaluators(handles, opts);
 
   if (opts.list) {
     for (const evaluator of evaluators.evaluators) {
@@ -533,6 +548,7 @@ async function runOnce(
         },
         opts.progressReporter,
         opts.filters,
+        undefined,
         undefined,
       );
     } finally {
@@ -693,22 +709,7 @@ async function collectFiles(
   return files;
 }
 
-// Inspired by https://github.com/evanw/esbuild/issues/619
-// In addition to marking node_modules external, explicitly mark
-// our packages (braintrust and autoevals) external, in case they're
-// installed in a relative path.
-const markKnownPackagesExternalPlugin = {
-  name: "make-known-packages-external",
-  setup(build: esbuild.PluginBuild) {
-    // Mark known packages as external
-    const knownPackagesFilter =
-      /^(braintrust|autoevals|@braintrust\/|config|lightningcss)/;
-    build.onResolve({ filter: knownPackagesFilter }, (args) => ({
-      path: args.path,
-      external: true,
-    }));
-  },
-};
+import { createMarkKnownPackagesExternalPlugin } from "./cli-util/external-packages-plugin";
 
 // Inspired by and modified from https://github.com/evanw/esbuild/issues/1051
 const nativeNodeModulesPlugin = {
@@ -780,15 +781,17 @@ function buildOpts({
   outFile,
   tsconfig,
   plugins: argPlugins,
+  externalPackages,
 }: {
   fileName: string;
   outFile: string;
   tsconfig?: string;
   plugins?: PluginMaker[];
+  externalPackages?: string[];
 }): esbuild.BuildOptions {
   const plugins = [
     nativeNodeModulesPlugin,
-    markKnownPackagesExternalPlugin,
+    createMarkKnownPackagesExternalPlugin(externalPackages),
     ...(argPlugins || []).map((fn) => fn(fileName)),
   ];
   return {
@@ -811,12 +814,14 @@ export async function initializeHandles({
   mode,
   plugins,
   tsconfig,
+  externalPackages,
 }: {
   files: string[];
   mode: "eval" | "bundle";
   plugins?: PluginMaker[];
   tsconfig?: string;
-}) {
+  externalPackages?: string[];
+}): Promise<Record<string, FileHandle>> {
   const files: Record<string, boolean> = {};
   const inputPaths = inputFiles.length > 0 ? inputFiles : ["."];
   for (const inputPath of inputPaths) {
@@ -858,6 +863,7 @@ export async function initializeHandles({
         bundleFile,
         plugins,
         tsconfig,
+        externalPackages,
       }),
     );
   }
@@ -918,7 +924,21 @@ async function run(args: RunArgs) {
     mode: "eval",
     tsconfig: args.tsconfig,
     plugins,
+    externalPackages: args.external_packages,
   });
+
+  if (args.dev) {
+    // XXX We should watch these files (or support a --watch flag).
+    const { evaluators } = await buildEvaluators(handles, evaluatorOpts);
+    const allEvaluators = Object.values(evaluators.evaluators).map(
+      (e) => e.evaluator,
+    );
+    runDevServer(allEvaluators, {
+      host: args.dev_host,
+      port: args.dev_port,
+    });
+    return;
+  }
 
   let success = true;
   try {
@@ -929,6 +949,7 @@ async function run(args: RunArgs) {
         appUrl: args.app_url,
       });
     }
+
     if (args.watch) {
       await runAndWatch({
         handles,
@@ -973,6 +994,10 @@ function addCompileArgs(parser: ArgumentParser) {
   });
   parser.add_argument("--tsconfig", {
     help: "Specify a custom tsconfig.json file to use.",
+  });
+  parser.add_argument("--external-packages", {
+    nargs: "*",
+    help: "Additional packages to mark as external during bundling. These packages will not be included in the bundle and must be available at runtime. Use this to resolve bundling errors with native modules or problematic dependencies. Example: --external-packages sqlite3 fsevents @mapbox/node-pre-gyp",
   });
 }
 
@@ -1034,6 +1059,20 @@ async function main() {
   parser_run.add_argument("files", {
     nargs: "*",
     help: "A list of files or directories to run. If no files are specified, the current directory is used.",
+  });
+  parser_run.add_argument("--dev", {
+    action: "store_true",
+    help: "Run the evaluators in dev mode. This will start a dev server which you can connect to via the playground.",
+  });
+  parser_run.add_argument("--dev-host", {
+    help: "The host to bind the dev server to. Defaults to localhost. Set to 0.0.0.0 to bind to all interfaces.",
+    type: String,
+    default: "localhost",
+  });
+  parser_run.add_argument("--dev-port", {
+    help: "The port to bind the dev server to. Defaults to 8300.",
+    type: Number,
+    default: 8300,
   });
   parser_run.set_defaults({ func: run });
 

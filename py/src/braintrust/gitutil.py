@@ -4,7 +4,7 @@ import re
 import subprocess
 import threading
 from functools import lru_cache as _cache
-from typing import List, Optional
+from typing import Optional
 
 from .git_fields import GitMetadataSettings, RepoInfo
 
@@ -70,15 +70,15 @@ def _get_base_branch_ancestor(remote=None):
         )
         return None
 
-    head = "HEAD" if _current_repo().is_dirty() else "HEAD^"
     try:
+        head = "HEAD" if _current_repo().is_dirty() else "HEAD^"
         return subprocess.check_output(["git", "merge-base", head, f"{remote_name}/{base_branch}"]).decode().strip()
-    except subprocess.CalledProcessError as e:
+    except (subprocess.CalledProcessError, git.GitCommandError) as e:
         # _logger.warning(f"Could not find a common ancestor with {remote_name}/{base_branch}")
         return None
 
 
-def get_past_n_ancestors(n=10, remote=None):
+def get_past_n_ancestors(n=1000, remote=None):
     with _gitlock:
         repo = _current_repo()
         if repo is None:
@@ -158,7 +158,7 @@ def repo_info():
         branch = attempt(lambda: repo.active_branch.name)
 
         if dirty:
-            git_diff = attempt(lambda: truncate_to_byte_limit(repo.git.diff("HEAD")))
+            git_diff = attempt(lambda: truncate_to_byte_limit(repo.git.diff("HEAD", no_ext_diff=True)))
 
         return RepoInfo(
             commit=commit,

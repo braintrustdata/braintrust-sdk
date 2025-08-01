@@ -4,24 +4,46 @@ import { DiskCache } from "./disk-cache";
 import { tmpdir } from "os";
 import { beforeEach, describe, it, afterEach, expect } from "vitest";
 import { configureNode } from "../node";
-import iso from "../isomorph";
 
 describe("DiskCache", () => {
   configureNode();
 
   let cacheDir: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let cache: DiskCache<any>;
 
   beforeEach(async () => {
     cacheDir = path.join(tmpdir(), `disk-cache-test-${Date.now()}`);
-    cache = new DiskCache({ cacheDir, max: 3 });
+
+    cache = new DiskCache({ cacheDir, max: 3, logWarnings: false });
   });
 
   afterEach(async () => {
     try {
       await fs.rm(cacheDir, { recursive: true, force: true });
-    } catch (e) {
+    } catch {
       // Ignore errors if directory doesn't exist.
+    }
+  });
+
+  it("should handle odd project names", async () => {
+    const names = [
+      ".",
+      "..",
+      "/a/b/c",
+      "my\0file.txt",
+      "file*.txT",
+      "what?.txt",
+      " asdf ",
+      "invalid/name",
+      "my<file>.txt",
+    ];
+
+    cache = new DiskCache({ cacheDir });
+    for (const name of names) {
+      await cache.set(name, { foo: "bar" });
+      const result = await cache.get(name);
+      expect(result).toEqual({ foo: "bar" });
     }
   });
 
@@ -57,65 +79,37 @@ describe("DiskCache", () => {
     expect(newer).toEqual({ value: 2 });
   });
 
-  it("should throw when write fails", async () => {
-    // Make cache directory read-only.
-    await fs.mkdir(cacheDir, { recursive: true });
-    await fs.chmod(cacheDir, 0o444);
+  it("should never throw when write fails", async () => {
+    const cacheDir = path.join(
+      tmpdir(),
+      "doesnt-exist-dir",
+      `write-fail-disk-cache-test-${Date.now()}`,
+    );
 
-    // Should throw when write fails.
-    await expect(cache.set("test", { foo: "bar" })).rejects.toThrow();
+    // use mkdir false as a way of triggering cross-platform write
+    // errors. I tried other methods (permissions, etc) but couldn't
+    // get one that worked on github actions.
+    const brokenCache = new DiskCache({
+      cacheDir,
+      logWarnings: false,
+      mkdir: false,
+    });
+
+    // Failed writes shouldn't throw errors.
+    await brokenCache.set("test", { foo: "bar" });
+    const result = await brokenCache.get("test");
+    expect(result).toBeUndefined();
   });
 
   it("should throw on corrupted data", async () => {
     await cache.set("test-key", { foo: "bar" });
 
     // Corrupt the file.
-    const filePath = path.join(cacheDir, "test-key");
+    const filePath = cache.getEntryPath("test-key");
     await fs.writeFile(filePath, "invalid data");
 
     // Should throw on corrupted data.
-    await expect(cache.get("test-key")).rejects.toThrow();
-  });
-
-  it("should throw when eviction stat fails", async () => {
-    // Fill cache.
-    for (let i = 0; i < 3; i++) {
-      await cache.set(`key${i}`, { value: i });
-    }
-
-    // Fake stat to fail for one file.
-    const origStat = iso.stat;
-    iso.stat = async (path: string) => {
-      if (path.endsWith("key0")) {
-        throw new Error("stat error");
-      }
-      return origStat!(path);
-    };
-
-    // Should throw when trying to get stats during eviction.
-    await expect(cache.set("key3", { value: 3 })).rejects.toThrow("stat error");
-
-    iso.stat = origStat;
-  });
-
-  it("should throw when eviction unlink fails", async () => {
-    // Fill cache.
-    for (let i = 0; i < 3; i++) {
-      await cache.set(`key${i}`, { value: i });
-      await new Promise((resolve) => setTimeout(resolve, 100)); // Ensure different mtimes
-    }
-
-    // Fake unlink to fail.
-    const origUnlink = iso.unlink;
-    iso.unlink = async () => {
-      throw new Error("unlink error");
-    };
-
-    // Should throw when trying to remove files during eviction.
-    await expect(cache.set("key3", { value: 3 })).rejects.toThrow(
-      "unlink error",
-    );
-
-    iso.unlink = origUnlink;
+    const result = await cache.get("test-key");
+    expect(result).toBeUndefined();
   });
 });

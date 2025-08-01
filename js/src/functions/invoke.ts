@@ -67,6 +67,17 @@ export interface InvokeFunctionArgs<
   messages?: Message[];
 
   /**
+   * Additional metadata to add to the span. This will be logged as the `metadata` field in the span.
+   * It will also be available as the {{metadata}} field in the prompt and as the `metadata` argument
+   * to the function.
+   */
+  metadata?: Record<string, unknown>;
+  /**
+   * Tags to add to the span. This will be logged as the `tags` field in the span.
+   */
+  tags?: string[];
+
+  /**
    * The parent of the function. This can be an existing span, logger, or experiment, or
    * the output of `.export()` if you are distributed tracing. If unspecified, will use
    * the same semantics as `traced()` to determine the parent and no-op if not in a tracing
@@ -85,6 +96,11 @@ export interface InvokeFunctionArgs<
    * object per tool call.
    */
   mode?: StreamingMode;
+  /**
+   * Whether to use strict mode for the function. If true, the function will throw an error
+   * if the variable names in the prompt do not match the input keys.
+   */
+  strict?: boolean;
   /**
    * A Zod schema to validate the output of the function and return a typed value. This
    * is only used if `stream` is false.
@@ -126,10 +142,13 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     input,
     messages,
     parent: parentArg,
+    metadata,
+    tags,
     state: stateArg,
     stream,
     mode,
     schema,
+    strict,
     ...functionIdArgs
   } = args;
 
@@ -149,6 +168,7 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     : await getSpanParentObject().export();
 
   const functionId = functionIdSchema.safeParse({
+    function_id: functionIdArgs.function_id,
     project_name: functionIdArgs.projectName,
     slug: functionIdArgs.slug,
     global_function: functionIdArgs.globalFunction,
@@ -167,8 +187,11 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     input,
     messages,
     parent,
+    metadata,
+    tags,
     stream,
     mode,
+    strict,
   };
 
   const resp = await state.proxyConn().post(`function/invoke`, request, {
@@ -181,9 +204,11 @@ export async function invoke<Input, Output, Stream extends boolean = false>(
     if (!resp.body) {
       throw new Error("Received empty stream body");
     }
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return new BraintrustStream(resp.body) as InvokeReturn<Stream, Output>;
   } else {
     const data = await resp.json();
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return (schema ? schema.parse(data) : data) as InvokeReturn<Stream, Output>;
   }
 }
@@ -227,6 +252,7 @@ export function initFunction({
   slug: string;
   version?: string;
 }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const f = async (input: any): Promise<any> => {
     return await invoke({
       projectName,

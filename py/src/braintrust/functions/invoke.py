@@ -1,4 +1,4 @@
-from typing import Any, List, Literal, Optional, TypeVar, Union, overload
+from typing import Any, Dict, List, Literal, Optional, TypeVar, Union, overload
 
 from sseclient import SSEClient
 
@@ -24,9 +24,12 @@ def invoke(
     # arguments to the function
     input: Any = None,
     messages: Optional[List[Any]] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+    tags: Optional[List[str]] = None,
     parent: Optional[Union[Exportable, str]] = None,
     stream: Optional[Literal[False]] = None,
     mode: Optional[ModeType] = None,
+    strict: Optional[bool] = None,
     org_name: Optional[str] = None,
     api_key: Optional[str] = None,
     app_url: Optional[str] = None,
@@ -48,9 +51,12 @@ def invoke(
     # arguments to the function
     input: Any = None,
     messages: Optional[List[Any]] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+    tags: Optional[List[str]] = None,
     parent: Optional[Union[Exportable, str]] = None,
     stream: Literal[True] = True,
     mode: Optional[ModeType] = None,
+    strict: Optional[bool] = None,
     org_name: Optional[str] = None,
     api_key: Optional[str] = None,
     app_url: Optional[str] = None,
@@ -71,9 +77,12 @@ def invoke(
     # arguments to the function
     input: Any = None,
     messages: Optional[List[Any]] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+    tags: Optional[List[str]] = None,
     parent: Optional[Union[Exportable, str]] = None,
     stream: bool = False,
     mode: Optional[ModeType] = None,
+    strict: Optional[bool] = None,
     org_name: Optional[str] = None,
     api_key: Optional[str] = None,
     app_url: Optional[str] = None,
@@ -86,6 +95,10 @@ def invoke(
     Args:
         input: The input to the function. This will be logged as the `input` field in the span.
         messages: Additional OpenAI-style messages to add to the prompt (only works for llm functions).
+        metadata: Additional metadata to add to the span. This will be logged as the `metadata` field in the span.
+            It will also be available as the {{metadata}} field in the prompt and as the `metadata` argument
+            to the function.
+        tags: Tags to add to the span. This will be logged as the `tags` field in the span.
         parent: The parent of the function. This can be an existing span, logger, or experiment, or
             the output of `.export()` if you are distributed tracing. If unspecified, will use
             the same semantics as `traced()` to determine the parent and no-op if not in a tracing
@@ -96,6 +109,8 @@ def invoke(
         mode: The response shape of the function if returning tool calls. If "auto", will return
             a string if the function returns a string, and a JSON object otherwise. If "parallel",
             will return an array of JSON objects with one object per tool call.
+        strict: Whether to use strict mode for the function. If true, the function will throw an
+            error if the variable names in the prompt do not match the input keys.
         org_name: The name of the Braintrust organization to use.
         api_key: The API key to use for authentication.
         app_url: The URL of the Braintrust application.
@@ -139,6 +154,8 @@ def invoke(
 
     request = dict(
         input=input,
+        metadata=metadata,
+        tags=tags,
         parent=parent,
         stream=stream,
         api_version=INVOKE_API_VERSION,
@@ -148,6 +165,8 @@ def invoke(
         request["messages"] = messages
     if mode is not None:
         request["mode"] = mode
+    if strict is not None:
+        request["strict"] = strict
 
     headers = {"Accept": "text/event-stream" if stream else "application/json"}
 

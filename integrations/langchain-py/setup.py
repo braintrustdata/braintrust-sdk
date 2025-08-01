@@ -28,7 +28,6 @@ dev_requires = [
     "isort==5.12.0",
     "pre-commit",
     "pytest",
-    "pytest-watch",
     "responses",
     "respx",
     "tenacity",

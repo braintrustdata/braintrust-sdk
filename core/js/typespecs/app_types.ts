@@ -3,13 +3,22 @@
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 import { objectNullish } from "../src/zod_util";
-import { ObjectType, datetimeStringSchema } from "./common_types";
-import { customTypes } from "./custom_types";
+import {
+  ObjectType,
+  datetimeStringSchema,
+  generateBaseTableOpSchema,
+} from "./common_types";
 import { promptDataSchema } from "./prompt";
 import { viewDataSchema, viewOptionsSchema, viewTypeEnum } from "./view";
-import { functionTypeEnum, runtimeContextSchema } from "./functions";
+import { functionDataSchema, functionTypeEnum } from "./functions";
 import { savedFunctionIdSchema } from "./function_id";
 import { repoInfoSchema } from "./git_types";
+import {
+  automationConfigSchema,
+  btqlExportAutomationConfigSchema,
+  logAutomationConfigSchema,
+  retentionAutomationConfigSchema,
+} from "./automations";
 extendZodWithOpenApi(z);
 
 // Section: App DB table schemas
@@ -53,7 +62,7 @@ function generateBaseTableSchema(
       .nullish()
       .describe(`Identifies the user who created the ${objectName}`),
     metadata: z
-      .record(customTypes.unknown)
+      .record(z.unknown())
       .nullish()
       .describe(`User-controlled metadata about the ${objectName}`),
   });
@@ -145,7 +154,7 @@ export const aiSecretSchema = z
     org_id: organizationSchema.shape.id,
     name: aiSecretBaseSchema.shape.name,
     type: z.string().nullish(),
-    metadata: z.record(customTypes.unknown).nullish(),
+    metadata: z.record(z.unknown()).nullish(),
     preview_secret: z.string().nullish(),
   })
   .openapi("AISecret");
@@ -208,6 +217,9 @@ export const apiKeySchema = z
     name: apiKeyBaseSchema.shape.name,
     preview_name: z.string(),
     user_id: userSchema.shape.id.nullish(),
+    user_email: userSchema.shape.email.nullish(),
+    user_given_name: userSchema.shape.given_name.nullish(),
+    user_family_name: userSchema.shape.family_name.nullish(),
     org_id: organizationSchema.shape.id.nullish(),
   })
   .openapi("ApiKey");
@@ -220,6 +232,13 @@ export const spanFieldOrderItem = z.object({
   layout: z.literal("full").or(z.literal("two_column")).nullish(),
 });
 export type SpanFieldOrderItem = z.infer<typeof spanFieldOrderItem>;
+
+export const remoteEvalSourceSchema = z.object({
+  url: z.string(),
+  name: z.string(),
+  description: z.string().nullish(),
+});
+export type RemoteEvalSource = z.infer<typeof remoteEvalSourceSchema>;
 
 export const projectSettingsSchema = z
   .object({
@@ -238,6 +257,10 @@ export const projectSettingsSchema = z
       .array(spanFieldOrderItem)
       .nullish()
       .describe("The order of the fields to display in the trace view"),
+    remote_eval_sources: z
+      .array(remoteEvalSourceSchema)
+      .nullish()
+      .describe("The remote eval sources to use for the project"),
   })
   .openapi("ProjectSettings");
 export type ProjectSettings = z.infer<typeof projectSettingsSchema>;
@@ -314,76 +337,6 @@ const promptSchemaObject = z.object({
 export const promptSchema = promptSchemaObject.openapi("Prompt");
 export type Prompt = z.infer<typeof promptSchema>;
 
-export const codeBundleSchema = z
-  .object({
-    runtime_context: runtimeContextSchema,
-    location: z.union([
-      z
-        .object({
-          type: z.literal("experiment"),
-          eval_name: z.string(),
-          position: z.union([
-            z.object({ type: z.literal("task") }),
-            z
-              .object({
-                type: z.literal("scorer"),
-                index: z.number().int().nonnegative(),
-              })
-              .openapi({ title: "scorer" }),
-          ]),
-        })
-        .openapi({ title: "experiment" }),
-      z
-        .object({
-          type: z.literal("function"),
-          index: z.number().int().nonnegative(),
-        })
-        .openapi({ title: "function" }),
-    ]),
-    bundle_id: z.string(),
-    preview: z.string().nullish().describe("A preview of the code"),
-  })
-  .openapi("CodeBundle");
-export type CodeBundle = z.infer<typeof codeBundleSchema>;
-
-export const functionDataSchema = z
-  .union([
-    z
-      .object({
-        type: z.literal("prompt"),
-        // For backwards compatibility reasons, the prompt definition is hoisted out and stored
-        // in the outer object
-      })
-      .openapi({ title: "prompt" }),
-    z
-      .object({
-        type: z.literal("code"),
-        data: z.union([
-          z
-            .object({
-              type: z.literal("bundle"),
-            })
-            .and(codeBundleSchema)
-            .openapi({ title: "bundle" }),
-          z
-            .object({
-              type: z.literal("inline"),
-              runtime_context: runtimeContextSchema,
-              code: z.string(),
-            })
-            .openapi({ title: "inline" }),
-        ]),
-      })
-      .openapi({ title: "code" }),
-    z
-      .object({
-        type: z.literal("global"),
-        name: z.string(),
-      })
-      .openapi({ title: "global" }),
-  ])
-  .openapi("FunctionData");
-
 export const functionSchema = promptSchemaObject
   .merge(
     z.object({
@@ -405,8 +358,8 @@ export const functionSchema = promptSchemaObject
         .nullish(),
       function_schema: z
         .object({
-          parameters: customTypes.unknown,
-          returns: customTypes.unknown.optional(),
+          parameters: z.unknown(),
+          returns: z.unknown().optional(),
         })
         .nullish()
         .describe("JSON schema for the function's parameters and return type"),
@@ -460,6 +413,10 @@ export const experimentSchema = z
       ),
     user_id: experimentBaseSchema.shape.user_id,
     metadata: experimentBaseSchema.shape.metadata,
+    tags: z
+      .array(z.string())
+      .nullish()
+      .describe("A list of tags for the experiment"),
   })
   .openapi("Experiment");
 export type Experiment = z.infer<typeof experimentSchema>;
@@ -623,6 +580,50 @@ export const projectScoreCategory = z
   .openapi("ProjectScoreCategory");
 export type ProjectScoreCategory = z.infer<typeof projectScoreCategory>;
 
+const webhookAutomationActionSchema = z.object({
+  type: z.literal("webhook").describe("The type of action to take"),
+  url: z.string().describe("The webhook URL to send the request to"),
+});
+
+const projectAutomationBaseSchema =
+  generateBaseTableSchema("project automation");
+export const projectAutomationSchema = z
+  .object({
+    id: projectAutomationBaseSchema.shape.id,
+    project_id: projectAutomationBaseSchema.shape.project_id,
+    user_id: projectAutomationBaseSchema.shape.user_id,
+    created: projectAutomationBaseSchema.shape.created,
+    name: projectAutomationBaseSchema.shape.name,
+    description: projectAutomationBaseSchema.shape.description,
+    config: automationConfigSchema.describe(
+      "The configuration for the automation rule",
+    ),
+  })
+  .openapi("ProjectAutomation");
+
+export type ProjectAutomation = z.infer<typeof projectAutomationSchema>;
+
+export const logAutomationSchema = projectAutomationSchema.merge(
+  z.object({
+    config: logAutomationConfigSchema,
+  }),
+);
+export type LogAutomation = z.infer<typeof logAutomationSchema>;
+
+export const btqlExportAutomationSchema = projectAutomationSchema.merge(
+  z.object({
+    config: btqlExportAutomationConfigSchema,
+  }),
+);
+export type BtqlExportAutomation = z.infer<typeof btqlExportAutomationSchema>;
+
+export const retentionAutomationSchema = projectAutomationSchema.merge(
+  z.object({
+    config: retentionAutomationConfigSchema,
+  }),
+);
+export type RetentionAutomation = z.infer<typeof retentionAutomationSchema>;
+
 export const onlineScoreConfigSchema = z
   .object({
     sampling_rate: z
@@ -633,6 +634,7 @@ export const onlineScoreConfigSchema = z
     scorers: z
       .array(savedFunctionIdSchema)
       .describe("The list of scorers to use for online scoring"),
+    btql_filter: z.string().nullish().describe("Filter logs using BTQL"),
     apply_to_root_span: z
       .boolean()
       .nullish()
@@ -644,10 +646,20 @@ export const onlineScoreConfigSchema = z
       .array()
       .nullish()
       .describe("Trigger online scoring on any spans with a name in this list"),
+    skip_logging: z
+      .boolean()
+      .nullish()
+      .describe("Whether to skip adding scorer spans when computing scores"),
   })
-  .refine((val) => val.apply_to_root_span || val.apply_to_span_names?.length, {
-    message: "Online scoring rule does not apply to any rows",
-  })
+  .refine(
+    (val) =>
+      val.apply_to_root_span ||
+      val.apply_to_span_names?.length ||
+      val.btql_filter,
+    {
+      message: "Online scoring rule does not apply to any rows",
+    },
+  )
   .openapi("OnlineScoreConfig");
 export type OnlineScoreConfig = z.infer<typeof onlineScoreConfigSchema>;
 
@@ -715,6 +727,12 @@ export const projectTagSchema = z
     name: projectTagBaseSchema.shape.name,
     description: projectTagBaseSchema.shape.description,
     color: z.string().nullish().describe("Color of the tag for the UI"),
+    position: z
+      .string()
+      .nullish()
+      .describe(
+        "An optional LexoRank-based string that sets the sort position for the tag in the UI",
+      ),
   })
   .describe(
     "A project tag is a user-configured tag for tracking and filtering your experiments, logs, and other data",
@@ -830,17 +848,6 @@ export const appLimitParamSchema = z.coerce
   .describe("Limit the number of objects to return")
   .openapi("AppLimit");
 
-function generateBaseTableOpSchema(objectName: string) {
-  return z.object({
-    org_name: z
-      .string()
-      .nullish()
-      .describe(
-        `For nearly all users, this parameter should be unnecessary. But in the rare case that your API key belongs to multiple organizations, you may specify the name of the organization the ${objectName} belongs in.`,
-      ),
-  });
-}
-
 // Pagination for listing data objects.
 
 export const startingAfterSchema = z
@@ -910,6 +917,7 @@ export const createExperimentSchema = z
     dataset_version: experimentSchema.shape.dataset_version,
     public: experimentSchema.shape.public.nullish(),
     metadata: experimentSchema.shape.metadata,
+    tags: experimentSchema.shape.tags,
     ensure_new: z
       .boolean()
       .nullish()
@@ -1100,6 +1108,21 @@ export type AclBatchUpdateResponse = z.infer<
   typeof aclBatchUpdateResponseSchema
 >;
 
+export const createProjectAutomationSchema = projectAutomationSchema
+  .pick({
+    project_id: true,
+    name: true,
+    description: true,
+    config: true,
+  })
+  .openapi("CreateProjectAutomation");
+
+export const patchProjectAutomationSchema = objectNullish(
+  createProjectAutomationSchema,
+)
+  .omit({ project_id: true })
+  .openapi("PatchProjectAutomation");
+
 export const createProjectScoreSchema = projectScoreSchema
   .pick({
     project_id: true,
@@ -1222,6 +1245,15 @@ export const patchOrganizationMembersSchema = z
           .array()
           .nullish()
           .describe("Emails of users to invite"),
+        service_accounts: z
+          .array(
+            z.object({
+              name: z.string(),
+              token_name: z.string().nullish(),
+            }),
+          )
+          .nullish()
+          .describe("Service accounts to create"),
         send_invite_emails: z
           .boolean()
           .nullish()
@@ -1401,6 +1433,11 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
     object: userSchema,
   },
   prompt_session: {},
+  project_automation: {
+    object: projectAutomationSchema,
+    create: createProjectAutomationSchema,
+    patch_id: patchProjectAutomationSchema,
+  },
   project_score: {
     object: projectScoreSchema,
     create: createProjectScoreSchema,

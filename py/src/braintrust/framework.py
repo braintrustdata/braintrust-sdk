@@ -22,7 +22,6 @@ from typing import (
     Iterable,
     Iterator,
     List,
-    Literal,
     Optional,
     Sequence,
     Type,
@@ -30,12 +29,9 @@ from typing import (
     Union,
 )
 
-import exceptiongroup
-from braintrust_core.score import Score, Scorer
-from braintrust_core.serializable_data_class import SerializableDataClass
 from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
-from typing_extensions import NotRequired, TypedDict
+from typing_extensions import NotRequired, Protocol, TypedDict
 
 from .git_fields import GitMetadataSettings, RepoInfo
 from .logger import (
@@ -51,6 +47,8 @@ from .logger import (
 )
 from .logger import init as _init_experiment
 from .resource_manager import ResourceManager
+from .score import Score, is_score, is_scorer
+from .serializable_data_class import SerializableDataClass
 from .span_types import SpanTypeAttribute
 from .util import bt_iscoroutinefunction, eprint
 
@@ -155,6 +153,13 @@ class EvalHooks(abc.ABC, Generic[Output]):
         Access the span under which the task is run. Also accessible via braintrust.current_span()
         """
 
+    @property
+    @abc.abstractmethod
+    def trial_index(self) -> int:
+        """
+        The index of the current trial (0-based). This is useful when trial_count > 1.
+        """
+
     @abc.abstractmethod
     def meta(self, **info: Any) -> None:
         """
@@ -179,9 +184,37 @@ class EvalScorerArgs(SerializableDataClass, Generic[Input, Output]):
 
 OneOrMoreScores = Union[float, int, bool, None, Score, List[Score]]
 
+
+# Synchronous scorer interface - implements callable
+class SyncScorerLike(Protocol, Generic[Input, Output]):
+    """
+    Protocol for synchronous scorers that implement the callable interface.
+    This is the most common interface and is used when no async version is available.
+    """
+
+    def __call__(
+        self, input: Input, output: Output, expected: Optional[Output] = None, **kwargs: Any
+    ) -> OneOrMoreScores:
+        ...
+
+
+# Asynchronous scorer interface
+class AsyncScorerLike(Protocol, Generic[Input, Output]):
+    """
+    Protocol for asynchronous scorers that implement the eval_async interface.
+    The framework will prefer this interface if available.
+    """
+
+    async def eval_async(self, output: Output, expected: Optional[Output] = None, **kwargs: Any) -> OneOrMoreScores:
+        ...
+
+
+# Union type for any kind of scorer (for typing)
+ScorerLike = Union[SyncScorerLike[Input, Output], AsyncScorerLike[Input, Output]]
+
 EvalScorer = Union[
-    Scorer,
-    Type[Scorer],
+    ScorerLike[Input, Output],
+    Type[ScorerLike[Input, Output]],
     Callable[[Input, Output, Output], OneOrMoreScores],
     Callable[[Input, Output, Output], Awaitable[OneOrMoreScores]],
 ]
@@ -342,6 +375,16 @@ class Evaluator(Generic[Input, Output]):
     A default implementation is exported as `default_error_score_handler` which will log a 0 score to the root span for any scorer that was not run.
     """
 
+    description: Optional[str] = None
+    """
+    An optional description for the experiment.
+    """
+
+    summarize_scores: bool = True
+    """
+    Whether to summarize the scores of the experiment after it has run.
+    """
+
 
 @dataclasses.dataclass
 class EvalResultWithSummary(SerializableDataClass, Generic[Input, Output]):
@@ -386,7 +429,10 @@ def _call_user_fn_args(fn, kwargs):
     final_kwargs = {}
 
     for name, param in signature.parameters.items():
-        if param.kind == inspect.Parameter.VAR_KEYWORD:
+        # VAR_POSITIONAL is *args
+        # VAR_KEYWORD is **kwargs
+        # We don't want to use eithers' name
+        if param.kind == inspect.Parameter.VAR_POSITIONAL or param.kind == inspect.Parameter.VAR_KEYWORD:
             continue
 
         if name in kwargs:
@@ -487,6 +533,10 @@ def _set_lazy_load(lazy_load: bool):
         _lazy_load = current
 
 
+def _is_lazy_load():
+    return _lazy_load
+
+
 def pluralize(n, singular, plural):
     if n == 1:
         return singular
@@ -562,6 +612,8 @@ def _EvalCommon(
     base_experiment_id: Optional[str],
     git_metadata_settings: Optional[GitMetadataSettings],
     repo_info: Optional[RepoInfo],
+    description: Optional[str],
+    summarize_scores: bool,
     error_score_handler: Optional[ErrorScoreHandler] = None,
 ) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary[Input, Output]]]:
     """
@@ -594,6 +646,8 @@ def _EvalCommon(
         git_metadata_settings=git_metadata_settings,
         repo_info=repo_info,
         error_score_handler=error_score_handler,
+        description=description,
+        summarize_scores=summarize_scores,
     )
 
     if _lazy_load:
@@ -625,6 +679,7 @@ def _EvalCommon(
             project_name=evaluator.project_name if evaluator.project_id is None else None,
             project_id=evaluator.project_id,
             experiment_name=evaluator.experiment_name,
+            description=evaluator.description,
             metadata=evaluator.metadata,
             is_public=evaluator.is_public,
             update=evaluator.update,
@@ -664,6 +719,9 @@ async def EvalAsync(
     base_experiment_id: Optional[str] = None,
     git_metadata_settings: Optional[GitMetadataSettings] = None,
     repo_info: Optional[RepoInfo] = None,
+    error_score_handler: Optional[ErrorScoreHandler] = None,
+    description: Optional[str] = None,
+    summarize_scores: bool = True,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -708,6 +766,9 @@ async def EvalAsync(
     summarized and compared to this experiment. This takes precedence over `base_experiment_name` if specified.
     :param git_metadata_settings: Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param repo_info: Optionally explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
+    :param error_score_handler: Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
+    :param description: An optional description for the experiment.
+    :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
     f = _EvalCommon(
@@ -728,6 +789,8 @@ async def EvalAsync(
         base_experiment_id=base_experiment_id,
         git_metadata_settings=git_metadata_settings,
         repo_info=repo_info,
+        description=description,
+        summarize_scores=summarize_scores,
     )
 
     return await f()
@@ -755,6 +818,8 @@ def Eval(
     git_metadata_settings: Optional[GitMetadataSettings] = None,
     repo_info: Optional[RepoInfo] = None,
     error_score_handler: Optional[ErrorScoreHandler] = None,
+    description: Optional[str] = None,
+    summarize_scores: bool = True,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -800,6 +865,8 @@ def Eval(
     :param git_metadata_settings: Optional settings for collecting git metadata. By default, will collect all git metadata fields allowed in org-level settings.
     :param repo_info: Optionally explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
     :param error_score_handler: Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
+    :param description: An optional description for the experiment.
+    :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
 
@@ -822,6 +889,8 @@ def Eval(
         git_metadata_settings=git_metadata_settings,
         repo_info=repo_info,
         error_score_handler=error_score_handler,
+        description=description,
+        summarize_scores=summarize_scores,
     )
 
     # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
@@ -939,11 +1008,12 @@ def evaluate_filter(object, filter: Filter):
 
 
 class DictEvalHooks(Dict[str, Any]):
-    def __init__(self, metadata: Optional[Any] = None, expected: Optional[Any] = None):
+    def __init__(self, metadata: Optional[Any] = None, expected: Optional[Any] = None, trial_index: int = 0):
         if metadata is not None:
             self.update({"metadata": metadata})
         if expected is not None:
             self.update({"expected": expected})
+        self.update({"trial_index": trial_index})
         self._span = None
 
     @property
@@ -953,6 +1023,10 @@ class DictEvalHooks(Dict[str, Any]):
     @property
     def expected(self):
         return self.get("expected")
+
+    @property
+    def trial_index(self) -> int:
+        return self.get("trial_index", 0)
 
     @property
     def span(self) -> Optional[Span]:
@@ -1035,7 +1109,7 @@ async def run_evaluator(
     )
 
     if experiment:
-        summary = experiment.summarize()
+        summary = experiment.summarize(summarize_scores=evaluator.summarize_scores)
     else:
         summary = build_local_summary(evaluator, results)
 
@@ -1059,7 +1133,9 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
         with root_span.start_span(
             name=name, span_attributes={"type": SpanTypeAttribute.SCORE}, input=dict(**kwargs)
         ) as span:
-            score = scorer.eval_async if isinstance(scorer, Scorer) else scorer
+            score = scorer
+            if hasattr(scorer, "eval_async"):
+                score = scorer.eval_async
 
             scorer_args = kwargs
 
@@ -1072,12 +1148,12 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
 
             if isinstance(result, Iterable):
                 for s in result:
-                    if not isinstance(s, Score):
+                    if not is_score(s):
                         raise ValueError(
-                            f"When returning an array of scores, each score must be a non-empty object. Got: {s}"
+                            f"When returning an array of scores, each score must be a valid Score object. Got: {s}"
                         )
                 result = list(result)
-            elif isinstance(result, Score):
+            elif is_score(result):
                 result = [result]
             else:
                 result = [Score(name=name, score=result)]
@@ -1095,13 +1171,11 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             return result
 
     # First, resolve the scorers if they are classes
-    scorers = [
-        scorer() if inspect.isclass(scorer) and issubclass(scorer, Scorer) else scorer for scorer in evaluator.scores
-    ]
+    scorers = [scorer() if inspect.isclass(scorer) and is_scorer(scorer) else scorer for scorer in evaluator.scores]
     scorer_names = [_scorer_name(scorer, i) for i, scorer in enumerate(scorers)]
     unhandled_scores = scorer_names
 
-    async def run_evaluator_task(datum):
+    async def run_evaluator_task(datum, trial_index=0):
         if isinstance(datum, dict):
             datum = EvalCase.from_dict(datum)
 
@@ -1132,7 +1206,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             root_span = NOOP_SPAN
         with root_span:
             try:
-                hooks = DictEvalHooks(metadata, expected=datum.expected)
+                hooks = DictEvalHooks(metadata, expected=datum.expected, trial_index=trial_index)
 
                 # Check if the task takes a hooks argument
                 task_args = [datum.input]
@@ -1277,8 +1351,8 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
         disable=position is None,
     ) as pbar:
         async for datum in pbar:
-            for _ in range(evaluator.trial_count):
-                tasks.append(asyncio.create_task(with_max_concurrency(run_evaluator_task(datum))))
+            for trial_index in range(evaluator.trial_count):
+                tasks.append(asyncio.create_task(with_max_concurrency(run_evaluator_task(datum, trial_index))))
 
     results = []
     for task in std_tqdm(tasks, desc=f"{evaluator.eval_name} (tasks)", position=position, disable=position is None):

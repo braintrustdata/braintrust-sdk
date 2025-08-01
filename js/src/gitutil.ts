@@ -101,7 +101,7 @@ async function getBaseBranchAncestor(remote: string | undefined = undefined) {
 }
 
 export async function getPastNAncestors(
-  n: number = 10,
+  n: number = 1000,
   remote: string | undefined = undefined,
 ) {
   const git = await currentRepo();
@@ -121,7 +121,7 @@ export async function getPastNAncestors(
   if (!ancestor) {
     return [];
   }
-  const commits = await git.log({ from: ancestor, to: "HEAD" });
+  const commits = await git.log({ from: ancestor, to: "HEAD", maxCount: n });
   return commits.all.map((c) => c.hash);
 }
 
@@ -202,7 +202,7 @@ async function repoInfo() {
 
   if (dirty) {
     git_diff = await attempt(async () =>
-      truncateToByteLimit(await git.raw(["diff", "HEAD"])),
+      truncateToByteLimit(await git.raw(["--no-ext-diff", "diff", "HEAD"])),
     );
   }
 

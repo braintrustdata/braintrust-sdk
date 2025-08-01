@@ -13,6 +13,7 @@ export function runCatchFinally<R>(
     const ret = f();
     if (ret instanceof Promise) {
       runSyncCleanup = false;
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
       return (ret as any).catch(catchF).finally(finallyF) as R;
     } else {
       return ret;
@@ -41,6 +42,7 @@ export function isEmpty(a: unknown): a is null | undefined {
 // immediately consumes what is returned by `LazyValue.value()`).
 export class LazyValue<T> {
   private callable: () => Promise<T>;
+  private resolvedValue: T | undefined = undefined;
   private value:
     | { computedState: "succeeded"; val: Promise<T> }
     | { computedState: "in_progress"; val: Promise<T> }
@@ -68,13 +70,50 @@ export class LazyValue<T> {
       computedState: "in_progress",
       val: this.callable().then((x) => {
         this.value.computedState = "succeeded";
+        this.resolvedValue = x; // Store the resolved value
         return x;
       }),
     };
     return this.value.val;
   }
 
+  getSync(): { resolved: boolean; value: T | undefined } {
+    return {
+      resolved: this.value.computedState === "succeeded",
+      value: this.resolvedValue,
+    };
+  }
+
   // If this is true, the caller should be able to obtain the LazyValue without
+  // it throwing.
+  public get hasSucceeded(): boolean {
+    return this.value.computedState === "succeeded";
+  }
+}
+
+// Synchronous version of LazyValue.
+export class SyncLazyValue<T> {
+  private callable: () => T;
+  private value:
+    | { computedState: "succeeded"; val: T }
+    | { computedState: "uninitialized" } = {
+    computedState: "uninitialized",
+  };
+
+  constructor(callable: () => T) {
+    this.callable = callable;
+  }
+
+  get(): T {
+    if (this.value.computedState !== "uninitialized") {
+      return this.value.val;
+    }
+    const result = this.callable();
+    this.value = { computedState: "succeeded", val: result };
+    return result;
+  }
+
+  // If this is true, the caller should be able to obtain the SyncLazyValue without
   // it throwing.
   public get hasSucceeded(): boolean {
     return this.value.computedState === "succeeded";
@@ -90,4 +129,27 @@ export function addAzureBlobHeaders(
   if (url.includes("blob.core.windows.net")) {
     headers["x-ms-blob-type"] = "BlockBlob";
   }
+}
+
+// Internal error class for indicating that an operation was aborted.
+export class InternalAbortError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InternalAbortError";
+  }
+}
+
+// Return a copy of record with the given keys removed.
+export function filterFrom(record: Record<string, any>, keys: string[]) {
+  const out: Record<string, any> = {};
+  for (const k of Object.keys(record)) {
+    if (!keys.includes(k)) {
+      out[k] = record[k];
+    }
+  }
+  return out;
+}
+
+export function objectIsEmpty(obj: Record<string, any>): boolean {
+  return !obj || Object.keys(obj).length === 0;
 }

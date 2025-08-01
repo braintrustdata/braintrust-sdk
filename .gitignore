@@ -13,3 +13,7 @@ dist
 *.egg-info
 .aider*
 !.aiderignore
+
+**/.claude/settings.local.json
+CLAUDE.local.md
+.zed
