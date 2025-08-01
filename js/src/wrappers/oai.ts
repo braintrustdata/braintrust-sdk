@@ -284,7 +284,7 @@ export function parseCachedHeader(
       : 0;
 }
 
-function logHeaders(response: Response, span: Span) {
+export function logHeaders(response: Response, span: Span) {
   const cachedHeader = response.headers.get(X_CACHED_HEADER);
   if (isEmpty(cachedHeader)) {
     const legacyCacheHeader = response.headers.get(LEGACY_CACHED_HEADER);
@@ -579,6 +579,39 @@ function postprocessStreamingResults(allResults: any[]): {
       },
     ],
   };
+}
+
+export function extractDetailedTokenMetrics(usage: any): Record<string, any> {
+  const metrics: Record<string, any> = {};
+  
+  if (usage?.input_tokens) {
+    metrics.prompt_tokens = usage.input_tokens;
+  } else if (usage?.prompt_tokens) {
+    metrics.prompt_tokens = usage.prompt_tokens;
+  }
+  
+  if (usage?.output_tokens) {
+    metrics.completion_tokens = usage.output_tokens;
+  } else if (usage?.completion_tokens) {
+    metrics.completion_tokens = usage.completion_tokens;
+  }
+  
+  if (usage?.total_tokens) {
+    metrics.tokens = usage.total_tokens;
+  } else if (metrics.prompt_tokens && metrics.completion_tokens) {
+    metrics.tokens = metrics.prompt_tokens + metrics.completion_tokens;
+  }
+  
+  // Extract detailed token breakdowns
+  if (usage?.input_tokens_details?.cached_tokens) {
+    metrics.prompt_cached_tokens = usage.input_tokens_details.cached_tokens;
+  }
+  
+  if (usage?.output_tokens_details?.reasoning_tokens) {
+    metrics.completion_reasoning_tokens = usage.output_tokens_details.reasoning_tokens;
+  }
+  
+  return metrics;
 }
 
 class WrapperStream<Item> implements AsyncIterable<Item> {

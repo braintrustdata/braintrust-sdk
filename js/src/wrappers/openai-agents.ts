@@ -2,6 +2,50 @@
 import { SpanTypeAttribute } from "@braintrust/core";
 import { Span, startSpan, Experiment, Logger } from "../logger";
 import { parseMetricsFromUsage } from "./oai_responses";
+import { extractDetailedTokenMetrics } from "./oai";
+
+// Helper function to normalize input for Braintrust prompt format
+function normalizeInputForPrompt(input: any): any {
+  if (!input) return input;
+
+  // If input is an array, filter and normalize messages
+  if (Array.isArray(input)) {
+    const messages = input
+      .filter((item: any) => {
+        // Only include actual chat messages, not function calls or results
+        return (
+          item.type === "message" ||
+          (item.role &&
+            [
+              "system",
+              "user",
+              "assistant",
+              "tool",
+              "function",
+              "developer",
+            ].includes(item.role))
+        );
+      })
+      .map((item: any) => {
+        // Normalize message format
+        if (item.type === "message") {
+          return {
+            role: item.role,
+            content: item.content,
+          };
+        }
+        // Already in correct format
+        return {
+          role: item.role,
+          content: item.content,
+        };
+      });
+
+    return messages.length > 0 ? messages : input;
+  }
+
+  return input;
+}
 
 // TypeScript interfaces for @openai/agents types to avoid direct dependencies
 interface AgentsTrace {
@@ -162,18 +206,28 @@ export class BraintrustTracingProcessor {
     const spanData = span.spanData;
     const data: Record<string, any> = {
       metadata: {
-        tools: spanData?.tools,
-        handoffs: spanData?.handoffs,
-        outputType: spanData?.outputType,
+        agent_name: spanData?.name,
+        tools_available: spanData?.tools,
+        handoffs_available: spanData?.handoffs,
+        output_type: spanData?.outputType,
+        provider: "openai",
       },
     };
 
     // Check for input and output at spanData level
     if (spanData?.input !== undefined) {
-      data.input = spanData.input;
+      data.input = normalizeInputForPrompt(spanData.input);
     }
     if (spanData?.output !== undefined) {
       data.output = spanData.output;
+    }
+
+    // Add agent execution timing
+    const executionTime = timestampElapsed(span.endedAt, span.startedAt);
+    if (executionTime !== undefined) {
+      data.metrics = {
+        total_execution_time: executionTime,
+      };
     }
 
     return data;
@@ -181,13 +235,26 @@ export class BraintrustTracingProcessor {
 
   private extractResponseLogData(span: AgentsSpan): Record<string, any> {
     const spanData = span.spanData;
+    console.log("=== SPAN DATA AVAILABLE IN EXTRACT ===");
+    console.log("spanData keys:", Object.keys(spanData || {}));
+    console.log("spanData._response exists:", !!spanData?._response);
+    console.log("spanData.response exists:", !!spanData?.response);
+    console.log("spanData._input exists:", !!spanData?._input);
+    console.log("spanData.input exists:", !!spanData?.input);
+    console.log("=== END SPAN DATA DEBUG ===");
     const data: Record<string, any> = {};
 
     // Check for input - regular field first, then underscore fallback
+    let rawInput;
     if (spanData?.input !== undefined) {
-      data.input = spanData.input;
+      rawInput = spanData.input;
     } else if (spanData?._input !== undefined) {
-      data.input = spanData._input;
+      rawInput = spanData._input;
+    }
+
+    // Normalize input for Braintrust prompt format
+    if (rawInput !== undefined) {
+      data.input = normalizeInputForPrompt(rawInput);
     }
 
     // Check for output - regular field first, then underscore fallback
@@ -199,37 +266,146 @@ export class BraintrustTracingProcessor {
       data.output = spanData.response.output;
     }
 
-    if (spanData?.response) {
-      data.metadata = spanData.response.metadata || {};
-      // Add other response fields to metadata
-      const { output, metadata, usage, ...otherFields } = spanData.response;
-      Object.assign(data.metadata, otherFields);
-    }
-
+    // Initialize metadata and metrics
+    data.metadata = {};
     data.metrics = {};
+
+    // Extract timing metrics
     const ttft = timestampElapsed(span.endedAt, span.startedAt);
     if (ttft !== undefined) {
       data.metrics.time_to_first_token = ttft;
     }
 
-    // Extract model info and usage from the OpenAI response object
+    // Extract comprehensive metadata from _response object
     const responseOutput = spanData?._response;
     if (responseOutput) {
-      // Add model to metadata
-      if (!data.metadata) data.metadata = {};
-      if (responseOutput.model) {
-        data.metadata.model = responseOutput.model;
+      // Model and configuration metadata - separate prompt-replayable params from response metadata
+      const promptParams: Record<string, any> = {};
+      const responseMetadata: Record<string, any> = {};
+
+      // Parameters needed for prompt replay
+      if (responseOutput.model) promptParams.model = responseOutput.model;
+      if (responseOutput.temperature !== undefined)
+        promptParams.temperature = responseOutput.temperature;
+      if (responseOutput.parallel_tool_calls !== undefined)
+        promptParams.parallel_tool_calls = responseOutput.parallel_tool_calls;
+      if (responseOutput.tool_choice !== undefined)
+        promptParams.tool_choice = responseOutput.tool_choice;
+      if (responseOutput.top_p !== undefined)
+        promptParams.top_p = responseOutput.top_p;
+      if (responseOutput.max_output_tokens !== undefined)
+        promptParams.max_output_tokens = responseOutput.max_output_tokens;
+      if (responseOutput.max_tool_calls !== undefined)
+        promptParams.max_tool_calls = responseOutput.max_tool_calls;
+      if (responseOutput.truncation !== undefined)
+        promptParams.truncation = responseOutput.truncation;
+      if (responseOutput.top_logprobs !== undefined)
+        promptParams.top_logprobs = responseOutput.top_logprobs;
+
+      // Include tools if tool_choice is specified, transforming to proper OpenAI format
+      if (responseOutput.tool_choice && responseOutput.tools) {
+        promptParams.tools = responseOutput.tools.map((tool: any) => ({
+          type: "function",
+          function: {
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.parameters,
+            ...(tool.strict !== undefined && { strict: tool.strict }),
+          },
+        }));
       }
 
-      // Extract usage metrics using the existing OpenAI parser
-      const usageMetrics = parseMetricsFromUsage(responseOutput.usage);
-      Object.assign(data.metrics, usageMetrics);
+      // Response-only metadata (not needed for replay)
+      responseMetadata.provider = "openai";
+      responseMetadata.response_id = responseOutput.id;
+      responseMetadata.service_tier = responseOutput.service_tier;
+      responseMetadata.created_at = responseOutput.created_at;
+      responseMetadata.status = responseOutput.status;
+      responseMetadata.background = responseOutput.background;
+      responseMetadata.store = responseOutput.store;
+      responseMetadata.previous_response_id =
+        responseOutput.previous_response_id;
+
+      // Combine both types of metadata
+      data.metadata = {
+        ...data.metadata,
+        ...promptParams,
+        ...responseMetadata,
+      };
+
+      // Store detailed tool schemas separately from the tools array used for replay
+      if (responseOutput.tools && Array.isArray(responseOutput.tools)) {
+        data.metadata.tools_schemas = responseOutput.tools.map((tool: any) => ({
+          name: tool.name,
+          description: tool.description,
+          type: tool.type,
+          parameters: tool.parameters,
+          strict: tool.strict,
+        }));
+      }
+
+      // Extract reasoning metadata if available
+      if (responseOutput.reasoning) {
+        data.metadata.reasoning = responseOutput.reasoning;
+      }
+
+      // Extract safety and prompt cache info
+      if (responseOutput.safety_identifier) {
+        data.metadata.safety_identifier = responseOutput.safety_identifier;
+      }
+      if (responseOutput.prompt_cache_key) {
+        data.metadata.prompt_cache_key = responseOutput.prompt_cache_key;
+      }
+
+      // Extract text format info
+      if (responseOutput.text?.format) {
+        data.metadata.text_format = responseOutput.text.format;
+      }
+
+      // Use enhanced token metrics extraction
+      if (responseOutput.usage) {
+        const detailedMetrics = extractDetailedTokenMetrics(
+          responseOutput.usage,
+        );
+        Object.assign(data.metrics, detailedMetrics);
+      }
+
+      // Process tool call outputs with enhanced metadata
+      if (responseOutput.output && Array.isArray(responseOutput.output)) {
+        data.output = responseOutput.output.map((item: any) => {
+          if (item.type === "function_call") {
+            return {
+              ...item,
+              metadata: {
+                call_id: item.call_id,
+                provider_data: item.providerData,
+                arguments_raw: item.arguments,
+              },
+            };
+          }
+          return item;
+        });
+      }
+
+      // Extract additional metadata from response object
+      if (responseOutput.metadata) {
+        Object.assign(data.metadata, responseOutput.metadata);
+      }
     }
 
     // Fallback to legacy response structure
-    if (spanData?.response?.usage) {
-      const usageMetrics = parseMetricsFromUsage(spanData.response.usage);
-      Object.assign(data.metrics, usageMetrics);
+    if (spanData?.response) {
+      const legacyResponse = spanData.response;
+      data.metadata = { ...data.metadata, ...(legacyResponse.metadata || {}) };
+
+      // Add other response fields to metadata
+      const { output, metadata, usage, ...otherFields } = legacyResponse;
+      Object.assign(data.metadata, otherFields);
+
+      if (legacyResponse.usage) {
+        const legacyMetrics = extractDetailedTokenMetrics(legacyResponse.usage);
+        Object.assign(data.metrics, legacyMetrics);
+      }
     }
 
     return data;
@@ -237,63 +413,128 @@ export class BraintrustTracingProcessor {
 
   private extractFunctionLogData(span: AgentsSpan): Record<string, any> {
     const spanData = span.spanData;
-    return {
+    const data: Record<string, any> = {
       input: spanData?.input,
       output: spanData?.output,
     };
+
+    // Add function/tool metadata
+    if (spanData?.name) {
+      data.metadata = {
+        tool_name: spanData.name,
+        provider: "openai",
+      };
+    }
+
+    // Parse input if it's a JSON string to extract arguments
+    if (typeof spanData?.input === "string") {
+      try {
+        const parsedInput = JSON.parse(spanData.input);
+        data.metadata = {
+          ...data.metadata,
+          arguments: parsedInput,
+        };
+      } catch (e) {
+        // Input is not JSON, keep as string
+      }
+    }
+
+    // Add execution timing
+    const executionTime = timestampElapsed(span.endedAt, span.startedAt);
+    if (executionTime !== undefined) {
+      data.metrics = {
+        execution_time: executionTime,
+      };
+    }
+
+    return data;
   }
 
   private extractHandoffLogData(span: AgentsSpan): Record<string, any> {
     const spanData = span.spanData;
-    return {
+    const data: Record<string, any> = {
       metadata: {
-        fromAgent: spanData?.fromAgent,
-        toAgent: spanData?.toAgent,
+        from_agent: spanData?.fromAgent,
+        to_agent: spanData?.toAgent,
+        handoff_name: spanData?.name,
+        provider: "openai",
       },
     };
+
+    // Add handoff execution timing
+    const executionTime = timestampElapsed(span.endedAt, span.startedAt);
+    if (executionTime !== undefined) {
+      data.metrics = {
+        handoff_time: executionTime,
+      };
+    }
+
+    // Include input/output if available
+    if (spanData?.input !== undefined) {
+      data.input = normalizeInputForPrompt(spanData.input);
+    }
+    if (spanData?.output !== undefined) {
+      data.output = spanData.output;
+    }
+
+    return data;
   }
 
   private extractGuardrailLogData(span: AgentsSpan): Record<string, any> {
     const spanData = span.spanData;
-    return {
+    const data: Record<string, any> = {
       metadata: {
+        guardrail_name: spanData?.name,
         triggered: spanData?.triggered,
+        provider: "openai",
       },
     };
+
+    // Add guardrail execution timing
+    const executionTime = timestampElapsed(span.endedAt, span.startedAt);
+    if (executionTime !== undefined) {
+      data.metrics = {
+        execution_time: executionTime,
+      };
+    }
+
+    // Include input/output if available
+    if (spanData?.input !== undefined) {
+      data.input = normalizeInputForPrompt(spanData.input);
+    }
+    if (spanData?.output !== undefined) {
+      data.output = spanData.output;
+    }
+
+    return data;
   }
 
   private extractGenerationLogData(span: AgentsSpan): Record<string, any> {
     const spanData = span.spanData;
-    const metrics: Record<string, any> = {};
-
-    const ttft = timestampElapsed(span.endedAt, span.startedAt);
-    if (ttft !== undefined) {
-      metrics.time_to_first_token = ttft;
-    }
-
-    const usage = spanData?.usage || {};
-    if (usage.prompt_tokens) metrics.prompt_tokens = usage.prompt_tokens;
-    else if (usage.input_tokens) metrics.prompt_tokens = usage.input_tokens;
-
-    if (usage.completion_tokens)
-      metrics.completion_tokens = usage.completion_tokens;
-    else if (usage.output_tokens)
-      metrics.completion_tokens = usage.output_tokens;
-
-    if (usage.total_tokens) metrics.tokens = usage.total_tokens;
-    else if (usage.input_tokens && usage.output_tokens) {
-      metrics.tokens = usage.input_tokens + usage.output_tokens;
-    }
-
-    return {
-      input: spanData?.input,
+    const data: Record<string, any> = {
+      input: normalizeInputForPrompt(spanData?.input),
       output: spanData?.output,
       metadata: {
         model: spanData?.model,
         modelConfig: spanData?.modelConfig,
+        provider: "openai",
       },
-      metrics,
+      metrics: {},
     };
+
+    // Extract timing metrics
+    const ttft = timestampElapsed(span.endedAt, span.startedAt);
+    if (ttft !== undefined) {
+      data.metrics.time_to_first_token = ttft;
+    }
+
+    // Use enhanced token metrics extraction
+    if (spanData?.usage) {
+      const detailedMetrics = extractDetailedTokenMetrics(spanData.usage);
+      Object.assign(data.metrics, detailedMetrics);
+    }
+
+    return data;
   }
 
   private extractCustomLogData(span: AgentsSpan): Record<string, any> {
@@ -343,13 +584,29 @@ export class BraintrustTracingProcessor {
   }
 
   onSpanEnd(span: AgentsSpan): Promise<void> {
+    console.log("=== RAW OPENAI AGENTS DATA (UNFILTERED) ===");
+    console.log("span type:", span.spanData?.type);
+    if (span.spanData) {
+      console.log("All spanData keys:", Object.keys(span.spanData));
+      console.log("All spanData entries:");
+      console.log("{");
+      for (const [key, value] of Object.entries(span.spanData)) {
+        console.log(
+          `  ${key}:`,
+          typeof value === "object" ? JSON.stringify(value, null, 4) : value,
+          ",",
+        );
+      }
+      console.log("}");
+    }
+    console.log("=== END RAW DATA ===");
     console.log("onSpanEnd", span.type, span.spanData?.type);
     if (!span.spanId) return Promise.resolve();
 
     const braintrustSpan = this.spans.get(span.spanId);
     if (braintrustSpan) {
       const logData = this.extractLogData(span);
-      console.log("logData", JSON.stringify(logData, null, 2));
+      // console.log("logData", JSON.stringify(logData, null, 2));
       braintrustSpan.log({
         error: span.error,
         ...logData,
