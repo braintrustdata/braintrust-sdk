@@ -162,6 +162,10 @@ def test_openai_responses_metrics(memory_logger):
     assert span["metadata"]["model"] == TEST_MODEL
     assert span["metadata"]["provider"] == "openai"
     assert TEST_PROMPT in str(span["input"])
+    assert len(span["output"]) > 0
+    assert span["output"][0]["content"][0]["parsed"]
+    assert span["output"][0]["content"][0]["parsed"]["value"] == 24
+    assert span["output"][0]["content"][0]["parsed"]["reasoning"] == parse_response.output_parsed.reasoning
 
 
 @pytest.mark.vcr
@@ -470,6 +474,10 @@ async def test_openai_responses_async(memory_logger):
             assert span["metadata"]["model"] == TEST_MODEL
             # assert span["metadata"]["provider"] == "openai"
             assert TEST_PROMPT in str(span["input"])
+            assert len(span["output"]) > 0
+            assert span["output"][0]["content"][0]["parsed"]
+            assert span["output"][0]["content"][0]["parsed"]["value"] == 24
+            assert span["output"][0]["content"][0]["parsed"]["reasoning"] == parse_response.output_parsed.reasoning
 
 
 @pytest.mark.asyncio
@@ -987,6 +995,13 @@ def test_openai_responses_not_given_filtering(memory_logger):
     assert "NOT_GIVEN" not in str(meta)
     for k in ["max_output_tokens", "tools", "top_p", "store"]:
         assert k not in meta
+    # Verify the output is properly logged in the span
+    assert span["output"]
+    assert isinstance(span["output"], list)
+    assert len(span["output"]) > 0
+    assert span["output"][0]["content"][0]["parsed"]
+    assert span["output"][0]["content"][0]["parsed"]["value"] == 24
+    assert span["output"][0]["content"][0]["parsed"]["reasoning"]
 
 
 @pytest.mark.vcr
