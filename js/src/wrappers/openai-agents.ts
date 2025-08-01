@@ -4,52 +4,90 @@ import { Span, startSpan, Experiment, Logger } from "../logger";
 
 // TypeScript interfaces for @openai/agents types to avoid direct dependencies
 interface AgentsTrace {
-  type: string;
+  type: 'trace';
   traceId: string;
   name: string;
-  groupId?: string;
+  groupId: string | null;
   metadata?: Record<string, any>;
 }
 
-interface AgentsSpan {
+type SpanDataBase = {
   type: string;
-  spanId?: string;
-  traceId?: string;
-  name?: string;
-  spanData?: {
-    type?: string;
-    name?: string;
-    tools?: any[];
-    handoffs?: any[];
-    outputType?: string;
-    input?: any;
-    output?: any;
-    // OpenAI agents library underscore fields
-    _input?: any;
-    _response?: any;
-    response?: {
-      output?: any;
-      metadata?: Record<string, any>;
-      usage?: {
-        totalTokens?: number;
-        inputTokens?: number;
-        outputTokens?: number;
-        promptTokens?: number;
-        completionTokens?: number;
-      };
-    };
-    usage?: Record<string, any>;
-    model?: string;
-    modelConfig?: Record<string, any>;
-    fromAgent?: string;
-    toAgent?: string;
-    triggered?: boolean;
-    data?: Record<string, any>;
-  };
-  startedAt?: string;
-  endedAt?: string;
-  error?: string;
-  toJSON?: () => Record<string, any>;
+};
+
+type AgentSpanData = SpanDataBase & {
+  type: 'agent';
+  name: string;
+  handoffs?: string[];
+  tools?: string[];
+  output_type?: string;
+};
+
+type FunctionSpanData = SpanDataBase & {
+  type: 'function';
+  name: string;
+  input: string;
+  output: string;
+  mcp_data?: string;
+};
+
+type GenerationSpanData = SpanDataBase & {
+  type: 'generation';
+  input?: Array<Record<string, any>>;
+  output?: Array<Record<string, any>>;
+  model?: string;
+  model_config?: Record<string, any>;
+  usage?: Record<string, any>;
+};
+
+type ResponseSpanData = SpanDataBase & {
+  type: 'response';
+  response_id?: string;
+  _input?: string | Record<string, any>[];
+  _response?: Record<string, any>;
+};
+
+type HandoffSpanData = SpanDataBase & {
+  type: 'handoff';
+  from_agent?: string;
+  to_agent?: string;
+};
+
+type CustomSpanData = SpanDataBase & {
+  type: 'custom';
+  name: string;
+  data: Record<string, any>;
+};
+
+type GuardrailSpanData = SpanDataBase & {
+  type: 'guardrail';
+  name: string;
+  triggered: boolean;
+};
+
+type SpanData =
+  | AgentSpanData
+  | FunctionSpanData
+  | GenerationSpanData
+  | ResponseSpanData
+  | HandoffSpanData
+  | CustomSpanData
+  | GuardrailSpanData;
+
+type SpanError = {
+  message: string;
+  data?: Record<string, any>;
+};
+
+interface AgentsSpan {
+  type: 'trace.span';
+  traceId: string;
+  spanId: string;
+  parentId: string | null;
+  spanData: SpanData;
+  startedAt: string | null;
+  endedAt: string | null;
+  error: SpanError | null;
 }
 
 function spanTypeFromAgents(span: AgentsSpan): SpanTypeAttribute {
@@ -198,7 +236,12 @@ export class BraintrustTracingProcessor {
       data.output = spanData.response.output;
     }
 
-    if (spanData?.response) {
+    if (spanData?._response) {
+      // Exclude output, metadata, usage, and output_text like Python does
+      const { output, metadata, usage, output_text, ...otherFields } =
+        spanData._response;
+      data.metadata = otherFields;
+    } else if (spanData?.response) {
       data.metadata = spanData.response.metadata || {};
       // Add other response fields to metadata
       const { output, metadata, usage, ...otherFields } = spanData.response;
@@ -211,15 +254,31 @@ export class BraintrustTracingProcessor {
       data.metrics.time_to_first_token = ttft;
     }
 
-    if (spanData?.response?.usage) {
-      const usage = spanData.response.usage;
-      if (usage.totalTokens) data.metrics.tokens = usage.totalTokens;
-      if (usage.inputTokens) data.metrics.prompt_tokens = usage.inputTokens;
-      if (usage.outputTokens)
+    // Check for usage in _response first, then fall back to response.usage
+    let usage: any = null;
+    if (spanData?._response?.usage) {
+      usage = spanData._response.usage;
+    } else if (spanData?.response?.usage) {
+      usage = spanData.response.usage;
+    }
+
+    if (usage) {
+      // Check for OpenAI agents SDK field names first
+      if (usage.total_tokens) data.metrics.tokens = usage.total_tokens;
+      if (usage.input_tokens) data.metrics.prompt_tokens = usage.input_tokens;
+      if (usage.output_tokens)
+        data.metrics.completion_tokens = usage.output_tokens;
+
+      // Fallback to alternate field names
+      if (!data.metrics.tokens && usage.totalTokens)
+        data.metrics.tokens = usage.totalTokens;
+      if (!data.metrics.prompt_tokens && usage.inputTokens)
+        data.metrics.prompt_tokens = usage.inputTokens;
+      if (!data.metrics.prompt_tokens && usage.promptTokens)
+        data.metrics.prompt_tokens = usage.promptTokens;
+      if (!data.metrics.completion_tokens && usage.outputTokens)
         data.metrics.completion_tokens = usage.outputTokens;
-      // Also check for alternate field names
-      if (usage.promptTokens) data.metrics.prompt_tokens = usage.promptTokens;
-      if (usage.completionTokens)
+      if (!data.metrics.completion_tokens && usage.completionTokens)
         data.metrics.completion_tokens = usage.completionTokens;
     }
 
@@ -317,9 +376,11 @@ export class BraintrustTracingProcessor {
   onSpanStart(span: AgentsSpan): Promise<void> {
     if (!span.spanId || !span.traceId) return Promise.resolve();
 
-    // Find parent span - could be another span or the root trace
+    // Find parent span - use parent_id if available, otherwise fall back to trace root
     let parentSpan: Span | undefined;
-    if (span.traceId) {
+    if (span.parentId) {
+      parentSpan = this.spans.get(span.parentId);
+    } else if (span.traceId) {
       parentSpan = this.spans.get(span.traceId);
     }
 
@@ -334,13 +395,11 @@ export class BraintrustTracingProcessor {
   }
 
   onSpanEnd(span: AgentsSpan): Promise<void> {
-    console.log("onSpanEnd", span.type, span.spanData?.type);
     if (!span.spanId) return Promise.resolve();
 
     const braintrustSpan = this.spans.get(span.spanId);
     if (braintrustSpan) {
       const logData = this.extractLogData(span);
-      console.log("logData", JSON.stringify(logData, null, 2));
       braintrustSpan.log({
         error: span.error,
         ...logData,
