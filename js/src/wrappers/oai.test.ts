@@ -419,6 +419,91 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
   });
 
+  test("openai.responses.parse", async (context) => {
+    if (!oai.responses) {
+      context.skip();
+    }
+
+    assert.lengthOf(await backgroundLogger.drain(), 0);
+
+    // Define a simple schema for structured output
+    const NumberAnswerSchema = {
+      type: "object",
+      properties: {
+        value: { type: "integer" },
+        reasoning: { type: "string" },
+      },
+      required: ["value", "reasoning"],
+      additionalProperties: false,
+    };
+
+    // Test with unwrapped client first - should work but no spans
+    const unwrappedResponse = await oai.responses.parse({
+      model: TEST_MODEL,
+      input: "What is 20 + 4?",
+      text: {
+        format: {
+          name: "NumberAnswer",
+          type: "json_schema",
+          schema: NumberAnswerSchema,
+        },
+      },
+    });
+
+    assert.ok(unwrappedResponse);
+    // The parse method returns a response with output_parsed field
+    assert.ok(unwrappedResponse.output_parsed);
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const unwrapped_output_parsed = unwrappedResponse.output_parsed as any;
+    assert.equal(unwrapped_output_parsed.value, 24);
+    assert.ok(unwrapped_output_parsed.reasoning);
+
+    // No spans should be generated with unwrapped client
+    assert.lengthOf(await backgroundLogger.drain(), 0);
+
+    // Now test with wrapped client - should generate spans
+    const start = getCurrentUnixTimestamp();
+    const response = await client.responses.parse({
+      model: TEST_MODEL,
+      input: "What is 20 + 4?",
+      text: {
+        format: {
+          name: "NumberAnswer",
+          type: "json_schema",
+          schema: NumberAnswerSchema,
+        },
+      },
+    });
+    const end = getCurrentUnixTimestamp();
+
+    assert.ok(response);
+    // The parse method returns a response with output_parsed field
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const output_parsed = response.output_parsed as any;
+    assert.equal(output_parsed.value, 24);
+    assert.ok(output_parsed.reasoning);
+
+    // Verify spans were created
+    const spans = await backgroundLogger.drain();
+    assert.lengthOf(spans, 1);
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const span = spans[0] as any;
+    assert.equal(span.span_attributes.name, "openai.responses.parse");
+    assert.equal(span.span_attributes.type, "llm");
+    assert.equal(span.input[0].content, "What is 20 + 4?");
+    assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.metadata.provider, "openai");
+    assert.ok(span.metadata.text);
+    assert.equal(span.output.value, 24);
+    assert.equal(span.output.reasoning, output_parsed.reasoning);
+    const m = span.metrics;
+    assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
+    assert.isTrue(m.tokens > 0);
+    assert.isTrue(m.prompt_tokens > 0);
+    assert.isTrue(m.prompt_cached_tokens >= 0);
+    assert.isTrue(m.completion_reasoning_tokens >= 0);
+  });
+
   test("openai.chat.completions.parse (v5 GA method)", async () => {
     // Test that the parse method is properly wrapped in the GA namespace (v5)
     if (!oai.chat?.completions?.parse) {

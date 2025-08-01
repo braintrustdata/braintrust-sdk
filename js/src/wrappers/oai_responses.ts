@@ -13,6 +13,8 @@ export function responsesProxy(openai: any) {
         return responsesCreateProxy(target.create.bind(target));
       } else if (name === "stream") {
         return responsesStreamProxy(target.stream.bind(target));
+      } else if (name === "parse") {
+        return responsesParseProxy(target.parse.bind(target));
       }
       return Reflect.get(target, name, receiver);
     },
@@ -63,6 +65,43 @@ function parseSpanFromResponseCreateParams(params: any): TimedSpan {
 function parseEventFromResponseCreateResult(result: any) {
   return {
     output: result?.output_text || "",
+    metrics: parseMetricsFromUsage(result?.usage),
+  };
+}
+
+// convert response.parse params into a span
+function parseSpanFromResponseParseParams(params: any): TimedSpan {
+  // responses.parse is meant to take a single message and instruction.
+  // Convert that to the form our backend expects.
+  const input = [{ role: "user", content: params.input }];
+  if (params.instructions) {
+    input.push({ role: "system", content: params.instructions });
+  }
+
+  const spanArgs = {
+    name: "openai.responses.parse",
+    spanAttributes: {
+      type: "llm",
+    },
+    event: {
+      input,
+      metadata: {
+        ...filterFrom(params, ["input", "instructions"]),
+        provider: "openai",
+      },
+    },
+    startTime: getCurrentUnixTimestamp(),
+  };
+  return {
+    span: startSpan(spanArgs),
+    start: spanArgs.startTime,
+  };
+}
+
+// convert response.parse result into an event
+function parseEventFromResponseParseResult(result: any) {
+  return {
+    output: result?.output_parsed || result?.output_text || "",
     metrics: parseMetricsFromUsage(result?.usage),
   };
 }
@@ -157,6 +196,17 @@ function responsesStreamProxy(target: any): (params: any) => Promise<any> {
       return responseStream;
     },
   });
+}
+
+function responsesParseProxy(target: any): (params: any) => Promise<any> {
+  const hooks = {
+    name: "openai.responses.parse",
+    toSpanFunc: parseSpanFromResponseParseParams,
+    resultToEventFunc: parseEventFromResponseParseResult,
+    traceStreamFunc: traceResponseCreateStream, // Reuse the same stream tracing
+  };
+
+  return proxyCreate(target, hooks);
 }
 
 const TOKEN_NAME_MAP: Record<string, string> = {

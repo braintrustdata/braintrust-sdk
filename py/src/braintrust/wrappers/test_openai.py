@@ -5,6 +5,7 @@ import openai
 import pytest
 from openai import AsyncOpenAI
 from openai._types import NOT_GIVEN
+from pydantic import BaseModel
 
 from braintrust import logger, wrap_openai
 from braintrust.test_helpers import assert_dict_matches, init_test_logger
@@ -121,6 +122,53 @@ def test_openai_responses_metrics(memory_logger):
     assert span["metadata"]["model"] == TEST_MODEL
     assert span["metadata"]["provider"] == "openai"
     assert TEST_PROMPT in str(span["input"])
+    assert len(span["output"]) > 0
+    span_output_text = span["output"][0]["content"][0]["text"]
+    assert "24" in span_output_text or "twenty-four" in span_output_text.lower()
+
+    # Test responses.parse method
+    class NumberAnswer(BaseModel):
+        value: int
+        reasoning: str
+
+    # First test with unwrapped client - should work but no spans
+    parse_response = unwrapped_client.responses.parse(model=TEST_MODEL, input=TEST_PROMPT, text_format=NumberAnswer)
+    assert parse_response
+    # Access the structured output via text_format
+    assert parse_response.output_parsed
+    assert parse_response.output_parsed.value == 24
+    assert parse_response.output_parsed.reasoning
+
+    # No spans should be generated with unwrapped client
+    assert not memory_logger.pop()
+
+    # Now test with wrapped client - should generate spans
+    start = time.time()
+    parse_response = client.responses.parse(model=TEST_MODEL, input=TEST_PROMPT, text_format=NumberAnswer)
+    end = time.time()
+
+    assert parse_response
+    # Access the structured output via text_format
+    assert parse_response.output_parsed
+    assert parse_response.output_parsed.value == 24
+    assert parse_response.output_parsed.reasoning
+
+    # Verify spans are generated
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+    assert span
+    metrics = span["metrics"]
+    assert_metrics_are_valid(metrics, start, end)
+    assert 0 <= metrics.get("prompt_cached_tokens", 0)
+    assert 0 <= metrics.get("completion_reasoning_tokens", 0)
+    assert span["metadata"]["model"] == TEST_MODEL
+    assert span["metadata"]["provider"] == "openai"
+    assert TEST_PROMPT in str(span["input"])
+    assert len(span["output"]) > 0
+    assert span["output"][0]["content"][0]["parsed"]
+    assert span["output"][0]["content"][0]["parsed"]["value"] == 24
+    assert span["output"][0]["content"][0]["parsed"]["reasoning"] == parse_response.output_parsed.reasoning
 
 
 @pytest.mark.vcr
@@ -377,13 +425,62 @@ async def test_openai_responses_async(memory_logger):
         assert len(spans) == 1
         span = spans[0]
         metrics = span["metrics"]
-        assert_metrics_are_valid(metrics)
+        assert_metrics_are_valid(metrics, start, end)
         assert 0 <= metrics.get("prompt_cached_tokens", 0)
         assert 0 <= metrics.get("completion_reasoning_tokens", 0)
-        assert_metrics_are_valid(metrics, start, end)
         assert span["metadata"]["model"] == TEST_MODEL
         # assert span["metadata"]["provider"] == "openai"
         assert TEST_PROMPT in str(span["input"])
+
+    # Test responses.parse method
+    class NumberAnswer(BaseModel):
+        value: int
+        reasoning: str
+
+    for client, is_wrapped in clients:
+        if not is_wrapped:
+            # Test unwrapped client first
+            parse_response = await client.responses.parse(
+                model=TEST_MODEL, input=TEST_PROMPT, text_format=NumberAnswer
+            )
+            assert parse_response
+            # Access the structured output via text_format
+            assert parse_response.output_parsed
+            assert parse_response.output_parsed.value == 24
+            assert parse_response.output_parsed.reasoning
+
+            # No spans should be generated with unwrapped client
+            assert not memory_logger.pop()
+        else:
+            # Test wrapped client
+            start = time.time()
+            parse_response = await client.responses.parse(
+                model=TEST_MODEL, input=TEST_PROMPT, text_format=NumberAnswer
+            )
+            end = time.time()
+
+            assert parse_response
+            # Access the structured output via text_format
+            assert parse_response.output_parsed
+            assert parse_response.output_parsed.value == 24
+            assert parse_response.output_parsed.reasoning
+
+            # Verify spans were created
+            spans = memory_logger.pop()
+            assert len(spans) == 1
+            span = spans[0]
+            assert span
+            metrics = span["metrics"]
+            assert_metrics_are_valid(metrics, start, end)
+            assert 0 <= metrics.get("prompt_cached_tokens", 0)
+            assert 0 <= metrics.get("completion_reasoning_tokens", 0)
+            assert span["metadata"]["model"] == TEST_MODEL
+            # assert span["metadata"]["provider"] == "openai"
+            assert TEST_PROMPT in str(span["input"])
+            assert len(span["output"]) > 0
+            assert span["output"][0]["content"][0]["parsed"]
+            assert span["output"][0]["content"][0]["parsed"]["value"] == 24
+            assert span["output"][0]["content"][0]["parsed"]["reasoning"] == parse_response.output_parsed.reasoning
 
 
 @pytest.mark.asyncio
@@ -854,6 +951,60 @@ def test_openai_responses_not_given_filtering(memory_logger):
     assert "NOT_GIVEN" not in str(meta)
     for k in ["max_output_tokens", "tools", "top_p", "store"]:
         assert k not in meta
+
+    # Test responses.parse with NOT_GIVEN filtering
+    class NumberAnswer(BaseModel):
+        value: int
+        reasoning: str
+
+    # Make a parse call with NOT_GIVEN for optional parameters
+    parse_response = client.responses.parse(
+        model=TEST_MODEL,
+        input=TEST_PROMPT,
+        text_format=NumberAnswer,
+        max_output_tokens=NOT_GIVEN,
+        tools=NOT_GIVEN,
+        temperature=0.7,  # one real parameter
+        top_p=NOT_GIVEN,
+        metadata=NOT_GIVEN,
+        store=NOT_GIVEN,
+    )
+
+    # Verify the API call worked normally
+    assert parse_response
+    assert parse_response.output_parsed
+    assert parse_response.output_parsed.value == 24
+    assert parse_response.output_parsed.reasoning
+
+    # Check the logged span for parse
+    spans = memory_logger.pop()
+    assert len(spans) == 1
+    span = spans[0]
+
+    assert_dict_matches(
+        span,
+        {
+            "input": TEST_PROMPT,
+            "metadata": {
+                "model": TEST_MODEL,
+                "provider": "openai",
+                "temperature": 0.7,
+                "text_format": lambda tf: tf is not None and "NumberAnswer" in str(tf),
+            },
+        },
+    )
+    # Verify NOT_GIVEN values are not in the logged metadata
+    meta = span["metadata"]
+    assert "NOT_GIVEN" not in str(meta)
+    for k in ["max_output_tokens", "tools", "top_p", "store"]:
+        assert k not in meta
+    # Verify the output is properly logged in the span
+    assert span["output"]
+    assert isinstance(span["output"], list)
+    assert len(span["output"]) > 0
+    assert span["output"][0]["content"][0]["parsed"]
+    assert span["output"][0]["content"][0]["parsed"]["value"] == 24
+    assert span["output"][0]["content"][0]["parsed"]["reasoning"]
 
 
 @pytest.mark.vcr
