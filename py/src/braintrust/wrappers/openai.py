@@ -1,6 +1,7 @@
 """
 Exports `BraintrustTracingProcessor`, a `tracing.TracingProcessor` that logs traces to Braintrust.
 """
+
 import datetime
 from typing import Any, Dict, Optional, Union
 
@@ -63,6 +64,8 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
     def __init__(self, logger: Optional[Union[braintrust.Span, braintrust.Experiment, braintrust.Logger]] = None):
         self._logger = logger
         self._spans: Dict[str, braintrust.Span] = {}
+        self._first_input: Any = None
+        self._last_output: Any = None
 
     def on_trace_start(self, trace: tracing.Trace) -> None:
         if self._logger is not None:
@@ -83,7 +86,10 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
 
     def on_trace_end(self, trace: tracing.Trace) -> None:
         span = self._spans.pop(trace.trace_id)
+        span.log(input=self._first_input, output=self._last_output)
         span.end()
+        self._first_input = None
+        self._last_output = None
         # TODO(sachin): Add end time when SDK provides it.
         # span.end(_timestamp_from_maybe_iso(trace.ended_at))
 
@@ -208,8 +214,17 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
 
     def on_span_end(self, span: tracing.Span[tracing.SpanData]) -> None:
         s = self._spans.pop(span.span_id)
-        s.log(error=span.error, **self._log_data(span))
+        event = dict(error=span.error, **self._log_data(span))
+        s.log(**event)
         s.end(_timestamp_from_maybe_iso(span.ended_at))
+
+        input_ = event.get("input")
+        output = event.get("output")
+        if self._first_input is None:
+            self._first_input = input_
+
+        if output is not None:
+            self._last_output = output
 
     def shutdown(self) -> None:
         if self._logger is not None:
