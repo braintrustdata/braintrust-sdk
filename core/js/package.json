@@ -25,18 +25,11 @@
       "import": "./typespecs/dist/index.mjs",
       "module": "./typespecs/dist/index.mjs",
       "require": "./typespecs/dist/index.js"
-    },
-    "./typespecs-stainless": {
-      "types": "./typespecs-stainless/dist/index.d.ts",
-      "import": "./typespecs-stainless/dist/index.mjs",
-      "module": "./typespecs-stainless/dist/index.mjs",
-      "require": "./typespecs-stainless/dist/index.js"
     }
   },
   "files": [
     "dist/**/*",
-    "typespecs/dist/**/*",
-    "typespecs-stainless/dist/**/*"
+    "typespecs/dist/**/*"
   ],
   "license": "MIT",
   "publishConfig": {

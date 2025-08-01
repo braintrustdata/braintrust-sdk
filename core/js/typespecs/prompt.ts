@@ -10,7 +10,6 @@ import {
   chatCompletionMessageReasoningSchema,
 } from "./openai/messages";
 import { savedFunctionIdSchema } from "./function_id";
-import { customTypes } from "./custom_types";
 
 export {
   chatCompletionMessageParamSchema,
@@ -76,7 +75,7 @@ export const responseFormatJsonSchemaSchema = z.object({
   description: z.string().optional(),
   schema: z
     .union([
-      z.record(customTypes.unknown).openapi({ title: "object" }),
+      z.record(z.unknown()).openapi({ title: "object" }),
       z.string().openapi({ title: "string" }),
     ])
     .optional(),
@@ -105,7 +104,7 @@ export const responsesAPIJsonSchemaSchema = z.object({
   description: z.string().optional(),
   schema: z
     .union([
-      z.record(customTypes.unknown).openapi({ title: "object" }),
+      z.record(z.unknown()).openapi({ title: "object" }),
       z.string().openapi({ title: "string" }),
     ])
     .optional(),

@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { customTypes } from "./custom_types";
 
 export const viewTypeEnum = z
   .enum([
@@ -22,10 +21,10 @@ export type ViewType = z.infer<typeof viewTypeEnum>;
 
 export const viewDataSearchSchema = z
   .object({
-    filter: z.array(customTypes.unknown).nullish(),
-    tag: z.array(customTypes.unknown).nullish(),
-    match: z.array(customTypes.unknown).nullish(),
-    sort: z.array(customTypes.unknown).nullish(),
+    filter: z.array(z.unknown()).nullish(),
+    tag: z.array(z.unknown()).nullish(),
+    match: z.array(z.unknown()).nullish(),
+    sort: z.array(z.unknown()).nullish(),
   })
   .strip()
   .openapi("ViewDataSearch");
