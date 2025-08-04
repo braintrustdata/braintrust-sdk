@@ -3,19 +3,24 @@ import slugifyLib from "slugify";
 import { _initializeSpanContext } from "./framework";
 import { z } from "zod";
 import {
-  FunctionType,
-  IfExists,
-  SavedFunctionId,
-  PromptBlockData,
-  PromptData,
-  toolFunctionDefinitionSchema,
-  type ToolFunctionDefinition,
-  chatCompletionMessageParamSchema,
-  modelParamsSchema,
-  functionDataSchema,
-  projectSchema,
-  ExtendedSavedFunctionId,
-} from "@braintrust/core/typespecs";
+  type FunctionTypeEnumType as FunctionType,
+  IfExists as IfExistsSchema,
+  type IfExistsType as IfExists,
+  SavedFunctionId as SavedFunctionIdSchema,
+  type SavedFunctionIdType as SavedFunctionId,
+  PromptBlockData as PromptBlockDataSchema,
+  type PromptBlockDataType as PromptBlockData,
+  PromptData as PromptDataSchema,
+  type PromptDataType as PromptData,
+  ToolFunctionDefinition as toolFunctionDefinitionSchema,
+  type ToolFunctionDefinitionType as ToolFunctionDefinition,
+  ChatCompletionMessageParam as chatCompletionMessageParamSchema,
+  ModelParams as modelParamsSchema,
+  FunctionData as functionDataSchema,
+  Project as projectSchema,
+  ExtendedSavedFunctionId as ExtendedSavedFunctionIdSchema,
+  type ExtendedSavedFunctionIdType as ExtendedSavedFunctionId,
+} from "./imported_types";
 import { loadPrettyXact, TransactionId } from "@braintrust/core";
 import {
   _internalGetGlobalState,

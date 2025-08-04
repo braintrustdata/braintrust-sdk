@@ -1,9 +1,10 @@
 import {
-  CallEventSchema,
-  callEventSchema,
-  sseConsoleEventDataSchema,
-  sseProgressEventDataSchema,
-} from "@braintrust/core/typespecs";
+  CallEvent as CallEventSchemaImport,
+  type CallEventType as CallEventSchema,
+  CallEvent as callEventSchema,
+  SSEConsoleEventData as sseConsoleEventDataSchema,
+  SSEProgressEventData as sseProgressEventDataSchema,
+} from "../imported_types";
 import {
   createParser,
   EventSourceParser,

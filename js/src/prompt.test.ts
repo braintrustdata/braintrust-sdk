@@ -1,6 +1,9 @@
 import { describe, test } from "vitest";
 import { Prompt } from "./logger";
-import { PromptData } from "@braintrust/core/typespecs";
+import {
+  PromptData as PromptDataSchema,
+  type PromptDataType as PromptData,
+} from "./imported_types";
 
 describe("prompt strict mode", () => {
   test("strict mode", () => {

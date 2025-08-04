@@ -7,7 +7,7 @@ import slugify
 from braintrust.logger import api_conn, app_conn, login
 
 from .framework import _is_lazy_load, bcolors  # type: ignore
-from .types import (
+from .imported_types import (
     ChatCompletionMessageParam,
     IfExists,
     ModelParams,

@@ -1,8 +1,11 @@
 import {
-  CodeBundle,
-  FunctionObject,
-  IfExists,
-} from "@braintrust/core/typespecs";
+  CodeBundle as CodeBundleSchema,
+  type CodeBundleType as CodeBundle,
+  Function as FunctionObjectSchema,
+  type FunctionType as FunctionObject,
+  IfExists as IfExistsSchema,
+  type IfExistsType as IfExists,
+} from "../imported_types";
 import { BuildSuccess, EvaluatorState, FileHandle } from "../cli";
 import { scorerName, warning } from "../framework";
 import {

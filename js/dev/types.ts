@@ -1,9 +1,9 @@
 import {
-  functionIdSchema,
-  invokeParent,
-  runEvalSchema,
-  promptDataSchema,
-} from "@braintrust/core/typespecs";
+  FunctionId as functionIdSchema,
+  InvokeParent as invokeParentSchema,
+  RunEval as runEvalSchema,
+  PromptData as promptDataSchema,
+} from "../src/imported_types";
 import { z } from "zod";
 import { EvaluatorDef } from "../src/framework";
 import { BaseMetadata } from "../src/logger";
@@ -22,7 +22,7 @@ export const evalBodySchema = z.object({
     .nullish(),
   experiment_name: z.string().nullish(),
   project_id: z.string().nullish(),
-  parent: invokeParent.optional(),
+  parent: invokeParentSchema.optional(),
   stream: z.boolean().optional(),
 });
 

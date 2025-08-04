@@ -1,4 +1,9 @@
-import { GitMetadataSettings, RepoInfo } from "@braintrust/core/typespecs";
+import {
+  GitMetadataSettings as GitMetadataSettingsSchema,
+  type GitMetadataSettingsType as GitMetadataSettings,
+  RepoInfo as RepoInfoSchema,
+  type RepoInfoType as RepoInfo,
+} from "./imported_types";
 
 export interface CallerLocation {
   caller_functionname: string;
