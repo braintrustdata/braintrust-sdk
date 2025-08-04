@@ -3495,6 +3495,12 @@ export function traced<IsAsyncFlush extends boolean = true, R = void>(
 
 /**
  * Check if a function is a sync generator function.
+ *
+ * Note: This uses Object.prototype.toString which is sufficient for environments that
+ * support generator functions (ES6+). While our code is compiled to ES2022, consumers
+ * may run it in various environments. However, if generators aren't supported in their
+ * environment, the generator functions themselves won't work anyway, making detection moot.
+ *
  * @param fn The function to check.
  * @returns True if the function is a sync generator function.
  */
@@ -3504,6 +3510,8 @@ function isGeneratorFunction(fn: any): boolean {
 
 /**
  * Check if a function is an async generator function.
+ *
+ * Note: see isGeneratorFunction disclaimer
  * @param fn The function to check.
  * @returns True if the function is an async generator function.
  */
@@ -6152,4 +6160,6 @@ export const _exportsForTestingOnly = {
   simulateLoginForTests,
   simulateLogoutForTests,
   setInitialTestState,
+  isGeneratorFunction,
+  isAsyncGeneratorFunction,
 };
