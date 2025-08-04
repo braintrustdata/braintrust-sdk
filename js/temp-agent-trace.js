@@ -1,17 +1,19 @@
 /**
- * Temporary script to test OpenAI agents with Braintrust tracing
+ * Temporary script to test OpenAI agents with the new @braintrust/openai-agents package
  * 
  * Run with: node temp-agent-trace.js
  * 
  * Requirements:
  * - OPENAI_API_KEY environment variable
  * - BRAINTRUST_API_KEY environment variable (optional, can login via browser)
+ * - @braintrust/openai-agents package (workspace dependency)
  */
 
 async function main() {
   try {
     // Import the built modules
     const braintrust = await import('./dist/index.js');
+    const { OpenAIAgentsTracingProcessor } = await import('@braintrust/openai-agents');
 
     const { Agent, run, tool, addTraceProcessor, setTracingDisabled } = await import('@openai/agents');
     const { z } = await import('zod');
@@ -24,7 +26,7 @@ async function main() {
     });
 
     // Enhanced processor that logs raw data AND sends to Braintrust
-    class EnhancedTracingProcessor extends braintrust.BraintrustTracingProcessor {
+    class EnhancedTracingProcessor extends OpenAIAgentsTracingProcessor {
       onTraceStart(trace) {
         // console.log('\n=== RAW TRACE START ===');
         // console.log(JSON.stringify(trace, null, 2));
