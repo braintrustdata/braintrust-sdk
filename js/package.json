@@ -51,18 +51,19 @@
     "docs": "npx typedoc --options typedoc.json src/index.ts",
     "prepublishOnly": "../../scripts/node_prepublish_sdk.py",
     "postpublish": "../../scripts/node_postpublish_sdk.py",
-    "test": "vitest run --exclude src/wrappers/anthropic.test.ts --exclude src/wrappers/oai.test.ts --exclude src/otel.test.ts --exclude src/otel-no-deps.test.ts  --exclude src/wrappers/ai-sdk-v1.test.ts --exclude src/wrappers/ai-sdk-v2.test.ts --exclude src/wrappers/openai-agents.test.ts",
+    "test": "vitest run --exclude src/wrappers/anthropic.test.ts --exclude src/wrappers/oai.test.ts --exclude src/otel.test.ts --exclude src/otel-no-deps.test.ts  --exclude src/wrappers/ai-sdk-v1.test.ts --exclude src/wrappers/ai-sdk-v2.test.ts --exclude src/wrappers/openai-agents-integration.test.ts",
     "test:anthropic": "vitest run src/wrappers/anthropic.test.ts",
     "test:openai": "vitest run src/wrappers/oai.test.ts",
     "test:otel": "vitest run src/otel.test.ts",
     "test:otel-no-deps": "vitest run src/otel-no-deps.test.ts --reporter=verbose",
     "test:ai-sdk-v1": "vitest run src/wrappers/ai-sdk-v1.test.ts",
     "test:ai-sdk-v2": "vitest run src/wrappers/ai-sdk-v2.test.ts src/wrappers/ai-sdk-v1.test.ts",
-    "test:openai-agents": "vitest run src/wrappers/openai-agents.test.ts"
+    "test:openai-agents": "vitest run src/wrappers/openai-agents-integration.test.ts"
   },
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@braintrust/openai-agents": "workspace:*",
     "@openai/agents": "^0.0.14",
     "ai": "^4.3.16",
     "@jest/globals": "^29.7.0",
@@ -119,10 +120,5 @@
   },
   "peerDependencies": {
     "zod": "^3.25.34"
-  },
-  "peerDependenciesMeta": {
-    "@openai/agents": {
-      "optional": true
-    }
   }
 }

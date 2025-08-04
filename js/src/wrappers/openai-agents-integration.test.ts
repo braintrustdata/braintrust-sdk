@@ -6,6 +6,10 @@ import {
   afterEach,
   describe,
 } from "vitest";
+import { OpenAIAgentsTracingProcessor } from "@braintrust/openai-agents";
+import { z } from "zod";
+
+// Import necessary types and functions from braintrust (we're back in the main package)
 import { configureNode } from "../node";
 import {
   _exportsForTestingOnly,
@@ -13,8 +17,6 @@ import {
   Logger,
   TestBackgroundLogger,
 } from "../logger";
-import { BraintrustTracingProcessor } from "./openai-agents";
-import { z } from "zod";
 
 const TEST_SUITE_OPTIONS = { timeout: 30000, retry: 3 };
 
@@ -24,7 +26,7 @@ const TEST_MODEL = "gpt-4o-mini";
 try {
   configureNode();
 } catch {
-  // FIXME[matt] have a better of way of initializing brainstrust state once per process.
+  // TODO: Have a better of way of initializing brainstrust state once per process.
 }
 
 // Test with real @openai/agents SDK calls (requires OPENAI_API_KEY)
@@ -78,8 +80,8 @@ describe(
       _exportsForTestingOnly.clearTestBackgroundLogger();
     });
 
-    test("BraintrustTracingProcessor is instantiable", () => {
-      const processor = new BraintrustTracingProcessor(_logger);
+    test("OpenAIAgentsTracingProcessor is instantiable", () => {
+      const processor = new OpenAIAgentsTracingProcessor(_logger as any);
       assert.ok(processor);
 
       // Test methods exist
@@ -92,20 +94,10 @@ describe(
     });
 
     test("simple agent run with tracing", async (context) => {
-      if (
-        !Agent ||
-        !run ||
-        !setTraceProcessors ||
-        !process.env.OPENAI_API_KEY
-      ) {
-        context.skip();
-        return;
-      }
-
       assert.lengthOf(await backgroundLogger.drain(), 0);
 
-      // Set up the Braintrust tracing processor
-      const processor = new BraintrustTracingProcessor(_logger);
+      // Set up the OpenAI Agents tracing processor
+      const processor = new OpenAIAgentsTracingProcessor(_logger as any);
 
       setTracingDisabled(false);
       addTraceProcessor(processor);
@@ -147,7 +139,7 @@ describe(
     test("agent with function calling", async (context) => {
       assert.lengthOf(await backgroundLogger.drain(), 0);
 
-      const processor = new BraintrustTracingProcessor(_logger);
+      const processor = new OpenAIAgentsTracingProcessor(_logger as any);
 
       setTracingDisabled(false);
       addTraceProcessor(processor);

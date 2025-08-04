@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { SpanTypeAttribute } from "@braintrust/core";
-import { Span, startSpan, Experiment, Logger } from "../logger";
+import { Span as BraintrustSpan, startSpan, Experiment, Logger } from "braintrust";
 
 // TypeScript interfaces for @openai/agents types to avoid direct dependencies
+// These match the types from @openai/agents but are defined here to avoid export issues
 interface AgentsTrace {
   type: "trace";
   traceId: string;
@@ -169,15 +170,15 @@ function timestampElapsed(end?: string, start?: string): number | undefined {
 }
 
 /**
- * `BraintrustTracingProcessor` is a tracing processor that logs traces from the OpenAI Agents SDK to Braintrust.
+ * `OpenAIAgentsTracingProcessor` is a tracing processor that logs traces from the OpenAI Agents SDK to Braintrust.
  *
  * Args:
  *   logger: A `Span`, `Experiment`, or `Logger` to use for logging.
  *     If `undefined`, the current span, experiment, or logger will be selected exactly as in `startSpan`.
  */
-export class BraintrustTracingProcessor {
+export class OpenAIAgentsTracingProcessor {
   private logger?: Logger<any>;
-  private spans: Map<string, Span> = new Map();
+  private spans: Map<string, BraintrustSpan> = new Map();
 
   constructor(logger?: Logger<any>) {
     this.logger = logger;
@@ -407,7 +408,7 @@ export class BraintrustTracingProcessor {
     if (!span.spanId || !span.traceId) return Promise.resolve();
 
     // Find parent span - use parent_id if available, otherwise fall back to trace root
-    let parentSpan: Span | undefined;
+    let parentSpan: BraintrustSpan | undefined;
     if (span.parentId) {
       parentSpan = this.spans.get(span.parentId);
     } else if (span.traceId) {

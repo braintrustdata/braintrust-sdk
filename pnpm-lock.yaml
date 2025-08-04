@@ -89,6 +89,37 @@ importers:
         specifier: ^3.22.5
         version: 3.22.5(zod@3.24.0)
 
+  integrations/openai-agents:
+    dependencies:
+      '@braintrust/core':
+        specifier: workspace:*
+        version: link:../../core/js
+      braintrust:
+        specifier: workspace:^
+        version: link:../../js
+    devDependencies:
+      '@openai/agents':
+        specifier: ^0.0.15
+        version: 0.0.15(zod@3.25.67)
+      '@types/node':
+        specifier: ^20.10.5
+        version: 20.19.9
+      tsup:
+        specifier: ^8.3.5
+        version: 8.3.5(tsx@3.14.0)(typescript@5.4.4)
+      tsx:
+        specifier: ^3.14.0
+        version: 3.14.0
+      typescript:
+        specifier: ^5.3.3
+        version: 5.4.4
+      vitest:
+        specifier: ^2.1.9
+        version: 2.1.9(@types/node@20.19.9)
+      zod:
+        specifier: ^3.25.34
+        version: 3.25.76
+
   integrations/vercel-ai-sdk:
     dependencies:
       '@ai-sdk/provider':
@@ -186,6 +217,9 @@ importers:
         specifier: ^3.22.5
         version: 3.22.5(zod@3.25.34)
     devDependencies:
+      '@braintrust/openai-agents':
+        specifier: workspace:*
+        version: link:../integrations/openai-agents
       '@jest/globals':
         specifier: ^29.7.0
         version: 29.7.0
@@ -254,7 +288,7 @@ importers:
         version: 29.1.4(@babel/core@7.24.7)(esbuild@0.25.8)(jest@29.7.0)(typescript@5.4.4)
       tsup:
         specifier: ^8.3.5
-        version: 8.3.5(typescript@5.4.4)
+        version: 8.3.5(tsx@3.14.0)(typescript@5.4.4)
       typedoc:
         specifier: ^0.28.5
         version: 0.28.5(typescript@5.4.4)
@@ -438,6 +472,16 @@ packages:
     dependencies:
       openapi3-ts: 4.2.1
       zod: 3.25.34
+    dev: false
+
+  /@asteasolutions/zod-to-openapi@6.3.1(zod@3.25.76):
+    resolution: {integrity: sha512-1CRWBqslgdBpZeJnxxksGirAQ39Iztxk+LzTkYwoP0mNzuaULa604s8Xc5V9yzmYccwJ89O9fPQgxCkbNN398g==}
+    peerDependencies:
+      zod: ^3.20.2
+    dependencies:
+      openapi3-ts: 4.2.1
+      zod: 3.25.76
+    dev: true
 
   /@babel/code-frame@7.24.7:
     resolution: {integrity: sha512-BcYH1CVJBO9tvyIZ2jVeXgSIMvGZ2FDRvDdOIVQyuklNKSsx+eppDEBq/g47Ayw+RqNFE+URvOShmf+f/qwAlA==}
@@ -481,7 +525,7 @@ packages:
       '@babel/traverse': 7.24.7
       '@babel/types': 7.24.7
       convert-source-map: 2.0.0
-      debug: 4.4.0
+      debug: 4.4.1
       gensync: 1.0.0-beta.2
       json5: 2.2.3
       semver: 6.3.1
@@ -1026,7 +1070,7 @@ packages:
       '@babel/helper-split-export-declaration': 7.24.7
       '@babel/parser': 7.24.7
       '@babel/types': 7.24.7
-      debug: 4.4.0
+      debug: 4.4.1
       globals: 11.12.0
     transitivePeerDependencies:
       - supports-color
@@ -1070,9 +1114,9 @@ packages:
   /@braintrust/core@0.0.38:
     resolution: {integrity: sha512-Szvl4d7cLy+IYyrN3NNvaBKAigBomj6937Vu+Hg/wKRxFAiiwecx3Hm1wbxessT9wJWwUc/ovQeIU2c6NdfH6Q==}
     dependencies:
-      '@asteasolutions/zod-to-openapi': 6.3.1(zod@3.25.34)
+      '@asteasolutions/zod-to-openapi': 6.3.1(zod@3.25.76)
       uuid: 9.0.1
-      zod: 3.25.34
+      zod: 3.25.76
     dev: true
 
   /@bundled-es-modules/cookie@2.0.1:
@@ -2077,7 +2121,7 @@ packages:
     dependencies:
       '@jest/fake-timers': 29.7.0
       '@jest/types': 29.6.3
-      '@types/node': 20.10.5
+      '@types/node': 20.19.9
       jest-mock: 29.7.0
     dev: true
 
@@ -2104,7 +2148,7 @@ packages:
     dependencies:
       '@jest/types': 29.6.3
       '@sinonjs/fake-timers': 10.3.0
-      '@types/node': 20.10.5
+      '@types/node': 20.19.9
       jest-message-util: 29.7.0
       jest-mock: 29.7.0
       jest-util: 29.7.0
@@ -2225,7 +2269,7 @@ packages:
       '@jest/schemas': 29.6.3
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 20.10.5
+      '@types/node': 20.19.9
       '@types/yargs': 17.0.32
       chalk: 4.1.2
     dev: true
@@ -2275,7 +2319,7 @@ packages:
   /@kwsites/file-exists@1.1.1:
     resolution: {integrity: sha512-m9/5YGR18lIwxSFDwfE3oA7bWuq9kdau6ugN4H2rJeyhFQZcG9AgSHkQtSD15a8WvTgfz9aikZMrKPHvbpqFiw==}
     dependencies:
-      debug: 4.4.0
+      debug: 4.4.1
     transitivePeerDependencies:
       - supports-color
     dev: false
@@ -2444,10 +2488,42 @@ packages:
       - ws
     dev: true
 
+  /@openai/agents-core@0.0.15(ws@8.18.3)(zod@3.25.67):
+    resolution: {integrity: sha512-ODTqttjW0s0ejBe5PKnYRlFbJSZH2IO6OtUlRhIKmWiWrX6pGRxvpKjTSOXy8DEtpRHBj6Nhky0UoSlO6eOkDQ==}
+    peerDependencies:
+      zod: 3.25.40 - 3.25.67
+    peerDependenciesMeta:
+      zod:
+        optional: true
+    dependencies:
+      '@openai/zod': /zod@3.25.67
+      debug: 4.4.1
+      openai: 5.11.0(ws@8.18.3)(zod@3.25.67)
+      zod: 3.25.67
+    optionalDependencies:
+      '@modelcontextprotocol/sdk': 1.17.0
+    transitivePeerDependencies:
+      - supports-color
+      - ws
+    dev: true
+
   /@openai/agents-openai@0.0.14(zod@3.25.67):
     resolution: {integrity: sha512-qSGBictwfJ3dMhC3QvqOLMm8RVZ/eIYNcFNLHps7hWeB1xeDGJFDZ/X7dDicejOeEXbi/nGe1ry6LbXDYSo3uQ==}
     dependencies:
       '@openai/agents-core': 0.0.14(ws@8.18.3)(zod@3.25.67)
+      '@openai/zod': /zod@3.25.67
+      debug: 4.4.1
+      openai: 5.11.0(ws@8.18.3)(zod@3.25.67)
+    transitivePeerDependencies:
+      - supports-color
+      - ws
+      - zod
+    dev: true
+
+  /@openai/agents-openai@0.0.15(zod@3.25.67):
+    resolution: {integrity: sha512-YIX3n98HdmmWKkb/71OB+DCQUYyGEpqfzPjejzdtNLUvAEs3jvXf7nkC8oTISsuCwrirgBz0rQEefeo0oUlyFQ==}
+    dependencies:
+      '@openai/agents-core': 0.0.15(ws@8.18.3)(zod@3.25.67)
       '@openai/zod': /zod@3.25.67
       debug: 4.4.1
       openai: 5.11.0(ws@8.18.3)(zod@3.25.67)
@@ -2472,6 +2548,21 @@ packages:
       - zod
     dev: true
 
+  /@openai/agents-realtime@0.0.15(zod@3.25.67):
+    resolution: {integrity: sha512-kSZzMyij9Xt3BpMb/9snuVnu7a5qKZLyhtN/kWMA+wmfETvWz23BBz6tbO5xOmurAt9//OktkB+94e0T0RBtlA==}
+    dependencies:
+      '@openai/agents-core': 0.0.15(ws@8.18.3)(zod@3.25.67)
+      '@openai/zod': /zod@3.25.67
+      '@types/ws': 8.18.1
+      debug: 4.4.1
+      ws: 8.18.3
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+      - zod
+    dev: true
+
   /@openai/agents@0.0.14(zod@3.25.67):
     resolution: {integrity: sha512-67FwkSxlid8/fFzIDMBuIvDQJ2Egf7PCpI7zp2JAlIlsz4UZVSlptNcN63RCG2xP6X2XqsdyjPke8ZDEKVrePw==}
     dependencies:
@@ -2480,6 +2571,22 @@ packages:
       '@openai/agents-realtime': 0.0.14(zod@3.25.67)
       debug: 4.4.1
       openai: 5.11.0(zod@3.25.34)
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+      - ws
+      - zod
+    dev: true
+
+  /@openai/agents@0.0.15(zod@3.25.67):
+    resolution: {integrity: sha512-B8y+WyWOeHowflPx09pyCfcqikC4OYWK27HTyNGt1oraXv93CzuamSr76iAaU1nWQ1MPbUwl6LHPX4BPUikVkQ==}
+    dependencies:
+      '@openai/agents-core': 0.0.15(ws@8.18.3)(zod@3.25.67)
+      '@openai/agents-openai': 0.0.15(zod@3.25.67)
+      '@openai/agents-realtime': 0.0.15(zod@3.25.67)
+      debug: 4.4.1
+      openai: 5.11.0(zod@3.25.76)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -2747,19 +2854,19 @@ packages:
     resolution: {integrity: sha512-fB3Zu92ucau0iQ0JMCFQE7b/dv8Ot07NI3KaZIkIUNXq82k4eBAqUaneXfleGY9JWskeS9y+u0nXMyspcuQrCg==}
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 20.17.30
+      '@types/node': 20.19.9
     dev: true
 
   /@types/cli-progress@3.11.5:
     resolution: {integrity: sha512-D4PbNRbviKyppS5ivBGyFO29POlySLmA2HyUFE4p5QGazAMM3CwkKWcvTl8gvElSuxRh6FPKL8XmidX873ou4g==}
     dependencies:
-      '@types/node': 20.10.5
+      '@types/node': 20.19.9
     dev: true
 
   /@types/connect@3.4.38:
     resolution: {integrity: sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug==}
     dependencies:
-      '@types/node': 20.17.30
+      '@types/node': 20.19.9
     dev: true
 
   /@types/cookie@0.6.0:
@@ -2769,7 +2876,7 @@ packages:
   /@types/cors@2.8.17:
     resolution: {integrity: sha512-8CGDvrBj1zgo2qE+oS3pOCyYNqCPryMWY2bGfwA0dcfopWGgxs+78df0Rs3rc9THP4JkOhLsAa+15VdpAqkcUA==}
     dependencies:
-      '@types/node': 20.17.30
+      '@types/node': 20.19.9
     dev: true
 
   /@types/diff-match-patch@1.0.36:
@@ -2786,7 +2893,7 @@ packages:
   /@types/express-serve-static-core@5.0.6:
     resolution: {integrity: sha512-3xhRnjJPkULekpSzgtoNYYcTWgEZkp4myc+Saevii5JPnHNvHMRlBSHDbs7Bh1iPPoVTERHEZXyhyLbMEsExsA==}
     dependencies:
-      '@types/node': 20.17.30
+      '@types/node': 20.19.9
       '@types/qs': 6.9.18
       '@types/range-parser': 1.2.7
       '@types/send': 0.17.4
@@ -2803,7 +2910,7 @@ packages:
   /@types/graceful-fs@4.1.9:
     resolution: {integrity: sha512-olP3sd1qOEe5dXTSaFvQG+02VdRXcdytWLAZsAq1PecU8uqQAhkrnbli7DagjtXKW/Bl7YJbUsa8MPcuc8LHEQ==}
     dependencies:
-      '@types/node': 20.10.5
+      '@types/node': 20.19.9
     dev: true
 
   /@types/hast@3.0.4:
@@ -2847,7 +2954,7 @@ packages:
   /@types/node-fetch@2.6.11:
     resolution: {integrity: sha512-24xFj9R5+rfQJLRyM56qh+wnVSYhyXC2tkoBndtY0U+vubqNsYXGjufB2nn8Q6gt0LrARwL6UBtMCSVCwl4B1g==}
     dependencies:
-      '@types/node': 20.10.5
+      '@types/node': 20.19.9
       form-data: 4.0.0
     dev: true
 
@@ -2861,12 +2968,6 @@ packages:
     resolution: {integrity: sha512-nNPsNE65wjMxEKI93yOP+NPGGBJz/PoN3kZsVLee0XMiJolxSekEVD8wRwBUBqkwc7UWop0edW50yrCQW4CyRw==}
     dependencies:
       undici-types: 5.26.5
-    dev: true
-
-  /@types/node@20.17.30:
-    resolution: {integrity: sha512-7zf4YyHA+jvBNfVrk2Gtvs6x7E8V+YDW05bNfG2XkWDJfYRXrTiP/DsB2zSYTaHX0bGIujTBQdMVAhb+j7mwpg==}
-    dependencies:
-      undici-types: 6.19.8
     dev: true
 
   /@types/node@20.19.9:
@@ -2895,14 +2996,14 @@ packages:
     resolution: {integrity: sha512-x2EM6TJOybec7c52BX0ZspPodMsQUd5L6PRwOunVyVUhXiBSKf3AezDL8Dgvgt5o0UfKNfuA0eMLr2wLT4AiBA==}
     dependencies:
       '@types/mime': 1.3.5
-      '@types/node': 20.17.30
+      '@types/node': 20.19.9
     dev: true
 
   /@types/serve-static@1.15.7:
     resolution: {integrity: sha512-W8Ym+h8nhuRwaKPaDw34QUkwsGi6Rc4yYqvKFo5rm2FUEhCFbzVWrxXUxuKK8TASjWsysJY0nsmNCGhCOIsrOw==}
     dependencies:
       '@types/http-errors': 2.0.4
-      '@types/node': 20.17.30
+      '@types/node': 20.19.9
       '@types/send': 0.17.4
     dev: true
 
@@ -3318,8 +3419,8 @@ packages:
       linear-sum-assignment: 1.0.7
       mustache: 4.2.0
       openai: 4.47.1
-      zod: 3.25.34
-      zod-to-json-schema: 3.22.5(zod@3.25.34)
+      zod: 3.25.76
+      zod-to-json-schema: 3.22.5(zod@3.25.76)
     transitivePeerDependencies:
       - encoding
     dev: true
@@ -3911,6 +4012,7 @@ packages:
         optional: true
     dependencies:
       ms: 2.1.3
+    dev: true
 
   /debug@4.4.1:
     resolution: {integrity: sha512-KcKCqiftBJcZr++7ykoDIEwSa3XWowTfNPo92BYxjXiyYEVrUQh2aLyhxBCwww+heortUFxEJYcRzosstTEBYQ==}
@@ -3922,7 +4024,6 @@ packages:
         optional: true
     dependencies:
       ms: 2.1.3
-    dev: true
 
   /decamelize@1.2.0:
     resolution: {integrity: sha512-z2S+W9X73hAUUki+N+9Za2lBlun89zigOyGrsax+KUQ6wKW4ZoWpEYBkGhQjwAjjDCkWxhY0VKEhk8wzY7F5cA==}
@@ -5321,7 +5422,7 @@ packages:
     dependencies:
       '@jest/types': 29.6.3
       '@types/graceful-fs': 4.1.9
-      '@types/node': 20.10.5
+      '@types/node': 20.19.9
       anymatch: 3.1.3
       fb-watchman: 2.0.2
       graceful-fs: 4.2.11
@@ -5372,7 +5473,7 @@ packages:
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 20.10.5
+      '@types/node': 20.19.9
       jest-util: 29.7.0
     dev: true
 
@@ -5510,7 +5611,7 @@ packages:
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 20.10.5
+      '@types/node': 20.19.9
       chalk: 4.1.2
       ci-info: 3.9.0
       graceful-fs: 4.2.11
@@ -5547,7 +5648,7 @@ packages:
     resolution: {integrity: sha512-eIz2msL/EzL9UFTFFx7jBTkeZfku0yUAyZZZmJ93H2TYEiroIx2PQjEXcwYtYl8zXCxb+PAmA2hLIt/6ZEkPHw==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
     dependencies:
-      '@types/node': 20.17.30
+      '@types/node': 20.19.9
       jest-util: 29.7.0
       merge-stream: 2.0.0
       supports-color: 8.1.1
@@ -6241,6 +6342,21 @@ packages:
         optional: true
     dependencies:
       zod: 3.25.34
+    dev: true
+
+  /openai@5.11.0(zod@3.25.76):
+    resolution: {integrity: sha512-+AuTc5pVjlnTuA9zvn8rA/k+1RluPIx9AD4eDcnutv6JNwHHZxIhkFy+tmMKCvmMFDQzfA/r1ujvPWB19DQkYg==}
+    hasBin: true
+    peerDependencies:
+      ws: ^8.18.0
+      zod: ^3.23.8
+    peerDependenciesMeta:
+      ws:
+        optional: true
+      zod:
+        optional: true
+    dependencies:
+      zod: 3.25.76
     dev: true
 
   /openapi3-ts@4.2.1:
@@ -7478,7 +7594,7 @@ packages:
       cac: 6.7.14
       chokidar: 4.0.3
       consola: 3.4.0
-      debug: 4.4.0
+      debug: 4.4.1
       esbuild: 0.24.2
       joycon: 3.1.1
       picocolors: 1.1.1
@@ -7498,7 +7614,7 @@ packages:
       - yaml
     dev: true
 
-  /tsup@8.3.5(typescript@5.4.4):
+  /tsup@8.3.5(tsx@3.14.0)(typescript@5.4.4):
     resolution: {integrity: sha512-Tunf6r6m6tnZsG9GYWndg0z8dEV7fD733VBFzFJ5Vcm1FtlXB8xBD/rtrBi2a3YKEV7hHtxiZtW5EAVADoe1pA==}
     engines: {node: '>=18'}
     hasBin: true
@@ -7521,7 +7637,7 @@ packages:
       cac: 6.7.14
       chokidar: 4.0.3
       consola: 3.4.0
-      debug: 4.4.0
+      debug: 4.4.1
       esbuild: 0.24.2
       joycon: 3.1.1
       picocolors: 1.1.1
@@ -7736,10 +7852,6 @@ packages:
     resolution: {integrity: sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA==}
     dev: true
 
-  /undici-types@6.19.8:
-    resolution: {integrity: sha512-ve2KP6f/JnbPBFyobGHuerC9g1FYGn/F8n1LWTwNxCEzd6IfqTwUQcNXgEtmmQ6DlRrC1hrSrBnCZPokRrDHjw==}
-    dev: true
-
   /undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
     dev: true
@@ -7868,6 +7980,28 @@ packages:
       - terser
     dev: true
 
+  /vite-node@2.1.9(@types/node@20.19.9):
+    resolution: {integrity: sha512-AM9aQ/IPrW/6ENLQg3AGY4K1N2TGZdR5e4gu/MmmR2xR3Ll1+dib+nook92g4TV3PXVyeyxdWwtaCAiUL0hMxA==}
+    engines: {node: ^18.0.0 || >=20.0.0}
+    hasBin: true
+    dependencies:
+      cac: 6.7.14
+      debug: 4.4.0
+      es-module-lexer: 1.6.0
+      pathe: 1.1.2
+      vite: 5.4.14(@types/node@20.19.9)
+    transitivePeerDependencies:
+      - '@types/node'
+      - less
+      - lightningcss
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+    dev: true
+
   /vite-tsconfig-paths@4.3.2(typescript@5.3.3):
     resolution: {integrity: sha512-0Vd/a6po6Q+86rPlntHye7F31zA2URZMbH8M3saAZ/xR9QoGN/L21bxEGfXdWmFdNkqPpRdxFT7nmNe12e9/uA==}
     peerDependencies:
@@ -7939,6 +8073,45 @@ packages:
       fsevents: 2.3.3
     dev: true
 
+  /vite@5.4.14(@types/node@20.19.9):
+    resolution: {integrity: sha512-EK5cY7Q1D8JNhSaPKVK4pwBFvaTmZxEnoKXLG/U9gmdDcihQGNzFlgIvaxezFR4glP1LsuiedwMBqCXH3wZccA==}
+    engines: {node: ^18.0.0 || >=20.0.0}
+    hasBin: true
+    peerDependencies:
+      '@types/node': ^18.0.0 || >=20.0.0
+      less: '*'
+      lightningcss: ^1.21.0
+      sass: '*'
+      sass-embedded: '*'
+      stylus: '*'
+      sugarss: '*'
+      terser: ^5.4.0
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+      less:
+        optional: true
+      lightningcss:
+        optional: true
+      sass:
+        optional: true
+      sass-embedded:
+        optional: true
+      stylus:
+        optional: true
+      sugarss:
+        optional: true
+      terser:
+        optional: true
+    dependencies:
+      '@types/node': 20.19.9
+      esbuild: 0.21.5
+      postcss: 8.5.3
+      rollup: 4.35.0
+    optionalDependencies:
+      fsevents: 2.3.3
+    dev: true
+
   /vitest@2.1.9(@types/node@20.10.5)(msw@2.6.6):
     resolution: {integrity: sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==}
     engines: {node: ^18.0.0 || >=20.0.0}
@@ -7984,6 +8157,64 @@ packages:
       tinyrainbow: 1.2.0
       vite: 5.4.14(@types/node@20.10.5)
       vite-node: 2.1.9(@types/node@20.10.5)
+      why-is-node-running: 2.3.0
+    transitivePeerDependencies:
+      - less
+      - lightningcss
+      - msw
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+    dev: true
+
+  /vitest@2.1.9(@types/node@20.19.9):
+    resolution: {integrity: sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==}
+    engines: {node: ^18.0.0 || >=20.0.0}
+    hasBin: true
+    peerDependencies:
+      '@edge-runtime/vm': '*'
+      '@types/node': ^18.0.0 || >=20.0.0
+      '@vitest/browser': 2.1.9
+      '@vitest/ui': 2.1.9
+      happy-dom: '*'
+      jsdom: '*'
+    peerDependenciesMeta:
+      '@edge-runtime/vm':
+        optional: true
+      '@types/node':
+        optional: true
+      '@vitest/browser':
+        optional: true
+      '@vitest/ui':
+        optional: true
+      happy-dom:
+        optional: true
+      jsdom:
+        optional: true
+    dependencies:
+      '@types/node': 20.19.9
+      '@vitest/expect': 2.1.9
+      '@vitest/mocker': 2.1.9(msw@2.6.6)(vite@5.4.14)
+      '@vitest/pretty-format': 2.1.9
+      '@vitest/runner': 2.1.9
+      '@vitest/snapshot': 2.1.9
+      '@vitest/spy': 2.1.9
+      '@vitest/utils': 2.1.9
+      chai: 5.2.0
+      debug: 4.4.0
+      expect-type: 1.2.0
+      magic-string: 0.30.17
+      pathe: 1.1.2
+      std-env: 3.8.1
+      tinybench: 2.9.0
+      tinyexec: 0.3.2
+      tinypool: 1.0.2
+      tinyrainbow: 1.2.0
+      vite: 5.4.14(@types/node@20.19.9)
+      vite-node: 2.1.9(@types/node@20.19.9)
       why-is-node-running: 2.3.0
     transitivePeerDependencies:
       - less
@@ -8221,7 +8452,6 @@ packages:
       zod: ^3.22.4
     dependencies:
       zod: 3.25.76
-    dev: false
 
   /zod-to-json-schema@3.24.6(zod@3.25.34):
     resolution: {integrity: sha512-h/z3PKvcTcTetyjl1fkj79MHNEjm+HpD6NXheWjzOekY7kV+lwDYnHw+ivHkijnCSMz1yJaWBD9vu/Fcmk+vEg==}
