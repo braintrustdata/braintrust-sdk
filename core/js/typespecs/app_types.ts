@@ -274,6 +274,11 @@ export const projectSchema = z
     deleted_at: projectBaseSchema.shape.deleted_at,
     user_id: projectBaseSchema.shape.user_id,
     settings: projectSettingsSchema.nullish(),
+    tags: z
+      .string()
+      .array()
+      .nullish()
+      .describe("A list of tags for the project"),
   })
   .openapi("Project");
 export type Project = z.infer<typeof projectSchema>;
@@ -897,6 +902,9 @@ export const patchProjectSchema = z
         "Project settings. Patch operations replace all settings, so make sure you include all settings you want to keep.",
       )
       .nullish(),
+    tags: projectSchema.shape.tags.describe(
+      "A list of tags for the project. This replaces all existing tags.",
+    ),
   })
   .openapi("PatchProject");
 
