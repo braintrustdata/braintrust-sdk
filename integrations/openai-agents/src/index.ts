@@ -6,95 +6,24 @@ import {
   Experiment,
   Logger,
 } from "braintrust";
+import type {
+  SpanData,
+  AgentSpanData,
+  FunctionSpanData,
+  GenerationSpanData,
+  ResponseSpanData,
+  HandoffSpanData,
+  CustomSpanData,
+  GuardrailSpanData,
+} from "@openai/agents-core/dist/tracing/spans";
 
-// TypeScript interfaces for @openai/agents types to avoid direct dependencies
-// These match the types from @openai/agents but are defined here to avoid export issues
-interface AgentsTrace {
-  type: "trace";
-  traceId: string;
-  name: string;
-  groupId: string | null;
-  metadata?: Record<string, any>;
-}
+import type { Trace, Span } from "@openai/agents";
 
-type SpanDataBase = {
-  type: string;
-};
+// Interface for traces - using the Trace type from @openai/agents
+type AgentsTrace = Trace;
 
-type AgentSpanData = SpanDataBase & {
-  type: "agent";
-  name: string;
-  handoffs?: string[];
-  tools?: string[];
-  output_type?: string;
-};
-
-type FunctionSpanData = SpanDataBase & {
-  type: "function";
-  name: string;
-  input: string;
-  output: string;
-  mcp_data?: string;
-};
-
-type GenerationSpanData = SpanDataBase & {
-  type: "generation";
-  input?: Array<Record<string, any>>;
-  output?: Array<Record<string, any>>;
-  model?: string;
-  model_config?: Record<string, any>;
-  usage?: Record<string, any>;
-};
-
-type ResponseSpanData = SpanDataBase & {
-  type: "response";
-  response_id?: string;
-  _input?: string | Record<string, any>[];
-  _response?: Record<string, any>;
-};
-
-type HandoffSpanData = SpanDataBase & {
-  type: "handoff";
-  from_agent?: string;
-  to_agent?: string;
-};
-
-type CustomSpanData = SpanDataBase & {
-  type: "custom";
-  name: string;
-  data: Record<string, any>;
-};
-
-type GuardrailSpanData = SpanDataBase & {
-  type: "guardrail";
-  name: string;
-  triggered: boolean;
-};
-
-type SpanData =
-  | AgentSpanData
-  | FunctionSpanData
-  | GenerationSpanData
-  | ResponseSpanData
-  | HandoffSpanData
-  | CustomSpanData
-  | GuardrailSpanData;
-
-type SpanError = {
-  message: string;
-  data?: Record<string, any>;
-};
-
-interface AgentsSpan {
-  type: "trace.span";
-  traceId: string;
-  spanId: string;
-  parentId: string | null;
-  spanData: SpanData;
-  startedAt: string | null;
-  endedAt: string | null;
-  error: SpanError | null;
-}
+// Interface for spans - using the Span type from @openai/agents
+type AgentsSpan = Span<SpanData>;
 
 // Union types for input/output from different span types
 type SpanInput = string | Array<Record<string, any>> | Record<string, any>[];
