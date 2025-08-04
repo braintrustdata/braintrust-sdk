@@ -217,9 +217,6 @@ importers:
         specifier: ^3.22.5
         version: 3.22.5(zod@3.25.34)
     devDependencies:
-      '@braintrust/openai-agents':
-        specifier: workspace:*
-        version: link:../integrations/openai-agents
       '@jest/globals':
         specifier: ^29.7.0
         version: 29.7.0
