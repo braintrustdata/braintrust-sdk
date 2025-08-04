@@ -3020,6 +3020,7 @@ type LoadPromptOptions = FullLoginOptions & {
   id?: string;
   defaults?: DefaultPromptArgs;
   noTrace?: boolean;
+  environment?: string;
   state?: BraintrustState;
 };
 
@@ -3058,6 +3059,7 @@ export async function loadPrompt({
   id,
   defaults,
   noTrace = false,
+  environment,
   appUrl,
   apiKey,
   orgName,
@@ -3065,6 +3067,9 @@ export async function loadPrompt({
   forceLogin,
   state: stateArg,
 }: LoadPromptOptions) {
+  if (version && environment) {
+    throw new Error("Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other).");
+  }
   if (id) {
     // When loading by ID, we don't need project or slug
   } else if (isEmpty(projectName) && isEmpty(projectId)) {
@@ -3085,7 +3090,10 @@ export async function loadPrompt({
     });
     if (id) {
       // Load prompt by ID using the /v1/prompt/{id} endpoint
-      response = await state.apiConn().get_json(`v1/prompt/${id}`, {});
+      response = await state.apiConn().get_json(`v1/prompt/${id}`, {
+        ...(version && { version }),
+        ...(environment && { environment }),
+      });
       // Wrap single prompt response in objects array to match list API format
       if (response) {
         response = { objects: [response] };
@@ -3096,6 +3104,7 @@ export async function loadPrompt({
         project_id: projectId,
         slug,
         version,
+        ...(environment && { environment }),
       });
     }
   } catch (e) {
