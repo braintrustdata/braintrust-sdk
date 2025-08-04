@@ -1089,3 +1089,82 @@ describe("wrapTraced generator support", () => {
     expect(log.metadata).toEqual({ a: "b", total: 6 });
   });
 });
+
+describe("isGeneratorFunction and isAsyncGeneratorFunction utilities", () => {
+  const { isGeneratorFunction, isAsyncGeneratorFunction } =
+    _exportsForTestingOnly;
+
+  test("isGeneratorFunction correctly identifies sync generators", () => {
+    // Positive cases
+    expect(isGeneratorFunction(function* () {})).toBe(true);
+    expect(
+      isGeneratorFunction(function* gen() {
+        yield 1;
+      }),
+    ).toBe(true);
+
+    // Negative cases
+    expect(isGeneratorFunction(function () {})).toBe(false);
+    expect(isGeneratorFunction(() => {})).toBe(false);
+    expect(isGeneratorFunction(async function () {})).toBe(false);
+    expect(isGeneratorFunction(async function* () {})).toBe(false);
+
+    // Edge cases
+    expect(isGeneratorFunction(null)).toBe(false);
+    expect(isGeneratorFunction(undefined)).toBe(false);
+    expect(isGeneratorFunction(123)).toBe(false);
+    expect(isGeneratorFunction("function*() {}")).toBe(false);
+    expect(isGeneratorFunction({})).toBe(false);
+    expect(isGeneratorFunction([])).toBe(false);
+  });
+
+  test("isAsyncGeneratorFunction correctly identifies async generators", () => {
+    // Positive cases
+    expect(isAsyncGeneratorFunction(async function* () {})).toBe(true);
+    expect(
+      isAsyncGeneratorFunction(async function* gen() {
+        yield 1;
+      }),
+    ).toBe(true);
+
+    // Negative cases
+    expect(isAsyncGeneratorFunction(function () {})).toBe(false);
+    expect(isAsyncGeneratorFunction(() => {})).toBe(false);
+    expect(isAsyncGeneratorFunction(async function () {})).toBe(false);
+    expect(isAsyncGeneratorFunction(function* () {})).toBe(false);
+
+    // Edge cases
+    expect(isAsyncGeneratorFunction(null)).toBe(false);
+    expect(isAsyncGeneratorFunction(undefined)).toBe(false);
+    expect(isAsyncGeneratorFunction(123)).toBe(false);
+    expect(isAsyncGeneratorFunction("async function*() {}")).toBe(false);
+    expect(isAsyncGeneratorFunction({})).toBe(false);
+    expect(isAsyncGeneratorFunction([])).toBe(false);
+  });
+
+  test("generator detection works with various declaration styles", () => {
+    // Named generators
+    function* namedGen() {
+      yield 1;
+    }
+    expect(isGeneratorFunction(namedGen)).toBe(true);
+
+    // Anonymous generators
+    const anonGen = function* () {
+      yield 2;
+    };
+    expect(isGeneratorFunction(anonGen)).toBe(true);
+
+    // Async named generators
+    async function* namedAsyncGen() {
+      yield 1;
+    }
+    expect(isAsyncGeneratorFunction(namedAsyncGen)).toBe(true);
+
+    // Anonymous async generators
+    const anonAsyncGen = async function* () {
+      yield 2;
+    };
+    expect(isAsyncGeneratorFunction(anonAsyncGen)).toBe(true);
+  });
+});
