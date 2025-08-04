@@ -344,24 +344,26 @@ export function postProcessOutput(
   toolCalls: LanguageModelV1FunctionToolCall[] | undefined,
   finishReason: LanguageModelV1FinishReason,
 ) {
-  return {
-    index: 0,
-    message: {
-      role: "assistant",
-      content: text ?? "",
-      ...(toolCalls && toolCalls.length > 0
-        ? {
-            tool_calls: toolCalls.map((toolCall) => ({
-              id: toolCall.toolCallId,
-              function: {
-                name: toolCall.toolName,
-                arguments: toolCall.args,
-              },
-              type: "function" as const,
-            })),
-          }
-        : {}),
+  return [
+    {
+      index: 0,
+      message: {
+        role: "assistant",
+        content: text ?? "",
+        ...(toolCalls && toolCalls.length > 0
+          ? {
+              tool_calls: toolCalls.map((toolCall) => ({
+                id: toolCall.toolCallId,
+                function: {
+                  name: toolCall.toolName,
+                  arguments: toolCall.args,
+                },
+                type: "function" as const,
+              })),
+            }
+          : {}),
+      },
+      finish_reason: finishReason,
     },
-    finish_reason: finishReason,
-  };
+  ];
 }

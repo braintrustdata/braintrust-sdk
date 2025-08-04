@@ -80,24 +80,26 @@ describe("postProcessOutput", () => {
     ];
 
     const result = postProcessOutput(undefined, toolCalls, "tool-calls");
-    expect(result).toEqual({
-      index: 0,
-      message: {
-        role: "assistant",
-        content: "",
-        tool_calls: [
-          {
-            id: "call_abc123",
-            type: "function",
-            function: {
-              name: "get_weather",
-              arguments: '{"location": "San Francisco", "unit": "celsius"}',
+    expect(result).toEqual([
+      {
+        index: 0,
+        message: {
+          role: "assistant",
+          content: "",
+          tool_calls: [
+            {
+              id: "call_abc123",
+              type: "function",
+              function: {
+                name: "get_weather",
+                arguments: '{"location": "San Francisco", "unit": "celsius"}',
+              },
             },
-          },
-        ],
+          ],
+        },
+        finish_reason: "tool-calls",
       },
-      finish_reason: "tool-calls",
-    });
+    ]);
   });
 });
 
