@@ -4,7 +4,7 @@ import { Span, startSpan, Experiment, Logger } from "../logger";
 
 // TypeScript interfaces for @openai/agents types to avoid direct dependencies
 interface AgentsTrace {
-  type: 'trace';
+  type: "trace";
   traceId: string;
   name: string;
   groupId: string | null;
@@ -16,7 +16,7 @@ type SpanDataBase = {
 };
 
 type AgentSpanData = SpanDataBase & {
-  type: 'agent';
+  type: "agent";
   name: string;
   handoffs?: string[];
   tools?: string[];
@@ -24,7 +24,7 @@ type AgentSpanData = SpanDataBase & {
 };
 
 type FunctionSpanData = SpanDataBase & {
-  type: 'function';
+  type: "function";
   name: string;
   input: string;
   output: string;
@@ -32,7 +32,7 @@ type FunctionSpanData = SpanDataBase & {
 };
 
 type GenerationSpanData = SpanDataBase & {
-  type: 'generation';
+  type: "generation";
   input?: Array<Record<string, any>>;
   output?: Array<Record<string, any>>;
   model?: string;
@@ -41,26 +41,26 @@ type GenerationSpanData = SpanDataBase & {
 };
 
 type ResponseSpanData = SpanDataBase & {
-  type: 'response';
+  type: "response";
   response_id?: string;
   _input?: string | Record<string, any>[];
   _response?: Record<string, any>;
 };
 
 type HandoffSpanData = SpanDataBase & {
-  type: 'handoff';
+  type: "handoff";
   from_agent?: string;
   to_agent?: string;
 };
 
 type CustomSpanData = SpanDataBase & {
-  type: 'custom';
+  type: "custom";
   name: string;
   data: Record<string, any>;
 };
 
 type GuardrailSpanData = SpanDataBase & {
-  type: 'guardrail';
+  type: "guardrail";
   name: string;
   triggered: boolean;
 };
@@ -80,7 +80,7 @@ type SpanError = {
 };
 
 interface AgentsSpan {
-  type: 'trace.span';
+  type: "trace.span";
   traceId: string;
   spanId: string;
   parentId: string | null;
@@ -90,8 +90,41 @@ interface AgentsSpan {
   error: SpanError | null;
 }
 
+// Type guard functions
+function isResponseSpanData(spanData: SpanData): spanData is ResponseSpanData {
+  return spanData.type === "response";
+}
+
+function isGenerationSpanData(
+  spanData: SpanData,
+): spanData is GenerationSpanData {
+  return spanData.type === "generation";
+}
+
+function isAgentSpanData(spanData: SpanData): spanData is AgentSpanData {
+  return spanData.type === "agent";
+}
+
+function isFunctionSpanData(spanData: SpanData): spanData is FunctionSpanData {
+  return spanData.type === "function";
+}
+
+function isHandoffSpanData(spanData: SpanData): spanData is HandoffSpanData {
+  return spanData.type === "handoff";
+}
+
+function isGuardrailSpanData(
+  spanData: SpanData,
+): spanData is GuardrailSpanData {
+  return spanData.type === "guardrail";
+}
+
+function isCustomSpanData(spanData: SpanData): spanData is CustomSpanData {
+  return spanData.type === "custom";
+}
+
 function spanTypeFromAgents(span: AgentsSpan): SpanTypeAttribute {
-  const spanType = span.spanData?.type;
+  const spanType = span.spanData.type;
 
   if (spanType === "agent" || spanType === "handoff" || spanType === "custom") {
     return SpanTypeAttribute.TASK;
@@ -107,11 +140,11 @@ function spanTypeFromAgents(span: AgentsSpan): SpanTypeAttribute {
 function spanNameFromAgents(span: AgentsSpan): string {
   const spanData = span.spanData;
 
-  if (spanData?.name) {
+  if ("name" in spanData && spanData.name) {
     return spanData.name;
   }
 
-  switch (spanData?.type) {
+  switch (spanData.type) {
     case "generation":
       return "Generation";
     case "response":
@@ -122,7 +155,7 @@ function spanNameFromAgents(span: AgentsSpan): string {
     case "function":
     case "guardrail":
     case "custom":
-      return spanData.name || "Unknown";
+      return "name" in spanData && spanData.name ? spanData.name : "Unknown";
     default:
       return "Unknown";
   }
@@ -143,46 +176,32 @@ function timestampElapsed(end?: string, start?: string): number | undefined {
  *     If `undefined`, the current span, experiment, or logger will be selected exactly as in `startSpan`.
  */
 export class BraintrustTracingProcessor {
-  private logger?: Span | Experiment | Logger<any>;
+  private logger?: Logger<any>;
   private spans: Map<string, Span> = new Map();
 
-  constructor(logger?: Span | Experiment | Logger<any>) {
+  constructor(logger?: Logger<any>) {
     this.logger = logger;
   }
 
   onTraceStart(trace: AgentsTrace): Promise<void> {
-    // Check if we already have a span for this trace to avoid duplicates
-    if (this.spans.has(trace.traceId)) {
-      return Promise.resolve();
-    }
+    const span = this.logger
+      ? this.logger.startSpan({
+          name: trace.name,
+          type: SpanTypeAttribute.TASK,
+        })
+      : startSpan({
+          name: trace.name,
+          type: SpanTypeAttribute.TASK,
+        });
 
-    if (this.logger) {
-      const span = this.logger.startSpan({
-        name: trace.name,
-        type: SpanTypeAttribute.TASK,
-      });
-      // Log basic trace info immediately
-      span.log({
-        input: "Agent workflow started",
-        metadata: {
-          ...(trace.metadata || {}),
-        },
-      });
-      this.spans.set(trace.traceId, span);
-    } else {
-      const span = startSpan({
-        name: trace.name,
-        type: SpanTypeAttribute.TASK,
-      });
-      // Log basic trace info immediately
-      span.log({
-        input: "Agent workflow started",
-        metadata: {
-          ...(trace.metadata || {}),
-        },
-      });
-      this.spans.set(trace.traceId, span);
-    }
+    // Log basic trace info immediately
+    span.log({
+      input: "Agent workflow started",
+      metadata: {
+        ...(trace.metadata || {}),
+      },
+    });
+    this.spans.set(trace.traceId, span);
     return Promise.resolve();
   }
 
@@ -197,21 +216,17 @@ export class BraintrustTracingProcessor {
 
   private extractAgentLogData(span: AgentsSpan): Record<string, any> {
     const spanData = span.spanData;
+    if (!isAgentSpanData(spanData)) {
+      return {};
+    }
+
     const data: Record<string, any> = {
       metadata: {
-        tools: spanData?.tools,
-        handoffs: spanData?.handoffs,
-        outputType: spanData?.outputType,
+        tools: spanData.tools,
+        handoffs: spanData.handoffs,
+        output_type: spanData.output_type,
       },
     };
-
-    // Check for input and output at spanData level
-    if (spanData?.input !== undefined) {
-      data.input = spanData.input;
-    }
-    if (spanData?.output !== undefined) {
-      data.output = spanData.output;
-    }
 
     return data;
   }
@@ -220,46 +235,41 @@ export class BraintrustTracingProcessor {
     const spanData = span.spanData;
     const data: Record<string, any> = {};
 
+    // Only proceed if this is actually a response span
+    if (!isResponseSpanData(spanData)) {
+      return data;
+    }
+
     // Check for input - regular field first, then underscore fallback
-    if (spanData?.input !== undefined) {
-      data.input = spanData.input;
-    } else if (spanData?._input !== undefined) {
+    if (spanData._input !== undefined) {
       data.input = spanData._input;
     }
 
-    // Check for output - regular field first, then underscore fallback
-    if (spanData?.output !== undefined) {
-      data.output = spanData.output;
-    } else if (spanData?._response !== undefined) {
+    // Check for output - underscore response first
+    if (spanData._response !== undefined) {
       data.output = spanData._response.output;
-    } else if (spanData?.response?.output !== undefined) {
-      data.output = spanData.response.output;
     }
 
-    if (spanData?._response) {
+    if (spanData._response) {
       // Exclude output, metadata, usage, and output_text like Python does
       const { output, metadata, usage, output_text, ...otherFields } =
         spanData._response;
       data.metadata = otherFields;
-    } else if (spanData?.response) {
-      data.metadata = spanData.response.metadata || {};
-      // Add other response fields to metadata
-      const { output, metadata, usage, ...otherFields } = spanData.response;
-      Object.assign(data.metadata, otherFields);
     }
 
     data.metrics = {};
-    const ttft = timestampElapsed(span.endedAt, span.startedAt);
+    const ttft = timestampElapsed(
+      span.endedAt ?? undefined,
+      span.startedAt ?? undefined,
+    );
     if (ttft !== undefined) {
       data.metrics.time_to_first_token = ttft;
     }
 
-    // Check for usage in _response first, then fall back to response.usage
+    // Check for usage in _response
     let usage: any = null;
-    if (spanData?._response?.usage) {
+    if (spanData._response?.usage) {
       usage = spanData._response.usage;
-    } else if (spanData?.response?.usage) {
-      usage = spanData.response.usage;
     }
 
     if (usage) {
@@ -287,41 +297,57 @@ export class BraintrustTracingProcessor {
 
   private extractFunctionLogData(span: AgentsSpan): Record<string, any> {
     const spanData = span.spanData;
+    if (!isFunctionSpanData(spanData)) {
+      return {};
+    }
     return {
-      input: spanData?.input,
-      output: spanData?.output,
+      input: spanData.input,
+      output: spanData.output,
     };
   }
 
   private extractHandoffLogData(span: AgentsSpan): Record<string, any> {
     const spanData = span.spanData;
+    if (!isHandoffSpanData(spanData)) {
+      return {};
+    }
     return {
       metadata: {
-        fromAgent: spanData?.fromAgent,
-        toAgent: spanData?.toAgent,
+        from_agent: spanData.from_agent,
+        to_agent: spanData.to_agent,
       },
     };
   }
 
   private extractGuardrailLogData(span: AgentsSpan): Record<string, any> {
     const spanData = span.spanData;
+    if (!isGuardrailSpanData(spanData)) {
+      return {};
+    }
     return {
       metadata: {
-        triggered: spanData?.triggered,
+        triggered: spanData.triggered,
       },
     };
   }
 
   private extractGenerationLogData(span: AgentsSpan): Record<string, any> {
     const spanData = span.spanData;
+    if (!isGenerationSpanData(spanData)) {
+      return {};
+    }
+
     const metrics: Record<string, any> = {};
 
-    const ttft = timestampElapsed(span.endedAt, span.startedAt);
+    const ttft = timestampElapsed(
+      span.endedAt ?? undefined,
+      span.startedAt ?? undefined,
+    );
     if (ttft !== undefined) {
       metrics.time_to_first_token = ttft;
     }
 
-    const usage = spanData?.usage || {};
+    const usage = spanData.usage || {};
     if (usage.prompt_tokens) metrics.prompt_tokens = usage.prompt_tokens;
     else if (usage.input_tokens) metrics.prompt_tokens = usage.input_tokens;
 
@@ -336,18 +362,22 @@ export class BraintrustTracingProcessor {
     }
 
     return {
-      input: spanData?.input,
-      output: spanData?.output,
+      input: spanData.input,
+      output: spanData.output,
       metadata: {
-        model: spanData?.model,
-        modelConfig: spanData?.modelConfig,
+        model: spanData.model,
+        model_config: spanData.model_config,
       },
       metrics,
     };
   }
 
   private extractCustomLogData(span: AgentsSpan): Record<string, any> {
-    return span.spanData?.data || {};
+    const spanData = span.spanData;
+    if (!isCustomSpanData(spanData)) {
+      return {};
+    }
+    return spanData.data || {};
   }
 
   private extractLogData(span: AgentsSpan): Record<string, any> {
