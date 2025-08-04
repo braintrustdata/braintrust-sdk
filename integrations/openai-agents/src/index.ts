@@ -1,6 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { SpanTypeAttribute } from "@braintrust/core";
-import { Span as BraintrustSpan, startSpan, Experiment, Logger } from "braintrust";
+import {
+  Span as BraintrustSpan,
+  startSpan,
+  Experiment,
+  Logger,
+} from "braintrust";
 
 // TypeScript interfaces for @openai/agents types to avoid direct dependencies
 // These match the types from @openai/agents but are defined here to avoid export issues
@@ -455,11 +460,11 @@ export class OpenAIAgentsTracingProcessor {
       // Track first input and last output for the root trace span
       const input = logData.input as SpanInput;
       const output = logData.output as SpanOutput;
-      
+
       if (this.firstInput === null && input != null) {
         this.firstInput = input;
       }
-      
+
       if (output != null) {
         this.lastOutput = output;
       }
