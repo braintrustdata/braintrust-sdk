@@ -11,9 +11,9 @@ npm install braintrust @braintrust/openai-agents @openai/agents
 ## Usage
 
 ```typescript
-import { initLogger } from 'braintrust';
-import { OpenAIAgentsTracingProcessor } from '@braintrust/openai-agents';
-import { Agent, run, addTraceProcessor } from '@openai/agents';
+import { initLogger } from "braintrust";
+import { OpenAIAgentsTracingProcessor } from "@braintrust/openai-agents";
+import { Agent, run, addTraceProcessor } from "@openai/agents";
 
 // Initialize Braintrust logger
 const logger = initLogger({
@@ -53,12 +53,8 @@ new OpenAIAgentsTracingProcessor(logger?: Logger)
 #### Methods
 
 - `onTraceStart(trace)`: Called when a trace starts
-- `onTraceEnd(trace)`: Called when a trace ends  
+- `onTraceEnd(trace)`: Called when a trace ends
 - `onSpanStart(span)`: Called when a span starts
 - `onSpanEnd(span)`: Called when a span ends
 - `shutdown()`: Shut down the processor
 - `forceFlush()`: Force flush any pending data
-
-## License
-
-MIT
