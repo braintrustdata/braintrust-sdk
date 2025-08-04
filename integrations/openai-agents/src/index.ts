@@ -91,6 +91,10 @@ interface AgentsSpan {
   error: SpanError | null;
 }
 
+// Union types for input/output from different span types
+type SpanInput = string | Array<Record<string, any>> | Record<string, any>[];
+type SpanOutput = string | Array<Record<string, any>> | Record<string, any>;
+
 // Type guard functions
 function isResponseSpanData(spanData: SpanData): spanData is ResponseSpanData {
   return spanData.type === "response";
@@ -179,6 +183,8 @@ function timestampElapsed(end?: string, start?: string): number | undefined {
 export class OpenAIAgentsTracingProcessor {
   private logger?: Logger<any>;
   private spans: Map<string, BraintrustSpan> = new Map();
+  private firstInput: SpanInput | null = null;
+  private lastOutput: SpanOutput | null = null;
 
   constructor(logger?: Logger<any>) {
     this.logger = logger;
@@ -209,9 +215,17 @@ export class OpenAIAgentsTracingProcessor {
   onTraceEnd(trace: AgentsTrace): Promise<void> {
     const span = this.spans.get(trace.traceId);
     if (span) {
+      // Log first input and last output to the root trace span
+      span.log({
+        input: this.firstInput,
+        output: this.lastOutput,
+      });
       span.end();
       this.spans.delete(trace.traceId);
     }
+    // Reset for next trace
+    this.firstInput = null;
+    this.lastOutput = null;
     return Promise.resolve();
   }
 
@@ -437,6 +451,18 @@ export class OpenAIAgentsTracingProcessor {
       });
       braintrustSpan.end();
       this.spans.delete(span.spanId);
+
+      // Track first input and last output for the root trace span
+      const input = logData.input as SpanInput;
+      const output = logData.output as SpanOutput;
+      
+      if (this.firstInput === null && input != null) {
+        this.firstInput = input;
+      }
+      
+      if (output != null) {
+        this.lastOutput = output;
+      }
     } else {
       console.warn(`No span found for ID: ${span.spanId}`);
     }
