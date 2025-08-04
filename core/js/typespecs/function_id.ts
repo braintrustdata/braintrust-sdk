@@ -21,13 +21,15 @@ export const savedFunctionIdSchema = z
 
 export type SavedFunctionId = z.infer<typeof savedFunctionIdSchema>;
 
-export const extendedSavedFunctionIdSchema = savedFunctionIdSchema.or(
-  z.object({
-    type: z.literal("slug"),
-    project_id: z.string(),
-    slug: z.string(),
-  }),
-);
+export const extendedSavedFunctionIdSchema = savedFunctionIdSchema
+  .or(
+    z.object({
+      type: z.literal("slug"),
+      project_id: z.string(),
+      slug: z.string(),
+    }),
+  )
+  .openapi("ExtendedSavedFunctionId");
 
 export type ExtendedSavedFunctionId = z.infer<
   typeof extendedSavedFunctionIdSchema

@@ -25,8 +25,8 @@ export {
   type MessageRole,
 } from "./openai/messages";
 
-export { toolsSchema } from "./openai/tools";
-export type { Tools } from "./openai/tools";
+export { chatCompletionToolSchema } from "./openai/tools";
+export type { ChatCompletionTool } from "./openai/tools";
 
 export type OpenAIMessage = z.infer<
   typeof chatCompletionOpenAIMessageParamSchema
@@ -44,59 +44,67 @@ export type ContentPartImage = z.infer<
 >;
 export type ContentPart = z.infer<typeof chatCompletionContentPartSchema>;
 
-export const promptBlockDataSchema = z.union([
-  z
-    .object({
-      type: z.literal("completion"),
-      content: z.string(),
-    })
-    .openapi({ title: "completion" }),
-  z
-    .object({
-      type: z.literal("chat"),
-      messages: z.array(chatCompletionMessageParamSchema),
-      tools: z.string().optional(),
-    })
-    .openapi({ title: "chat" }),
-]);
+export const promptBlockDataSchema = z
+  .union([
+    z
+      .object({
+        type: z.literal("completion"),
+        content: z.string(),
+      })
+      .openapi({ title: "completion" }),
+    z
+      .object({
+        type: z.literal("chat"),
+        messages: z.array(chatCompletionMessageParamSchema),
+        tools: z.string().optional(),
+      })
+      .openapi({ title: "chat" }),
+  ])
+  .openapi("PromptBlockData");
 
 export type PromptBlockData = z.infer<typeof promptBlockDataSchema>;
 
 // Note that for prompt options, we relax the strictness requirement because
 // these params may come from external sources.
 
-const braintrustModelParamsSchema = z.object({
-  use_cache: z.boolean().optional(),
-});
+export const braintrustModelParamsSchema = z
+  .object({
+    use_cache: z.boolean().optional(),
+  })
+  .openapi("BraintrustModelParams");
 export const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
-export const responseFormatJsonSchemaSchema = z.object({
-  name: z.string(),
-  description: z.string().optional(),
-  schema: z
-    .union([
-      z.record(z.unknown()).openapi({ title: "object" }),
-      z.string().openapi({ title: "string" }),
-    ])
-    .optional(),
-  strict: z.boolean().nullish(),
-});
+export const responseFormatJsonSchemaSchema = z
+  .object({
+    name: z.string(),
+    description: z.string().optional(),
+    schema: z
+      .union([
+        z.record(z.unknown()).openapi({ title: "object" }),
+        z.string().openapi({ title: "string" }),
+      ])
+      .optional(),
+    strict: z.boolean().nullish(),
+  })
+  .openapi("ResponseFormatJsonSchema");
 export type ResponseFormatJsonSchema = z.infer<
   typeof responseFormatJsonSchemaSchema
 >;
 
-export const responseFormatSchema = z.union([
-  z
-    .object({ type: z.literal("json_object") })
-    .openapi({ title: "json_object" }),
-  z
-    .object({
-      type: z.literal("json_schema"),
-      json_schema: responseFormatJsonSchemaSchema,
-    })
-    .openapi({ title: "json_schema" }),
-  z.object({ type: z.literal("text") }).openapi({ title: "text" }),
-]);
+export const responseFormatSchema = z
+  .union([
+    z
+      .object({ type: z.literal("json_object") })
+      .openapi({ title: "json_object" }),
+    z
+      .object({
+        type: z.literal("json_schema"),
+        json_schema: responseFormatJsonSchemaSchema,
+      })
+      .openapi({ title: "json_schema" }),
+    z.object({ type: z.literal("text") }).openapi({ title: "text" }),
+  ])
+  .openapi("ResponseFormat");
 
 export const responsesAPIJsonSchemaSchema = z.object({
   type: z.literal("json_schema"),
@@ -218,12 +226,13 @@ export const modelParamsSchema = z
 
 export type ModelParams = z.infer<typeof modelParamsSchema>;
 
-const _anyModelParamsSchema = openAIModelParamsSchema
+export const anyModelParamsSchema = openAIModelParamsSchema
   .merge(anthropicModelParamsSchema)
   .merge(googleModelParamsSchema)
-  .merge(braintrustModelParamsSchema);
+  .merge(braintrustModelParamsSchema)
+  .openapi("AnyModelParams");
 
-export type AnyModelParam = z.infer<typeof _anyModelParamsSchema>;
+export type AnyModelParam = z.infer<typeof anyModelParamsSchema>;
 
 export const promptOptionsSchema = z
   .object({

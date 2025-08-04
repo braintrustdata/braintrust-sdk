@@ -180,16 +180,15 @@ export const functionIdSchema = z
       .openapi({ title: "inline_prompt" }),
   ])
   .describe("Options for identifying a function")
-  .openapi({
-    title: "FunctionId",
-    description: "Options for identifying a function",
-  });
+  .openapi("FunctionId");
 
 export type FunctionId = z.infer<typeof functionIdSchema>;
 
 export const useFunctionSchema = functionIdSchema;
 
-export const streamingModeEnum = z.enum(["auto", "parallel"]);
+export const streamingModeEnum = z
+  .enum(["auto", "parallel"])
+  .openapi("StreamingMode");
 export type StreamingMode = z.infer<typeof streamingModeEnum>;
 
 const spanParentObjectTypeSchema = z.enum([
@@ -494,10 +493,12 @@ export const sseProgressEventDataSchema = z
   .openapi("SSEProgressEventData");
 export type SSEProgressEventData = z.infer<typeof sseProgressEventDataSchema>;
 
-export const sseConsoleEventDataSchema = z.object({
-  stream: z.enum(["stderr", "stdout"]),
-  message: z.string(),
-});
+export const sseConsoleEventDataSchema = z
+  .object({
+    stream: z.enum(["stderr", "stdout"]),
+    message: z.string(),
+  })
+  .openapi("SSEConsoleEventData");
 export type SSEConsoleEventData = z.infer<typeof sseConsoleEventDataSchema>;
 
 export const callEventSchema = z
@@ -531,19 +532,23 @@ export const scoreSchema = z
   ])
   .openapi("ScorerScore");
 
-export const ifExistsEnum = z.enum(["error", "ignore", "replace"]);
+export const ifExistsEnum = z
+  .enum(["error", "ignore", "replace"])
+  .openapi("IfExists");
 export type IfExists = z.infer<typeof ifExistsEnum>;
 export const DEFAULT_IF_EXISTS: IfExists = "error";
 
-export const toolFunctionDefinitionSchema = z.object({
-  type: z.literal("function"),
-  function: z.object({
-    name: z.string(),
-    description: z.string().optional(),
-    parameters: z.record(z.unknown()).optional(),
-    strict: z.boolean().nullish(),
-  }),
-});
+export const toolFunctionDefinitionSchema = z
+  .object({
+    type: z.literal("function"),
+    function: z.object({
+      name: z.string(),
+      description: z.string().optional(),
+      parameters: z.record(z.unknown()).optional(),
+      strict: z.boolean().nullish(),
+    }),
+  })
+  .openapi("ToolFunctionDefinition");
 export type ToolFunctionDefinition = z.infer<
   typeof toolFunctionDefinitionSchema
 >;

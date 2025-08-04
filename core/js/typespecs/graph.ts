@@ -7,7 +7,7 @@ extendZodWithOpenApi(z);
 // Define a placeholder for functionIdSchema
 // This approach creates a reference to the type with OpenAPI metadata
 // We can't use z.lazy directly as it's not supported by zod-to-openapi
-const functionIdRef = z.object({}).passthrough().openapi("FunctionId", {
+const functionIdRef = z.object({}).passthrough().openapi("FunctionIdRef", {
   description: "Options for identifying a function",
 });
 
@@ -31,40 +31,42 @@ const baseNodeDataSchema = z.object({
     .describe("The position of the node"),
 });
 
-export const graphNodeSchema = z.union([
-  baseNodeDataSchema.extend({
-    type: z.literal("function"),
-    function: functionIdRef,
-  }),
-  baseNodeDataSchema.extend({
-    type: z.literal("input").describe("The input to the graph"),
-  }),
-  baseNodeDataSchema.extend({
-    type: z.literal("output").describe("The output of the graph"),
-  }),
-  baseNodeDataSchema.extend({
-    type: z.literal("literal"),
-    value: z.unknown().describe("A literal value to be returned"),
-  }),
-  baseNodeDataSchema.extend({
-    type: z.literal("btql"),
-    expr: z.string().describe("A BTQL expression to be evaluated"),
-  }),
-  baseNodeDataSchema.extend({
-    type: z.literal("gate"),
-    condition: z
-      .string()
-      .nullish()
-      .describe("A BTQL expression to be evaluated"),
-  }),
-  baseNodeDataSchema.extend({
-    type: z.literal("aggregator"),
-  }),
-  baseNodeDataSchema.extend({
-    type: z.literal("prompt_template"),
-    prompt: promptBlockDataSchema,
-  }),
-]);
+export const graphNodeSchema = z
+  .union([
+    baseNodeDataSchema.extend({
+      type: z.literal("function"),
+      function: functionIdRef,
+    }),
+    baseNodeDataSchema.extend({
+      type: z.literal("input").describe("The input to the graph"),
+    }),
+    baseNodeDataSchema.extend({
+      type: z.literal("output").describe("The output of the graph"),
+    }),
+    baseNodeDataSchema.extend({
+      type: z.literal("literal"),
+      value: z.unknown().describe("A literal value to be returned"),
+    }),
+    baseNodeDataSchema.extend({
+      type: z.literal("btql"),
+      expr: z.string().describe("A BTQL expression to be evaluated"),
+    }),
+    baseNodeDataSchema.extend({
+      type: z.literal("gate"),
+      condition: z
+        .string()
+        .nullish()
+        .describe("A BTQL expression to be evaluated"),
+    }),
+    baseNodeDataSchema.extend({
+      type: z.literal("aggregator"),
+    }),
+    baseNodeDataSchema.extend({
+      type: z.literal("prompt_template"),
+      prompt: promptBlockDataSchema,
+    }),
+  ])
+  .openapi("GraphNode");
 export type GraphNode = z.infer<typeof graphNodeSchema>;
 
 export const graphEdgeDataSchema = z.object({
@@ -72,21 +74,25 @@ export const graphEdgeDataSchema = z.object({
   variable: z.string(),
 });
 
-export const graphEdgeSchema = z.object({
-  source: graphEdgeDataSchema,
-  target: graphEdgeDataSchema,
-  purpose: z
-    .enum(["control", "data", "messages"])
-    .describe("The purpose of the edge"),
-});
+export const graphEdgeSchema = z
+  .object({
+    source: graphEdgeDataSchema,
+    target: graphEdgeDataSchema,
+    purpose: z
+      .enum(["control", "data", "messages"])
+      .describe("The purpose of the edge"),
+  })
+  .openapi("GraphEdge");
 
 export type GraphEdge = z.infer<typeof graphEdgeSchema>;
 
-export const graphDataSchema = z.object({
-  type: z.literal("graph"),
-  // Use record so that updates can be efficient
-  nodes: z.record(nodeIdSchema, graphNodeSchema),
-  edges: z.record(edgeIdSchema, graphEdgeSchema),
-});
+export const graphDataSchema = z
+  .object({
+    type: z.literal("graph"),
+    // Use record so that updates can be efficient
+    nodes: z.record(nodeIdSchema, graphNodeSchema),
+    edges: z.record(edgeIdSchema, graphEdgeSchema),
+  })
+  .openapi("GraphData");
 
 export type GraphData = z.infer<typeof graphDataSchema>;

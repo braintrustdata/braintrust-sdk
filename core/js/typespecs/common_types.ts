@@ -77,9 +77,14 @@ export const objectTypesWithEvent = z.enum([
 ]);
 export type ObjectTypeWithEvent = z.infer<typeof objectTypesWithEvent>;
 
-export const eventObjectType = objectTypesWithEvent
-  .exclude(["project"])
-  .or(z.enum(["project_logs"]));
+export const eventObjectType = z.enum([
+  "project_logs",
+  "experiment",
+  "dataset",
+  "prompt",
+  "function",
+  "prompt_session",
+]);
 export type EventObjectType = z.infer<typeof eventObjectType>;
 
 export function getEventObjectType(

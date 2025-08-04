@@ -13,5 +13,21 @@ from ._types import (
     SavedFunctionId,  # noqa: F401 # type: ignore[reportUnusedImport]
     SpanAttributes,  # noqa: F401 # type: ignore[reportUnusedImport]
     SpanType,  # noqa: F401 # type: ignore[reportUnusedImport]
-    ToolFunctionDefinition,  # noqa: F401 # type: ignore[reportUnusedImport]
+    ToolFunctionDefinition,
 )
+
+__all__ = [
+    "AttachmentReference",
+    "AttachmentStatus",
+    "ChatCompletionMessageParam",
+    "DatasetEvent",
+    "ExperimentEvent",
+    "IfExists",
+    "ModelParams",
+    "PromptData",
+    "PromptOptions",
+    "SavedFunctionId",
+    "SpanAttributes",
+    "SpanType",
+    "ToolFunctionDefinition",
+]
