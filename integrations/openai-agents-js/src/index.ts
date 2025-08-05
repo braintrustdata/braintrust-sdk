@@ -1,11 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { SpanTypeAttribute } from "@braintrust/core";
-import {
-  Span as BraintrustSpan,
-  startSpan,
-  Experiment,
-  Logger,
-} from "braintrust";
+import { Span as BraintrustSpan, startSpan, Logger } from "braintrust";
 import type {
   SpanData,
   AgentSpanData,
@@ -19,57 +14,79 @@ import type {
 
 import type { Trace, Span } from "@openai/agents";
 
-// Interface for traces - using the Trace type from @openai/agents
+enum SpanType {
+  AGENT = "agent",
+  RESPONSE = "response",
+  FUNCTION = "function",
+  HANDOFF = "handoff",
+  GUARDRAIL = "guardrail",
+  GENERATION = "generation",
+  CUSTOM = "custom",
+}
+
 type AgentsTrace = Trace;
 
-// Interface for spans - using the Span type from @openai/agents
 type AgentsSpan = Span<SpanData>;
 
-// Union types for input/output from different span types
-type SpanInput = string | Array<Record<string, any>> | Record<string, any>[];
-type SpanOutput = string | Array<Record<string, any>> | Record<string, any>;
+type SpanInput =
+  | string
+  | Array<Record<string, unknown>>
+  | Record<string, unknown>[];
+type SpanOutput =
+  | string
+  | Array<Record<string, unknown>>
+  | Record<string, unknown>;
 
-// Type guard functions
 function isResponseSpanData(spanData: SpanData): spanData is ResponseSpanData {
-  return spanData.type === "response";
+  return spanData.type === SpanType.RESPONSE;
 }
 
 function isGenerationSpanData(
   spanData: SpanData,
 ): spanData is GenerationSpanData {
-  return spanData.type === "generation";
+  return spanData.type === SpanType.GENERATION;
 }
 
 function isAgentSpanData(spanData: SpanData): spanData is AgentSpanData {
-  return spanData.type === "agent";
+  return spanData.type === SpanType.AGENT;
 }
 
 function isFunctionSpanData(spanData: SpanData): spanData is FunctionSpanData {
-  return spanData.type === "function";
+  return spanData.type === SpanType.FUNCTION;
 }
 
 function isHandoffSpanData(spanData: SpanData): spanData is HandoffSpanData {
-  return spanData.type === "handoff";
+  return spanData.type === SpanType.HANDOFF;
 }
 
 function isGuardrailSpanData(
   spanData: SpanData,
 ): spanData is GuardrailSpanData {
-  return spanData.type === "guardrail";
+  return spanData.type === SpanType.GUARDRAIL;
 }
 
 function isCustomSpanData(spanData: SpanData): spanData is CustomSpanData {
-  return spanData.type === "custom";
+  return spanData.type === SpanType.CUSTOM;
 }
 
 function spanTypeFromAgents(span: AgentsSpan): SpanTypeAttribute {
   const spanType = span.spanData.type;
 
-  if (spanType === "agent" || spanType === "handoff" || spanType === "custom") {
+  if (
+    spanType === SpanType.AGENT ||
+    spanType === SpanType.HANDOFF ||
+    spanType === SpanType.CUSTOM
+  ) {
     return SpanTypeAttribute.TASK;
-  } else if (spanType === "function" || spanType === "guardrail") {
+  } else if (
+    spanType === SpanType.FUNCTION ||
+    spanType === SpanType.GUARDRAIL
+  ) {
     return SpanTypeAttribute.TOOL;
-  } else if (spanType === "generation" || spanType === "response") {
+  } else if (
+    spanType === SpanType.GENERATION ||
+    spanType === SpanType.RESPONSE
+  ) {
     return SpanTypeAttribute.LLM;
   } else {
     return SpanTypeAttribute.TASK;
@@ -84,23 +101,23 @@ function spanNameFromAgents(span: AgentsSpan): string {
   }
 
   switch (spanData.type) {
-    case "generation":
+    case SpanType.GENERATION:
       return "Generation";
-    case "response":
+    case SpanType.RESPONSE:
       return "Response";
-    case "handoff":
+    case SpanType.HANDOFF:
       return "Handoff";
-    case "agent":
-    case "function":
-    case "guardrail":
-    case "custom":
+    case SpanType.AGENT:
+    case SpanType.FUNCTION:
+    case SpanType.GUARDRAIL:
+    case SpanType.CUSTOM:
       return "name" in spanData && spanData.name ? spanData.name : "Unknown";
     default:
       return "Unknown";
   }
 }
 
-function timestampElapsed(end?: string, start?: string): number | undefined {
+function getTimeElapsed(end?: string, start?: string): number | undefined {
   if (!start || !end) return undefined;
   const startTime = new Date(start).getTime();
   const endTime = new Date(end).getTime();
@@ -111,20 +128,75 @@ function timestampElapsed(end?: string, start?: string): number | undefined {
  * `OpenAIAgentsTracingProcessor` is a tracing processor that logs traces from the OpenAI Agents SDK to Braintrust.
  *
  * Args:
- *   logger: A `Span`, `Experiment`, or `Logger` to use for logging.
- *     If `undefined`, the current span, experiment, or logger will be selected exactly as in `startSpan`.
+ *   options: Configuration options including:
+ *     - logger: A `Span`, `Experiment`, or `Logger` to use for logging.
+ *       If `undefined`, the current span, experiment, or logger will be selected exactly as in `startSpan`.
+ *     - maxTraces: Maximum number of concurrent traces to keep in memory (default: 1000).
+ *       When exceeded, oldest traces are evicted using LRU policy.
  */
-export class OpenAIAgentsTracingProcessor {
-  private logger?: Logger<any>;
-  private spans: Map<string, BraintrustSpan> = new Map();
-  private firstInput: SpanInput | null = null;
-  private lastOutput: SpanOutput | null = null;
+type TraceMetadata = {
+  firstInput: SpanInput | null;
+  lastOutput: SpanOutput | null;
+};
 
-  constructor(logger?: Logger<any>) {
-    this.logger = logger;
+export interface OpenAIAgentsTracingProcessorOptions {
+  logger?: Logger<any>;
+  maxTraces?: number;
+}
+
+export class OpenAIAgentsTracingProcessor {
+  private static readonly DEFAULT_MAX_TRACES = 1000;
+
+  private logger?: Logger<any>;
+  private maxTraces: number;
+  // Flat storage: traceId for root spans, traceId:spanId for child spans
+  private spans = new Map<string, BraintrustSpan>();
+  private traceMetadata = new Map<string, TraceMetadata>();
+  private traceOrder: string[] = []; // Track insertion order for LRU
+
+  // Expose for testing
+  public readonly _spans = this.spans;
+  public readonly _traceMetadata = this.traceMetadata;
+  public get _maxTraces(): number {
+    return this.maxTraces;
+  }
+
+  constructor(options: OpenAIAgentsTracingProcessorOptions = {}) {
+    this.logger = options.logger;
+    this.maxTraces =
+      options.maxTraces ?? OpenAIAgentsTracingProcessor.DEFAULT_MAX_TRACES;
+  }
+
+  private evictOldestTrace(): void {
+    if (this.traceOrder.length === 0) return;
+
+    const oldestTraceId = this.traceOrder.shift()!; // Remove from front
+
+    // Simply remove references without force-closing spans
+    // Let spans close naturally through normal flow
+    this.spans.delete(oldestTraceId);
+
+    // Remove all child spans for this trace - more efficient iteration
+    const keysToDelete: string[] = [];
+    for (const key of this.spans.keys()) {
+      if (key.startsWith(`${oldestTraceId}:`)) {
+        keysToDelete.push(key);
+      }
+    }
+    for (const key of keysToDelete) {
+      this.spans.delete(key);
+    }
+
+    // Clean up metadata
+    this.traceMetadata.delete(oldestTraceId);
   }
 
   onTraceStart(trace: AgentsTrace): Promise<void> {
+    // Implement LRU eviction: if we're at capacity, remove oldest trace
+    if (this.traceOrder.length >= this.maxTraces) {
+      this.evictOldestTrace();
+    }
+
     const span = this.logger
       ? this.logger.startSpan({
           name: trace.name,
@@ -142,24 +214,39 @@ export class OpenAIAgentsTracingProcessor {
         ...(trace.metadata || {}),
       },
     });
+
+    // Store root span and metadata
     this.spans.set(trace.traceId, span);
+    this.traceMetadata.set(trace.traceId, {
+      firstInput: null,
+      lastOutput: null,
+    });
+    this.traceOrder.push(trace.traceId);
+
     return Promise.resolve();
   }
 
   onTraceEnd(trace: AgentsTrace): Promise<void> {
-    const span = this.spans.get(trace.traceId);
-    if (span) {
+    const rootSpan = this.spans.get(trace.traceId);
+    const metadata = this.traceMetadata.get(trace.traceId);
+
+    if (rootSpan && metadata) {
       // Log first input and last output to the root trace span
-      span.log({
-        input: this.firstInput,
-        output: this.lastOutput,
+      rootSpan.log({
+        input: metadata.firstInput,
+        output: metadata.lastOutput,
       });
-      span.end();
+      rootSpan.end();
+
+      // Simple cleanup - just remove from maps and order
       this.spans.delete(trace.traceId);
+      this.traceMetadata.delete(trace.traceId);
+      // Remove from order array - find and splice is fine for normal trace end
+      const orderIndex = this.traceOrder.indexOf(trace.traceId);
+      if (orderIndex > -1) {
+        this.traceOrder.splice(orderIndex, 1);
+      }
     }
-    // Reset for next trace
-    this.firstInput = null;
-    this.lastOutput = null;
     return Promise.resolve();
   }
 
@@ -207,7 +294,7 @@ export class OpenAIAgentsTracingProcessor {
     }
 
     data.metrics = {};
-    const ttft = timestampElapsed(
+    const ttft = getTimeElapsed(
       span.endedAt ?? undefined,
       span.startedAt ?? undefined,
     );
@@ -288,7 +375,7 @@ export class OpenAIAgentsTracingProcessor {
 
     const metrics: Record<string, any> = {};
 
-    const ttft = timestampElapsed(
+    const ttft = getTimeElapsed(
       span.endedAt ?? undefined,
       span.startedAt ?? undefined,
     );
@@ -333,19 +420,19 @@ export class OpenAIAgentsTracingProcessor {
     const spanType = span.spanData?.type;
 
     switch (spanType) {
-      case "agent":
+      case SpanType.AGENT:
         return this.extractAgentLogData(span);
-      case "response":
+      case SpanType.RESPONSE:
         return this.extractResponseLogData(span);
-      case "function":
+      case SpanType.FUNCTION:
         return this.extractFunctionLogData(span);
-      case "handoff":
+      case SpanType.HANDOFF:
         return this.extractHandoffLogData(span);
-      case "guardrail":
+      case SpanType.GUARDRAIL:
         return this.extractGuardrailLogData(span);
-      case "generation":
+      case SpanType.GENERATION:
         return this.extractGenerationLogData(span);
-      case "custom":
+      case SpanType.CUSTOM:
         return this.extractCustomLogData(span);
       default:
         return {};
@@ -358,8 +445,8 @@ export class OpenAIAgentsTracingProcessor {
     // Find parent span - use parent_id if available, otherwise fall back to trace root
     let parentSpan: BraintrustSpan | undefined;
     if (span.parentId) {
-      parentSpan = this.spans.get(span.parentId);
-    } else if (span.traceId) {
+      parentSpan = this.spans.get(`${span.traceId}:${span.parentId}`);
+    } else {
       parentSpan = this.spans.get(span.traceId);
     }
 
@@ -368,34 +455,36 @@ export class OpenAIAgentsTracingProcessor {
         name: spanNameFromAgents(span),
         type: spanTypeFromAgents(span),
       });
-      this.spans.set(span.spanId, childSpan);
+      this.spans.set(`${span.traceId}:${span.spanId}`, childSpan);
     }
     return Promise.resolve();
   }
 
   onSpanEnd(span: AgentsSpan): Promise<void> {
-    if (!span.spanId) return Promise.resolve();
+    if (!span.spanId || !span.traceId) return Promise.resolve();
 
-    const braintrustSpan = this.spans.get(span.spanId);
-    if (braintrustSpan) {
+    const braintrustSpan = this.spans.get(`${span.traceId}:${span.spanId}`);
+    const metadata = this.traceMetadata.get(span.traceId);
+
+    if (braintrustSpan && metadata) {
       const logData = this.extractLogData(span);
       braintrustSpan.log({
         error: span.error,
         ...logData,
       });
       braintrustSpan.end();
-      this.spans.delete(span.spanId);
+      this.spans.delete(`${span.traceId}:${span.spanId}`);
 
       // Track first input and last output for the root trace span
       const input = logData.input as SpanInput;
       const output = logData.output as SpanOutput;
 
-      if (this.firstInput === null && input != null) {
-        this.firstInput = input;
+      if (metadata.firstInput === null && input != null) {
+        metadata.firstInput = input;
       }
 
       if (output != null) {
-        this.lastOutput = output;
+        metadata.lastOutput = output;
       }
     } else {
       console.warn(`No span found for ID: ${span.spanId}`);

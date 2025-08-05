@@ -76,7 +76,9 @@ describe(
     });
 
     test("OpenAIAgentsTracingProcessor is instantiable", () => {
-      const processor = new OpenAIAgentsTracingProcessor(_logger as any);
+      const processor = new OpenAIAgentsTracingProcessor({
+        logger: _logger as any,
+      });
       assert.ok(processor);
 
       // Test methods exist
@@ -92,7 +94,9 @@ describe(
       assert.lengthOf(await backgroundLogger.drain(), 0);
 
       // Set up the OpenAI Agents tracing processor
-      const processor = new OpenAIAgentsTracingProcessor(_logger as any);
+      const processor = new OpenAIAgentsTracingProcessor({
+        logger: _logger as any,
+      });
 
       setTracingDisabled(false);
       addTraceProcessor(processor);
@@ -134,7 +138,9 @@ describe(
     test("agent with function calling", async (context) => {
       assert.lengthOf(await backgroundLogger.drain(), 0);
 
-      const processor = new OpenAIAgentsTracingProcessor(_logger as any);
+      const processor = new OpenAIAgentsTracingProcessor({
+        logger: _logger as any,
+      });
 
       setTracingDisabled(false);
       addTraceProcessor(processor);
@@ -187,6 +193,314 @@ describe(
       } finally {
         processor.shutdown();
       }
+    });
+
+    test("Cleanup behavior - traces are cleaned up properly and orphaned spans are handled gracefully", async () => {
+      const processor = new OpenAIAgentsTracingProcessor({
+        logger: _logger as any,
+      });
+
+      const trace: any = {
+        traceId: "test-trace-cleanup",
+        name: "cleanup-test",
+        metadata: {},
+      };
+
+      // Start trace and verify it's stored
+      await processor.onTraceStart(trace);
+      assert.isTrue(
+        processor._spans.has(trace.traceId),
+        "Root span should be stored",
+      );
+      assert.isTrue(
+        processor._traceMetadata.has(trace.traceId),
+        "Trace metadata should be stored",
+      );
+
+      // Add a child span
+      const span = {
+        spanId: "test-span-cleanup",
+        traceId: trace.traceId,
+        spanData: { type: "agent", name: "test-agent" },
+        error: null,
+      } as any;
+
+      await processor.onSpanStart(span);
+      const childSpanKey = `${trace.traceId}:${span.spanId}`;
+      assert.isTrue(
+        processor._spans.has(childSpanKey),
+        "Child span should be stored",
+      );
+
+      // End the child span first
+      await processor.onSpanEnd(span);
+
+      // End the trace normally
+      await processor.onTraceEnd(trace);
+
+      // Verify cleanup happened
+      assert.isFalse(
+        processor._spans.has(trace.traceId),
+        "Root span should be removed",
+      );
+      assert.isFalse(
+        processor._traceMetadata.has(trace.traceId),
+        "Trace metadata should be removed",
+      );
+
+      // Test that operations with orphaned spans are handled gracefully
+      const orphanedSpan = {
+        spanId: "orphaned-span",
+        traceId: "test-trace-cleanup", // Same traceId but trace is now gone
+        spanData: { type: "agent", name: "orphaned" },
+        error: null,
+      } as any;
+
+      // These should be no-ops and not throw
+      await processor.onSpanStart(orphanedSpan);
+      await processor.onSpanEnd(orphanedSpan);
+
+      // Verify the orphaned operations didn't create any trace data
+      assert.isFalse(
+        processor._spans.has("test-trace-cleanup"),
+        "Orphaned operations shouldn't recreate root span",
+      );
+      assert.isFalse(
+        processor._traceMetadata.has("test-trace-cleanup"),
+        "Orphaned operations shouldn't recreate metadata",
+      );
+      assert.equal(
+        processor._spans.size,
+        0,
+        "No spans should exist after cleanup",
+      );
+      assert.equal(
+        processor._traceMetadata.size,
+        0,
+        "No metadata should exist after cleanup",
+      );
+    });
+
+    test("LRU eviction behavior - oldest traces are evicted when maxTraces is exceeded", async () => {
+      // Use a small maxTraces for fast testing
+      const processor = new OpenAIAgentsTracingProcessor({ maxTraces: 3 });
+      const maxTraces = processor._maxTraces;
+
+      assert.equal(maxTraces, 3, "Should use configured maxTraces");
+
+      // Create traces up to the limit
+      const traces: any[] = [];
+      for (let i = 0; i < maxTraces; i++) {
+        const trace = {
+          traceId: `test-trace-${i}`,
+          name: `test-${i}`,
+          metadata: {},
+        } as any;
+        traces.push(trace);
+        await processor.onTraceStart(trace);
+      }
+
+      // Verify all traces are stored
+      assert.equal(
+        processor._traceMetadata.size,
+        maxTraces,
+        "All trace metadata should be stored",
+      );
+      assert.isTrue(
+        processor._spans.has("test-trace-0"),
+        "First trace root span should exist",
+      );
+      assert.isTrue(
+        processor._spans.has("test-trace-1"),
+        "Second trace root span should exist",
+      );
+      assert.isTrue(
+        processor._spans.has("test-trace-2"),
+        "Third trace root span should exist",
+      );
+
+      // Add one more trace - this should trigger LRU eviction
+      const newTrace = {
+        traceId: "test-trace-new",
+        name: "test-new",
+        metadata: {},
+      } as any;
+      await processor.onTraceStart(newTrace);
+
+      // Metadata should still be at max size
+      assert.equal(
+        processor._traceMetadata.size,
+        maxTraces,
+        "Metadata should remain at max size after eviction",
+      );
+
+      // First trace should be evicted, new trace should exist
+      assert.isFalse(
+        processor._spans.has("test-trace-0"),
+        "First (oldest) trace should be evicted",
+      );
+      assert.isFalse(
+        processor._traceMetadata.has("test-trace-0"),
+        "First trace metadata should be evicted",
+      );
+      assert.isTrue(
+        processor._spans.has("test-trace-new"),
+        "New trace should exist",
+      );
+      assert.isTrue(
+        processor._traceMetadata.has("test-trace-new"),
+        "New trace metadata should exist",
+      );
+      assert.isTrue(
+        processor._spans.has("test-trace-1"),
+        "Second trace should still exist",
+      );
+      assert.isTrue(
+        processor._spans.has("test-trace-2"),
+        "Third trace should still exist",
+      );
+    });
+
+    test("Span hierarchy and storage validation - ensures proper parent-child relationships", async () => {
+      const processor = new OpenAIAgentsTracingProcessor({
+        logger: _logger as any,
+      });
+
+      // Create a trace
+      const trace: any = {
+        traceId: "test-hierarchy-trace",
+        name: "hierarchy-test",
+        metadata: {},
+      };
+
+      await processor.onTraceStart(trace);
+      assert.isTrue(
+        processor._spans.has(trace.traceId),
+        "Root span should be stored by traceId",
+      );
+      assert.isTrue(
+        processor._traceMetadata.has(trace.traceId),
+        "Trace metadata should be stored",
+      );
+
+      // Create parent span (no parentId, should attach to root)
+      const parentSpan = {
+        spanId: "parent-span-1",
+        traceId: trace.traceId,
+        parentId: null,
+        spanData: { type: "agent", name: "parent-agent" },
+        error: null,
+      } as any;
+
+      await processor.onSpanStart(parentSpan);
+      const parentSpanKey = `${trace.traceId}:${parentSpan.spanId}`;
+      assert.isTrue(
+        processor._spans.has(parentSpanKey),
+        "Parent span should be stored with composite key",
+      );
+
+      // Create child span (with parentId, should attach to parent)
+      const childSpan = {
+        spanId: "child-span-1",
+        traceId: trace.traceId,
+        parentId: parentSpan.spanId,
+        spanData: {
+          type: "function",
+          name: "child-function",
+          input: "test input",
+          output: "test output",
+        },
+        error: null,
+      } as any;
+
+      await processor.onSpanStart(childSpan);
+      const childSpanKey = `${trace.traceId}:${childSpan.spanId}`;
+      assert.isTrue(
+        processor._spans.has(childSpanKey),
+        "Child span should be stored with composite key",
+      );
+
+      // Create grandchild span
+      const grandchildSpan = {
+        spanId: "grandchild-span-1",
+        traceId: trace.traceId,
+        parentId: childSpan.spanId,
+        spanData: {
+          type: "generation",
+          name: "grandchild-generation",
+          input: [{ role: "user", content: "test" }],
+          output: [{ role: "assistant", content: "response" }],
+        },
+        error: null,
+      } as any;
+
+      await processor.onSpanStart(grandchildSpan);
+      const grandchildSpanKey = `${trace.traceId}:${grandchildSpan.spanId}`;
+      assert.isTrue(
+        processor._spans.has(grandchildSpanKey),
+        "Grandchild span should be stored with composite key",
+      );
+
+      // Verify we have the expected number of spans
+      const allSpanKeys = Array.from(processor._spans.keys());
+      const traceSpans = allSpanKeys.filter((key) =>
+        key.startsWith(trace.traceId),
+      );
+      assert.equal(
+        traceSpans.length,
+        4,
+        "Should have 4 spans total: 1 root + 3 child spans",
+      );
+
+      // End spans in reverse order (grandchild -> child -> parent)
+      await processor.onSpanEnd(grandchildSpan);
+      assert.isFalse(
+        processor._spans.has(grandchildSpanKey),
+        "Grandchild span should be removed after ending",
+      );
+
+      await processor.onSpanEnd(childSpan);
+      assert.isFalse(
+        processor._spans.has(childSpanKey),
+        "Child span should be removed after ending",
+      );
+
+      await processor.onSpanEnd(parentSpan);
+      assert.isFalse(
+        processor._spans.has(parentSpanKey),
+        "Parent span should be removed after ending",
+      );
+
+      // Root span should still exist
+      assert.isTrue(
+        processor._spans.has(trace.traceId),
+        "Root span should still exist",
+      );
+      assert.isTrue(
+        processor._traceMetadata.has(trace.traceId),
+        "Trace metadata should still exist",
+      );
+
+      // End the trace
+      await processor.onTraceEnd(trace);
+      assert.isFalse(
+        processor._spans.has(trace.traceId),
+        "Root span should be removed after trace end",
+      );
+      assert.isFalse(
+        processor._traceMetadata.has(trace.traceId),
+        "Trace metadata should be removed after trace end",
+      );
+
+      // Verify all spans are cleaned up
+      const remainingSpans = Array.from(processor._spans.keys()).filter((key) =>
+        key.startsWith(trace.traceId),
+      );
+      assert.equal(
+        remainingSpans.length,
+        0,
+        "No spans should remain for this trace",
+      );
     });
   },
 );

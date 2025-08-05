@@ -21,7 +21,7 @@ const logger = initLogger({
 });
 
 // Create the tracing processor
-const processor = new OpenAIAgentsTracingProcessor(logger);
+const processor = new OpenAIAgentsTracingProcessor({ logger });
 
 // Add the processor to OpenAI Agents
 addTraceProcessor(processor);
@@ -45,10 +45,13 @@ A tracing processor that logs traces from the OpenAI Agents SDK to Braintrust.
 #### Constructor
 
 ```typescript
-new OpenAIAgentsTracingProcessor(logger?: Logger)
+new OpenAIAgentsTracingProcessor(options?: OpenAIAgentsTracingProcessorOptions)
 ```
 
-- `logger`: A Braintrust `Span`, `Experiment`, or `Logger` to use for logging. If `undefined`, the current span, experiment, or logger will be selected exactly as in `startSpan`.
+**Options:**
+
+- `logger?: Logger` - A Braintrust `Span`, `Experiment`, or `Logger` to use for logging. If undefined, the current span, experiment, or logger will be selected exactly as in `startSpan`.
+- `maxTraces?: number` - Maximum number of concurrent traces to keep in memory (default: 1000). When exceeded, oldest traces are evicted using LRU policy to prevent memory leaks.
 
 #### Methods
 
