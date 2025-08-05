@@ -12,6 +12,9 @@ jobs:
           fetch-depth: 0 # Fetch all history for checking branch
       - name: Refresh tags
         run: |
-          git show-ref --tags
+          echo "Fetching tags"
           git fetch --tags --prune --force
+          echo "\n\nTag state"
           git show-ref --tags
+          echo "\n\nRun validate script"
+          ./py/scripts/validate-release-tag.sh py-sdk-v0.2.1
