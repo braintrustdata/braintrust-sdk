@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { postProcessPrompt } from "./ai-sdk-v1";
+import { postProcessOutput, postProcessPrompt } from "./ai-sdk-v1";
 import { BraintrustMiddleware } from "../exports-node";
-import { LanguageModelV1Prompt } from "@ai-sdk/provider";
+import {
+  LanguageModelV1Prompt,
+  LanguageModelV1FunctionToolCall,
+} from "@ai-sdk/provider";
 
 describe("postProcessPrompt", () => {
   it("correctly processes a simple chat prompt", () => {
@@ -62,5 +65,76 @@ describe("postProcessPrompt", () => {
     expect(middleware).toHaveProperty("wrapStream");
     expect(typeof middleware.wrapGenerate).toBe("function");
     expect(typeof middleware.wrapStream).toBe("function");
+  });
+});
+
+describe("postProcessOutput", () => {
+  it("should format tool calls correctly in OpenAI format", () => {
+    const toolCalls: LanguageModelV1FunctionToolCall[] = [
+      {
+        toolCallType: "function",
+        toolCallId: "call_abc123",
+        toolName: "get_weather",
+        args: '{"location": "San Francisco", "unit": "celsius"}',
+      },
+    ];
+
+    const result = postProcessOutput(undefined, toolCalls, "tool-calls");
+    expect(result).toEqual([
+      {
+        index: 0,
+        message: {
+          role: "assistant",
+          content: "",
+          tool_calls: [
+            {
+              id: "call_abc123",
+              type: "function",
+              function: {
+                name: "get_weather",
+                arguments: '{"location": "San Francisco", "unit": "celsius"}',
+              },
+            },
+          ],
+        },
+        finish_reason: "tool-calls",
+      },
+    ]);
+  });
+});
+
+describe("ai-sdk exports", () => {
+  it("should always export BraintrustMiddleware as a function", () => {
+    expect(typeof BraintrustMiddleware).toBe("function");
+  });
+
+  it("BraintrustMiddleware should return an object with wrapGenerate and wrapStream", () => {
+    const result = BraintrustMiddleware({});
+    expect(result).toHaveProperty("wrapGenerate");
+    expect(result).toHaveProperty("wrapStream");
+    expect(typeof result.wrapGenerate).toBe("function");
+    expect(typeof result.wrapStream).toBe("function");
+  });
+
+  it("should handle conditional imports gracefully", () => {
+    // Test that imports don't throw errors regardless of AI SDK version
+    expect(() => {
+      const middleware = BraintrustMiddleware({ debug: true });
+
+      // Should be able to call the functions without errors
+      const { wrapGenerate, wrapStream } = middleware;
+
+      expect(wrapGenerate).toBeDefined();
+      expect(wrapStream).toBeDefined();
+    }).not.toThrow();
+  });
+
+  it("should export middleware functions that can be instantiated", () => {
+    const middleware = BraintrustMiddleware({});
+    const { wrapGenerate, wrapStream } = middleware;
+
+    // Should be functions that can be called (we don't test actual execution due to logger dependencies)
+    expect(typeof wrapGenerate).toBe("function");
+    expect(typeof wrapStream).toBe("function");
   });
 });
