@@ -1,5 +1,5 @@
 import logging
-from contextvars import ContextVar
+import os
 from typing import (
     Any,
     List,
@@ -51,13 +51,10 @@ def _start_span(
     parent: Optional[str] = None,
     event: Optional[LogEvent] = None,
 ):
-    # branch in invocation_context may be a parent_id equivalent
-
     current_parent = current_span()
     parent_span = None
     if current_parent != NOOP_SPAN:
         parent_span = current_parent
-    # TODO: support project logs?
     else:
         parent_span = braintrust
 
@@ -79,7 +76,9 @@ def _start_span(
         _logger.warning(
             "Braintrust logging not configured. Call `init_logger`, or run an experiment to configure Braintrust logging. Setting up a default."
         )
-        span = init_logger().start_span(
+        span = init_logger(
+            project=os.getenv("BRAINTRUST_PROJECT_NAME") or "google-adk-py"
+        ).start_span(
             name=name,
             type=type,
             span_attributes=span_attributes,
@@ -244,6 +243,3 @@ def after_tool_callback(
         output=tool_response,
         metadata=_tool_context_to_metadata(tool_context),
     )
-
-
-spans_ctx = ContextVar("braintrust_spans", default={})
