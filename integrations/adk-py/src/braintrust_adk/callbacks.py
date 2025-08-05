@@ -41,8 +41,6 @@ class LogEvent(TypedDict):
 
 
 def _start_span(
-    parent_run_id: Optional[str],
-    run_id: str,
     name: Optional[str] = None,
     type: Optional[SpanTypeAttribute] = None,
     span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
@@ -51,12 +49,6 @@ def _start_span(
     parent: Optional[str] = None,
     event: Optional[LogEvent] = None,
 ):
-    spans = spans_ctx.get()
-    if run_id in spans:
-        _logger.warning(
-            f"Span already exists for run_id {run_id} (this is likely a bug)"
-        )
-
     # branch in invocation_context may be a parent_id equivalent
 
     current_parent = current_span()
@@ -67,6 +59,8 @@ def _start_span(
     else:
         parent_span = braintrust
 
+    event = event or {}
+
     span = parent_span.start_span(
         name=name,
         type=type,
@@ -76,6 +70,8 @@ def _start_span(
         parent=parent,
         **event,
     )
+
+    span.set_current()
 
     if span == NOOP_SPAN:
         _logger.warning(
@@ -91,12 +87,8 @@ def _start_span(
             **event,
         )
 
-    spans[run_id] = span
-
 
 def _end_span(
-    run_id: str,
-    parent_run_id: Optional[str] = None,
     input: Optional[Any] = None,
     output: Optional[Any] = None,
     expected: Optional[Any] = None,
@@ -107,10 +99,7 @@ def _end_span(
     metrics: Optional[Mapping[str, Union[int, float]]] = None,
     dataset_record_id: Optional[str] = None,
 ):
-    spans = spans_ctx.get()
-    span = spans.pop(run_id, None)
-    if not span:
-        return
+    span = current_span()
 
     span.log(
         input=input,
@@ -146,6 +135,19 @@ def _tool_context_to_metadata(tool_context: ToolContext) -> dict[str, Any]:
     }
 
 
+def before_agent_callback(callback_context: CallbackContext):
+    _start_span(
+        name=callback_context.agent_name,
+        type=SpanTypeAttribute.TASK,
+        set_current=True,
+        event={},
+    )
+
+
+def after_agent_callback(callback_context: CallbackContext):
+    _end_span()
+
+
 def before_model_callback(callback_context: CallbackContext, llm_request: LlmRequest):
     """Called before calling the LLM.
     Args:
@@ -158,8 +160,6 @@ def before_model_callback(callback_context: CallbackContext, llm_request: LlmReq
       skipped and the provided content will be returned to user.
     """
     _start_span(
-        parent_run_id=None,  # TODO: ?
-        run_id=callback_context._invocation_context.invocation_id,
         name=callback_context.agent_name,
         type=SpanTypeAttribute.LLM,
         event={
@@ -182,7 +182,6 @@ def after_model_callback(callback_context: CallbackContext, llm_response: LlmRes
       will be ignored and the provided content will be returned to user.
     """
     _end_span(
-        run_id=callback_context._invocation_context.invocation_id,
         # TODO: cleaner?
         output=llm_response.model_dump(),
         metadata=_callback_context_to_metadata(callback_context),
@@ -204,8 +203,6 @@ def before_tool_callback(
       the framework will skip calling the actual tool.
     """
     _start_span(
-        parent_run_id=None,  # ?
-        run_id=tool_context._invocation_context.invocation_id,
         name=tool.name,
         type=SpanTypeAttribute.TOOL,
         event={
@@ -230,7 +227,6 @@ def after_tool_callback(
       When present, the returned dict will be used as tool result.
     """
     _end_span(
-        run_id=tool_context._invocation_context.invocation_id,
         output=tool_response,
         metadata=_tool_context_to_metadata(tool_context),
     )

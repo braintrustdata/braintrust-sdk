@@ -4,25 +4,23 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = [
-    "braintrust>=0.0.200",
-    "google-adk>=0.2.0",
-]
+dependencies = ["braintrust>=0.2.1", "google-adk>=0.2.0"]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-]
+dev = ["pytest>=7.0.0"]
 
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.uv.workspace]
 members = ["examples"]
+
+[tool.uv.sources]
+braintrust = { path = "../../py" }
