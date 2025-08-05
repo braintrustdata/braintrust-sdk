@@ -283,10 +283,8 @@ describe(
 
     test("LRU eviction behavior - oldest traces are evicted when maxTraces is exceeded", async () => {
       // Use a small maxTraces for fast testing
-      const processor = new OpenAIAgentsTracingProcessor({ maxTraces: 3 });
-      const maxTraces = processor._maxTraces;
-
-      assert.equal(maxTraces, 3, "Should use configured maxTraces");
+      const maxTraces = 3;
+      const processor = new OpenAIAgentsTracingProcessor({ maxTraces });
 
       // Create traces up to the limit
       const traces: any[] = [];

@@ -149,17 +149,13 @@ export class OpenAIAgentsTracingProcessor {
 
   private logger?: Logger<any>;
   private maxTraces: number;
-  // Flat storage: traceId for root spans, traceId:spanId for child spans
   private spans = new Map<string, BraintrustSpan>();
   private traceMetadata = new Map<string, TraceMetadata>();
-  private traceOrder: string[] = []; // Track insertion order for LRU
+  private traceOrder: string[] = [];
 
-  // Expose for testing
+  // Expose for testing purposes
   public readonly _spans = this.spans;
   public readonly _traceMetadata = this.traceMetadata;
-  public get _maxTraces(): number {
-    return this.maxTraces;
-  }
 
   constructor(options: OpenAIAgentsTracingProcessorOptions = {}) {
     this.logger = options.logger;
@@ -170,13 +166,10 @@ export class OpenAIAgentsTracingProcessor {
   private evictOldestTrace(): void {
     if (this.traceOrder.length === 0) return;
 
-    const oldestTraceId = this.traceOrder.shift()!; // Remove from front
+    const oldestTraceId = this.traceOrder.shift()!;
 
-    // Simply remove references without force-closing spans
-    // Let spans close naturally through normal flow
     this.spans.delete(oldestTraceId);
 
-    // Remove all child spans for this trace - more efficient iteration
     const keysToDelete: string[] = [];
     for (const key of this.spans.keys()) {
       if (key.startsWith(`${oldestTraceId}:`)) {
@@ -187,12 +180,10 @@ export class OpenAIAgentsTracingProcessor {
       this.spans.delete(key);
     }
 
-    // Clean up metadata
     this.traceMetadata.delete(oldestTraceId);
   }
 
   onTraceStart(trace: AgentsTrace): Promise<void> {
-    // Implement LRU eviction: if we're at capacity, remove oldest trace
     if (this.traceOrder.length >= this.maxTraces) {
       this.evictOldestTrace();
     }
@@ -207,7 +198,6 @@ export class OpenAIAgentsTracingProcessor {
           type: SpanTypeAttribute.TASK,
         });
 
-    // Log basic trace info immediately
     span.log({
       input: "Agent workflow started",
       metadata: {
@@ -215,7 +205,6 @@ export class OpenAIAgentsTracingProcessor {
       },
     });
 
-    // Store root span and metadata
     this.spans.set(trace.traceId, span);
     this.traceMetadata.set(trace.traceId, {
       firstInput: null,
@@ -231,17 +220,14 @@ export class OpenAIAgentsTracingProcessor {
     const metadata = this.traceMetadata.get(trace.traceId);
 
     if (rootSpan && metadata) {
-      // Log first input and last output to the root trace span
       rootSpan.log({
         input: metadata.firstInput,
         output: metadata.lastOutput,
       });
       rootSpan.end();
 
-      // Simple cleanup - just remove from maps and order
       this.spans.delete(trace.traceId);
       this.traceMetadata.delete(trace.traceId);
-      // Remove from order array - find and splice is fine for normal trace end
       const orderIndex = this.traceOrder.indexOf(trace.traceId);
       if (orderIndex > -1) {
         this.traceOrder.splice(orderIndex, 1);
@@ -271,23 +257,19 @@ export class OpenAIAgentsTracingProcessor {
     const spanData = span.spanData;
     const data: Record<string, any> = {};
 
-    // Only proceed if this is actually a response span
     if (!isResponseSpanData(spanData)) {
       return data;
     }
 
-    // Check for input - regular field first, then underscore fallback
     if (spanData._input !== undefined) {
       data.input = spanData._input;
     }
 
-    // Check for output - underscore response first
     if (spanData._response !== undefined) {
       data.output = spanData._response.output;
     }
 
     if (spanData._response) {
-      // Exclude output, metadata, usage, and output_text like Python does
       const { output, metadata, usage, output_text, ...otherFields } =
         spanData._response;
       data.metadata = otherFields;
@@ -302,20 +284,17 @@ export class OpenAIAgentsTracingProcessor {
       data.metrics.time_to_first_token = ttft;
     }
 
-    // Check for usage in _response
     let usage: any = null;
     if (spanData._response?.usage) {
       usage = spanData._response.usage;
     }
 
     if (usage) {
-      // Check for OpenAI agents SDK field names first
       if (usage.total_tokens) data.metrics.tokens = usage.total_tokens;
       if (usage.input_tokens) data.metrics.prompt_tokens = usage.input_tokens;
       if (usage.output_tokens)
         data.metrics.completion_tokens = usage.output_tokens;
 
-      // Fallback to alternate field names
       if (!data.metrics.tokens && usage.totalTokens)
         data.metrics.tokens = usage.totalTokens;
       if (!data.metrics.prompt_tokens && usage.inputTokens)
@@ -442,7 +421,6 @@ export class OpenAIAgentsTracingProcessor {
   onSpanStart(span: AgentsSpan): Promise<void> {
     if (!span.spanId || !span.traceId) return Promise.resolve();
 
-    // Find parent span - use parent_id if available, otherwise fall back to trace root
     let parentSpan: BraintrustSpan | undefined;
     if (span.parentId) {
       parentSpan = this.spans.get(`${span.traceId}:${span.parentId}`);
@@ -475,7 +453,6 @@ export class OpenAIAgentsTracingProcessor {
       braintrustSpan.end();
       this.spans.delete(`${span.traceId}:${span.spanId}`);
 
-      // Track first input and last output for the root trace span
       const input = logData.input as SpanInput;
       const output = logData.output as SpanOutput;
 
