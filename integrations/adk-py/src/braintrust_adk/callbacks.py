@@ -2,6 +2,7 @@ import logging
 from contextvars import ContextVar
 from typing import (
     Any,
+    List,
     Mapping,
     Optional,
     Sequence,
@@ -22,6 +23,7 @@ from google.adk.models.llm_request import LlmRequest
 from google.adk.models.llm_response import LlmResponse
 from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.tool_context import ToolContext
+from google.genai.types import Content
 from typing_extensions import NotRequired
 
 _logger = logging.getLogger("braintrust_adk")
@@ -109,6 +111,8 @@ def _end_span(
         tags=None,
         scores=scores,
         metadata={
+            "provider": "google-adk",
+            "language": "python",
             **({"tags": tags} if tags else {}),
             **(metadata or {}),
         },
@@ -163,11 +167,22 @@ def before_model_callback(callback_context: CallbackContext, llm_request: LlmReq
         name=callback_context.agent_name,
         type=SpanTypeAttribute.LLM,
         event={
-            # TODO: cleaner?
-            "input": llm_request.model_dump(),
-            "metadata": _callback_context_to_metadata(callback_context),
+            "input": _contents_to_input(llm_request.contents),
+            "metadata": {
+                **_callback_context_to_metadata(callback_context),
+                "model": llm_request.model,
+                **(
+                    llm_request.config.model_dump(exclude_none=True)
+                    if llm_request.config
+                    else {}
+                ),
+            },
         },
     )
+
+
+def _contents_to_input(contents: List[Content]):
+    return [content.model_dump(exclude_none=True) for content in contents]
 
 
 def after_model_callback(callback_context: CallbackContext, llm_response: LlmResponse):
@@ -182,8 +197,7 @@ def after_model_callback(callback_context: CallbackContext, llm_response: LlmRes
       will be ignored and the provided content will be returned to user.
     """
     _end_span(
-        # TODO: cleaner?
-        output=llm_response.model_dump(),
+        output=llm_response.model_dump(exclude_none=True),
         metadata=_callback_context_to_metadata(callback_context),
     )
 
