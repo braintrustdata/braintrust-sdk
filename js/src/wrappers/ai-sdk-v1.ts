@@ -339,23 +339,31 @@ export function postProcessPrompt(prompt: LanguageModelV1Prompt): Message[] {
   });
 }
 
-function postProcessOutput(
+export function postProcessOutput(
   text: string | undefined,
   toolCalls: LanguageModelV1FunctionToolCall[] | undefined,
   finishReason: LanguageModelV1FinishReason,
 ) {
-  return {
-    index: 0,
-    message: {
-      role: "assistant",
-      content:
-        text ??
-        (toolCalls
-          ? toolCalls.length === 1 && toolCalls[0].toolName === "json"
-            ? toolCalls[0].args
-            : JSON.stringify(toolCalls)
-          : ""),
+  return [
+    {
+      index: 0,
+      message: {
+        role: "assistant",
+        content: text ?? "",
+        ...(toolCalls && toolCalls.length > 0
+          ? {
+              tool_calls: toolCalls.map((toolCall) => ({
+                id: toolCall.toolCallId,
+                function: {
+                  name: toolCall.toolName,
+                  arguments: toolCall.args,
+                },
+                type: "function" as const,
+              })),
+            }
+          : {}),
+      },
+      finish_reason: finishReason,
     },
-    finish_reason: finishReason,
-  };
+  ];
 }
