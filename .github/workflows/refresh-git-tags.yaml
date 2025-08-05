@@ -1,0 +1,17 @@
+name: Refresh git tags
+
+on:
+  workflow_dispatch:
+
+jobs:
+  refresh-git-tags:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for checking branch
+      - name: Refresh tags
+        run: |
+          git show-ref --tags
+          git fetch --tags --prune --force
+          git show-ref --tags
