@@ -250,13 +250,13 @@ export class OpenAIAgentsTracingProcessor {
     return Promise.resolve();
   }
 
-  private extractAgentLogData(span: AgentsSpan): Record<string, any> {
+  private extractAgentLogData(span: AgentsSpan): Record<string, unknown> {
     const spanData = span.spanData;
     if (!isAgentSpanData(spanData)) {
       return {};
     }
 
-    const data: Record<string, any> = {
+    const data: Record<string, unknown> = {
       metadata: {
         tools: spanData.tools,
         handoffs: spanData.handoffs,
@@ -267,7 +267,7 @@ export class OpenAIAgentsTracingProcessor {
     return data;
   }
 
-  private extractResponseLogData(span: AgentsSpan): Record<string, any> {
+  private extractResponseLogData(span: AgentsSpan): Record<string, unknown> {
     const spanData = span.spanData;
     const data: Record<string, any> = {};
 
@@ -331,7 +331,7 @@ export class OpenAIAgentsTracingProcessor {
     return data;
   }
 
-  private extractFunctionLogData(span: AgentsSpan): Record<string, any> {
+  private extractFunctionLogData(span: AgentsSpan): Record<string, unknown> {
     const spanData = span.spanData;
     if (!isFunctionSpanData(spanData)) {
       return {};
@@ -342,7 +342,7 @@ export class OpenAIAgentsTracingProcessor {
     };
   }
 
-  private extractHandoffLogData(span: AgentsSpan): Record<string, any> {
+  private extractHandoffLogData(span: AgentsSpan): Record<string, unknown> {
     const spanData = span.spanData;
     if (!isHandoffSpanData(spanData)) {
       return {};
@@ -355,7 +355,7 @@ export class OpenAIAgentsTracingProcessor {
     };
   }
 
-  private extractGuardrailLogData(span: AgentsSpan): Record<string, any> {
+  private extractGuardrailLogData(span: AgentsSpan): Record<string, unknown> {
     const spanData = span.spanData;
     if (!isGuardrailSpanData(spanData)) {
       return {};
@@ -367,13 +367,13 @@ export class OpenAIAgentsTracingProcessor {
     };
   }
 
-  private extractGenerationLogData(span: AgentsSpan): Record<string, any> {
+  private extractGenerationLogData(span: AgentsSpan): Record<string, unknown> {
     const spanData = span.spanData;
     if (!isGenerationSpanData(spanData)) {
       return {};
     }
 
-    const metrics: Record<string, any> = {};
+    const metrics: Record<string, unknown> = {};
 
     const ttft = getTimeElapsed(
       span.endedAt ?? undefined,
@@ -408,7 +408,7 @@ export class OpenAIAgentsTracingProcessor {
     };
   }
 
-  private extractCustomLogData(span: AgentsSpan): Record<string, any> {
+  private extractCustomLogData(span: AgentsSpan): Record<string, unknown> {
     const spanData = span.spanData;
     if (!isCustomSpanData(spanData)) {
       return {};
@@ -416,7 +416,7 @@ export class OpenAIAgentsTracingProcessor {
     return spanData.data || {};
   }
 
-  private extractLogData(span: AgentsSpan): Record<string, any> {
+  private extractLogData(span: AgentsSpan): Record<string, unknown> {
     const spanType = span.spanData?.type;
 
     switch (spanType) {
