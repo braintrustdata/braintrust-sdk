@@ -47,7 +47,11 @@ VENDOR_PACKAGES = (
 
 # Test matrix
 ANTHROPIC_VERSIONS = (LATEST, "0.50.0", "0.49.0", "0.48.0")
-OPENAI_VERSIONS = (LATEST, "1.77.0", "1.71", "1.91", "1.92")
+# Latest openai version (1.99.0) is broken so temporarily skip it
+# (also install openai 1.98.0 in pydantic tests for now)
+# https://github.com/openai/openai-python/issues/2511
+# OPENAI_VERSIONS = (LATEST, "1.77.0", "1.71", "1.91", "1.92")
+OPENAI_VERSIONS = ("1.98.0", "1.77.0", "1.71", "1.91", "1.92")
 LITELLM_VERSIONS = (LATEST, "1.74.0")
 PYDANTIC_AI_VERSIONS = (LATEST, "0.1.9")
 AUTOEVALS_VERSIONS = (LATEST, "0.0.129")
@@ -66,6 +70,7 @@ def test_core(session):
 @nox.parametrize("version", PYDANTIC_AI_VERSIONS, ids=PYDANTIC_AI_VERSIONS)
 def test_pydantic_ai(session, version):
     _install_test_deps(session)
+    _install(session, "openai", OPENAI_VERSIONS[0])
     _install(session, "pydantic_ai", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai.py")
     _run_core_tests(session)
