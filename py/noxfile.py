@@ -66,7 +66,7 @@ def test_core(session):
 @nox.parametrize("version", PYDANTIC_AI_VERSIONS, ids=PYDANTIC_AI_VERSIONS)
 def test_pydantic_ai(session, version):
     _install_test_deps(session)
-    _install(session, "openai", "latest")
+    _install(session, "openai")
     _install(session, "pydantic_ai", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_pydantic_ai.py")
     _run_core_tests(session)
@@ -241,10 +241,6 @@ def _run_tests(session, test_path, ignore_path="", env=None):
 
 
 def _install(session, package, version=LATEST):
-    # Latest openai version (1.99.0) is broken so temporarily skip it
-    # https://github.com/openai/openai-python/issues/2511
-    if package == "openai" and version == LATEST or not version:
-        version = "1.98.0"
     pkg_version = f"{package}=={version}"
     if version == LATEST or not version:
         pkg_version = package

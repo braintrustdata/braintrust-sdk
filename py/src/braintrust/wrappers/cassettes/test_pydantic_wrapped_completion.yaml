@@ -1,0 +1,210 @@
+interactions:
+  - request:
+      body: '{"messages":[{"role":"user","content":"What is the capital of Italy?"}],"model":"gpt-3.5-turbo","stream":false}'
+      headers:
+        accept:
+          - application/json
+        accept-encoding:
+          - gzip, deflate, zstd
+        connection:
+          - keep-alive
+        content-length:
+          - "111"
+        content-type:
+          - application/json
+        host:
+          - api.openai.com
+        user-agent:
+          - pydantic-ai/0.5.0
+        x-stainless-arch:
+          - arm64
+        x-stainless-async:
+          - async:asyncio
+        x-stainless-lang:
+          - python
+        x-stainless-os:
+          - MacOS
+        x-stainless-package-version:
+          - 1.93.3
+        x-stainless-read-timeout:
+          - "600"
+        x-stainless-retry-count:
+          - "0"
+        x-stainless-runtime:
+          - CPython
+        x-stainless-runtime-version:
+          - 3.13.3
+      method: POST
+      uri: https://api.openai.com/v1/chat/completions
+    response:
+      body:
+        string: !!binary |
+          H4sIAAAAAAAAAwAAAP//jFLLbtswELzrKxY820bkB+z6lgQFmh5yCIICbREINLmS2FBcglwVjQP/
+          e0HasZRHgV502NkZzQz3uQAQRostCNVKVp230+vy66b+fPvlZrOcr6zdfKv39+Xj1Y/++35/KSaJ
+          QbtfqPiFNVPUeYtsyB1hFVAyJtVyvVou5+tPi0UGOtJoE63xPF3MVlPuw46mF+V8dWK2ZBRGsYWf
+          BQDAc/4mj07jH7GFi8nLpMMYZYNie14CEIFsmggZo4ksHYvJACpyjC7bvm8RlPSGpQWq4YalfQIT
+          4Y46nI05Aes+yuTZ9daOAOkcsUyZs9uHE3I4+7PU+EC7+IYqauNMbKuAMpJLXiKTFxk9FAAPuYf+
+          VTThA3WeK6ZHzL8rl0c5MTQ/gOsTxsTSDuN5OflArNLI0tg4qlEoqVrUA3PoXPba0AgoRpHfe/lI
+          +xjbuOZ/5AdAKfSMuvIBtVGv8w5rAdNZ/mvtXHE2LCKG30ZhxQZDegaNtezt8WBEfIqMXVUb12Dw
+          weSrSc9YHIq/AAAA//8DACJ+wLk0AwAA
+      headers:
+        CF-RAY:
+          - 96a940d5ea01ab45-YYZ
+        Connection:
+          - keep-alive
+        Content-Encoding:
+          - gzip
+        Content-Type:
+          - application/json
+        Date:
+          - Tue, 05 Aug 2025 21:05:34 GMT
+        Server:
+          - cloudflare
+        Set-Cookie:
+          - __cf_bm=mKAEmgBDeHfvHfbwbW6JwsGB9Tt8uiUvakcwqLwJ7dM-1754427934-1.0.1.1-L0pxzPbDmy9G_KHmZztKqVF0y2dYP.o0f7oeh3yn4aQWgodvViogULqTthTAvSzc7ZuvviILbIkzHaRP4A6ZNhCjDyOqnq.ieLO65t3ZvMw;
+            path=/; expires=Tue, 05-Aug-25 21:35:34 GMT; domain=.api.openai.com; HttpOnly;
+            Secure; SameSite=None
+          - _cfuvid=AJ4DS2LI5l9T4fA5tJo89_Zoue11PsFOW4VSiQg9gpE-1754427934166-0.0.1.1-604800000;
+            path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
+        Transfer-Encoding:
+          - chunked
+        X-Content-Type-Options:
+          - nosniff
+        access-control-expose-headers:
+          - X-Request-ID
+        alt-svc:
+          - h3=":443"; ma=86400
+        cf-cache-status:
+          - DYNAMIC
+        openai-organization:
+          - braintrust-data
+        openai-processing-ms:
+          - "895"
+        openai-project:
+          - proj_vsCSXafhhByzWOThMrJcZiw9
+        openai-version:
+          - "2020-10-01"
+        strict-transport-security:
+          - max-age=31536000; includeSubDomains; preload
+        x-envoy-upstream-service-time:
+          - "927"
+        x-ratelimit-limit-requests:
+          - "10000"
+        x-ratelimit-limit-tokens:
+          - "50000000"
+        x-ratelimit-remaining-requests:
+          - "9999"
+        x-ratelimit-remaining-tokens:
+          - "49999990"
+        x-ratelimit-reset-requests:
+          - 6ms
+        x-ratelimit-reset-tokens:
+          - 0s
+        x-request-id:
+          - req_06a6004b54e39bb172035df4addde9ab
+      status:
+        code: 200
+        message: OK
+  - request:
+      body: '{"messages":[{"role":"user","content":"What is the capital of Italy?"}],"model":"gpt-3.5-turbo","stream":false}'
+      headers:
+        accept:
+          - application/json
+        accept-encoding:
+          - gzip, deflate, zstd
+        connection:
+          - keep-alive
+        content-length:
+          - "111"
+        content-type:
+          - application/json
+        host:
+          - api.openai.com
+        user-agent:
+          - pydantic-ai/0.5.0
+        x-stainless-arch:
+          - arm64
+        x-stainless-async:
+          - async:asyncio
+        x-stainless-lang:
+          - python
+        x-stainless-os:
+          - MacOS
+        x-stainless-package-version:
+          - 1.93.3
+        x-stainless-raw-response:
+          - "true"
+        x-stainless-read-timeout:
+          - "600"
+        x-stainless-retry-count:
+          - "0"
+        x-stainless-runtime:
+          - CPython
+        x-stainless-runtime-version:
+          - 3.13.3
+      method: POST
+      uri: https://api.openai.com/v1/chat/completions
+    response:
+      body:
+        string: !!binary |
+          H4sIAAAAAAAAAwAAAP//jJLNTuswEIX3eQpr1i1qSnuB7hAbBBILEGyuUOTak9TgeIw9ubcI9d2R
+          3dKk/EhsvPA3Z3zOeN4KIcBoWAhQK8mq9XZ8UV6dNt3k9eHp/rJ0k//ru+eL6/pmfv5ys9YwSgpa
+          PqHiD9WRotZbZENui1VAyZi6lifz2Wx6cnY8y6AljTbJGs/j46P5mLuwpPGknM53yhUZhREW4m8h
+          hBBv+UwencY1LMRk9HHTYoyyQVjsi4SAQDbdgIzRRJaOYdRDRY7RZdu31OIQBay7KJM111k7ANI5
+          YpmiZVOPO7LZ27DU+EDL+EkKtXEmrqqAMpJLT0YmD5luCiEec9zuIAH4QK3niukZ83PlbNsO+gH3
+          cLpjTCztQPNn9E2zSiNLY+NgWqCkWqHulf1oZacNDUAxiPzVy3e9t7GNa37TvgdKoWfUlQ+ojTrM
+          25cFTNv3U9l+xNkwRAz/jMKKDYb0DRpr2dntXkB8jYxtVRvXYPDB5OVI31hsincAAAD//wMAL5D6
+          tRsDAAA=
+      headers:
+        CF-RAY:
+          - 96a940dd9abbab45-YYZ
+        Connection:
+          - keep-alive
+        Content-Encoding:
+          - gzip
+        Content-Type:
+          - application/json
+        Date:
+          - Tue, 05 Aug 2025 21:05:34 GMT
+        Server:
+          - cloudflare
+        Transfer-Encoding:
+          - chunked
+        X-Content-Type-Options:
+          - nosniff
+        access-control-expose-headers:
+          - X-Request-ID
+        alt-svc:
+          - h3=":443"; ma=86400
+        cf-cache-status:
+          - DYNAMIC
+        openai-organization:
+          - braintrust-data
+        openai-processing-ms:
+          - "482"
+        openai-project:
+          - proj_vsCSXafhhByzWOThMrJcZiw9
+        openai-version:
+          - "2020-10-01"
+        strict-transport-security:
+          - max-age=31536000; includeSubDomains; preload
+        x-envoy-upstream-service-time:
+          - "499"
+        x-ratelimit-limit-requests:
+          - "10000"
+        x-ratelimit-limit-tokens:
+          - "50000000"
+        x-ratelimit-remaining-requests:
+          - "9999"
+        x-ratelimit-remaining-tokens:
+          - "49999990"
+        x-ratelimit-reset-requests:
+          - 6ms
+        x-ratelimit-reset-tokens:
+          - 0s
+        x-request-id:
+          - req_099afc6a0a2258d05e3bb8c01d65acfe
+      status:
+        code: 200
+        message: OK
+version: 1

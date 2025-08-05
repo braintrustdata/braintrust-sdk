@@ -16,6 +16,23 @@ MODEL = "gpt-3.5-turbo"  # Use a cheaper model for testing
 TEST_PROMPT = "What is the capital of Italy?"
 
 
+@pytest.fixture(scope="module")
+def vcr_config():
+    return {
+        "filter_headers": [
+            "authorization",
+            "x-api-key",
+            "cookie",
+            "set-cookie",
+            "CF-RAY",
+            "cf-ray",
+            "openai-organization",
+            "openai-project",
+            "x-request-id",
+        ]
+    }
+
+
 def get_pydantic_agents_client(model_name: str, client: AsyncOpenAI) -> OpenAIModel:
     _provider = OpenAIProvider(openai_client=client)
     return OpenAIModel(model_name, provider=_provider)
@@ -53,6 +70,7 @@ def _assert_metrics_are_valid(metrics: Dict[str, Any]):
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_pydantic_wrapped_stream(memory_logger):
     """Test that Pydantic AI streaming operations work with Braintrust wrapping."""
     assert not memory_logger.pop()
@@ -95,6 +113,7 @@ async def test_pydantic_wrapped_stream(memory_logger):
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr
 async def test_pydantic_wrapped_completion(memory_logger):
     """Test that Pydantic AI completion operations work with Braintrust wrapping."""
     # Clear any previous logs
