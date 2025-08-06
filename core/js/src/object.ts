@@ -61,6 +61,11 @@ export interface ParentPlaygroundLogIds {
   log_id: "x";
 }
 
+export interface ParentFunctionLogIds {
+  function_id: string;
+  log_id: "f";
+}
+
 export type LogCommentFullArgs = IdField & {
   created: string;
   origin: {
@@ -111,6 +116,9 @@ export type PlaygroundLogEvent = Omit<ExperimentEvent, "experiment_id"> & {
   log_id: "x";
 };
 
+export type FunctionLogEvent = Omit<ExperimentEvent, "experiment_id"> &
+  ParentFunctionLogIds;
+
 export type CommentEvent = IdField & {
   created: string;
   origin: {
@@ -121,14 +129,20 @@ export type CommentEvent = IdField & {
   };
   [AUDIT_SOURCE_FIELD]: Source;
   [AUDIT_METADATA_FIELD]?: Record<string, unknown>;
-} & (ParentExperimentIds | ParentProjectLogIds | ParentPlaygroundLogIds);
+} & (
+    | ParentExperimentIds
+    | ParentProjectLogIds
+    | ParentPlaygroundLogIds
+    | ParentFunctionLogIds
+  );
 
 export type BackgroundLogEvent =
   | ExperimentEvent
   | DatasetEvent
   | LoggingEvent
   | PlaygroundLogEvent
-  | CommentEvent;
+  | CommentEvent
+  | FunctionLogEvent;
 
 export const DEFAULT_IS_LEGACY_DATASET = false;
 

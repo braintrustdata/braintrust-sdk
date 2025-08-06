@@ -196,6 +196,7 @@ const spanParentObjectTypeSchema = z.enum([
   "project_logs",
   "experiment",
   "playground_logs",
+  "function_logs",
 ]);
 export const invokeParent = z.union([
   z

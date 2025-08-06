@@ -1479,6 +1479,10 @@ function spanComponentsToObjectIdLambda(
       throw new Error(
         "Impossible: computeObjectMetadataArgs not supported for prompt sessions",
       );
+    case SpanObjectTypeV3.FUNCTION_LOGS:
+      throw new Error(
+        "Impossible: computeObjectMetadataArgs not supported for function logs",
+      );
     case SpanObjectTypeV3.PROJECT_LOGS:
       return async () =>
         (
@@ -5118,6 +5122,9 @@ export class SpanImpl implements Span {
       }
       case SpanObjectTypeV3.PLAYGROUND_LOGS: {
         // FIXME[matt] I dont believe these are used in the SDK.
+        return NOOP_SPAN_PERMALINK;
+      }
+      case SpanObjectTypeV3.FUNCTION_LOGS: {
         return NOOP_SPAN_PERMALINK;
       }
       default: {

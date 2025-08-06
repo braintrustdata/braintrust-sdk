@@ -30,12 +30,14 @@ class SpanObjectTypeV3(Enum):
     EXPERIMENT = 1
     PROJECT_LOGS = 2
     PLAYGROUND_LOGS = 3
+    FUNCTION_LOGS = 4
 
     def __str__(self):
         return {
             SpanObjectTypeV3.EXPERIMENT: "experiment",
             SpanObjectTypeV3.PROJECT_LOGS: "project_logs",
             SpanObjectTypeV3.PLAYGROUND_LOGS: "playground_logs",
+            SpanObjectTypeV3.FUNCTION_LOGS: "function_logs",
         }[self]
 
 
@@ -184,6 +186,8 @@ class SpanComponentsV3:
             return dict(project_id=self.object_id, log_id="g")
         elif self.object_type == SpanObjectTypeV3.PLAYGROUND_LOGS:
             return dict(prompt_session_id=self.object_id, log_id="x")
+        elif self.object_type == SpanObjectTypeV3.FUNCTION_LOGS:
+            return dict(function_id=self.object_id, log_id="f")
         else:
             raise Exception(f"Invalid object_type {self.object_type}")
 

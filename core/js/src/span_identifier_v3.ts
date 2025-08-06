@@ -5,6 +5,7 @@ import {
   ParentExperimentIds,
   ParentProjectLogIds,
   ParentPlaygroundLogIds,
+  ParentFunctionLogIds,
 } from "./object";
 import { SpanComponentsV2 } from "./span_identifier_v2";
 import { z } from "zod";
@@ -39,6 +40,7 @@ export enum SpanObjectTypeV3 {
   EXPERIMENT = 1,
   PROJECT_LOGS = 2,
   PLAYGROUND_LOGS = 3,
+  FUNCTION_LOGS = 4,
 }
 
 export const spanObjectTypeV3EnumSchema = z.nativeEnum(SpanObjectTypeV3);
@@ -51,6 +53,8 @@ export function spanObjectTypeV3ToString(objectType: SpanObjectTypeV3): string {
       return "project_logs";
     case SpanObjectTypeV3.PLAYGROUND_LOGS:
       return "playground_logs";
+    case SpanObjectTypeV3.FUNCTION_LOGS:
+      return "function_logs";
     default:
       const x: never = objectType;
       throw new Error(`Unknown SpanObjectTypeV3: ${x}`);
@@ -220,7 +224,8 @@ export class SpanComponentsV3 {
   public objectIdFields():
     | ParentExperimentIds
     | ParentProjectLogIds
-    | ParentPlaygroundLogIds {
+    | ParentPlaygroundLogIds
+    | ParentFunctionLogIds {
     if (!this.data.object_id) {
       throw new Error(
         "Impossible: cannot invoke `objectIdFields` unless SpanComponentsV3 is initialized with an `object_id`",
@@ -233,6 +238,8 @@ export class SpanComponentsV3 {
         return { project_id: this.data.object_id, log_id: "g" };
       case SpanObjectTypeV3.PLAYGROUND_LOGS:
         return { prompt_session_id: this.data.object_id, log_id: "x" };
+      case SpanObjectTypeV3.FUNCTION_LOGS:
+        return { function_id: this.data.object_id, log_id: "f" };
       default:
         const _: never = this.data.object_type;
         throw new Error("Impossible");

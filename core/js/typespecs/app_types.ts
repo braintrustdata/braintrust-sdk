@@ -303,6 +303,10 @@ export const playgroundLogsLogIdLiteralSchema = z
   .literal("x")
   .describe("A literal 'x' which identifies the object as a playground log");
 
+export const functionLogsLogIdLiteralSchema = z
+  .literal("f")
+  .describe("A literal 'f' which identifies the object as a function log");
+
 export const promptBaseSchema = generateBaseTableSchema("prompt");
 const promptSchemaObject = z.object({
   id: promptBaseSchema.shape.id,
