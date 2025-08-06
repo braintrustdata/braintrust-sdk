@@ -1,0 +1,20 @@
+name: Refresh git tags
+
+on:
+  pull_request:
+
+jobs:
+  refresh-git-tags:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for checking branch
+      - name: Refresh tags
+        run: |
+          echo "Fetching tags"
+          git fetch --tags --prune --force
+          echo "\n\nTag state"
+          git show-ref --tags
+          echo "\n\nRun validate script"
+          ./py/scripts/validate-release-tag.sh py-sdk-v0.2.1
