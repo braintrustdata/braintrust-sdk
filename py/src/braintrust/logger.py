@@ -237,6 +237,11 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
         """
         pass
 
+    @abstractmethod
+    def set_current(self) -> None:
+        """Set the span as the current span. This is used to mark the span as the active span for the current thread."""
+        pass
+
 
 class _NoopSpan(Span):
     """A fake implementation of the Span API which does nothing. This can be used as the default span."""
@@ -290,6 +295,9 @@ class _NoopSpan(Span):
         type: Optional[SpanTypeAttribute] = None,
         span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
     ):
+        pass
+
+    def set_current(self):
         pass
 
     def __enter__(self):
@@ -1732,14 +1740,87 @@ def traced(*span_args: Any, **span_kwargs: Any) -> Callable[[F], F]:
             with start_span(*span_args, **span_kwargs) as span:
                 if trace_io:
                     _try_log_input(span, f_sig, f_args, f_kwargs)
-                async_gen = f(*f_args, **f_kwargs)
-                async for value in async_gen:
-                    yield value
-                # NOTE[matt] i'm disabling output tracing (e.g notrace_io=False) for async generators
-                # because an async generator could be infinite and make us OOM.
+
+                # Get max items from environment or default
+                max_items = int(os.environ.get("BRAINTRUST_MAX_GENERATOR_ITEMS", "1000"))
+
+                if trace_io and max_items != 0:
+                    # Collect output up to limit
+                    collected = []
+                    truncated = False
+
+                    async_gen = f(*f_args, **f_kwargs)
+                    try:
+                        async for value in async_gen:
+                            if max_items == -1 or (not truncated and len(collected) < max_items):
+                                collected.append(value)
+                            else:
+                                truncated = True
+                                collected = []
+                                _logger.warning(
+                                    f"Generator output exceeded limit of {max_items} items, output not logged. "
+                                    "Increase BRAINTRUST_MAX_GENERATOR_ITEMS or set to -1 to disable limit."
+                                )
+                            yield value
+
+                        if not truncated:
+                            _try_log_output(span, collected)
+                    except Exception as e:
+                        # Log partial output on error
+                        if collected and not truncated:
+                            _try_log_output(span, collected)
+                        raise
+                else:
+                    # Original behavior - no collection
+                    async_gen = f(*f_args, **f_kwargs)
+                    async for value in async_gen:
+                        yield value
+
+        @wraps(f)
+        def wrapper_sync_gen(*f_args, **f_kwargs):
+            with start_span(*span_args, **span_kwargs) as span:
+                if trace_io:
+                    _try_log_input(span, f_sig, f_args, f_kwargs)
+
+                # Get max items from environment or default
+                max_items = int(os.environ.get("BRAINTRUST_MAX_GENERATOR_ITEMS", "1000"))
+
+                if trace_io and max_items != 0:
+                    # Collect output up to limit
+                    collected = []
+                    truncated = False
+
+                    sync_gen = f(*f_args, **f_kwargs)
+                    try:
+                        for value in sync_gen:
+                            if max_items == -1 or (not truncated and len(collected) < max_items):
+                                collected.append(value)
+                            else:
+                                truncated = True
+                                collected = []
+                                _logger.warning(
+                                    f"Generator output exceeded limit of {max_items} items, output not logged. "
+                                    "Increase BRAINTRUST_MAX_GENERATOR_ITEMS or set to -1 to disable limit."
+                                )
+                            yield value
+
+                        if not truncated:
+                            _try_log_output(span, collected)
+                    except Exception as e:
+                        # Log partial output on error
+                        if collected and not truncated:
+                            _try_log_output(span, collected)
+                        raise
+                else:
+                    # Original behavior - no collection
+                    sync_gen = f(*f_args, **f_kwargs)
+                    for value in sync_gen:
+                        yield value
 
         if inspect.isasyncgenfunction(f):
             return cast(F, wrapper_async_gen)
+        elif inspect.isgeneratorfunction(f):
+            return cast(F, wrapper_sync_gen)
         elif bt_iscoroutinefunction(f):
             return cast(F, wrapper_async)
         else:
@@ -3207,6 +3288,8 @@ class SpanImpl(Span):
     We suggest using one of the various `start_span` methods, instead of creating Spans directly. See `Span.start_span` for full details.
     """
 
+    can_set_current: bool
+
     def __init__(
         self,
         parent_object_type: SpanObjectTypeV3,
@@ -3231,7 +3314,7 @@ class SpanImpl(Span):
         if type is None and not parent_span_ids:
             type = default_root_type
 
-        self.set_current = coalesce(set_current, True)
+        self.can_set_current = cast(bool, coalesce(set_current, True))
         self._logged_end_time: Optional[float] = None
 
         self.parent_object_type = parent_object_type
@@ -3478,9 +3561,12 @@ class SpanImpl(Span):
 
         _state.global_bg_logger().flush()
 
-    def __enter__(self) -> Span:
-        if self.set_current:
+    def set_current(self):
+        if self.can_set_current:
             self._context_token = _state.current_span.set(self)
+
+    def __enter__(self) -> Span:
+        self.set_current()
         return self
 
     def __exit__(self, exc_type, exc_value, tb) -> None:
@@ -3488,7 +3574,7 @@ class SpanImpl(Span):
             if exc_type is not None:
                 self.log_internal(dict(error=stringify_exception(exc_type, exc_value, tb)))
         finally:
-            if self.set_current:
+            if self.can_set_current:
                 _state.current_span.reset(self._context_token)
 
             self.end()

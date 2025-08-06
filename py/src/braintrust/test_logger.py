@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import time
 from typing import AsyncGenerator, List
@@ -458,6 +459,36 @@ def test_permalink_with_valid_span_logged_in(with_simulate_login, with_memory_lo
     assert link == expected_link
 
 
+def test_span_set_current(with_memory_logger):
+    """Test that span.set_current() makes the span accessible via current_span()."""
+    init_test_logger(__name__)
+
+    # Store initial current span
+    initial_current = braintrust.current_span()
+
+    # Start a span that can be set as current (default behavior)
+    span1 = logger.start_span(name="test-span-1")
+
+    # Initially, it should not be the current span
+    assert braintrust.current_span() != span1
+
+    # Call set_current() on the span
+    span1.set_current()
+
+    # Verify it's now the current span
+    assert braintrust.current_span() == span1
+
+    # Test that spans with set_current=False cannot be set as current
+    span2 = logger.start_span(name="test-span-2", set_current=False)
+    span2.set_current()  # This should not change the current span
+
+    # Current span should still be span1
+    assert braintrust.current_span() == span1
+
+    span1.end()
+    span2.end()
+
+
 @pytest.mark.asyncio
 async def test_traced_async_generator_with_exception(with_memory_logger):
     """Test tracing when async generator raises an exception."""
@@ -497,19 +528,23 @@ async def test_traced_async_generator_with_exception(with_memory_logger):
 
 @pytest.mark.asyncio
 async def test_traced_async_generator_with_subtasks(with_memory_logger):
-    """Test async generator with current_span().log() calls - similar to user's failing case."""
+    """
+    Test async generator with current_span().log() calls - similar to user's failing case.
+    Set notrace_io so we do not automatically log output and clobber the manually logged
+    output "testing"
+    """
 
     init_test_logger(__name__)
 
     num_loops = 3
 
-    @logger.traced
+    @logger.traced(notrace_io=True)
     async def foo(i: int) -> int:
         """Simulate some async work."""
         await asyncio.sleep(0.001)  # Small delay to simulate work
         return i * 2
 
-    @logger.traced("main")
+    @logger.traced("main", notrace_io=True)
     async def main():
         yield 1
         logger.current_span().log(metadata={"a": "b"})
@@ -540,7 +575,7 @@ async def test_traced_async_generator_with_subtasks(with_memory_logger):
     assert_dict_matches(
         main_span,
         {
-            "input": {},
+            # no input because notrace_io
             "output": "testing",
             "metadata": {"a": "b", "total": 6},  # Manual metadata logging
             "metrics": {
@@ -699,3 +734,398 @@ def test_traced_sync_function(with_memory_logger):
             },
         },
     )
+
+
+def test_traced_sync_generator(with_memory_logger):
+    """Test tracing synchronous generators."""
+    init_test_logger(__name__)
+
+    @logger.traced
+    def sync_number_generator(n: int):
+        """A sync generator that yields numbers."""
+        for i in range(n):
+            yield i * 2
+
+    results = []
+    start_time = time.time()
+    for value in sync_number_generator(3):
+        results.append(value)
+    end_time = time.time()
+
+    assert results == [0, 2, 4]
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+
+    # Should log the complete output as a list
+    assert log.get("output") == [0, 2, 4]
+    assert log.get("input") == {"n": 3}
+    assert_dict_matches(
+        log,
+        {
+            "metrics": {
+                "start": lambda x: start_time <= x <= end_time,
+                "end": lambda x: start_time <= x <= end_time,
+            },
+            "span_attributes": {
+                "name": "sync_number_generator",
+                "type": "function",
+            },
+        },
+    )
+
+
+def test_traced_sync_generator_with_exception(with_memory_logger):
+    """Test sync generator that raises an exception."""
+    init_test_logger(__name__)
+
+    @logger.traced
+    def failing_generator():
+        yield "first"
+        yield "second"
+        raise RuntimeError("Generator failed")
+
+    results = []
+    start_time = time.time()
+    with pytest.raises(RuntimeError, match="Generator failed"):
+        for value in failing_generator():
+            results.append(value)
+    end_time = time.time()
+
+    assert results == ["first", "second"]
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+
+    # Should have partial output and error
+    assert log.get("output") == ["first", "second"]
+    assert "RuntimeError" in str(log.get("error", ""))
+    assert_dict_matches(
+        log,
+        {
+            "metrics": {
+                "start": lambda x: start_time <= x <= end_time,
+                "end": lambda x: start_time <= x <= end_time,
+            },
+        },
+    )
+
+
+def test_traced_sync_generator_with_subtasks(with_memory_logger):
+    """
+    Test sync generator with current_span().log() calls
+    Set notrace_io so we do not automatically log output and clobber the manually logged
+    output "testing"
+    """
+
+    init_test_logger(__name__)
+
+    num_loops = 3
+
+    @logger.traced(notrace_io=True)
+    def foo(i: int) -> int:
+        """Simulate some sync work."""
+        time.sleep(0.001)
+        return i * 2
+
+    @logger.traced("main", notrace_io=True)
+    def main():
+        yield 1
+        logger.current_span().log(metadata={"a": "b"})
+        tasks = [foo(i) for i in range(num_loops)]
+        total = sum(tasks)
+        logger.current_span().log(metadata=dict(total=total), output="testing")
+        yield total
+
+    # consume the generator
+    results: list[int] = []
+    start_time = time.time()
+    for value in main():
+        results.append(value)
+    end_time = time.time()
+
+    assert results == [1, 6]
+
+    # Check logs
+    logs = with_memory_logger.pop()
+    assert len(logs) == num_loops + 1
+
+    # Find the main span
+    main_spans = [l for l in logs if l["span_attributes"]["name"] == "main"]
+    assert len(main_spans) == 1
+    main_span = main_spans[0]
+
+    assert_dict_matches(
+        main_span,
+        {
+            # no input because notrace_io
+            "output": "testing",
+            "metadata": {"a": "b", "total": 6},  # Manual metadata logging
+            "metrics": {
+                "start": lambda x: start_time <= x <= end_time,
+                "end": lambda x: start_time <= x <= end_time,
+            },
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_traced_async_generator(with_memory_logger):
+    """Test async generator version of sync generator test."""
+    init_test_logger(__name__)
+
+    @logger.traced
+    async def async_number_generator(n: int):
+        """An async generator that yields numbers."""
+        for i in range(n):
+            await asyncio.sleep(0.001)
+            yield i * 2
+
+    results = []
+    start_time = time.time()
+    async for value in async_number_generator(3):
+        results.append(value)
+    end_time = time.time()
+
+    assert results == [0, 2, 4]
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+
+    # Should log the complete output as a list
+    assert log.get("output") == [0, 2, 4]
+    assert log.get("input") == {"n": 3}
+    assert_dict_matches(
+        log,
+        {
+            "metrics": {
+                "start": lambda x: start_time <= x <= end_time,
+                "end": lambda x: start_time <= x <= end_time,
+            },
+            "span_attributes": {
+                "name": "async_number_generator",
+                "type": "function",
+            },
+        },
+    )
+
+
+def test_traced_sync_generator_truncation(with_memory_logger, caplog):
+    """Test sync generator truncation behavior."""
+    init_test_logger(__name__)
+
+    original = os.environ.get("BRAINTRUST_MAX_GENERATOR_ITEMS")
+    try:
+        os.environ["BRAINTRUST_MAX_GENERATOR_ITEMS"] = "3"
+
+        @logger.traced
+        def large_generator():
+            """A generator that yields more items than the limit."""
+            for i in range(10):
+                yield i
+
+        results = []
+        with caplog.at_level(logging.WARNING):
+            for value in large_generator():
+                results.append(value)
+
+        # All values should still be yielded
+        assert results == list(range(10))
+
+        # Check warning was logged
+        assert any("Generator output exceeded limit of 3 items" in record.message for record in caplog.records)
+
+        logs = with_memory_logger.pop()
+        assert len(logs) == 1
+        log = logs[0]
+
+        # Output should not be logged when truncated
+        assert "output" not in log or log.get("output") is None
+        assert log.get("input") == {}
+
+    finally:
+        os.environ.pop("BRAINTRUST_MAX_GENERATOR_ITEMS", None)
+        if original:
+            os.environ["BRAINTRUST_MAX_GENERATOR_ITEMS"] = original
+
+
+@pytest.mark.asyncio
+async def test_traced_async_generator_truncation(with_memory_logger, caplog):
+    """Test async generator truncation behavior."""
+    init_test_logger(__name__)
+
+    original = os.environ.get("BRAINTRUST_MAX_GENERATOR_ITEMS")
+    try:
+        os.environ["BRAINTRUST_MAX_GENERATOR_ITEMS"] = "3"
+
+        @logger.traced
+        async def large_async_generator():
+            """An async generator that yields more items than the limit."""
+            for i in range(10):
+                await asyncio.sleep(0.001)
+                yield i
+
+        results = []
+        with caplog.at_level(logging.WARNING):
+            async for value in large_async_generator():
+                results.append(value)
+
+        # All values should still be yielded
+        assert results == list(range(10))
+
+        # Check warning was logged
+        assert any("Generator output exceeded limit of 3 items" in record.message for record in caplog.records)
+
+        logs = with_memory_logger.pop()
+        assert len(logs) == 1
+        log = logs[0]
+
+        # Output should not be logged when truncated
+        assert "output" not in log or log.get("output") is None
+        assert log.get("input") == {}
+
+    finally:
+        os.environ.pop("BRAINTRUST_MAX_GENERATOR_ITEMS", None)
+        if original:
+            os.environ["BRAINTRUST_MAX_GENERATOR_ITEMS"] = original
+
+
+def test_traced_sync_generator_zero_limit_drops_output(with_memory_logger):
+    """Test sync generator with limit=0 drops all output but still yields values."""
+    init_test_logger(__name__)
+
+    original = os.environ.get("BRAINTRUST_MAX_GENERATOR_ITEMS")
+    try:
+        os.environ["BRAINTRUST_MAX_GENERATOR_ITEMS"] = "0"
+
+        @logger.traced
+        def no_output_logged_generator():
+            """Generator whose output won't be logged due to limit=0."""
+            for i in range(10):
+                yield i
+
+        results = []
+        for value in no_output_logged_generator():
+            results.append(value)
+
+        # Generator still yields all values
+        assert results == list(range(10))
+
+        logs = with_memory_logger.pop()
+        assert len(logs) == 1
+        log = logs[0]
+
+        # Output is not logged when limit is 0
+        assert "output" not in log or log.get("output") is None
+
+    finally:
+        os.environ.pop("BRAINTRUST_MAX_GENERATOR_ITEMS", None)
+        if original:
+            os.environ["BRAINTRUST_MAX_GENERATOR_ITEMS"] = original
+
+
+def test_traced_sync_generator_unlimited_with_minus_one(with_memory_logger):
+    """Test sync generator with limit=-1 buffers all output."""
+    init_test_logger(__name__)
+
+    original = os.environ.get("BRAINTRUST_MAX_GENERATOR_ITEMS")
+    try:
+        os.environ["BRAINTRUST_MAX_GENERATOR_ITEMS"] = "-1"
+
+        @logger.traced
+        def unlimited_buffer_generator():
+            """Generator that buffers all output with limit=-1."""
+            for i in range(3):
+                yield i * 2
+
+        results = []
+        for value in unlimited_buffer_generator():
+            results.append(value)
+
+        assert results == [0, 2, 4]
+
+        logs = with_memory_logger.pop()
+        assert len(logs) == 1
+        log = logs[0]
+
+        # All output should be logged when limit is -1
+        assert log.get("output") == [0, 2, 4]
+
+    finally:
+        os.environ.pop("BRAINTRUST_MAX_GENERATOR_ITEMS", None)
+        if original:
+            os.environ["BRAINTRUST_MAX_GENERATOR_ITEMS"] = original
+
+
+@pytest.mark.asyncio
+async def test_traced_async_generator_zero_limit_drops_output(with_memory_logger):
+    """Test async generator with limit=0 drops all output but still yields values."""
+    init_test_logger(__name__)
+
+    original = os.environ.get("BRAINTRUST_MAX_GENERATOR_ITEMS")
+    try:
+        os.environ["BRAINTRUST_MAX_GENERATOR_ITEMS"] = "0"
+
+        @logger.traced
+        async def no_output_logged_async_generator():
+            """Async generator whose output won't be logged due to limit=0."""
+            for i in range(10):
+                await asyncio.sleep(0.001)
+                yield i
+
+        results = []
+        async for value in no_output_logged_async_generator():
+            results.append(value)
+
+        # Generator still yields all values
+        assert results == list(range(10))
+
+        logs = with_memory_logger.pop()
+        assert len(logs) == 1
+        log = logs[0]
+
+        # Output is not logged when limit is 0
+        assert "output" not in log or log.get("output") is None
+
+    finally:
+        os.environ.pop("BRAINTRUST_MAX_GENERATOR_ITEMS", None)
+        if original:
+            os.environ["BRAINTRUST_MAX_GENERATOR_ITEMS"] = original
+
+
+@pytest.mark.asyncio
+async def test_traced_async_generator_unlimited_with_minus_one(with_memory_logger):
+    """Test async generator with limit=-1 buffers all output."""
+    init_test_logger(__name__)
+
+    original = os.environ.get("BRAINTRUST_MAX_GENERATOR_ITEMS")
+    try:
+        os.environ["BRAINTRUST_MAX_GENERATOR_ITEMS"] = "-1"
+
+        @logger.traced
+        async def unlimited_buffer_async_generator():
+            """Async generator that buffers all output with limit=-1."""
+            for i in range(3):
+                await asyncio.sleep(0.001)
+                yield i * 2
+
+        results = []
+        async for value in unlimited_buffer_async_generator():
+            results.append(value)
+
+        assert results == [0, 2, 4]
+
+        logs = with_memory_logger.pop()
+        assert len(logs) == 1
+        log = logs[0]
+
+        # All output should be logged when limit is -1
+        assert log.get("output") == [0, 2, 4]
+
+    finally:
+        os.environ.pop("BRAINTRUST_MAX_GENERATOR_ITEMS", None)
+        if original:
+            os.environ["BRAINTRUST_MAX_GENERATOR_ITEMS"] = original
