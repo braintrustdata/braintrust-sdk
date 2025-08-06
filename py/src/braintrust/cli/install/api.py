@@ -15,6 +15,7 @@ _logger = logging.getLogger("braintrust.install.api")
 
 PARAMS = {
     "OrgName": "org_name",
+    "PrimaryOrgName": "org_name",
     "ProvisionedConcurrency": "provisioned_concurrency",
     "EncryptDatabase": "encrypt_database",
     "PostgresAlternativeHost": "postgres_alternative_host",
