@@ -49,6 +49,7 @@ PARAMS = {
 REMOVED_PARAMS = ["ThirdAZIndex"]
 
 DEFAULTS = {
+    "PrimaryOrgName": "",
     "DwType": "Postgres",
     "EncryptDatabase": "false",
     "ProvisionedConcurrency": 0,
