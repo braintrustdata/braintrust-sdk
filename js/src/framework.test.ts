@@ -13,6 +13,7 @@ import {
   EvalScorer,
   runEvaluator,
 } from "./framework";
+import { flush } from "./logger";
 import { configureNode } from "./node";
 import { BarProgressReporter, type ProgressReporter } from "./progress";
 import { InternalAbortError } from "./util";
@@ -511,6 +512,9 @@ test("trialIndex with multiple inputs", async () => {
 });
 
 test("Eval with noSendLogs: true runs locally without creating experiment", async () => {
+  // Spy on flush function to verify it's never called
+  const flushSpy = vi.spyOn({ flush }, "flush");
+
   const result = await Eval(
     "test-no-logs",
     {
@@ -547,4 +551,10 @@ test("Eval with noSendLogs: true runs locally without creating experiment", asyn
   expect(result.summary.experimentUrl).toBeUndefined();
   expect(result.summary.scores.exact_match.score).toBe(1);
   expect(result.summary.scores.simple_scorer.score).toBe(0.8);
+
+  // Most importantly: verify that flush was never called (no logs sent)
+  expect(flushSpy).not.toHaveBeenCalled();
+
+  // Clean up
+  flushSpy.mockRestore();
 });
