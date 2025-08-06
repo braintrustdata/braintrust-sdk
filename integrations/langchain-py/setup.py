@@ -14,7 +14,7 @@ with open(os.path.join(dir_name, "README.md"), "r", encoding="utf-8") as f:
     long_description = f.read()
 
 install_requires = [
-    "braintrust",
+    "braintrust>=0.2.1",
     "langchain",
 ]
 
