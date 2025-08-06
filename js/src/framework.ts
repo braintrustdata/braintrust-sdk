@@ -480,6 +480,11 @@ export interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
    */
   reporter?: ReporterDef<EvalReport> | string;
   /**
+   * Whether to send logs to Braintrust. When false, the evaluation runs locally
+   * and builds a local summary instead of creating an experiment. Defaults to true.
+   */
+  sendLogs?: boolean;
+  /**
    * A callback function that will be called when an experiment is started with
    * information about its project, experiment id, name, and other useful information.
    * @param metadata
@@ -588,23 +593,25 @@ export async function Eval<
     );
     // NOTE: This code is duplicated with initExperiment in js/src/cli.ts. Make sure
     // to update that if you change this.
-    const experiment = options.parent
-      ? null
-      : initExperiment(evaluator.state, {
-          ...(evaluator.projectId
-            ? { projectId: evaluator.projectId }
-            : { project: name }),
-          experiment: evaluator.experimentName,
-          description: evaluator.description,
-          metadata: evaluator.metadata,
-          isPublic: evaluator.isPublic,
-          update: evaluator.update,
-          baseExperiment: evaluator.baseExperimentName ?? defaultBaseExperiment,
-          baseExperimentId: evaluator.baseExperimentId,
-          gitMetadataSettings: evaluator.gitMetadataSettings,
-          repoInfo: evaluator.repoInfo,
-          dataset: Dataset.isDataset(data) ? data : undefined,
-        });
+    const experiment =
+      options.parent || options.sendLogs === false
+        ? null
+        : initExperiment(evaluator.state, {
+            ...(evaluator.projectId
+              ? { projectId: evaluator.projectId }
+              : { project: name }),
+            experiment: evaluator.experimentName,
+            description: evaluator.description,
+            metadata: evaluator.metadata,
+            isPublic: evaluator.isPublic,
+            update: evaluator.update,
+            baseExperiment:
+              evaluator.baseExperimentName ?? defaultBaseExperiment,
+            baseExperimentId: evaluator.baseExperimentId,
+            gitMetadataSettings: evaluator.gitMetadataSettings,
+            repoInfo: evaluator.repoInfo,
+            dataset: Dataset.isDataset(data) ? data : undefined,
+          });
 
     if (experiment && options.onStart) {
       const summary = await experiment.summarize({ summarizeScores: false });

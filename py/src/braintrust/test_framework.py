@@ -3,6 +3,7 @@ from typing import List
 import pytest
 
 from .framework import (
+    Eval,
     EvalCase,
     EvalHooks,
     EvalResultWithSummary,
@@ -237,3 +238,40 @@ async def test_hooks_trial_index_multiple_inputs():
     # Each input should have been run with trial indices 0 and 1
     assert sorted(input_1_trials) == [0, 1]
     assert sorted(input_2_trials) == [0, 1]
+
+
+@pytest.mark.asyncio
+async def test_eval_send_logs_false():
+    """Test that Eval with send_logs=False runs locally without creating experiment."""
+
+    def exact_match(input, output, expected):
+        return Score(name="exact_match", score=1.0 if output == expected else 0.0)
+
+    def length_score(input, output, expected):
+        return Score(name="length", score=len(output))
+
+    result = await Eval(
+        "test-no-logs",
+        data=[{"input": "hello", "expected": "hello world"}, {"input": "test", "expected": "test world"}],
+        task=lambda input_val: input_val + " world",
+        scores=[exact_match, length_score],
+        send_logs=False,
+    )
+
+    # Verify it returns results
+    assert len(result.results) == 2
+    assert result.results[0].input == "hello"
+    assert result.results[0].output == "hello world"
+    assert result.results[0].scores["exact_match"] == 1.0
+    assert result.results[0].scores["length"] == 11
+
+    assert result.results[1].input == "test"
+    assert result.results[1].output == "test world"
+    assert result.results[1].scores["exact_match"] == 1.0
+    assert result.results[1].scores["length"] == 10
+
+    # Verify it builds a local summary (no experiment_url means local run)
+    assert result.summary.project_name == "test-no-logs"
+    assert result.summary.experiment_url is None
+    assert result.summary.scores["exact_match"].score == 1.0
+    assert result.summary.scores["length"].score == 10.5  # average of 11 and 10

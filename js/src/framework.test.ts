@@ -9,6 +9,7 @@ import {
 } from "vitest";
 import {
   defaultErrorScoreHandler,
+  Eval,
   EvalScorer,
   runEvaluator,
 } from "./framework";
@@ -507,4 +508,43 @@ test("trialIndex with multiple inputs", async () => {
   // Each input should have been run with trial indices 0 and 1
   expect(input1Trials).toEqual([0, 1]);
   expect(input2Trials).toEqual([0, 1]);
+});
+
+test("Eval with sendLogs: false runs locally without creating experiment", async () => {
+  const result = await Eval(
+    "test-no-logs",
+    {
+      data: () => [
+        { input: "hello", expected: "hello world" },
+        { input: "test", expected: "test world" },
+      ],
+      task: (input) => input + " world",
+      scores: [
+        (args) => ({
+          name: "exact_match",
+          score: args.output === args.expected ? 1 : 0,
+        }),
+        (args) => ({ name: "length", score: args.output.length }),
+      ],
+    },
+    { sendLogs: false },
+  );
+
+  // Verify it returns results
+  expect(result.results).toHaveLength(2);
+  expect(result.results[0].input).toBe("hello");
+  expect(result.results[0].output).toBe("hello world");
+  expect(result.results[0].scores.exact_match).toBe(1);
+  expect(result.results[0].scores.length).toBe(11);
+
+  expect(result.results[1].input).toBe("test");
+  expect(result.results[1].output).toBe("test world");
+  expect(result.results[1].scores.exact_match).toBe(1);
+  expect(result.results[1].scores.length).toBe(10);
+
+  // Verify it builds a local summary (no experimentUrl means local run)
+  expect(result.summary.projectName).toBe("test-no-logs");
+  expect(result.summary.experimentUrl).toBeUndefined();
+  expect(result.summary.scores.exact_match.score).toBe(1);
+  expect(result.summary.scores.length.score).toBe(10.5); // average of 11 and 10
 });

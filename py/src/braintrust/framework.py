@@ -614,6 +614,7 @@ def _EvalCommon(
     repo_info: Optional[RepoInfo],
     description: Optional[str],
     summarize_scores: bool,
+    send_logs: bool,
     error_score_handler: Optional[ErrorScoreHandler] = None,
 ) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary[Input, Output]]]:
     """
@@ -675,20 +676,22 @@ def _EvalCommon(
 
         # NOTE: This code is duplicated with run_evaluator_task in py/src/braintrust/cli/eval.py.
         # Make sure to update those arguments if you change this.
-        experiment = init_experiment(
-            project_name=evaluator.project_name if evaluator.project_id is None else None,
-            project_id=evaluator.project_id,
-            experiment_name=evaluator.experiment_name,
-            description=evaluator.description,
-            metadata=evaluator.metadata,
-            is_public=evaluator.is_public,
-            update=evaluator.update,
-            base_experiment=base_experiment_name,
-            base_experiment_id=base_experiment_id,
-            git_metadata_settings=evaluator.git_metadata_settings,
-            repo_info=evaluator.repo_info,
-            dataset=dataset,
-        )
+        experiment = None
+        if send_logs:
+            experiment = init_experiment(
+                project_name=evaluator.project_name if evaluator.project_id is None else None,
+                project_id=evaluator.project_id,
+                experiment_name=evaluator.experiment_name,
+                description=evaluator.description,
+                metadata=evaluator.metadata,
+                is_public=evaluator.is_public,
+                update=evaluator.update,
+                base_experiment=base_experiment_name,
+                base_experiment_id=base_experiment_id,
+                git_metadata_settings=evaluator.git_metadata_settings,
+                repo_info=evaluator.repo_info,
+                dataset=dataset,
+            )
 
         async def run_to_completion():
             try:
@@ -696,7 +699,8 @@ def _EvalCommon(
                 reporter.report_eval(evaluator, ret, verbose=True, jsonl=False)
                 return ret
             finally:
-                experiment.flush()
+                if experiment:
+                    experiment.flush()
 
         return run_to_completion
 
@@ -722,6 +726,7 @@ async def EvalAsync(
     error_score_handler: Optional[ErrorScoreHandler] = None,
     description: Optional[str] = None,
     summarize_scores: bool = True,
+    send_logs: bool = True,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -769,6 +774,8 @@ async def EvalAsync(
     :param error_score_handler: Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
     :param description: An optional description for the experiment.
     :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
+    :param send_logs: Whether to send logs to Braintrust. When False, the evaluation runs locally
+    and builds a local summary instead of creating an experiment. Defaults to True.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
     f = _EvalCommon(
@@ -791,6 +798,7 @@ async def EvalAsync(
         repo_info=repo_info,
         description=description,
         summarize_scores=summarize_scores,
+        send_logs=send_logs,
     )
 
     return await f()
@@ -820,6 +828,7 @@ def Eval(
     error_score_handler: Optional[ErrorScoreHandler] = None,
     description: Optional[str] = None,
     summarize_scores: bool = True,
+    send_logs: bool = True,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -867,6 +876,8 @@ def Eval(
     :param error_score_handler: Optionally supply a custom function to specifically handle score values when tasks or scoring functions have errored.
     :param description: An optional description for the experiment.
     :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
+    :param send_logs: Whether to send logs to Braintrust. When False, the evaluation runs locally
+    and builds a local summary instead of creating an experiment. Defaults to True.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
 
@@ -891,6 +902,7 @@ def Eval(
         error_score_handler=error_score_handler,
         description=description,
         summarize_scores=summarize_scores,
+        send_logs=send_logs,
     )
 
     # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no
