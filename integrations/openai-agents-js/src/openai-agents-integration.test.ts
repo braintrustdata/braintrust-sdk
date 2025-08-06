@@ -15,7 +15,30 @@ import {
   initLogger,
   Logger,
   TestBackgroundLogger,
+  Span as BraintrustSpan,
 } from "braintrust";
+
+// Test helper functions for backward compatibility
+function getSpansMap(
+  processor: OpenAIAgentsTracingProcessor,
+): Map<string, BraintrustSpan> {
+  const spans = new Map<string, BraintrustSpan>();
+  for (const [traceId, traceData] of processor._traceSpans) {
+    spans.set(traceId, traceData.rootSpan);
+    for (const [spanId, span] of traceData.childSpans) {
+      spans.set(`${traceId}:${spanId}`, span);
+    }
+  }
+  return spans;
+}
+
+function getTraceMetadataMap(processor: OpenAIAgentsTracingProcessor) {
+  const metadata = new Map();
+  for (const [traceId, traceData] of processor._traceSpans) {
+    metadata.set(traceId, traceData.metadata);
+  }
+  return metadata;
+}
 
 const TEST_SUITE_OPTIONS = { timeout: 30000, retry: 3 };
 
@@ -209,11 +232,11 @@ describe(
       // Start trace and verify it's stored
       await processor.onTraceStart(trace);
       assert.isTrue(
-        processor._spans.has(trace.traceId),
+        getSpansMap(processor).has(trace.traceId),
         "Root span should be stored",
       );
       assert.isTrue(
-        processor._traceMetadata.has(trace.traceId),
+        getTraceMetadataMap(processor).has(trace.traceId),
         "Trace metadata should be stored",
       );
 
@@ -228,7 +251,7 @@ describe(
       await processor.onSpanStart(span);
       const childSpanKey = `${trace.traceId}:${span.spanId}`;
       assert.isTrue(
-        processor._spans.has(childSpanKey),
+        getSpansMap(processor).has(childSpanKey),
         "Child span should be stored",
       );
 
@@ -240,11 +263,11 @@ describe(
 
       // Verify cleanup happened
       assert.isFalse(
-        processor._spans.has(trace.traceId),
+        getSpansMap(processor).has(trace.traceId),
         "Root span should be removed",
       );
       assert.isFalse(
-        processor._traceMetadata.has(trace.traceId),
+        getTraceMetadataMap(processor).has(trace.traceId),
         "Trace metadata should be removed",
       );
 
@@ -262,20 +285,20 @@ describe(
 
       // Verify the orphaned operations didn't create any trace data
       assert.isFalse(
-        processor._spans.has("test-trace-cleanup"),
+        getSpansMap(processor).has("test-trace-cleanup"),
         "Orphaned operations shouldn't recreate root span",
       );
       assert.isFalse(
-        processor._traceMetadata.has("test-trace-cleanup"),
+        getTraceMetadataMap(processor).has("test-trace-cleanup"),
         "Orphaned operations shouldn't recreate metadata",
       );
       assert.equal(
-        processor._spans.size,
+        getSpansMap(processor).size,
         0,
         "No spans should exist after cleanup",
       );
       assert.equal(
-        processor._traceMetadata.size,
+        getTraceMetadataMap(processor).size,
         0,
         "No metadata should exist after cleanup",
       );
@@ -300,20 +323,20 @@ describe(
 
       // Verify all traces are stored
       assert.equal(
-        processor._traceMetadata.size,
+        getTraceMetadataMap(processor).size,
         maxTraces,
         "All trace metadata should be stored",
       );
       assert.isTrue(
-        processor._spans.has("test-trace-0"),
+        getSpansMap(processor).has("test-trace-0"),
         "First trace root span should exist",
       );
       assert.isTrue(
-        processor._spans.has("test-trace-1"),
+        getSpansMap(processor).has("test-trace-1"),
         "Second trace root span should exist",
       );
       assert.isTrue(
-        processor._spans.has("test-trace-2"),
+        getSpansMap(processor).has("test-trace-2"),
         "Third trace root span should exist",
       );
 
@@ -327,34 +350,34 @@ describe(
 
       // Metadata should still be at max size
       assert.equal(
-        processor._traceMetadata.size,
+        getTraceMetadataMap(processor).size,
         maxTraces,
         "Metadata should remain at max size after eviction",
       );
 
       // First trace should be evicted, new trace should exist
       assert.isFalse(
-        processor._spans.has("test-trace-0"),
+        getSpansMap(processor).has("test-trace-0"),
         "First (oldest) trace should be evicted",
       );
       assert.isFalse(
-        processor._traceMetadata.has("test-trace-0"),
+        getTraceMetadataMap(processor).has("test-trace-0"),
         "First trace metadata should be evicted",
       );
       assert.isTrue(
-        processor._spans.has("test-trace-new"),
+        getSpansMap(processor).has("test-trace-new"),
         "New trace should exist",
       );
       assert.isTrue(
-        processor._traceMetadata.has("test-trace-new"),
+        getTraceMetadataMap(processor).has("test-trace-new"),
         "New trace metadata should exist",
       );
       assert.isTrue(
-        processor._spans.has("test-trace-1"),
+        getSpansMap(processor).has("test-trace-1"),
         "Second trace should still exist",
       );
       assert.isTrue(
-        processor._spans.has("test-trace-2"),
+        getSpansMap(processor).has("test-trace-2"),
         "Third trace should still exist",
       );
     });
@@ -373,11 +396,11 @@ describe(
 
       await processor.onTraceStart(trace);
       assert.isTrue(
-        processor._spans.has(trace.traceId),
+        getSpansMap(processor).has(trace.traceId),
         "Root span should be stored by traceId",
       );
       assert.isTrue(
-        processor._traceMetadata.has(trace.traceId),
+        getTraceMetadataMap(processor).has(trace.traceId),
         "Trace metadata should be stored",
       );
 
@@ -393,7 +416,7 @@ describe(
       await processor.onSpanStart(parentSpan);
       const parentSpanKey = `${trace.traceId}:${parentSpan.spanId}`;
       assert.isTrue(
-        processor._spans.has(parentSpanKey),
+        getSpansMap(processor).has(parentSpanKey),
         "Parent span should be stored with composite key",
       );
 
@@ -414,7 +437,7 @@ describe(
       await processor.onSpanStart(childSpan);
       const childSpanKey = `${trace.traceId}:${childSpan.spanId}`;
       assert.isTrue(
-        processor._spans.has(childSpanKey),
+        getSpansMap(processor).has(childSpanKey),
         "Child span should be stored with composite key",
       );
 
@@ -435,12 +458,12 @@ describe(
       await processor.onSpanStart(grandchildSpan);
       const grandchildSpanKey = `${trace.traceId}:${grandchildSpan.spanId}`;
       assert.isTrue(
-        processor._spans.has(grandchildSpanKey),
+        getSpansMap(processor).has(grandchildSpanKey),
         "Grandchild span should be stored with composite key",
       );
 
       // Verify we have the expected number of spans
-      const allSpanKeys = Array.from(processor._spans.keys());
+      const allSpanKeys = Array.from(getSpansMap(processor).keys());
       const traceSpans = allSpanKeys.filter((key) =>
         key.startsWith(trace.traceId),
       );
@@ -453,46 +476,46 @@ describe(
       // End spans in reverse order (grandchild -> child -> parent)
       await processor.onSpanEnd(grandchildSpan);
       assert.isFalse(
-        processor._spans.has(grandchildSpanKey),
+        getSpansMap(processor).has(grandchildSpanKey),
         "Grandchild span should be removed after ending",
       );
 
       await processor.onSpanEnd(childSpan);
       assert.isFalse(
-        processor._spans.has(childSpanKey),
+        getSpansMap(processor).has(childSpanKey),
         "Child span should be removed after ending",
       );
 
       await processor.onSpanEnd(parentSpan);
       assert.isFalse(
-        processor._spans.has(parentSpanKey),
+        getSpansMap(processor).has(parentSpanKey),
         "Parent span should be removed after ending",
       );
 
       // Root span should still exist
       assert.isTrue(
-        processor._spans.has(trace.traceId),
+        getSpansMap(processor).has(trace.traceId),
         "Root span should still exist",
       );
       assert.isTrue(
-        processor._traceMetadata.has(trace.traceId),
+        getTraceMetadataMap(processor).has(trace.traceId),
         "Trace metadata should still exist",
       );
 
       // End the trace
       await processor.onTraceEnd(trace);
       assert.isFalse(
-        processor._spans.has(trace.traceId),
+        getSpansMap(processor).has(trace.traceId),
         "Root span should be removed after trace end",
       );
       assert.isFalse(
-        processor._traceMetadata.has(trace.traceId),
+        getTraceMetadataMap(processor).has(trace.traceId),
         "Trace metadata should be removed after trace end",
       );
 
       // Verify all spans are cleaned up
-      const remainingSpans = Array.from(processor._spans.keys()).filter((key) =>
-        key.startsWith(trace.traceId),
+      const remainingSpans = Array.from(getSpansMap(processor).keys()).filter(
+        (key) => key.startsWith(trace.traceId),
       );
       assert.equal(
         remainingSpans.length,

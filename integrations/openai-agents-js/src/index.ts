@@ -149,13 +149,18 @@ export class OpenAIAgentsTracingProcessor {
 
   private logger?: Logger<any>;
   private maxTraces: number;
-  private spans = new Map<string, BraintrustSpan>();
-  private traceMetadata = new Map<string, TraceMetadata>();
+  private traceSpans = new Map<
+    string,
+    {
+      rootSpan: BraintrustSpan;
+      childSpans: Map<string, BraintrustSpan>;
+      metadata: TraceMetadata;
+    }
+  >();
   private traceOrder: string[] = [];
 
   // Expose for testing purposes
-  public readonly _spans = this.spans;
-  public readonly _traceMetadata = this.traceMetadata;
+  public readonly _traceSpans = this.traceSpans;
 
   constructor(options: OpenAIAgentsTracingProcessorOptions = {}) {
     this.logger = options.logger;
@@ -167,20 +172,7 @@ export class OpenAIAgentsTracingProcessor {
     if (this.traceOrder.length === 0) return;
 
     const oldestTraceId = this.traceOrder.shift()!;
-
-    this.spans.delete(oldestTraceId);
-
-    const keysToDelete: string[] = [];
-    for (const key of this.spans.keys()) {
-      if (key.startsWith(`${oldestTraceId}:`)) {
-        keysToDelete.push(key);
-      }
-    }
-    for (const key of keysToDelete) {
-      this.spans.delete(key);
-    }
-
-    this.traceMetadata.delete(oldestTraceId);
+    this.traceSpans.delete(oldestTraceId);
   }
 
   onTraceStart(trace: AgentsTrace): Promise<void> {
@@ -205,10 +197,13 @@ export class OpenAIAgentsTracingProcessor {
       },
     });
 
-    this.spans.set(trace.traceId, span);
-    this.traceMetadata.set(trace.traceId, {
-      firstInput: null,
-      lastOutput: null,
+    this.traceSpans.set(trace.traceId, {
+      rootSpan: span,
+      childSpans: new Map(),
+      metadata: {
+        firstInput: null,
+        lastOutput: null,
+      },
     });
     this.traceOrder.push(trace.traceId);
 
@@ -216,18 +211,16 @@ export class OpenAIAgentsTracingProcessor {
   }
 
   onTraceEnd(trace: AgentsTrace): Promise<void> {
-    const rootSpan = this.spans.get(trace.traceId);
-    const metadata = this.traceMetadata.get(trace.traceId);
+    const traceData = this.traceSpans.get(trace.traceId);
 
-    if (rootSpan && metadata) {
-      rootSpan.log({
-        input: metadata.firstInput,
-        output: metadata.lastOutput,
+    if (traceData) {
+      traceData.rootSpan.log({
+        input: traceData.metadata.firstInput,
+        output: traceData.metadata.lastOutput,
       });
-      rootSpan.end();
+      traceData.rootSpan.end();
 
-      this.spans.delete(trace.traceId);
-      this.traceMetadata.delete(trace.traceId);
+      this.traceSpans.delete(trace.traceId);
       const orderIndex = this.traceOrder.indexOf(trace.traceId);
       if (orderIndex > -1) {
         this.traceOrder.splice(orderIndex, 1);
@@ -421,11 +414,14 @@ export class OpenAIAgentsTracingProcessor {
   onSpanStart(span: AgentsSpan): Promise<void> {
     if (!span.spanId || !span.traceId) return Promise.resolve();
 
+    const traceData = this.traceSpans.get(span.traceId);
+    if (!traceData) return Promise.resolve();
+
     let parentSpan: BraintrustSpan | undefined;
     if (span.parentId) {
-      parentSpan = this.spans.get(`${span.traceId}:${span.parentId}`);
+      parentSpan = traceData.childSpans.get(span.parentId);
     } else {
-      parentSpan = this.spans.get(span.traceId);
+      parentSpan = traceData.rootSpan;
     }
 
     if (parentSpan) {
@@ -433,7 +429,7 @@ export class OpenAIAgentsTracingProcessor {
         name: spanNameFromAgents(span),
         type: spanTypeFromAgents(span),
       });
-      this.spans.set(`${span.traceId}:${span.spanId}`, childSpan);
+      traceData.childSpans.set(span.spanId, childSpan);
     }
     return Promise.resolve();
   }
@@ -441,27 +437,29 @@ export class OpenAIAgentsTracingProcessor {
   onSpanEnd(span: AgentsSpan): Promise<void> {
     if (!span.spanId || !span.traceId) return Promise.resolve();
 
-    const braintrustSpan = this.spans.get(`${span.traceId}:${span.spanId}`);
-    const metadata = this.traceMetadata.get(span.traceId);
+    const traceData = this.traceSpans.get(span.traceId);
+    if (!traceData) return Promise.resolve();
 
-    if (braintrustSpan && metadata) {
+    const braintrustSpan = traceData.childSpans.get(span.spanId);
+
+    if (braintrustSpan) {
       const logData = this.extractLogData(span);
       braintrustSpan.log({
         error: span.error,
         ...logData,
       });
       braintrustSpan.end();
-      this.spans.delete(`${span.traceId}:${span.spanId}`);
+      traceData.childSpans.delete(span.spanId);
 
       const input = logData.input as SpanInput;
       const output = logData.output as SpanOutput;
 
-      if (metadata.firstInput === null && input != null) {
-        metadata.firstInput = input;
+      if (traceData.metadata.firstInput === null && input != null) {
+        traceData.metadata.firstInput = input;
       }
 
       if (output != null) {
-        metadata.lastOutput = output;
+        traceData.metadata.lastOutput = output;
       }
     } else {
       console.warn(`No span found for ID: ${span.spanId}`);
