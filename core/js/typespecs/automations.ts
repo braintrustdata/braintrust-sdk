@@ -94,8 +94,7 @@ export const retentionAutomationConfigSchema = z.object({
   ),
   retention_days: z
     .number()
-    .min(1)
-    .max(365)
+    .min(0)
     .describe("The number of days to retain the object"),
 });
 
