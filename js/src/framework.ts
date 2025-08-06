@@ -480,10 +480,10 @@ export interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
    */
   reporter?: ReporterDef<EvalReport> | string;
   /**
-   * Whether to send logs to Braintrust. When false, the evaluation runs locally
-   * and builds a local summary instead of creating an experiment. Defaults to true.
+   * Do not send logs to Braintrust. When true, the evaluation runs locally
+   * and builds a local summary instead of creating an experiment. Defaults to false.
    */
-  sendLogs?: boolean;
+  noSendLogs?: boolean;
   /**
    * A callback function that will be called when an experiment is started with
    * information about its project, experiment id, name, and other useful information.
@@ -594,7 +594,7 @@ export async function Eval<
     // NOTE: This code is duplicated with initExperiment in js/src/cli.ts. Make sure
     // to update that if you change this.
     const experiment =
-      options.parent || options.sendLogs === false
+      options.parent || options.noSendLogs
         ? null
         : initExperiment(evaluator.state, {
             ...(evaluator.projectId

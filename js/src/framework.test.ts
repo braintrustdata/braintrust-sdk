@@ -510,7 +510,7 @@ test("trialIndex with multiple inputs", async () => {
   expect(input2Trials).toEqual([0, 1]);
 });
 
-test("Eval with sendLogs: false runs locally without creating experiment", async () => {
+test("Eval with noSendLogs: true runs locally without creating experiment", async () => {
   const result = await Eval(
     "test-no-logs",
     {
@@ -524,10 +524,10 @@ test("Eval with sendLogs: false runs locally without creating experiment", async
           name: "exact_match",
           score: args.output === args.expected ? 1 : 0,
         }),
-        (args) => ({ name: "simple_scorer", score: 0.8 }),
+        () => ({ name: "simple_scorer", score: 0.8 }),
       ],
     },
-    { sendLogs: false },
+    { noSendLogs: true },
   );
 
   // Verify it returns results

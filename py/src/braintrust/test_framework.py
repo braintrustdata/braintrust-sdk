@@ -241,8 +241,8 @@ async def test_hooks_trial_index_multiple_inputs():
 
 
 @pytest.mark.asyncio
-async def test_eval_send_logs_false():
-    """Test that Eval with send_logs=False runs locally without creating experiment."""
+async def test_eval_no_send_logs_true():
+    """Test that Eval with no_send_logs=True runs locally without creating experiment."""
 
     def exact_match(input, output, expected):
         return {"name": "exact_match", "score": 1.0 if output == expected else 0.0}
@@ -255,7 +255,7 @@ async def test_eval_send_logs_false():
         data=[{"input": "hello", "expected": "hello world"}, {"input": "test", "expected": "test world"}],
         task=lambda input_val: input_val + " world",
         scores=[exact_match, simple_scorer],
-        send_logs=False,
+        no_send_logs=True,
     )
 
     # Verify it returns results
