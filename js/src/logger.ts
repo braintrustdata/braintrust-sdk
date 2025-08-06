@@ -3032,6 +3032,7 @@ type LoadPromptOptions = FullLoginOptions & {
  * @param options.projectId The id of the project to load the prompt from. This takes precedence over `projectName` if specified.
  * @param options.slug The slug of the prompt to load.
  * @param options.version An optional version of the prompt (to read). If not specified, the latest version will be used.
+ * @param options.environment Fetch the version of the prompt assigned to the specified environment (e.g. "production", "staging"). Cannot be specified at the same time as `version`.
  * @param options.id The id of a specific prompt to load. If specified, this takes precedence over all other parameters (project, slug, version).
  * @param options.defaults (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
  * @param options.noTrace If true, do not include logging metadata for this prompt when build() is called.
@@ -3056,10 +3057,10 @@ export async function loadPrompt({
   projectId,
   slug,
   version,
+  environment,
   id,
   defaults,
   noTrace = false,
-  environment,
   appUrl,
   apiKey,
   orgName,
@@ -3068,7 +3069,9 @@ export async function loadPrompt({
   state: stateArg,
 }: LoadPromptOptions) {
   if (version && environment) {
-    throw new Error("Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other).");
+    throw new Error(
+      "Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other).",
+    );
   }
   if (id) {
     // When loading by ID, we don't need project or slug
