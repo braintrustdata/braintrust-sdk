@@ -3111,6 +3111,11 @@ export async function loadPrompt({
       });
     }
   } catch (e) {
+    // If environment or version was specified, don't fall back to cache
+    if (environment || version) {
+      throw new Error(`Prompt not found with specified parameters: ${e}`);
+    }
+
     console.warn("Failed to load prompt, attempting to fall back to cache:", e);
     let prompt;
     if (id) {

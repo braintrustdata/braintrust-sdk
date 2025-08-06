@@ -1359,7 +1359,9 @@ def load_prompt(
     :returns: The prompt object.
     """
     if version is not None and environment is not None:
-        raise ValueError("Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other).")
+        raise ValueError(
+            "Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other)."
+        )
 
     if id:
         # When loading by ID, we don't need project or slug
@@ -1395,6 +1397,10 @@ def load_prompt(
                 )
                 response = _state.api_conn().get_json("/v1/prompt", args)
         except Exception as server_error:
+            # If environment or version was specified, don't fall back to cache
+            if environment is not None or version is not None:
+                raise ValueError(f"Prompt not found with specified parameters") from server_error
+
             eprint(f"Failed to load prompt, attempting to fall back to cache: {server_error}")
             try:
                 if id:
