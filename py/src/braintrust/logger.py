@@ -1336,6 +1336,7 @@ def load_prompt(
     id: Optional[str] = None,
     defaults: Optional[Mapping[str, Any]] = None,
     no_trace: bool = False,
+    environment: Optional[str] = None,
     app_url: Optional[str] = None,
     api_key: Optional[str] = None,
     org_name: Optional[str] = None,
@@ -1350,12 +1351,17 @@ def load_prompt(
     :param id: The id of a specific prompt to load. If specified, this takes precedence over all other parameters (project, slug, version).
     :param defaults: (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
     :param no_trace: If true, do not include logging metadata for this prompt when build() is called.
+    :param environment: The environment to load the prompt from. Cannot be used together with version.
     :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
     :returns: The prompt object.
     """
+    if version is not None and environment is not None:
+        raise ValueError(
+            "Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other)."
+        )
 
     if id:
         # When loading by ID, we don't need project or slug
@@ -1370,7 +1376,12 @@ def load_prompt(
             login(org_name=org_name, api_key=api_key, app_url=app_url)
             if id:
                 # Load prompt by ID using the /v1/prompt/{id} endpoint
-                response = _state.api_conn().get_json(f"/v1/prompt/{id}", {})
+                prompt_args = {}
+                if version is not None:
+                    prompt_args["version"] = version
+                if environment is not None:
+                    prompt_args["environment"] = environment
+                response = _state.api_conn().get_json(f"/v1/prompt/{id}", prompt_args)
                 # Wrap single prompt response in objects array to match list API format
                 if response is not None:
                     response = {"objects": [response]}
@@ -1381,10 +1392,15 @@ def load_prompt(
                         "project_id": project_id,
                         "slug": slug,
                         "version": version,
+                        "environment": environment,
                     },
                 )
                 response = _state.api_conn().get_json("/v1/prompt", args)
         except Exception as server_error:
+            # If environment or version was specified, don't fall back to cache
+            if environment is not None or version is not None:
+                raise ValueError(f"Prompt not found with specified parameters") from server_error
+
             eprint(f"Failed to load prompt, attempting to fall back to cache: {server_error}")
             try:
                 if id:
