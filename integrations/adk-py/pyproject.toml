@@ -1,13 +1,10 @@
 [project]
 name = "braintrust-adk-py"
 version = "0.1.0"
-description = "Add your description here"
+description = "Automatic OpenTelemetry tracing integration for Google ADK with Braintrust"
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = [
-    "braintrust>=0.2.1",
-    "google-adk>=0.2.0",
-]
+dependencies = ["braintrust[otel]>=0.2.1", "google-adk>=1.9.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0.0"]

@@ -10,6 +10,7 @@ from .callbacks import (
 )
 
 
+# NOTE: not yet useful, but we could add additional context to otel traces from within callbacks
 class Agent(LlmAgent):
     after_agent_callback = after_agent_callback
     after_model_callback = after_model_callback

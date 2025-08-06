@@ -1,13 +1,13 @@
 [project]
 name = "adk-py-examples"
 version = "0.1.0"
-description = "Add your description here"
+description = "Examples demonstrating braintrust-adk-py usage patterns for automatic Google ADK tracing"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "braintrust-adk-py",
-    "google-adk>=0.2.0",
-    "ruff>=0.11.6",
+ "google-adk>=1.9.0",
+ "python-multipart>=0.0.20",
 ]
 
 [tool.uv.sources]
