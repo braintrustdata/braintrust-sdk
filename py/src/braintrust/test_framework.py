@@ -245,10 +245,10 @@ async def test_eval_send_logs_false():
     """Test that Eval with send_logs=False runs locally without creating experiment."""
 
     def exact_match(input, output, expected):
-        return Score(name="exact_match", score=1.0 if output == expected else 0.0)
+        return {"name": "exact_match", "score": 1.0 if output == expected else 0.0}
 
     def length_score(input, output, expected):
-        return Score(name="length", score=len(output))
+        return {"name": "length", "score": len(output)}
 
     result = await Eval(
         "test-no-logs",
