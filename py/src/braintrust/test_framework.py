@@ -247,14 +247,14 @@ async def test_eval_send_logs_false():
     def exact_match(input, output, expected):
         return {"name": "exact_match", "score": 1.0 if output == expected else 0.0}
 
-    def length_score(input, output, expected):
-        return {"name": "length", "score": len(output)}
+    def simple_scorer(input, output, expected):
+        return {"name": "simple_scorer", "score": 0.8}
 
     result = await Eval(
         "test-no-logs",
         data=[{"input": "hello", "expected": "hello world"}, {"input": "test", "expected": "test world"}],
         task=lambda input_val: input_val + " world",
-        scores=[exact_match, length_score],
+        scores=[exact_match, simple_scorer],
         send_logs=False,
     )
 
@@ -263,15 +263,15 @@ async def test_eval_send_logs_false():
     assert result.results[0].input == "hello"
     assert result.results[0].output == "hello world"
     assert result.results[0].scores["exact_match"] == 1.0
-    assert result.results[0].scores["length"] == 11
+    assert result.results[0].scores["simple_scorer"] == 0.8
 
     assert result.results[1].input == "test"
     assert result.results[1].output == "test world"
     assert result.results[1].scores["exact_match"] == 1.0
-    assert result.results[1].scores["length"] == 10
+    assert result.results[1].scores["simple_scorer"] == 0.8
 
     # Verify it builds a local summary (no experiment_url means local run)
     assert result.summary.project_name == "test-no-logs"
     assert result.summary.experiment_url is None
     assert result.summary.scores["exact_match"].score == 1.0
-    assert result.summary.scores["length"].score == 10.5  # average of 11 and 10
+    assert result.summary.scores["simple_scorer"].score == 0.8
