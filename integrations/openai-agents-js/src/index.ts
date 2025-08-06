@@ -121,6 +121,7 @@ function getTimeElapsed(end?: string, start?: string): number | undefined {
   if (!start || !end) return undefined;
   const startTime = new Date(start).getTime();
   const endTime = new Date(end).getTime();
+  if (isNaN(startTime) || isNaN(endTime)) return undefined;
   return (endTime - startTime) / 1000;
 }
 
