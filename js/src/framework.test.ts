@@ -524,7 +524,7 @@ test("Eval with sendLogs: false runs locally without creating experiment", async
           name: "exact_match",
           score: args.output === args.expected ? 1 : 0,
         }),
-        (args) => ({ name: "length", score: args.output.length }),
+        (args) => ({ name: "simple_scorer", score: 0.8 }),
       ],
     },
     { sendLogs: false },
@@ -535,16 +535,16 @@ test("Eval with sendLogs: false runs locally without creating experiment", async
   expect(result.results[0].input).toBe("hello");
   expect(result.results[0].output).toBe("hello world");
   expect(result.results[0].scores.exact_match).toBe(1);
-  expect(result.results[0].scores.length).toBe(11);
+  expect(result.results[0].scores.simple_scorer).toBe(0.8);
 
   expect(result.results[1].input).toBe("test");
   expect(result.results[1].output).toBe("test world");
   expect(result.results[1].scores.exact_match).toBe(1);
-  expect(result.results[1].scores.length).toBe(10);
+  expect(result.results[1].scores.simple_scorer).toBe(0.8);
 
   // Verify it builds a local summary (no experimentUrl means local run)
   expect(result.summary.projectName).toBe("test-no-logs");
   expect(result.summary.experimentUrl).toBeUndefined();
   expect(result.summary.scores.exact_match.score).toBe(1);
-  expect(result.summary.scores.length.score).toBe(10.5); // average of 11 and 10
+  expect(result.summary.scores.simple_scorer.score).toBe(0.8);
 });
