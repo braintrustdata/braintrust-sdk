@@ -3020,6 +3020,7 @@ type LoadPromptOptions = FullLoginOptions & {
   id?: string;
   defaults?: DefaultPromptArgs;
   noTrace?: boolean;
+  environment?: string;
   state?: BraintrustState;
 };
 
@@ -3031,6 +3032,7 @@ type LoadPromptOptions = FullLoginOptions & {
  * @param options.projectId The id of the project to load the prompt from. This takes precedence over `projectName` if specified.
  * @param options.slug The slug of the prompt to load.
  * @param options.version An optional version of the prompt (to read). If not specified, the latest version will be used.
+ * @param options.environment Fetch the version of the prompt assigned to the specified environment (e.g. "production", "staging"). Cannot be specified at the same time as `version`.
  * @param options.id The id of a specific prompt to load. If specified, this takes precedence over all other parameters (project, slug, version).
  * @param options.defaults (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
  * @param options.noTrace If true, do not include logging metadata for this prompt when build() is called.
@@ -3055,6 +3057,7 @@ export async function loadPrompt({
   projectId,
   slug,
   version,
+  environment,
   id,
   defaults,
   noTrace = false,
@@ -3065,6 +3068,11 @@ export async function loadPrompt({
   forceLogin,
   state: stateArg,
 }: LoadPromptOptions) {
+  if (version && environment) {
+    throw new Error(
+      "Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other).",
+    );
+  }
   if (id) {
     // When loading by ID, we don't need project or slug
   } else if (isEmpty(projectName) && isEmpty(projectId)) {
@@ -3085,7 +3093,10 @@ export async function loadPrompt({
     });
     if (id) {
       // Load prompt by ID using the /v1/prompt/{id} endpoint
-      response = await state.apiConn().get_json(`v1/prompt/${id}`, {});
+      response = await state.apiConn().get_json(`v1/prompt/${id}`, {
+        ...(version && { version }),
+        ...(environment && { environment }),
+      });
       // Wrap single prompt response in objects array to match list API format
       if (response) {
         response = { objects: [response] };
@@ -3096,9 +3107,15 @@ export async function loadPrompt({
         project_id: projectId,
         slug,
         version,
+        ...(environment && { environment }),
       });
     }
   } catch (e) {
+    // If environment or version was specified, don't fall back to cache
+    if (environment || version) {
+      throw new Error(`Prompt not found with specified parameters: ${e}`);
+    }
+
     console.warn("Failed to load prompt, attempting to fall back to cache:", e);
     let prompt;
     if (id) {
