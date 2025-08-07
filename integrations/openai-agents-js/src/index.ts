@@ -126,7 +126,7 @@ function getTimeElapsed(end?: string, start?: string): number | undefined {
 }
 
 /**
- * `OpenAIAgentsTracingProcessor` is a tracing processor that logs traces from the OpenAI Agents SDK to Braintrust.
+ * `OpenAIAgentsTraceProcessor` is a tracing processor that logs traces from the OpenAI Agents SDK to Braintrust.
  *
  * Args:
  *   options: Configuration options including:
@@ -140,13 +140,13 @@ type TraceMetadata = {
   lastOutput: SpanOutput | null;
 };
 
-export interface OpenAIAgentsTracingProcessorOptions {
+export interface OpenAIAgentsTraceProcessorOptions {
   logger?: Logger<any>;
   maxTraces?: number;
 }
 
-export class OpenAIAgentsTracingProcessor {
-  private static readonly DEFAULT_MAX_TRACES = 1000;
+export class OpenAIAgentsTraceProcessor {
+  private static readonly DEFAULT_MAX_TRACES = 10000;
 
   private logger?: Logger<any>;
   private maxTraces: number;
@@ -163,10 +163,10 @@ export class OpenAIAgentsTracingProcessor {
   // Expose for testing purposes
   public readonly _traceSpans = this.traceSpans;
 
-  constructor(options: OpenAIAgentsTracingProcessorOptions = {}) {
+  constructor(options: OpenAIAgentsTraceProcessorOptions = {}) {
     this.logger = options.logger;
     this.maxTraces =
-      options.maxTraces ?? OpenAIAgentsTracingProcessor.DEFAULT_MAX_TRACES;
+      options.maxTraces ?? OpenAIAgentsTraceProcessor.DEFAULT_MAX_TRACES;
   }
 
   private evictOldestTrace(): void {

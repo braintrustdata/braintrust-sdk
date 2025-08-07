@@ -6,7 +6,7 @@ import {
   afterEach,
   describe,
 } from "vitest";
-import { OpenAIAgentsTracingProcessor } from "./index";
+import { OpenAIAgentsTraceProcessor } from "./index";
 import { z } from "zod";
 
 // Import necessary types and functions from braintrust
@@ -20,7 +20,7 @@ import {
 
 // Test helper functions for backward compatibility
 function getSpansMap(
-  processor: OpenAIAgentsTracingProcessor,
+  processor: OpenAIAgentsTraceProcessor,
 ): Map<string, BraintrustSpan> {
   const spans = new Map<string, BraintrustSpan>();
   for (const [traceId, traceData] of processor._traceSpans) {
@@ -32,7 +32,7 @@ function getSpansMap(
   return spans;
 }
 
-function getTraceMetadataMap(processor: OpenAIAgentsTracingProcessor) {
+function getTraceMetadataMap(processor: OpenAIAgentsTraceProcessor) {
   const metadata = new Map();
   for (const [traceId, traceData] of processor._traceSpans) {
     metadata.set(traceId, traceData.metadata);
@@ -98,8 +98,8 @@ describe(
       _exportsForTestingOnly.clearTestBackgroundLogger();
     });
 
-    test("OpenAIAgentsTracingProcessor is instantiable", () => {
-      const processor = new OpenAIAgentsTracingProcessor({
+    test("OpenAIAgentsTraceProcessor is instantiable", () => {
+      const processor = new OpenAIAgentsTraceProcessor({
         logger: _logger as any,
       });
       assert.ok(processor);
@@ -117,7 +117,7 @@ describe(
       assert.lengthOf(await backgroundLogger.drain(), 0);
 
       // Set up the OpenAI Agents tracing processor
-      const processor = new OpenAIAgentsTracingProcessor({
+      const processor = new OpenAIAgentsTraceProcessor({
         logger: _logger as any,
       });
 
@@ -161,7 +161,7 @@ describe(
     test("agent with function calling", async (context) => {
       assert.lengthOf(await backgroundLogger.drain(), 0);
 
-      const processor = new OpenAIAgentsTracingProcessor({
+      const processor = new OpenAIAgentsTraceProcessor({
         logger: _logger as any,
       });
 
@@ -219,7 +219,7 @@ describe(
     });
 
     test("Cleanup behavior - traces are cleaned up properly and orphaned spans are handled gracefully", async () => {
-      const processor = new OpenAIAgentsTracingProcessor({
+      const processor = new OpenAIAgentsTraceProcessor({
         logger: _logger as any,
       });
 
@@ -307,7 +307,7 @@ describe(
     test("LRU eviction behavior - oldest traces are evicted when maxTraces is exceeded", async () => {
       // Use a small maxTraces for fast testing
       const maxTraces = 3;
-      const processor = new OpenAIAgentsTracingProcessor({ maxTraces });
+      const processor = new OpenAIAgentsTraceProcessor({ maxTraces });
 
       // Create traces up to the limit
       const traces: any[] = [];
@@ -383,7 +383,7 @@ describe(
     });
 
     test("Span hierarchy and storage validation - ensures proper parent-child relationships", async () => {
-      const processor = new OpenAIAgentsTracingProcessor({
+      const processor = new OpenAIAgentsTraceProcessor({
         logger: _logger as any,
       });
 
