@@ -70,7 +70,7 @@ async function runExample() {
     "\nSpans sent to Braintrust! Check your dashboard at https://braintrust.dev",
   );
   console.log(
-    "Note: Only root spans and spans with gen_ai.*, braintrust.*, llm.*, or ai.* prefixes were sent to Braintrust",
+    "Note: Only root spans and spans with gen_ai.*, braintrust.*, llm.*, ai.*, or traceloop.* prefixes were sent to Braintrust",
   );
   await provider.shutdown();
 }
