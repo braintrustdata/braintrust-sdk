@@ -62,7 +62,6 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "ai": "^4.3.16",
     "@jest/globals": "^29.7.0",
     "@nodelib/fs.walk": "^1.2.8",
     "@types/argparse": "^2.0.14",
@@ -76,6 +75,7 @@
     "@types/node": "^20.10.5",
     "@types/pluralize": "^0.0.30",
     "@types/uuid": "^9.0.7",
+    "ai": "^4.3.16",
     "async": "^3.2.5",
     "autoevals": "^0.0.69",
     "cross-env": "^7.0.3",
@@ -84,8 +84,8 @@
     "tinybench": "^4.0.1",
     "ts-jest": "^29.1.4",
     "tsup": "^8.3.5",
-    "typedoc": "^0.28.5",
-    "typedoc-plugin-markdown": "^4.6.4",
+    "typedoc": "^0.28.9",
+    "typedoc-plugin-markdown": "^4.8.0",
     "typescript": "5.4.4",
     "vite-tsconfig-paths": "^4.3.2",
     "vitest": "^2.1.9"
