@@ -1,5 +1,4 @@
 from typing import List
-from unittest.mock import patch
 
 import pytest
 
@@ -12,6 +11,7 @@ from .framework import (
     run_evaluator,
 )
 from .score import Score, Scorer
+from .test_helpers import with_memory_logger  # noqa: F401
 
 
 @pytest.mark.asyncio
@@ -242,7 +242,7 @@ async def test_hooks_trial_index_multiple_inputs():
 
 
 @pytest.mark.asyncio
-async def test_eval_no_send_logs_true():
+async def test_eval_no_send_logs_true(with_memory_logger):
     """Test that Eval with no_send_logs=True runs locally without creating experiment."""
 
     def exact_match(input, output, expected):
@@ -251,33 +251,32 @@ async def test_eval_no_send_logs_true():
     def simple_scorer(input, output, expected):
         return {"name": "simple_scorer", "score": 0.8}
 
-    # Spy on the logger's init function to verify no experiment is created
-    with patch("braintrust.framework.init_experiment") as mock_init:
-        result = await Eval(
-            "test-no-logs",
-            data=[{"input": "hello", "expected": "hello world"}, {"input": "test", "expected": "test world"}],
-            task=lambda input_val: input_val + " world",
-            scores=[exact_match, simple_scorer],
-            no_send_logs=True,
-        )
+    result = await Eval(
+        "test-no-logs",
+        data=[{"input": "hello", "expected": "hello world"}, {"input": "test", "expected": "test world"}],
+        task=lambda input_val: input_val + " world",
+        scores=[exact_match, simple_scorer],
+        no_send_logs=True,
+    )
 
-        # Verify it returns results
-        assert len(result.results) == 2
-        assert result.results[0].input == "hello"
-        assert result.results[0].output == "hello world"
-        assert result.results[0].scores["exact_match"] == 1.0
-        assert result.results[0].scores["simple_scorer"] == 0.8
+    # Verify it returns results
+    assert len(result.results) == 2
+    assert result.results[0].input == "hello"
+    assert result.results[0].output == "hello world"
+    assert result.results[0].scores["exact_match"] == 1.0
+    assert result.results[0].scores["simple_scorer"] == 0.8
 
-        assert result.results[1].input == "test"
-        assert result.results[1].output == "test world"
-        assert result.results[1].scores["exact_match"] == 1.0
-        assert result.results[1].scores["simple_scorer"] == 0.8
+    assert result.results[1].input == "test"
+    assert result.results[1].output == "test world"
+    assert result.results[1].scores["exact_match"] == 1.0
+    assert result.results[1].scores["simple_scorer"] == 0.8
 
-        # Verify it builds a local summary (no experiment_url means local run)
-        assert result.summary.project_name == "test-no-logs"
-        assert result.summary.experiment_url is None
-        assert result.summary.scores["exact_match"].score == 1.0
-        assert result.summary.scores["simple_scorer"].score == 0.8
+    # Verify it builds a local summary (no experiment_url means local run)
+    assert result.summary.project_name == "test-no-logs"
+    assert result.summary.experiment_url is None
+    assert result.summary.scores["exact_match"].score == 1.0
+    assert result.summary.scores["simple_scorer"].score == 0.8
 
-        # Most importantly: verify that no experiment was created (no logs sent)
-        mock_init.assert_not_called()
+    # Most importantly: verify that no logs were sent (should be empty)
+    logs = with_memory_logger.pop()
+    assert len(logs) == 0
