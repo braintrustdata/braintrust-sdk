@@ -159,7 +159,8 @@ const openAIModelParamsSchema = z.object({
     .optional(),
   n: z.number().optional(),
   stop: z.array(z.string()).optional(),
-  reasoning_effort: z.enum(["low", "medium", "high"]).optional(),
+  reasoning_effort: z.enum(["minimal", "low", "medium", "high"]).optional(),
+  verbosity: z.enum(["low", "medium", "high"]).optional(),
 });
 export type OpenAIModelParams = z.infer<typeof openAIModelParamsSchema>;
 
