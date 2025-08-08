@@ -1,5 +1,4 @@
 import inspect
-import os.path
 import sys
 import threading
 import urllib.parse
@@ -94,22 +93,23 @@ class CallerLocation(TypedDict):
 
 
 def get_caller_location() -> Optional[CallerLocation]:
-    # Modified from
-    # https://stackoverflow.com/questions/24438976/debugging-get-filename-and-line-number-from-which-a-function-is-called
-    # to fetch the first stack frame not contained inside the same directory as
-    # this file.
-    this_dir = None
-    call_stack = inspect.stack()
-    for frame in call_stack:
-        caller = inspect.getframeinfo(frame.frame)
-        if this_dir is None:
-            this_dir = os.path.dirname(caller.filename)
-        if os.path.dirname(caller.filename) != this_dir:
+    frame = inspect.currentframe()
+    while frame:
+        frame = frame.f_back
+        if frame is None:
+            return None
+
+        mod = frame.f_globals.get("__name__")
+        # NOTE[matt] we know this is only called from braintrust code,
+        # so we can iterate up the callstack until we a frame that isn't
+        # braintrust code and know that's our first user caller.
+        if not mod.startswith("braintrust."):
             return CallerLocation(
-                caller_functionname=caller.function,
-                caller_filename=caller.filename,
-                caller_lineno=caller.lineno,
+                caller_functionname=frame.f_code.co_name,
+                caller_filename=frame.f_code.co_filename,
+                caller_lineno=frame.f_lineno,
             )
+
     return None
 
 
