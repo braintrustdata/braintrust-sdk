@@ -1,4 +1,5 @@
 import datetime
+from typing import Dict
 from zoneinfo import ZoneInfo
 
 from google.adk.agents import LlmAgent
@@ -8,7 +9,7 @@ def isNewYork(city: str) -> bool:
     return city.lower() == "new york"
 
 
-def get_weather(city: str) -> dict:
+def get_weather(city: str) -> Dict[str, str]:
     """Retrieves the current weather report for a specified city.
 
     Args:
@@ -31,7 +32,7 @@ def get_weather(city: str) -> dict:
         }
 
 
-def get_current_time(city: str) -> dict:
+def get_current_time(city: str) -> Dict[str, str]:
     """Returns the current time in a specified city.
 
     Args:
@@ -59,8 +60,6 @@ root_agent = LlmAgent(
     name="weather_time_agent",
     model="gemini-2.0-flash",
     description=("Agent to answer questions about the time and weather in a city."),
-    instruction=(
-        "You are a helpful agent who can answer user questions about the time and weather in a city."
-    ),
+    instruction=("You are a helpful agent who can answer user questions about the time and weather in a city."),
     tools=[get_weather, get_current_time],
 )
