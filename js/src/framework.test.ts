@@ -9,9 +9,11 @@ import {
 } from "vitest";
 import {
   defaultErrorScoreHandler,
+  Eval,
   EvalScorer,
   runEvaluator,
 } from "./framework";
+import { _exportsForTestingOnly } from "./logger";
 import { configureNode } from "./node";
 import { BarProgressReporter, type ProgressReporter } from "./progress";
 import { InternalAbortError } from "./util";
@@ -507,4 +509,49 @@ test("trialIndex with multiple inputs", async () => {
   // Each input should have been run with trial indices 0 and 1
   expect(input1Trials).toEqual([0, 1]);
   expect(input2Trials).toEqual([0, 1]);
+});
+
+test("Eval with noSendLogs: true runs locally without creating experiment", async () => {
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+
+  const result = await Eval(
+    "test-no-logs",
+    {
+      data: () => [
+        { input: "hello", expected: "hello world" },
+        { input: "test", expected: "test world" },
+      ],
+      task: (input) => input + " world",
+      scores: [
+        (args) => ({
+          name: "exact_match",
+          score: args.output === args.expected ? 1 : 0,
+        }),
+        () => ({ name: "simple_scorer", score: 0.8 }),
+      ],
+    },
+    { noSendLogs: true },
+  );
+
+  // Verify it returns results
+  expect(result.results).toHaveLength(2);
+  expect(result.results[0].input).toBe("hello");
+  expect(result.results[0].output).toBe("hello world");
+  expect(result.results[0].scores.exact_match).toBe(1);
+  expect(result.results[0].scores.simple_scorer).toBe(0.8);
+
+  expect(result.results[1].input).toBe("test");
+  expect(result.results[1].output).toBe("test world");
+  expect(result.results[1].scores.exact_match).toBe(1);
+  expect(result.results[1].scores.simple_scorer).toBe(0.8);
+
+  // Verify it builds a local summary (no experimentUrl means local run)
+  expect(result.summary.projectName).toBe("test-no-logs");
+  expect(result.summary.experimentUrl).toBeUndefined();
+  expect(result.summary.scores.exact_match.score).toBe(1);
+  expect(result.summary.scores.simple_scorer.score).toBe(0.8);
+
+  // Most importantly: verify that no logs were sent
+  await memoryLogger.flush();
+  expect(await memoryLogger.drain()).toHaveLength(0);
 });
