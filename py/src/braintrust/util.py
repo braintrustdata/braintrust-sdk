@@ -103,7 +103,7 @@ def get_caller_location() -> Optional[CallerLocation]:
         # NOTE[matt] we know this is only called from braintrust code,
         # so we can iterate up the callstack until we a frame that isn't
         # braintrust code and know that's our first user caller.
-        if not mod.startswith("braintrust."):
+        if mod and not mod.startswith("braintrust."):
             return CallerLocation(
                 caller_functionname=frame.f_code.co_name,
                 caller_filename=frame.f_code.co_filename,
