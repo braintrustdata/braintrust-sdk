@@ -1,7 +1,13 @@
 import datetime
 from zoneinfo import ZoneInfo
 
-from braintrust_adk.agent import Agent
+from braintrust.logger import start_span, traced
+from google.adk.agents import LlmAgent
+
+
+@traced
+def isNewYork(city: str) -> bool:
+    return city.lower() == "new york"
 
 
 def get_weather(city: str) -> dict:
@@ -13,12 +19,11 @@ def get_weather(city: str) -> dict:
     Returns:
         dict: status and result or error msg.
     """
-    if city.lower() == "new york":
+    if isNewYork(city):
         return {
             "status": "success",
             "report": (
-                "The weather in New York is sunny with a temperature of 25 degrees"
-                " Celsius (41 degrees Fahrenheit)."
+                "The weather in New York is sunny with a temperature of 25 degrees Celsius (41 degrees Fahrenheit)."
             ),
         }
     else:
@@ -38,7 +43,7 @@ def get_current_time(city: str) -> dict:
         dict: status and result or error msg.
     """
 
-    if city.lower() == "new york":
+    if isNewYork(city):
         tz_identifier = "America/New_York"
     else:
         return {
@@ -48,11 +53,17 @@ def get_current_time(city: str) -> dict:
 
     tz = ZoneInfo(tz_identifier)
     now = datetime.datetime.now(tz)
-    report = f'The current time in {city} is {now.strftime("%Y-%m-%d %H:%M:%S %Z%z")}'
+    report = f"The current time in {city} is {now.strftime('%Y-%m-%d %H:%M:%S %Z%z')}"
     return {"status": "success", "report": report}
 
 
-root_agent = Agent(
+@traced
+def before_agent_callback(*args, **kwargs):
+    with start_span("inside before_agent_callback"):
+        pass
+
+
+root_agent = LlmAgent(
     name="weather_time_agent",
     model="gemini-2.0-flash",
     description=("Agent to answer questions about the time and weather in a city."),
@@ -60,4 +71,5 @@ root_agent = Agent(
         "You are a helpful agent who can answer user questions about the time and weather in a city."
     ),
     tools=[get_weather, get_current_time],
+    before_agent_callback=before_agent_callback,
 )
