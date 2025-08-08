@@ -2,8 +2,6 @@ import logging
 import os
 from typing import Optional
 
-from braintrust import init_logger
-
 logger = logging.getLogger(__name__)
 
 __all__ = ["setup_braintrust"]
@@ -37,23 +35,9 @@ def setup_braintrust(
             or "project_name:default-google-adk-py"
         )
 
-        parsed_parent = parse_parent(parent)
-
-        logger = init_logger(api_key=api_key, **parsed_parent)
-
-        processor = BraintrustSpanProcessor(api_key=api_key, parent=logger.export())
+        processor = BraintrustSpanProcessor(api_key=api_key, parent=parent)
         provider.add_span_processor(processor)  # type: ignore
         return True
     except Exception as e:
         print("Failed to setup Braintrust:", e)
         return False
-
-
-def parse_parent(parent: str) -> dict:
-    for kwarg, parent_key in [
-        ("project", "project_name"),
-        ("project_id", "project_id"),
-    ]:
-        if parent.startswith(f"{parent_key}:"):
-            return {kwarg: parent.split(":")[1]}
-    return {}

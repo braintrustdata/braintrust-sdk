@@ -1,11 +1,9 @@
 import datetime
 from zoneinfo import ZoneInfo
 
-from braintrust.logger import start_span, traced
 from google.adk.agents import LlmAgent
 
 
-@traced
 def isNewYork(city: str) -> bool:
     return city.lower() == "new york"
 
@@ -57,12 +55,6 @@ def get_current_time(city: str) -> dict:
     return {"status": "success", "report": report}
 
 
-@traced
-def before_agent_callback(*args, **kwargs):
-    with start_span("inside before_agent_callback"):
-        pass
-
-
 root_agent = LlmAgent(
     name="weather_time_agent",
     model="gemini-2.0-flash",
@@ -71,5 +63,4 @@ root_agent = LlmAgent(
         "You are a helpful agent who can answer user questions about the time and weather in a city."
     ),
     tools=[get_weather, get_current_time],
-    before_agent_callback=before_agent_callback,
 )
