@@ -44,7 +44,7 @@ except ImportError:
     OTEL_AVAILABLE = False
 
 
-FILTER_PREFIXES = ("gen_ai.", "braintrust.", "llm.", "ai.")
+FILTER_PREFIXES = ("gen_ai.", "braintrust.", "llm.", "ai.", "traceloop.")
 
 
 class AISpanProcessor:
@@ -96,7 +96,7 @@ class AISpanProcessor:
         Keep spans if:
         1. It's a root span (no parent)
         2. Custom filter returns True/False (if provided)
-        3. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', or 'ai.'
+        3. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', 'ai.', or 'traceloop.'
         4. Any attribute name starts with those prefixes
         """
         if not span:

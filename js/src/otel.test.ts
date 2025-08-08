@@ -62,12 +62,18 @@ describe("AISpanProcessor", () => {
     );
     const llmSpan = tracer.startSpan("llm.generate", {}, parentContext);
     const aiSpan = tracer.startSpan("ai.model_call", {}, parentContext);
+    const traceloopSpan = tracer.startSpan(
+      "traceloop.agent",
+      {},
+      parentContext,
+    );
     const regularSpan = tracer.startSpan("database_query", {}, parentContext);
 
     genAiSpan.end();
     braintrustSpan.end();
     llmSpan.end();
     aiSpan.end();
+    traceloopSpan.end();
     regularSpan.end();
     rootSpan.end();
 
@@ -82,6 +88,7 @@ describe("AISpanProcessor", () => {
     expect(spanNames).toContain("braintrust.eval");
     expect(spanNames).toContain("llm.generate");
     expect(spanNames).toContain("ai.model_call");
+    expect(spanNames).toContain("traceloop.agent");
     // database_query should be filtered out as it doesn't match filtered prefixes
     expect(spanNames).not.toContain("database_query");
   });
@@ -117,6 +124,13 @@ describe("AISpanProcessor", () => {
     const aiAttrSpan = tracer.startSpan("ai_attr_operation", {}, parentContext);
     aiAttrSpan.setAttributes({ "ai.temperature": 0.7 });
 
+    const traceloopAttrSpan = tracer.startSpan(
+      "traceloop_attr_operation",
+      {},
+      parentContext,
+    );
+    traceloopAttrSpan.setAttributes({ "traceloop.agent_id": "agent-123" });
+
     const regularSpan = tracer.startSpan(
       "regular_operation",
       {},
@@ -128,6 +142,7 @@ describe("AISpanProcessor", () => {
     braintrustAttrSpan.end();
     llmAttrSpan.end();
     aiAttrSpan.end();
+    traceloopAttrSpan.end();
     regularSpan.end();
     rootSpan.end();
 
@@ -142,6 +157,7 @@ describe("AISpanProcessor", () => {
     expect(spanNames).toContain("braintrust_attr_operation");
     expect(spanNames).toContain("llm_attr_operation");
     expect(spanNames).toContain("ai_attr_operation");
+    expect(spanNames).toContain("traceloop_attr_operation");
     expect(spanNames).not.toContain("regular_operation");
   });
 
