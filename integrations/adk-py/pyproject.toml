@@ -1,0 +1,26 @@
+[project]
+name = "braintrust-adk-py"
+version = "0.1.0"
+description = "Automatic OpenTelemetry tracing integration for Google ADK with Braintrust"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["braintrust[otel]>=0.2.1", "google-adk>=1.9.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0.0"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv.workspace]
+members = ["examples"]
+
+[tool.uv.sources]
+braintrust = { path = "../../py" }

@@ -43,7 +43,7 @@ jobs:
         # lint everything other than the SDK (that's linted in make nox)
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
-          pylint --errors-only $(git ls-files '**/*.py' | grep -v '^py\/')
+          pylint --errors-only $(git ls-files '**/*.py' | grep -v '^py\/' | grep -v 'integrations/adk-py/examples/')
       - name: Run tests
         run: |
           python -m unittest discover ./core/py/src
