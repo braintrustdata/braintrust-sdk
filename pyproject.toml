@@ -3,6 +3,8 @@ line-length = 119
 
 [tool.ruff]
 line-length = 119
+
+[tool.ruff.lint]
 select = [
     "I",    # isort
     "F401", # unused imports
