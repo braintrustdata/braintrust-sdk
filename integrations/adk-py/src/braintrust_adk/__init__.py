@@ -29,11 +29,7 @@ def setup_braintrust(
         elif project_name:
             parent = f"project_name:{project_name}"
 
-        parent = (
-            parent
-            or os.environ.get("BRAINTRUST_PARENT")
-            or "project_name:default-google-adk-py"
-        )
+        parent = parent or os.environ.get("BRAINTRUST_PARENT") or "project_name:default-google-adk-py"
 
         processor = BraintrustSpanProcessor(api_key=api_key, parent=parent)
         provider.add_span_processor(processor)  # type: ignore
