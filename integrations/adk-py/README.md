@@ -12,6 +12,7 @@ pip install braintrust-adk
 
 - Python >= 3.9
 - Google ADK >= 1.9.0
+- Braintrust Dataplane >= 1.1.19 (applicable only for hybrid deployment customers)
 - Braintrust (with Otel support) >= 0.2.1
 
 ## Quick Start
