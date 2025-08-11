@@ -40,7 +40,13 @@ interface Span extends ReadableSpan {
   setStatus(status: { code: number; message?: string }): void;
 }
 
-const FILTER_PREFIXES = ["gen_ai.", "braintrust.", "llm.", "ai."] as const;
+const FILTER_PREFIXES = [
+  "gen_ai.",
+  "braintrust.",
+  "llm.",
+  "ai.",
+  "traceloop.",
+] as const;
 
 /**
  * Custom filter function type for span filtering.
@@ -127,7 +133,7 @@ export class AISpanProcessor {
    * Keep spans if:
    * 1. It's a root span (no parent)
    * 2. Custom filter returns true/false (if provided)
-   * 3. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', or 'ai.'
+   * 3. Span name starts with 'gen_ai.', 'braintrust.', 'llm.', 'ai.', or 'traceloop.'
    * 4. Any attribute name starts with those prefixes
    */
   private shouldKeepFilteredSpan(span: ReadableSpan): boolean {

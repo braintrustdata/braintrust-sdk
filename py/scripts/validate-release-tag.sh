@@ -15,7 +15,7 @@ fi
 ROOT_DIR=$(git rev-parse --show-toplevel)
 
 # Fetch the latest tags to ensure we're up to date
-git fetch --tags --prune
+git fetch --tags --prune --force
 
 TAG=$1
 
