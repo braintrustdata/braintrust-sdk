@@ -1,5 +1,6 @@
 import { getCurrentUnixTimestamp, filterFrom, objectIsEmpty } from "../util";
 import { Span, startSpan } from "../logger";
+import { isObject } from "@braintrust/core";
 
 export function responsesProxy(openai: any) {
   // This was added in v4.87.0 of the openai-node library
@@ -240,11 +241,11 @@ export function parseMetricsFromUsage(usage: unknown): Record<string, number> {
       const metricName = TOKEN_NAME_MAP[oai_name] || oai_name;
       metrics[metricName] = value;
     } else if (oai_name.endsWith("_tokens_details")) {
-      const rawPrefix = oai_name.slice(0, -"_tokens_details".length);
-      const prefix = TOKEN_PREFIX_MAP[rawPrefix] || rawPrefix;
-      if (typeof value !== "object" || value === null) {
+      if (!isObject(value)) {
         continue;
       }
+      const rawPrefix = oai_name.slice(0, -"_tokens_details".length);
+      const prefix = TOKEN_PREFIX_MAP[rawPrefix] || rawPrefix;
       for (const [key, n] of Object.entries(value)) {
         if (typeof n !== "number") {
           continue;
