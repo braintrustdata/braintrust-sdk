@@ -1,73 +1,22 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { SpanTypeAttribute } from "@braintrust/core";
 import { Span as BraintrustSpan, startSpan, Logger } from "braintrust";
-import type {
-  SpanData,
-  AgentSpanData,
-  FunctionSpanData,
-  GenerationSpanData,
-  ResponseSpanData,
-  HandoffSpanData,
-  CustomSpanData,
-  GuardrailSpanData,
-} from "@openai/agents-core/dist/tracing/spans";
-
-import type { Trace, Span } from "@openai/agents";
-
-enum SpanType {
-  AGENT = "agent",
-  RESPONSE = "response",
-  FUNCTION = "function",
-  HANDOFF = "handoff",
-  GUARDRAIL = "guardrail",
-  GENERATION = "generation",
-  CUSTOM = "custom",
-}
-
-type AgentsTrace = Trace;
-
-type AgentsSpan = Span<SpanData>;
-
-type SpanInput =
-  | string
-  | Array<Record<string, unknown>>
-  | Record<string, unknown>[];
-type SpanOutput =
-  | string
-  | Array<Record<string, unknown>>
-  | Record<string, unknown>;
-
-function isResponseSpanData(spanData: SpanData): spanData is ResponseSpanData {
-  return spanData.type === SpanType.RESPONSE;
-}
-
-function isGenerationSpanData(
-  spanData: SpanData,
-): spanData is GenerationSpanData {
-  return spanData.type === SpanType.GENERATION;
-}
-
-function isAgentSpanData(spanData: SpanData): spanData is AgentSpanData {
-  return spanData.type === SpanType.AGENT;
-}
-
-function isFunctionSpanData(spanData: SpanData): spanData is FunctionSpanData {
-  return spanData.type === SpanType.FUNCTION;
-}
-
-function isHandoffSpanData(spanData: SpanData): spanData is HandoffSpanData {
-  return spanData.type === SpanType.HANDOFF;
-}
-
-function isGuardrailSpanData(
-  spanData: SpanData,
-): spanData is GuardrailSpanData {
-  return spanData.type === SpanType.GUARDRAIL;
-}
-
-function isCustomSpanData(spanData: SpanData): spanData is CustomSpanData {
-  return spanData.type === SpanType.CUSTOM;
-}
+import {
+  SpanType,
+  AgentsTrace,
+  AgentsSpan,
+  SpanInput,
+  SpanOutput,
+  TraceMetadata,
+  OpenAIAgentsTraceProcessorOptions,
+  isResponseSpanData,
+  isGenerationSpanData,
+  isAgentSpanData,
+  isFunctionSpanData,
+  isHandoffSpanData,
+  isGuardrailSpanData,
+  isCustomSpanData,
+} from "./types";
 
 function spanTypeFromAgents(span: AgentsSpan): SpanTypeAttribute {
   const spanType = span.spanData.type;
@@ -78,19 +27,17 @@ function spanTypeFromAgents(span: AgentsSpan): SpanTypeAttribute {
     spanType === SpanType.CUSTOM
   ) {
     return SpanTypeAttribute.TASK;
-  } else if (
-    spanType === SpanType.FUNCTION ||
-    spanType === SpanType.GUARDRAIL
-  ) {
-    return SpanTypeAttribute.TOOL;
-  } else if (
-    spanType === SpanType.GENERATION ||
-    spanType === SpanType.RESPONSE
-  ) {
-    return SpanTypeAttribute.LLM;
-  } else {
-    return SpanTypeAttribute.TASK;
   }
+
+  if (spanType === SpanType.FUNCTION || spanType === SpanType.GUARDRAIL) {
+    return SpanTypeAttribute.TOOL;
+  }
+
+  if (spanType === SpanType.GENERATION || spanType === SpanType.RESPONSE) {
+    return SpanTypeAttribute.LLM;
+  }
+
+  return SpanTypeAttribute.TASK;
 }
 
 function spanNameFromAgents(span: AgentsSpan): string {
@@ -135,15 +82,6 @@ function getTimeElapsed(end?: string, start?: string): number | undefined {
  *     - maxTraces: Maximum number of concurrent traces to keep in memory (default: 1000).
  *       When exceeded, oldest traces are evicted using LRU policy.
  */
-type TraceMetadata = {
-  firstInput: SpanInput | null;
-  lastOutput: SpanOutput | null;
-};
-
-export interface OpenAIAgentsTraceProcessorOptions {
-  logger?: Logger<any>;
-  maxTraces?: number;
-}
 
 export class OpenAIAgentsTraceProcessor {
   private static readonly DEFAULT_MAX_TRACES = 10000;
