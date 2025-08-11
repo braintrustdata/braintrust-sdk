@@ -10,8 +10,8 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "adk-py-examples",
-    "braintrust-adk-py",
+    "braintrust-adk",
+    "braintrust-adk-examples",
 ]
 
 [[package]]
@@ -21,23 +21,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/74/0f/9da9dc9a12ebf4622ec96d9338d221e0172699e7574929f65ec8fdb30f9c/absolufy_imports-0.3.1.tar.gz", hash = "sha256:c90638a6c0b66826d1fb4880ddc20ef7701af34192c94faf40b95d32b59f9793", size = 4724, upload-time = "2022-01-20T14:48:53.434Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a3/a4/b65c9fbc2c0c09c0ea3008f62d2010fd261e62a4881502f03a6301079182/absolufy_imports-0.3.1-py2.py3-none-any.whl", hash = "sha256:49bf7c753a9282006d553ba99217f48f947e3eef09e18a700f8a82f75dc7fc5c", size = 5937, upload-time = "2022-01-20T14:48:51.718Z" },
-]
-
-[[package]]
-name = "adk-py-examples"
-version = "0.1.0"
-source = { virtual = "examples" }
-dependencies = [
-    { name = "braintrust-adk-py" },
-    { name = "google-adk" },
-    { name = "python-multipart" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "braintrust-adk-py", editable = "." },
-    { name = "google-adk", specifier = ">=1.9.0" },
-    { name = "python-multipart", specifier = ">=0.0.20" },
 ]
 
 [[package]]
@@ -88,7 +71,7 @@ wheels = [
 [[package]]
 name = "braintrust"
 version = "0.2.2"
-source = { directory = "../../py" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "chevron" },
     { name = "exceptiongroup" },
@@ -100,6 +83,10 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/c6/94/0dbd97c4c4bd948d9590eb5351ccec2869c36e3d71ee13fc75361a9c465a/braintrust-0.2.2.tar.gz", hash = "sha256:0f7b1989991bb533a5e2c1c43e0340bd4f8896cbae5d5806c9cabc20e405e150", size = 148865, upload-time = "2025-08-08T21:07:52.662Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f4/3c/90ea63d548a308898db11ff5fc06fd94ee5b0d86ad459e1136fd011d20cd/braintrust-0.2.2-py3-none-any.whl", hash = "sha256:68cd9851b01bccb69b22470497016b936855ec1da7720e61a3a4b3ae2db51867", size = 174625, upload-time = "2025-08-08T21:07:51.433Z" },
+]
 
 [package.optional-dependencies]
 otel = [
@@ -108,38 +95,8 @@ otel = [
     { name = "opentelemetry-sdk" },
 ]
 
-[package.metadata]
-requires-dist = [
-    { name = "boto3", marker = "extra == 'all'" },
-    { name = "boto3", marker = "extra == 'cli'" },
-    { name = "chevron" },
-    { name = "exceptiongroup", specifier = ">=1.2.0" },
-    { name = "gitpython" },
-    { name = "openai-agents", marker = "extra == 'all'" },
-    { name = "openai-agents", marker = "extra == 'openai-agents'" },
-    { name = "opentelemetry-api", marker = "extra == 'all'" },
-    { name = "opentelemetry-api", marker = "extra == 'otel'" },
-    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'all'" },
-    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'otel'" },
-    { name = "opentelemetry-sdk", marker = "extra == 'all'" },
-    { name = "opentelemetry-sdk", marker = "extra == 'otel'" },
-    { name = "psycopg2-binary", marker = "extra == 'all'" },
-    { name = "psycopg2-binary", marker = "extra == 'cli'" },
-    { name = "pydoc-markdown", marker = "extra == 'all'" },
-    { name = "pydoc-markdown", marker = "extra == 'doc'" },
-    { name = "python-dotenv" },
-    { name = "python-slugify" },
-    { name = "requests" },
-    { name = "sseclient-py" },
-    { name = "tqdm" },
-    { name = "typing-extensions", specifier = ">=4.1.0" },
-    { name = "uv", marker = "extra == 'all'" },
-    { name = "uv", marker = "extra == 'cli'" },
-]
-provides-extras = ["cli", "doc", "openai-agents", "otel", "all"]
-
 [[package]]
-name = "braintrust-adk-py"
+name = "braintrust-adk"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
@@ -154,11 +111,28 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "braintrust", extras = ["otel"], directory = "../../py" },
+    { name = "braintrust", extras = ["otel"], specifier = ">=0.2.1" },
     { name = "google-adk", specifier = ">=1.9.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
 ]
 provides-extras = ["dev"]
+
+[[package]]
+name = "braintrust-adk-examples"
+version = "0.1.0"
+source = { virtual = "examples" }
+dependencies = [
+    { name = "braintrust-adk" },
+    { name = "google-adk" },
+    { name = "python-multipart" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "braintrust-adk", editable = "." },
+    { name = "google-adk", specifier = ">=1.9.0" },
+    { name = "python-multipart", specifier = ">=0.0.20" },
+]
 
 [[package]]
 name = "cachetools"

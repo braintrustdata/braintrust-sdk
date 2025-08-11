@@ -1,6 +1,6 @@
 # Braintrust ADK Examples
 
-This directory contains examples demonstrating how to use the `braintrust-adk-py` library for automatic OpenTelemetry tracing integration with Google ADK.
+This directory contains examples demonstrating how to use the `braintrust-adk` library for logging Google ADK traces to Braintrust.
 
 ## Running the Examples
 
@@ -45,11 +45,3 @@ Set these to enable different tracing backends:
 - `OTEL_DEBUG=true` - Enable console tracing (good for testing)
 - `GOOGLE_CLOUD_PROJECT` - Enable Google Cloud Trace
 - `OTEL_EXPORTER_OTLP_ENDPOINT` - Enable OTLP tracing
-
-## Other Make Commands
-
-- `make test` - Run tests
-- `make lint` - Check code style
-- `make format` - Format code
-- `make clean` - Clean temporary files
-- `make help` - Show all available commands
