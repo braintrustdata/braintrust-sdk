@@ -657,6 +657,23 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
             return first
 
 
+class _NoOpBackgroundLogger(_BackgroundLogger):
+    """A no-op logger that discards all logs - useful for profiling span creation overhead"""
+
+    def __init__(self):
+        pass
+
+    def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
+        # Complete no-op - don't even evaluate the lazy values
+        pass
+
+    def flush(self, batch_size: Optional[int] = None):
+        pass
+
+    def pop(self):
+        return []
+
+
 BACKGROUND_LOGGER_BASE_SLEEP_TIME_S = 1.0
 
 
@@ -966,6 +983,17 @@ def _internal_with_memory_background_logger():
     _state._override_bg_logger.logger = memory_logger
     try:
         yield memory_logger
+    finally:
+        _state._override_bg_logger.logger = None
+
+
+@contextlib.contextmanager
+def _internal_with_noop_background_logger():
+    """Context manager that uses a no-op logger for profiling span creation overhead"""
+    noop_logger = _NoOpBackgroundLogger()
+    _state._override_bg_logger.logger = noop_logger
+    try:
+        yield noop_logger
     finally:
         _state._override_bg_logger.logger = None
 
