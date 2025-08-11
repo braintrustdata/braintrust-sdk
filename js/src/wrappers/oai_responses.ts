@@ -242,7 +242,7 @@ export function parseMetricsFromUsage(usage: unknown): Record<string, number> {
     } else if (oai_name.endsWith("_tokens_details")) {
       const rawPrefix = oai_name.slice(0, -"_tokens_details".length);
       const prefix = TOKEN_PREFIX_MAP[rawPrefix] || rawPrefix;
-      if (typeof value !== "object") {
+      if (typeof value !== "object" || value === null) {
         continue;
       }
       for (const [key, n] of Object.entries(value)) {
