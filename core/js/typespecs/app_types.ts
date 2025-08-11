@@ -196,8 +196,8 @@ export const customColumnSchema = z
       .string()
       .uuid()
       .describe("The id of the object the custom column is scoped for"),
-    subtype: aclObjectTypeEnum.or(z.literal("")).nullish(),
-    variant: projectColumnVariantEnum.nullish(),
+    subtype: aclObjectTypeEnum.or(z.literal("")),
+    variant: projectColumnVariantEnum,
     name: z.string().describe("The name of the custom column"),
     expr: z
       .string()
