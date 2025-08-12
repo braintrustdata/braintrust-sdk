@@ -178,8 +178,7 @@ class PromptBuilder:
         params: Optional[ModelParams] = None,
         tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
         if_exists: Optional[IfExists] = None,
-    ) -> CodePrompt:
-        ...
+    ) -> CodePrompt: ...
 
     @overload  # messages only, no prompt
     def create(
@@ -194,8 +193,7 @@ class PromptBuilder:
         params: Optional[ModelParams] = None,
         tools: Optional[List[Union[CodeFunction, SavedFunctionId, ToolFunctionDefinition]]] = None,
         if_exists: Optional[IfExists] = None,
-    ) -> CodePrompt:
-        ...
+    ) -> CodePrompt: ...
 
     def create(
         self,
@@ -296,8 +294,7 @@ class ScorerBuilder:
         handler: Callable[..., Any],
         parameters: Any,
         returns: Any = None,
-    ) -> CodeFunction:
-        ...
+    ) -> CodeFunction: ...
 
     # LLM scorer with prompt.
     @overload
@@ -313,8 +310,7 @@ class ScorerBuilder:
         params: Optional[ModelParams] = None,
         use_cot: bool,
         choice_scores: Dict[str, float],
-    ) -> CodePrompt:
-        ...
+    ) -> CodePrompt: ...
 
     # LLM scorer with messages.
     @overload
@@ -330,8 +326,7 @@ class ScorerBuilder:
         params: Optional[ModelParams] = None,
         use_cot: bool,
         choice_scores: Dict[str, float],
-    ) -> CodePrompt:
-        ...
+    ) -> CodePrompt: ...
 
     def create(
         self,
