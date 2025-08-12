@@ -1239,15 +1239,13 @@ export const createApiKeyOutputSchema = apiKeySchema
   )
   .openapi("CreateApiKeyOutput");
 
+const createServiceTokenBaseSchema = generateBaseTableOpSchema("Service token");
 export const createServiceTokenSchema = z.object({
   name: z
     .string()
     .describe("Name of the service token. Does not have to be unique"),
-  org_id: z
-    .string()
-    .uuid()
-    .describe("The organization ID this service token should be scoped to."),
-  account_id: z
+  org_name: createServiceTokenBaseSchema.shape.org_name,
+  service_account_id: z
     .string()
     .describe("The service account ID this service token should belong to."),
 });
@@ -1255,10 +1253,6 @@ export const createServiceTokenSchema = z.object({
 export const deleteServiceTokenSchema = z
   .object({
     id: z.string().uuid().describe(`Unique identifier for the service token.`),
-    org_id: z
-      .string()
-      .uuid()
-      .describe("The organization ID this service token is scoped to."),
   })
   .openapi("DeleteServiceToken");
 
