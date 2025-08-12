@@ -20,6 +20,7 @@ except AttributeError:
     # Use backport for Python < 3.11
     ExceptionGroup = exceptiongroup.ExceptionGroup
 
+
 import braintrust
 from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt, init_logger, logger
 from braintrust.logger import _deep_copy_event, _extract_attachments
@@ -1200,17 +1201,20 @@ class TestExceptionGroupHandling(TestCase):
 
         from braintrust.logger import stringify_exception
 
+        # Get TaskGroup class or skip test if not available
+        task_group_class = getattr(asyncio, "TaskGroup", None)
+        if task_group_class is None:
+            pytest.skip("asyncio.TaskGroup not available")
+
         async def failing_task():
             raise ConnectionRefusedError("[Errno 61] Connection refused")
 
         async def main_task():
-            # Use getattr to avoid linter errors for TaskGroup (Python 3.11+)
-            TaskGroup = getattr(asyncio, "TaskGroup", None)
-            if TaskGroup is None:
-                pytest.skip("asyncio.TaskGroup not available")
-            async with TaskGroup() as tg:
+            # pylint: disable=not-callable
+            async with task_group_class() as tg:
                 tg.create_task(failing_task())
                 tg.create_task(failing_task())
+            # pylint: enable=not-callable
 
         try:
             asyncio.run(main_task())
