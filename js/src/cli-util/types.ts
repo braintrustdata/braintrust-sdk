@@ -1,4 +1,4 @@
-import { IfExists } from "../imported_types";
+import { type IfExistsType as IfExists } from "../imported_types";
 
 export interface CommonArgs {
   verbose: boolean;
