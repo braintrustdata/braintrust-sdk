@@ -1106,10 +1106,120 @@ def test_openai_parallel_tool_calls(memory_logger):
 
                     # Check if we have the expected tools (only if names are available)
                     if tool_names:
-                        assert (
-                            "get_weather" in tool_names or "get_time" in tool_names
-                        ), f"Expected weather/time tools, got: {tool_names}"
+                        assert "get_weather" in tool_names or "get_time" in tool_names, (
+                            f"Expected weather/time tools, got: {tool_names}"
+                        )
 
 
 def _is_wrapped(client):
     return hasattr(client, "_NamedWrapper__wrapped")
+
+
+@pytest.mark.asyncio
+async def test_braintrust_tracing_processor_current_span_detection(memory_logger):
+    """Test that BraintrustTracingProcessor currentSpan() detection works with OpenAI Agents SDK."""
+    pytest.importorskip("agents", reason="agents package not available")
+
+    import agents
+    from agents import Agent
+    from agents.run import AgentRunner
+
+    import braintrust
+    from braintrust.wrappers.openai import BraintrustTracingProcessor
+
+    assert not memory_logger.pop()
+
+    @braintrust.traced(name="parent_span_test")
+    async def test_function(instructions: str):
+        # Verify we're in a traced context
+        detected_parent = braintrust.current_span()
+        assert detected_parent is not None, "Parent span should exist in traced context"
+        assert detected_parent != braintrust.logger.NOOP_SPAN, "Should not be NOOP span"
+
+        # Create processor WITHOUT parentSpan - should auto-detect via current_span()
+        processor = BraintrustTracingProcessor()
+
+        # Set up tracing
+        agents.set_tracing_disabled(False)
+        agents.add_trace_processor(processor)
+
+        try:
+            # Create a simple agent
+            agent = Agent(
+                name="test-agent",
+                model=TEST_MODEL,
+                instructions="You are a helpful assistant. Be very concise.",
+            )
+
+            # Run the agent - this should create spans as children of detected parent
+            runner = AgentRunner()
+            result = await runner.run(agent, instructions)
+            assert result is not None, "Agent should return a result"
+            assert hasattr(result, "final_output") or hasattr(result, "output"), "Result should have output"
+
+            return result
+        finally:
+            processor.shutdown()
+
+    # Execute the wrapped function
+    result = await test_function("What is 2+2? Just the number.")
+    assert result is not None, "Test function should return a result"
+
+    # Verify span hierarchy in logged spans
+    spans = memory_logger.pop()
+    assert len(spans) >= 2, f"Should have at least parent and child spans, got {len(spans)}"
+
+    # Find parent and child spans
+    parent_span = None
+    child_spans = []
+
+    for span in spans:
+        if span.get("span_attributes", {}).get("name") == "parent_span_test":
+            parent_span = span
+        elif span.get("span_attributes", {}).get("name") == "Agent workflow":
+            child_spans.append(span)
+
+    assert parent_span is not None, "Should find parent span with name 'parent_span_test'"
+    assert len(child_spans) > 0, "Should find at least one child span with name 'Agent workflow'"
+
+    # Verify the child span has the parent as its parent
+    if child_spans and parent_span:
+        child_span = child_spans[0]
+        # In Braintrust, parent-child relationships are represented by span_parents array
+        child_span_parents = child_span.get("span_parents", [])
+        parent_span_id = parent_span.get("span_id")
+
+        assert parent_span_id is not None, "Parent span should have a span_id"
+        assert isinstance(child_span_parents, list) and len(child_span_parents) > 0, (
+            "Child span should have span_parents array"
+        )
+        assert parent_span_id in child_span_parents, (
+            f"Child span should include parent span_id {parent_span_id} in its span_parents array {child_span_parents} (currentSpan detection)"
+        )
+
+        # Verify both spans have the same root_span_id
+        assert child_span.get("root_span_id") == parent_span.get("root_span_id"), (
+            "Parent and child should share the same root_span_id"
+        )
+
+    # Verify input/output are properly logged on parent span
+    assert parent_span.get("input") is not None, "Parent span should have input logged"
+    assert parent_span.get("output") is not None, "Parent span should have output logged"
+
+    # Verify that we have child spans beyond just "Agent workflow"
+    # The OpenAI SDK should generate multiple span types (generation, response, etc.)
+    parent_span_id = parent_span.get("span_id")
+    assert parent_span_id is not None, "Parent span should have a span_id"
+
+    all_child_spans = [s for s in spans if parent_span_id in (s.get("span_parents") or [])]
+
+    assert len(all_child_spans) >= 1, f"Should have at least 1 child span, but found {len(all_child_spans)}"
+
+    # We should see spans like Generation, Response, etc. from the OpenAI SDK
+    span_types = [s.get("span_attributes", {}).get("type") for s in all_child_spans]
+    has_llm_spans = "llm" in span_types
+    has_task_spans = "task" in span_types
+
+    assert has_llm_spans or has_task_spans, (
+        f"Should have LLM or task type spans from OpenAI SDK, got types: {span_types}"
+    )
