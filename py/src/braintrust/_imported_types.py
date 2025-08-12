@@ -1016,8 +1016,7 @@ class CodeBundle(TypedDict):
     """
 
 
-class FunctionIdRef(TypedDict):
-    pass
+FunctionIdRef = Optional[Mapping[str, Any]]
 
 
 class PromptBlockDataPromptBlockData(TypedDict):

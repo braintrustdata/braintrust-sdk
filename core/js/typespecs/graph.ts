@@ -7,9 +7,12 @@ extendZodWithOpenApi(z);
 // Define a placeholder for functionIdSchema
 // This approach creates a reference to the type with OpenAPI metadata
 // We can't use z.lazy directly as it's not supported by zod-to-openapi
-const functionIdRef = z.object({}).passthrough().openapi("FunctionIdRef", {
-  description: "Options for identifying a function",
-});
+const functionIdRef = z
+  .object({})
+  .catchall(z.unknown())
+  .openapi("FunctionIdRef", {
+    description: "Options for identifying a function",
+  });
 
 const graphElemIdSchema = z.string().max(1024);
 

@@ -208,23 +208,28 @@ export const modelParamsSchema = z
   .union([
     braintrustModelParamsSchema
       .merge(openAIModelParamsSchema)
-      .passthrough()
+      // NOTE: we use `catchall` instead of `passthrough` here, because our
+      // zod-to-openapi generator doesn't explicitly include
+      // `additionalProperties: true` for passthrough, but will for catchall. We
+      // need this explicitness to distinguish between strip vs passthrough
+      // schemas.
+      .catchall(z.unknown())
       .openapi({ title: "OpenAIModelParams" }),
     braintrustModelParamsSchema
       .merge(anthropicModelParamsSchema)
-      .passthrough()
+      .catchall(z.unknown())
       .openapi({ title: "AnthropicModelParams" }),
     braintrustModelParamsSchema
       .merge(googleModelParamsSchema)
-      .passthrough()
+      .catchall(z.unknown())
       .openapi({ title: "GoogleModelParams" }),
     braintrustModelParamsSchema
       .merge(windowAIModelParamsSchema)
-      .passthrough()
+      .catchall(z.unknown())
       .openapi({ title: "WindowAIModelParams" }),
     braintrustModelParamsSchema
       .merge(jsCompletionParamsSchema)
-      .passthrough()
+      .catchall(z.unknown())
       .openapi({ title: "JsCompletionParams" }),
   ])
   .openapi("ModelParams");

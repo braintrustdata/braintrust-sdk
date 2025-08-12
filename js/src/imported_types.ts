@@ -251,16 +251,19 @@ export const ModelParams = z.union([
       reasoning_effort: z.enum(["minimal", "low", "medium", "high"]),
       verbosity: z.enum(["low", "medium", "high"]),
     })
-    .partial(),
-  z.object({
-    use_cache: z.boolean().optional(),
-    max_tokens: z.number(),
-    temperature: z.number(),
-    top_p: z.number().optional(),
-    top_k: z.number().optional(),
-    stop_sequences: z.array(z.string()).optional(),
-    max_tokens_to_sample: z.number().optional(),
-  }),
+    .partial()
+    .passthrough(),
+  z
+    .object({
+      use_cache: z.boolean().optional(),
+      max_tokens: z.number(),
+      temperature: z.number(),
+      top_p: z.number().optional(),
+      top_k: z.number().optional(),
+      stop_sequences: z.array(z.string()).optional(),
+      max_tokens_to_sample: z.number().optional(),
+    })
+    .passthrough(),
   z
     .object({
       use_cache: z.boolean(),
@@ -269,15 +272,17 @@ export const ModelParams = z.union([
       topP: z.number(),
       topK: z.number(),
     })
-    .partial(),
+    .partial()
+    .passthrough(),
   z
     .object({
       use_cache: z.boolean(),
       temperature: z.number(),
       topK: z.number(),
     })
-    .partial(),
-  z.object({ use_cache: z.boolean() }).partial(),
+    .partial()
+    .passthrough(),
+  z.object({ use_cache: z.boolean() }).partial().passthrough(),
 ]);
 export type ModelParamsType = z.infer<typeof ModelParams>;
 export const PromptOptionsNullish = z.union([
@@ -578,7 +583,7 @@ export const CodeBundle = z.object({
   preview: z.union([z.string(), z.null()]).optional(),
 });
 export type CodeBundleType = z.infer<typeof CodeBundle>;
-export const FunctionIdRef = z.object({}).partial();
+export const FunctionIdRef = z.object({}).partial().passthrough();
 export type FunctionIdRefType = z.infer<typeof FunctionIdRef>;
 export const PromptBlockData = z.union([
   z.object({ type: z.literal("completion"), content: z.string() }),

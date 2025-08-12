@@ -1103,6 +1103,7 @@
                 ]
               }
             },
+            "additionalProperties": {},
             "title": "OpenAIModelParams"
           },
           {
@@ -1138,6 +1139,7 @@
               "max_tokens",
               "temperature"
             ],
+            "additionalProperties": {},
             "title": "AnthropicModelParams"
           },
           {
@@ -1159,6 +1161,7 @@
                 "type": "number"
               }
             },
+            "additionalProperties": {},
             "title": "GoogleModelParams"
           },
           {
@@ -1174,6 +1177,7 @@
                 "type": "number"
               }
             },
+            "additionalProperties": {},
             "title": "WindowAIModelParams"
           },
           {
@@ -1183,6 +1187,7 @@
                 "type": "boolean"
               }
             },
+            "additionalProperties": {},
             "title": "JsCompletionParams"
           }
         ]
@@ -2481,6 +2486,7 @@
       "FunctionIdRef": {
         "type": "object",
         "properties": {},
+        "additionalProperties": {},
         "description": "Options for identifying a function"
       },
       "PromptBlockData": {
