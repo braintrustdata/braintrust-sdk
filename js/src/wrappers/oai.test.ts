@@ -582,3 +582,16 @@ test("parseMetricsFromUsage", () => {
     assert.deepEqual(parseMetricsFromUsage(input), {});
   }
 });
+
+test("parseMetricsFromUsage with null input_tokens_details", () => {
+  const usage = {
+    input_tokens: 14,
+    output_tokens: 8,
+    input_tokens_details: null,
+  };
+  const metrics = parseMetricsFromUsage(usage);
+  assert.equal(metrics.prompt_tokens, 14);
+  assert.equal(metrics.prompt_cached_tokens, undefined);
+  assert.equal(metrics.prompt_brand_new_token, undefined);
+  assert.equal(metrics.completion_tokens, 8);
+});
