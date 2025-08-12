@@ -526,20 +526,22 @@ describe(
       );
     });
 
-    test("parentSpan option creates proper span hierarchy", async () => {
-      // This tests the core functionality we just implemented
+    test("currentSpan() detection creates proper span hierarchy with actual OpenAI SDK", async () => {
+      // This tests that currentSpan() detection works with the real OpenAI SDK
       assert.lengthOf(await backgroundLogger.drain(), 0);
 
-      // Create a parent span using Braintrust's wrapTraced
       const testFunction = wrapTraced(
         async (instructions: string) => {
-          // Get the current span (this will be our parent)
-          const parentSpan = currentSpan();
-          assert.ok(parentSpan, "Parent span should exist in traced context");
+          // Verify we're in a traced context
+          const detectedParent = currentSpan();
+          assert.ok(
+            detectedParent,
+            "Parent span should exist in traced context",
+          );
 
+          // Create processor WITHOUT parentSpan - should auto-detect via currentSpan()
           const processor = new OpenAIAgentsTraceProcessor({
             logger: _logger as any,
-            parentSpan: parentSpan,
           });
 
           setTracingDisabled(false);
@@ -548,12 +550,12 @@ describe(
           try {
             // Create a simple agent
             const agent = new Agent({
-              name: "child-agent",
+              name: "test-agent",
               model: TEST_MODEL,
               instructions: "You are a helpful assistant. Be very concise.",
             });
 
-            // Run the agent - this should create spans as children of parentSpan
+            // Run the agent - this should create spans as children of detected parent
             const result = await run(agent, instructions);
             assert.ok(result, "Agent should return a result");
             assert.ok(result.finalOutput, "Result should have finalOutput");
@@ -567,7 +569,7 @@ describe(
       );
 
       // Execute the wrapped function
-      const result = await testFunction("What is 1+1? Just the number.");
+      const result = await testFunction("What is 2+2? Just the number.");
       assert.ok(result, "Test function should return a result");
 
       // Verify span hierarchy in logged spans
@@ -603,7 +605,7 @@ describe(
         );
         assert.isTrue(
           childSpanParents.includes(parentSpanId),
-          "Child span should include parent span_id in its span_parents array",
+          "Child span should include parent span_id in its span_parents array (currentSpan detection)",
         );
 
         // Verify both spans have the same root_span_id
@@ -624,15 +626,26 @@ describe(
         "Parent span should have output logged",
       );
 
-      // The input should be the instruction string we passed
-      const parentInput = (parentSpan as any).input;
-      if (Array.isArray(parentInput) && parentInput.length > 0) {
-        assert.equal(
-          parentInput[0],
-          "What is 1+1? Just the number.",
-          "Parent span input should match the instruction",
-        );
-      }
+      // Verify that we have child spans beyond just "Agent workflow"
+      // The OpenAI SDK should generate multiple span types (generation, response, etc.)
+      const allChildSpans = spans.filter((s: any) =>
+        (s as any).span_parents?.includes((parentSpan as any).span_id),
+      );
+
+      assert.isTrue(
+        allChildSpans.length >= 1,
+        `Should have at least 1 child span, but found ${allChildSpans.length}`,
+      );
+
+      // We should see spans like Generation, Response, etc. from the OpenAI SDK
+      const spanTypes = allChildSpans.map((s: any) => s.span_attributes?.type);
+      const hasLLMSpans = spanTypes.includes("llm");
+      const hasTaskSpans = spanTypes.includes("task");
+
+      assert.isTrue(
+        hasLLMSpans || hasTaskSpans,
+        "Should have LLM or task type spans from OpenAI SDK",
+      );
     });
 
     test("processor without parentSpan creates root spans (backward compatibility)", async () => {

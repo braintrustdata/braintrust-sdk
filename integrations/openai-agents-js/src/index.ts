@@ -94,7 +94,6 @@ export class OpenAIAgentsTraceProcessor {
 
   private logger?: Logger<any>;
   private maxTraces: number;
-  private parentSpan?: BraintrustSpan;
   private traceSpans = new Map<
     string,
     {
@@ -112,7 +111,6 @@ export class OpenAIAgentsTraceProcessor {
     this.logger = options.logger;
     this.maxTraces =
       options.maxTraces ?? OpenAIAgentsTraceProcessor.DEFAULT_MAX_TRACES;
-    this.parentSpan = options.parentSpan;
   }
 
   private evictOldestTrace(): void {
@@ -127,35 +125,27 @@ export class OpenAIAgentsTraceProcessor {
       this.evictOldestTrace();
     }
 
-    // Use parentSpan if provided, otherwise fall back to currentSpan (which might be NOOP)
+    // Detect parent span from current execution context
     let span: BraintrustSpan;
+    const current = currentSpan();
 
-    if (this.parentSpan && this.parentSpan !== NOOP_SPAN) {
-      // Create as child of provided parent span
-      span = this.parentSpan.startSpan({
+    if (current && current !== NOOP_SPAN) {
+      // Create as child of current span
+      span = current.startSpan({
         name: trace.name,
         type: SpanTypeAttribute.TASK,
       });
     } else {
-      // Fall back to currentSpan if it's not NOOP
-      const current = currentSpan();
-      if (current && current !== NOOP_SPAN) {
-        span = current.startSpan({
-          name: trace.name,
-          type: SpanTypeAttribute.TASK,
-        });
-      } else {
-        // No parent span available, create as root
-        span = this.logger
-          ? this.logger.startSpan({
-              name: trace.name,
-              type: SpanTypeAttribute.TASK,
-            })
-          : startSpan({
-              name: trace.name,
-              type: SpanTypeAttribute.TASK,
-            });
-      }
+      // No parent span available, create as root
+      span = this.logger
+        ? this.logger.startSpan({
+            name: trace.name,
+            type: SpanTypeAttribute.TASK,
+          })
+        : startSpan({
+            name: trace.name,
+            type: SpanTypeAttribute.TASK,
+          });
     }
 
     span.log({
