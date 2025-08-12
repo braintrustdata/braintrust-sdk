@@ -10,11 +10,15 @@ from unittest import TestCase
 import exceptiongroup
 import pytest
 
-# Also conditionally import native ExceptionGroup for Python 3.11+
-if sys.version_info >= (3, 11):
-    ExceptionGroup = ExceptionGroup  # Use native
-else:
-    ExceptionGroup = exceptiongroup.ExceptionGroup  # Use backport
+# Handle ExceptionGroup compatibility between Python versions
+try:
+    # Python 3.11+ has ExceptionGroup as a builtin
+    import builtins
+
+    ExceptionGroup = builtins.ExceptionGroup
+except AttributeError:
+    # Use backport for Python < 3.11
+    ExceptionGroup = exceptiongroup.ExceptionGroup
 
 import braintrust
 from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt, init_logger, logger
@@ -1200,7 +1204,11 @@ class TestExceptionGroupHandling(TestCase):
             raise ConnectionRefusedError("[Errno 61] Connection refused")
 
         async def main_task():
-            async with asyncio.TaskGroup() as tg:
+            # Use getattr to avoid linter errors for TaskGroup (Python 3.11+)
+            TaskGroup = getattr(asyncio, "TaskGroup", None)
+            if TaskGroup is None:
+                pytest.skip("asyncio.TaskGroup not available")
+            async with TaskGroup() as tg:
                 tg.create_task(failing_task())
                 tg.create_task(failing_task())
 
