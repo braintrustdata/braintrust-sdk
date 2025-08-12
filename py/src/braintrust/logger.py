@@ -52,7 +52,7 @@ from urllib3.util.retry import Retry
 
 from braintrust.functions.stream import BraintrustStream
 
-from .bt_json import bt_dumps
+from .bt_json import bt_dumps, iter_to_bt_json, to_bt_json
 from .db_fields import (
     ASYNC_SCORING_CONTROL_FIELD,
     AUDIT_METADATA_FIELD,
@@ -640,7 +640,7 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
     def flush(self, batch_size: Optional[int] = None):
         pass
 
-    def pop(self):
+    def pop(self, raise_json_errors: bool = True):
         with self.lock:
             logs = [l.get() for l in self.logs]  # unwrap the LazyValues
             self.logs = []
@@ -654,7 +654,22 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
             first = merged[0]
             for other in merged[1:]:
                 first.extend(other)
-            return first
+
+            # serialize all the items to make the behavirou more like the HTTPBackgroundLogger
+            # so we can test it with the same exceptions
+            out = []
+            for item in first:
+                try:
+                    to_bt_json(item)
+                    out.append(item)
+                except Exception as e:
+                    if raise_json_errors:
+                        raise
+                    else:
+                        pass
+
+            # return the spans
+            return out
 
 
 class _NoOpBackgroundLogger(_BackgroundLogger):
@@ -794,7 +809,7 @@ class _HTTPBackgroundLogger:
                 return
 
             # Construct batches of records to flush in parallel and in sequence.
-            all_items_str = [[bt_dumps(item) for item in bucket] for bucket in all_items]
+            all_items_str = [iter_to_bt_json(bucket, raise_on_error=False) for bucket in all_items]
             batch_sets = batch_items(
                 items=all_items_str, batch_max_num_items=batch_size, batch_max_num_bytes=self.max_request_size // 2
             )
@@ -910,7 +925,7 @@ class _HTTPBackgroundLogger:
             return
         try:
             all_items, attachments = self._unwrap_lazy_values(wrapped_items)
-            dataStr = construct_logs3_data([bt_dumps(item) for item in all_items])
+            dataStr = construct_logs3_data(iter_to_bt_json(all_items, raise_on_error=False))
             attachment_str = bt_dumps([a.debug_info() for a in attachments])
             payload = "{" + f""""data": {dataStr}, "attachments": {attachment_str}""" + "}"
             for output_dir in publish_payloads_dir:
@@ -3486,6 +3501,9 @@ class SpanImpl(Span):
                 else:
                     final_record[k] = v
 
+        # Ensure ID cannot be overridden by user
+        final_record["id"] = self.id
+
         # Do deep copy once at the beginning - this isolates from user object mutations
         final_record_copy = _deep_copy_event(final_record)
 
@@ -3501,9 +3519,11 @@ class SpanImpl(Span):
                 scores_dict = final_record_copy["scores"]
                 for score_name, score_value in v.items():
                     if score_value is None:
-                        scores_dict.pop(score_name, None)
+                        scores_dict[score_name] = None  # Preserve None values
                     elif type(score_value) is bool:
                         scores_dict[score_name] = 1 if score_value else 0
+                    else:
+                        scores_dict[score_name] = score_value
 
             elif k == "metadata" and type(v) is dict:
                 # Ensure metadata dict exists and mutate in place

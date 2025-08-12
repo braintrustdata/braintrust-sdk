@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import os
 import time
 from typing import AsyncGenerator, List
@@ -911,6 +912,64 @@ async def test_traced_async_generator(with_memory_logger):
             },
         },
     )
+
+
+def test_json_serializability(with_memory_logger):
+    """Test that the logger can serialize all the data it logs."""
+    init_test_logger(__name__)
+
+    project = logger.current_logger()
+    for v in [math.nan, math.inf, -math.inf]:
+        with project.start_span(name="test-span") as span:
+            span.log(metadata={"invalid": v, "valid": 1})
+
+    logs = with_memory_logger.pop(raise_json_errors=False)
+    assert len(logs) == 0
+
+
+def test_nulls_in_scores(with_memory_logger):
+    """Test that None values in scores are handled correctly (similar to integration test_nulls)"""
+    init_test_logger(__name__)
+
+    project = logger.current_logger()
+    for i in range(10):
+        with project.start_span() as span:
+            span.log(
+                input=i,
+                output=1 if i < 5 else 0,
+                expected=1 if i < 5 else 0,
+                scores={
+                    "all_1s": 1,
+                    "half_0s": 1 if i < 5 else 0,
+                    "half_nulls": 1 if i < 5 else None,
+                    "all_nulls": None,
+                    "all_0s": 0,
+                },
+            )
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 10
+
+    for i, log in enumerate(logs):
+        expected_scores = {
+            "all_1s": 1,
+            "half_0s": 1 if i < 5 else 0,
+            "all_0s": 0,
+        }
+        if i < 5:
+            expected_scores["half_nulls"] = 1
+
+        # None values should be preserved in scores, not filtered out
+        actual_scores = log.get("scores", {})
+
+        # Check that we have the expected non-None values
+        for key, expected_value in expected_scores.items():
+            assert actual_scores.get(key) == expected_value
+
+        # Check that None values are preserved (not filtered out)
+        if i >= 5:
+            assert actual_scores.get("half_nulls") is None
+        assert actual_scores.get("all_nulls") is None
 
 
 def test_traced_sync_generator_truncation(with_memory_logger, caplog):
