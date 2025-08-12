@@ -972,6 +972,39 @@ def test_nulls_in_scores(with_memory_logger):
         assert actual_scores.get("all_nulls") is None
 
 
+def test_span_attributes_filters_nones(with_memory_logger):
+    """Test that None values are filtered from span_attributes"""
+    init_test_logger(__name__)
+
+    project = logger.current_logger()
+    with project.start_span(
+        name="test-span",
+        span_attributes={
+            "valid_key": "valid_value",
+            "none_key": None,
+            "zero_key": 0,
+            "false_key": False,
+            "empty_string_key": "",
+        },
+    ) as span:
+        span.log(input="test")
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+
+    span_attributes = log.get("span_attributes", {})
+
+    # None values should be filtered out
+    assert "none_key" not in span_attributes
+
+    # Other falsy values should be preserved
+    assert span_attributes.get("valid_key") == "valid_value"
+    assert span_attributes.get("zero_key") == 0
+    assert span_attributes.get("false_key") is False
+    assert span_attributes.get("empty_string_key") == ""
+
+
 def test_traced_sync_generator_truncation(with_memory_logger, caplog):
     """Test sync generator truncation behavior."""
     init_test_logger(__name__)

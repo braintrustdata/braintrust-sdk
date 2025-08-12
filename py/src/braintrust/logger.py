@@ -3488,6 +3488,9 @@ class SpanImpl(Span):
                 if v is not None:
                     if isinstance(v, BraintrustStream):
                         lazy_values[k] = LazyValue(lambda stream=v: stream.copy().final_value(), use_mutex=False)
+                    elif k == "span_attributes" and isinstance(v, dict):
+                        # Filter None values from span_attributes
+                        final_record[k] = {sk: sv for sk, sv in v.items() if sv is not None}
                     else:
                         final_record[k] = v
 
@@ -3538,6 +3541,9 @@ class SpanImpl(Span):
 
             elif k == "tags" and type(v) in (list, set, tuple):
                 final_record_copy["tags"] = list(v)
+
+            elif k == "span_attributes" and type(v) is dict:
+                final_record_copy["span_attributes"] = {k: v for k, v in v.items() if v is not None}
 
         # Handle end time tracking
         if final_record_copy.get("metrics", {}).get("end") is not None:
