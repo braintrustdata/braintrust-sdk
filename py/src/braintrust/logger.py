@@ -237,6 +237,11 @@ class Span(Exportable, contextlib.AbstractContextManager, ABC):
         """
         pass
 
+    @abstractmethod
+    def set_current(self) -> None:
+        """Set the span as the current span. This is used to mark the span as the active span for the current thread."""
+        pass
+
 
 class _NoopSpan(Span):
     """A fake implementation of the Span API which does nothing. This can be used as the default span."""
@@ -290,6 +295,9 @@ class _NoopSpan(Span):
         type: Optional[SpanTypeAttribute] = None,
         span_attributes: Optional[Union[SpanAttributes, Mapping[str, Any]]] = None,
     ):
+        pass
+
+    def set_current(self):
         pass
 
     def __enter__(self):
@@ -1005,8 +1013,7 @@ def init(
     project_id: Optional[str] = ...,
     base_experiment_id: Optional[str] = ...,
     repo_info: Optional[RepoInfo] = ...,
-) -> "Experiment":
-    ...
+) -> "Experiment": ...
 
 
 @overload
@@ -1028,8 +1035,7 @@ def init(
     project_id: Optional[str] = ...,
     base_experiment_id: Optional[str] = ...,
     repo_info: Optional[RepoInfo] = ...,
-) -> "ReadonlyExperiment":
-    ...
+) -> "ReadonlyExperiment": ...
 
 
 def init(
@@ -1328,6 +1334,7 @@ def load_prompt(
     id: Optional[str] = None,
     defaults: Optional[Mapping[str, Any]] = None,
     no_trace: bool = False,
+    environment: Optional[str] = None,
     app_url: Optional[str] = None,
     api_key: Optional[str] = None,
     org_name: Optional[str] = None,
@@ -1342,12 +1349,17 @@ def load_prompt(
     :param id: The id of a specific prompt to load. If specified, this takes precedence over all other parameters (project, slug, version).
     :param defaults: (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
     :param no_trace: If true, do not include logging metadata for this prompt when build() is called.
+    :param environment: The environment to load the prompt from. Cannot be used together with version.
     :param app_url: The URL of the Braintrust App. Defaults to https://www.braintrust.dev.
     :param api_key: The API key to use. If the parameter is not specified, will try to use the `BRAINTRUST_API_KEY` environment variable. If no API
     key is specified, will prompt the user to login.
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
     :returns: The prompt object.
     """
+    if version is not None and environment is not None:
+        raise ValueError(
+            "Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other)."
+        )
 
     if id:
         # When loading by ID, we don't need project or slug
@@ -1362,7 +1374,12 @@ def load_prompt(
             login(org_name=org_name, api_key=api_key, app_url=app_url)
             if id:
                 # Load prompt by ID using the /v1/prompt/{id} endpoint
-                response = _state.api_conn().get_json(f"/v1/prompt/{id}", {})
+                prompt_args = {}
+                if version is not None:
+                    prompt_args["version"] = version
+                if environment is not None:
+                    prompt_args["environment"] = environment
+                response = _state.api_conn().get_json(f"/v1/prompt/{id}", prompt_args)
                 # Wrap single prompt response in objects array to match list API format
                 if response is not None:
                     response = {"objects": [response]}
@@ -1373,10 +1390,15 @@ def load_prompt(
                         "project_id": project_id,
                         "slug": slug,
                         "version": version,
+                        "environment": environment,
                     },
                 )
                 response = _state.api_conn().get_json("/v1/prompt", args)
         except Exception as server_error:
+            # If environment or version was specified, don't fall back to cache
+            if environment is not None or version is not None:
+                raise ValueError(f"Prompt not found with specified parameters") from server_error
+
             eprint(f"Failed to load prompt, attempting to fall back to cache: {server_error}")
             try:
                 if id:
@@ -1722,14 +1744,87 @@ def traced(*span_args: Any, **span_kwargs: Any) -> Callable[[F], F]:
             with start_span(*span_args, **span_kwargs) as span:
                 if trace_io:
                     _try_log_input(span, f_sig, f_args, f_kwargs)
-                async_gen = f(*f_args, **f_kwargs)
-                async for value in async_gen:
-                    yield value
-                # NOTE[matt] i'm disabling output tracing (e.g notrace_io=False) for async generators
-                # because an async generator could be infinite and make us OOM.
+
+                # Get max items from environment or default
+                max_items = int(os.environ.get("BRAINTRUST_MAX_GENERATOR_ITEMS", "1000"))
+
+                if trace_io and max_items != 0:
+                    # Collect output up to limit
+                    collected = []
+                    truncated = False
+
+                    async_gen = f(*f_args, **f_kwargs)
+                    try:
+                        async for value in async_gen:
+                            if max_items == -1 or (not truncated and len(collected) < max_items):
+                                collected.append(value)
+                            else:
+                                truncated = True
+                                collected = []
+                                _logger.warning(
+                                    f"Generator output exceeded limit of {max_items} items, output not logged. "
+                                    "Increase BRAINTRUST_MAX_GENERATOR_ITEMS or set to -1 to disable limit."
+                                )
+                            yield value
+
+                        if not truncated:
+                            _try_log_output(span, collected)
+                    except Exception as e:
+                        # Log partial output on error
+                        if collected and not truncated:
+                            _try_log_output(span, collected)
+                        raise
+                else:
+                    # Original behavior - no collection
+                    async_gen = f(*f_args, **f_kwargs)
+                    async for value in async_gen:
+                        yield value
+
+        @wraps(f)
+        def wrapper_sync_gen(*f_args, **f_kwargs):
+            with start_span(*span_args, **span_kwargs) as span:
+                if trace_io:
+                    _try_log_input(span, f_sig, f_args, f_kwargs)
+
+                # Get max items from environment or default
+                max_items = int(os.environ.get("BRAINTRUST_MAX_GENERATOR_ITEMS", "1000"))
+
+                if trace_io and max_items != 0:
+                    # Collect output up to limit
+                    collected = []
+                    truncated = False
+
+                    sync_gen = f(*f_args, **f_kwargs)
+                    try:
+                        for value in sync_gen:
+                            if max_items == -1 or (not truncated and len(collected) < max_items):
+                                collected.append(value)
+                            else:
+                                truncated = True
+                                collected = []
+                                _logger.warning(
+                                    f"Generator output exceeded limit of {max_items} items, output not logged. "
+                                    "Increase BRAINTRUST_MAX_GENERATOR_ITEMS or set to -1 to disable limit."
+                                )
+                            yield value
+
+                        if not truncated:
+                            _try_log_output(span, collected)
+                    except Exception as e:
+                        # Log partial output on error
+                        if collected and not truncated:
+                            _try_log_output(span, collected)
+                        raise
+                else:
+                    # Original behavior - no collection
+                    sync_gen = f(*f_args, **f_kwargs)
+                    for value in sync_gen:
+                        yield value
 
         if inspect.isasyncgenfunction(f):
             return cast(F, wrapper_async_gen)
+        elif inspect.isgeneratorfunction(f):
+            return cast(F, wrapper_sync_gen)
         elif bt_iscoroutinefunction(f):
             return cast(F, wrapper_async)
         else:
@@ -2136,13 +2231,11 @@ class ObjectFetcher(ABC, Generic[TMapping]):
         return self._refetch()
 
     @abstractmethod
-    def _get_state(self) -> BraintrustState:
-        ...
+    def _get_state(self) -> BraintrustState: ...
 
     @property
     @abstractmethod
-    def id(self) -> str:
-        ...
+    def id(self) -> str: ...
 
     def _refetch(self) -> List[TMapping]:
         state = self._get_state()
@@ -2213,21 +2306,17 @@ class ObjectFetcher(ABC, Generic[TMapping]):
 class BaseAttachment(ABC):
     @property
     @abstractmethod
-    def reference(self) -> AttachmentReference:
-        ...
+    def reference(self) -> AttachmentReference: ...
 
     @property
     @abstractmethod
-    def data(self) -> bytes:
-        ...
+    def data(self) -> bytes: ...
 
     @abstractmethod
-    def upload(self) -> AttachmentStatus:
-        ...
+    def upload(self) -> AttachmentStatus: ...
 
     @abstractmethod
-    def debug_info(self) -> Mapping[str, Any]:
-        ...
+    def debug_info(self) -> Mapping[str, Any]: ...
 
 
 class Attachment(BaseAttachment):
@@ -2745,17 +2834,17 @@ def _start_span_parent_args(
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
         parent_components = SpanComponentsV3.from_str(parent)
-        assert (
-            parent_object_type == parent_components.object_type
-        ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
+        assert parent_object_type == parent_components.object_type, (
+            f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
+        )
 
         parent_components_object_id_lambda = _span_components_to_object_id_lambda(parent_components)
 
         def compute_parent_object_id():
             parent_components_object_id = parent_components_object_id_lambda()
-            assert (
-                parent_object_id.get() == parent_components_object_id
-            ), f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            assert parent_object_id.get() == parent_components_object_id, (
+                f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            )
             return parent_object_id.get()
 
         arg_parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)
@@ -3197,6 +3286,8 @@ class SpanImpl(Span):
     We suggest using one of the various `start_span` methods, instead of creating Spans directly. See `Span.start_span` for full details.
     """
 
+    can_set_current: bool
+
     def __init__(
         self,
         parent_object_type: SpanObjectTypeV3,
@@ -3221,7 +3312,7 @@ class SpanImpl(Span):
         if type is None and not parent_span_ids:
             type = default_root_type
 
-        self.set_current = coalesce(set_current, True)
+        self.can_set_current = cast(bool, coalesce(set_current, True))
         self._logged_end_time: Optional[float] = None
 
         self.parent_object_type = parent_object_type
@@ -3468,9 +3559,12 @@ class SpanImpl(Span):
 
         _state.global_bg_logger().flush()
 
-    def __enter__(self) -> Span:
-        if self.set_current:
+    def set_current(self):
+        if self.can_set_current:
             self._context_token = _state.current_span.set(self)
+
+    def __enter__(self) -> Span:
+        self.set_current()
         return self
 
     def __exit__(self, exc_type, exc_value, tb) -> None:
@@ -3478,7 +3572,7 @@ class SpanImpl(Span):
             if exc_type is not None:
                 self.log_internal(dict(error=stringify_exception(exc_type, exc_value, tb)))
         finally:
-            if self.set_current:
+            if self.can_set_current:
                 _state.current_span.reset(self._context_token)
 
             self.end()

@@ -4,7 +4,7 @@ from typing import List, Mapping, Tuple, Union
 
 import pytest
 import responses
-from braintrust import init_logger
+from braintrust import _internal_reset_global_state, init_logger  # type: ignore
 from braintrust_langchain.context import clear_global_handler
 from requests import PreparedRequest
 
@@ -14,8 +14,12 @@ from .types import LogRequest
 @pytest.fixture(autouse=True)
 def setup():
     os.environ["BRAINTRUST_API_KEY"] = "test"
+    os.environ["BRAINTRUST_APP_URL"] = "https://www.braintrust.dev/"
+    os.environ["BRAINTRUST_API_URL"] = "https://test.braintrust.dev/"
     os.environ["OPENAI_API_KEY"] = "test"
+    os.environ["OPENAI_BASE_URL"] = "https://api.openai.com/v1"
     clear_global_handler()
+    _internal_reset_global_state()
     init_logger(project="langchain")
     yield
 

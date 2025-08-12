@@ -46,6 +46,16 @@ class AsyncResponseWrapper:
     def __getattr__(self, name: str) -> Any:
         return getattr(self._response, name)
 
+    @property
+    def __class__(self):  # type: ignore
+        return self._response.__class__
+
+    def __str__(self) -> str:
+        return str(self._response)
+
+    def __repr__(self) -> str:
+        return repr(self._response)
+
 
 def log_headers(response: Any, span: Span):
     cached_value = response.headers.get(X_CACHED_HEADER) or response.headers.get(X_LEGACY_CACHED_HEADER)
@@ -652,6 +662,9 @@ class ResponsesV1Wrapper(NamedWrapper):
     def create(self, *args: Any, **kwargs: Any) -> Any:
         return ResponseWrapper(self.__responses.with_raw_response.create, None).create(*args, **kwargs)
 
+    def parse(self, *args: Any, **kwargs: Any) -> Any:
+        return ResponseWrapper(self.__responses.parse, None).create(*args, **kwargs)
+
 
 class AsyncResponsesV1Wrapper(NamedWrapper):
     def __init__(self, responses: Any):
@@ -660,6 +673,10 @@ class AsyncResponsesV1Wrapper(NamedWrapper):
 
     async def create(self, *args: Any, **kwargs: Any) -> Any:
         response = await ResponseWrapper(None, self.__responses.with_raw_response.create).acreate(*args, **kwargs)
+        return AsyncResponseWrapper(response)
+
+    async def parse(self, *args: Any, **kwargs: Any) -> Any:
+        response = await ResponseWrapper(None, self.__responses.parse).acreate(*args, **kwargs)
         return AsyncResponseWrapper(response)
 
 

@@ -5,7 +5,11 @@ const webhookAutomationActionSchema = z.object({
   url: z.string().describe("The webhook URL to send the request to"),
 });
 
-export const automationEventTypeEnum = z.enum(["logs", "btql_export"]);
+export const automationEventTypeEnum = z.enum([
+  "logs",
+  "btql_export",
+  "retention",
+]);
 const intervalSecondsSchema = z
   .number()
   .min(1)
@@ -77,8 +81,26 @@ export const btqlExportAutomationConfigSchema = z.object({
     .describe("The number of rows to export in each batch"),
 });
 
+export const retentionObjectTypeEnum = z
+  .enum(["project_logs", "experiment", "dataset"])
+  .describe("The object type that the retention policy applies to")
+  .openapi("RetentionObjectType");
+export type RetentionObjectType = z.infer<typeof retentionObjectTypeEnum>;
+
+export const retentionAutomationConfigSchema = z.object({
+  event_type: z.literal("retention").describe("The type of automation."),
+  object_type: retentionObjectTypeEnum.describe(
+    "The object type that the retention policy applies to",
+  ),
+  retention_days: z
+    .number()
+    .min(0)
+    .describe("The number of days to retain the object"),
+});
+
 export const automationConfigSchema = z.union([
   logAutomationConfigSchema,
   btqlExportAutomationConfigSchema,
+  retentionAutomationConfigSchema,
 ]);
 export type AutomationConfig = z.infer<typeof automationConfigSchema>;

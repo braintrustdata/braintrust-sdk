@@ -297,7 +297,8 @@ class ModelParams1(TypedDict):
     function_call: NotRequired[Optional[Union[Literal["auto"], Literal["none"], FunctionCall]]]
     n: NotRequired[Optional[float]]
     stop: NotRequired[Optional[Sequence[str]]]
-    reasoning_effort: NotRequired[Optional[Literal["low", "medium", "high"]]]
+    reasoning_effort: NotRequired[Optional[Literal["minimal", "low", "medium", "high"]]]
+    verbosity: NotRequired[Optional[Literal["low", "medium", "high"]]]
 
 
 class ModelParams2(TypedDict):

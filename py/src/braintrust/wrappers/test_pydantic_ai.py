@@ -1,18 +1,15 @@
-import asyncio
 import time
-from typing import Any, Dict, List, cast
+from typing import Any, Dict
 
 import pytest
-from openai import AsyncOpenAI, OpenAI
+from openai import AsyncOpenAI
 from pydantic_ai import Agent  # pylint: disable=import-error
 from pydantic_ai.models.openai import OpenAIModel  # pylint: disable=import-error
 from pydantic_ai.providers.openai import OpenAIProvider  # pylint: disable=import-error
 
 from braintrust import logger, wrap_openai
-from braintrust.logger import ObjectMetadata, OrgProjectMetadata
 from braintrust.span_types import SpanTypeAttribute
 from braintrust.test_helpers import init_test_logger
-from braintrust.util import LazyValue
 
 PROJECT_NAME = "test-pydantic-ai"
 MODEL = "gpt-3.5-turbo"  # Use a cheaper model for testing

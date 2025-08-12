@@ -3,7 +3,12 @@ line-length = 119
 
 [tool.ruff]
 line-length = 119
-select = ["I"]
+
+[tool.ruff.lint]
+select = [
+    "I",    # isort
+    "F401", # unused imports
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "strict"

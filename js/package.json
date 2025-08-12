@@ -1,6 +1,6 @@
 {
   "name": "braintrust",
-  "version": "0.1.1",
+  "version": "0.2.4",
   "description": "SDK for integrating Braintrust",
   "repository": {
     "type": "git",
@@ -51,15 +51,18 @@
     "docs": "npx typedoc --options typedoc.json src/index.ts",
     "prepublishOnly": "../../scripts/node_prepublish_sdk.py",
     "postpublish": "../../scripts/node_postpublish_sdk.py",
-    "test": "vitest run --exclude src/wrappers/anthropic.test.ts --exclude src/wrappers/oai.test.ts --exclude src/otel.test.ts --exclude src/otel-no-deps.test.ts",
+    "test": "vitest run --exclude src/wrappers/anthropic.test.ts --exclude src/wrappers/oai.test.ts --exclude src/otel.test.ts --exclude src/otel-no-deps.test.ts  --exclude src/wrappers/ai-sdk-v1.test.ts --exclude src/wrappers/ai-sdk-v2.test.ts",
     "test:anthropic": "vitest run src/wrappers/anthropic.test.ts",
     "test:openai": "vitest run src/wrappers/oai.test.ts",
     "test:otel": "vitest run src/otel.test.ts",
-    "test:otel-no-deps": "vitest run src/otel-no-deps.test.ts --reporter=verbose"
+    "test:otel-no-deps": "vitest run src/otel-no-deps.test.ts --reporter=verbose",
+    "test:ai-sdk-v1": "vitest run src/wrappers/ai-sdk-v1.test.ts",
+    "test:ai-sdk-v2": "vitest run src/wrappers/ai-sdk-v2.test.ts src/wrappers/ai-sdk-v1.test.ts"
   },
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@openai/agents": "^0.0.14",
     "ai": "^4.3.16",
     "@jest/globals": "^29.7.0",
     "@nodelib/fs.walk": "^1.2.8",
@@ -98,7 +101,7 @@
     "cli-progress": "^3.12.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "esbuild": "^0.25.6",
+    "esbuild": "^0.25.8",
     "eventsource-parser": "^1.1.2",
     "express": "^4.21.2",
     "graceful-fs": "^4.2.11",

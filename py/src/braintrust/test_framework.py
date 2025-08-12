@@ -1,10 +1,17 @@
-import asyncio
-from typing import List, Optional
+from typing import List
 
 import pytest
 
-from .framework import EvalCase, EvalResultWithSummary, Evaluator, build_local_summary, run_evaluator
+from .framework import (
+    Eval,
+    EvalCase,
+    EvalHooks,
+    EvalResultWithSummary,
+    Evaluator,
+    run_evaluator,
+)
 from .score import Score, Scorer
+from .test_helpers import with_memory_logger  # noqa: F401
 
 
 @pytest.mark.asyncio
@@ -152,3 +159,124 @@ async def test_run_evaluator_with_many_scorers():
     for scorer_name in scorer_names:
         assert scorer_name in result.summary.scores
         assert result.summary.scores[scorer_name].score == 1.0
+
+
+@pytest.mark.asyncio
+async def test_hooks_trial_index():
+    """Test that trial_index is correctly passed to task via hooks."""
+    trial_indices: List[int] = []
+
+    # Task that captures trial indices
+    def task_with_hooks(input_value: int, hooks: EvalHooks) -> int:
+        trial_indices.append(hooks.trial_index)
+        return input_value * 2
+
+    # Create evaluator with trial_count > 1
+    evaluator = Evaluator(
+        project_name="test-project",
+        eval_name="test-trial-index",
+        data=[EvalCase(input=1, expected=2)],
+        task=task_with_hooks,
+        scores=[],  # No scoring needed for this test
+        experiment_name=None,
+        metadata=None,
+        trial_count=3,  # Run 3 trials
+    )
+
+    # Run evaluator
+    result = await run_evaluator(experiment=None, evaluator=evaluator, position=None, filters=[])
+
+    # Verify we got 3 results (one for each trial)
+    assert len(result.results) == 3
+
+    # Verify trial indices were captured correctly
+    assert len(trial_indices) == 3
+    assert sorted(trial_indices) == [0, 1, 2]
+
+    # Verify all results are correct
+    for eval_result in result.results:
+        assert eval_result.input == 1
+        assert eval_result.expected == 2
+        assert eval_result.output == 2  # 1 * 2
+        assert eval_result.error is None
+
+
+@pytest.mark.asyncio
+async def test_hooks_trial_index_multiple_inputs():
+    """Test trial_index with multiple inputs to ensure proper indexing."""
+    trial_data: List[tuple] = []  # (input, trial_index)
+
+    def task_with_hooks(input_value: int, hooks: EvalHooks) -> int:
+        trial_data.append((input_value, hooks.trial_index))
+        return input_value * 2
+
+    # Create evaluator with multiple inputs and trials
+    evaluator = Evaluator(
+        project_name="test-project",
+        eval_name="test-trial-index-multiple",
+        data=[
+            EvalCase(input=1, expected=2),
+            EvalCase(input=2, expected=4),
+        ],
+        task=task_with_hooks,
+        scores=[],
+        experiment_name=None,
+        metadata=None,
+        trial_count=2,  # 2 trials per input
+    )
+
+    # Run evaluator
+    result = await run_evaluator(experiment=None, evaluator=evaluator, position=None, filters=[])
+
+    # Should have 4 results total (2 inputs × 2 trials)
+    assert len(result.results) == 4
+    assert len(trial_data) == 4
+
+    # Group by input to verify trial indices
+    input_1_trials = [trial_idx for inp, trial_idx in trial_data if inp == 1]
+    input_2_trials = [trial_idx for inp, trial_idx in trial_data if inp == 2]
+
+    # Each input should have been run with trial indices 0 and 1
+    assert sorted(input_1_trials) == [0, 1]
+    assert sorted(input_2_trials) == [0, 1]
+
+
+@pytest.mark.asyncio
+async def test_eval_no_send_logs_true(with_memory_logger):
+    """Test that Eval with no_send_logs=True runs locally without creating experiment."""
+
+    def exact_match(input, output, expected):
+        return {"name": "exact_match", "score": 1.0 if output == expected else 0.0}
+
+    def simple_scorer(input, output, expected):
+        return {"name": "simple_scorer", "score": 0.8}
+
+    result = await Eval(
+        "test-no-logs",
+        data=[{"input": "hello", "expected": "hello world"}, {"input": "test", "expected": "test world"}],
+        task=lambda input_val: input_val + " world",
+        scores=[exact_match, simple_scorer],
+        no_send_logs=True,
+    )
+
+    # Verify it returns results
+    assert len(result.results) == 2
+    assert result.results[0].input == "hello"
+    assert result.results[0].output == "hello world"
+    assert result.results[0].scores["exact_match"] == 1.0
+    assert result.results[0].scores["simple_scorer"] == 0.8
+
+    assert result.results[1].input == "test"
+    assert result.results[1].output == "test world"
+    assert result.results[1].scores["exact_match"] == 1.0
+    assert result.results[1].scores["simple_scorer"] == 0.8
+
+    # Verify it builds a local summary (no experiment_url means local run)
+    assert result.summary.project_name == "test-no-logs"
+    assert result.summary.experiment_url is None
+    assert result.summary.scores["exact_match"].score == 1.0
+    assert result.summary.scores["simple_scorer"].score == 0.8
+
+    # Most importantly: verify that no logs were sent (should be empty)
+    logs = with_memory_logger.pop()
+    assert len(logs) == 0

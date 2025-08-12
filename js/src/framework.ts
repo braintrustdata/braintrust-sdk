@@ -139,6 +139,10 @@ export interface EvalHooks<
    * Report progress that will show up in the playground.
    */
   reportProgress: (progress: TaskProgressEvent) => void;
+  /**
+   * The index of the current trial (0-based). This is useful when trialCount > 1.
+   */
+  trialIndex: number;
 }
 
 // This happens to be compatible with ScorerArgs defined in @braintrust/core.
@@ -476,6 +480,11 @@ export interface EvalOptions<EvalReport, Parameters extends EvalParameters> {
    */
   reporter?: ReporterDef<EvalReport> | string;
   /**
+   * Do not send logs to Braintrust. When true, the evaluation runs locally
+   * and builds a local summary instead of creating an experiment. Defaults to false.
+   */
+  noSendLogs?: boolean;
+  /**
    * A callback function that will be called when an experiment is started with
    * information about its project, experiment id, name, and other useful information.
    * @param metadata
@@ -584,23 +593,25 @@ export async function Eval<
     );
     // NOTE: This code is duplicated with initExperiment in js/src/cli.ts. Make sure
     // to update that if you change this.
-    const experiment = options.parent
-      ? null
-      : initExperiment(evaluator.state, {
-          ...(evaluator.projectId
-            ? { projectId: evaluator.projectId }
-            : { project: name }),
-          experiment: evaluator.experimentName,
-          description: evaluator.description,
-          metadata: evaluator.metadata,
-          isPublic: evaluator.isPublic,
-          update: evaluator.update,
-          baseExperiment: evaluator.baseExperimentName ?? defaultBaseExperiment,
-          baseExperimentId: evaluator.baseExperimentId,
-          gitMetadataSettings: evaluator.gitMetadataSettings,
-          repoInfo: evaluator.repoInfo,
-          dataset: Dataset.isDataset(data) ? data : undefined,
-        });
+    const experiment =
+      options.parent || options.noSendLogs
+        ? null
+        : initExperiment(evaluator.state, {
+            ...(evaluator.projectId
+              ? { projectId: evaluator.projectId }
+              : { project: name }),
+            experiment: evaluator.experimentName,
+            description: evaluator.description,
+            metadata: evaluator.metadata,
+            isPublic: evaluator.isPublic,
+            update: evaluator.update,
+            baseExperiment:
+              evaluator.baseExperimentName ?? defaultBaseExperiment,
+            baseExperimentId: evaluator.baseExperimentId,
+            gitMetadataSettings: evaluator.gitMetadataSettings,
+            repoInfo: evaluator.repoInfo,
+            dataset: Dataset.isDataset(data) ? data : undefined,
+          });
 
     if (experiment && options.onStart) {
       const summary = await experiment.summarize({ summarizeScores: false });
@@ -833,13 +844,16 @@ async function runEvaluatorInternal(
     data = dataResult;
   }
 
-  data = data
+  const dataWithTrials = data
     .filter((d) => filters.every((f) => evaluateFilter(d, f)))
     .flatMap((datum) =>
-      [...Array(evaluator.trialCount ?? 1).keys()].map(() => datum),
+      [...Array(evaluator.trialCount ?? 1).keys()].map((trialIndex) => ({
+        datum,
+        trialIndex,
+      })),
     );
 
-  progressReporter.start(evaluator.evalName, data.length);
+  progressReporter.start(evaluator.evalName, dataWithTrials.length);
   interface EvalResult {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     input: any;
@@ -854,7 +868,13 @@ async function runEvaluatorInternal(
   const results: EvalResult[] = [];
   const q = queue(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async (datum: EvalCase<any, any, any>) => {
+    async ({
+      datum,
+      trialIndex,
+    }: {
+      datum: EvalCase<any, any, any>;
+      trialIndex: number;
+    }) => {
       const eventDataset: Dataset | undefined = experiment
         ? experiment.dataset
         : Dataset.isDataset(evaluator.data)
@@ -915,6 +935,7 @@ async function runEvaluatorInternal(
                     object_type: "task",
                   });
                 },
+                trialIndex,
               });
               if (outputResult instanceof Promise) {
                 output = await outputResult;
@@ -1099,9 +1120,9 @@ async function runEvaluatorInternal(
         return await experiment.traced(callback, baseEvent);
       }
     },
-    Math.max(evaluator.maxConcurrency ?? data.length, 1),
+    Math.max(evaluator.maxConcurrency ?? dataWithTrials.length, 1),
   );
-  q.push(data);
+  q.push(dataWithTrials);
 
   const cancel = async () => {
     await new Promise((_, reject) => {

@@ -121,8 +121,16 @@ export function runDevServer(
     "/eval",
     checkAuthorized,
     asyncHandler(async (req, res) => {
-      const { name, parameters, parent, data, scores, stream } =
-        evalBodySchema.parse(req.body);
+      const {
+        name,
+        parameters,
+        parent,
+        experiment_name,
+        project_id,
+        data,
+        scores,
+        stream,
+      } = evalBodySchema.parse(req.body);
 
       const state = await cachedLogin({ apiKey: req.ctx?.token });
 
@@ -200,15 +208,17 @@ export function runDevServer(
             ),
             task,
             state,
+            experimentName: experiment_name ?? undefined,
+            projectId: project_id ?? undefined,
           },
           {
             // Avoid printing the bar to the console.
             progress: {
-              start: (name, total) => {},
+              start: () => {},
               stop: () => {
                 console.log("Finished running experiment");
               },
-              increment: (name) => {},
+              increment: () => {},
             },
             stream: (data: SSEProgressEventData) => {
               if (stream) {

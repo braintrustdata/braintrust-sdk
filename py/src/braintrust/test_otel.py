@@ -1,8 +1,6 @@
 # pylint: disable=not-context-manager
-import importlib
 import os
 import sys
-import warnings
 
 import pytest
 
@@ -151,8 +149,6 @@ def test_braintrust_otel_filter_ai_spans_environment_variable():
         pytest.skip("OpenTelemetry not installed, skipping test")
 
     import os
-
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
     from braintrust.otel import AISpanProcessor
 
@@ -338,6 +334,18 @@ class TestSpanFiltering:
         span_names = [span.name for span in spans]
         assert "ai.model_call" in span_names
 
+    def test_keeps_traceloop_spans(self):
+        with self.tracer.start_as_current_span("root"):
+            with self.tracer.start_as_current_span("traceloop.agent"):
+                pass
+            with self.tracer.start_as_current_span("traceloop.workflow.step"):
+                pass
+
+        spans = self.memory_exporter.get_finished_spans()
+        span_names = [span.name for span in spans]
+        assert "traceloop.agent" in span_names
+        assert "traceloop.workflow.step" in span_names
+
     def test_keeps_spans_with_llm_attributes(self):
         with self.tracer.start_as_current_span("root"):
             with self.tracer.start_as_current_span("some_operation") as span:
@@ -345,6 +353,8 @@ class TestSpanFiltering:
                 span.set_attribute("regular_data", "value")
             with self.tracer.start_as_current_span("another_operation") as span:
                 span.set_attribute("llm.tokens", 100)
+            with self.tracer.start_as_current_span("traceloop_operation") as span:
+                span.set_attribute("traceloop.agent_id", "agent-123")
             with self.tracer.start_as_current_span("third_operation") as span:
                 span.set_attribute("database.connection", "postgres")
 
@@ -354,6 +364,7 @@ class TestSpanFiltering:
         assert "root" in span_names
         assert "some_operation" in span_names  # has gen_ai.model attribute
         assert "another_operation" in span_names  # has llm.tokens attribute
+        assert "traceloop_operation" in span_names  # has traceloop.agent_id attribute
         assert "third_operation" not in span_names  # no LLM attributes
 
     def test_drops_non_llm_spans(self):

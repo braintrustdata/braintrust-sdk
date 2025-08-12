@@ -7,8 +7,9 @@ help:
 	@echo "  make build              - Build the SDK"
 	@echo "  make clean              - Clean build artifacts"
 	@echo "  make install-optional-deps - Install optional dependencies"
-	@echo "  make test               - Run all tests (core + wrappers)"
+	@echo "  make test               - Run all tests (core + wrappers + ai-sdk)"
 	@echo "  make test-core          - Run core tests only"
+	@echo "  make test-ai-sdk        - Run AI SDK tests (v1 + v2)"
 	@echo "  make test-otel          - Run OpenTelemetry tests (both installed and missing)"
 	@echo "  make test-otel-installed - Run OpenTelemetry tests with library installed"
 	@echo "  make test-otel-missing  - Run OpenTelemetry tests without library"
@@ -18,7 +19,26 @@ help:
 	@echo "  make test-latest        - Run core + latest versions of wrappers"
 	@echo "  make publish-beta       - Publish beta version to npm"
 
-.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-latest install-optional-deps publish-beta
+.PHONY: help bench build clean test test-core test-otel test-otel-installed test-otel-missing test-openai test-anthropic test-ai-sdk test-latest install-optional-deps publish-beta
+
+# -------------------------------------------------------------------------------------------------	#
+# AI SDK testing
+# -------------------------------------------------------------------------------------------------
+.PHONY: test-ai-sdk test-ai-sdk-v1 test-ai-sdk-v2
+
+test-ai-sdk: test-ai-sdk-v1 test-ai-sdk-v2
+
+test-ai-sdk-v1:
+	pnpm prune
+	$(call pnpm_install_no_save,ai@^3.0.0)
+	pnpm test:ai-sdk-v1
+
+test-ai-sdk-v2:
+	pnpm prune
+	npm_config_save=false npm_config_lockfile=false pnpm add ai@beta @ai-sdk/openai@beta @ai-sdk/anthropic@beta @ai-sdk/provider@beta
+	pnpm test:ai-sdk-v2
+# this should still work
+	pnpm test:ai-sdk-v1
 
 # -------------------------------------------------------------------------------------------------	#
 # Anthropic testing
@@ -93,7 +113,7 @@ test-core:
 	pnpm test
 
 # Test everything
-test: test-core test-otel test-openai test-anthropic
+test: test-core test-otel test-openai test-anthropic test-ai-sdk
 
 # Test the core and the latest versions of wrappers.
 test-latest: test-core test-otel test-anthropic-latest test-openai-latest

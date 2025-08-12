@@ -9,9 +9,11 @@ import {
 } from "vitest";
 import {
   defaultErrorScoreHandler,
+  Eval,
   EvalScorer,
   runEvaluator,
 } from "./framework";
+import { _exportsForTestingOnly } from "./logger";
 import { configureNode } from "./node";
 import { BarProgressReporter, type ProgressReporter } from "./progress";
 import { InternalAbortError } from "./util";
@@ -429,4 +431,127 @@ describe("runEvaluator", () => {
       expect(vi.getTimerCount()).toBe(0);
     });
   });
+});
+
+test("trialIndex is passed to task", async () => {
+  const trialIndices: number[] = [];
+
+  const { results } = await runEvaluator(
+    null,
+    {
+      projectName: "proj",
+      evalName: "eval",
+      data: [{ input: 1, expected: 2 }],
+      task: async (input: number, { trialIndex }) => {
+        trialIndices.push(trialIndex);
+        return input * 2;
+      },
+      scores: [],
+      trialCount: 3,
+    },
+    new NoopProgressReporter(),
+    [],
+  );
+
+  // Should have 3 results (one for each trial)
+  expect(results).toHaveLength(3);
+
+  // Should have captured 3 trial indices
+  expect(trialIndices).toHaveLength(3);
+  expect(trialIndices.sort()).toEqual([0, 1, 2]);
+
+  // All results should be correct
+  results.forEach((result) => {
+    expect(result.input).toBe(1);
+    expect(result.expected).toBe(2);
+    expect(result.output).toBe(2);
+    expect(result.error).toBeUndefined();
+  });
+});
+
+test("trialIndex with multiple inputs", async () => {
+  const trialData: Array<{ input: number; trialIndex: number }> = [];
+
+  const { results } = await runEvaluator(
+    null,
+    {
+      projectName: "proj",
+      evalName: "eval",
+      data: [
+        { input: 1, expected: 2 },
+        { input: 2, expected: 4 },
+      ],
+      task: async (input: number, { trialIndex }) => {
+        trialData.push({ input, trialIndex });
+        return input * 2;
+      },
+      scores: [],
+      trialCount: 2,
+    },
+    new NoopProgressReporter(),
+    [],
+  );
+
+  // Should have 4 results total (2 inputs × 2 trials)
+  expect(results).toHaveLength(4);
+  expect(trialData).toHaveLength(4);
+
+  // Group by input to verify trial indices
+  const input1Trials = trialData
+    .filter((d) => d.input === 1)
+    .map((d) => d.trialIndex)
+    .sort();
+  const input2Trials = trialData
+    .filter((d) => d.input === 2)
+    .map((d) => d.trialIndex)
+    .sort();
+
+  // Each input should have been run with trial indices 0 and 1
+  expect(input1Trials).toEqual([0, 1]);
+  expect(input2Trials).toEqual([0, 1]);
+});
+
+test("Eval with noSendLogs: true runs locally without creating experiment", async () => {
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+
+  const result = await Eval(
+    "test-no-logs",
+    {
+      data: () => [
+        { input: "hello", expected: "hello world" },
+        { input: "test", expected: "test world" },
+      ],
+      task: (input) => input + " world",
+      scores: [
+        (args) => ({
+          name: "exact_match",
+          score: args.output === args.expected ? 1 : 0,
+        }),
+        () => ({ name: "simple_scorer", score: 0.8 }),
+      ],
+    },
+    { noSendLogs: true },
+  );
+
+  // Verify it returns results
+  expect(result.results).toHaveLength(2);
+  expect(result.results[0].input).toBe("hello");
+  expect(result.results[0].output).toBe("hello world");
+  expect(result.results[0].scores.exact_match).toBe(1);
+  expect(result.results[0].scores.simple_scorer).toBe(0.8);
+
+  expect(result.results[1].input).toBe("test");
+  expect(result.results[1].output).toBe("test world");
+  expect(result.results[1].scores.exact_match).toBe(1);
+  expect(result.results[1].scores.simple_scorer).toBe(0.8);
+
+  // Verify it builds a local summary (no experimentUrl means local run)
+  expect(result.summary.projectName).toBe("test-no-logs");
+  expect(result.summary.experimentUrl).toBeUndefined();
+  expect(result.summary.scores.exact_match.score).toBe(1);
+  expect(result.summary.scores.simple_scorer.score).toBe(0.8);
+
+  // Most importantly: verify that no logs were sent
+  await memoryLogger.flush();
+  expect(await memoryLogger.drain()).toHaveLength(0);
 });

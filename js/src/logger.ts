@@ -3020,6 +3020,7 @@ type LoadPromptOptions = FullLoginOptions & {
   id?: string;
   defaults?: DefaultPromptArgs;
   noTrace?: boolean;
+  environment?: string;
   state?: BraintrustState;
 };
 
@@ -3031,6 +3032,7 @@ type LoadPromptOptions = FullLoginOptions & {
  * @param options.projectId The id of the project to load the prompt from. This takes precedence over `projectName` if specified.
  * @param options.slug The slug of the prompt to load.
  * @param options.version An optional version of the prompt (to read). If not specified, the latest version will be used.
+ * @param options.environment Fetch the version of the prompt assigned to the specified environment (e.g. "production", "staging"). Cannot be specified at the same time as `version`.
  * @param options.id The id of a specific prompt to load. If specified, this takes precedence over all other parameters (project, slug, version).
  * @param options.defaults (Optional) A dictionary of default values to use when rendering the prompt. Prompt values will override these defaults.
  * @param options.noTrace If true, do not include logging metadata for this prompt when build() is called.
@@ -3055,6 +3057,7 @@ export async function loadPrompt({
   projectId,
   slug,
   version,
+  environment,
   id,
   defaults,
   noTrace = false,
@@ -3065,6 +3068,11 @@ export async function loadPrompt({
   forceLogin,
   state: stateArg,
 }: LoadPromptOptions) {
+  if (version && environment) {
+    throw new Error(
+      "Cannot specify both 'version' and 'environment' parameters. Please use only one (remove the other).",
+    );
+  }
   if (id) {
     // When loading by ID, we don't need project or slug
   } else if (isEmpty(projectName) && isEmpty(projectId)) {
@@ -3085,7 +3093,10 @@ export async function loadPrompt({
     });
     if (id) {
       // Load prompt by ID using the /v1/prompt/{id} endpoint
-      response = await state.apiConn().get_json(`v1/prompt/${id}`, {});
+      response = await state.apiConn().get_json(`v1/prompt/${id}`, {
+        ...(version && { version }),
+        ...(environment && { environment }),
+      });
       // Wrap single prompt response in objects array to match list API format
       if (response) {
         response = { objects: [response] };
@@ -3096,9 +3107,15 @@ export async function loadPrompt({
         project_id: projectId,
         slug,
         version,
+        ...(environment && { environment }),
       });
     }
   } catch (e) {
+    // If environment or version was specified, don't fall back to cache
+    if (environment || version) {
+      throw new Error(`Prompt not found with specified parameters: ${e}`);
+    }
+
     console.warn("Failed to load prompt, attempting to fall back to cache:", e);
     let prompt;
     if (id) {
@@ -3494,6 +3511,172 @@ export function traced<IsAsyncFlush extends boolean = true, R = void>(
 }
 
 /**
+ * Check if a function is a sync generator function.
+ *
+ * Note: This uses Object.prototype.toString which is sufficient for environments that
+ * support generator functions (ES6+). While our code is compiled to ES2022, consumers
+ * may run it in various environments. However, if generators aren't supported in their
+ * environment, the generator functions themselves won't work anyway, making detection moot.
+ *
+ * @param fn The function to check.
+ * @returns True if the function is a sync generator function.
+ */
+function isGeneratorFunction(fn: any): boolean {
+  return Object.prototype.toString.call(fn) === "[object GeneratorFunction]";
+}
+
+/**
+ * Check if a function is an async generator function.
+ *
+ * Note: see isGeneratorFunction disclaimer
+ * @param fn The function to check.
+ * @returns True if the function is an async generator function.
+ */
+function isAsyncGeneratorFunction(fn: any): boolean {
+  return (
+    Object.prototype.toString.call(fn) === "[object AsyncGeneratorFunction]"
+  );
+}
+
+/**
+ * Wrap a sync generator function with tracing.
+ */
+function wrapTracedSyncGenerator<F extends (...args: any[]) => any>(
+  fn: F,
+  spanArgs: any,
+  noTraceIO: boolean,
+): F {
+  const wrapper = function* (this: any, ...fnArgs: Parameters<F>) {
+    const span = startSpan(spanArgs);
+    try {
+      if (!noTraceIO) {
+        span.log({ input: fnArgs });
+      }
+
+      const envValue = iso.getEnv("BRAINTRUST_MAX_GENERATOR_ITEMS");
+      const maxItems = envValue !== undefined ? Number(envValue) : 1000;
+
+      if (!noTraceIO && maxItems !== 0) {
+        let collected: any[] = [];
+        let truncated = false;
+
+        const gen = generatorWithCurrent(span, fn.apply(this, fnArgs));
+        try {
+          for (const value of gen) {
+            if (
+              maxItems === -1 ||
+              (!truncated && collected.length < maxItems)
+            ) {
+              collected.push(value);
+            } else {
+              truncated = true;
+              collected = [];
+              console.warn(
+                `Generator output exceeded limit of ${maxItems} items, output not logged. ` +
+                  `Increase BRAINTRUST_MAX_GENERATOR_ITEMS or set to -1 to disable limit.`,
+              );
+            }
+            yield value;
+          }
+
+          if (!truncated) {
+            span.log({ output: collected });
+          }
+        } catch (error) {
+          logError(span, error);
+          if (!truncated && collected.length > 0) {
+            span.log({ output: collected });
+          }
+          throw error;
+        }
+      } else {
+        // No output collection
+        const gen = generatorWithCurrent(span, fn.apply(this, fnArgs));
+        for (const value of gen) {
+          yield value;
+        }
+      }
+    } finally {
+      span.end();
+    }
+  };
+  // Preserve the original function name
+  Object.defineProperty(wrapper, "name", { value: fn.name });
+  return wrapper as F;
+}
+
+/**
+ * Wrap an async generator function with tracing.
+ */
+function wrapTracedAsyncGenerator<F extends (...args: any[]) => any>(
+  fn: F,
+  spanArgs: any,
+  noTraceIO: boolean,
+): F {
+  const wrapper = async function* (this: any, ...fnArgs: Parameters<F>) {
+    const span = startSpan(spanArgs);
+    try {
+      if (!noTraceIO) {
+        span.log({ input: fnArgs });
+      }
+
+      const envValue = iso.getEnv("BRAINTRUST_MAX_GENERATOR_ITEMS");
+      const maxItems = envValue !== undefined ? Number(envValue) : 1000;
+
+      if (!noTraceIO && maxItems !== 0) {
+        let collected: any[] = [];
+        let truncated = false;
+
+        const gen = asyncGeneratorWithCurrent(span, fn.apply(this, fnArgs));
+        try {
+          for await (const value of gen) {
+            if (
+              maxItems === -1 ||
+              (!truncated && collected.length < maxItems)
+            ) {
+              collected.push(value);
+            } else {
+              truncated = true;
+              collected = [];
+              console.warn(
+                `Generator output exceeded limit of ${maxItems} items, output not logged. ` +
+                  `Increase BRAINTRUST_MAX_GENERATOR_ITEMS or set to -1 to disable limit.`,
+              );
+            }
+            yield value;
+          }
+
+          if (!truncated) {
+            span.log({ output: collected });
+          }
+        } catch (error) {
+          logError(span, error);
+          if (!truncated && collected.length > 0) {
+            span.log({ output: collected });
+          }
+          throw error;
+        }
+      } else {
+        // No output collection
+        const gen = asyncGeneratorWithCurrent(span, fn.apply(this, fnArgs));
+        for await (const value of gen) {
+          yield value;
+        }
+      }
+    } finally {
+      span.end();
+    }
+  };
+  // Preserve the original function name
+  Object.defineProperty(wrapper, "name", { value: fn.name });
+  return wrapper as F;
+}
+
+type WrapTracedArgs = {
+  noTraceIO?: boolean;
+};
+
+/**
  * Wrap a function with `traced`, using the arguments as `input` and return value as `output`.
  * Any functions wrapped this way will automatically be traced, similar to the `@traced` decorator
  * in Python. If you want to correctly propagate the function's name and define it in one go, then
@@ -3523,7 +3706,10 @@ export function wrapTraced<
   IsAsyncFlush extends boolean = true,
 >(
   fn: F,
-  args?: StartSpanArgs & SetCurrentArg & AsyncFlushArg<IsAsyncFlush>,
+  args?: StartSpanArgs &
+    SetCurrentArg &
+    AsyncFlushArg<IsAsyncFlush> &
+    WrapTracedArgs,
 ): IsAsyncFlush extends false
   ? (...args: Parameters<F>) => Promise<Awaited<ReturnType<F>>>
   : F {
@@ -3539,6 +3725,16 @@ export function wrapTraced<
     args.event.input !== undefined;
   const hasExplicitOutput =
     args && args.event && args.event.output !== undefined;
+
+  const noTraceIO = args?.noTraceIO || hasExplicitInput || hasExplicitOutput;
+  // Check if the function is a generator
+  if (isGeneratorFunction(fn)) {
+    return wrapTracedSyncGenerator(fn, spanArgs, !!noTraceIO);
+  }
+
+  if (isAsyncGeneratorFunction(fn)) {
+    return wrapTracedAsyncGenerator(fn, spanArgs, !!noTraceIO);
+  }
 
   if (args?.asyncFlush) {
     return ((...fnArgs: Parameters<F>) =>
@@ -3687,6 +3883,76 @@ export function withCurrent<R>(
   state: BraintrustState | undefined = undefined,
 ): R {
   return (state ?? _globalState).currentSpan.run(span, () => callback(span));
+}
+
+/**
+ * Wraps a sync generator to maintain the current span context across yields.
+ */
+function* generatorWithCurrent<T>(
+  span: Span,
+  gen: Generator<T, any, any>,
+  state: BraintrustState | undefined = undefined,
+): Generator<T, any, any> {
+  let nextValue: any;
+  while (true) {
+    const result = withCurrent(
+      span,
+      () => {
+        try {
+          return gen.next(nextValue);
+        } catch (e) {
+          // Handle generator.throw()
+          return { value: undefined, done: true, error: e };
+        }
+      },
+      state,
+    );
+
+    if ("error" in result) {
+      throw result.error;
+    }
+
+    if (result.done) {
+      return result.value;
+    }
+
+    nextValue = yield result.value;
+  }
+}
+
+/**
+ * Wraps an async generator to maintain the current span context across yields.
+ */
+async function* asyncGeneratorWithCurrent<T>(
+  span: Span,
+  gen: AsyncGenerator<T, any, any>,
+  state: BraintrustState | undefined = undefined,
+): AsyncGenerator<T, any, any> {
+  let nextValue: any;
+  while (true) {
+    const result = await withCurrent(
+      span,
+      async () => {
+        try {
+          return await gen.next(nextValue);
+        } catch (e) {
+          // Handle generator.throw()
+          return { value: undefined, done: true, error: e };
+        }
+      },
+      state,
+    );
+
+    if ("error" in result) {
+      throw result.error;
+    }
+
+    if (result.done) {
+      return result.value;
+    }
+
+    nextValue = yield result.value;
+  }
 }
 
 export function withParent<R>(
@@ -5882,6 +6148,12 @@ export interface DatasetSummary {
 // on the server side.
 const TEST_API_KEY = "___TEST_API_KEY__THIS_IS_NOT_REAL___";
 
+function setInitialTestState() {
+  // a way of setting initial state for tests without any log messages
+  if (!_internalGetGlobalState()) {
+    _internalSetInitialState();
+  }
+}
 // This is a helper function to simulate a login for testing.
 async function simulateLoginForTests() {
   return await login({
@@ -5904,4 +6176,7 @@ export const _exportsForTestingOnly = {
   clearTestBackgroundLogger,
   simulateLoginForTests,
   simulateLogoutForTests,
+  setInitialTestState,
+  isGeneratorFunction,
+  isAsyncGeneratorFunction,
 };
