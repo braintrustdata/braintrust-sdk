@@ -1,6 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { SpanTypeAttribute } from "@braintrust/core";
-import { Span as BraintrustSpan, startSpan, Logger } from "braintrust";
+import {
+  Span as BraintrustSpan,
+  startSpan,
+  Logger,
+  currentSpan,
+  NOOP_SPAN,
+} from "braintrust";
 import {
   SpanType,
   AgentsTrace,
@@ -88,6 +94,7 @@ export class OpenAIAgentsTraceProcessor {
 
   private logger?: Logger<any>;
   private maxTraces: number;
+  private parentSpan?: BraintrustSpan;
   private traceSpans = new Map<
     string,
     {
@@ -105,6 +112,7 @@ export class OpenAIAgentsTraceProcessor {
     this.logger = options.logger;
     this.maxTraces =
       options.maxTraces ?? OpenAIAgentsTraceProcessor.DEFAULT_MAX_TRACES;
+    this.parentSpan = options.parentSpan;
   }
 
   private evictOldestTrace(): void {
@@ -119,15 +127,27 @@ export class OpenAIAgentsTraceProcessor {
       this.evictOldestTrace();
     }
 
-    const span = this.logger
-      ? this.logger.startSpan({
-          name: trace.name,
-          type: SpanTypeAttribute.TASK,
-        })
-      : startSpan({
-          name: trace.name,
-          type: SpanTypeAttribute.TASK,
-        });
+    // Use parentSpan if provided, otherwise fall back to currentSpan (which might be NOOP)
+    let span: BraintrustSpan;
+
+    if (this.parentSpan && this.parentSpan !== NOOP_SPAN) {
+      // Create as child of provided parent span
+      span = this.parentSpan.startSpan({
+        name: trace.name,
+        type: SpanTypeAttribute.TASK,
+      });
+    } else {
+      // No parent span provided, create as root (original behavior)
+      span = this.logger
+        ? this.logger.startSpan({
+            name: trace.name,
+            type: SpanTypeAttribute.TASK,
+          })
+        : startSpan({
+            name: trace.name,
+            type: SpanTypeAttribute.TASK,
+          });
+    }
 
     span.log({
       input: "Agent workflow started",

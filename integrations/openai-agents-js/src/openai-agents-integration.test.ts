@@ -523,5 +523,163 @@ describe(
         "No spans should remain for this trace",
       );
     });
+
+    test("parentSpan option creates proper span hierarchy", async () => {
+      // This tests the core functionality we just implemented
+      assert.lengthOf(await backgroundLogger.drain(), 0);
+
+      // Create a parent span using Braintrust's wrapTraced
+      const { wrapTraced } = await import("braintrust");
+
+      const testFunction = wrapTraced(
+        async (instructions: string) => {
+          const { currentSpan } = await import("braintrust");
+
+          // Get the current span (this will be our parent)
+          const parentSpan = currentSpan();
+          assert.ok(parentSpan, "Parent span should exist in traced context");
+
+          // Create processor with parentSpan (the key feature we implemented)
+          const processor = new OpenAIAgentsTraceProcessor({
+            logger: _logger as any,
+            parentSpan: parentSpan,
+          });
+
+          setTracingDisabled(false);
+          addTraceProcessor(processor);
+
+          try {
+            // Create a simple agent
+            const agent = new Agent({
+              name: "child-agent",
+              model: TEST_MODEL,
+              instructions: "You are a helpful assistant. Be very concise.",
+            });
+
+            // Run the agent - this should create spans as children of parentSpan
+            const result = await run(agent, instructions);
+            assert.ok(result, "Agent should return a result");
+            assert.ok(result.finalOutput, "Result should have finalOutput");
+
+            return result;
+          } finally {
+            processor.shutdown();
+          }
+        },
+        { name: "parent_span_test" },
+      );
+
+      // Execute the wrapped function
+      const result = await testFunction("What is 1+1? Just the number.");
+      assert.ok(result, "Test function should return a result");
+
+      // Verify span hierarchy in logged spans
+      const spans = await backgroundLogger.drain();
+      assert.isTrue(
+        spans.length >= 2,
+        "Should have at least parent and child spans",
+      );
+
+      // Find parent and child spans
+      const parentSpan = spans.find(
+        (s: any) => s.span_attributes?.name === "parent_span_test",
+      );
+      const childSpan = spans.find(
+        (s: any) => s.span_attributes?.name === "Agent workflow",
+      );
+
+      assert.ok(
+        parentSpan,
+        "Should find parent span with name 'parent_span_test'",
+      );
+      assert.ok(childSpan, "Should find child span with name 'Agent workflow'");
+
+      // Verify the child span has the parent as its parent
+      if (childSpan && parentSpan) {
+        // In Braintrust, parent-child relationships are represented by span_parents array
+        const childSpanParents = (childSpan as any).span_parents || [];
+        const parentSpanId = (parentSpan as any).span_id;
+
+        assert.ok(
+          Array.isArray(childSpanParents) && childSpanParents.length > 0,
+          "Child span should have span_parents array",
+        );
+        assert.isTrue(
+          childSpanParents.includes(parentSpanId),
+          "Child span should include parent span_id in its span_parents array",
+        );
+
+        // Verify both spans have the same root_span_id
+        assert.equal(
+          (childSpan as any).root_span_id,
+          (parentSpan as any).root_span_id,
+          "Parent and child should share the same root_span_id",
+        );
+      }
+
+      // Verify input/output are properly logged on parent span
+      assert.ok(
+        (parentSpan as any).input,
+        "Parent span should have input logged",
+      );
+      assert.ok(
+        (parentSpan as any).output,
+        "Parent span should have output logged",
+      );
+
+      // The input should be the instruction string we passed
+      const parentInput = (parentSpan as any).input;
+      if (Array.isArray(parentInput) && parentInput.length > 0) {
+        assert.equal(
+          parentInput[0],
+          "What is 1+1? Just the number.",
+          "Parent span input should match the instruction",
+        );
+      }
+    });
+
+    test("processor without parentSpan creates root spans (backward compatibility)", async () => {
+      // This ensures backward compatibility when parentSpan is not provided
+      assert.lengthOf(await backgroundLogger.drain(), 0);
+
+      const processor = new OpenAIAgentsTraceProcessor({
+        logger: _logger as any,
+        // No parentSpan provided - should create root spans
+      });
+
+      setTracingDisabled(false);
+      addTraceProcessor(processor);
+
+      try {
+        const agent = new Agent({
+          name: "root-agent",
+          model: TEST_MODEL,
+          instructions: "Be concise.",
+        });
+
+        const result = await run(agent, "What is 2+2?");
+        assert.ok(result);
+
+        const spans = await backgroundLogger.drain();
+        assert.isTrue(spans.length > 0, "Should create spans");
+
+        // Find the Agent workflow span
+        const agentSpan = spans.find(
+          (s: any) => s.span_attributes?.name === "Agent workflow",
+        );
+        assert.ok(agentSpan, "Should find Agent workflow span");
+
+        // Verify it's a root span (no parent_id or parent_id is null)
+        const isRootSpan =
+          !(agentSpan as any).parent_id ||
+          (agentSpan as any).parent_id === null;
+        assert.isTrue(
+          isRootSpan,
+          "Agent workflow should be a root span when no parentSpan provided",
+        );
+      } finally {
+        processor.shutdown();
+      }
+    });
   },
 );

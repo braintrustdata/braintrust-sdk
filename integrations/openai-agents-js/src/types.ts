@@ -1,4 +1,4 @@
-import { Logger } from "braintrust";
+import { Logger, Span as BraintrustSpan } from "braintrust";
 import type {
   SpanData,
   AgentSpanData,
@@ -44,6 +44,7 @@ export type TraceMetadata = {
 export interface OpenAIAgentsTraceProcessorOptions {
   logger?: Logger<any>;
   maxTraces?: number;
+  parentSpan?: BraintrustSpan;
 }
 
 // Type guard functions
