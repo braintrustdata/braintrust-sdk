@@ -137,16 +137,25 @@ export class OpenAIAgentsTraceProcessor {
         type: SpanTypeAttribute.TASK,
       });
     } else {
-      // No parent span provided, create as root (original behavior)
-      span = this.logger
-        ? this.logger.startSpan({
-            name: trace.name,
-            type: SpanTypeAttribute.TASK,
-          })
-        : startSpan({
-            name: trace.name,
-            type: SpanTypeAttribute.TASK,
-          });
+      // Fall back to currentSpan if it's not NOOP
+      const current = currentSpan();
+      if (current && current !== NOOP_SPAN) {
+        span = current.startSpan({
+          name: trace.name,
+          type: SpanTypeAttribute.TASK,
+        });
+      } else {
+        // No parent span available, create as root
+        span = this.logger
+          ? this.logger.startSpan({
+              name: trace.name,
+              type: SpanTypeAttribute.TASK,
+            })
+          : startSpan({
+              name: trace.name,
+              type: SpanTypeAttribute.TASK,
+            });
+      }
     }
 
     span.log({

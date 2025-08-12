@@ -16,6 +16,8 @@ import {
   Logger,
   TestBackgroundLogger,
   Span as BraintrustSpan,
+  wrapTraced,
+  currentSpan,
 } from "braintrust";
 
 // Test helper functions for backward compatibility
@@ -529,17 +531,12 @@ describe(
       assert.lengthOf(await backgroundLogger.drain(), 0);
 
       // Create a parent span using Braintrust's wrapTraced
-      const { wrapTraced } = await import("braintrust");
-
       const testFunction = wrapTraced(
         async (instructions: string) => {
-          const { currentSpan } = await import("braintrust");
-
           // Get the current span (this will be our parent)
           const parentSpan = currentSpan();
           assert.ok(parentSpan, "Parent span should exist in traced context");
 
-          // Create processor with parentSpan (the key feature we implemented)
           const processor = new OpenAIAgentsTraceProcessor({
             logger: _logger as any,
             parentSpan: parentSpan,
