@@ -6171,15 +6171,15 @@ function simulateLogoutForTests() {
 }
 
 /**
- * Get the audit log for a prompt function.
+ * Get the versions for a prompt.
  *
  * @param projectId The ID of the project to query
- * @param functionId The ID of the function (prompt) to get audit logs for
- * @returns Promise containing the audit log data
+ * @param promptId The ID of the prompt to get versions for
+ * @returns Promise containing the version data
  */
 export async function getPromptVersions(
   projectId: string,
-  functionId: string,
+  promptId: string,
 ): Promise<any> {
   const state = _internalGetGlobalState();
   if (!state) {
@@ -6210,7 +6210,7 @@ export async function getPromptVersions(
     filter: {
       op: "eq",
       left: { op: "ident", name: ["id"] },
-      right: { op: "literal", value: functionId },
+      right: { op: "literal", value: promptId },
     },
   };
 

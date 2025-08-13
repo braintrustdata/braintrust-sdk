@@ -4609,13 +4609,13 @@ class TracedThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
         return super().submit(wrapped_fn, *args, **kwargs)
 
 
-def get_prompt_versions(project_id: str, function_id: str) -> List[str]:
+def get_prompt_versions(project_id: str, prompt_id: str) -> List[str]:
     """
-    Get audit log entries for a specific prompt/function and return transaction IDs for upsert actions.
+    Get the versions for a specific prompt.
 
     Args:
         project_id: The ID of the project to query
-        function_id: The ID of the function (prompt) to get audit logs for
+        prompt_id: The ID of the prompt to get versions for
 
     Returns:
         List of transaction IDs (_xact_id) for entries where audit_data.action is "upsert"
@@ -4646,7 +4646,7 @@ def get_prompt_versions(project_id: str, function_id: str) -> List[str]:
         "filter": {
             "op": "eq",
             "left": {"op": "ident", "name": ["id"]},
-            "right": {"op": "literal", "value": function_id},
+            "right": {"op": "literal", "value": prompt_id},
         },
     }
 
