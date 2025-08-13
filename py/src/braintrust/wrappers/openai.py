@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional, Union
 from agents import tracing
 
 import braintrust
+from braintrust.logger import NOOP_SPAN
 
 
 def _span_type(span: tracing.Span[Any]) -> braintrust.SpanTypeAttribute:
@@ -68,7 +69,13 @@ class BraintrustTracingProcessor(tracing.TracingProcessor):
         self._last_output: Any = None
 
     def on_trace_start(self, trace: tracing.Trace) -> None:
-        if self._logger is not None:
+        current_context = braintrust.current_span()
+        if current_context != NOOP_SPAN:
+            self._spans[trace.trace_id] = current_context.start_span(
+                name=trace.name,
+                span_attributes={"type": "task", "name": trace.name},
+            )
+        elif self._logger is not None:
             self._spans[trace.trace_id] = self._logger.start_span(
                 span_attributes={"type": "task", "name": trace.name},
                 span_id=trace.trace_id,
