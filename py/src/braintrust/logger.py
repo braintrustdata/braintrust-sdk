@@ -4663,9 +4663,11 @@ def get_prompt_audit_log(project_id: str, function_id: str) -> List[str]:
     response_raise_for_status(resp)
     result = resp.json()
 
-    # Filter for entries where audit_data.action is "upsert" and return only _xact_id fields
+    # Filter for entries where audit_data.action is "upsert" or "merge" and return only _xact_id fields
     return [
-        entry["_xact_id"] for entry in result.get("data", []) if entry.get("audit_data", {}).get("action") == "upsert"
+        entry["_xact_id"]
+        for entry in result.get("data", [])
+        if entry.get("audit_data", {}).get("action") in ["upsert", "merge"]
     ]
 
 

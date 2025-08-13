@@ -6232,10 +6232,12 @@ export async function getPromptAuditLog(
 
   const result = await response.json();
 
-  // Filter for entries where audit_data.action is "upsert" and return only _xact_id fields
+  // Filter for entries where audit_data.action is "upsert" or "merge" and return only _xact_id fields
   return (
     result.data
-      ?.filter((entry: any) => entry.audit_data?.action === "upsert")
+      ?.filter((entry: any) =>
+        ["upsert", "merge"].includes(entry.audit_data?.action),
+      )
       .map((entry: any) => entry._xact_id) || []
   );
 }
