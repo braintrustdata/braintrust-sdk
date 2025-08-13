@@ -84,6 +84,7 @@ import {
   runCatchFinally,
 } from "./util";
 import { lintTemplate } from "./mustache-utils";
+import { prettifyXact } from "@braintrust/core";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -6238,7 +6239,7 @@ export async function getPromptVersions(
       ?.filter((entry: any) =>
         ["upsert", "merge"].includes(entry.audit_data?.action),
       )
-      .map((entry: any) => entry._xact_id) || []
+      .map((entry: any) => prettifyXact(entry._xact_id)) || []
   );
 }
 

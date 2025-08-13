@@ -91,6 +91,7 @@ from .util import (
     merge_dicts,
     response_raise_for_status,
 )
+from .xact_ids import prettify_xact
 
 Metadata = Dict[str, Any]
 DATA_API_VERSION = 2
@@ -4663,9 +4664,9 @@ def get_prompt_versions(project_id: str, function_id: str) -> List[str]:
     response_raise_for_status(resp)
     result = resp.json()
 
-    # Filter for entries where audit_data.action is "upsert" or "merge" and return only _xact_id fields
+    # Filter for entries where audit_data.action is "upsert" or "merge" and return prettified _xact_id fields
     return [
-        entry["_xact_id"]
+        prettify_xact(entry["_xact_id"])
         for entry in result.get("data", [])
         if entry.get("audit_data", {}).get("action") in ["upsert", "merge"]
     ]
