@@ -6169,6 +6169,70 @@ function simulateLogoutForTests() {
   return _globalState;
 }
 
+/**
+ * Get the audit log for a prompt function.
+ *
+ * @param projectId The ID of the project to query
+ * @param functionId The ID of the function (prompt) to get audit logs for
+ * @returns Promise containing the audit log data
+ */
+export async function getPromptAuditLog(
+  projectId: string,
+  functionId: string,
+): Promise<any> {
+  const state = _internalGetGlobalState();
+  if (!state) {
+    throw new Error("Must log in first");
+  }
+
+  await state.login({});
+
+  const query = {
+    from: {
+      op: "function",
+      name: {
+        op: "ident",
+        name: ["project_prompts"],
+      },
+      args: [
+        {
+          op: "literal",
+          value: projectId,
+        },
+      ],
+    },
+    select: [
+      {
+        op: "star",
+      },
+    ],
+    filter: {
+      op: "eq",
+      left: { op: "ident", name: ["id"] },
+      right: { op: "literal", value: functionId },
+    },
+  };
+
+  const response = await state.apiConn().post(
+    "btql",
+    {
+      query,
+      audit_log: true,
+      use_columnstore: false,
+      brainstore_realtime: true,
+    },
+    { headers: { "Accept-Encoding": "gzip" } },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `API request failed: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  return await response.json();
+}
+
 export const _exportsForTestingOnly = {
   extractAttachments,
   deepCopyEvent,
