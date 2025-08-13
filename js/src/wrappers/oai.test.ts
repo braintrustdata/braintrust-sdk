@@ -419,6 +419,188 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
   });
 
+  test("openai.responses.create with image input", async (context) => {
+    if (!oai.responses) {
+      context.skip();
+    }
+
+    assert.lengthOf(await backgroundLogger.drain(), 0);
+
+    const start = getCurrentUnixTimestamp();
+    const response = await client.responses.create({
+      model: "gpt-4o", // Use gpt-4o for image support
+      input: [
+        {
+          role: "user",
+          content: [
+            { type: "input_text", text: "What do you see in this image?" },
+            {
+              type: "input_image",
+              image_url:
+                "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg",
+              detail: "high",
+            },
+          ],
+        },
+      ],
+    });
+    const end = getCurrentUnixTimestamp();
+
+    assert.ok(response);
+    assert.ok(response.output_text);
+
+    console.log("Here's the response: ", response);
+    // The response should contain some description of the nature boardwalk image
+    expect(response.output_text.toLowerCase()).toMatch(
+      /(nature|boardwalk|path|trail|outdoor|landscape)/,
+    );
+
+    const spans = await backgroundLogger.drain();
+    assert.lengthOf(spans, 1);
+    console.log("The span: ", JSON.stringify(spans[0], null, 2));
+
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const span = spans[0] as any;
+    assert.equal(span.span_attributes.name, "openai.responses.create");
+    assert.equal(span.span_attributes.type, "llm");
+
+    // Verify the input structure is correctly logged
+    assert.deepEqual(span.input, [
+      {
+        role: "user",
+        content: [
+          {
+            role: "user",
+            content: [
+              { type: "input_text", text: "What do you see in this image?" },
+              {
+                type: "input_image",
+                image_url:
+                  "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg",
+                detail: "high",
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    assert.deepEqual(span.metadata, {
+      model: "gpt-4o",
+      provider: "openai",
+    });
+
+    expect(span.output).toMatch(
+      /(nature|boardwalk|path|trail|outdoor|landscape)/,
+    );
+
+    const m = span.metrics;
+    assert.isTrue(m.tokens > 0);
+    assert.isTrue(m.prompt_tokens > 0);
+    assert.isTrue(m.completion_tokens > 0);
+    assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
+  });
+
+  test("openai.responses.create with image input (streaming)", async (context) => {
+    if (!oai.responses) {
+      context.skip();
+    }
+
+    assert.lengthOf(await backgroundLogger.drain(), 0);
+
+    const start = getCurrentUnixTimestamp();
+    const stream = await client.responses.create({
+      model: "gpt-4o", // Use gpt-4o for image support
+      input: [
+        {
+          role: "user",
+          content: [
+            { type: "input_text", text: "What do you see in this image?" },
+            {
+              type: "input_image",
+              image_url:
+                "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg",
+              detail: "high",
+            },
+          ],
+        },
+      ],
+      stream: true,
+    });
+
+    assert.ok(stream);
+
+    let streamedText = "";
+    for await (const event of stream) {
+      assert.ok(event);
+      if (event.type === "response.completed") {
+        console.log("EVENT: ", JSON.stringify(event, null, 2));
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+        const response = event.response as any;
+        const output = response?.output?.[0]?.content?.[0]?.text;
+        if (output) {
+          streamedText = output;
+        }
+      }
+    }
+
+    const end = getCurrentUnixTimestamp();
+
+    // Verify we got some response about the image
+    expect(streamedText.toLowerCase()).toMatch(
+      /(nature|boardwalk|path|trail|outdoor|landscape)/,
+    );
+
+    const spans = await backgroundLogger.drain();
+    assert.lengthOf(spans, 1);
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const span = spans[0] as any;
+    assert.equal(span.span_attributes.name, "openai.responses.create");
+    assert.equal(span.span_attributes.type, "llm");
+
+    // Verify the input structure is correctly logged
+    assert.deepEqual(span.input, [
+      {
+        role: "user",
+        content: [
+          {
+            role: "user",
+            content: [
+              { type: "input_text", text: "What do you see in this image?" },
+              {
+                type: "input_image",
+                image_url:
+                  "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg",
+                detail: "high",
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    assert.deepEqual(span.metadata, {
+      model: "gpt-4o",
+      provider: "openai",
+      stream: true,
+    });
+
+    expect(span.output).toMatch(
+      /(nature|boardwalk|path|trail|outdoor|landscape)/,
+    );
+
+    console.log("span metrics: ", JSON.stringify(span.metrics, null, 2));
+    console.log("start: ", start);
+    console.log("end: ", end);
+
+    const m = span.metrics;
+    assert.isTrue(m.tokens > 0);
+    assert.isTrue(m.prompt_tokens > 0);
+    assert.isTrue(m.completion_tokens > 0);
+    assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
+    assert.isTrue(m.time_to_first_token > 0);
+  });
+
   test("openai.responses.parse", async (context) => {
     if (!oai.responses) {
       context.skip();
