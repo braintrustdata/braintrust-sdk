@@ -23,6 +23,7 @@ export {
   messageRoleSchema,
   chatCompletionMessageReasoningSchema,
   chatCompletionMessageToolCallSchema,
+  chatCompletionOpenAIMessageParamSchema,
   type MessageRole,
 } from "./openai/messages";
 

@@ -5022,6 +5022,239 @@
           }
         ]
       },
+      "ChatCompletionOpenAIMessageParam": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "content": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "default": "",
+                    "title": "text"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ChatCompletionContentPartText"
+                    },
+                    "title": "array"
+                  }
+                ]
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "system"
+                ]
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "content"
+            ],
+            "title": "system"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "content": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "default": "",
+                    "title": "text"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ChatCompletionContentPart"
+                    },
+                    "title": "array"
+                  }
+                ]
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "user"
+                ]
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "content"
+            ],
+            "title": "user"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "enum": [
+                  "assistant"
+                ]
+              },
+              "content": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ChatCompletionContentPartText"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "function_call": {
+                "type": "object",
+                "properties": {
+                  "arguments": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "arguments",
+                  "name"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "tool_calls": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ChatCompletionMessageToolCall"
+                }
+              },
+              "reasoning": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ChatCompletionMessageReasoning"
+                }
+              }
+            },
+            "required": [
+              "role"
+            ],
+            "title": "assistant"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "content": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "default": "",
+                    "title": "text"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ChatCompletionContentPartText"
+                    },
+                    "title": "array"
+                  }
+                ]
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "tool"
+                ]
+              },
+              "tool_call_id": {
+                "type": "string",
+                "default": ""
+              }
+            },
+            "required": [
+              "role",
+              "content",
+              "tool_call_id"
+            ],
+            "title": "tool"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "content": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "function"
+                ]
+              }
+            },
+            "required": [
+              "content",
+              "name",
+              "role"
+            ],
+            "title": "function"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "content": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "default": "",
+                    "title": "text"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ChatCompletionContentPartText"
+                    },
+                    "title": "array"
+                  }
+                ]
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "developer"
+                ]
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "content"
+            ],
+            "title": "developer"
+          }
+        ]
+      },
       "ChatCompletionTool": {
         "type": "object",
         "properties": {

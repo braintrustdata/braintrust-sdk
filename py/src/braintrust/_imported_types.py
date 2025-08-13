@@ -2176,6 +2176,60 @@ CallEvent = Union[
 ]
 
 
+class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam(TypedDict):
+    content: Union[str, Sequence[ChatCompletionContentPartText]]
+    role: Literal["system"]
+    name: NotRequired[Optional[str]]
+
+
+class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam1(TypedDict):
+    content: Union[str, Sequence[ChatCompletionContentPart]]
+    role: Literal["user"]
+    name: NotRequired[Optional[str]]
+
+
+class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam2FunctionCall(TypedDict):
+    arguments: str
+    name: str
+
+
+class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam2(TypedDict):
+    role: Literal["assistant"]
+    content: NotRequired[Optional[Union[str, Sequence[ChatCompletionContentPartText]]]]
+    function_call: NotRequired[Optional[ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam2FunctionCall]]
+    name: NotRequired[Optional[str]]
+    tool_calls: NotRequired[Optional[Sequence[ChatCompletionMessageToolCall]]]
+    reasoning: NotRequired[Optional[Sequence[ChatCompletionMessageReasoning]]]
+
+
+class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam3(TypedDict):
+    content: Union[str, Sequence[ChatCompletionContentPartText]]
+    role: Literal["tool"]
+    tool_call_id: str
+
+
+class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam4(TypedDict):
+    content: Optional[str]
+    name: str
+    role: Literal["function"]
+
+
+class ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam5(TypedDict):
+    content: Union[str, Sequence[ChatCompletionContentPartText]]
+    role: Literal["developer"]
+    name: NotRequired[Optional[str]]
+
+
+ChatCompletionOpenAIMessageParam = Union[
+    ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam,
+    ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam1,
+    ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam2,
+    ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam3,
+    ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam4,
+    ChatCompletionOpenAIMessageParamChatCompletionOpenAIMessageParam5,
+]
+
+
 class ChatCompletionToolFunction(TypedDict):
     name: str
     description: NotRequired[Optional[str]]

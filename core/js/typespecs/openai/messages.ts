@@ -207,14 +207,16 @@ const chatCompletionFallbackMessageParamSchema = z.object({
   ]),
   content: z.string().nullish(),
 });
-export const chatCompletionOpenAIMessageParamSchema = z.union([
-  chatCompletionSystemMessageParamSchema.openapi({ title: "system" }),
-  chatCompletionUserMessageParamSchema.openapi({ title: "user" }),
-  chatCompletionAssistantMessageParamSchema.openapi({ title: "assistant" }),
-  chatCompletionToolMessageParamSchema.openapi({ title: "tool" }),
-  chatCompletionFunctionMessageParamSchema.openapi({ title: "function" }),
-  chatCompletionDeveloperMessageParamSchema.openapi({ title: "developer" }),
-]);
+export const chatCompletionOpenAIMessageParamSchema = z
+  .union([
+    chatCompletionSystemMessageParamSchema.openapi({ title: "system" }),
+    chatCompletionUserMessageParamSchema.openapi({ title: "user" }),
+    chatCompletionAssistantMessageParamSchema.openapi({ title: "assistant" }),
+    chatCompletionToolMessageParamSchema.openapi({ title: "tool" }),
+    chatCompletionFunctionMessageParamSchema.openapi({ title: "function" }),
+    chatCompletionDeveloperMessageParamSchema.openapi({ title: "developer" }),
+  ])
+  .openapi("ChatCompletionOpenAIMessageParam");
 
 export const chatCompletionMessageParamSchema = z
   .union([

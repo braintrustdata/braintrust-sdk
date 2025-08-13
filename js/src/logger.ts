@@ -53,7 +53,7 @@ import {
   GitMetadataSettings as gitMetadataSettingsSchema,
   type GitMetadataSettingsType as GitMetadataSettings,
   type ChatCompletionMessageParamType as Message,
-  type ChatCompletionMessageParamType as OpenAIMessage,
+  type ChatCompletionOpenAIMessageParamType as OpenAIMessage,
   PromptData as promptDataSchema,
   type PromptDataType as PromptData,
   Prompt as promptSchema,

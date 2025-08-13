@@ -1156,6 +1156,48 @@ export const CallEvent = z.union([
   }),
 ]);
 export type CallEventType = z.infer<typeof CallEvent>;
+export const ChatCompletionOpenAIMessageParam = z.union([
+  z.object({
+    content: z.union([z.string(), z.array(ChatCompletionContentPartText)]),
+    role: z.literal("system"),
+    name: z.string().optional(),
+  }),
+  z.object({
+    content: z.union([z.string(), z.array(ChatCompletionContentPart)]),
+    role: z.literal("user"),
+    name: z.string().optional(),
+  }),
+  z.object({
+    role: z.literal("assistant"),
+    content: z
+      .union([z.string(), z.array(ChatCompletionContentPartText), z.null()])
+      .optional(),
+    function_call: z
+      .object({ arguments: z.string(), name: z.string() })
+      .optional(),
+    name: z.string().optional(),
+    tool_calls: z.array(ChatCompletionMessageToolCall).optional(),
+    reasoning: z.array(ChatCompletionMessageReasoning).optional(),
+  }),
+  z.object({
+    content: z.union([z.string(), z.array(ChatCompletionContentPartText)]),
+    role: z.literal("tool"),
+    tool_call_id: z.string().default(""),
+  }),
+  z.object({
+    content: z.union([z.string(), z.null()]),
+    name: z.string(),
+    role: z.literal("function"),
+  }),
+  z.object({
+    content: z.union([z.string(), z.array(ChatCompletionContentPartText)]),
+    role: z.literal("developer"),
+    name: z.string().optional(),
+  }),
+]);
+export type ChatCompletionOpenAIMessageParamType = z.infer<
+  typeof ChatCompletionOpenAIMessageParam
+>;
 export const ChatCompletionTool = z.object({
   function: z.object({
     name: z.string(),
