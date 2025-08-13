@@ -4608,7 +4608,7 @@ class TracedThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
         return super().submit(wrapped_fn, *args, **kwargs)
 
 
-def get_prompt_audit_log(project_id: str, function_id: str) -> List[str]:
+def get_prompt_versions(project_id: str, function_id: str) -> List[str]:
     """
     Get audit log entries for a specific prompt/function and return transaction IDs for upsert actions.
 

@@ -6176,7 +6176,7 @@ function simulateLogoutForTests() {
  * @param functionId The ID of the function (prompt) to get audit logs for
  * @returns Promise containing the audit log data
  */
-export async function getPromptAuditLog(
+export async function getPromptVersions(
   projectId: string,
   functionId: string,
 ): Promise<any> {
