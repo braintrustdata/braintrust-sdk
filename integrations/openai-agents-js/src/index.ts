@@ -1,6 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { SpanTypeAttribute } from "@braintrust/core";
-import { Span as BraintrustSpan, startSpan, Logger } from "braintrust";
+import {
+  Span as BraintrustSpan,
+  startSpan,
+  Logger,
+  currentSpan,
+  NOOP_SPAN,
+} from "braintrust";
 import {
   SpanType,
   AgentsTrace,
@@ -119,15 +125,28 @@ export class OpenAIAgentsTraceProcessor {
       this.evictOldestTrace();
     }
 
-    const span = this.logger
-      ? this.logger.startSpan({
-          name: trace.name,
-          type: SpanTypeAttribute.TASK,
-        })
-      : startSpan({
-          name: trace.name,
-          type: SpanTypeAttribute.TASK,
-        });
+    // Detect parent span from current execution context
+    let span: BraintrustSpan;
+    const current = currentSpan();
+
+    if (current && current !== NOOP_SPAN) {
+      // Create as child of current span
+      span = current.startSpan({
+        name: trace.name,
+        type: SpanTypeAttribute.TASK,
+      });
+    } else {
+      // No parent span available, create as root
+      span = this.logger
+        ? this.logger.startSpan({
+            name: trace.name,
+            type: SpanTypeAttribute.TASK,
+          })
+        : startSpan({
+            name: trace.name,
+            type: SpanTypeAttribute.TASK,
+          });
+    }
 
     span.log({
       input: "Agent workflow started",
