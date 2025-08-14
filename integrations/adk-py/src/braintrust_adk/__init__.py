@@ -14,8 +14,15 @@ def setup_braintrust(
 ) -> bool:
     try:
         from opentelemetry import trace
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.trace import ProxyTracerProvider
 
         provider = trace.get_tracer_provider()
+
+        # the user doesn't have a tracer setup
+        if isinstance(provider, ProxyTracerProvider):
+            provider = TracerProvider()
+            trace.set_tracer_provider(provider)
 
         api_key = api_key or os.environ.get("BRAINTRUST_API_KEY")
         if not api_key:
