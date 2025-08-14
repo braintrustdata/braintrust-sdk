@@ -70,8 +70,7 @@ class Scorer(ABC):
         return self.__class__.__name__
 
     @abstractmethod
-    def _run_eval_sync(self, output: Any, expected: Any = None, **kwargs: Any) -> Score:
-        ...
+    def _run_eval_sync(self, output: Any, expected: Any = None, **kwargs: Any) -> Score: ...
 
 
 def is_scorer(obj):

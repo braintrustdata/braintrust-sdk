@@ -98,6 +98,7 @@ from .util import (
     merge_dicts,
     response_raise_for_status,
 )
+from .xact_ids import prettify_xact
 
 Metadata = Dict[str, Any]
 DATA_API_VERSION = 2
@@ -4613,6 +4614,66 @@ class TracedThreadPoolExecutor(concurrent.futures.ThreadPoolExecutor):
             return context.run(fn, *args, **kwargs)
 
         return super().submit(wrapped_fn, *args, **kwargs)
+
+
+def get_prompt_versions(project_id: str, prompt_id: str) -> List[str]:
+    """
+    Get the versions for a specific prompt.
+
+    Args:
+        project_id: The ID of the project to query
+        prompt_id: The ID of the prompt to get versions for
+
+    Returns:
+        List of transaction IDs (_xact_id) for entries where audit_data.action is "upsert"
+    """
+
+    query = {
+        "from": {
+            "op": "function",
+            "name": {
+                "op": "ident",
+                "name": ["project_prompts"],
+            },
+            "args": [
+                {
+                    "op": "literal",
+                    "value": project_id,
+                },
+            ],
+        },
+        "select": [
+            {
+                "op": "star",
+            },
+        ],
+        "filter": {
+            "op": "eq",
+            "left": {"op": "ident", "name": ["id"]},
+            "right": {"op": "literal", "value": prompt_id},
+        },
+    }
+
+    resp = _state.api_conn().post(
+        "btql",
+        json={
+            "query": query,
+            "audit_log": True,
+            "use_columnstore": False,
+            "brainstore_realtime": True,
+        },
+        headers={"Accept-Encoding": "gzip"},
+    )
+
+    response_raise_for_status(resp)
+    result = resp.json()
+
+    # Filter for entries where audit_data.action is "upsert" or "merge" and return prettified _xact_id fields
+    return [
+        prettify_xact(entry["_xact_id"])
+        for entry in result.get("data", [])
+        if entry.get("audit_data", {}).get("action") in ["upsert", "merge"]
+    ]
 
 
 def _get_app_url(app_url: Optional[str] = None) -> str:
