@@ -20,7 +20,7 @@ import {
   Project as projectSchema,
   ExtendedSavedFunctionId as ExtendedSavedFunctionIdSchema,
   type ExtendedSavedFunctionIdType as ExtendedSavedFunctionId,
-} from "./imported_types";
+} from "./generated_types";
 import { loadPrettyXact, TransactionId } from "@braintrust/core";
 import {
   _internalGetGlobalState,

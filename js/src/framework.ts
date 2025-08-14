@@ -8,7 +8,7 @@ import {
   type RepoInfoType as RepoInfo,
   SSEProgressEventData as SSEProgressEventDataSchema,
   type SSEProgressEventDataType as SSEProgressEventData,
-} from "./imported_types";
+} from "./generated_types";
 import { queue } from "async";
 
 import chalk from "chalk";

@@ -6,7 +6,7 @@ import {
   type ChatCompletionMessageParamType as Message,
   StreamingMode as StreamingModeSchema,
   type StreamingModeType as StreamingMode,
-} from "../imported_types";
+} from "../generated_types";
 import {
   _internalGetGlobalState,
   BraintrustState,

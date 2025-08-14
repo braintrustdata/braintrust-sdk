@@ -53,7 +53,7 @@ from .framework import *
 from .framework2 import *
 from .functions.invoke import *
 from .functions.stream import *
-from .imported_types import *
+from .generated_types import *
 from .logger import *
 from .logger import (
     _internal_get_global_state,  # noqa: F401 # type: ignore[reportUnusedImport]

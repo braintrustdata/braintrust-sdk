@@ -5,7 +5,7 @@ import {
   type ChatCompletionMessageParamType as Message,
   ChatCompletionTool as ChatCompletionToolSchema,
   type ChatCompletionToolType as ChatCompletionTool,
-} from "../imported_types";
+} from "../generated_types";
 import { startSpan } from "../logger";
 import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import {

@@ -4,7 +4,7 @@ import {
   promptDefinitionWithToolsSchema,
   promptDefinitionToPromptData,
 } from "./framework2";
-import { PromptData as promptDataSchema } from "./imported_types";
+import { PromptData as promptDataSchema } from "./generated_types";
 
 // Schema for evaluation parameters
 export const evalParametersSchema = z.record(

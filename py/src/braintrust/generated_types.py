@@ -1,6 +1,6 @@
-"""Re-exports generated typespecs that are considered public API."""
+"""Auto-generated file (internal git SHA 8e9da33826c6b364fa43f7e6690e3aa2c6d8e1fc) -- do not modify"""
 
-from ._imported_types import (
+from ._generated_types import (
     Acl,
     AclObjectType,
     AISecret,

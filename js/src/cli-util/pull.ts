@@ -5,7 +5,7 @@ import {
   type SavedFunctionIdType as SavedFunctionId,
   ToolFunctionDefinition as ToolFunctionDefinitionSchema,
   type ToolFunctionDefinitionType as ToolFunctionDefinition,
-} from "../imported_types";
+} from "../generated_types";
 import { _internalGetGlobalState } from "../logger";
 import { loadCLIEnv } from "./bundle";
 import { PullArgs } from "./types";

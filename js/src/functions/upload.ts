@@ -5,7 +5,7 @@ import {
   type FunctionType as FunctionObject,
   IfExists as IfExistsSchema,
   type IfExistsType as IfExists,
-} from "../imported_types";
+} from "../generated_types";
 import { BuildSuccess, EvaluatorState, FileHandle } from "../cli";
 import { scorerName, warning } from "../framework";
 import {

@@ -61,7 +61,7 @@ import {
   type PromptSessionEventType as PromptSessionEvent,
   type RepoInfoType as RepoInfo,
   type PromptBlockDataType as PromptBlockData,
-} from "./imported_types";
+} from "./generated_types";
 
 const BRAINTRUST_ATTACHMENT =
   BraintrustAttachmentReferenceSchema.shape.type.value;

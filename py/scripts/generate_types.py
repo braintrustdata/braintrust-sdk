@@ -7,8 +7,8 @@ import subprocess
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OPENAPI_SPEC_PATH = os.path.join(SCRIPT_DIR, "../../imported_types.json")
-INTERNAL_TYPES_OUTPUT_PATH = os.path.join(SCRIPT_DIR, "../src/braintrust/_imported_types.py")
+OPENAPI_SPEC_PATH = os.path.join(SCRIPT_DIR, "../../generated_types.json")
+INTERNAL_TYPES_OUTPUT_PATH = os.path.join(SCRIPT_DIR, "../src/braintrust/_generated_types.py")
 
 
 def generate_internal_types():
@@ -27,7 +27,7 @@ def generate_internal_types():
             "3.9",
             "--custom-file-header",
             '''"""
-Do not import this file directly. See `imported_types.py` for the classes that have a stable API.
+Do not import this file directly. See `generated_types.py` for the classes that have a stable API.
 
 Auto-generated file -- do not modify.
 """''',
@@ -81,13 +81,18 @@ def get_public_typenames() -> list[str]:
 
 
 def generate_public_types():
-    public_types_output_path = os.path.join(SCRIPT_DIR, "../src/braintrust/imported_types.py")
+    public_types_output_path = os.path.join(SCRIPT_DIR, "../src/braintrust/generated_types.py")
     public_typenames = get_public_typenames()
+
+    with open(OPENAPI_SPEC_PATH, "r") as f:
+        openapi_spec = json.load(f)
+    internal_git_sha = openapi_spec.get("info", {}).get("x-internal-git-sha", "unknown")
+
     with open(public_types_output_path, "w") as f:
         f.write(
-            '''"""Re-exports generated typespecs that are considered public API."""
+            f'''"""Auto-generated file (internal git SHA {internal_git_sha}) -- do not modify"""
 
-from ._imported_types import ('''
+from ._generated_types import ('''
         )
         for typename in public_typenames:
             f.write(f"\n    {typename},")

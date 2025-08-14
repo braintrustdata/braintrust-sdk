@@ -3,7 +3,7 @@ import {
   type GitMetadataSettingsType as GitMetadataSettings,
   RepoInfo as RepoInfoSchema,
   type RepoInfoType as RepoInfo,
-} from "./imported_types";
+} from "./generated_types";
 
 export interface CallerLocation {
   caller_functionname: string;

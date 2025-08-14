@@ -4,7 +4,7 @@ import {
   CallEvent as callEventSchema,
   SSEConsoleEventData as sseConsoleEventDataSchema,
   SSEProgressEventData as sseProgressEventDataSchema,
-} from "../imported_types";
+} from "../generated_types";
 import {
   createParser,
   EventSourceParser,

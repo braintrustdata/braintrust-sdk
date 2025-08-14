@@ -10,7 +10,7 @@ import {
   type GraphEdgeType as GraphEdge,
   PromptBlockData as PromptBlockDataSchema,
   type PromptBlockDataType as PromptBlockData,
-} from "./imported_types";
+} from "./generated_types";
 
 export interface BuildContext {
   getFunctionId(functionObj: unknown): Promise<FunctionId>;

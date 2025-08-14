@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Literal, Optional, Union
 
-from .imported_types import PromptOptions
+from .generated_types import PromptOptions
 from .serializable_data_class import SerializableDataClass
 
 # Keep these definitions in sync with sdk/core/js/typespecs/prompt.ts.

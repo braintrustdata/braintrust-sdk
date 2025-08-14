@@ -22,7 +22,7 @@ import {
   type InvokeFunctionType as InvokeFunctionRequest,
   type RunEvalType as RunEvalRequest,
   type SSEProgressEventDataType as SSEProgressEventData,
-} from "../src/imported_types";
+} from "../src/generated_types";
 import {
   BaseMetadata,
   BraintrustState,

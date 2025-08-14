@@ -63,9 +63,7 @@ from .db_fields import (
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
-from .git_fields import GitMetadataSettings, RepoInfo
-from .gitutil import get_past_n_ancestors, get_repo_info
-from .imported_types import (
+from .generated_types import (
     AttachmentReference,
     AttachmentStatus,
     DatasetEvent,
@@ -73,6 +71,8 @@ from .imported_types import (
     PromptOptions,
     SpanAttributes,
 )
+from .git_fields import GitMetadataSettings, RepoInfo
+from .gitutil import get_past_n_ancestors, get_repo_info
 from .merge_row_batch import batch_items, merge_row_batch
 from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record
 from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptMessage, PromptSchema, TextPart

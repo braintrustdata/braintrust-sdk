@@ -1,4 +1,4 @@
-from .imported_types import DatasetEvent
+from .generated_types import DatasetEvent
 
 DEFAULT_IS_LEGACY_DATASET = False
 

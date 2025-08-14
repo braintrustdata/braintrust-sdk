@@ -1,4 +1,4 @@
-import { type IfExistsType as IfExists } from "./imported_types";
+import { type IfExistsType as IfExists } from "./generated_types";
 import { z } from "zod";
 
 // Type to accept both regular Zod schemas and OpenAPI-extended ones
