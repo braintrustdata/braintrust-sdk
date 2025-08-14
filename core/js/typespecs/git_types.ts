@@ -52,8 +52,10 @@ export type GitFields = z.infer<typeof gitFieldsSchema>;
 const collectMetadataEnum = z.enum(["all", "none", "some"]);
 export type CollectMetadata = z.infer<typeof collectMetadataEnum>;
 
-export const gitMetadataSettingsSchema = z.strictObject({
-  collect: collectMetadataEnum,
-  fields: z.array(gitFieldsSchema).optional(),
-});
+export const gitMetadataSettingsSchema = z
+  .strictObject({
+    collect: collectMetadataEnum,
+    fields: z.array(gitFieldsSchema).optional(),
+  })
+  .openapi("GitMetadataSettings");
 export type GitMetadataSettings = z.infer<typeof gitMetadataSettingsSchema>;

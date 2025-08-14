@@ -1,10 +1,14 @@
 import { Score, SpanTypeAttribute, mergeDicts } from "@braintrust/core";
 import {
-  GitMetadataSettings,
-  ObjectReference,
-  RepoInfo,
-  SSEProgressEventData,
-} from "@braintrust/core/typespecs";
+  GitMetadataSettings as GitMetadataSettingsSchema,
+  type GitMetadataSettingsType as GitMetadataSettings,
+  ObjectReference as ObjectReferenceSchema,
+  type ObjectReferenceType as ObjectReference,
+  RepoInfo as RepoInfoSchema,
+  type RepoInfoType as RepoInfo,
+  SSEProgressEventData as SSEProgressEventDataSchema,
+  type SSEProgressEventDataType as SSEProgressEventData,
+} from "./generated_types";
 import { queue } from "async";
 
 import chalk from "chalk";
