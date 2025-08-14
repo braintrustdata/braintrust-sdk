@@ -226,19 +226,15 @@ export const serviceTokenSchema = z
     created: serviceTokenBaseSchema.shape.created,
     name: serviceTokenBaseSchema.shape.name,
     preview_name: z.string(),
-    user_id: serviceTokenBaseSchema.shape.id.nullish(),
-    user_email: z
+    service_account_id: serviceTokenBaseSchema.shape.id.nullish(),
+    service_account_email: z
       .string()
       .nullish()
       .describe("The service account email (not routable)"),
-    user_given_name: z
+    service_account_name: z
       .string()
       .nullish()
-      .describe("The service account given name"),
-    user_family_name: z
-      .string()
-      .nullish()
-      .describe("The service account family name"),
+      .describe("The service account name"),
     org_id: organizationSchema.shape.id.nullish(),
   })
   .openapi("ServiceToken");
