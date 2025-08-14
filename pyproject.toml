@@ -4,10 +4,12 @@ line-length = 119
 [tool.ruff]
 line-length = 119
 
+[tool.ruff.isort]
+known-third-party = ["braintrust_core", "braintrust_local"]
+
 [tool.ruff.lint]
 select = [
     "I",    # isort
-    "F401", # unused imports
 ]
 
 [tool.pytest.ini_options]
