@@ -26,6 +26,7 @@ trace.set_tracer_provider(provider)
 # Instrument OpenAI to automatically trace calls
 OpenAIInstrumentor().instrument()
 
+
 # Define a custom filter function
 def my_custom_filter(span):
     """Keep spans that start with 'custom_' in addition to LLM spans."""

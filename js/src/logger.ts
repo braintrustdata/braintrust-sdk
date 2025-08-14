@@ -90,6 +90,7 @@ import {
   runCatchFinally,
 } from "./util";
 import { lintTemplate } from "./mustache-utils";
+import { prettifyXact } from "@braintrust/core";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -6175,6 +6176,79 @@ function simulateLogoutForTests() {
   _globalState.resetLoginInfo();
   _globalState.appUrl = "https://www.braintrust.dev";
   return _globalState;
+}
+
+/**
+ * Get the versions for a prompt.
+ *
+ * @param projectId The ID of the project to query
+ * @param promptId The ID of the prompt to get versions for
+ * @returns Promise containing the version data
+ */
+export async function getPromptVersions(
+  projectId: string,
+  promptId: string,
+): Promise<any> {
+  const state = _internalGetGlobalState();
+  if (!state) {
+    throw new Error("Must log in first");
+  }
+
+  await state.login({});
+
+  const query = {
+    from: {
+      op: "function",
+      name: {
+        op: "ident",
+        name: ["project_prompts"],
+      },
+      args: [
+        {
+          op: "literal",
+          value: projectId,
+        },
+      ],
+    },
+    select: [
+      {
+        op: "star",
+      },
+    ],
+    filter: {
+      op: "eq",
+      left: { op: "ident", name: ["id"] },
+      right: { op: "literal", value: promptId },
+    },
+  };
+
+  const response = await state.apiConn().post(
+    "btql",
+    {
+      query,
+      audit_log: true,
+      use_columnstore: false,
+      brainstore_realtime: true,
+    },
+    { headers: { "Accept-Encoding": "gzip" } },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `API request failed: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const result = await response.json();
+
+  // Filter for entries where audit_data.action is "upsert" or "merge" and return only _xact_id fields
+  return (
+    result.data
+      ?.filter((entry: any) =>
+        ["upsert", "merge"].includes(entry.audit_data?.action),
+      )
+      .map((entry: any) => prettifyXact(entry._xact_id)) || []
+  );
 }
 
 export const _exportsForTestingOnly = {

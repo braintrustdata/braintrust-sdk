@@ -60,9 +60,9 @@ class SpanComponentsV2:
 
     def __post_init__(self):
         assert isinstance(self.object_type, SpanObjectTypeV2)
-        assert (
-            self.object_id or self.compute_object_metadata_args
-        ), "Must provide either object_id or compute_object_metadata_args"
+        assert self.object_id or self.compute_object_metadata_args, (
+            "Must provide either object_id or compute_object_metadata_args"
+        )
         if self.object_id:
             assert isinstance(self.object_id, str)
         else:
