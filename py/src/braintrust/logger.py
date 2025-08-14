@@ -63,6 +63,14 @@ from .db_fields import (
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
+from .generated_types import (
+    AttachmentReference,
+    AttachmentStatus,
+    DatasetEvent,
+    ExperimentEvent,
+    PromptOptions,
+    SpanAttributes,
+)
 from .git_fields import GitMetadataSettings, RepoInfo
 from .gitutil import get_past_n_ancestors, get_repo_info
 from .merge_row_batch import batch_items, merge_row_batch
@@ -75,7 +83,6 @@ from .queue import DEFAULT_QUEUE_SIZE, LogQueue
 from .serializable_data_class import SerializableDataClass
 from .span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from .span_types import SpanTypeAttribute
-from .types import AttachmentReference, AttachmentStatus, DatasetEvent, ExperimentEvent, PromptOptions, SpanAttributes
 from .util import (
     GLOBAL_PROJECT,
     AugmentedHTTPError,
@@ -1013,8 +1020,7 @@ def init(
     project_id: Optional[str] = ...,
     base_experiment_id: Optional[str] = ...,
     repo_info: Optional[RepoInfo] = ...,
-) -> "Experiment":
-    ...
+) -> "Experiment": ...
 
 
 @overload
@@ -1036,8 +1042,7 @@ def init(
     project_id: Optional[str] = ...,
     base_experiment_id: Optional[str] = ...,
     repo_info: Optional[RepoInfo] = ...,
-) -> "ReadonlyExperiment":
-    ...
+) -> "ReadonlyExperiment": ...
 
 
 def init(
@@ -2233,13 +2238,11 @@ class ObjectFetcher(ABC, Generic[TMapping]):
         return self._refetch()
 
     @abstractmethod
-    def _get_state(self) -> BraintrustState:
-        ...
+    def _get_state(self) -> BraintrustState: ...
 
     @property
     @abstractmethod
-    def id(self) -> str:
-        ...
+    def id(self) -> str: ...
 
     def _refetch(self) -> List[TMapping]:
         state = self._get_state()
@@ -2310,21 +2313,17 @@ class ObjectFetcher(ABC, Generic[TMapping]):
 class BaseAttachment(ABC):
     @property
     @abstractmethod
-    def reference(self) -> AttachmentReference:
-        ...
+    def reference(self) -> AttachmentReference: ...
 
     @property
     @abstractmethod
-    def data(self) -> bytes:
-        ...
+    def data(self) -> bytes: ...
 
     @abstractmethod
-    def upload(self) -> AttachmentStatus:
-        ...
+    def upload(self) -> AttachmentStatus: ...
 
     @abstractmethod
-    def debug_info(self) -> Mapping[str, Any]:
-        ...
+    def debug_info(self) -> Mapping[str, Any]: ...
 
 
 class Attachment(BaseAttachment):
@@ -2842,17 +2841,17 @@ def _start_span_parent_args(
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
         parent_components = SpanComponentsV3.from_str(parent)
-        assert (
-            parent_object_type == parent_components.object_type
-        ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
+        assert parent_object_type == parent_components.object_type, (
+            f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
+        )
 
         parent_components_object_id_lambda = _span_components_to_object_id_lambda(parent_components)
 
         def compute_parent_object_id():
             parent_components_object_id = parent_components_object_id_lambda()
-            assert (
-                parent_object_id.get() == parent_components_object_id
-            ), f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            assert parent_object_id.get() == parent_components_object_id, (
+                f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            )
             return parent_object_id.get()
 
         arg_parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)

@@ -1,9 +1,11 @@
 import {
-  FunctionObject,
-  functionSchema,
-  SavedFunctionId,
-  ToolFunctionDefinition,
-} from "@braintrust/core/typespecs";
+  Function as functionSchema,
+  type FunctionType as FunctionObject,
+  SavedFunctionId as SavedFunctionIdSchema,
+  type SavedFunctionIdType as SavedFunctionId,
+  ToolFunctionDefinition as ToolFunctionDefinitionSchema,
+  type ToolFunctionDefinitionType as ToolFunctionDefinition,
+} from "../generated_types";
 import { _internalGetGlobalState } from "../logger";
 import { loadCLIEnv } from "./bundle";
 import { PullArgs } from "./types";

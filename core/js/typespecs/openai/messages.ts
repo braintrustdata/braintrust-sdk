@@ -1,5 +1,9 @@
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { attachmentReferenceSchema } from "typespecs/attachment-reference";
+import {
+  X_OPENAPI_OUTPUT_MARK_REQUIRED,
+  X_OPENAPI_OUTPUT_STRIP_NULL,
+} from "typespecs/common_types";
 import { z } from "zod";
 extendZodWithOpenApi(z);
 
@@ -22,26 +26,33 @@ export const cacheControlSchema = z.object({
 
 export const chatCompletionContentPartTextSchema = z
   .object({
-    text: z.string().default(""),
+    text: z
+      .string()
+      .default("")
+      .openapi({ [X_OPENAPI_OUTPUT_MARK_REQUIRED]: true }),
     type: z.literal("text"),
     cache_control: cacheControlSchema.optional(),
   })
   .openapi("ChatCompletionContentPartText");
 
 const chatCompletionSystemMessageParamSchema = z.object({
-  content: z.union([
-    z.string().default("").openapi({ title: "text" }),
-    z.array(chatCompletionContentPartTextSchema).openapi({ title: "array" }),
-  ]),
+  content: z
+    .union([
+      z.string().default("").openapi({ title: "text" }),
+      z.array(chatCompletionContentPartTextSchema).openapi({ title: "array" }),
+    ])
+    .openapi({ [X_OPENAPI_OUTPUT_MARK_REQUIRED]: true }),
   role: z.literal("system"),
   name: z.string().optional(),
 });
 
 const chatCompletionDeveloperMessageParamSchema = z.object({
-  content: z.union([
-    z.string().default("").openapi({ title: "text" }),
-    z.array(chatCompletionContentPartTextSchema).openapi({ title: "array" }),
-  ]),
+  content: z
+    .union([
+      z.string().default("").openapi({ title: "text" }),
+      z.array(chatCompletionContentPartTextSchema).openapi({ title: "array" }),
+    ])
+    .openapi({ [X_OPENAPI_OUTPUT_MARK_REQUIRED]: true }),
   role: z.literal("developer"),
   name: z.string().optional(),
 });
@@ -72,28 +83,37 @@ export const chatCompletionContentPartImageSchema = z
   })
   .openapi("ChatCompletionContentPartImage");
 
+const chatCompletionContentPartTextWithTitleSchema =
+  chatCompletionContentPartTextSchema
+    .openapi({ title: "text" })
+    .openapi("ChatCompletionContentPartTextWithTitle");
+const chatCompletionContentPartImageWithTitleSchema =
+  chatCompletionContentPartImageSchema
+    .openapi({ title: "image_url" })
+    .openapi("ChatCompletionContentPartImageWithTitle");
+
 export const chatCompletionContentPartSchema = z
   .union([
-    chatCompletionContentPartTextSchema.openapi({ title: "text" }),
-    chatCompletionContentPartImageSchema.openapi({ title: "image_url" }),
+    chatCompletionContentPartTextWithTitleSchema,
+    chatCompletionContentPartImageWithTitleSchema,
   ])
   .openapi("ChatCompletionContentPart");
 
-export const chatCompletionContentSchema = z
-  .union([
-    z.string().default("").openapi({ title: "text" }),
-    z
-      .array(
-        chatCompletionContentPartSchema.openapi({
-          title: "chat_completion_content_part",
-        }),
-      )
-      .openapi({ title: "array" }),
-  ])
-  .openapi("ChatCompletionContent");
+export const chatCompletionContentSchema = z.union([
+  z.string().default("").openapi({ title: "text" }),
+  z
+    .array(
+      chatCompletionContentPartSchema.openapi({
+        title: "chat_completion_content_part",
+      }),
+    )
+    .openapi({ title: "array" }),
+]);
 
 const chatCompletionUserMessageParamSchema = z.object({
-  content: chatCompletionContentSchema,
+  content: chatCompletionContentSchema.openapi({
+    [X_OPENAPI_OUTPUT_MARK_REQUIRED]: true,
+  }),
   role: z.literal("user"),
   name: z.string().optional(),
 });
@@ -106,12 +126,17 @@ const functionSchema = z.object({
   name: z.string(),
 });
 const chatCompletionToolMessageParamSchema = z.object({
-  content: z.union([
-    z.string().default("").openapi({ title: "text" }),
-    z.array(chatCompletionContentPartTextSchema).openapi({ title: "array" }),
-  ]),
+  content: z
+    .union([
+      z.string().default("").openapi({ title: "text" }),
+      z.array(chatCompletionContentPartTextSchema).openapi({ title: "array" }),
+    ])
+    .openapi({ [X_OPENAPI_OUTPUT_MARK_REQUIRED]: true }),
   role: z.literal("tool"),
-  tool_call_id: z.string().default(""),
+  tool_call_id: z
+    .string()
+    .default("")
+    .openapi({ [X_OPENAPI_OUTPUT_MARK_REQUIRED]: true }),
 });
 const chatCompletionFunctionMessageParamSchema = z.object({
   content: z.string().nullable(),
@@ -131,11 +156,13 @@ export const chatCompletionMessageReasoningSchema = z
     id: z
       .string()
       .nullish()
-      .transform((x) => x ?? undefined),
+      .transform((x) => x ?? undefined)
+      .openapi({ [X_OPENAPI_OUTPUT_STRIP_NULL]: true }),
     content: z
       .string()
       .nullish()
-      .transform((x) => x ?? undefined),
+      .transform((x) => x ?? undefined)
+      .openapi({ [X_OPENAPI_OUTPUT_STRIP_NULL]: true }),
   })
   .describe(
     "Note: This is not part of the OpenAI API spec, but we added it for interoperability with multiple reasoning models.",
@@ -149,19 +176,25 @@ const chatCompletionAssistantMessageParamSchema = z.object({
     .nullish(),
   // NOTE: It's important to keep these optional, rather than nullish, to stay
   // inline with the OpenAI SDK's type definition.
-  function_call: functionCallSchema.nullish().transform((x) => x ?? undefined),
+  function_call: functionCallSchema
+    .nullish()
+    .transform((x) => x ?? undefined)
+    .openapi({ [X_OPENAPI_OUTPUT_STRIP_NULL]: true }),
   name: z
     .string()
     .nullish()
-    .transform((x) => x ?? undefined),
+    .transform((x) => x ?? undefined)
+    .openapi({ [X_OPENAPI_OUTPUT_STRIP_NULL]: true }),
   tool_calls: z
     .array(chatCompletionMessageToolCallSchema)
     .nullish()
-    .transform((x) => x ?? undefined),
+    .transform((x) => x ?? undefined)
+    .openapi({ [X_OPENAPI_OUTPUT_STRIP_NULL]: true }),
   reasoning: z
     .array(chatCompletionMessageReasoningSchema)
     .nullish()
-    .transform((x) => x ?? undefined),
+    .transform((x) => x ?? undefined)
+    .openapi({ [X_OPENAPI_OUTPUT_STRIP_NULL]: true }),
 });
 const chatCompletionFallbackMessageParamSchema = z.object({
   role: messageRoleSchema.exclude([
@@ -174,14 +207,16 @@ const chatCompletionFallbackMessageParamSchema = z.object({
   ]),
   content: z.string().nullish(),
 });
-export const chatCompletionOpenAIMessageParamSchema = z.union([
-  chatCompletionSystemMessageParamSchema.openapi({ title: "system" }),
-  chatCompletionUserMessageParamSchema.openapi({ title: "user" }),
-  chatCompletionAssistantMessageParamSchema.openapi({ title: "assistant" }),
-  chatCompletionToolMessageParamSchema.openapi({ title: "tool" }),
-  chatCompletionFunctionMessageParamSchema.openapi({ title: "function" }),
-  chatCompletionDeveloperMessageParamSchema.openapi({ title: "developer" }),
-]);
+export const chatCompletionOpenAIMessageParamSchema = z
+  .union([
+    chatCompletionSystemMessageParamSchema.openapi({ title: "system" }),
+    chatCompletionUserMessageParamSchema.openapi({ title: "user" }),
+    chatCompletionAssistantMessageParamSchema.openapi({ title: "assistant" }),
+    chatCompletionToolMessageParamSchema.openapi({ title: "tool" }),
+    chatCompletionFunctionMessageParamSchema.openapi({ title: "function" }),
+    chatCompletionDeveloperMessageParamSchema.openapi({ title: "developer" }),
+  ])
+  .openapi("ChatCompletionOpenAIMessageParam");
 
 export const chatCompletionMessageParamSchema = z
   .union([

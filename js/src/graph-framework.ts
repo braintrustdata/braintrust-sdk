@@ -1,11 +1,16 @@
 import { newId, Prompt } from "./logger";
 import {
-  FunctionId,
-  GraphData,
-  GraphNode,
-  GraphEdge,
-  PromptBlockData,
-} from "@braintrust/core/typespecs";
+  FunctionId as FunctionIdSchema,
+  type FunctionIdType as FunctionId,
+  GraphData as GraphDataSchema,
+  type GraphDataType as GraphData,
+  GraphNode as GraphNodeSchema,
+  type GraphNodeType as GraphNode,
+  GraphEdge as GraphEdgeSchema,
+  type GraphEdgeType as GraphEdge,
+  PromptBlockData as PromptBlockDataSchema,
+  type PromptBlockDataType as PromptBlockData,
+} from "./generated_types";
 
 export interface BuildContext {
   getFunctionId(functionObj: unknown): Promise<FunctionId>;

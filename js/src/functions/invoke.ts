@@ -1,9 +1,12 @@
 import {
-  functionIdSchema,
-  InvokeFunctionRequest,
-  Message,
-  StreamingMode,
-} from "@braintrust/core/typespecs";
+  FunctionId as functionIdSchema,
+  InvokeFunction as InvokeFunctionRequestSchema,
+  type InvokeFunctionType as InvokeFunctionRequest,
+  ChatCompletionMessageParam as MessageSchema,
+  type ChatCompletionMessageParamType as Message,
+  StreamingMode as StreamingModeSchema,
+  type StreamingModeType as StreamingMode,
+} from "../generated_types";
 import {
   _internalGetGlobalState,
   BraintrustState,
