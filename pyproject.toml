@@ -7,6 +7,7 @@ line-length = 119
 [tool.ruff.lint]
 select = [
     "I",    # isort
+    "F401", # unused imports
 ]
 [tool.ruff.lint.isort]
 known-third-party = ["braintrust_core", "braintrust_local", "autoevals"]
