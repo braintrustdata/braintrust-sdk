@@ -2,7 +2,7 @@ import { SourceMapConsumer } from "source-map";
 import * as fs from "fs/promises";
 import { EvaluatorFile, warning } from "../framework";
 import { loadModule } from "./load-module";
-import { CodeBundle } from "@braintrust/core/typespecs/dist";
+import { type CodeBundleType as CodeBundle } from "../generated_types";
 import path from "path";
 import type { Node } from "typescript";
 

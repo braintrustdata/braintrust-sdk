@@ -391,6 +391,10 @@ export const datasetEventSchema = z
   .openapi("DatasetEvent");
 export type DatasetEvent = z.infer<typeof datasetEventSchema>;
 
+const functionTypeEnumNullish = functionTypeEnum
+  .nullish()
+  .openapi("FunctionTypeEnumNullish");
+
 const promptSessionEventBaseSchema =
   generateBaseEventOpSchema("prompt_session");
 export const promptSessionEventSchema = z
@@ -406,7 +410,7 @@ export const promptSessionEventSchema = z
     prompt_data: z.unknown().describe("Data about the prompt"),
     function_data: z.unknown().describe("Data about the function"),
     // An empty (unspecified) function_type is equivalent to "task".
-    function_type: functionTypeEnum.nullish(),
+    function_type: functionTypeEnumNullish,
     object_data: z.unknown().describe("Data about the mapped data"),
     completion: z.unknown().describe("Data about the completion"),
     tags: promptSessionEventBaseSchema.shape.tags,

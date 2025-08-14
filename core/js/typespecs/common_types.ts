@@ -44,6 +44,15 @@ export const datetimeStringSchema = z
   })
   .openapi({ format: "date-time" });
 
+// Our internal zod -> OpenAPI generator currently generates openapi specs which
+// conform to the "input" zod type, even though in some cases we want it to
+// conform to the "output" type. So we define some custom directives for our
+// post-processor to make certain schema modifications as necessary. In the
+// future, we might utilize a converter that explicitly allows emitting
+// input/output types.
+export const X_OPENAPI_OUTPUT_STRIP_NULL = "x-openapi-output-strip-null";
+export const X_OPENAPI_OUTPUT_MARK_REQUIRED = "x-openapi-output-mark-required";
+
 export const objectTypes = z.enum([
   "project",
   "experiment",
@@ -77,9 +86,14 @@ export const objectTypesWithEvent = z.enum([
 ]);
 export type ObjectTypeWithEvent = z.infer<typeof objectTypesWithEvent>;
 
-export const eventObjectType = objectTypesWithEvent
-  .exclude(["project"])
-  .or(z.enum(["project_logs"]));
+export const eventObjectType = z.enum([
+  "project_logs",
+  "experiment",
+  "dataset",
+  "prompt",
+  "function",
+  "prompt_session",
+]);
 export type EventObjectType = z.infer<typeof eventObjectType>;
 
 export function getEventObjectType(

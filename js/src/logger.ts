@@ -36,32 +36,38 @@ import {
   isObject,
 } from "@braintrust/core";
 import {
-  AnyModelParam,
-  AttachmentReference,
-  BraintrustAttachmentReference,
-  ExternalAttachmentReference,
-  attachmentReferenceSchema,
-  ModelParams,
-  responseFormatJsonSchemaSchema,
-  AttachmentStatus,
-  attachmentStatusSchema,
-  BRAINTRUST_ATTACHMENT,
-  BRAINTRUST_PARAMS,
-  GitMetadataSettings,
-  gitMetadataSettingsSchema,
-  Message,
-  OpenAIMessage,
-  PromptData,
-  promptDataSchema,
-  Prompt as PromptRow,
-  promptSchema,
-  PromptSessionEvent,
-  RepoInfo,
-  Tools,
-  toolsSchema,
-  EXTERNAL_ATTACHMENT,
-  PromptBlockData,
-} from "@braintrust/core/typespecs";
+  type AnyModelParamsType as AnyModelParam,
+  AttachmentReference as attachmentReferenceSchema,
+  type AttachmentReferenceType as AttachmentReference,
+  BraintrustAttachmentReference as BraintrustAttachmentReferenceSchema,
+  type BraintrustAttachmentReferenceType as BraintrustAttachmentReference,
+  BraintrustModelParams as braintrustModelParamsSchema,
+  ChatCompletionTool as chatCompletionToolSchema,
+  type ChatCompletionToolType as ChatCompletionTool,
+  ExternalAttachmentReference as ExternalAttachmentReferenceSchema,
+  type ExternalAttachmentReferenceType as ExternalAttachmentReference,
+  type ModelParamsType as ModelParams,
+  ResponseFormatJsonSchema as responseFormatJsonSchemaSchema,
+  AttachmentStatus as attachmentStatusSchema,
+  type AttachmentStatusType as AttachmentStatus,
+  GitMetadataSettings as gitMetadataSettingsSchema,
+  type GitMetadataSettingsType as GitMetadataSettings,
+  type ChatCompletionMessageParamType as Message,
+  type ChatCompletionOpenAIMessageParamType as OpenAIMessage,
+  PromptData as promptDataSchema,
+  type PromptDataType as PromptData,
+  Prompt as promptSchema,
+  type PromptType as PromptRow,
+  type PromptSessionEventType as PromptSessionEvent,
+  type RepoInfoType as RepoInfo,
+  type PromptBlockDataType as PromptBlockData,
+} from "./generated_types";
+
+const BRAINTRUST_ATTACHMENT =
+  BraintrustAttachmentReferenceSchema.shape.type.value;
+const EXTERNAL_ATTACHMENT = ExternalAttachmentReferenceSchema.shape.type.value;
+const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
+
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
 import { z, ZodError } from "zod";
@@ -5538,7 +5544,7 @@ export type CompiledPromptParams = Omit<
 
 export type ChatPrompt = {
   messages: OpenAIMessage[];
-  tools?: Tools;
+  tools?: ChatCompletionTool[];
 };
 export type CompletionPrompt = {
   prompt: string;
@@ -5911,7 +5917,9 @@ export class Prompt<
         messages: renderedPrompt.messages,
         ...(renderedPrompt.tools
           ? {
-              tools: toolsSchema.parse(JSON.parse(renderedPrompt.tools)),
+              tools: chatCompletionToolSchema
+                .array()
+                .parse(JSON.parse(renderedPrompt.tools)),
             }
           : undefined),
       } as CompiledPrompt<Flavor>;

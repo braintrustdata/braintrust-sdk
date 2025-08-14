@@ -10,7 +10,9 @@ import { graphDataSchema } from "./graph";
 export const validRuntimesEnum = z.enum(["node", "python"]);
 export type Runtime = z.infer<typeof validRuntimesEnum>;
 
-export const functionTypeEnum = z.enum(["llm", "scorer", "task", "tool"]);
+export const functionTypeEnum = z
+  .enum(["llm", "scorer", "task", "tool"])
+  .openapi("FunctionTypeEnum");
 export type FunctionType = z.infer<typeof functionTypeEnum>;
 
 export const runtimeContextSchema = z.object({
@@ -180,16 +182,15 @@ export const functionIdSchema = z
       .openapi({ title: "inline_prompt" }),
   ])
   .describe("Options for identifying a function")
-  .openapi({
-    title: "FunctionId",
-    description: "Options for identifying a function",
-  });
+  .openapi("FunctionId");
 
 export type FunctionId = z.infer<typeof functionIdSchema>;
 
 export const useFunctionSchema = functionIdSchema;
 
-export const streamingModeEnum = z.enum(["auto", "parallel"]);
+export const streamingModeEnum = z
+  .enum(["auto", "parallel"])
+  .openapi("StreamingMode");
 export type StreamingMode = z.infer<typeof streamingModeEnum>;
 
 const spanParentObjectTypeSchema = z.enum([
@@ -197,37 +198,39 @@ const spanParentObjectTypeSchema = z.enum([
   "experiment",
   "playground_logs",
 ]);
-export const invokeParent = z.union([
-  z
-    .object({
-      object_type: spanParentObjectTypeSchema,
-      object_id: z
-        .string()
-        .describe("The id of the container object you are logging to"),
-      row_ids: z
-        .object({
-          id: z.string().describe("The id of the row"),
-          span_id: z.string().describe("The span_id of the row"),
-          root_span_id: z.string().describe("The root_span_id of the row"),
-        })
-        .nullish()
-        .describe("Identifiers for the row to to log a subspan under"),
-      propagated_event: z
-        .record(z.unknown())
-        .nullish()
-        .describe(
-          "Include these properties in every span created under this parent",
-        ),
-    })
-    .describe("Span parent properties")
-    .openapi({ title: "span_parent_struct" }),
-  z
-    .string()
-    .optional()
-    .describe(
-      "The parent's span identifier, created by calling `.export()` on a span",
-    ),
-]);
+export const invokeParentSchema = z
+  .union([
+    z
+      .object({
+        object_type: spanParentObjectTypeSchema,
+        object_id: z
+          .string()
+          .describe("The id of the container object you are logging to"),
+        row_ids: z
+          .object({
+            id: z.string().describe("The id of the row"),
+            span_id: z.string().describe("The span_id of the row"),
+            root_span_id: z.string().describe("The root_span_id of the row"),
+          })
+          .nullish()
+          .describe("Identifiers for the row to to log a subspan under"),
+        propagated_event: z
+          .record(z.unknown())
+          .nullish()
+          .describe(
+            "Include these properties in every span created under this parent",
+          ),
+      })
+      .describe("Span parent properties")
+      .openapi({ title: "span_parent_struct" }),
+    z
+      .string()
+      .optional()
+      .describe(
+        "The parent's span identifier, created by calling `.export()` on a span",
+      ),
+  ])
+  .openapi("InvokeParent");
 
 export const invokeFunctionNonIdArgsSchema = z.object({
   input: z
@@ -256,7 +259,7 @@ export const invokeFunctionNonIdArgsSchema = z.object({
     .describe(
       "If the function is an LLM, additional messages to pass along to it",
     ),
-  parent: invokeParent.describe("Options for tracing the function call"),
+  parent: invokeParentSchema.describe("Options for tracing the function call"),
   stream: z
     .boolean()
     .nullish()
@@ -331,7 +334,7 @@ export const runEvalSchema = z
       .describe(
         "Optional experiment-level metadata to store about the evaluation. You can later use this to slice & dice across experiments.",
       ),
-    parent: invokeParent.describe("Options for tracing the evaluation"),
+    parent: invokeParentSchema.describe("Options for tracing the evaluation"),
     stream: z
       .boolean()
       .optional()
@@ -357,7 +360,7 @@ export const runEvalSchema = z
     max_concurrency: z
       .number()
       .nullish()
-      .transform((val) => (val === undefined ? 10 : val))
+      .default(10)
       .describe(
         "The maximum number of tasks/scorers that will be run concurrently. Defaults to 10. If null is provided, no max concurrency will be used.",
       ),
@@ -494,10 +497,12 @@ export const sseProgressEventDataSchema = z
   .openapi("SSEProgressEventData");
 export type SSEProgressEventData = z.infer<typeof sseProgressEventDataSchema>;
 
-export const sseConsoleEventDataSchema = z.object({
-  stream: z.enum(["stderr", "stdout"]),
-  message: z.string(),
-});
+export const sseConsoleEventDataSchema = z
+  .object({
+    stream: z.enum(["stderr", "stdout"]),
+    message: z.string(),
+  })
+  .openapi("SSEConsoleEventData");
 export type SSEConsoleEventData = z.infer<typeof sseConsoleEventDataSchema>;
 
 export const callEventSchema = z
@@ -515,35 +520,23 @@ export const callEventSchema = z
 
 export type CallEventSchema = z.infer<typeof callEventSchema>;
 
-export const scoreSchema = z
-  .union([
-    z.object({
-      name: z.string(),
-      score: z.number().min(0).max(1).nullable().default(null), // Sometimes we get an empty value over the wire
-      metadata: z
-        .record(z.unknown())
-        .optional()
-        .transform((data) => data ?? undefined),
-    }),
-    z.number().min(0).max(1),
-    z.boolean().transform((b) => (b ? 1 : 0)),
-    z.null(),
-  ])
-  .openapi("ScorerScore");
-
-export const ifExistsEnum = z.enum(["error", "ignore", "replace"]);
+export const ifExistsEnum = z
+  .enum(["error", "ignore", "replace"])
+  .openapi("IfExists");
 export type IfExists = z.infer<typeof ifExistsEnum>;
 export const DEFAULT_IF_EXISTS: IfExists = "error";
 
-export const toolFunctionDefinitionSchema = z.object({
-  type: z.literal("function"),
-  function: z.object({
-    name: z.string(),
-    description: z.string().optional(),
-    parameters: z.record(z.unknown()).optional(),
-    strict: z.boolean().nullish(),
-  }),
-});
+export const toolFunctionDefinitionSchema = z
+  .object({
+    type: z.literal("function"),
+    function: z.object({
+      name: z.string(),
+      description: z.string().optional(),
+      parameters: z.record(z.unknown()).optional(),
+      strict: z.boolean().nullish(),
+    }),
+  })
+  .openapi("ToolFunctionDefinition");
 export type ToolFunctionDefinition = z.infer<
   typeof toolFunctionDefinitionSchema
 >;

@@ -63,6 +63,14 @@ from .db_fields import (
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
+from .generated_types import (
+    AttachmentReference,
+    AttachmentStatus,
+    DatasetEvent,
+    ExperimentEvent,
+    PromptOptions,
+    SpanAttributes,
+)
 from .git_fields import GitMetadataSettings, RepoInfo
 from .gitutil import get_past_n_ancestors, get_repo_info
 from .merge_row_batch import batch_items, merge_row_batch
@@ -75,7 +83,6 @@ from .queue import DEFAULT_QUEUE_SIZE, LogQueue
 from .serializable_data_class import SerializableDataClass
 from .span_identifier_v3 import SpanComponentsV3, SpanObjectTypeV3
 from .span_types import SpanTypeAttribute
-from .types import AttachmentReference, AttachmentStatus, DatasetEvent, ExperimentEvent, PromptOptions, SpanAttributes
 from .util import (
     GLOBAL_PROJECT,
     AugmentedHTTPError,

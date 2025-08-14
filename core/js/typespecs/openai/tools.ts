@@ -8,10 +8,11 @@ export const functionDefinitionSchema = z.object({
   parameters: functionParametersSchema.optional(),
 });
 
-export const chatCompletionToolSchema = z.object({
-  function: functionDefinitionSchema,
-  type: z.literal("function"),
-});
+export const chatCompletionToolSchema = z
+  .object({
+    function: functionDefinitionSchema,
+    type: z.literal("function"),
+  })
+  .openapi("ChatCompletionTool");
 
-export const toolsSchema = z.array(chatCompletionToolSchema);
-export type Tools = z.infer<typeof toolsSchema>;
+export type ChatCompletionTool = z.infer<typeof chatCompletionToolSchema>;
