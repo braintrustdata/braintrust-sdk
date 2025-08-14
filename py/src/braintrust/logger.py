@@ -4627,9 +4627,6 @@ def get_prompt_versions(project_id: str, prompt_id: str) -> List[str]:
     Returns:
         List of transaction IDs (_xact_id) for entries where audit_data.action is "upsert"
     """
-    state = _internal_get_global_state()
-    if not state or not state.logged_in:
-        raise Exception("Must log in first")
 
     query = {
         "from": {
@@ -4657,7 +4654,7 @@ def get_prompt_versions(project_id: str, prompt_id: str) -> List[str]:
         },
     }
 
-    resp = state.api_conn().post(
+    resp = _state.api_conn().post(
         "btql",
         json={
             "query": query,
