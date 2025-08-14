@@ -34,8 +34,7 @@ def invoke(
     api_key: Optional[str] = None,
     app_url: Optional[str] = None,
     force_login: bool = False,
-) -> T:
-    ...
+) -> T: ...
 
 
 @overload
@@ -61,8 +60,7 @@ def invoke(
     api_key: Optional[str] = None,
     app_url: Optional[str] = None,
     force_login: bool = False,
-) -> BraintrustStream:
-    ...
+) -> BraintrustStream: ...
 
 
 def invoke(

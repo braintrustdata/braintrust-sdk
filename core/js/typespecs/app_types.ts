@@ -309,6 +309,15 @@ export const playgroundLogsLogIdLiteralSchema = z
   .literal("x")
   .describe("A literal 'x' which identifies the object as a playground log");
 
+// Defined as a separate openapi schema from promptDataSchema, so that the
+// nullish doesn't bleed into the openapi schema for the raw PromptData type.
+const promptDataNullishSchema = promptDataSchema
+  .nullish()
+  .openapi("PromptDataNullish");
+const functionTypeEnumNullish = functionTypeEnum
+  .nullish()
+  .openapi("FunctionTypeEnumNullish");
+
 export const promptBaseSchema = generateBaseTableSchema("prompt");
 const promptSchemaObject = z.object({
   id: promptBaseSchema.shape.id,
@@ -325,13 +334,13 @@ const promptSchemaObject = z.object({
   slug: z.string().describe("Unique identifier for the prompt"),
   description: promptBaseSchema.shape.description,
   created: promptBaseSchema.shape.created,
-  prompt_data: promptDataSchema
-    .nullish()
-    .describe("The prompt, model, and its parameters"),
+  prompt_data: promptDataNullishSchema.describe(
+    "The prompt, model, and its parameters",
+  ),
   tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
   metadata: promptBaseSchema.shape.metadata,
   // An empty (unspecified) function_type is equivalent to "task".
-  function_type: functionTypeEnum.nullish(),
+  function_type: functionTypeEnumNullish,
 });
 
 export const promptSchema = promptSchemaObject.openapi("Prompt");

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { X_OPENAPI_OUTPUT_STRIP_NULL } from "./common_types";
 
 export const BRAINTRUST_ATTACHMENT = "braintrust_attachment";
 export const EXTERNAL_ATTACHMENT = "external_attachment";
@@ -94,6 +95,7 @@ export const attachmentStatusSchema = z
       .string()
       .nullish()
       .transform((x) => x || undefined)
+      .openapi({ [X_OPENAPI_OUTPUT_STRIP_NULL]: true })
       .describe("Describes the error encountered while uploading."),
   })
   .openapi("AttachmentStatus");

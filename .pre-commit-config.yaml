@@ -8,11 +8,10 @@ repos:
         exclude: queryscript/tests/.*\.(expected|test)$
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.12.8
+    rev: v0.12.7
     hooks:
-      - id: ruff-check
-        args: [--fix]
-      - id: ruff-format
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
   - repo: https://github.com/codespell-project/codespell
     rev: v2.2.5
     hooks:
@@ -31,4 +30,4 @@ repos:
     rev: v3.3.2
     hooks:
       - id: prettier
-        exclude: ^(extension/|.*\.json|.*pnpm-lock.yaml)$
+        exclude: ^(extension/|.*\.json|.*pnpm-lock.yaml|js/scripts/openapi_zod_client_output_template\.hbs)$

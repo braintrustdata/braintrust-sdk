@@ -18,11 +18,11 @@ import {
   checkOrigin,
 } from "./authorize";
 import {
-  FunctionId,
-  InvokeFunctionRequest,
-  RunEvalRequest,
-  SSEProgressEventData,
-} from "@braintrust/core/typespecs";
+  type FunctionIdType as FunctionId,
+  type InvokeFunctionType as InvokeFunctionRequest,
+  type RunEvalType as RunEvalRequest,
+  type SSEProgressEventDataType as SSEProgressEventData,
+} from "../src/generated_types";
 import {
   BaseMetadata,
   BraintrustState,
@@ -406,13 +406,18 @@ function makeEvalParametersSchema(
           },
         ];
       } else {
+        // Since this schema is bundled, it won't pass an instanceof check. For
+        // some reason, aliasing it to `z.ZodSchema` leads to `error TS2589:
+        // Type instantiation is excessively deep and possibly infinite.` So
+        // just using `any` to turn off the typesystem.
+        //
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        const schema = zodToJsonSchema(value as any);
         return [
           name,
           {
             type: "data",
-            // Since this schema is bundled, it won't pass an instanceof check.
-            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-            schema: zodToJsonSchema(value as z.ZodSchema),
+            schema,
             default: value.default,
             description: value.description,
           },
