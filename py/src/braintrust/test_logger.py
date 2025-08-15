@@ -9,12 +9,13 @@ from unittest import TestCase
 import pytest
 
 import braintrust
-from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt, init, init_logger, logger
+from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt, init_logger, logger
 from braintrust.logger import _deep_copy_event, _extract_attachments
 from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
 from braintrust.test_helpers import (
     assert_dict_matches,
     assert_logged_out,
+    init_test_exp,
     init_test_logger,
     simulate_login,  # noqa: F401 # type: ignore[reportUnusedImport]
     simulate_logout,
@@ -1188,7 +1189,7 @@ def test_invalid_scores_dont_throw_error(with_memory_logger):
     ]
 
     # experiments should raise errors for invalid scores
-    exp = init(__name__)
+    exp = init_test_exp(__name__)
     for i, s in enumerate(invalid_scores.copy()):
         if s is None:
             continue
@@ -1229,7 +1230,7 @@ def test_invalid_metadata_dont_throw_error(with_memory_logger):
     ]
 
     # experiments should raise errors for invalid metadata
-    exp = init(__name__)
+    exp = init_test_exp(__name__)
     for m in invalid_metadata.copy():
         if m is None:
             continue
@@ -1271,7 +1272,7 @@ def test_invalid_tags_dont_throw_error(with_memory_logger):
     ]
 
     # experiments should raise errors for invalid tags
-    exp = init(__name__)
+    exp = init_test_exp(__name__)
     for t in invalid_tags.copy():
         if t is None:
             continue
@@ -1317,7 +1318,7 @@ def test_invalid_span_attributes_dont_throw_error(with_memory_logger):
     ]
 
     # experiments should raise errors for invalid span_attributes
-    exp = init(__name__)
+    exp = init_test_exp(__name__)
     for sa in invalid_span_attributes.copy():
         if sa is None:
             continue
