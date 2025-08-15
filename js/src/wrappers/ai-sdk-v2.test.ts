@@ -423,4 +423,190 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
     expect(typeof middleware.wrapGenerate).toBe("function");
     expect(typeof middleware.wrapStream).toBe("function");
   });
+
+  test(
+    "anthropic token counts consistent between direct and AI SDK wrappers with prompt caching",
+    { timeout: 30000 },
+    async () => {
+      const Anthropic = (await import("@anthropic-ai/sdk")).default;
+      const { wrapAnthropic } = await import("./anthropic");
+      const { LONG_SYSTEM_PROMPT, TEST_USER_PROMPT, CACHEABLE_SYSTEM_MESSAGE } =
+        await import("./test-prompts");
+
+      // Skip test if no API key available
+      if (!process.env.ANTHROPIC_API_KEY) {
+        console.warn(
+          "Skipping anthropic token count test - no valid ANTHROPIC_API_KEY",
+        );
+        return;
+      }
+
+      const directClient = wrapAnthropic(
+        new Anthropic({
+          apiKey: process.env.ANTHROPIC_API_KEY,
+        }),
+      );
+
+      // FIRST CALL: Direct Anthropic wrapper - this should create the cache
+      console.log("🔄 Making first call (direct API) to create cache...");
+      expect(await testLogger.drain()).toHaveLength(0);
+
+      try {
+        await directClient.messages.create({
+          model: testAnthropicModelName,
+          max_tokens: 50,
+          system: CACHEABLE_SYSTEM_MESSAGE,
+          messages: [
+            {
+              role: "user",
+              content: TEST_USER_PROMPT,
+            },
+          ],
+        });
+      } catch (error: any) {
+        if (
+          error.message?.includes("authentication") ||
+          error.message?.includes("api_key")
+        ) {
+          console.warn("Skipping token count test - authentication failed");
+          return;
+        }
+        throw error;
+      }
+
+      // Get the logged data from the direct Anthropic wrapper
+      const firstSpans = await testLogger.drain();
+      expect(firstSpans).toHaveLength(1);
+      const firstSpan = firstSpans[0] as any;
+
+      console.log("📊 First call (Direct wrapper) logged metrics:");
+      console.log(
+        `   Input tokens: ${firstSpan.metrics?.prompt_tokens || "N/A"}`,
+      );
+      console.log(
+        `   Output tokens: ${firstSpan.metrics?.completion_tokens || "N/A"}`,
+      );
+      console.log(`   Total tokens: ${firstSpan.metrics?.tokens || "N/A"}`);
+      console.log(
+        `   Cache tokens: ${firstSpan.metrics?.prompt_cached_tokens || 0}`,
+      );
+
+      // Wait before second call
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // SECOND CALL: AI SDK wrapper - this should hit the cache
+      console.log("🔄 Making second call (AI SDK) to test cached behavior...");
+      const wrappedAnthropicModel = wrapLanguageModel({
+        model: anthropic(testAnthropicModelName),
+        middleware: BraintrustMiddleware({
+          debug: true,
+          name: "TokenCountTestMiddleware",
+        }),
+      });
+
+      await generateText({
+        model: wrappedAnthropicModel,
+        messages: [
+          {
+            role: "system",
+            content: LONG_SYSTEM_PROMPT,
+            providerOptions: {
+              anthropic: { cacheControl: { type: "ephemeral" } },
+            },
+          },
+          {
+            role: "user",
+            content: TEST_USER_PROMPT,
+          },
+        ],
+        maxRetries: 0,
+      });
+
+      const aiSdkSpans = await testLogger.drain();
+      expect(aiSdkSpans).toHaveLength(1);
+      const aiSdkSpan = aiSdkSpans[0] as any;
+
+      // THIRD CALL: Direct Anthropic wrapper again - this should also hit the cache for comparison
+      console.log(
+        "🔄 Making third call (direct API) to verify cached behavior...",
+      );
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      try {
+        await directClient.messages.create({
+          model: testAnthropicModelName,
+          max_tokens: 50,
+          system: CACHEABLE_SYSTEM_MESSAGE,
+          messages: [
+            {
+              role: "user",
+              content: TEST_USER_PROMPT,
+            },
+          ],
+        });
+      } catch (error: any) {
+        throw error;
+      }
+
+      // Get the logged data from the third direct call
+      const thirdSpans = await testLogger.drain();
+      expect(thirdSpans).toHaveLength(1);
+      const thirdSpan = thirdSpans[0] as any;
+
+      console.log("📊 Second call (AI SDK) logged metrics:");
+      console.log(`   Input tokens: ${aiSdkSpan.metrics.prompt_tokens}`);
+      console.log(`   Output tokens: ${aiSdkSpan.metrics.completion_tokens}`);
+      console.log(`   Total tokens: ${aiSdkSpan.metrics.tokens}`);
+      console.log(
+        `   Cache tokens: ${aiSdkSpan.metrics.prompt_cached_tokens || 0}`,
+      );
+
+      console.log("📊 Third call (Direct wrapper) logged metrics:");
+      console.log(
+        `   Input tokens: ${thirdSpan.metrics?.prompt_tokens || "N/A"}`,
+      );
+      console.log(
+        `   Output tokens: ${thirdSpan.metrics?.completion_tokens || "N/A"}`,
+      );
+      console.log(`   Total tokens: ${thirdSpan.metrics?.tokens || "N/A"}`);
+      console.log(
+        `   Cache tokens: ${thirdSpan.metrics?.prompt_cached_tokens || 0}`,
+      );
+
+      // Verify both wrappers produce the expected Braintrust token field names
+      expect(aiSdkSpan.metrics).toHaveProperty("prompt_tokens");
+      expect(aiSdkSpan.metrics).toHaveProperty("completion_tokens");
+      expect(aiSdkSpan.metrics).toHaveProperty("tokens");
+
+      expect(thirdSpan.metrics).toHaveProperty("prompt_tokens");
+      expect(thirdSpan.metrics).toHaveProperty("completion_tokens");
+      expect(thirdSpan.metrics).toHaveProperty("tokens");
+
+      // Compare the two cached calls (2nd AI SDK vs 3rd Direct) - they should log identically
+      expect(aiSdkSpan.metrics.prompt_tokens).toBe(
+        thirdSpan.metrics.prompt_tokens,
+      );
+      expect(aiSdkSpan.metrics.completion_tokens).toBe(
+        thirdSpan.metrics.completion_tokens,
+      );
+      expect(aiSdkSpan.metrics.tokens).toBe(thirdSpan.metrics.tokens);
+      expect(aiSdkSpan.metrics.prompt_cached_tokens).toBe(
+        thirdSpan.metrics.prompt_cached_tokens,
+      );
+
+      // Verify provider detection
+      expect(aiSdkSpan.metadata.provider).toBe("anthropic");
+      expect(thirdSpan.metadata.provider).toBe("anthropic");
+
+      console.log(
+        "✅ Token count consistency verified - both cached calls log identically:",
+      );
+      console.log(
+        `   AI SDK (2nd):    ${aiSdkSpan.metrics.prompt_tokens}/${aiSdkSpan.metrics.completion_tokens} tokens (${aiSdkSpan.metrics.tokens} total, ${aiSdkSpan.metrics.prompt_cached_tokens} cached)`,
+      );
+      console.log(
+        `   Direct (3rd):    ${thirdSpan.metrics.prompt_tokens}/${thirdSpan.metrics.completion_tokens} tokens (${thirdSpan.metrics.tokens} total, ${thirdSpan.metrics.prompt_cached_tokens} cached)`,
+      );
+    },
+  );
 });
