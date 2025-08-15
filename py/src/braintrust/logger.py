@@ -8,6 +8,7 @@ import datetime
 import inspect
 import json
 import logging
+import math
 import os
 import sys
 import textwrap
@@ -2073,14 +2074,18 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any])
     metrics = event.get("metrics")
     if metrics:
         if not isinstance(metrics, dict):
-            raise ValueError("metrics must be a dictionary")
-        for key in metrics.keys():
-            if not isinstance(key, str):
-                raise ValueError("metric keys must be strings")
+            metrics = {}
+            event["metrics"] = metrics
 
-        for value in metrics.values():
-            if not isinstance(value, (int, float)):
-                raise ValueError("metric values must be numbers")
+        invalid_metric_keys = []
+        for k, v in metrics.items():
+            if not isinstance(k, str):
+                invalid_metric_keys.append(k)
+            elif not isinstance(v, (int, float)) or not math.isfinite(v):
+                invalid_metric_keys.append(k)
+
+        for k in invalid_metric_keys:
+            del metrics[k]
 
     tags = event.get("tags")
     if tags:

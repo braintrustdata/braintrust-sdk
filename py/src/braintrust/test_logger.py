@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import os
 import time
 from typing import AsyncGenerator, List
@@ -1129,3 +1130,41 @@ async def test_traced_async_generator_unlimited_with_minus_one(with_memory_logge
         os.environ.pop("BRAINTRUST_MAX_GENERATOR_ITEMS", None)
         if original:
             os.environ["BRAINTRUST_MAX_GENERATOR_ITEMS"] = original
+
+
+def test_invalid_metrics_dont_throw_error(with_memory_logger):
+    init_test_logger(__name__)
+
+    invalid_numbers = [
+        "not a number",
+        None,
+        [],
+        {},
+        math.nan,
+        math.inf,
+        -math.inf,
+    ]
+
+    for n in invalid_numbers:
+        with logger.start_span("test") as span:
+            span.log(metrics={"invalid": n})
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == len(invalid_numbers)
+
+    for log in logs:
+        assert "invalid" not in log["metrics"]
+
+    # verify metrics that are dicts dont throw
+    invalid_metrics = [None, 1, "abc"]
+    for i in invalid_metrics:
+        with logger.start_span("test") as span:
+            span.log(metrics=i)
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == len(invalid_metrics)
+    for log in logs:
+        # only start and end metrics should be logged
+        assert "start" in log.get("metrics")
+        assert "end" in log.get("metrics")
+        assert len(log.get("metrics")) == 2
