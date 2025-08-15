@@ -9,7 +9,7 @@ from unittest import TestCase
 import pytest
 
 import braintrust
-from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt, init_logger, logger
+from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt, init, init_logger, logger
 from braintrust.logger import _deep_copy_event, _extract_attachments
 from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, PromptSchema
 from braintrust.test_helpers import (
@@ -1171,7 +1171,6 @@ def test_invalid_metrics_dont_throw_error(with_memory_logger):
 
 
 def test_invalid_scores_dont_throw_error(with_memory_logger):
-    init_test_logger(__name__)
 
     invalid_scores = [
         {"invalid": "not a number"},
@@ -1191,17 +1190,33 @@ def test_invalid_scores_dont_throw_error(with_memory_logger):
         [],  # not a dict
     ]
 
-    for scores in invalid_scores:
-        with logger.start_span("test") as span:
-            span.log(scores=scores)
+    # experiments should raise errors for invalid scores
+    exp = init(__name__)
+    for s in invalid_scores.copy():
+        if s is None:
+            continue
+        with exp.start_span("test") as span:
+            try:
+                span.log(scores=s)
+            except ValueError:
+                pass
+            else:
+                assert False, f"Expected ValueError for score {s}"
+    with_memory_logger.pop()
 
+    # projects should silently drop invalid scores
+    lg = init_test_logger(__name__)
+    for scores in invalid_scores.copy():
+        with lg.start_span("test") as span:
+            span.log(scores=scores)
     logs = with_memory_logger.pop()
     assert len(logs) == len(invalid_scores)
-
     for log in logs:
         # All invalid scores should result in empty scores dict
         scores = log.get("scores", {})
         assert scores == {}
+
+
 
 
 def test_invalid_metadata_dont_throw_error(with_memory_logger):

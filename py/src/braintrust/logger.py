@@ -2018,16 +2018,20 @@ def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
     return event
 
 
-def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any]) -> Dict[str, Any]:
+def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any], raise_errors: bool = True) -> Dict[str, Any]:
     scores = event.get("scores")
     if scores is not None:
         if not isinstance(scores, dict):
+            if raise_errors:
+                raise ValueError("scores must be a dictionary of names with scores")
             scores = {}
             event["scores"] = scores
 
         invalid_score_keys = []
         for name, score in scores.items():
             if not isinstance(name, str):
+                if raise_errors:
+                    raise ValueError("scores must be a dictionary of names with scores")
                 invalid_score_keys.append(name)
                 continue
 
@@ -2039,6 +2043,8 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any])
                 scores[name] = score
 
             if not isinstance(score, (int, float)) or not (0 <= score <= 1):
+                if raise_errors:
+                    raise ValueError("scores must be a number between 0 and 1")
                 invalid_score_keys.append(name)
                 continue
 
@@ -3426,7 +3432,12 @@ class SpanImpl(Span):
     def log_internal(
         self, event: Optional[Dict[str, Any]] = None, internal_data: Optional[Dict[str, Any]] = None
     ) -> None:
-        serializable_partial_record, lazy_partial_record = split_logging_data(event, internal_data)
+
+        # We'll raise errors on validation if we're running an experiment (e.g. in CI / on a dev machine)
+        # but not if we're in a project (e.g. likely running in a customer prod app)
+        raise_errors = self.parent_object_type == SpanObjectTypeV3.EXPERIMENT
+        serializable_partial_record, lazy_partial_record = split_logging_data(
+            event, internal_data, raise_errors=raise_errors)
 
         # We both check for serializability and round-trip `partial_record`
         # through JSON in order to create a "deep copy". This has the benefit of
@@ -3639,12 +3650,12 @@ def _strip_nones(d: T, deep: bool) -> T:
 
 
 def split_logging_data(
-    event: Optional[Dict[str, Any]], internal_data: Optional[Dict[str, Any]]
+    event: Optional[Dict[str, Any]], internal_data: Optional[Dict[str, Any]], raise_errors: bool
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     # There should be no overlap between the dictionaries being merged,
     # except for `sanitized` and `internal_data`, where the former overrides
     # the latter.
-    sanitized = _validate_and_sanitize_experiment_log_partial_args(event or {})
+    sanitized = _validate_and_sanitize_experiment_log_partial_args(event or {}, raise_errors=raise_errors)
     sanitized_and_internal_data = _strip_nones(internal_data or {}, deep=True)
     merge_dicts(sanitized_and_internal_data, _strip_nones(sanitized, deep=False))
 
