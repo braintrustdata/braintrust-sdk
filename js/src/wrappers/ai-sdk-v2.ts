@@ -117,7 +117,11 @@ function getNumberProperty(obj: unknown, key: string): number | undefined {
   return typeof value === "number" ? value : undefined;
 }
 
-function normalizeUsageMetrics(usage: unknown): Record<string, number> {
+function normalizeUsageMetrics(
+  usage: unknown,
+  provider?: string,
+  providerMetadata?: Record<string, unknown>,
+): Record<string, number> {
   const metrics: Record<string, number> = {};
 
   // AI SDK provides these standard fields
@@ -145,6 +149,40 @@ function normalizeUsageMetrics(usage: unknown): Record<string, number> {
   const cachedInputTokens = getNumberProperty(usage, "cachedInputTokens");
   if (cachedInputTokens !== undefined) {
     metrics.prompt_cached_tokens = cachedInputTokens;
+  }
+
+  // For Anthropic providers, implement the same token aggregation logic as wrapAnthropic
+  if (provider === "anthropic") {
+    // Look for Anthropic-specific cache tokens in providerMetadata.anthropic
+    const anthropicMetadata = providerMetadata?.anthropic as any;
+
+    if (anthropicMetadata) {
+      const cacheReadTokens =
+        getNumberProperty(anthropicMetadata.usage, "cache_read_input_tokens") ||
+        0;
+      const cacheCreationTokens =
+        getNumberProperty(
+          anthropicMetadata.usage,
+          "cache_creation_input_tokens",
+        ) || 0;
+
+      if (cacheReadTokens > 0) {
+        metrics.prompt_cached_tokens = cacheReadTokens;
+      }
+
+      if (cacheCreationTokens > 0) {
+        metrics.prompt_cache_creation_tokens = cacheCreationTokens;
+      }
+
+      // Recalculate totals to include cache tokens (same logic as anthropic.ts)
+      const promptTokensWithCache =
+        (metrics.prompt_tokens || 0) +
+        (metrics.prompt_cached_tokens || 0) +
+        (metrics.prompt_cache_creation_tokens || 0);
+
+      metrics.prompt_tokens = promptTokensWithCache;
+      metrics.tokens = promptTokensWithCache + (metrics.completion_tokens || 0);
+    }
   }
 
   return metrics;
@@ -212,7 +250,11 @@ export function BraintrustMiddleware(
         span.log({
           output: result.content,
           metadata,
-          metrics: normalizeUsageMetrics(result.usage),
+          metrics: normalizeUsageMetrics(
+            result.usage,
+            provider,
+            result.providerMetadata,
+          ),
         });
 
         return result;
@@ -310,7 +352,11 @@ export function BraintrustMiddleware(
               span.log({
                 output,
                 metadata,
-                metrics: normalizeUsageMetrics(finalUsage),
+                metrics: normalizeUsageMetrics(
+                  finalUsage,
+                  provider,
+                  providerMetadata,
+                ),
               });
 
               span.end();
