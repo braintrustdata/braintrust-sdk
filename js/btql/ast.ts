@@ -333,5 +333,6 @@ export const parsedQuerySchema = z.strictObject({
   weighted_scores: z.array(aliasExpr).nullish(),
   custom_columns: z.array(aliasExpr).nullish(),
   preview_length: z.number().int().nullish(),
+  inference_budget: z.number().int().nullish(),
 });
 export type ParsedQuery = z.infer<typeof parsedQuerySchema>;
