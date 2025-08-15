@@ -2046,10 +2046,19 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any])
         raise ValueError(f"The following keys are not permitted: {forbidden_keys}")
 
     scores = event.get("scores")
-    if scores:
+    if not scores:
+        scores = {}
+        event["scores"] = scores
+    else:
+        if not isinstance(scores, dict):
+            scores = {}
+            event["scores"] = scores
+
+        invalid_score_keys = []
         for name, score in scores.items():
             if not isinstance(name, str):
-                raise ValueError("score names must be strings")
+                invalid_score_keys.append(name)
+                continue
 
             if score is None:
                 continue
@@ -2058,10 +2067,12 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any])
                 score = 1 if score else 0
                 scores[name] = score
 
-            if not isinstance(score, (int, float)):
-                raise ValueError("score values must be numbers")
-            if score < 0 or score > 1:
-                raise ValueError("score values must be between 0 and 1")
+            if not isinstance(score, (int, float)) or not (0 <= score <= 1):
+                invalid_score_keys.append(name)
+                continue
+
+        for k in invalid_score_keys:
+            del scores[k]
 
     metadata = event.get("metadata")
     if metadata:
