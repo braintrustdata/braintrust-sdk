@@ -1,5 +1,4 @@
 // Very long system prompt to trigger Anthropic prompt caching (1500+ tokens)
-// Based on the prompt from js/examples/trace_comparison_common.js
 export const LONG_SYSTEM_PROMPT = `You are a mega expert software engineering assistant with deep knowledge across multiple programming languages, frameworks, and development methodologies. Your expertise spans the following comprehensive areas:
 
 **Programming Languages & Technologies:**
