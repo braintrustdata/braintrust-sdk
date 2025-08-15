@@ -3448,7 +3448,9 @@ class SpanImpl(Span):
             self._logged_end_time = serializable_partial_record["metrics"]["end"]
 
         if len(serializable_partial_record.get("tags", [])) > 0 and self.span_parents:
-            raise Exception("Tags can only be logged to the root span")
+            # Remove tags when logging to non-root spans instead of throwing error
+            serializable_partial_record = dict(serializable_partial_record)
+            del serializable_partial_record["tags"]
 
         def compute_record() -> Dict[str, Any]:
             return dict(
