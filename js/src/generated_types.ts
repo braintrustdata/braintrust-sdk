@@ -1,4 +1,4 @@
-// Auto-generated file (internal git SHA 3d080feb201289a076bd933b2b6add14dbea0c0f) -- do not modify
+// Auto-generated file (internal git SHA 1ac2b47b4b217608a0eea90a6f5299afce9e1a64) -- do not modify
 
 import { z } from "zod";
 
@@ -1279,6 +1279,18 @@ export const RunEval = z.object({
   tags: z.array(z.string()).optional(),
 });
 export type RunEvalType = z.infer<typeof RunEval>;
+export const ServiceToken = z.object({
+  id: z.string().uuid(),
+  created: z.union([z.string(), z.null()]).optional(),
+  name: z.string(),
+  preview_name: z.string(),
+  user_id: z.union([z.string(), z.null()]).optional(),
+  user_email: z.union([z.string(), z.null()]).optional(),
+  user_given_name: z.union([z.string(), z.null()]).optional(),
+  user_family_name: z.union([z.string(), z.null()]).optional(),
+  org_id: z.union([z.string(), z.null()]).optional(),
+});
+export type ServiceTokenType = z.infer<typeof ServiceToken>;
 export const SpanIFrame = z.object({
   id: z.string().uuid(),
   project_id: z.string().uuid(),

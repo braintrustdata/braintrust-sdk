@@ -5479,6 +5479,73 @@
           }
         ]
       },
+      "ServiceToken": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the service token"
+          },
+          "created": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Date of service token creation"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the service token"
+          },
+          "preview_name": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Unique identifier for the service token"
+          },
+          "user_email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The service account email (not routable)"
+          },
+          "user_given_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The service account given name"
+          },
+          "user_family_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The service account family name"
+          },
+          "org_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Unique identifier for the organization"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "preview_name"
+        ]
+      },
       "SpanAttributes": {
         "type": [
           "object",
@@ -6216,7 +6283,7 @@
     "license": {
       "name": "Apache 2.0"
     },
-    "x-internal-git-sha": "3d080feb201289a076bd933b2b6add14dbea0c0f"
+    "x-internal-git-sha": "1ac2b47b4b217608a0eea90a6f5299afce9e1a64"
   },
   "paths": {},
   "webhooks": {}
