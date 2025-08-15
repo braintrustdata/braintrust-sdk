@@ -2091,17 +2091,26 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any])
             event["tags"] = valid_tags
 
     span_attributes = event.get("span_attributes")
-    if span_attributes:
+    if span_attributes is not None:
         if not isinstance(span_attributes, dict):
-            raise ValueError("span_attributes must be a dictionary")
+            span_attributes = {}
+            event["span_attributes"] = span_attributes
+
+        invalid_span_attributes_keys = []
         for key in span_attributes.keys():
             if not isinstance(key, str):
-                raise ValueError("span_attributes keys must be strings")
+                invalid_span_attributes_keys.append(key)
+
+        for key in invalid_span_attributes_keys:
+            del span_attributes[key]
 
     input = event.get("input")
     inputs = event.get("inputs")
     if input is not None and inputs is not None:
-        raise ValueError("Only one of input or inputs (deprecated) can be specified. Prefer input.")
+        # Prefer input over inputs (deprecated) - remove inputs from event
+        event = dict(event)
+        del event["inputs"]
+        return event
     if inputs is not None:
         return dict(**{k: v for k, v in event.items() if k not in ["input", "inputs"]}, input=inputs)
     else:

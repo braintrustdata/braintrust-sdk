@@ -1299,3 +1299,47 @@ def test_invalid_tags_dont_throw_error(with_memory_logger):
         tags = log.get("tags")
         if tags is not None:
             assert tags == []
+
+
+def test_invalid_span_attributes_dont_throw_error(with_memory_logger):
+    init_test_logger(__name__)
+
+    # test invalid span_attributes keys
+    invalid_span_attributes_keys = [123, None, (1, 2)]
+    for key in invalid_span_attributes_keys:
+        with logger.start_span("test") as span:
+            span.log(span_attributes={key: "value"})
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == len(invalid_span_attributes_keys)
+    for log in logs:
+        span_attributes = log.get("span_attributes", {})
+        # should only have valid string keys
+        for k in span_attributes.keys():
+            assert isinstance(k, str)
+
+    # verify span_attributes that are not dicts dont throw
+    invalid_span_attributes = [None, 1, "abc", []]
+    for span_attributes in invalid_span_attributes:
+        with logger.start_span("test") as span:
+            span.log(span_attributes=span_attributes)
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == len(invalid_span_attributes)
+    # All logs should succeed without throwing errors
+    # (span_attributes may contain system-generated attributes like exec_counter, name, type)
+
+
+def test_input_inputs_conflict_dont_throw_error(with_memory_logger):
+    init_test_logger(__name__)
+
+    # test providing both input and inputs (deprecated) - should not throw error
+    with logger.start_span("test") as span:
+        span.log(input="test input", inputs="test inputs")
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    # Should prefer input over inputs when both are provided
+    log = logs[0]
+    assert "input" in log
+    # inputs should not be in the final log since input takes precedence
