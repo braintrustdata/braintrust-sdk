@@ -135,6 +135,10 @@ export const responsesAPIFormatSchema = z.union([
   z.object({ type: z.literal("text") }).openapi({ title: "text" }),
 ]);
 
+const responseFormatNullishSchema = responseFormatSchema
+  .nullish()
+  .openapi("ResponseFormatNullish");
+
 const openAIModelParamsSchema = z.object({
   temperature: z.number().optional(),
   top_p: z.number().optional(),
@@ -145,7 +149,7 @@ const openAIModelParamsSchema = z.object({
     .describe("The successor to max_tokens"),
   frequency_penalty: z.number().optional(),
   presence_penalty: z.number().optional(),
-  response_format: responseFormatSchema.nullish(),
+  response_format: responseFormatNullishSchema,
   tool_choice: z
     .union([
       z.literal("auto").openapi({ title: "auto" }),
