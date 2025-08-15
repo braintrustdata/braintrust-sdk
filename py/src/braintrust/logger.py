@@ -2054,12 +2054,16 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any],
     metadata = event.get("metadata")
     if metadata is not None:
         if not isinstance(metadata, dict):
+            if raise_errors:
+                raise ValueError("metadata must be a dictionary")
             metadata = {}
             event["metadata"] = metadata
 
         invalid_metadata_keys = []
         for key in metadata.keys():
             if not isinstance(key, str):
+                if raise_errors:
+                    raise ValueError("metadata keys must be strings")
                 invalid_metadata_keys.append(key)
 
         for key in invalid_metadata_keys:
@@ -2084,6 +2088,8 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any],
     tags = event.get("tags")
     if tags is not None:
         if not isinstance(tags, (list, set, tuple)):
+            if raise_errors:
+                raise ValueError("tags must be a list, set, or tuple")
             tags = []
             event["tags"] = tags
         else:
@@ -2094,17 +2100,23 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any],
                 if isinstance(tag, str) and tag not in seen:
                     valid_tags.append(tag)
                     seen.add(tag)
+                elif not isinstance(tag, str) and raise_errors:
+                    raise ValueError("tag values must be strings")
             event["tags"] = valid_tags
 
     span_attributes = event.get("span_attributes")
     if span_attributes is not None:
         if not isinstance(span_attributes, dict):
+            if raise_errors:
+                raise ValueError("span_attributes must be a dictionary")
             span_attributes = {}
             event["span_attributes"] = span_attributes
 
         invalid_span_attributes_keys = []
         for key in span_attributes.keys():
             if not isinstance(key, str):
+                if raise_errors:
+                    raise ValueError("span_attributes keys must be strings")
                 invalid_span_attributes_keys.append(key)
 
         for key in invalid_span_attributes_keys:
@@ -3436,6 +3448,13 @@ class SpanImpl(Span):
         # We'll raise errors on validation if we're running an experiment (e.g. in CI / on a dev machine)
         # but not if we're in a project (e.g. likely running in a customer prod app)
         raise_errors = self.parent_object_type == SpanObjectTypeV3.EXPERIMENT
+
+        # Validate BEFORE deep copying, since deep copy converts all keys to strings
+        if event and raise_errors:
+            _validate_and_sanitize_experiment_log_partial_args(event, raise_errors=True)
+
+        event = _deep_copy_event(event)
+
         serializable_partial_record, lazy_partial_record = split_logging_data(
             event, internal_data, raise_errors=raise_errors)
 
@@ -3454,7 +3473,7 @@ class SpanImpl(Span):
         )
 
         _check_json_serializable(partial_record)
-        serializable_partial_record = _deep_copy_event(partial_record)
+        serializable_partial_record = partial_record
         if serializable_partial_record.get("metrics", {}).get("end") is not None:
             self._logged_end_time = serializable_partial_record["metrics"]["end"]
 

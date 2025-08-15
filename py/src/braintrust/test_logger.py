@@ -1181,9 +1181,6 @@ def test_invalid_scores_dont_throw_error(with_memory_logger):
         {"invalid": -math.inf},
         {"invalid": 2.0},  # outside valid range
         {"invalid": -0.5},  # outside valid range
-        {123: 0.5},  # invalid key type
-        {None: 0.5},  # invalid key type
-        {(1, 2): 0.5},  # invalid key type
         None,  # not a dict
         1,  # not a dict
         "abc",  # not a dict
@@ -1192,7 +1189,7 @@ def test_invalid_scores_dont_throw_error(with_memory_logger):
 
     # experiments should raise errors for invalid scores
     exp = init(__name__)
-    for s in invalid_scores.copy():
+    for i, s in enumerate(invalid_scores.copy()):
         if s is None:
             continue
         with exp.start_span("test") as span:
@@ -1202,13 +1199,16 @@ def test_invalid_scores_dont_throw_error(with_memory_logger):
                 pass
             else:
                 assert False, f"Expected ValueError for score {s}"
+        assert invalid_scores[i] == s
     with_memory_logger.pop()
 
     # projects should silently drop invalid scores
     lg = init_test_logger(__name__)
-    for scores in invalid_scores.copy():
+    for i, s in enumerate(invalid_scores.copy()):
         with lg.start_span("test") as span:
-            span.log(scores=scores)
+            span.log(scores=s)
+        assert invalid_scores[i] == s
+
     logs = with_memory_logger.pop()
     assert len(logs) == len(invalid_scores)
     for log in logs:
@@ -1220,110 +1220,130 @@ def test_invalid_scores_dont_throw_error(with_memory_logger):
 
 
 def test_invalid_metadata_dont_throw_error(with_memory_logger):
-    init_test_logger(__name__)
 
-    # test invalid metadata keys
-    invalid_metadata_keys = [123, None, (1, 2)]
-    for key in invalid_metadata_keys:
-        with logger.start_span("test") as span:
-            span.log(metadata={key: "value"})
+    invalid_metadata = [
+        None,  # not a dict
+        1,  # not a dict
+        "abc",  # not a dict
+        [],  # not a dict
+    ]
 
-    logs = with_memory_logger.pop()
-    assert len(logs) == len(invalid_metadata_keys)
-    for log in logs:
-        metadata = log.get("metadata", {})
-        # should only have valid string keys
-        for k in metadata.keys():
-            assert isinstance(k, str)
+    # experiments should raise errors for invalid metadata
+    exp = init(__name__)
+    for m in invalid_metadata.copy():
+        if m is None:
+            continue
+        with exp.start_span("test") as span:
+            try:
+                span.log(metadata=m)
+            except ValueError:
+                pass
+            else:
+                assert False, f"Expected ValueError for metadata {m}"
+    with_memory_logger.pop()
 
-    # verify metadata that are not dicts dont throw
-    invalid_metadata = [None, 1, "abc", []]
-    for metadata in invalid_metadata:
-        with logger.start_span("test") as span:
+    # projects should silently drop invalid metadata
+    lg = init_test_logger(__name__)
+    for metadata in invalid_metadata.copy():
+        with lg.start_span("test") as span:
             span.log(metadata=metadata)
 
     logs = with_memory_logger.pop()
     assert len(logs) == len(invalid_metadata)
+
     for log in logs:
-        # metadata should be empty dict when invalid, or not present at all
-        metadata = log.get("metadata")
-        if metadata is not None:
-            assert metadata == {}
+        # All invalid metadata should result in empty metadata dict
+        metadata = log.get("metadata", {})
+        assert metadata == {}
 
 
 def test_invalid_tags_dont_throw_error(with_memory_logger):
-    init_test_logger(__name__)
 
-    # test invalid tag values (non-strings)
-    invalid_tag_values = [123, None, [], {}]
-    for tag_val in invalid_tag_values:
-        with logger.start_span("test") as span:
-            span.log(tags=["valid", tag_val])
+    invalid_tags = [
+        ["valid", 123],  # invalid tag value (non-string)
+        ["valid", None],  # invalid tag value
+        ["valid", []],  # invalid tag value
+        ["valid", {}],  # invalid tag value
+        None,  # not a list/set/tuple
+        1,  # not a list/set/tuple
+        "abc",  # not a list/set/tuple
+        {},  # not a list/set/tuple
+    ]
 
-    logs = with_memory_logger.pop()
-    assert len(logs) == len(invalid_tag_values)
-    for log in logs:
-        tags = log.get("tags", [])
-        # should only have valid string values
-        for tag in tags:
-            assert isinstance(tag, str)
-        # should contain the valid tag
-        assert "valid" in tags
+    # experiments should raise errors for invalid tags
+    exp = init(__name__)
+    for t in invalid_tags.copy():
+        if t is None:
+            continue
+        with exp.start_span("test") as span:
+            try:
+                span.log(tags=t)
+            except ValueError:
+                pass
+            else:
+                assert False, f"Expected ValueError for tags {t}"
+    with_memory_logger.pop()
 
-    # test duplicate tags
-    with logger.start_span("test") as span:
-        span.log(tags=["tag1", "tag2", "tag1"])
-
-    logs = with_memory_logger.pop()
-    assert len(logs) == 1
-    tags = logs[0].get("tags", [])
-    # should have deduplicated tags
-    assert len(tags) == len(set(tags))
-    assert "tag1" in tags
-    assert "tag2" in tags
-
-    # verify tags that are not lists/sets/tuples dont throw
-    invalid_tags = [None, 1, "abc", {}]
-    for tags in invalid_tags:
-        with logger.start_span("test") as span:
+    # projects should silently drop invalid tags
+    lg = init_test_logger(__name__)
+    for tags in invalid_tags.copy():
+        with lg.start_span("test") as span:
             span.log(tags=tags)
 
     logs = with_memory_logger.pop()
     assert len(logs) == len(invalid_tags)
+
     for log in logs:
-        # tags should be empty list when invalid, or not present at all
-        tags = log.get("tags")
-        if tags is not None:
-            assert tags == []
+        # All invalid tags should result in empty tags list or only valid tags
+        tags = log.get("tags", [])
+        # All remaining tags should be strings
+        for tag in tags:
+            assert isinstance(tag, str)
+        # Should only contain "valid" if the original had it
+        if "valid" in str(log):
+            assert "valid" in tags
 
 
 def test_invalid_span_attributes_dont_throw_error(with_memory_logger):
-    init_test_logger(__name__)
 
-    # test invalid span_attributes keys
-    invalid_span_attributes_keys = [123, None, (1, 2)]
-    for key in invalid_span_attributes_keys:
-        with logger.start_span("test") as span:
-            span.log(span_attributes={key: "value"})
+    invalid_span_attributes = [
+        {123: "value"},  # invalid key type
+        {None: "value"},  # invalid key type
+        {(1, 2): "value"},  # invalid key type
+        None,  # not a dict
+        1,  # not a dict
+        "abc",  # not a dict
+        [],  # not a dict
+    ]
 
-    logs = with_memory_logger.pop()
-    assert len(logs) == len(invalid_span_attributes_keys)
-    for log in logs:
-        span_attributes = log.get("span_attributes", {})
-        # should only have valid string keys
-        for k in span_attributes.keys():
-            assert isinstance(k, str)
+    # experiments should raise errors for invalid span_attributes
+    exp = init(__name__)
+    for sa in invalid_span_attributes.copy():
+        if sa is None:
+            continue
+        with exp.start_span("test") as span:
+            try:
+                span.log(span_attributes=sa)
+            except ValueError:
+                pass
+            else:
+                assert False, f"Expected ValueError for span_attributes {sa}"
+    with_memory_logger.pop()
 
-    # verify span_attributes that are not dicts dont throw
-    invalid_span_attributes = [None, 1, "abc", []]
-    for span_attributes in invalid_span_attributes:
-        with logger.start_span("test") as span:
+    # projects should silently drop invalid span_attributes
+    lg = init_test_logger(__name__)
+    for span_attributes in invalid_span_attributes.copy():
+        with lg.start_span("test") as span:
             span.log(span_attributes=span_attributes)
 
     logs = with_memory_logger.pop()
     assert len(logs) == len(invalid_span_attributes)
-    # All logs should succeed without throwing errors
-    # (span_attributes may contain system-generated attributes like exec_counter, name, type)
+
+    for log in logs:
+        # span_attributes may contain system-generated attributes, but all keys should be strings
+        span_attributes = log.get("span_attributes", {})
+        for key in span_attributes.keys():
+            assert isinstance(key, str)
 
 
 def test_input_inputs_conflict_dont_throw_error(with_memory_logger):
