@@ -1173,54 +1173,35 @@ def test_invalid_metrics_dont_throw_error(with_memory_logger):
 def test_invalid_scores_dont_throw_error(with_memory_logger):
     init_test_logger(__name__)
 
-    invalid_score_values = [
-        "not a number",
-        [],
-        {},
-        math.nan,
-        math.inf,
-        -math.inf,
-        2.0,  # outside valid range
-        -0.5,  # outside valid range
+    invalid_scores = [
+        {"invalid": "not a number"},
+        {"invalid": []},
+        {"invalid": {}},
+        {"invalid": math.nan},
+        {"invalid": math.inf},
+        {"invalid": -math.inf},
+        {"invalid": 2.0},  # outside valid range
+        {"invalid": -0.5},  # outside valid range
+        {123: 0.5},  # invalid key type
+        {None: 0.5},  # invalid key type
+        {(1, 2): 0.5},  # invalid key type
+        None,  # not a dict
+        1,  # not a dict
+        "abc",  # not a dict
+        [],  # not a dict
     ]
 
-    for score_val in invalid_score_values:
-        with logger.start_span("test") as span:
-            span.log(scores={"invalid": score_val})
-
-    logs = with_memory_logger.pop()
-    assert len(logs) == len(invalid_score_values)
-
-    for log in logs:
-        assert "invalid" not in log["scores"]
-
-    # test invalid score names (only hashable types that aren't strings)
-    invalid_score_names = [123, None, (1, 2)]  # removed unhashable types
-    for name in invalid_score_names:
-        with logger.start_span("test") as span:
-            span.log(scores={name: 0.5})
-
-    logs = with_memory_logger.pop()
-    assert len(logs) == len(invalid_score_names)
-    for log in logs:
-        scores = log["scores"]
-        # should only have valid string keys
-        for k in scores.keys():
-            assert isinstance(k, str)
-
-    # verify scores that are not dicts dont throw
-    invalid_scores = [None, 1, "abc", []]
     for scores in invalid_scores:
         with logger.start_span("test") as span:
             span.log(scores=scores)
 
     logs = with_memory_logger.pop()
     assert len(logs) == len(invalid_scores)
+
     for log in logs:
-        # scores should be empty dict when invalid, or not present at all
-        scores = log.get("scores")
-        if scores is not None:
-            assert scores == {}
+        # All invalid scores should result in empty scores dict
+        scores = log.get("scores", {})
+        assert scores == {}
 
 
 def test_invalid_metadata_dont_throw_error(with_memory_logger):
