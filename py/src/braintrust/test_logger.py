@@ -1,11 +1,25 @@
 import asyncio
 import logging
 import os
+import sys
 import time
 from typing import AsyncGenerator, List
 from unittest import TestCase
 
+# Import the backport for Python < 3.11 compatibility
+import exceptiongroup
 import pytest
+
+# Handle ExceptionGroup compatibility between Python versions
+try:
+    # Python 3.11+ has ExceptionGroup as a builtin
+    import builtins
+
+    ExceptionGroup = builtins.ExceptionGroup
+except AttributeError:
+    # Use backport for Python < 3.11
+    ExceptionGroup = exceptiongroup.ExceptionGroup
+
 
 import braintrust
 from braintrust import Attachment, BaseAttachment, ExternalAttachment, LazyValue, Prompt, init_logger, logger
@@ -1129,3 +1143,116 @@ async def test_traced_async_generator_unlimited_with_minus_one(with_memory_logge
         os.environ.pop("BRAINTRUST_MAX_GENERATOR_ITEMS", None)
         if original:
             os.environ["BRAINTRUST_MAX_GENERATOR_ITEMS"] = original
+
+
+class TestExceptionGroupHandling(TestCase):
+    """Test cases for ExceptionGroup handling in @traced decorator"""
+
+    def test_stringify_exception_with_exception_group(self):
+        """Test that stringify_exception properly shows ExceptionGroup sub-exceptions"""
+        import exceptiongroup
+
+        from braintrust.logger import stringify_exception
+
+        try:
+            exc1 = ConnectionRefusedError("[Errno 61] Connection refused on port 8080")
+            exc2 = ValueError("Invalid configuration")
+            raise exceptiongroup.ExceptionGroup("Multiple failures", [exc1, exc2])
+        except exceptiongroup.ExceptionGroup as eg:
+            # After fix, stringify_exception properly formats ExceptionGroups
+            result = stringify_exception(type(eg), eg, eg.__traceback__)
+
+            # The main exception is shown
+            self.assertIn("ExceptionGroup: Multiple failures", result)
+            self.assertIn("(2 sub-exceptions)", result)
+
+            # And now sub-exceptions are properly shown
+            self.assertIn("ConnectionRefusedError", result)
+            self.assertIn("[Errno 61] Connection refused on port 8080", result)
+            self.assertIn("ValueError", result)
+            self.assertIn("Invalid configuration", result)
+
+    def test_format_exception_shows_sub_exceptions(self):
+        """Test that format_exception properly shows ExceptionGroup sub-exceptions"""
+        import traceback
+
+        import exceptiongroup
+
+        try:
+            exc1 = ConnectionRefusedError("[Errno 61] Connection refused on port 8080")
+            exc2 = ValueError("Invalid configuration")
+            raise exceptiongroup.ExceptionGroup("Multiple failures", [exc1, exc2])
+        except exceptiongroup.ExceptionGroup as eg:
+            # Using format_exception instead
+            result = "".join(traceback.format_exception(type(eg), eg, eg.__traceback__))
+
+            # This should show all sub-exceptions
+            self.assertIn("ExceptionGroup: Multiple failures", result)
+            self.assertIn("(2 sub-exceptions)", result)
+            self.assertIn("ConnectionRefusedError", result)
+            self.assertIn("Connection refused on port 8080", result)
+            self.assertIn("ValueError", result)
+            self.assertIn("Invalid configuration", result)
+
+    @pytest.mark.skipif(sys.version_info < (3, 11), reason="asyncio.TaskGroup requires Python 3.11+")
+    def test_exception_group_from_async_task_group(self):
+        """Test ExceptionGroup from asyncio.TaskGroup is properly formatted"""
+        import exceptiongroup
+
+        from braintrust.logger import stringify_exception
+
+        # Get TaskGroup class or skip test if not available
+        task_group_class = getattr(asyncio, "TaskGroup", None)
+        if task_group_class is None:
+            pytest.skip("asyncio.TaskGroup not available")
+
+        async def failing_task():
+            raise ConnectionRefusedError("[Errno 61] Connection refused")
+
+        async def main_task():
+            # pylint: disable=not-callable
+            async with task_group_class() as tg:
+                tg.create_task(failing_task())
+                tg.create_task(failing_task())
+            # pylint: enable=not-callable
+
+        try:
+            asyncio.run(main_task())
+        except (exceptiongroup.ExceptionGroup, ExceptionGroup) as eg:
+            # Test how this is formatted by stringify_exception
+            result = stringify_exception(type(eg), eg, eg.__traceback__)
+
+            # Check that it shows the ExceptionGroup
+            self.assertIn("ExceptionGroup", result)
+            self.assertIn("2 sub-exceptions", result)
+
+            # After fix, sub-exception details are properly shown
+            self.assertIn("ConnectionRefusedError", result)
+            self.assertIn("Connection refused", result)
+
+    def test_stringify_exception_shows_sub_exceptions_after_fix(self):
+        """Test that stringify_exception properly shows ExceptionGroup sub-exceptions after fix"""
+        import exceptiongroup
+
+        from braintrust.logger import stringify_exception
+
+        try:
+            exc1 = ConnectionRefusedError("[Errno 61] Connection refused on port 8080")
+            exc2 = ValueError("Invalid configuration")
+            raise exceptiongroup.ExceptionGroup("Multiple failures", [exc1, exc2])
+        except exceptiongroup.ExceptionGroup as eg:
+            result = stringify_exception(type(eg), eg, eg.__traceback__)
+
+            # These assertions SHOULD pass once the bug is fixed
+            self.assertIn("ExceptionGroup: Multiple failures", result)
+            self.assertIn("(2 sub-exceptions)", result)
+
+            # Sub-exceptions SHOULD be shown (but aren't with current implementation)
+            self.assertIn(
+                "ConnectionRefusedError",
+                result,
+                "Sub-exception ConnectionRefusedError should be visible in the traceback",
+            )
+            self.assertIn("Connection refused on port 8080", result, "Sub-exception error message should be visible")
+            self.assertIn("ValueError", result, "Sub-exception ValueError should be visible in the traceback")
+            self.assertIn("Invalid configuration", result, "Sub-exception error message should be visible")
