@@ -55,12 +55,9 @@ from braintrust.functions.stream import BraintrustStream
 
 from .bt_json import bt_dumps
 from .db_fields import (
-    ASYNC_SCORING_CONTROL_FIELD,
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
-    MERGE_PATHS_FIELD,
-    SKIP_ASYNC_SCORING_FIELD,
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
@@ -1942,14 +1939,14 @@ def _filter_none_args(args):
 def validate_tags(tags: Sequence[str]) -> None:
     # Tag should be a list, set, or tuple, not a dict or string
     if not isinstance(tags, (list, set, tuple)):
-        raise ValueError("tags must be a list, set, or tuple of strings")
+        return  # Don't raise error, just return
 
     seen = set()
     for tag in tags:
         if not isinstance(tag, str):
-            raise ValueError("tags must be strings")
+            return  # Don't raise error, just return
         if tag in seen:
-            raise ValueError(f"duplicate tag: {tag}")
+            return  # Don't raise error, just return
         seen.add(tag)
 
 
@@ -2022,34 +2019,8 @@ def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
 
 
 def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any]) -> Dict[str, Any]:
-    # Make sure only certain keys are specified.
-    forbidden_keys = set(event.keys()) - {
-        "input",
-        "output",
-        "expected",
-        "tags",
-        "scores",
-        "metadata",
-        "metrics",
-        "error",
-        "dataset_record_id",
-        "origin",
-        "inputs",
-        "span_attributes",
-        ASYNC_SCORING_CONTROL_FIELD,
-        MERGE_PATHS_FIELD,
-        SKIP_ASYNC_SCORING_FIELD,
-        "span_id",
-        "root_span_id",
-    }
-    if forbidden_keys:
-        raise ValueError(f"The following keys are not permitted: {forbidden_keys}")
-
     scores = event.get("scores")
-    if not scores:
-        scores = {}
-        event["scores"] = scores
-    else:
+    if scores is not None:
         if not isinstance(scores, dict):
             scores = {}
             event["scores"] = scores
@@ -2075,12 +2046,18 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any])
             del scores[k]
 
     metadata = event.get("metadata")
-    if metadata:
+    if metadata is not None:
         if not isinstance(metadata, dict):
-            raise ValueError("metadata must be a dictionary")
+            metadata = {}
+            event["metadata"] = metadata
+
+        invalid_metadata_keys = []
         for key in metadata.keys():
             if not isinstance(key, str):
-                raise ValueError("metadata keys must be strings")
+                invalid_metadata_keys.append(key)
+
+        for key in invalid_metadata_keys:
+            del metadata[key]
 
     metrics = event.get("metrics")
     if metrics:
@@ -2099,8 +2076,19 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any])
             del metrics[k]
 
     tags = event.get("tags")
-    if tags:
-        validate_tags(tags)
+    if tags is not None:
+        if not isinstance(tags, (list, set, tuple)):
+            tags = []
+            event["tags"] = tags
+        else:
+            # Create a cleaned list of valid string tags, removing duplicates
+            valid_tags = []
+            seen = set()
+            for tag in tags:
+                if isinstance(tag, str) and tag not in seen:
+                    valid_tags.append(tag)
+                    seen.add(tag)
+            event["tags"] = valid_tags
 
     span_attributes = event.get("span_attributes")
     if span_attributes:

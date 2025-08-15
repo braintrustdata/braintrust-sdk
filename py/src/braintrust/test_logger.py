@@ -1221,3 +1221,81 @@ def test_invalid_scores_dont_throw_error(with_memory_logger):
         scores = log.get("scores")
         if scores is not None:
             assert scores == {}
+
+
+def test_invalid_metadata_dont_throw_error(with_memory_logger):
+    init_test_logger(__name__)
+
+    # test invalid metadata keys
+    invalid_metadata_keys = [123, None, (1, 2)]
+    for key in invalid_metadata_keys:
+        with logger.start_span("test") as span:
+            span.log(metadata={key: "value"})
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == len(invalid_metadata_keys)
+    for log in logs:
+        metadata = log.get("metadata", {})
+        # should only have valid string keys
+        for k in metadata.keys():
+            assert isinstance(k, str)
+
+    # verify metadata that are not dicts dont throw
+    invalid_metadata = [None, 1, "abc", []]
+    for metadata in invalid_metadata:
+        with logger.start_span("test") as span:
+            span.log(metadata=metadata)
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == len(invalid_metadata)
+    for log in logs:
+        # metadata should be empty dict when invalid, or not present at all
+        metadata = log.get("metadata")
+        if metadata is not None:
+            assert metadata == {}
+
+
+def test_invalid_tags_dont_throw_error(with_memory_logger):
+    init_test_logger(__name__)
+
+    # test invalid tag values (non-strings)
+    invalid_tag_values = [123, None, [], {}]
+    for tag_val in invalid_tag_values:
+        with logger.start_span("test") as span:
+            span.log(tags=["valid", tag_val])
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == len(invalid_tag_values)
+    for log in logs:
+        tags = log.get("tags", [])
+        # should only have valid string values
+        for tag in tags:
+            assert isinstance(tag, str)
+        # should contain the valid tag
+        assert "valid" in tags
+
+    # test duplicate tags
+    with logger.start_span("test") as span:
+        span.log(tags=["tag1", "tag2", "tag1"])
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    tags = logs[0].get("tags", [])
+    # should have deduplicated tags
+    assert len(tags) == len(set(tags))
+    assert "tag1" in tags
+    assert "tag2" in tags
+
+    # verify tags that are not lists/sets/tuples dont throw
+    invalid_tags = [None, 1, "abc", {}]
+    for tags in invalid_tags:
+        with logger.start_span("test") as span:
+            span.log(tags=tags)
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == len(invalid_tags)
+    for log in logs:
+        # tags should be empty list when invalid, or not present at all
+        tags = log.get("tags")
+        if tags is not None:
+            assert tags == []
