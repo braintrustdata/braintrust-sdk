@@ -1,23 +1,6 @@
-// Conditional imports for OpenTelemetry to handle missing dependencies gracefully
-let otelApi: any = null;
-let otelSdk: any = null;
-let OTEL_AVAILABLE = false;
-
-try {
-  otelApi = require("@opentelemetry/api");
-  otelSdk = require("@opentelemetry/sdk-trace-base");
-  OTEL_AVAILABLE = true;
-} catch (error) {
-  console.warn(
-    "OpenTelemetry packages are not installed. " +
-      "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
-  );
-  OTEL_AVAILABLE = false;
-}
-
 // Type definitions that don't depend on OpenTelemetry being installed
 interface Context {
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface SpanProcessor {
@@ -30,13 +13,13 @@ interface SpanProcessor {
 interface ReadableSpan {
   name: string;
   parentSpanContext?: { spanId: string; traceId: string };
-  attributes?: Record<string, any>;
+  attributes?: Record<string, unknown>;
   spanContext(): { spanId: string; traceId: string };
 }
 
 interface Span extends ReadableSpan {
   end(): void;
-  setAttributes(attributes: Record<string, any>): void;
+  setAttributes(attributes: Record<string, unknown>): void;
   setStatus(status: { code: number; message?: string }): void;
 }
 
@@ -71,14 +54,6 @@ export type CustomSpanFilter = (
  * ```
  */
 export class AISpanProcessor {
-  private static checkOtelAvailable(): void {
-    if (!OTEL_AVAILABLE) {
-      throw new Error(
-        "OpenTelemetry packages are not installed. " +
-          "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
-      );
-    }
-  }
   private readonly processor: SpanProcessor;
   private readonly customFilter: CustomSpanFilter | undefined;
 
@@ -91,7 +66,6 @@ export class AISpanProcessor {
    *                      null/undefined to not influence the decision
    */
   constructor(processor: SpanProcessor, customFilter?: CustomSpanFilter) {
-    AISpanProcessor.checkOtelAvailable();
     this.processor = processor;
     this.customFilter = customFilter;
   }
@@ -246,20 +220,10 @@ interface BraintrustSpanProcessorOptions {
  * ```
  */
 export class BraintrustSpanProcessor {
-  private static checkOtelAvailable(): void {
-    if (!OTEL_AVAILABLE) {
-      throw new Error(
-        "OpenTelemetry packages are not installed. " +
-          "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
-      );
-    }
-  }
   private readonly processor: SpanProcessor;
   private readonly aiSpanProcessor: SpanProcessor;
 
   constructor(options: BraintrustSpanProcessorOptions = {}) {
-    BraintrustSpanProcessor.checkOtelAvailable();
-
     // Get API key from options or environment
     const apiKey = options.apiKey || process.env.BRAINTRUST_API_KEY;
     if (!apiKey) {
@@ -291,35 +255,28 @@ export class BraintrustSpanProcessor {
       );
     }
 
-    // Create OTLP exporter
-    let exporter: any;
-    try {
-      const {
-        OTLPTraceExporter,
-      } = require("@opentelemetry/exporter-trace-otlp-http");
+    const { OTLPTraceExporter } = requireOrFail(
+      "@opentelemetry/exporter-trace-otlp-http",
+      "Make sure @opentelemetry/exporter-trace-otlp-http is installed.",
+    );
 
-      const headers = {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "x-bt-parent": parent,
-        ...options.headers,
-      };
+    const headers = {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "x-bt-parent": parent,
+      ...options.headers,
+    };
 
-      exporter = new OTLPTraceExporter({
-        url: new URL("otel/v1/traces", apiUrl).href,
-        headers,
-      });
-    } catch (error) {
-      throw new Error(
-        "Failed to create OTLP exporter. Make sure @opentelemetry/exporter-trace-otlp-http is installed.",
-      );
-    }
+    const exporter = new OTLPTraceExporter({
+      url: new URL("otel/v1/traces", apiUrl).href,
+      headers,
+    });
 
-    // Create batch processor with the exporter
-    if (!otelSdk) {
-      throw new Error("OpenTelemetry SDK not available");
-    }
-    this.processor = new otelSdk.BatchSpanProcessor(exporter);
+    const { BatchSpanProcessor } = requireOrFail(
+      "@opentelemetry/sdk-trace-base",
+      "Make sure @opentelemetry/sdk-trace-base is installed.",
+    );
+    this.processor = new BatchSpanProcessor(exporter);
 
     // Conditionally wrap with filtering based on filterAISpans flag
     if (options.filterAISpans === true) {
@@ -396,30 +353,21 @@ export class BraintrustSpanProcessor {
  * ```
  */
 export class BraintrustExporter {
-  private static checkOtelAvailable(): void {
-    if (!OTEL_AVAILABLE) {
-      throw new Error(
-        "OpenTelemetry packages are not installed. " +
-          "Install them with: npm install @opentelemetry/api @opentelemetry/sdk-trace-base @opentelemetry/exporter-trace-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions",
-      );
-    }
-  }
-
   private readonly processor: BraintrustSpanProcessor;
   private readonly spans: ReadableSpan[] = [];
-  private readonly callbacks: Array<(result: any) => void> = [];
+  private readonly callbacks: Array<(result: unknown) => void> = [];
 
   constructor(options: BraintrustSpanProcessorOptions = {}) {
-    BraintrustExporter.checkOtelAvailable();
-
-    // Use BraintrustSpanProcessor under the hood
     this.processor = new BraintrustSpanProcessor(options);
   }
 
   /**
    * Export spans to Braintrust by simulating span processor behavior.
    */
-  export(spans: ReadableSpan[], resultCallback: (result: any) => void): void {
+  export(
+    spans: ReadableSpan[],
+    resultCallback: (result: unknown) => void,
+  ): void {
     try {
       // Process each span through the processor
       spans.forEach((span) => {
@@ -454,3 +402,12 @@ export class BraintrustExporter {
     return this.processor.forceFlush();
   }
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const requireOrFail = (module: string, error: string): any => {
+  try {
+    return require(module);
+  } catch {
+    throw new Error(error);
+  }
+};
