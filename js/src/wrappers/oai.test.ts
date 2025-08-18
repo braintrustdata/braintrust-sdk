@@ -623,3 +623,45 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     }
   });
 });
+
+test("parseMetricsFromUsage", () => {
+  const usage = {
+    input_tokens: 14,
+    output_tokens: 8,
+    input_tokens_details: { cached_tokens: 0, brand_new_token: 12 },
+  };
+  const metrics = parseMetricsFromUsage(usage);
+  assert.equal(metrics.prompt_tokens, 14);
+  assert.equal(metrics.prompt_cached_tokens, 0);
+  assert.equal(metrics.prompt_brand_new_token, 12);
+  assert.equal(metrics.completion_tokens, 8);
+  // test a bunch of error conditions
+  const totallyBadInputs = [
+    null,
+    undefined,
+    "not an object",
+    {},
+    { input_tokens: "not a number" },
+    { input_tokens_details: "not an object" },
+    { input_tokens_details: {} },
+    { input_tokens_details: { cached_tokens: "not a number" } },
+    { input_tokens_details: { cached_tokens: null } },
+    { input_tokens_details: { cached_tokens: undefined } },
+  ];
+  for (const input of totallyBadInputs) {
+    assert.deepEqual(parseMetricsFromUsage(input), {});
+  }
+});
+
+test("parseMetricsFromUsage with null input_tokens_details", () => {
+  const usage = {
+    input_tokens: 14,
+    output_tokens: 8,
+    input_tokens_details: null,
+  };
+  const metrics = parseMetricsFromUsage(usage);
+  assert.equal(metrics.prompt_tokens, 14);
+  assert.equal(metrics.prompt_cached_tokens, undefined);
+  assert.equal(metrics.prompt_brand_new_token, undefined);
+  assert.equal(metrics.completion_tokens, 8);
+});

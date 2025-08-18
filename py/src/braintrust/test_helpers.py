@@ -172,16 +172,16 @@ def assert_dict_matches(actual, expected, exact_keys=False):
             _assert_sequence_matches(actual_val, expected_val, key, exact_keys)
         else:
             # Direct value comparison
-            assert (
-                actual_val == expected_val
-            ), f"Value mismatch for key '{key}': expected {expected_val}, got {actual_val}"
+            assert actual_val == expected_val, (
+                f"Value mismatch for key '{key}': expected {expected_val}, got {actual_val}"
+            )
 
 
 def _assert_sequence_matches(actual_seq, expected_seq, key, exact_keys=False):
     """Helper function to match sequences (lists/tuples) exactly."""
-    assert len(expected_seq) == len(
-        actual_seq
-    ), f"Sequence length mismatch for key '{key}': expected {len(expected_seq)} items, got {len(actual_seq)}"
+    assert len(expected_seq) == len(actual_seq), (
+        f"Sequence length mismatch for key '{key}': expected {len(expected_seq)} items, got {len(actual_seq)}"
+    )
 
     for i, (expected_item, actual_item) in enumerate(zip(expected_seq, actual_seq)):
         if isinstance(expected_item, dict) and isinstance(actual_item, dict):
@@ -192,9 +192,9 @@ def _assert_sequence_matches(actual_seq, expected_seq, key, exact_keys=False):
             _assert_sequence_matches(actual_item, expected_item, f"{key}[{i}]", exact_keys)
         else:
             # Direct value comparison
-            assert (
-                actual_item == expected_item
-            ), f"Sequence item mismatch for key '{key}' at index {i}: expected {expected_item}, got {actual_item}"
+            assert actual_item == expected_item, (
+                f"Sequence item mismatch for key '{key}' at index {i}: expected {expected_item}, got {actual_item}"
+            )
 
 
 def test_assert_dict_matches():

@@ -6,14 +6,9 @@ repos:
         exclude: queryscript/tests/.*\.(expected|test)$
       - id: trailing-whitespace
         exclude: queryscript/tests/.*\.(expected|test)$
-  - repo: "https://github.com/psf/black"
-    rev: 22.6.0
-    hooks:
-      - id: black
-        files: ./
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.0.282
+    rev: v0.12.7
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
@@ -35,4 +30,4 @@ repos:
     rev: v3.3.2
     hooks:
       - id: prettier
-        exclude: ^(extension/|.*\.json|.*pnpm-lock.yaml)$
+        exclude: ^(extension/|.*\.json|.*pnpm-lock.yaml|js/scripts/openapi_zod_client_output_template\.hbs)$

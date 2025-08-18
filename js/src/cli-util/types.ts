@@ -1,4 +1,4 @@
-import { IfExists } from "@braintrust/core/typespecs";
+import { type IfExistsType as IfExists } from "../generated_types";
 
 export interface CommonArgs {
   verbose: boolean;

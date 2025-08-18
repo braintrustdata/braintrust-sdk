@@ -36,32 +36,38 @@ import {
   isObject,
 } from "@braintrust/core";
 import {
-  AnyModelParam,
-  AttachmentReference,
-  BraintrustAttachmentReference,
-  ExternalAttachmentReference,
-  attachmentReferenceSchema,
-  ModelParams,
-  responseFormatJsonSchemaSchema,
-  AttachmentStatus,
-  attachmentStatusSchema,
-  BRAINTRUST_ATTACHMENT,
-  BRAINTRUST_PARAMS,
-  GitMetadataSettings,
-  gitMetadataSettingsSchema,
-  Message,
-  OpenAIMessage,
-  PromptData,
-  promptDataSchema,
-  Prompt as PromptRow,
-  promptSchema,
-  PromptSessionEvent,
-  RepoInfo,
-  Tools,
-  toolsSchema,
-  EXTERNAL_ATTACHMENT,
-  PromptBlockData,
-} from "@braintrust/core/typespecs";
+  type AnyModelParamsType as AnyModelParam,
+  AttachmentReference as attachmentReferenceSchema,
+  type AttachmentReferenceType as AttachmentReference,
+  BraintrustAttachmentReference as BraintrustAttachmentReferenceSchema,
+  type BraintrustAttachmentReferenceType as BraintrustAttachmentReference,
+  BraintrustModelParams as braintrustModelParamsSchema,
+  ChatCompletionTool as chatCompletionToolSchema,
+  type ChatCompletionToolType as ChatCompletionTool,
+  ExternalAttachmentReference as ExternalAttachmentReferenceSchema,
+  type ExternalAttachmentReferenceType as ExternalAttachmentReference,
+  type ModelParamsType as ModelParams,
+  ResponseFormatJsonSchema as responseFormatJsonSchemaSchema,
+  AttachmentStatus as attachmentStatusSchema,
+  type AttachmentStatusType as AttachmentStatus,
+  GitMetadataSettings as gitMetadataSettingsSchema,
+  type GitMetadataSettingsType as GitMetadataSettings,
+  type ChatCompletionMessageParamType as Message,
+  type ChatCompletionOpenAIMessageParamType as OpenAIMessage,
+  PromptData as promptDataSchema,
+  type PromptDataType as PromptData,
+  Prompt as promptSchema,
+  type PromptType as PromptRow,
+  type PromptSessionEventType as PromptSessionEvent,
+  type RepoInfoType as RepoInfo,
+  type PromptBlockDataType as PromptBlockData,
+} from "./generated_types";
+
+const BRAINTRUST_ATTACHMENT =
+  BraintrustAttachmentReferenceSchema.shape.type.value;
+const EXTERNAL_ATTACHMENT = ExternalAttachmentReferenceSchema.shape.type.value;
+const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
+
 import { waitUntil } from "@vercel/functions";
 import Mustache from "mustache";
 import { z, ZodError } from "zod";
@@ -84,6 +90,7 @@ import {
   runCatchFinally,
 } from "./util";
 import { lintTemplate } from "./mustache-utils";
+import { prettifyXact } from "@braintrust/core";
 
 export type SetCurrentArg = { setCurrent?: boolean };
 
@@ -5537,7 +5544,7 @@ export type CompiledPromptParams = Omit<
 
 export type ChatPrompt = {
   messages: OpenAIMessage[];
-  tools?: Tools;
+  tools?: ChatCompletionTool[];
 };
 export type CompletionPrompt = {
   prompt: string;
@@ -5910,7 +5917,9 @@ export class Prompt<
         messages: renderedPrompt.messages,
         ...(renderedPrompt.tools
           ? {
-              tools: toolsSchema.parse(JSON.parse(renderedPrompt.tools)),
+              tools: chatCompletionToolSchema
+                .array()
+                .parse(JSON.parse(renderedPrompt.tools)),
             }
           : undefined),
       } as CompiledPrompt<Flavor>;
@@ -6167,6 +6176,79 @@ function simulateLogoutForTests() {
   _globalState.resetLoginInfo();
   _globalState.appUrl = "https://www.braintrust.dev";
   return _globalState;
+}
+
+/**
+ * Get the versions for a prompt.
+ *
+ * @param projectId The ID of the project to query
+ * @param promptId The ID of the prompt to get versions for
+ * @returns Promise containing the version data
+ */
+export async function getPromptVersions(
+  projectId: string,
+  promptId: string,
+): Promise<any> {
+  const state = _internalGetGlobalState();
+  if (!state) {
+    throw new Error("Must log in first");
+  }
+
+  await state.login({});
+
+  const query = {
+    from: {
+      op: "function",
+      name: {
+        op: "ident",
+        name: ["project_prompts"],
+      },
+      args: [
+        {
+          op: "literal",
+          value: projectId,
+        },
+      ],
+    },
+    select: [
+      {
+        op: "star",
+      },
+    ],
+    filter: {
+      op: "eq",
+      left: { op: "ident", name: ["id"] },
+      right: { op: "literal", value: promptId },
+    },
+  };
+
+  const response = await state.apiConn().post(
+    "btql",
+    {
+      query,
+      audit_log: true,
+      use_columnstore: false,
+      brainstore_realtime: true,
+    },
+    { headers: { "Accept-Encoding": "gzip" } },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `API request failed: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const result = await response.json();
+
+  // Filter for entries where audit_data.action is "upsert" or "merge" and return only _xact_id fields
+  return (
+    result.data
+      ?.filter((entry: any) =>
+        ["upsert", "merge"].includes(entry.audit_data?.action),
+      )
+      .map((entry: any) => prettifyXact(entry._xact_id)) || []
+  );
 }
 
 export const _exportsForTestingOnly = {

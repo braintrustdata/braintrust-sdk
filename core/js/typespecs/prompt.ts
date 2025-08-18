@@ -10,6 +10,7 @@ import {
   chatCompletionMessageReasoningSchema,
 } from "./openai/messages";
 import { savedFunctionIdSchema } from "./function_id";
+import { chatCompletionToolSchema } from "./openai/tools";
 
 export {
   chatCompletionMessageParamSchema,
@@ -22,11 +23,15 @@ export {
   messageRoleSchema,
   chatCompletionMessageReasoningSchema,
   chatCompletionMessageToolCallSchema,
+  chatCompletionOpenAIMessageParamSchema,
   type MessageRole,
 } from "./openai/messages";
 
-export { toolsSchema } from "./openai/tools";
-export type { Tools } from "./openai/tools";
+export { chatCompletionToolSchema } from "./openai/tools";
+export type { ChatCompletionTool } from "./openai/tools";
+
+export const toolsSchema = z.array(chatCompletionToolSchema);
+export type Tools = z.infer<typeof toolsSchema>;
 
 export type OpenAIMessage = z.infer<
   typeof chatCompletionOpenAIMessageParamSchema
@@ -44,59 +49,67 @@ export type ContentPartImage = z.infer<
 >;
 export type ContentPart = z.infer<typeof chatCompletionContentPartSchema>;
 
-export const promptBlockDataSchema = z.union([
-  z
-    .object({
-      type: z.literal("completion"),
-      content: z.string(),
-    })
-    .openapi({ title: "completion" }),
-  z
-    .object({
-      type: z.literal("chat"),
-      messages: z.array(chatCompletionMessageParamSchema),
-      tools: z.string().optional(),
-    })
-    .openapi({ title: "chat" }),
-]);
+export const promptBlockDataSchema = z
+  .union([
+    z
+      .object({
+        type: z.literal("completion"),
+        content: z.string(),
+      })
+      .openapi({ title: "completion" }),
+    z
+      .object({
+        type: z.literal("chat"),
+        messages: z.array(chatCompletionMessageParamSchema),
+        tools: z.string().optional(),
+      })
+      .openapi({ title: "chat" }),
+  ])
+  .openapi("PromptBlockData");
 
 export type PromptBlockData = z.infer<typeof promptBlockDataSchema>;
 
 // Note that for prompt options, we relax the strictness requirement because
 // these params may come from external sources.
 
-const braintrustModelParamsSchema = z.object({
-  use_cache: z.boolean().optional(),
-});
+export const braintrustModelParamsSchema = z
+  .object({
+    use_cache: z.boolean().optional(),
+  })
+  .openapi("BraintrustModelParams");
 export const BRAINTRUST_PARAMS = Object.keys(braintrustModelParamsSchema.shape);
 
-export const responseFormatJsonSchemaSchema = z.object({
-  name: z.string(),
-  description: z.string().optional(),
-  schema: z
-    .union([
-      z.record(z.unknown()).openapi({ title: "object" }),
-      z.string().openapi({ title: "string" }),
-    ])
-    .optional(),
-  strict: z.boolean().nullish(),
-});
+export const responseFormatJsonSchemaSchema = z
+  .object({
+    name: z.string(),
+    description: z.string().optional(),
+    schema: z
+      .union([
+        z.record(z.unknown()).openapi({ title: "object" }),
+        z.string().openapi({ title: "string" }),
+      ])
+      .optional(),
+    strict: z.boolean().nullish(),
+  })
+  .openapi("ResponseFormatJsonSchema");
 export type ResponseFormatJsonSchema = z.infer<
   typeof responseFormatJsonSchemaSchema
 >;
 
-export const responseFormatSchema = z.union([
-  z
-    .object({ type: z.literal("json_object") })
-    .openapi({ title: "json_object" }),
-  z
-    .object({
-      type: z.literal("json_schema"),
-      json_schema: responseFormatJsonSchemaSchema,
-    })
-    .openapi({ title: "json_schema" }),
-  z.object({ type: z.literal("text") }).openapi({ title: "text" }),
-]);
+export const responseFormatSchema = z
+  .union([
+    z
+      .object({ type: z.literal("json_object") })
+      .openapi({ title: "json_object" }),
+    z
+      .object({
+        type: z.literal("json_schema"),
+        json_schema: responseFormatJsonSchemaSchema,
+      })
+      .openapi({ title: "json_schema" }),
+    z.object({ type: z.literal("text") }).openapi({ title: "text" }),
+  ])
+  .openapi("ResponseFormat");
 
 export const responsesAPIJsonSchemaSchema = z.object({
   type: z.literal("json_schema"),
@@ -122,6 +135,10 @@ export const responsesAPIFormatSchema = z.union([
   z.object({ type: z.literal("text") }).openapi({ title: "text" }),
 ]);
 
+const responseFormatNullishSchema = responseFormatSchema
+  .nullish()
+  .openapi("ResponseFormatNullish");
+
 const openAIModelParamsSchema = z.object({
   temperature: z.number().optional(),
   top_p: z.number().optional(),
@@ -132,7 +149,7 @@ const openAIModelParamsSchema = z.object({
     .describe("The successor to max_tokens"),
   frequency_penalty: z.number().optional(),
   presence_penalty: z.number().optional(),
-  response_format: responseFormatSchema.nullish(),
+  response_format: responseFormatNullishSchema,
   tool_choice: z
     .union([
       z.literal("auto").openapi({ title: "auto" }),
@@ -196,35 +213,41 @@ export const modelParamsSchema = z
   .union([
     braintrustModelParamsSchema
       .merge(openAIModelParamsSchema)
-      .passthrough()
+      // NOTE: we use `catchall` instead of `passthrough` here, because our
+      // zod-to-openapi generator doesn't explicitly include
+      // `additionalProperties: true` for passthrough, but will for catchall. We
+      // need this explicitness to distinguish between strip vs passthrough
+      // schemas.
+      .catchall(z.unknown())
       .openapi({ title: "OpenAIModelParams" }),
     braintrustModelParamsSchema
       .merge(anthropicModelParamsSchema)
-      .passthrough()
+      .catchall(z.unknown())
       .openapi({ title: "AnthropicModelParams" }),
     braintrustModelParamsSchema
       .merge(googleModelParamsSchema)
-      .passthrough()
+      .catchall(z.unknown())
       .openapi({ title: "GoogleModelParams" }),
     braintrustModelParamsSchema
       .merge(windowAIModelParamsSchema)
-      .passthrough()
+      .catchall(z.unknown())
       .openapi({ title: "WindowAIModelParams" }),
     braintrustModelParamsSchema
       .merge(jsCompletionParamsSchema)
-      .passthrough()
+      .catchall(z.unknown())
       .openapi({ title: "JsCompletionParams" }),
   ])
   .openapi("ModelParams");
 
 export type ModelParams = z.infer<typeof modelParamsSchema>;
 
-const _anyModelParamsSchema = openAIModelParamsSchema
+export const anyModelParamsSchema = openAIModelParamsSchema
   .merge(anthropicModelParamsSchema)
   .merge(googleModelParamsSchema)
-  .merge(braintrustModelParamsSchema);
+  .merge(braintrustModelParamsSchema)
+  .openapi("AnyModelParams");
 
-export type AnyModelParam = z.infer<typeof _anyModelParamsSchema>;
+export type AnyModelParam = z.infer<typeof anyModelParamsSchema>;
 
 export const promptOptionsSchema = z
   .object({
@@ -242,12 +265,25 @@ const promptParserSchema = z.object({
   choice_scores: z.record(z.number().min(0).max(1)),
 });
 
+// Defined as a separate openapi schema from promptBlockDataSchema, so that the
+// nullish doesn't bleed into the openapi schema for the raw PromptBlockData
+// type.
+const promptBlockDataNullishSchema = promptBlockDataSchema
+  .nullish()
+  .openapi("PromptBlockDataNullish");
+const promptOptionsNullishSchema = promptOptionsSchema
+  .nullish()
+  .openapi("PromptOptionsNullish");
+const promptParserNullishSchema = promptParserSchema
+  .nullish()
+  .openapi("PromptParserNullish");
+
 export const promptDataSchema = z
   .object({
-    prompt: promptBlockDataSchema.nullish(),
-    options: promptOptionsSchema.nullish(),
+    prompt: promptBlockDataNullishSchema,
+    options: promptOptionsNullishSchema,
     // This should be a union once we support multiple parser types
-    parser: promptParserSchema.nullish(),
+    parser: promptParserNullishSchema,
     tool_functions: z.array(savedFunctionIdSchema).nullish(),
     origin: z
       .object({

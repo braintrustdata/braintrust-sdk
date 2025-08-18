@@ -182,6 +182,11 @@ export const envVarSchema = z
   .openapi("EnvVar");
 export type EnvVar = z.infer<typeof envVarSchema>;
 
+export const projectColumnVariantEnum = z
+  .enum(["project", "experiment", "dataset", "project_log", "experiment_list"])
+  .describe("The table variant that the custom column applies to")
+  .openapi("CustomColumnVariant");
+export type CustomColumnVariant = z.infer<typeof projectColumnVariantEnum>;
 const customColumnBaseSchema = generateBaseTableSchema("custom columns");
 export const customColumnSchema = z
   .object({
@@ -191,7 +196,8 @@ export const customColumnSchema = z
       .string()
       .uuid()
       .describe("The id of the object the custom column is scoped for"),
-    subtype: aclObjectTypeEnum.nullable(),
+    subtype: aclObjectTypeEnum.or(z.literal("")),
+    variant: projectColumnVariantEnum,
     name: z.string().describe("The name of the custom column"),
     expr: z
       .string()
@@ -218,6 +224,27 @@ export const apiKeySchema = z
   })
   .openapi("ApiKey");
 export type ApiKey = z.infer<typeof apiKeySchema>;
+
+const serviceTokenBaseSchema = generateBaseTableSchema("service token");
+export const serviceTokenSchema = z
+  .object({
+    id: serviceTokenBaseSchema.shape.id,
+    created: serviceTokenBaseSchema.shape.created,
+    name: serviceTokenBaseSchema.shape.name,
+    preview_name: z.string(),
+    service_account_id: serviceTokenBaseSchema.shape.id.nullish(),
+    service_account_email: z
+      .string()
+      .nullish()
+      .describe("The service account email (not routable)"),
+    service_account_name: z
+      .string()
+      .nullish()
+      .describe("The service account name"),
+    org_id: organizationSchema.shape.id.nullish(),
+  })
+  .openapi("ServiceToken");
+export type ServiceToken = z.infer<typeof serviceTokenSchema>;
 
 export const spanFieldOrderItem = z.object({
   object_type: z.string(),
@@ -303,6 +330,15 @@ export const playgroundLogsLogIdLiteralSchema = z
   .literal("x")
   .describe("A literal 'x' which identifies the object as a playground log");
 
+// Defined as a separate openapi schema from promptDataSchema, so that the
+// nullish doesn't bleed into the openapi schema for the raw PromptData type.
+const promptDataNullishSchema = promptDataSchema
+  .nullish()
+  .openapi("PromptDataNullish");
+const functionTypeEnumNullish = functionTypeEnum
+  .nullish()
+  .openapi("FunctionTypeEnumNullish");
+
 export const promptBaseSchema = generateBaseTableSchema("prompt");
 const promptSchemaObject = z.object({
   id: promptBaseSchema.shape.id,
@@ -319,13 +355,13 @@ const promptSchemaObject = z.object({
   slug: z.string().describe("Unique identifier for the prompt"),
   description: promptBaseSchema.shape.description,
   created: promptBaseSchema.shape.created,
-  prompt_data: promptDataSchema
-    .nullish()
-    .describe("The prompt, model, and its parameters"),
+  prompt_data: promptDataNullishSchema.describe(
+    "The prompt, model, and its parameters",
+  ),
   tags: z.array(z.string()).nullish().describe("A list of tags for the prompt"),
   metadata: promptBaseSchema.shape.metadata,
   // An empty (unspecified) function_type is equivalent to "task".
-  function_type: functionTypeEnum.nullish(),
+  function_type: functionTypeEnumNullish,
 });
 
 export const promptSchema = promptSchemaObject.openapi("Prompt");
@@ -573,11 +609,6 @@ export const projectScoreCategory = z
   .describe("For categorical-type project scores, defines a single category")
   .openapi("ProjectScoreCategory");
 export type ProjectScoreCategory = z.infer<typeof projectScoreCategory>;
-
-const webhookAutomationActionSchema = z.object({
-  type: z.literal("webhook").describe("The type of action to take"),
-  url: z.string().describe("The webhook URL to send the request to"),
-});
 
 const projectAutomationBaseSchema =
   generateBaseTableSchema("project automation");
@@ -1219,6 +1250,35 @@ export const createApiKeyOutputSchema = apiKeySchema
   )
   .openapi("CreateApiKeyOutput");
 
+const createServiceTokenBaseSchema = generateBaseTableOpSchema("Service token");
+export const createServiceTokenSchema = z.object({
+  name: z
+    .string()
+    .describe("Name of the service token. Does not have to be unique"),
+  org_name: createServiceTokenBaseSchema.shape.org_name,
+  service_account_id: z
+    .string()
+    .describe("The service account ID this service token should belong to."),
+});
+
+export const deleteServiceTokenSchema = z
+  .object({
+    id: z.string().uuid().describe(`Unique identifier for the service token.`),
+  })
+  .openapi("DeleteServiceToken");
+
+export const createServiceTokenOutputSchema = serviceTokenSchema
+  .merge(
+    z.object({
+      key: z
+        .string()
+        .describe(
+          "The raw service token. It will only be exposed this one time",
+        ),
+    }),
+  )
+  .openapi("CreateServiceTokenOutput");
+
 export const organizationMembersSchema = z
   .object({
     members: userSchema.pick({ id: true, email: true }).array(),
@@ -1460,6 +1520,11 @@ export const apiSpecObjectSchemas: Record<ObjectType, ObjectSchemasEntry> = {
   api_key: {
     object: apiKeySchema,
     create: createApiKeySchema,
+  },
+  service_token: {
+    object: serviceTokenSchema,
+    create: createServiceTokenSchema,
+    delete: deleteServiceTokenSchema,
   },
   ai_secret: {
     object: aiSecretSchema,
