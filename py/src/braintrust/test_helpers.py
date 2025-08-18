@@ -1,7 +1,9 @@
+from typing import Optional
+
 import pytest
 
 from braintrust import logger
-from braintrust.logger import ObjectMetadata, OrgProjectMetadata
+from braintrust.logger import ObjectMetadata, OrgProjectMetadata, ProjectDatasetMetadata
 from braintrust.util import LazyValue
 
 # Fake API key for testing only - this will not work with actual API calls
@@ -72,6 +74,27 @@ def init_test_logger(project_name: str):
     l._lazy_metadata = lazy_metadata  # Skip actual login by setting fake metadata directly
     return l
 
+
+def init_test_dataset(project_name: str, dataset_name: Optional[str] = None):
+    """
+    Initialize a dataset for testing with fake project/dataset metadata.
+
+    This sets up a dataset with fake metadata to avoid requiring actual API
+    calls. This is useful for tests that need a dataset object without network
+    access.
+
+    Args:
+        project_name: The name to use for the test project.
+        dataset_name: Optional explicit dataset name; defaults to project_name.
+    """
+    dataset_name = dataset_name or project_name
+    project_metadata = ObjectMetadata(id=project_name, name=project_name, full_info=dict())
+    dataset_metadata = ObjectMetadata(id=dataset_name, name=dataset_name, full_info=dict())
+    metadata = ProjectDatasetMetadata(project=project_metadata, dataset=dataset_metadata)
+    lazy_metadata = LazyValue(lambda: metadata, use_mutex=False)
+    d = logger.init_dataset(project=project_name, name=dataset_name)
+    d._lazy_metadata = lazy_metadata  # Skip actual login by setting fake metadata directly
+    return d
 
 # ----------------------------------------------------------------------
 # Tests for the helper functions

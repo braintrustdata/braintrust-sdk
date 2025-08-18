@@ -639,7 +639,32 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
             self.logs.extend(args)
 
     def flush(self, batch_size: Optional[int] = None):
-        pass
+        # The flush method only handles the logic for uploading attachments, no HTTP requests are made here.
+
+        items = []
+        while self.logs:
+            items.extend(self.pop())
+        attachments: List["BaseAttachment"] = []
+
+        for item in items:
+            _extract_attachments(item, attachments)
+
+        attachment_errors: List[Exception] = []
+        for attachment in attachments:
+            try:
+                result = attachment.upload()
+                if result["upload_status"] == "error":
+                    raise RuntimeError(result.get("error_message"))
+            except Exception as e:
+                attachment_errors.append(e)
+
+            if len(attachment_errors) == 1:
+                raise attachment_errors[0]
+            elif len(attachment_errors) > 1:
+                raise exceptiongroup.ExceptionGroup(
+                    "Encountered errors while uploading attachments",
+                    attachment_errors,
+                )
 
     def pop(self):
         with self.lock:
