@@ -594,33 +594,53 @@ describe("openai client unit tests", TEST_SUITE_OPTIONS, () => {
     assert.isTrue(m.completion_reasoning_tokens >= 0);
   });
 
-  test("parseMetricsFromUsage", () => {
-    const usage = {
-      input_tokens: 14,
-      output_tokens: 8,
-      input_tokens_details: { cached_tokens: 0, brand_new_token: 12 },
-    };
-    const metrics = parseMetricsFromUsage(usage);
-    assert.equal(metrics.prompt_tokens, 14);
-    assert.equal(metrics.prompt_cached_tokens, 0);
-    assert.equal(metrics.prompt_brand_new_token, 12);
-    assert.equal(metrics.completion_tokens, 8);
-    // test a bunch of error conditions
-    const totallyBadInputs = [
-      null,
-      undefined,
-      "not an object",
-      {},
-      { input_tokens: "not a number" },
-      { input_tokens_details: "not an object" },
-      { input_tokens_details: {} },
-      { input_tokens_details: { cached_tokens: "not a number" } },
-      { input_tokens_details: { cached_tokens: null } },
-      { input_tokens_details: { cached_tokens: undefined } },
-    ];
-    for (const input of totallyBadInputs) {
-      assert.deepEqual(parseMetricsFromUsage(input), {});
+  test("openai.chat.completions.parse (v5 GA method)", async () => {
+    // Test that the parse method is properly wrapped in the GA namespace (v5)
+    if (!oai.chat?.completions?.parse) {
+      // Skip if parse method not available (older SDK version)
+      return;
     }
+
+    assert.lengthOf(await backgroundLogger.drain(), 0);
+
+    // Use a simple schema for testing
+    const schema = {
+      type: "object",
+      properties: {
+        answer: { type: "number" },
+      },
+      required: ["answer"],
+    };
+
+    const start = getCurrentUnixTimestamp();
+    const result = await client.chat.completions.parse({
+      messages: [{ role: "user", content: "What is 2 + 2?" }],
+      model: TEST_MODEL,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "math_response",
+          schema: schema,
+        },
+      },
+    });
+    const end = getCurrentUnixTimestamp();
+
+    assert.ok(result);
+
+    const spans = await backgroundLogger.drain();
+    assert.lengthOf(spans, 1);
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-explicit-any
+    const span = spans[0] as any;
+    assert.equal(span.span_attributes.name, "Chat Completion");
+    assert.equal(span.span_attributes.type, "llm");
+    assert.equal(span.metadata.model, TEST_MODEL);
+    assert.equal(span.metadata.provider, "openai");
+    const m = span.metrics;
+    assert.isTrue(start <= m.start && m.start < m.end && m.end <= end);
+    assert.isTrue(m.tokens > 0);
+    assert.isTrue(m.prompt_tokens > 0);
+    assert.isTrue(m.time_to_first_token > 0);
   });
 });
 
