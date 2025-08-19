@@ -118,6 +118,7 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
     if parent:
         parent = parse_parent(parent)
 
+    print("STATE", state)
     try:
         eval_task = asyncio.create_task(
             EvalAsync(

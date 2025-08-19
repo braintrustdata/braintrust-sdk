@@ -1950,7 +1950,7 @@ def start_span(
     state = state or _state
     parent = parent or state.current_parent.get()
 
-    print("STARTING SPAN WITH", parent)
+    print("STARTING SPAN WITH", state, parent)
 
     if parent:
         components = SpanComponentsV3.from_str(parent)
@@ -1970,6 +1970,7 @@ def start_span(
             set_current=set_current,
             propagated_event=coalesce(propagated_event, components.propagated_event),
             event=event,
+            state=state,
         )
     else:
         return get_span_parent_object().start_span(
@@ -1980,6 +1981,7 @@ def start_span(
             set_current=set_current,
             parent=parent,
             propagated_event=propagated_event,
+            state=state,
             **event,
         )
 
@@ -3328,6 +3330,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
             start_time=start_time,
             set_current=set_current,
             event=event,
+            state=self.state,
         )
 
     def __enter__(self) -> "Experiment":
@@ -3581,6 +3584,7 @@ class SpanImpl(Span):
             start_time=start_time,
             set_current=set_current,
             event=event,
+            state=self.state,
         )
 
     def end(self, end_time: Optional[float] = None) -> float:
@@ -4302,6 +4306,7 @@ class Logger(Exportable):
         async_flush: bool = True,
         compute_metadata_args: Optional[Dict] = None,
         link_args: Optional[Dict] = None,
+        state: Optional[BraintrustState] = None,
     ):
         self._lazy_metadata = lazy_metadata
         self.async_flush = async_flush
@@ -4312,6 +4317,7 @@ class Logger(Exportable):
         # unresolved args about the org / project. Use these as potential
         # fallbacks when generating links
         self._link_args = link_args
+        self.state = state or _state
 
     @property
     def org_id(self) -> str:
@@ -4332,7 +4338,7 @@ class Logger(Exportable):
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
         self._lazy_metadata.get()
-        return _state
+        return self.state
 
     def log(
         self,
@@ -4495,6 +4501,7 @@ class Logger(Exportable):
             event=event,
             span_id=span_id,
             root_span_id=root_span_id,
+            state=self.state,
         )
 
     def export(self) -> str:
@@ -4526,8 +4533,8 @@ class Logger(Exportable):
         # the url and org name can be passed into init_logger, resolved by login or provided as env variables
         # so this resolves all of those things. It's possible we never have an org name if the user has not
         # yet logged in and there is nothing else configured.
-        app_url = _state.app_url or self._link_args.get("app_url") or _get_app_url()
-        org_name = _state.org_name or self._link_args.get("org_name") or _get_org_name()
+        app_url = self.state.app_url or self._link_args.get("app_url") or _get_app_url()
+        org_name = self.state.org_name or self._link_args.get("org_name") or _get_org_name()
         if not app_url or not org_name:
             return None
         return f"{app_url}/app/{org_name}"
@@ -4539,7 +4546,7 @@ class Logger(Exportable):
         """
         Flush any pending logs to the server.
         """
-        _state.global_bg_logger().flush()
+        self.state.global_bg_logger().flush()
 
 
 @dataclasses.dataclass
