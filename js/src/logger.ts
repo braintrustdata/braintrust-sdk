@@ -629,15 +629,13 @@ let _globalState: BraintrustState;
 
 // Return a TestBackgroundLogger that will intercept logs before they are sent to the server.
 // Used for testing only.
-function useTestBackgroundLogger(
-  itemsFlushed: boolean = false,
-): TestBackgroundLogger {
+function useTestBackgroundLogger(): TestBackgroundLogger {
   const state = _internalGetGlobalState();
   if (!state) {
     throw new Error("global state not set yet");
   }
 
-  const logger = new TestBackgroundLogger(itemsFlushed);
+  const logger = new TestBackgroundLogger();
   state.setOverrideBgLogger(logger);
   return logger;
 }
@@ -1930,38 +1928,12 @@ interface BackgroundLogger {
 
 export class TestBackgroundLogger implements BackgroundLogger {
   private items: LazyValue<BackgroundLogEvent>[][] = [];
-  private itemsFlushed: boolean;
-
-  constructor(itemsFlushed: boolean = false) {
-    this.itemsFlushed = itemsFlushed;
-  }
 
   log(items: LazyValue<BackgroundLogEvent>[]): void {
     this.items.push(items);
   }
 
   async flush(): Promise<void> {
-    if (this.itemsFlushed) {
-      const queued = this.items;
-      this.items = [];
-      const events: any[] = [];
-      for (const batch of queued)
-        for (const it of batch) events.push(await it.get());
-      const attachments: Attachment[] = [];
-      _exportsForTestingOnly.extractAttachments(events as any, attachments);
-      const errors: unknown[] = [];
-      for (const a of attachments) {
-        try {
-          await a.upload();
-        } catch (e) {
-          errors.push(e);
-        }
-      }
-      if (errors.length === 1) throw errors[0];
-      if (errors.length > 1)
-        throw new AggregateError(errors, "Attachment upload errors");
-    }
-
     return Promise.resolve();
   }
 

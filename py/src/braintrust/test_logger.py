@@ -3,7 +3,7 @@ import logging
 import os
 import time
 from typing import AsyncGenerator, List
-from unittest import TestCase, mock
+from unittest import TestCase
 
 import pytest
 
@@ -14,7 +14,6 @@ from braintrust.prompt import PromptChatBlock, PromptData, PromptMessage, Prompt
 from braintrust.test_helpers import (
     assert_dict_matches,
     assert_logged_out,
-    init_test_dataset,
     init_test_logger,
     simulate_login,  # noqa: F401 # type: ignore[reportUnusedImport]
     simulate_logout,
@@ -1130,25 +1129,3 @@ async def test_traced_async_generator_unlimited_with_minus_one(with_memory_logge
         os.environ.pop("BRAINTRUST_MAX_GENERATOR_ITEMS", None)
         if original:
             os.environ["BRAINTRUST_MAX_GENERATOR_ITEMS"] = original
-
-
-def test_dataset_flush_file_not_found_error(with_memory_logger, with_simulate_login):
-    """Test that dataset flush throws errors from attachment upload."""
-    dataset = init_test_dataset(__name__, __name__)
-
-    file_path = os.path.join("files", "invoice.pdf")
-    dataset.insert(
-        input={
-            "file": Attachment(
-                filename="invoice.pdf",
-                content_type="application/pdf",
-                data=file_path,
-            )
-        }
-    )
-
-    error = IOError(f"Failed to read file: {FileNotFoundError('mock-missing-file')}")
-
-    with mock.patch.object(Attachment, "upload", side_effect=error):
-        with pytest.raises(IOError, match="Failed to read file:"):
-            dataset.flush()

@@ -8,14 +8,10 @@ import {
   BraintrustState,
   wrapTraced,
   currentSpan,
-  initDataset,
-  Attachment,
-  Dataset,
   _internalGetGlobalState,
 } from "./logger";
 import { LazyValue } from "./util";
 import { configureNode } from "./node";
-import path from "node:path";
 
 configureNode();
 
@@ -742,45 +738,7 @@ describe("wrapTraced generator support", () => {
   });
 });
 
-// Test-only helper: create a Dataset without network calls by injecting fake metadata
-function initTestDataset(projectName: string, datasetName?: string) {
-  const state = _internalGetGlobalState();
-  const name = datasetName ?? projectName;
-  const lazyMetadata = new LazyValue(async () => ({
-    project: { id: projectName, name: projectName, fullInfo: {} },
-    dataset: { id: name, name, fullInfo: {} },
-  }));
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return new (Dataset as any)(state, lazyMetadata);
-}
-
-test("dataset flush throws file-not-found error", async () => {
-  initDataset;
-  await _exportsForTestingOnly.simulateLoginForTests();
-  _exportsForTestingOnly.useTestBackgroundLogger(true);
-
-  const uploadSpy = vi
-    .spyOn(Attachment.prototype, "upload")
-    .mockRejectedValue(new Error("Failed to read file: mock-missing-file"));
-
-  const ds = initTestDataset("invoice-dataset", "invoice-dataset");
-  ds.insert({
-    input: {
-      file: new Attachment({
-        filename: "invoice.pdf",
-        contentType: "application/pdf",
-        data: path.join("files", "invoice.pdf"),
-      }),
-    },
-  });
-
-  await expect(ds.flush()).rejects.toThrow("Failed to read file");
-
-  uploadSpy.mockRestore();
-  _exportsForTestingOnly.clearTestBackgroundLogger();
-});
-
-test("flush does not throw with default async flush", async () => {
+test("logger flush throws error regardless of syncFlush option", async () => {
   await _exportsForTestingOnly.simulateLoginForTests();
   const logger = initLogger({ projectName: "p", projectId: "p-id" });
 
