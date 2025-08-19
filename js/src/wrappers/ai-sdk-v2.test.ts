@@ -505,9 +505,6 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
       expect(aiSdkSpans).toHaveLength(1);
       const aiSdkSpan = aiSdkSpans[0] as any;
 
-      // Third call: Direct wrapper with cache hit for comparison
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
       await directClient.messages.create({
         model: testAnthropicModelName,
         max_tokens: 50,
