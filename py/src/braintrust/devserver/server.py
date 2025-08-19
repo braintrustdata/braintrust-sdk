@@ -1,4 +1,5 @@
 import asyncio
+import json
 import traceback
 from typing import Any
 
@@ -93,6 +94,15 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
     # Set up SSE headers for streaming
     sse_queue = SSEQueue()
 
+    async def task(input, hooks):
+        result = await evaluator.task(input, hooks)
+        hooks.report_progress({
+            "format": "code",
+            "output_type": "completion",
+            "event": "json_delta",
+            "data": json.dumps(result),
+        })
+
     async def stream_fn(event: SSEProgressEvent):
         if stream:
             # Serialize the event and put it in the SSE queue
@@ -104,6 +114,13 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
                 name="worker thead",
                 **{
                     **{k: v for (k, v) in evaluator.__dict__.items() if k not in ["eval_name", "project_name"]},
+                    # XXX Need to propagate this variable
+                    "state": state,
+                    "data": dataset,
+                    "task": task,
+                    "experiment_name": eval_data.get("experiment_name"),
+                    # XXX Need to propagate this variable
+                    "project_id": eval_data.get("project_id"),
                 },
             )
         )
