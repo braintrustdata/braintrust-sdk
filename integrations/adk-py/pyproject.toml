@@ -4,7 +4,11 @@ version = "0.1.0"
 description = "Braintrust Google ADK integration"
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = ["braintrust[otel]>=0.2.1", "google-adk>=1.9.0"]
+dependencies = [
+    "braintrust[otel]>=0.2.4",
+    "google-adk>=1.9.0",
+    "opentelemetry-proto>=1.36.0",
+]
 license = { text = "Apache-2.0" }
 authors = [{ name = "Braintrust", email = "info@braintrust.dev" }]
 keywords = ["braintrust", "google-adk", "adk", "agents", "ai", "llm", "tracing"]
@@ -35,3 +39,23 @@ where = ["src"]
 
 [tool.uv.workspace]
 members = ["examples"]
+
+[tool.uv.sources]
+braintrust = { path = "../../py" }
+
+[dependency-groups]
+dev = ["pytest>=8.3.5", "pytest-asyncio>=1.1.0", "pytest-vcr>=1.0.2"]
+
+[tool.isort]
+profile = "black"
+line_length = 120
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    "ignore::pytest.PytestUnhandledThreadExceptionWarning",
+    "ignore::pytest.PytestConfigWarning",
+]
