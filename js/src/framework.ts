@@ -147,6 +147,10 @@ export interface EvalHooks<
    * The index of the current trial (0-based). This is useful when trialCount > 1.
    */
   trialIndex: number;
+  /**
+   * The tags for the current evaluation.
+   */
+  tags: string[];
 }
 
 // This happens to be compatible with ScorerArgs defined in @braintrust/core.
@@ -915,6 +919,7 @@ async function runEvaluatorInternal(
         const expected = "expected" in datum ? datum.expected : undefined;
         let output: unknown = undefined;
         let error: unknown | undefined = undefined;
+        let tags: string[] = [...(datum.tags ?? [])];
         const scores: Record<string, number | null> = {};
         const scorerNames = evaluator.scores.map(scorerName);
         let unhandledScores: string[] | null = scorerNames;
@@ -924,7 +929,11 @@ async function runEvaluatorInternal(
 
           await rootSpan.traced(
             async (span: Span) => {
-              const outputResult = evaluator.task(datum.input, {
+              const hooksForTask: EvalHooks<
+                unknown,
+                Record<string, unknown>,
+                EvalParameters
+              > = {
                 meta,
                 metadata,
                 expected,
@@ -940,12 +949,17 @@ async function runEvaluatorInternal(
                   });
                 },
                 trialIndex,
-              });
+                tags,
+              };
+
+              const outputResult = evaluator.task(datum.input, hooksForTask);
               if (outputResult instanceof Promise) {
                 output = await outputResult;
               } else {
                 output = outputResult;
               }
+
+              tags = hooksForTask.tags;
               span.log({ output });
             },
             {
@@ -954,7 +968,7 @@ async function runEvaluatorInternal(
               event: { input: datum.input },
             },
           );
-          rootSpan.log({ output, metadata, expected });
+          rootSpan.log({ output, metadata, expected, tags });
 
           const scoringArgs = {
             input: datum.input,
@@ -1096,7 +1110,7 @@ async function runEvaluatorInternal(
           input: datum.input,
           ...("expected" in datum ? { expected: datum.expected } : {}),
           output,
-          tags: datum.tags,
+          tags,
           metadata,
           scores: {
             ...(evaluator.errorScoreHandler && unhandledScores

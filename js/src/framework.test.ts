@@ -555,3 +555,77 @@ test("Eval with noSendLogs: true runs locally without creating experiment", asyn
   await memoryLogger.flush();
   expect(await memoryLogger.drain()).toHaveLength(0);
 });
+
+test("hooks.tags can be appended and logged to root span", async () => {
+  await _exportsForTestingOnly.simulateLoginForTests();
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+  const experiment =
+    _exportsForTestingOnly.initTestExperiment("js-tags-append");
+
+  const initialTags = ["cookies n cream"];
+  const appendedTags = ["chocolate", "vanilla", "strawberry"];
+  const expectedTags = [
+    "cookies n cream",
+    "chocolate",
+    "vanilla",
+    "strawberry",
+  ];
+
+  await runEvaluator(
+    experiment,
+    {
+      projectName: "proj",
+      evalName: "js-tags-append",
+      data: [{ input: "hello", expected: "hello world", tags: initialTags }],
+      task: (input, hooks) => {
+        for (const t of appendedTags) hooks.tags.push(t);
+        return input;
+      },
+      scores: [() => ({ name: "simple_scorer", score: 0.8 })],
+      summarizeScores: false,
+    },
+    new NoopProgressReporter(),
+    [],
+    undefined,
+  );
+
+  await memoryLogger.flush();
+  const logs = await memoryLogger.drain();
+  const rootSpans = logs.filter((l: any) => !l["span_parents"]);
+  expect(rootSpans).toHaveLength(1);
+  expect((rootSpans[0] as any).tags).toEqual(expectedTags);
+});
+
+test.each<[string[]]>([[[]], [["chocolate", "vanilla", "strawberry"]]])(
+  "hooks.tags can be set to a list (%s)",
+  async (tags) => {
+    await _exportsForTestingOnly.simulateLoginForTests();
+    const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+    const experiment =
+      _exportsForTestingOnly.initTestExperiment("js-tags-list");
+
+    await runEvaluator(
+      experiment,
+      {
+        projectName: "proj",
+        evalName: "js-tags-list",
+        data: [{ input: "hello", expected: "hello world" }],
+        task: (input, hooks) => {
+          hooks.tags = tags;
+          return input;
+        },
+        scores: [() => ({ name: "simple_scorer", score: 0.8 })],
+        summarizeScores: false,
+      },
+      new NoopProgressReporter(),
+      [],
+      undefined,
+    );
+
+    await memoryLogger.flush();
+    const logs = await memoryLogger.drain();
+    const rootSpans = logs.filter((l: any) => !l["span_parents"]);
+    expect(rootSpans).toHaveLength(1);
+    expect((rootSpans[0] as any).tags ?? []).toEqual(tags);
+  },
+);

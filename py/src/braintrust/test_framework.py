@@ -286,10 +286,12 @@ async def test_eval_no_send_logs_true(with_memory_logger):
 async def test_hooks_tags_append(with_memory_logger, with_simulate_login):
     """ Test that hooks.tags can be appended to and logged. """
 
-    expected_tags = ["chocolate", "vanilla", "strawberry"]
+    initial_tags = ["cookies n cream"]
+    appended_tags = ["chocolate", "vanilla", "strawberry"]
+    expected_tags = ["cookies n cream", "chocolate", "vanilla", "strawberry"]
 
     def task_with_hooks(input, hooks):
-        for x in expected_tags:
+        for x in appended_tags:
             hooks.tags.append(x)
         return input
 
@@ -299,7 +301,7 @@ async def test_hooks_tags_append(with_memory_logger, with_simulate_login):
     evaluator = Evaluator(
         project_name=__name__,
         eval_name=__name__,
-        data=[EvalCase(input="hello", expected="hello world")],
+        data=[EvalCase(input="hello", expected="hello world", tags=initial_tags)],
         task=task_with_hooks,
         scores=[simple_scorer],
         experiment_name=__name__,
@@ -324,8 +326,7 @@ async def test_hooks_tags_list(with_memory_logger, with_simulate_login, expected
     """ Test that hooks.tags can be set to a list. """
 
     def task_with_hooks(input, hooks):
-        for x in expected_tags:
-            hooks.tags.append(x)
+        hooks.tags = expected_tags
         return input
 
     def simple_scorer(input, output, expected):
