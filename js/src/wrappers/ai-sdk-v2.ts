@@ -1,5 +1,9 @@
 import { SpanTypeAttribute } from "@braintrust/core";
 import { startSpan } from "../logger";
+import {
+  finalizeAnthropicTokens,
+  extractAnthropicCacheTokens,
+} from "./anthropic-tokens-util";
 
 // Minimal interface definitions that are compatible with AI SDK v2
 // We use generic types to avoid conflicts with the actual AI SDK types
@@ -166,22 +170,15 @@ function normalizeUsageMetrics(
           "cache_creation_input_tokens",
         ) || 0;
 
-      if (cacheReadTokens > 0) {
-        metrics.prompt_cached_tokens = cacheReadTokens;
-      }
+      // Add cache tokens to metrics
+      const cacheTokens = extractAnthropicCacheTokens(
+        cacheReadTokens,
+        cacheCreationTokens,
+      );
+      Object.assign(metrics, cacheTokens);
 
-      if (cacheCreationTokens > 0) {
-        metrics.prompt_cache_creation_tokens = cacheCreationTokens;
-      }
-
-      // Recalculate totals to include cache tokens (same logic as anthropic.ts)
-      const promptTokensWithCache =
-        (metrics.prompt_tokens || 0) +
-        (metrics.prompt_cached_tokens || 0) +
-        (metrics.prompt_cache_creation_tokens || 0);
-
-      metrics.prompt_tokens = promptTokensWithCache;
-      metrics.tokens = promptTokensWithCache + (metrics.completion_tokens || 0);
+      // Apply Anthropic token finalization logic
+      Object.assign(metrics, finalizeAnthropicTokens(metrics));
     }
   }
 

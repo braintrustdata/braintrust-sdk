@@ -23,7 +23,7 @@ import {
   LONG_SYSTEM_PROMPT,
   TEST_USER_PROMPT,
   CACHEABLE_SYSTEM_MESSAGE,
-} from "./test-prompts";
+} from "./ai-sdk-v2.fixtures";
 
 const testModelName = "gpt-4.1";
 const testAnthropicModelName = "claude-3-haiku-20240307";
@@ -469,7 +469,9 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
       // Clear first call logs
       await testLogger.drain();
 
-      // Wait for cache to be available
+      // This is because we need the cache to be available before we get cached responses back
+      // Which we need for this test. This will sometimes still not be long enough and the test
+      // will run again.
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Second call: AI SDK wrapper with cache hit
