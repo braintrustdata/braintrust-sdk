@@ -2,8 +2,6 @@ import os
 import re
 from typing import List, Union
 
-from bottle import hook, request, response
-
 # CORS configuration
 ALLOWED_ORIGINS: List[Union[str, re.Pattern]] = [
     "https://www.braintrust.dev",
@@ -62,20 +60,82 @@ def check_origin(origin: str) -> bool:
     return False
 
 
-@hook("after_request")
-def enable_cors():
-    """Add CORS headers to every response."""
-    origin = request.environ.get("HTTP_ORIGIN")
+def create_cors_middleware():
+    """Create a Starlette CORS middleware class."""
 
-    # Only set CORS headers if origin is valid
-    if origin and check_origin(origin):
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-        response.headers["Access-Control-Allow-Headers"] = ", ".join(ALLOWED_HEADERS)
-        response.headers["Access-Control-Expose-Headers"] = ", ".join(EXPOSED_HEADERS)
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Max-Age"] = "86400"
+    class CORSMiddleware:
+        def __init__(self, app):
+            self.app = app
 
-        # Handle Access-Control-Request-Private-Network
-        if request.headers.get("access-control-request-private-network"):
-            response.headers["Access-Control-Allow-Private-Network"] = "true"
+        async def __call__(self, scope, receive, send):
+            if scope["type"] == "http":
+                headers = dict(scope["headers"])
+                origin = headers.get(b"origin", b"").decode("utf-8")
+
+                # Handle OPTIONS requests
+                if scope["method"] == "OPTIONS":
+
+                    async def send_wrapper(message):
+                        if message["type"] == "http.response.start":
+                            headers_dict = dict(message.get("headers", []))
+
+                            if origin and check_origin(origin):
+                                headers_dict[b"access-control-allow-origin"] = origin.encode()
+                                headers_dict[
+                                    b"access-control-allow-methods"
+                                ] = b"GET, POST, PUT, DELETE, OPTIONS, PATCH"
+                                headers_dict[b"access-control-allow-headers"] = ", ".join(ALLOWED_HEADERS).encode()
+                                headers_dict[b"access-control-expose-headers"] = ", ".join(EXPOSED_HEADERS).encode()
+                                headers_dict[b"access-control-allow-credentials"] = b"true"
+                                headers_dict[b"access-control-max-age"] = b"86400"
+
+                                # Handle private network access
+                                if headers.get(b"access-control-request-private-network"):
+                                    headers_dict[b"access-control-allow-private-network"] = b"true"
+
+                            message["headers"] = list(headers_dict.items())
+
+                        await send(message)
+
+                    # Send empty response for OPTIONS
+                    await send_wrapper(
+                        {
+                            "type": "http.response.start",
+                            "status": 200,
+                            "headers": [],
+                        }
+                    )
+                    await send(
+                        {
+                            "type": "http.response.body",
+                            "body": b"",
+                        }
+                    )
+                    return
+
+                # For other requests, add CORS headers if origin is valid
+                async def send_wrapper(message):
+                    if message["type"] == "http.response.start" and origin and check_origin(origin):
+                        headers_dict = dict(message.get("headers", []))
+
+                        # Add CORS headers
+                        headers_dict[b"access-control-allow-origin"] = origin.encode()
+                        headers_dict[b"access-control-allow-methods"] = b"GET, POST, PUT, DELETE, OPTIONS, PATCH"
+                        headers_dict[b"access-control-allow-headers"] = ", ".join(ALLOWED_HEADERS).encode()
+                        headers_dict[b"access-control-expose-headers"] = ", ".join(EXPOSED_HEADERS).encode()
+                        headers_dict[b"access-control-allow-credentials"] = b"true"
+                        headers_dict[b"access-control-max-age"] = b"86400"
+
+                        # Handle private network access
+                        if headers.get(b"access-control-request-private-network"):
+                            headers_dict[b"access-control-allow-private-network"] = b"true"
+
+                        message["headers"] = list(headers_dict.items())
+
+                    await send(message)
+
+                await self.app(scope, receive, send_wrapper)
+            else:
+                await self.app(scope, receive, send)
+
+    return CORSMiddleware
