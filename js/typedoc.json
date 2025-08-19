@@ -3,6 +3,7 @@
       "skipLibCheck": true
     },
     "tsconfig": "./tsconfig.json",
+    "modulesFileName": "modules",
     "excludeExternals": true,
     "excludeNotDocumented": true,
     "excludeNotDocumentedKinds": ["TypeAlias", "Variable"],

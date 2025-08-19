@@ -71,8 +71,6 @@
   "devDependencies": {
     "@ai-sdk/anthropic": "^1.0.5",
     "@anthropic-ai/sdk": "^0.60.0",
-    "@openai/agents": "^0.0.14",
-    "ai": "^4.3.16",
     "@jest/globals": "^29.7.0",
     "@nodelib/fs.walk": "^1.2.8",
     "@openai/agents": "^0.0.14",
