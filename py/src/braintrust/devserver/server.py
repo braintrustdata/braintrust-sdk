@@ -1,18 +1,20 @@
+import asyncio
 import traceback
 from typing import Any
 
 import uvicorn
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse, PlainTextResponse
+from starlette.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from starlette.routing import Route
 
 from braintrust.logger import login_to_state
 
-from ..framework import Evaluator
+from ..framework import Eval, Evaluator, SSEProgressEvent
 from .auth import AuthorizationMiddleware
 from .cors import create_cors_middleware
 from .dataset import get_dataset
+from .eval_hooks import SSEQueue
 from .schemas import ValidationError, parse_eval_body
 
 _all_evaluators: dict[str, Evaluator[Any, Any]] = {}
@@ -43,7 +45,7 @@ async def list_evaluators(request: Request) -> JSONResponse:
     return JSONResponse(evaluator_list)
 
 
-async def run_eval(request: Request) -> JSONResponse:
+async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
     """Handle eval execution requests."""
     try:
         # Get request body
@@ -60,6 +62,8 @@ async def run_eval(request: Request) -> JSONResponse:
     ctx = getattr(request.state, "ctx", None)
 
     try:
+        # XXX Cache these logins with an LRU cache
+        # XXX Put login in front of /list too
         state = login_to_state(api_key=ctx.token, app_url=ctx.app_origin, org_name=ctx.org_name)
     except Exception as e:
         return JSONResponse({"error": f"Failed to log in: {str(e)}"}, status_code=401)
@@ -83,16 +87,62 @@ async def run_eval(request: Request) -> JSONResponse:
         print(traceback.format_exc())
         return JSONResponse({"error": f"Failed to process dataset: {str(e)}"}, status_code=400)
 
-    # TODO: Actually run the evaluator with the provided parameters and dataset
-    # For now, just return a success response
-    return JSONResponse({
-        "success": True,
-        "evaluator": eval_data["name"],
-        "parameters": eval_data.get("parameters"),
-        "stream": eval_data.get("stream", False),
-        "dataset_loaded": dataset is not None,
-        "message": "Eval execution not yet implemented",
-    })
+    # Check if streaming is requested
+    stream = eval_data.get("stream", False)
+
+    # Set up SSE headers for streaming
+    sse_queue = SSEQueue()
+
+    async def stream_fn(event: SSEProgressEvent):
+        if stream:
+            # Serialize the event and put it in the SSE queue
+            await sse_queue.put_event("progress", event)
+
+    try:
+        eval_task = asyncio.create_task(
+            Eval(
+                name="worker thead",
+                **{
+                    **{k: v for (k, v) in evaluator.__dict__.items() if k not in ["eval_name", "project_name"]},
+                },
+            )
+        )
+
+        if stream:
+
+            async def event_generator():
+                """Generate SSE events from the queue."""
+                # Stream events from the queue
+                while True:
+                    event = await sse_queue.get()
+                    if event is None:  # End of stream
+                        break
+                    yield event
+
+                # Wait for eval to complete
+                await eval_task
+
+            return StreamingResponse(
+                event_generator(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                },
+            )
+        else:
+            # Return regular JSON response
+            return JSONResponse({
+                "success": True,
+                "evaluator": eval_data["name"],
+                "parameters": eval_data.get("parameters"),
+                "stream": stream,
+                "dataset_loaded": dataset is not None,
+                "message": "Eval execution not yet implemented",
+            })
+    except Exception as e:
+        print(traceback.format_exc())
+        return JSONResponse({"error": f"Failed to run evaluation: {str(e)}"}, status_code=500)
 
 
 def run_dev_server(evaluators: list[Evaluator[Any, Any]], host: str = "localhost", port: int = 8300):

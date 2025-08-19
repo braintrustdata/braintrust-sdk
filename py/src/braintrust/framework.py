@@ -22,6 +22,7 @@ from typing import (
     Iterable,
     Iterator,
     List,
+    Literal,
     Optional,
     Sequence,
     Type,
@@ -33,6 +34,7 @@ from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 from typing_extensions import NotRequired, Protocol, TypedDict
 
+from .generated_types import FunctionFormat, FunctionOutputType, ObjectReference
 from .git_fields import GitMetadataSettings, RepoInfo
 from .logger import (
     NOOP_SPAN,
@@ -127,6 +129,37 @@ class EvalResult(SerializableDataClass, Generic[Input, Output]):
     exc_info: Optional[str] = None
 
 
+@dataclasses.dataclass
+class TaskProgressEvent(TypedDict):
+    """Progress event that can be reported during task execution."""
+
+    format: FunctionFormat
+    output_type: FunctionOutputType
+    event: Literal[
+        "reasoning_delta",
+        "text_delta",
+        "json_delta",
+        "error",
+        "console",
+        "start",
+        "done",
+        "progress",
+    ]
+    data: str
+
+
+class SSEProgressEvent(TaskProgressEvent):
+    """
+    A progress event that can be reported during task execution, specifically for SSE (Server-Sent Events) streams.
+    This is a subclass of TaskProgressEvent with additional fields for SSE-specific metadata.
+    """
+
+    id: str
+    object_type: str
+    origin: ObjectReference
+    name: str
+
+
 class EvalHooks(abc.ABC, Generic[Output]):
     """
     An object that can be used to add metadata to an evaluation. This is passed to the `task` function.
@@ -159,6 +192,13 @@ class EvalHooks(abc.ABC, Generic[Output]):
         """
         The index of the current trial (0-based). This is useful when trial_count > 1.
         """
+
+    @abc.abstractmethod
+    def report_progress(self, progress: TaskProgressEvent) -> None:
+        """
+        Report progress that will show up in the playground.
+        """
+        ...
 
     @abc.abstractmethod
     def meta(self, **info: Any) -> None:
@@ -1020,13 +1060,20 @@ def evaluate_filter(object, filter: Filter):
 
 
 class DictEvalHooks(Dict[str, Any]):
-    def __init__(self, metadata: Optional[Any] = None, expected: Optional[Any] = None, trial_index: int = 0):
+    def __init__(
+        self,
+        metadata: Optional[Any] = None,
+        expected: Optional[Any] = None,
+        trial_index: int = 0,
+        report_progress: Callable[TaskProgressEvent, None] = None,
+    ):
         if metadata is not None:
             self.update({"metadata": metadata})
         if expected is not None:
             self.update({"expected": expected})
         self.update({"trial_index": trial_index})
         self._span = None
+        self._report_progress = report_progress
 
     @property
     def metadata(self):
@@ -1056,6 +1103,10 @@ class DictEvalHooks(Dict[str, Any]):
             self.update({"metadata": {}})
 
         self.get("metadata").update(info)  # type: ignore
+
+    def report_progress(self, event: TaskProgressEvent):
+        if self._report_progress:
+            self._report_progress(event)
 
 
 def init_experiment(
@@ -1138,7 +1189,13 @@ def default_error_score_handler(
     return scores
 
 
-async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Optional[int], filters: List[Filter]):
+async def _run_evaluator_internal(
+    experiment,
+    evaluator: Evaluator,
+    position: Optional[int],
+    filters: List[Filter],
+    stream: Callable[SSEProgressEvent, None] = None,
+):
     event_loop = asyncio.get_event_loop()
 
     async def await_or_run_scorer(root_span, scorer, name, **kwargs):
@@ -1197,14 +1254,10 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
         exc_info = None
         scores = {}
 
+        origin = None
         if experiment:
-            root_span = experiment.start_span(
-                "eval",
-                span_attributes={"type": SpanTypeAttribute.EVAL},
-                input=datum.input,
-                expected=datum.expected,
-                tags=datum.tags,
-                origin={
+            origin = (
+                {
                     "object_type": "dataset",
                     "object_id": experiment.dataset.id,
                     "id": datum.id,
@@ -1212,13 +1265,29 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                     "_xact_id": datum._xact_id,
                 }
                 if experiment.dataset and datum.id and datum._xact_id
-                else None,
+                else None
+            )
+            root_span = experiment.start_span(
+                "eval",
+                span_attributes={"type": SpanTypeAttribute.EVAL},
+                input=datum.input,
+                expected=datum.expected,
+                tags=datum.tags,
+                origin=origin,
             )
         else:
             root_span = NOOP_SPAN
         with root_span:
             try:
-                hooks = DictEvalHooks(metadata, expected=datum.expected, trial_index=trial_index)
+
+                def report_progress(event: TaskProgressEvent):
+                    if not stream:
+                        return
+                    stream(id=root_span.id, origin=origin, name=evaluator.eval_name, object_type="task", **event)
+
+                hooks = DictEvalHooks(
+                    metadata, expected=datum.expected, trial_index=trial_index, report_progress=report_progress
+                )
 
                 # Check if the task takes a hooks argument
                 task_args = [datum.input]
