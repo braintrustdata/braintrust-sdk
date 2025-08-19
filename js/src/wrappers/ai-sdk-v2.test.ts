@@ -9,6 +9,7 @@ import {
 import { generateText, streamText, wrapLanguageModel } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
+import Anthropic from "@anthropic-ai/sdk";
 import { BraintrustMiddleware } from "../exports-node";
 import {
   _exportsForTestingOnly,
@@ -17,6 +18,12 @@ import {
   initLogger,
   _internalSetInitialState,
 } from "../logger";
+import { wrapAnthropic } from "./anthropic";
+import {
+  LONG_SYSTEM_PROMPT,
+  TEST_USER_PROMPT,
+  CACHEABLE_SYSTEM_MESSAGE,
+} from "./ai-sdk-v2.fixtures";
 
 const testModelName = "gpt-4.1";
 const testAnthropicModelName = "claude-3-haiku-20240307";
@@ -423,4 +430,123 @@ describe("ai sdk middleware tests", TEST_SUITE_OPTIONS, () => {
     expect(typeof middleware.wrapGenerate).toBe("function");
     expect(typeof middleware.wrapStream).toBe("function");
   });
+
+  test(
+    "anthropic token counts consistent between direct and AI SDK wrappers with prompt caching",
+    { timeout: 30000 },
+    async () => {
+      const directClient = wrapAnthropic(
+        new Anthropic({
+          apiKey: process.env.ANTHROPIC_API_KEY,
+        }),
+      );
+
+      expect(await testLogger.drain()).toHaveLength(0);
+
+      // First call: Direct Anthropic wrapper to create cache
+      try {
+        await directClient.messages.create({
+          model: testAnthropicModelName,
+          max_tokens: 50,
+          system: CACHEABLE_SYSTEM_MESSAGE,
+          messages: [
+            {
+              role: "user",
+              content: TEST_USER_PROMPT,
+            },
+          ],
+        });
+      } catch (error: any) {
+        if (
+          error.message?.includes("authentication") ||
+          error.message?.includes("api_key")
+        ) {
+          return;
+        }
+        throw error;
+      }
+
+      // Clear first call logs
+      await testLogger.drain();
+
+      // This is because we need the cache to be available before we get cached responses back
+      // Which we need for this test. This will sometimes still not be long enough and the test
+      // will run again.
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Second call: AI SDK wrapper with cache hit
+      const wrappedAnthropicModel = wrapLanguageModel({
+        model: anthropic(testAnthropicModelName),
+        middleware: BraintrustMiddleware({
+          debug: true,
+          name: "TokenCountTestMiddleware",
+        }),
+      });
+
+      await generateText({
+        model: wrappedAnthropicModel,
+        messages: [
+          {
+            role: "system",
+            content: LONG_SYSTEM_PROMPT,
+            providerOptions: {
+              anthropic: { cacheControl: { type: "ephemeral" } },
+            },
+          },
+          {
+            role: "user",
+            content: TEST_USER_PROMPT,
+          },
+        ],
+        maxRetries: 0,
+      });
+
+      const aiSdkSpans = await testLogger.drain();
+      expect(aiSdkSpans).toHaveLength(1);
+      const aiSdkSpan = aiSdkSpans[0] as any;
+
+      await directClient.messages.create({
+        model: testAnthropicModelName,
+        max_tokens: 50,
+        system: CACHEABLE_SYSTEM_MESSAGE,
+        messages: [
+          {
+            role: "user",
+            content: TEST_USER_PROMPT,
+          },
+        ],
+      });
+
+      const directSpans = await testLogger.drain();
+      expect(directSpans).toHaveLength(1);
+      const directSpan = directSpans[0] as any;
+
+      // Verify both wrappers have consistent token metrics
+      expect(aiSdkSpan.metrics).toHaveProperty("prompt_tokens");
+      expect(aiSdkSpan.metrics).toHaveProperty("completion_tokens");
+      expect(aiSdkSpan.metrics).toHaveProperty("tokens");
+      expect(aiSdkSpan.metrics).toHaveProperty("prompt_cached_tokens");
+
+      expect(directSpan.metrics).toHaveProperty("prompt_tokens");
+      expect(directSpan.metrics).toHaveProperty("completion_tokens");
+      expect(directSpan.metrics).toHaveProperty("tokens");
+      expect(directSpan.metrics).toHaveProperty("prompt_cached_tokens");
+
+      // Both cached calls should have identical token counts
+      expect(aiSdkSpan.metrics.prompt_tokens).toBe(
+        directSpan.metrics.prompt_tokens,
+      );
+      expect(aiSdkSpan.metrics.completion_tokens).toBe(
+        directSpan.metrics.completion_tokens,
+      );
+      expect(aiSdkSpan.metrics.tokens).toBe(directSpan.metrics.tokens);
+      expect(aiSdkSpan.metrics.prompt_cached_tokens).toBe(
+        directSpan.metrics.prompt_cached_tokens,
+      );
+
+      // Verify provider detection
+      expect(aiSdkSpan.metadata.provider).toBe("anthropic");
+      expect(directSpan.metadata.provider).toBe("anthropic");
+    },
+  );
 });
