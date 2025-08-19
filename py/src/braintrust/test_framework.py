@@ -309,7 +309,8 @@ async def test_hooks_tags_append(with_memory_logger, with_simulate_login):
         summarize_scores=False,
     )
     exp = init_test_exp(__name__)
-    await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
+    result = await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
+    assert result.results[0].tags == expected_tags
 
     logs = with_memory_logger.pop()
     assert len(logs) == 3
@@ -343,7 +344,8 @@ async def test_hooks_tags_list(with_memory_logger, with_simulate_login, expected
         summarize_scores=False,
     )
     exp = init_test_exp(__name__)
-    await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
+    result = await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
+    assert result.results[0].tags == expected_tags
 
     logs = with_memory_logger.pop()
     assert len(logs) == 3

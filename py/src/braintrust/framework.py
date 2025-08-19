@@ -1221,6 +1221,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
         error = None
         exc_info = None
         scores = {}
+        tags = datum.tags
 
         if experiment:
             root_span = experiment.start_span(
@@ -1228,7 +1229,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                 span_attributes={"type": SpanTypeAttribute.EVAL},
                 input=datum.input,
                 expected=datum.expected,
-                tags=datum.tags,
+                tags=tags,
                 origin={
                     "object_type": "dataset",
                     "object_id": experiment.dataset.id,
@@ -1243,7 +1244,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             root_span = NOOP_SPAN
         with root_span:
             try:
-                hooks = DictEvalHooks(metadata, expected=datum.expected, trial_index=trial_index, tags=datum.tags)
+                hooks = DictEvalHooks(metadata, expected=datum.expected, trial_index=trial_index, tags=tags)
 
                 # Check if the task takes a hooks argument
                 task_args = [datum.input]
@@ -1257,7 +1258,8 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                     hooks.set_span(span)
                     output = await await_or_run(event_loop, evaluator.task, *task_args)
                     span.log(input=task_args[0], output=output)
-                root_span.log(output=output, metadata=metadata, tags=hooks.tags)
+                tags = hooks.tags
+                root_span.log(output=output, metadata=metadata, tags=tags)
 
                 score_promises = [
                     asyncio.create_task(
@@ -1315,7 +1317,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             input=datum.input,
             expected=datum.expected,
             metadata=metadata,
-            tags=list(datum.tags) if datum.tags else None,
+            tags=tags,
             output=output,
             scores={
                 **(

@@ -571,7 +571,7 @@ test("hooks.tags can be appended and logged to root span", async () => {
     "strawberry",
   ];
 
-  await runEvaluator(
+  const result = await runEvaluator(
     experiment,
     {
       projectName: "proj",
@@ -588,6 +588,7 @@ test("hooks.tags can be appended and logged to root span", async () => {
     [],
     undefined,
   );
+  expect(result.results[0].tags).toEqual(expectedTags);
 
   await memoryLogger.flush();
   const logs = await memoryLogger.drain();
@@ -604,7 +605,7 @@ test.each<[string[]]>([[[]], [["chocolate", "vanilla", "strawberry"]]])(
     const experiment =
       _exportsForTestingOnly.initTestExperiment("js-tags-list");
 
-    await runEvaluator(
+    const result = await runEvaluator(
       experiment,
       {
         projectName: "proj",
@@ -621,6 +622,7 @@ test.each<[string[]]>([[[]], [["chocolate", "vanilla", "strawberry"]]])(
       [],
       undefined,
     );
+    expect(result.results[0].tags).toEqual(tags);
 
     await memoryLogger.flush();
     const logs = await memoryLogger.drain();
