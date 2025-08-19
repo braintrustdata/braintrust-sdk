@@ -9,9 +9,9 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from starlette.routing import Route
 
-from braintrust.logger import bt_iscoroutinefunction, login_to_state
-
 from ..framework import EvalAsync, Evaluator, SSEProgressEvent
+from ..logger import bt_iscoroutinefunction, login_to_state
+from ..span_identifier_v3 import parse_parent
 from .auth import AuthorizationMiddleware
 from .cors import create_cors_middleware
 from .dataset import get_dataset
@@ -109,9 +109,14 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
         return result
 
     async def stream_fn(event: SSEProgressEvent):
-        if stream:
-            # Serialize the event and put it in the SSE queue
-            await sse_queue.put_event("progress", event)
+        print("STREAMING EVENT", event)
+        # if stream:
+        #    # Serialize the event and put it in the SSE queue
+        #    await sse_queue.put_event("progress", event)
+
+    parent = eval_data.get("parent")
+    if parent:
+        parent = parse_parent(parent)
 
     try:
         eval_task = asyncio.create_task(
@@ -124,7 +129,7 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
                     "data": dataset,
                     "task": task,
                     "experiment_name": eval_data.get("experiment_name"),
-                    "parent": eval_data.get("parent"),
+                    "parent": parent,
                     # XXX Need to propagate this variable
                     # "project_id": eval_data.get("project_id"),
                 },
@@ -136,11 +141,12 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
             async def event_generator():
                 """Generate SSE events from the queue."""
                 # Stream events from the queue
-                while True:
-                    event = await sse_queue.get()
-                    if event is None:  # End of stream
-                        break
-                    yield event
+                #                while True:
+                #                    event = await sse_queue.get()
+                #                    if event is None:  # End of stream
+                #                        break
+                #                    yield event
+                yield f"data: {json.dumps({'status': 'started'})}\n\n"
 
                 # Wait for eval to complete
                 await eval_task

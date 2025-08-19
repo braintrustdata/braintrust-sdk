@@ -37,7 +37,6 @@ from typing_extensions import NotRequired, Protocol, TypedDict
 from .generated_types import FunctionFormat, FunctionOutputType, ObjectReference
 from .git_fields import GitMetadataSettings, RepoInfo
 from .logger import (
-    NOOP_SPAN,
     BraintrustState,
     Dataset,
     Experiment,
@@ -47,6 +46,7 @@ from .logger import (
     Span,
     _ExperimentDatasetEvent,
     parent_context,
+    start_span,
     stringify_exception,
 )
 from .logger import init as _init_experiment
@@ -658,6 +658,7 @@ def _EvalCommon(
     summarize_scores: bool,
     no_send_logs: bool,
     error_score_handler: Optional[ErrorScoreHandler] = None,
+    stream: Optional[Callable[[SSEProgressEvent], None]] = None,
     parent: Optional[str] = None,
     state: Optional[BraintrustState] = None,
 ) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary[Input, Output]]]:
@@ -739,9 +740,10 @@ def _EvalCommon(
             )
 
         async def run_to_completion():
+            print("PARENT", parent)
             with parent_context(parent, state):
                 try:
-                    ret = await run_evaluator(experiment, evaluator, 0, [])
+                    ret = await run_evaluator(experiment, evaluator, 0, [], stream, state)
                     reporter.report_eval(evaluator, ret, verbose=True, jsonl=False)
                     return ret
                 finally:
@@ -775,6 +777,7 @@ async def EvalAsync(
     description: Optional[str] = None,
     summarize_scores: bool = True,
     no_send_logs: bool = False,
+    stream: Optional[Callable[[SSEProgressEvent], None]] = None,
     parent: Optional[str] = None,
     state: Optional[BraintrustState] = None,
 ) -> EvalResultWithSummary[Input, Output]:
@@ -826,6 +829,8 @@ async def EvalAsync(
     :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
     :param no_send_logs: Do not send logs to Braintrust. When True, the evaluation runs locally
     and builds a local summary instead of creating an experiment. Defaults to False.
+    :param stream: A function that will be called with progress events, which can be used to
+    display intermediate progress.
     :param parent: If specified, instead of creating a new experiment object, the Eval() will populate
     the object or span specified by this parent.
     :param state: Optional BraintrustState to use for the evaluation. If not specified, the global login state will be used.
@@ -852,6 +857,7 @@ async def EvalAsync(
         description=description,
         summarize_scores=summarize_scores,
         no_send_logs=no_send_logs,
+        stream=stream,
         parent=parent,
         state=state,
     )
@@ -884,6 +890,7 @@ def Eval(
     description: Optional[str] = None,
     summarize_scores: bool = True,
     no_send_logs: bool = False,
+    stream: Optional[Callable[[SSEProgressEvent], None]] = None,
     parent: Optional[str] = None,
     state: Optional[BraintrustState] = None,
 ) -> EvalResultWithSummary[Input, Output]:
@@ -935,6 +942,8 @@ def Eval(
     :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
     :param no_send_logs: Do not send logs to Braintrust. When True, the evaluation runs locally
     and builds a local summary instead of creating an experiment. Defaults to False.
+    :param stream: A function that will be called with progress events, which can be used to
+    display intermediate progress.
     :param parent: If specified, instead of creating a new experiment object, the Eval() will populate
     the object or span specified by this parent.
     :param state: Optional BraintrustState to use for the evaluation. If not specified, the global login state will be used.
@@ -963,6 +972,7 @@ def Eval(
         description=description,
         summarize_scores=summarize_scores,
         no_send_logs=no_send_logs,
+        stream=stream,
         parent=parent,
         state=state,
     )
@@ -1187,10 +1197,12 @@ async def run_evaluator(
     evaluator: Evaluator[Input, Output],
     position: Optional[int],
     filters: List[Filter],
+    stream: Optional[Callable[[SSEProgressEvent], None]] = None,
+    state: Optional[BraintrustState] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """Wrapper on _run_evaluator_internal that times out execution after evaluator.timeout."""
     results = await asyncio.wait_for(
-        _run_evaluator_internal(experiment, evaluator, position, filters), evaluator.timeout
+        _run_evaluator_internal(experiment, evaluator, position, filters, stream, state), evaluator.timeout
     )
 
     if experiment:
@@ -1216,7 +1228,8 @@ async def _run_evaluator_internal(
     evaluator: Evaluator,
     position: Optional[int],
     filters: List[Filter],
-    stream: Callable[SSEProgressEvent, None] = None,
+    stream: Optional[Callable[[SSEProgressEvent], None]] = None,
+    state: Optional[BraintrustState] = None,
 ):
     event_loop = asyncio.get_event_loop()
 
@@ -1276,29 +1289,34 @@ async def _run_evaluator_internal(
         exc_info = None
         scores = {}
 
-        origin = None
+        origin = (
+            {
+                "object_type": "dataset",
+                "object_id": experiment.dataset.id,
+                "id": datum.id,
+                "created": datum.created,
+                "_xact_id": datum._xact_id,
+            }
+            # XXX Generalize this to look at evaluator.data too
+            if experiment and experiment.dataset and datum.id and datum._xact_id
+            else None
+        )
+        base_event = dict(
+            name="eval",
+            span_attributes={"type": SpanTypeAttribute.EVAL},
+            input=datum.input,
+            expected=datum.expected,
+            tags=datum.tags,
+            origin=origin,
+        )
+
+        print("HERE!")
         if experiment:
-            origin = (
-                {
-                    "object_type": "dataset",
-                    "object_id": experiment.dataset.id,
-                    "id": datum.id,
-                    "created": datum.created,
-                    "_xact_id": datum._xact_id,
-                }
-                if experiment.dataset and datum.id and datum._xact_id
-                else None
-            )
-            root_span = experiment.start_span(
-                "eval",
-                span_attributes={"type": SpanTypeAttribute.EVAL},
-                input=datum.input,
-                expected=datum.expected,
-                tags=datum.tags,
-                origin=origin,
-            )
+            root_span = experiment.start_span(**base_event)
         else:
-            root_span = NOOP_SPAN
+            # In most cases this will be a no-op span, but if the parent is set, it will use that ctx.
+            root_span = start_span(state=state, **base_event)
+
         with root_span:
             try:
 

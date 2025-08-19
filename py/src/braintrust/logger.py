@@ -464,6 +464,9 @@ class BraintrustState:
     def login_replace_api_conn(self, api_conn: "HTTPConnection"):
         self._global_bg_logger.get().internal_replace_api_conn(api_conn)
 
+    def flush(self):
+        self._global_bg_logger.get().flush()
+
 
 _state: BraintrustState = None  # type: ignore
 
@@ -1714,7 +1717,6 @@ def parent_context(parent: Optional[str], state: Optional[BraintrustState] = Non
             span = start_span("my-span")
     """
     state = state or _state
-    print("SETTING PARENT CONTEXT", parent)
     token = state.current_parent.set(parent)
     try:
         yield
@@ -1947,6 +1949,8 @@ def start_span(
 
     state = state or _state
     parent = parent or state.current_parent.get()
+
+    print("STARTING SPAN WITH", parent)
 
     if parent:
         components = SpanComponentsV3.from_str(parent)
