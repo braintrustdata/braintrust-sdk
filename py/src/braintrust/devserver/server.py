@@ -16,70 +16,22 @@ async def index(request):
 
 
 async def list_evaluators(request):
-    evaluator_list = [
-        {"name": name, "description": evaluator.description, "project_name": evaluator.project_name}
-        for name, evaluator in _all_evaluators.items()
-    ]
+    evaluator_list = {
+        k: {
+            "parameters": {},
+            "scores": [],
+        }
+        for k, v in _all_evaluators.items()
+    }
+
     print(f"Available evaluators: {evaluator_list}")
 
     # Return the hardcoded response for now
-    return JSONResponse({
-        "Simple eval": {
-            "parameters": {
-                "main": {
-                    "type": "prompt",
-                    "default": {
-                        "prompt": {"type": "chat", "messages": [{"role": "user", "content": "{{input}}"}]},
-                        "options": {"model": "gpt-4o"},
-                    },
-                    "description": "This is the main prompt",
-                },
-                "another": {
-                    "type": "prompt",
-                    "default": {
-                        "prompt": {"type": "chat", "messages": [{"role": "user", "content": "{{input}}"}]},
-                        "options": {"model": "gpt-4o"},
-                    },
-                    "description": "This is another prompt",
-                },
-                "include_prefix": {
-                    "type": "data",
-                    "schema": {
-                        "type": "boolean",
-                        "default": False,
-                        "description": "Include a contextual prefix",
-                        "$schema": "http://json-schema.org/draft-07/schema#",
-                    },
-                    "description": "Include a contextual prefix",
-                },
-                "prefix": {
-                    "type": "data",
-                    "schema": {
-                        "type": "string",
-                        "description": "The prefix to include",
-                        "default": "this is a math problem",
-                        "$schema": "http://json-schema.org/draft-07/schema#",
-                    },
-                    "description": "The prefix to include",
-                },
-                "array_of_objects": {
-                    "type": "data",
-                    "schema": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {"name": {"type": "string"}, "age": {"type": "number"}},
-                            "required": ["name", "age"],
-                            "additionalProperties": False,
-                        },
-                        "default": [{"name": "John", "age": 30}, {"name": "Jane", "age": 25}],
-                        "$schema": "http://json-schema.org/draft-07/schema#",
-                    },
-                },
-            },
-            "scores": [{"name": "Levenshtein"}],
-        }
-    })
+    return JSONResponse(evaluator_list)
+
+
+async def run_eval(request):
+    pass
 
 
 def run_dev_server(evaluators: list[Evaluator[Any, Any]], host: str = "localhost", port: int = 8300):
@@ -92,6 +44,7 @@ def run_dev_server(evaluators: list[Evaluator[Any, Any]], host: str = "localhost
     routes = [
         Route("/", endpoint=index),
         Route("/list", endpoint=list_evaluators),
+        Route("/eval", endpoint=run_eval, methods=["POST"]),
     ]
 
     app = Starlette(routes=routes)
