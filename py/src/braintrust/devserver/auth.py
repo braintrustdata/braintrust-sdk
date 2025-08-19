@@ -7,12 +7,14 @@ from starlette.responses import JSONResponse, Response
 
 ORIGIN_HEADER = "origin"
 BRAINTRUST_AUTH_TOKEN_HEADER = "x-bt-auth-token"
+BRAINTRUST_ORG_NAME_HEADER = "x-bt-org-name"
 
 
 @dataclass
 class RequestContext:
     app_origin: Optional[str]
     token: Optional[str]
+    org_name: Optional[str]
 
 
 def extract_allowed_origin(origin: Optional[str]) -> Optional[str]:
@@ -50,6 +52,7 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
             ctx = RequestContext(
                 app_origin=extract_allowed_origin(request.headers.get(ORIGIN_HEADER)),
                 token=None,
+                org_name=request.headers.get(BRAINTRUST_ORG_NAME_HEADER),
             )
 
             # Extract token from headers

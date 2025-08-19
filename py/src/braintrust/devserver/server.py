@@ -1,3 +1,4 @@
+import traceback
 from typing import Any
 
 import uvicorn
@@ -11,6 +12,7 @@ from braintrust.logger import login_to_state
 from ..framework import Evaluator
 from .auth import AuthorizationMiddleware
 from .cors import create_cors_middleware
+from .dataset import get_dataset
 from .schemas import ValidationError, parse_eval_body
 
 _all_evaluators: dict[str, Evaluator[Any, Any]] = {}
@@ -58,7 +60,7 @@ async def run_eval(request: Request) -> JSONResponse:
     ctx = getattr(request.state, "ctx", None)
 
     try:
-        state = login_to_state(api_key=ctx.token, app_url=ctx.app_origin)
+        state = login_to_state(api_key=ctx.token, app_url=ctx.app_origin, org_name=ctx.org_name)
     except Exception as e:
         return JSONResponse({"error": f"Failed to log in: {str(e)}"}, status_code=401)
 
@@ -67,15 +69,28 @@ async def run_eval(request: Request) -> JSONResponse:
     if not evaluator:
         return JSONResponse({"error": f"Evaluator '{eval_data['name']}' not found"}, status_code=404)
 
-    print(evaluator)
+    # Get the dataset if data is provided
+    print("DATASET DATA", eval_data.get("data"))
+    try:
+        dataset = await get_dataset(state, eval_data["data"])
+    except Exception as e:
+        return JSONResponse({"error": f"Failed to load dataset: {str(e)}"}, status_code=400)
 
-    # TODO: Actually run the evaluator with the provided parameters
+    try:
+        print(dataset)
+        print(list(dataset))
+    except Exception as e:
+        print(traceback.format_exc())
+        return JSONResponse({"error": f"Failed to process dataset: {str(e)}"}, status_code=400)
+
+    # TODO: Actually run the evaluator with the provided parameters and dataset
     # For now, just return a success response
     return JSONResponse({
         "success": True,
         "evaluator": eval_data["name"],
         "parameters": eval_data.get("parameters"),
         "stream": eval_data.get("stream", False),
+        "dataset_loaded": dataset is not None,
         "message": "Eval execution not yet implemented",
     })
 

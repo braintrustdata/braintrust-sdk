@@ -385,6 +385,42 @@ class BraintrustState:
         self._proxy_conn: Optional[HTTPConnection] = None
         self._user_info: Optional[Mapping[str, Any]] = None
 
+    def copy_login_info(self, other: "BraintrustState"):
+        """Copy login information from another BraintrustState instance."""
+        self.app_url = other.app_url
+        self.app_public_url = other.app_public_url
+        self.login_token = other.login_token
+        self.org_id = other.org_id
+        self.org_name = other.org_name
+        self.api_url = other.api_url
+        self.proxy_url = other.proxy_url
+        self.logged_in = other.logged_in
+        self.git_metadata_settings = other.git_metadata_settings
+
+        # Reset connections to ensure they are re-initialized with the new URLs.
+        self._app_conn = None
+        self._api_conn = None
+        self._proxy_conn = None
+        self._user_info = None
+
+    def login(
+        self,
+        app_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        org_name: Optional[str] = None,
+        force_login: bool = False,
+    ) -> None:
+        if self.api_url and not force_login:
+            # If we already have an API connection, we don't need to log in again.
+            return
+
+        state = login_to_state(
+            app_url=app_url,
+            api_key=api_key,
+            org_name=org_name,
+        )
+        self.copy_login_info(state)
+
     def app_conn(self):
         if not self._app_conn:
             if not self.app_url:
@@ -1216,6 +1252,7 @@ def init_dataset(
     metadata: Optional[Metadata] = None,
     use_output: bool = DEFAULT_IS_LEGACY_DATASET,
     _internal_btql: Optional[Dict[str, Any]] = None,
+    state: Optional[BraintrustState] = None,
 ) -> "Dataset":
     """
     Create a new dataset in a specified project. If the project does not exist, it will be created.
@@ -1231,18 +1268,22 @@ def init_dataset(
     :param project_id: The id of the project to create the dataset in. This takes precedence over `project` if specified.
     :param metadata: (Optional) a dictionary with additional data about the dataset. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
     :param use_output: (Deprecated) If True, records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This option will be removed in a future version of Braintrust.
+    :param _internal_btql: (Internal) If specified, the dataset will be created with the given BTQL filters.
+    :param state: (Internal) The Braintrust state to use. If not specified, will use the global state. For advanced use only.
     :returns: The dataset object.
     """
 
+    state = state or _state
+
     def compute_metadata():
-        login(org_name=org_name, api_key=api_key, app_url=app_url)
+        state.login(org_name=org_name, api_key=api_key, app_url=app_url)
         args = _populate_args(
-            {"project_name": project, "project_id": project_id, "org_id": _state.org_id},
+            {"project_name": project, "project_id": project_id, "org_id": state.org_id},
             dataset_name=name,
             description=description,
             metadata=metadata,
         )
-        response = _state.app_conn().post_json("api/dataset/register", args)
+        response = state.app_conn().post_json("api/dataset/register", args)
         resp_project = response["project"]
         resp_dataset = response["dataset"]
         return ProjectDatasetMetadata(
@@ -1255,6 +1296,7 @@ def init_dataset(
         version=version,
         legacy=use_output,
         _internal_btql=_internal_btql,
+        state=state,
     )
 
 
@@ -3669,6 +3711,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         version: Union[None, int, str] = None,
         legacy: bool = DEFAULT_IS_LEGACY_DATASET,
         _internal_btql: Optional[Dict[str, Any]] = None,
+        state: Optional[BraintrustState] = None,
     ):
         if legacy:
             eprint(
@@ -3689,6 +3732,8 @@ class Dataset(ObjectFetcher[DatasetEvent]):
             mutate_record=mutate_record,
             _internal_btql=_internal_btql,
         )
+
+        self.state = state or _state
 
     @property
     def id(self) -> str:
@@ -3713,7 +3758,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
         self._lazy_metadata.get()
-        return _state
+        return self.state
 
     def _validate_event(
         self,
@@ -3806,7 +3851,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
 
         self._clear_cache()  # We may be able to optimize this
         self.new_records += 1
-        _state.global_bg_logger().log(args)
+        self.state.global_bg_logger().log(args)
         return row_id
 
     def update(
@@ -3841,7 +3886,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         )
 
         self._clear_cache()  # We may be able to optimize this
-        _state.global_bg_logger().log(args)
+        self.state.global_bg_logger().log(args)
         return id
 
     def delete(self, id: str) -> str:
@@ -3868,7 +3913,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
                 dataset_id=self.id,
             )
 
-        _state.global_bg_logger().log(LazyValue(compute_args, use_mutex=False))
+        self.state.global_bg_logger().log(LazyValue(compute_args, use_mutex=False))
         return id
 
     def summarize(self, summarize_data: bool = True) -> "DatasetSummary":
@@ -3915,7 +3960,7 @@ class Dataset(ObjectFetcher[DatasetEvent]):
     def flush(self) -> None:
         """Flush any pending rows to the server."""
 
-        _state.global_bg_logger().flush()
+        self.state.global_bg_logger().flush()
 
     def __enter__(self) -> "Dataset":
         return self
