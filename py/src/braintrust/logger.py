@@ -2478,8 +2478,7 @@ class Attachment(BaseAttachment):
 
     def _ensure_file_readable(self, data: str) -> None:
         try:
-            with open(data, "rb"):
-                pass
+            os.stat(data)
         except Exception as e:
             raise IOError(f"Failed to read file: {e}") from e
 
