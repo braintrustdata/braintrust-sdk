@@ -1,4 +1,4 @@
-"""Auto-generated file (internal git SHA 3d080feb201289a076bd933b2b6add14dbea0c0f) -- do not modify"""
+"""Auto-generated file (internal git SHA 1ac2b47b4b217608a0eea90a6f5299afce9e1a64) -- do not modify"""
 
 from ._generated_types import (
     Acl,
@@ -77,6 +77,7 @@ from ._generated_types import (
     Role,
     RunEval,
     SavedFunctionId,
+    ServiceToken,
     SpanAttributes,
     SpanIFrame,
     SpanType,
@@ -171,6 +172,7 @@ __all__ = [
     "SSEConsoleEventData",
     "SSEProgressEventData",
     "SavedFunctionId",
+    "ServiceToken",
     "SpanAttributes",
     "SpanIFrame",
     "SpanType",
