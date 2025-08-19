@@ -1129,3 +1129,13 @@ async def test_traced_async_generator_unlimited_with_minus_one(with_memory_logge
         os.environ.pop("BRAINTRUST_MAX_GENERATOR_ITEMS", None)
         if original:
             os.environ["BRAINTRUST_MAX_GENERATOR_ITEMS"] = original
+
+
+
+def test_attachment_unreadable_path_raises_ioerror():
+    with pytest.raises(IOError, match="Failed to read file:"):
+        Attachment(
+            data="unreadable.txt",
+            filename="unreadable.txt",
+            content_type="text/plain",
+        )
