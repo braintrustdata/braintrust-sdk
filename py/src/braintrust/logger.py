@@ -2883,17 +2883,17 @@ def _start_span_parent_args(
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
         parent_components = SpanComponentsV3.from_str(parent)
-        assert (
-            parent_object_type == parent_components.object_type
-        ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
+        assert parent_object_type == parent_components.object_type, (
+            f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
+        )
 
         parent_components_object_id_lambda = _span_components_to_object_id_lambda(parent_components)
 
         def compute_parent_object_id():
             parent_components_object_id = parent_components_object_id_lambda()
-            assert (
-                parent_object_id.get() == parent_components_object_id
-            ), f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            assert parent_object_id.get() == parent_components_object_id, (
+                f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            )
             return parent_object_id.get()
 
         arg_parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)
@@ -3471,28 +3471,22 @@ class SpanImpl(Span):
         )
 
         _check_json_serializable(partial_record)
-        partial_record = _deep_copy_event(partial_record)
+        serializable_partial_record = _deep_copy_event(partial_record)
+        if serializable_partial_record.get("metrics", {}).get("end") is not None:
+            self._logged_end_time = serializable_partial_record["metrics"]["end"]
 
-        if partial_record.get("metrics", {}).get("end") is not None:
-            self._logged_end_time = partial_record["metrics"]["end"]
-
-        if len(partial_record.get("tags", [])) > 0 and self.span_parents:
+        if len(serializable_partial_record.get("tags", [])) > 0 and self.span_parents:
             raise Exception("Tags can only be logged to the root span")
 
         def compute_record() -> Dict[str, Any]:
-            # Get lazy values
-            lazy_values = {k: v.get() for k, v in lazy_partial_record.items()}
-
-            record = dict(
-                **partial_record,
-                **lazy_values,
+            return dict(
+                **serializable_partial_record,
+                **{k: v.get() for k, v in lazy_partial_record.items()},
                 **SpanComponentsV3(
                     object_type=self.parent_object_type,
                     object_id=self.parent_object_id.get(),
                 ).object_id_fields(),
             )
-
-            return record
 
         _state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
 
@@ -3986,10 +3980,9 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
                 if c["type"] == "text":
                     rendered_content.append({**c, "text": render(c["text"])})
                 elif c["type"] == "image_url":
-                    rendered_content.append({
-                        **c,
-                        "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
-                    })
+                    rendered_content.append(
+                        {**c, "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])}}
+                    )
                 else:
                     raise ValueError(f"Unknown content type: {c['type']}")
 
