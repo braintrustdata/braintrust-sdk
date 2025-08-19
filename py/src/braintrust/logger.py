@@ -637,10 +637,15 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
     def __init__(self):
         self.lock = threading.Lock()
         self.logs = []
+        self.masking_function: Optional[Callable[[Any], Any]] = None
 
     def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
         with self.lock:
             self.logs.extend(args)
+
+    def set_masking_function(self, masking_function: Optional[Callable[[Any], Any]]) -> None:
+        """Set the masking function for the memory logger."""
+        self.masking_function = masking_function
 
     def flush(self, batch_size: Optional[int] = None):
         pass
@@ -659,6 +664,12 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
             first = merged[0]
             for other in merged[1:]:
                 first.extend(other)
+
+            # Apply masking after merge, similar to HTTPBackgroundLogger
+            if self.masking_function:
+                for i in range(len(first)):
+                    first[i] = self.masking_function(first[i])
+
             return first
 
 
