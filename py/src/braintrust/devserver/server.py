@@ -1,7 +1,8 @@
-from typing import Any, Dict
+from typing import Any
 
 import uvicorn
 from starlette.applications import Starlette
+from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Route
 
@@ -10,14 +11,14 @@ from .auth import AuthorizationMiddleware
 from .cors import create_cors_middleware
 from .schemas import ValidationError, parse_eval_body
 
-_all_evaluators: Dict[str, Evaluator[Any, Any]] = {}
+_all_evaluators: dict[str, Evaluator[Any, Any]] = {}
 
 
-async def index(request):
+async def index(request: Request) -> PlainTextResponse:
     return PlainTextResponse("Hello, world!")
 
 
-async def list_evaluators(request):
+async def list_evaluators(request: Request) -> JSONResponse:
     # Access the context if needed
     ctx = getattr(request.state, "ctx", None)
     if ctx:
@@ -25,10 +26,11 @@ async def list_evaluators(request):
 
     evaluator_list = {
         k: {
+            # XXX Fill this in :)
             "parameters": {},
             "scores": [],
         }
-        for k, v in _all_evaluators.items()
+        for k in _all_evaluators.keys()
     }
 
     print(f"Available evaluators: {evaluator_list}")
@@ -37,7 +39,7 @@ async def list_evaluators(request):
     return JSONResponse(evaluator_list)
 
 
-async def run_eval(request):
+async def run_eval(request: Request) -> JSONResponse:
     """Handle eval execution requests."""
     try:
         # Get request body
@@ -56,15 +58,13 @@ async def run_eval(request):
 
         # TODO: Actually run the evaluator with the provided parameters
         # For now, just return a success response
-        return JSONResponse(
-            {
-                "success": True,
-                "evaluator": eval_data["name"],
-                "parameters": eval_data.get("parameters"),
-                "stream": eval_data.get("stream", False),
-                "message": "Eval execution not yet implemented",
-            }
-        )
+        return JSONResponse({
+            "success": True,
+            "evaluator": eval_data["name"],
+            "parameters": eval_data.get("parameters"),
+            "stream": eval_data.get("stream", False),
+            "message": "Eval execution not yet implemented",
+        })
 
     except ValidationError as e:
         return JSONResponse({"error": str(e)}, status_code=400)

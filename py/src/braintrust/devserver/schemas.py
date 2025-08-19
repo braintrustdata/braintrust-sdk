@@ -1,7 +1,7 @@
 import json
 from typing import Any, Dict, List, Optional, Sequence, Union, get_args, get_origin
 
-from typing_extensions import get_type_hints
+from typing_extensions import TypedDict, get_type_hints
 
 # This is not beautiful code, but it saves us from introducing Pydantic as a dependency, and it is fairly
 # straightforward for an LLM to keep it up to date with runEvalBodySchema in JS.
@@ -11,6 +11,36 @@ class ValidationError(Exception):
     """Raised when validation fails."""
 
     pass
+
+
+class ParsedFunctionId(TypedDict, total=False):
+    """Parsed function identifier."""
+
+    function_id: str
+    version: Optional[str]
+    name: str
+    prompt_session_id: str
+    inline_code: str
+
+
+class ParsedParent(TypedDict):
+    """Parsed parent reference."""
+
+    object_type: str
+    object_id: str
+
+
+class ParsedEvalBody(TypedDict, total=False):
+    """Type for parsed eval request body."""
+
+    name: str  # Required
+    parameters: Dict[str, Any]
+    data: Any
+    scores: List[ParsedFunctionId]
+    experiment_name: str
+    project_id: str
+    parent: Union[str, ParsedParent]
+    stream: bool
 
 
 def validate_typed_dict(data: Any, typed_dict_class: type, path: str = "") -> Dict[str, Any]:
@@ -116,22 +146,29 @@ def validate_value(value: Any, expected_type: type, path: str) -> Any:
     return value
 
 
-def parse_function_id(data: Any, path: str = "function") -> Dict[str, Any]:
+def parse_function_id(data: Any, path: str = "function") -> ParsedFunctionId:
     """Parse a FunctionId from various formats."""
     if isinstance(data, dict):
+        result: ParsedFunctionId = {}
         # Accept various function specifications
         if "function_id" in data:
-            return {"function_id": data["function_id"], "version": data.get("version")}
+            result["function_id"] = data["function_id"]
+            if "version" in data:
+                result["version"] = data["version"]
+            return result
         elif "name" in data:
-            return {"name": data["name"]}
+            result["name"] = data["name"]
+            return result
         elif "prompt_session_id" in data:
-            return {"prompt_session_id": data["prompt_session_id"]}
+            result["prompt_session_id"] = data["prompt_session_id"]
+            return result
         elif "inline_code" in data:
-            return {"inline_code": data["inline_code"]}
+            result["inline_code"] = data["inline_code"]
+            return result
     raise ValidationError(f"{path} must specify function_id, name, prompt_session_id, or inline_code")
 
 
-def parse_eval_body(request_data: Union[str, bytes, dict]) -> Dict[str, Any]:
+def parse_eval_body(request_data: Union[str, bytes, dict]) -> ParsedEvalBody:
     """
     Parse request body for eval execution.
 
@@ -159,7 +196,7 @@ def parse_eval_body(request_data: Union[str, bytes, dict]) -> Dict[str, Any]:
         raise ValidationError(f"name must be a string, got {type(name).__name__}")
 
     # Build the parsed body
-    parsed = {"name": name}
+    parsed: ParsedEvalBody = {"name": name}
 
     # Optional fields with validation
     if "parameters" in data:

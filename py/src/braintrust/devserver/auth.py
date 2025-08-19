@@ -1,8 +1,9 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Awaitable, Callable, Dict, Optional
 
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 
 ORIGIN_HEADER = "origin"
 BRAINTRUST_AUTH_TOKEN_HEADER = "x-bt-auth-token"
@@ -24,7 +25,7 @@ def extract_allowed_origin(origin: Optional[str]) -> Optional[str]:
     return None
 
 
-def parse_braintrust_auth_header(headers: dict) -> Optional[str]:
+def parse_braintrust_auth_header(headers: Dict[str, str]) -> Optional[str]:
     """Parse the authorization token from headers."""
     # Check x-bt-auth-token first
     token = headers.get(BRAINTRUST_AUTH_TOKEN_HEADER)
@@ -43,7 +44,7 @@ def parse_braintrust_auth_header(headers: dict) -> Optional[str]:
 
 
 class AuthorizationMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         try:
             # Create context
             ctx = RequestContext(

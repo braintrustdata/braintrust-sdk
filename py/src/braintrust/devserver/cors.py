@@ -1,6 +1,6 @@
 import os
 import re
-from typing import List, Union
+from typing import Any, Awaitable, Callable, Dict, List, Union
 
 # CORS configuration
 ALLOWED_ORIGINS: List[Union[str, re.Pattern]] = [
@@ -60,14 +60,19 @@ def check_origin(origin: str) -> bool:
     return False
 
 
-def create_cors_middleware():
+def create_cors_middleware() -> type:
     """Create a Starlette CORS middleware class."""
 
     class CORSMiddleware:
-        def __init__(self, app):
+        def __init__(self, app: Any) -> None:
             self.app = app
 
-        async def __call__(self, scope, receive, send):
+        async def __call__(
+            self,
+            scope: Dict[str, Any],
+            receive: Callable[[], Awaitable[Dict[str, Any]]],
+            send: Callable[[Dict[str, Any]], Awaitable[None]],
+        ) -> None:
             if scope["type"] == "http":
                 headers = dict(scope["headers"])
                 origin = headers.get(b"origin", b"").decode("utf-8")
@@ -75,7 +80,7 @@ def create_cors_middleware():
                 # Handle OPTIONS requests
                 if scope["method"] == "OPTIONS":
 
-                    async def send_wrapper(message):
+                    async def send_wrapper(message: Dict[str, Any]) -> None:
                         if message["type"] == "http.response.start":
                             headers_dict = dict(message.get("headers", []))
 
@@ -114,7 +119,7 @@ def create_cors_middleware():
                     return
 
                 # For other requests, add CORS headers if origin is valid
-                async def send_wrapper(message):
+                async def send_wrapper(message: Dict[str, Any]) -> None:
                     if message["type"] == "http.response.start" and origin and check_origin(origin):
                         headers_dict = dict(message.get("headers", []))
 
