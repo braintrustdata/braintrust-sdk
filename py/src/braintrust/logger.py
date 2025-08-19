@@ -1505,83 +1505,90 @@ def login(
             check_updated_param("api_key", sanitized_api_key, _state.login_token)
             check_updated_param("org_name", org_name, _state.org_name)
             return
+        _state = login_to_state(app_url=app_url, api_key=api_key, org_name=org_name)
 
-        app_url = _get_app_url(app_url)
 
-        app_public_url = os.environ.get("BRAINTRUST_APP_PUBLIC_URL", app_url)
+def login_to_state(
+    app_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    org_name: Optional[str] = None,
+) -> BraintrustState:
+    app_url = _get_app_url(app_url)
 
-        if api_key is None:
-            api_key = os.environ.get("BRAINTRUST_API_KEY")
+    app_public_url = os.environ.get("BRAINTRUST_APP_PUBLIC_URL", app_url)
 
-        org_name = _get_org_name(org_name)
+    if api_key is None:
+        api_key = os.environ.get("BRAINTRUST_API_KEY")
 
-        _state.reset_login_info()
+    org_name = _get_org_name(org_name)
 
-        _state.app_url = app_url
-        _state.app_public_url = app_public_url
-        _state.org_name = org_name
+    state = BraintrustState()
 
-        conn = None
-        if api_key == TEST_API_KEY:
-            # a small hook for pseudo-logins
-            test_org_info = [
-                {
-                    "id": "test-org-id",
-                    "name": org_name or "test-org-name",
-                    "api_url": "https://api.braintrust.ai",
-                    "proxy_url": "https://proxy.braintrust.ai",
-                }
-            ]
-            _check_org_info(test_org_info, org_name)
-            _state.login_token = TEST_API_KEY
-            _state.logged_in = True
-            return
-        elif api_key is not None:
-            app_conn = HTTPConnection(_state.app_url, adapter=_http_adapter)
-            app_conn.set_token(api_key)
-            resp = app_conn.post("api/apikey/login")
-            if not resp.ok:
-                masked_api_key = mask_api_key(api_key)
-                raise ValueError(f"Invalid API key {masked_api_key}: [{resp.status_code}] {resp.text}")
-            info = resp.json()
+    state.app_url = app_url
+    state.app_public_url = app_public_url
+    state.org_name = org_name
 
-            _check_org_info(info["org_info"], org_name)
+    conn = None
+    if api_key == TEST_API_KEY:
+        # a small hook for pseudo-logins
+        test_org_info = [
+            {
+                "id": "test-org-id",
+                "name": org_name or "test-org-name",
+                "api_url": "https://api.braintrust.ai",
+                "proxy_url": "https://proxy.braintrust.ai",
+            }
+        ]
+        _check_org_info(state, test_org_info, org_name)
+        state.login_token = TEST_API_KEY
+        state.logged_in = True
+        return
+    elif api_key is not None:
+        app_conn = HTTPConnection(state.app_url, adapter=_http_adapter)
+        app_conn.set_token(api_key)
+        resp = app_conn.post("api/apikey/login")
+        if not resp.ok:
+            masked_api_key = mask_api_key(api_key)
+            raise ValueError(f"Invalid API key {masked_api_key}: [{resp.status_code}] {resp.text}")
+        info = resp.json()
 
-            if not _state.api_url:
-                if org_name:
-                    raise ValueError(
-                        f"Unable to log into organization '{org_name}'."
-                        " Are you sure this credential is scoped to the organization?"
-                    )
-                else:
-                    raise ValueError("Unable to log into any organization with the provided credential.")
+        _check_org_info(state, info["org_info"], org_name)
 
-            conn = _state.api_conn()
-            conn.set_token(api_key)
+        if not state.api_url:
+            if org_name:
+                raise ValueError(
+                    f"Unable to log into organization '{org_name}'."
+                    " Are you sure this credential is scoped to the organization?"
+                )
+            else:
+                raise ValueError("Unable to log into any organization with the provided credential.")
 
-        if not conn:
-            raise ValueError(
-                "Could not login to Braintrust. You may need to set BRAINTRUST_API_KEY in your environment."
-            )
+        conn = state.api_conn()
+        conn.set_token(api_key)
 
-        # make_long_lived() allows the connection to retry if it breaks, which we're okay with after
-        # this point because we know the connection _can_ successfully ping.
-        conn.make_long_lived()
+    if not conn:
+        raise ValueError("Could not login to Braintrust. You may need to set BRAINTRUST_API_KEY in your environment.")
 
-        # Same for the app conn, which we know is valid because we have
-        # successfully logged in.
-        _state.app_conn().make_long_lived()
+    # make_long_lived() allows the connection to retry if it breaks, which we're okay with after
+    # this point because we know the connection _can_ successfully ping.
+    conn.make_long_lived()
 
-        # Set the same token in the API
-        _state.app_conn().set_token(conn.token)
-        if _state.proxy_url:
-            _state.proxy_conn().set_token(conn.token)
-            _state.proxy_conn().make_long_lived()
-        _state.login_token = conn.token
-        _state.logged_in = True
+    # Same for the app conn, which we know is valid because we have
+    # successfully logged in.
+    state.app_conn().make_long_lived()
 
-        # Replace the global logger's api_conn with this one.
-        _state.login_replace_api_conn(conn)
+    # Set the same token in the API
+    state.app_conn().set_token(conn.token)
+    if state.proxy_url:
+        state.proxy_conn().set_token(conn.token)
+        state.proxy_conn().make_long_lived()
+    state.login_token = conn.token
+    state.logged_in = True
+
+    # Replace the global logger's api_conn with this one.
+    state.login_replace_api_conn(conn)
+
+    return state
 
 
 def log(**event: Any) -> str:
@@ -1901,22 +1908,20 @@ def flush():
     _state.global_bg_logger().flush()
 
 
-def _check_org_info(org_info, org_name):
-    global _state
-
+def _check_org_info(state, org_info, org_name):
     if len(org_info) == 0:
         raise ValueError("This user is not part of any organizations.")
 
     for orgs in org_info:
         if org_name is None or orgs["name"] == org_name:
-            _state.org_id = orgs["id"]
-            _state.org_name = orgs["name"]
-            _state.api_url = os.environ.get("BRAINTRUST_API_URL", orgs["api_url"])
-            _state.proxy_url = os.environ.get("BRAINTRUST_PROXY_URL", orgs["proxy_url"])
-            _state.git_metadata_settings = GitMetadataSettings(**(orgs.get("git_metadata") or {}))
+            state.org_id = orgs["id"]
+            state.org_name = orgs["name"]
+            state.api_url = os.environ.get("BRAINTRUST_API_URL", orgs["api_url"])
+            state.proxy_url = os.environ.get("BRAINTRUST_PROXY_URL", orgs["proxy_url"])
+            state.git_metadata_settings = GitMetadataSettings(**(orgs.get("git_metadata") or {}))
             break
 
-    if _state.org_id is None:
+    if state.org_id is None:
         raise ValueError(
             f"Organization {org_name} not found. Must be one of {', '.join([x['name'] for x in org_info])}"
         )
@@ -2842,17 +2847,17 @@ def _start_span_parent_args(
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
         parent_components = SpanComponentsV3.from_str(parent)
-        assert parent_object_type == parent_components.object_type, (
-            f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
-        )
+        assert (
+            parent_object_type == parent_components.object_type
+        ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
 
         parent_components_object_id_lambda = _span_components_to_object_id_lambda(parent_components)
 
         def compute_parent_object_id():
             parent_components_object_id = parent_components_object_id_lambda()
-            assert parent_object_id.get() == parent_components_object_id, (
-                f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
-            )
+            assert (
+                parent_object_id.get() == parent_components_object_id
+            ), f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
             return parent_object_id.get()
 
         arg_parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)
@@ -3939,9 +3944,10 @@ def render_message(render: Callable[[str], str], message: PromptMessage):
                 if c["type"] == "text":
                     rendered_content.append({**c, "text": render(c["text"])})
                 elif c["type"] == "image_url":
-                    rendered_content.append(
-                        {**c, "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])}}
-                    )
+                    rendered_content.append({
+                        **c,
+                        "image_url": {**c["image_url"], "url": render(c["image_url"]["url"])},
+                    })
                 else:
                     raise ValueError(f"Unknown content type: {c['type']}")
 

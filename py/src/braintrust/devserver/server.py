@@ -6,6 +6,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Route
 
+from braintrust.logger import login_to_state
+
 from ..framework import Evaluator
 from .auth import AuthorizationMiddleware
 from .cors import create_cors_middleware
@@ -47,29 +49,35 @@ async def run_eval(request: Request) -> JSONResponse:
 
         # Parse and validate the request
         eval_data = parse_eval_body(body)
-
-        # Access the context if needed
-        ctx = getattr(request.state, "ctx", None)
-
-        # Check if the evaluator exists
-        evaluator = _all_evaluators.get(eval_data["name"])
-        if not evaluator:
-            return JSONResponse({"error": f"Evaluator '{eval_data['name']}' not found"}, status_code=404)
-
-        # TODO: Actually run the evaluator with the provided parameters
-        # For now, just return a success response
-        return JSONResponse({
-            "success": True,
-            "evaluator": eval_data["name"],
-            "parameters": eval_data.get("parameters"),
-            "stream": eval_data.get("stream", False),
-            "message": "Eval execution not yet implemented",
-        })
-
     except ValidationError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
     except Exception as e:
         return JSONResponse({"error": f"Internal error: {str(e)}"}, status_code=500)
+
+    # Access the context if needed
+    ctx = getattr(request.state, "ctx", None)
+
+    try:
+        state = login_to_state(api_key=ctx.token, app_url=ctx.app_origin)
+    except Exception as e:
+        return JSONResponse({"error": f"Failed to log in: {str(e)}"}, status_code=401)
+
+    # Check if the evaluator exists
+    evaluator = _all_evaluators.get(eval_data["name"])
+    if not evaluator:
+        return JSONResponse({"error": f"Evaluator '{eval_data['name']}' not found"}, status_code=404)
+
+    print(evaluator)
+
+    # TODO: Actually run the evaluator with the provided parameters
+    # For now, just return a success response
+    return JSONResponse({
+        "success": True,
+        "evaluator": eval_data["name"],
+        "parameters": eval_data.get("parameters"),
+        "stream": eval_data.get("stream", False),
+        "message": "Eval execution not yet implemented",
+    })
 
 
 def run_dev_server(evaluators: list[Evaluator[Any, Any]], host: str = "localhost", port: int = 8300):
