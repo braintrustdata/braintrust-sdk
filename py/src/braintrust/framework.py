@@ -38,6 +38,7 @@ from .generated_types import FunctionFormat, FunctionOutputType, ObjectReference
 from .git_fields import GitMetadataSettings, RepoInfo
 from .logger import (
     NOOP_SPAN,
+    BraintrustState,
     Dataset,
     Experiment,
     ExperimentSummary,
@@ -656,6 +657,8 @@ def _EvalCommon(
     summarize_scores: bool,
     no_send_logs: bool,
     error_score_handler: Optional[ErrorScoreHandler] = None,
+    parent: Optional[str] = None,
+    state: Optional[BraintrustState] = None,
 ) -> Callable[[], Coroutine[Any, Any, EvalResultWithSummary[Input, Output]]]:
     """
     This helper is needed because in case of `_lazy_load`, we need to update
@@ -717,7 +720,7 @@ def _EvalCommon(
         # NOTE: This code is duplicated with run_evaluator_task in py/src/braintrust/cli/eval.py.
         # Make sure to update those arguments if you change this.
         experiment = None
-        if not no_send_logs:
+        if not no_send_logs and parent is None:
             experiment = init_experiment(
                 project_name=evaluator.project_name if evaluator.project_id is None else None,
                 project_id=evaluator.project_id,
@@ -731,6 +734,7 @@ def _EvalCommon(
                 git_metadata_settings=evaluator.git_metadata_settings,
                 repo_info=evaluator.repo_info,
                 dataset=dataset,
+                state=state,
             )
 
         async def run_to_completion():
@@ -767,6 +771,8 @@ async def EvalAsync(
     description: Optional[str] = None,
     summarize_scores: bool = True,
     no_send_logs: bool = False,
+    parent: Optional[str] = None,
+    state: Optional[BraintrustState] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -816,6 +822,9 @@ async def EvalAsync(
     :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
     :param no_send_logs: Do not send logs to Braintrust. When True, the evaluation runs locally
     and builds a local summary instead of creating an experiment. Defaults to False.
+    :param parent: If specified, instead of creating a new experiment object, the Eval() will populate
+    the object or span specified by this parent.
+    :param state: Optional BraintrustState to use for the evaluation. If not specified, the global login state will be used.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
     f = _EvalCommon(
@@ -839,6 +848,8 @@ async def EvalAsync(
         description=description,
         summarize_scores=summarize_scores,
         no_send_logs=no_send_logs,
+        parent=parent,
+        state=state,
     )
 
     return await f()
@@ -869,6 +880,8 @@ def Eval(
     description: Optional[str] = None,
     summarize_scores: bool = True,
     no_send_logs: bool = False,
+    parent: Optional[str] = None,
+    state: Optional[BraintrustState] = None,
 ) -> EvalResultWithSummary[Input, Output]:
     """
     A function you can use to define an evaluator. This is a convenience wrapper around the `Evaluator` class.
@@ -918,6 +931,9 @@ def Eval(
     :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
     :param no_send_logs: Do not send logs to Braintrust. When True, the evaluation runs locally
     and builds a local summary instead of creating an experiment. Defaults to False.
+    :param parent: If specified, instead of creating a new experiment object, the Eval() will populate
+    the object or span specified by this parent.
+    :param state: Optional BraintrustState to use for the evaluation. If not specified, the global login state will be used.
     :return: An `EvalResultWithSummary` object, which contains all results and a summary.
     """
 
@@ -943,6 +959,8 @@ def Eval(
         description=description,
         summarize_scores=summarize_scores,
         no_send_logs=no_send_logs,
+        parent=parent,
+        state=state,
     )
 
     # https://stackoverflow.com/questions/55409641/asyncio-run-cannot-be-called-from-a-running-event-loop-when-using-jupyter-no

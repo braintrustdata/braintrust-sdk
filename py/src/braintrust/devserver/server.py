@@ -11,7 +11,7 @@ from starlette.routing import Route
 
 from braintrust.logger import login_to_state
 
-from ..framework import Eval, Evaluator, SSEProgressEvent
+from ..framework import EvalAsync, Evaluator, SSEProgressEvent
 from .auth import AuthorizationMiddleware
 from .cors import create_cors_middleware
 from .dataset import get_dataset
@@ -110,7 +110,7 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
 
     try:
         eval_task = asyncio.create_task(
-            Eval(
+            EvalAsync(
                 name="worker thead",
                 **{
                     **{k: v for (k, v) in evaluator.__dict__.items() if k not in ["eval_name", "project_name"]},
@@ -120,7 +120,7 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
                     "task": task,
                     "experiment_name": eval_data.get("experiment_name"),
                     # XXX Need to propagate this variable
-                    "project_id": eval_data.get("project_id"),
+                    # "project_id": eval_data.get("project_id"),
                 },
             )
         )

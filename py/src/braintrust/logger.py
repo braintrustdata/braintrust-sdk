@@ -329,6 +329,9 @@ class BraintrustState:
         self.id = str(uuid.uuid4())
         self.current_experiment: Optional[Experiment] = None
         self.current_logger: Optional[Logger] = None
+        self.current_parent: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+            "braintrust_current_parent", default=None
+        )
         self.current_span: contextvars.ContextVar[Span] = contextvars.ContextVar(
             "braintrust_current_span", default=NOOP_SPAN
         )
@@ -1057,6 +1060,7 @@ def init(
     project_id: Optional[str] = ...,
     base_experiment_id: Optional[str] = ...,
     repo_info: Optional[RepoInfo] = ...,
+    state: Optional[BraintrustState] = ...,
 ) -> "Experiment": ...
 
 
@@ -1079,6 +1083,7 @@ def init(
     project_id: Optional[str] = ...,
     base_experiment_id: Optional[str] = ...,
     repo_info: Optional[RepoInfo] = ...,
+    state: Optional[BraintrustState] = ...,
 ) -> "ReadonlyExperiment": ...
 
 
@@ -1100,6 +1105,7 @@ def init(
     project_id: Optional[str] = None,
     base_experiment_id: Optional[str] = None,
     repo_info: Optional[RepoInfo] = None,
+    state: Optional[BraintrustState] = None,
 ) -> Union["Experiment", "ReadonlyExperiment"]:
     """
     Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
@@ -1123,8 +1129,11 @@ def init(
     :param project_id: The id of the project to create the experiment in. This takes precedence over `project` if specified.
     :param base_experiment_id: An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this. This takes precedence over `base_experiment` if specified.
     :param repo_info: (Optional) Explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
+    :param state: (Optional) A BraintrustState object to use. If not specified, will use the global state. This is for advanced use only.
     :returns: The experiment object.
     """
+
+    state: BraintrustState = state or _state
 
     if project is None and project_id is None:
         raise ValueError("Must specify at least one of project or project_id")
@@ -1142,10 +1151,10 @@ def init(
                 "experiment_name": experiment,
                 "project_name": project,
                 "project_id": project_id,
-                "org_name": _state.org_name,
+                "org_name": state.org_name,
             }
 
-            response = _state.app_conn().post_json("api/experiment/get", args)
+            response = state.app_conn().post_json("api/experiment/get", args)
             if len(response) == 0:
                 raise ValueError(f"Experiment {experiment} not found in project {project}.")
 
@@ -1160,7 +1169,7 @@ def init(
             )
 
         lazy_metadata = LazyValue(compute_metadata, use_mutex=True)
-        return ReadonlyExperiment(lazy_metadata=lazy_metadata)
+        return ReadonlyExperiment(lazy_metadata=lazy_metadata, state=state)
 
     # pylint: disable=function-redefined
     def compute_metadata():
@@ -1168,7 +1177,7 @@ def init(
         args = {
             "project_name": project,
             "project_id": project_id,
-            "org_id": _state.org_id,
+            "org_id": state.org_id,
             "update": update,
         }
 
@@ -1181,7 +1190,7 @@ def init(
         if repo_info:
             repo_info_arg = repo_info
         else:
-            merged_git_metadata_settings = _state.git_metadata_settings
+            merged_git_metadata_settings = state.git_metadata_settings
             if git_metadata_settings is not None:
                 merged_git_metadata_settings = GitMetadataSettings.merge(
                     merged_git_metadata_settings, git_metadata_settings
@@ -1210,7 +1219,7 @@ def init(
 
         while True:
             try:
-                response = _state.app_conn().post_json("api/experiment/register", args)
+                response = state.app_conn().post_json("api/experiment/register", args)
                 break
             except AugmentedHTTPError as e:
                 if args.get("base_experiment") is not None and "base experiment" in str(e):
@@ -1228,9 +1237,9 @@ def init(
             ),
         )
 
-    ret = Experiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset)
+    ret = Experiment(lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset, state=state)
     if set_current:
-        _state.current_experiment = ret
+        state.current_experiment = ret
     return ret
 
 
@@ -1690,6 +1699,10 @@ def current_span() -> Span:
     return _state.current_span.get()
 
 
+def with_parent(parent: Optional[str]):
+    pass
+
+
 def get_span_parent_object() -> Union["Logger", "Experiment", Span]:
     """Mainly for internal use. Return the parent object for starting a span in a global context."""
 
@@ -1903,6 +1916,7 @@ def start_span(
     set_current: Optional[bool] = None,
     parent: Optional[str] = None,
     propagated_event: Optional[Dict[str, Any]] = None,
+    state: Optional[BraintrustState] = None,
     **event: Any,
 ) -> Span:
     """Lower-level alternative to `@traced` for starting a span at the toplevel. It creates a span under the first active object (using the same precedence order as `@traced`), or if `parent` is specified, under the specified parent row, or returns a no-op span object.
@@ -1911,6 +1925,9 @@ def start_span(
 
     See `Span.start_span` for full details.
     """
+
+    state = state or _state
+    parent = parent or state.current_parent.get()
 
     if parent:
         components = SpanComponentsV3.from_str(parent)
@@ -2889,17 +2906,17 @@ def _start_span_parent_args(
     if parent:
         assert parent_span_ids is None, "Cannot specify both parent and parent_span_ids"
         parent_components = SpanComponentsV3.from_str(parent)
-        assert (
-            parent_object_type == parent_components.object_type
-        ), f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
+        assert parent_object_type == parent_components.object_type, (
+            f"Mismatch between expected span parent object type {parent_object_type} and provided type {parent_components.object_type}"
+        )
 
         parent_components_object_id_lambda = _span_components_to_object_id_lambda(parent_components)
 
         def compute_parent_object_id():
             parent_components_object_id = parent_components_object_id_lambda()
-            assert (
-                parent_object_id.get() == parent_components_object_id
-            ), f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            assert parent_object_id.get() == parent_components_object_id, (
+                f"Mismatch between expected span parent object id {parent_object_id.get()} and provided id {parent_components_object_id}"
+            )
             return parent_object_id.get()
 
         arg_parent_object_id = LazyValue(compute_parent_object_id, use_mutex=False)
@@ -2987,12 +3004,14 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         self,
         lazy_metadata: LazyValue[ProjectExperimentMetadata],
         dataset: Optional["Dataset"] = None,
+        state: Optional[BraintrustState] = None,
     ):
         self._lazy_metadata = lazy_metadata
         self.dataset = dataset
         self.last_start_time = time.time()
         self._lazy_id = LazyValue(lambda: self.id, use_mutex=False)
         self._called_start_span = False
+        self.state = state or _state
 
         ObjectFetcher.__init__(
             self,
@@ -3028,7 +3047,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
         self._lazy_metadata.get()
-        return _state
+        return self.state
 
     def log(
         self,
@@ -3257,7 +3276,7 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
     def flush(self) -> None:
         """Flush any pending rows to the server."""
 
-        _state.global_bg_logger().flush()
+        self.state.global_bg_logger().flush()
 
     def _start_span_impl(
         self,
@@ -3308,8 +3327,10 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
     def __init__(
         self,
         lazy_metadata: LazyValue[ProjectExperimentMetadata],
+        state: Optional[BraintrustState] = None,
     ):
         self._lazy_metadata = lazy_metadata
+        self.state = state or _state
 
         ObjectFetcher.__init__(
             self,
@@ -3325,7 +3346,7 @@ class ReadonlyExperiment(ObjectFetcher[ExperimentEvent]):
     def _get_state(self) -> BraintrustState:
         # Ensure the login state is populated by fetching the lazy_metadata.
         self._lazy_metadata.get()
-        return _state
+        return self.state
 
     def as_dataset(self) -> Iterator[_ExperimentDatasetEvent]:
         return ExperimentDatasetIterator(self.fetch())
@@ -3359,6 +3380,7 @@ class SpanImpl(Span):
         propagated_event: Optional[Dict[str, Any]] = None,
         span_id: Optional[str] = None,
         root_span_id: Optional[str] = None,
+        state: Optional[BraintrustState] = None,
     ):
         if span_attributes is None:
             span_attributes = SpanAttributes()
@@ -3366,6 +3388,8 @@ class SpanImpl(Span):
             event = {}
         if type is None and not parent_span_ids:
             type = default_root_type
+
+        self.state = state or _state
 
         self.can_set_current = cast(bool, coalesce(set_current, True))
         self._logged_end_time: Optional[float] = None
@@ -3494,7 +3518,7 @@ class SpanImpl(Span):
                 ).object_id_fields(),
             )
 
-        _state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
+        self.state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
 
     def log_feedback(self, **event: Any) -> None:
         return _log_feedback_impl(
@@ -3567,7 +3591,7 @@ class SpanImpl(Span):
     def link(self) -> str:
         parent_type, info = self._get_parent_info()
         if parent_type == SpanObjectTypeV3.PROJECT_LOGS:
-            cur_logger = _state.current_logger
+            cur_logger = self.state.current_logger
             if not cur_logger:
                 return NOOP_SPAN_PERMALINK
             base_url = cur_logger._get_link_base_url()
@@ -3583,8 +3607,8 @@ class SpanImpl(Span):
             else:
                 return _get_error_link("no-project-id-or-name")
         elif parent_type == SpanObjectTypeV3.EXPERIMENT:
-            app_url = _state.app_url or _get_app_url()
-            org_name = _state.org_name or _get_org_name()
+            app_url = self.state.app_url or _get_app_url()
+            org_name = self.state.org_name or _get_org_name()
             if not app_url or not org_name:
                 return _get_error_link("provide-app-url-or-org-name")
             base_url = f"{app_url}/app/{org_name}"
@@ -3612,11 +3636,11 @@ class SpanImpl(Span):
     def flush(self) -> None:
         """Flush any pending rows to the server."""
 
-        _state.global_bg_logger().flush()
+        self.state.global_bg_logger().flush()
 
     def set_current(self):
         if self.can_set_current:
-            self._context_token = _state.current_span.set(self)
+            self._context_token = self.state.current_span.set(self)
 
     def __enter__(self) -> Span:
         self.set_current()
@@ -3628,7 +3652,7 @@ class SpanImpl(Span):
                 self.log_internal(dict(error=stringify_exception(exc_type, exc_value, tb)))
         finally:
             if self.can_set_current:
-                _state.current_span.reset(self._context_token)
+                self.state.current_span.reset(self._context_token)
 
             self.end()
 
