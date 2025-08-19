@@ -2107,9 +2107,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
     if (this.activeFlushError) {
       const err = this.activeFlushError;
       this.activeFlushError = undefined;
-      if (this.syncFlush) {
-        throw err;
-      }
+      throw err;
     }
   }
 
