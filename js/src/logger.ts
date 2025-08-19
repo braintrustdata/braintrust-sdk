@@ -548,6 +548,12 @@ export class BraintrustState {
     this._appConn?.setFetch(fetch);
   }
 
+  public setMaskingFunction(
+    maskingFunction: ((value: unknown) => unknown) | null,
+  ): void {
+    this.bgLogger().setMaskingFunction(maskingFunction);
+  }
+
   public async login(loginParams: LoginOptions & { forceLogin?: boolean }) {
     if (this.apiUrl && !loginParams.forceLogin) {
       return;
@@ -1924,13 +1930,23 @@ export interface BackgroundLoggerOpts {
 interface BackgroundLogger {
   log(items: LazyValue<BackgroundLogEvent>[]): void;
   flush(): Promise<void>;
+  setMaskingFunction(
+    maskingFunction: ((value: unknown) => unknown) | null,
+  ): void;
 }
 
 export class TestBackgroundLogger implements BackgroundLogger {
   private items: LazyValue<BackgroundLogEvent>[][] = [];
+  private maskingFunction: ((value: unknown) => unknown) | null = null;
 
   log(items: LazyValue<BackgroundLogEvent>[]): void {
     this.items.push(items);
+  }
+
+  setMaskingFunction(
+    maskingFunction: ((value: unknown) => unknown) | null,
+  ): void {
+    this.maskingFunction = maskingFunction;
   }
 
   async flush(): Promise<void> {
@@ -1950,7 +1966,16 @@ export class TestBackgroundLogger implements BackgroundLogger {
     }
 
     const batch = mergeRowBatch(events);
-    return batch.flat();
+    let flatBatch = batch.flat();
+
+    // Apply masking after merge, similar to HTTPBackgroundLogger
+    if (this.maskingFunction) {
+      flatBatch = flatBatch.map(
+        (item) => this.maskingFunction!(item) as BackgroundLogEvent,
+      );
+    }
+
+    return flatBatch;
   }
 }
 
@@ -1967,6 +1992,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   private activeFlushResolved = true;
   private activeFlushError: unknown = undefined;
   private onFlushError?: (error: unknown) => void;
+  private maskingFunction: ((value: unknown) => unknown) | null = null;
 
   public syncFlush: boolean = false;
   // 6 MB for the AWS lambda gateway (from our own testing).
@@ -2050,6 +2076,12 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       });
     }
     this.onFlushError = opts.onFlushError;
+  }
+
+  setMaskingFunction(
+    maskingFunction: ((value: unknown) => unknown) | null,
+  ): void {
+    this.maskingFunction = maskingFunction;
   }
 
   log(items: LazyValue<BackgroundLogEvent>[]) {
@@ -2176,7 +2208,18 @@ class HTTPBackgroundLogger implements BackgroundLogger {
         const attachments: Attachment[] = [];
         items.forEach((item) => extractAttachments(item, attachments));
 
-        return [mergeRowBatch(items), attachments];
+        let mergedItems = mergeRowBatch(items);
+
+        // Apply masking after merge but before sending to backend
+        if (this.maskingFunction) {
+          mergedItems = mergedItems.map((batch) =>
+            batch.map(
+              (item) => this.maskingFunction!(item) as BackgroundLogEvent,
+            ),
+          );
+        }
+
+        return [mergedItems, attachments];
       } catch (e) {
         let errmsg = "Encountered error when constructing records to flush";
         const isRetrying = i + 1 < this.numTries;
@@ -3225,6 +3268,19 @@ export interface LoginOptions {
 export type FullLoginOptions = LoginOptions & {
   forceLogin?: boolean;
 };
+
+/**
+ * Set a global masking function that will be applied to all logged data before sending to Braintrust.
+ * The masking function will be applied after records are merged but before they are sent to the backend.
+ *
+ * @param maskingFunction A function that takes a JSON-serializable object and returns a masked version.
+ *                        Set to null to disable masking.
+ */
+export function setMaskingFunction(
+  maskingFunction: ((value: unknown) => unknown) | null,
+): void {
+  _globalState.setMaskingFunction(maskingFunction);
+}
 
 /**
  * Log into Braintrust. This will prompt you for your API token, which you can find at
