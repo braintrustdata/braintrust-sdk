@@ -779,3 +779,16 @@ test("dataset flush throws file-not-found error", async () => {
   uploadSpy.mockRestore();
   _exportsForTestingOnly.clearTestBackgroundLogger();
 });
+
+test("flush does not throw with default async flush", async () => {
+  await _exportsForTestingOnly.simulateLoginForTests();
+  const logger = initLogger({ projectName: "p", projectId: "p-id" });
+
+  const bg = _internalGetGlobalState().httpLogger();
+  bg.syncFlush = false; // default behavior
+  // Simulate previous background error without triggering throw in async mode
+  (bg as any).activeFlush = Promise.resolve();
+  (bg as any).activeFlushError = new Error("background error");
+
+  await expect(logger.flush()).rejects.toThrow("background error");
+});
