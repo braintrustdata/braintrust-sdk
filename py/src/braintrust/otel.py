@@ -7,7 +7,7 @@ from urllib.parse import urljoin
 try:
     from opentelemetry import trace
     from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor
 
     OTEL_AVAILABLE = True
 except ImportError:
@@ -27,6 +27,13 @@ except ImportError:
             )
 
     class BatchSpanProcessor:
+        def __init__(self, *args, **kwargs):
+            raise ImportError(
+                "OpenTelemetry packages are not installed. "
+                "Install optional OpenTelemetry dependencies with: pip install braintrust[otel]"
+            )
+
+    class SimpleSpanProcessor:
         def __init__(self, *args, **kwargs):
             raise ImportError(
                 "OpenTelemetry packages are not installed. "
@@ -215,6 +222,7 @@ class BraintrustSpanProcessor:
         filter_ai_spans: bool = False,
         custom_filter=None,
         headers: Optional[Dict[str, str]] = None,
+        batch_export: bool = True,
     ):
         """
         Initialize the BraintrustSpanProcessor.
@@ -226,6 +234,7 @@ class BraintrustSpanProcessor:
             filter_ai_spans: Whether to enable AI span filtering. Defaults to False.
             custom_filter: Optional custom filter function for filtering.
             headers: Additional headers to include in requests.
+            batch_export: Whether to use BatchSpanProcessor or SimpleSpanProcessor. Defaults to True. Used for testing.
         """
         # Create the exporter
         # Convert api_url to the full endpoint URL that OtelExporter expects
@@ -243,7 +252,7 @@ class BraintrustSpanProcessor:
             )
 
         # Always create a BatchSpanProcessor first
-        batch_processor = BatchSpanProcessor(self._exporter)
+        batch_processor = BatchSpanProcessor(self._exporter) if batch_export else SimpleSpanProcessor(self._exporter)
 
         if filter_ai_spans:
             # Wrap the BatchSpanProcessor with filtering
