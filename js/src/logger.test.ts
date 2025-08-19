@@ -738,15 +738,17 @@ describe("wrapTraced generator support", () => {
   });
 });
 
-test("logger flush throws error regardless of syncFlush option", async () => {
-  await _exportsForTestingOnly.simulateLoginForTests();
-  const logger = initLogger({ projectName: "p", projectId: "p-id" });
+test.each([{ syncFlush: false }, { syncFlush: true }])(
+  "logger flush throws error: %s",
+  async ({ syncFlush }: { syncFlush: boolean }) => {
+    await _exportsForTestingOnly.simulateLoginForTests();
+    const logger = initLogger({ projectName: "p", projectId: "p-id" });
 
-  const bg = _internalGetGlobalState().httpLogger();
-  bg.syncFlush = false; // default behavior
-  // Simulate previous background error without triggering throw in async mode
-  (bg as any).activeFlush = Promise.resolve();
-  (bg as any).activeFlushError = new Error("background error");
+    const bg = _internalGetGlobalState().httpLogger();
+    bg.syncFlush = syncFlush;
+    (bg as any).activeFlush = Promise.resolve();
+    (bg as any).activeFlushError = new Error("background error");
 
-  await expect(logger.flush()).rejects.toThrow("background error");
-});
+    await expect(logger.flush()).rejects.toThrow("background error");
+  },
+);
