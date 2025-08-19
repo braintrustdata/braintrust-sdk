@@ -81,9 +81,9 @@ def create_cors_middleware():
 
                             if origin and check_origin(origin):
                                 headers_dict[b"access-control-allow-origin"] = origin.encode()
-                                headers_dict[
-                                    b"access-control-allow-methods"
-                                ] = b"GET, POST, PUT, DELETE, OPTIONS, PATCH"
+                                headers_dict[b"access-control-allow-methods"] = (
+                                    b"GET, POST, PUT, DELETE, OPTIONS, PATCH"
+                                )
                                 headers_dict[b"access-control-allow-headers"] = ", ".join(ALLOWED_HEADERS).encode()
                                 headers_dict[b"access-control-expose-headers"] = ", ".join(EXPOSED_HEADERS).encode()
                                 headers_dict[b"access-control-allow-credentials"] = b"true"

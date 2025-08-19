@@ -6,6 +6,7 @@ from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Route
 
 from ..framework import Evaluator
+from .auth import AuthorizationMiddleware
 from .cors import create_cors_middleware
 
 _all_evaluators: Dict[str, Evaluator[Any, Any]] = {}
@@ -16,6 +17,11 @@ async def index(request):
 
 
 async def list_evaluators(request):
+    # Access the context if needed
+    ctx = getattr(request.state, "ctx", None)
+    if ctx:
+        print(f"Request from origin: {ctx.app_origin}, token: {ctx.token}")
+
     evaluator_list = {
         k: {
             "parameters": {},
@@ -48,6 +54,8 @@ def run_dev_server(evaluators: list[Evaluator[Any, Any]], host: str = "localhost
     ]
 
     app = Starlette(routes=routes)
+    # Add middlewares in reverse order (last added is executed first)
+    app.add_middleware(AuthorizationMiddleware)
     app.add_middleware(create_cors_middleware())
 
     uvicorn.run(app, host=host, port=port)
