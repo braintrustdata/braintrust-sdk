@@ -125,8 +125,8 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
                 name="worker thead",
                 **{
                     **{k: v for (k, v) in evaluator.__dict__.items() if k not in ["eval_name", "project_name"]},
-                    # XXX Need to propagate this variable
                     "state": state,
+                    "stream": stream_fn,
                     "data": dataset,
                     "task": task,
                     "experiment_name": eval_data.get("experiment_name"),

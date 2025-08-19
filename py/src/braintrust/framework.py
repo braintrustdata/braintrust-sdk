@@ -1138,7 +1138,7 @@ class DictEvalHooks(Dict[str, Any]):
 
     def report_progress(self, event: TaskProgressEvent):
         if self._report_progress:
-            self._report_progress(event)
+            return self._report_progress(event)
 
 
 def init_experiment(
@@ -1326,7 +1326,11 @@ async def _run_evaluator_internal(
                 def report_progress(event: TaskProgressEvent):
                     if not stream:
                         return
-                    stream(id=root_span.id, origin=origin, name=evaluator.eval_name, object_type="task", **event)
+                    stream(
+                        SSEProgressEvent(
+                            id=root_span.id, origin=origin, name=evaluator.eval_name, object_type="task", **event
+                        )
+                    )
 
                 hooks = DictEvalHooks(
                     metadata, expected=datum.expected, trial_index=trial_index, report_progress=report_progress
