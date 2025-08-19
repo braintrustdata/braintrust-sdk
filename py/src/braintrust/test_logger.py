@@ -1152,9 +1152,11 @@ def test_masking_function_logger(with_memory_logger, with_simulate_login):
             return [masking_function(item) if isinstance(item, (dict, list)) else item for item in data]
         return data
 
-    # Create test logger with masking function
+    # Set masking function globally
+    braintrust.set_masking_function(masking_function)
+
+    # Create test logger
     test_logger = init_test_logger("test_project")
-    test_logger.masking_function = masking_function
 
     # Log some data with sensitive information
     test_logger.log(
@@ -1174,6 +1176,9 @@ def test_masking_function_logger(with_memory_logger, with_simulate_login):
     assert log["output"]["count"] == 42
     assert log["metadata"]["user"] == "REDACTED_user"
     assert log["metadata"]["safe"] == "normal_data"
+
+    # Clean up
+    braintrust.set_masking_function(None)
 
 
 def test_masking_function_experiment(with_memory_logger, with_simulate_login):
@@ -1200,13 +1205,16 @@ def test_masking_function_experiment(with_memory_logger, with_simulate_login):
             return [masking_function(item) if isinstance(item, (dict, list)) else item for item in data]
         return data
 
-    # Create test experiment with masking function
+    # Set masking function globally
+    braintrust.set_masking_function(masking_function)
+
+    # Create test experiment
     from braintrust.logger import Experiment, ObjectMetadata, ProjectExperimentMetadata
     project_metadata = ObjectMetadata(id="test_project", name="test_project", full_info=dict())
     experiment_metadata = ObjectMetadata(id="test_experiment", name="test_experiment", full_info=dict())
     metadata = ProjectExperimentMetadata(project=project_metadata, experiment=experiment_metadata)
     lazy_metadata = LazyValue(lambda: metadata, use_mutex=False)
-    experiment = Experiment(lazy_metadata=lazy_metadata, masking_function=masking_function)
+    experiment = Experiment(lazy_metadata=lazy_metadata)
 
     # Log some data with passwords
     experiment.log(
@@ -1239,6 +1247,9 @@ def test_masking_function_experiment(with_memory_logger, with_simulate_login):
     assert main_log["output"] == "Login successful with XXX validation"
     assert main_log["scores"]["accuracy"] == 0.95
 
+    # Clean up
+    braintrust.set_masking_function(None)
+
 
 def test_masking_function_propagates_to_spans(with_memory_logger, with_simulate_login):
     """Test that masking function propagates from parent to child spans."""
@@ -1261,9 +1272,11 @@ def test_masking_function_propagates_to_spans(with_memory_logger, with_simulate_
             return [masking_function(item) if isinstance(item, (dict, list)) else item for item in data]
         return data
 
-    # Create test logger with masking function
+    # Set masking function globally
+    braintrust.set_masking_function(masking_function)
+
+    # Create test logger
     test_logger = init_test_logger("test_project")
-    test_logger.masking_function = masking_function
 
     # Create parent span
     with test_logger.start_span(name="parent_span") as parent:
