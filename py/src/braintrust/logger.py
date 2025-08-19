@@ -3447,15 +3447,15 @@ class SpanImpl(Span):
         )
 
         _check_json_serializable(partial_record)
-        copied_record = _deep_copy_event(partial_record)
+        partial_record = _deep_copy_event(partial_record)
 
         if self.masking_function:
-            copied_record = self.masking_function(copied_record)
+            partial_record = self.masking_function(partial_record)
 
-        if copied_record.get("metrics", {}).get("end") is not None:
-            self._logged_end_time = copied_record["metrics"]["end"]
+        if partial_record.get("metrics", {}).get("end") is not None:
+            self._logged_end_time = partial_record["metrics"]["end"]
 
-        if len(copied_record.get("tags", [])) > 0 and self.span_parents:
+        if len(partial_record.get("tags", [])) > 0 and self.span_parents:
             raise Exception("Tags can only be logged to the root span")
 
         def compute_record() -> Dict[str, Any]:
@@ -3467,7 +3467,7 @@ class SpanImpl(Span):
                 lazy_values = self.masking_function(lazy_values)
 
             record = dict(
-                **copied_record,
+                **partial_record,
                 **lazy_values,
                 **SpanComponentsV3(
                     object_type=self.parent_object_type,
