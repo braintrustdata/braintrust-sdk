@@ -8,6 +8,7 @@ import {
   BraintrustState,
   wrapTraced,
   currentSpan,
+  Attachment,
 } from "./logger";
 import { LazyValue } from "./util";
 import { configureNode } from "./node";
@@ -735,4 +736,15 @@ describe("wrapTraced generator support", () => {
     expect(log.span_attributes?.name).toBe("main");
     expect(log.metadata).toEqual({ a: "b", total: 6 });
   });
+});
+
+test("attachment with unreadable path throws", () => {
+  expect(
+    () =>
+      new Attachment({
+        data: "unreadable.txt",
+        filename: "unreadable.txt",
+        contentType: "text/plain",
+      }),
+  ).toThrow(/Failed to read file:/);
 });
