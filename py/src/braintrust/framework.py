@@ -46,6 +46,7 @@ from .logger import (
     ScoreSummary,
     Span,
     _ExperimentDatasetEvent,
+    parent_context,
     stringify_exception,
 )
 from .logger import init as _init_experiment
@@ -738,13 +739,16 @@ def _EvalCommon(
             )
 
         async def run_to_completion():
-            try:
-                ret = await run_evaluator(experiment, evaluator, 0, [])
-                reporter.report_eval(evaluator, ret, verbose=True, jsonl=False)
-                return ret
-            finally:
-                if experiment:
-                    experiment.flush()
+            with parent_context(parent, state):
+                try:
+                    ret = await run_evaluator(experiment, evaluator, 0, [])
+                    reporter.report_eval(evaluator, ret, verbose=True, jsonl=False)
+                    return ret
+                finally:
+                    if experiment:
+                        experiment.flush()
+                    elif state is not None:
+                        state.flush()
 
         return run_to_completion
 

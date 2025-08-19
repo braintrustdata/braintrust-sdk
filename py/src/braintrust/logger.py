@@ -1699,8 +1699,27 @@ def current_span() -> Span:
     return _state.current_span.get()
 
 
-def with_parent(parent: Optional[str]):
-    pass
+@contextlib.contextmanager
+def parent_context(parent: Optional[str], state: Optional[BraintrustState] = None):
+    """
+    Context manager to temporarily set the parent context for spans.
+
+    Args:
+        parent: The parent string to set during the context
+        state: Optional BraintrustState to use. If not provided, uses the global state.
+
+    Example:
+        with parent_context('parent-id-123', state=state):
+            # Any spans created here will use 'parent-id-123' as their parent
+            span = start_span("my-span")
+    """
+    state = state or _state
+    print("SETTING PARENT CONTEXT", parent)
+    token = state.current_parent.set(parent)
+    try:
+        yield
+    finally:
+        state.current_parent.reset(token)
 
 
 def get_span_parent_object() -> Union["Logger", "Experiment", Span]:

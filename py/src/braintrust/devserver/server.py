@@ -9,7 +9,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from starlette.routing import Route
 
-from braintrust.logger import login_to_state
+from braintrust.logger import bt_iscoroutinefunction, login_to_state
 
 from ..framework import EvalAsync, Evaluator, SSEProgressEvent
 from .auth import AuthorizationMiddleware
@@ -95,13 +95,18 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
     sse_queue = SSEQueue()
 
     async def task(input, hooks):
-        result = await evaluator.task(input, hooks)
+        print("TASK", evaluator.task)
+        if bt_iscoroutinefunction(evaluator.task):
+            result = await evaluator.task(input, hooks)
+        else:
+            result = evaluator.task(input, hooks)
         hooks.report_progress({
             "format": "code",
             "output_type": "completion",
             "event": "json_delta",
             "data": json.dumps(result),
         })
+        return result
 
     async def stream_fn(event: SSEProgressEvent):
         if stream:
@@ -119,6 +124,7 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
                     "data": dataset,
                     "task": task,
                     "experiment_name": eval_data.get("experiment_name"),
+                    "parent": eval_data.get("parent"),
                     # XXX Need to propagate this variable
                     # "project_id": eval_data.get("project_id"),
                 },
@@ -148,6 +154,7 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
                 },
             )
         else:
+            await eval_task
             # Return regular JSON response
             return JSONResponse({
                 "success": True,
