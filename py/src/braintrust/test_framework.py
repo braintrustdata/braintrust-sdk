@@ -11,7 +11,7 @@ from .framework import (
     run_evaluator,
 )
 from .score import Score, Scorer
-from .test_helpers import with_memory_logger  # noqa: F401
+from .test_helpers import init_test_exp, with_memory_logger, with_simulate_login  # noqa: F401
 
 
 @pytest.mark.asyncio
@@ -280,3 +280,74 @@ async def test_eval_no_send_logs_true(with_memory_logger):
     # Most importantly: verify that no logs were sent (should be empty)
     logs = with_memory_logger.pop()
     assert len(logs) == 0
+
+
+@pytest.mark.asyncio
+async def test_hooks_tags_append(with_memory_logger, with_simulate_login):
+    """ Test that hooks.tags can be appended to and logged. """
+
+    expected_tags = ["chocolate", "vanilla", "strawberry"]
+
+    def task_with_hooks(input, hooks):
+        for x in expected_tags:
+            hooks.tags.append(x)
+        return input
+
+    def simple_scorer(input, output, expected):
+        return {"name": "simple_scorer", "score": 0.8}
+
+    evaluator = Evaluator(
+        project_name=__name__,
+        eval_name=__name__,
+        data=[EvalCase(input="hello", expected="hello world")],
+        task=task_with_hooks,
+        scores=[simple_scorer],
+        experiment_name=__name__,
+        metadata=None,
+        summarize_scores=False,
+    )
+    exp = init_test_exp(__name__)
+    await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 3
+
+    # assert root span contains tags
+    root_span = [log for log in logs if not log["span_parents"]]
+    assert len(root_span) == 1
+    assert root_span[0].get("tags") == expected_tags
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("expected_tags", [[], ["chocolate", "vanilla", "strawberry"]])
+async def test_hooks_tags_list(with_memory_logger, with_simulate_login, expected_tags):
+    """ Test that hooks.tags can be set to a list. """
+
+    def task_with_hooks(input, hooks):
+        for x in expected_tags:
+            hooks.tags.append(x)
+        return input
+
+    def simple_scorer(input, output, expected):
+        return {"name": "simple_scorer", "score": 0.8}
+
+    evaluator = Evaluator(
+        project_name=__name__,
+        eval_name=__name__,
+        data=[EvalCase(input="hello", expected="hello world")],
+        task=task_with_hooks,
+        scores=[simple_scorer],
+        experiment_name=__name__,
+        metadata=None,
+        summarize_scores=False,
+    )
+    exp = init_test_exp(__name__)
+    await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 3
+
+    # assert root span contains tags
+    root_span = [log for log in logs if not log["span_parents"]]
+    assert len(root_span) == 1
+    assert root_span[0].get("tags") == expected_tags
