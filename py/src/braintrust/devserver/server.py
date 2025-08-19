@@ -8,6 +8,7 @@ from starlette.routing import Route
 from ..framework import Evaluator
 from .auth import AuthorizationMiddleware
 from .cors import create_cors_middleware
+from .schemas import ValidationError, parse_eval_body
 
 _all_evaluators: Dict[str, Evaluator[Any, Any]] = {}
 
@@ -37,7 +38,38 @@ async def list_evaluators(request):
 
 
 async def run_eval(request):
-    pass
+    """Handle eval execution requests."""
+    try:
+        # Get request body
+        body = await request.body()
+
+        # Parse and validate the request
+        eval_data = parse_eval_body(body)
+
+        # Access the context if needed
+        ctx = getattr(request.state, "ctx", None)
+
+        # Check if the evaluator exists
+        evaluator = _all_evaluators.get(eval_data["name"])
+        if not evaluator:
+            return JSONResponse({"error": f"Evaluator '{eval_data['name']}' not found"}, status_code=404)
+
+        # TODO: Actually run the evaluator with the provided parameters
+        # For now, just return a success response
+        return JSONResponse(
+            {
+                "success": True,
+                "evaluator": eval_data["name"],
+                "parameters": eval_data.get("parameters"),
+                "stream": eval_data.get("stream", False),
+                "message": "Eval execution not yet implemented",
+            }
+        )
+
+    except ValidationError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": f"Internal error: {str(e)}"}, status_code=500)
 
 
 def run_dev_server(evaluators: list[Evaluator[Any, Any]], host: str = "localhost", port: int = 8300):
