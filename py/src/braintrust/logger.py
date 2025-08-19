@@ -3447,26 +3447,35 @@ class SpanImpl(Span):
         )
 
         _check_json_serializable(partial_record)
-        serializable_partial_record = _deep_copy_event(partial_record)
+        copied_record = _deep_copy_event(partial_record)
 
         if self.masking_function:
-            serializable_partial_record = self.masking_function(serializable_partial_record)
+            copied_record = self.masking_function(copied_record)
 
-        if serializable_partial_record.get("metrics", {}).get("end") is not None:
-            self._logged_end_time = serializable_partial_record["metrics"]["end"]
+        if copied_record.get("metrics", {}).get("end") is not None:
+            self._logged_end_time = copied_record["metrics"]["end"]
 
-        if len(serializable_partial_record.get("tags", [])) > 0 and self.span_parents:
+        if len(copied_record.get("tags", [])) > 0 and self.span_parents:
             raise Exception("Tags can only be logged to the root span")
 
         def compute_record() -> Dict[str, Any]:
-            return dict(
-                **serializable_partial_record,
-                **{k: v.get() for k, v in lazy_partial_record.items()},
+            # Get lazy values
+            lazy_values = {k: v.get() for k, v in lazy_partial_record.items()}
+
+            # Apply masking to lazy values if needed
+            if self.masking_function and lazy_values:
+                lazy_values = self.masking_function(lazy_values)
+
+            record = dict(
+                **copied_record,
+                **lazy_values,
                 **SpanComponentsV3(
                     object_type=self.parent_object_type,
                     object_id=self.parent_object_id.get(),
                 ).object_id_fields(),
             )
+
+            return record
 
         _state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
 
