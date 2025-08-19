@@ -1950,8 +1950,6 @@ def start_span(
     state = state or _state
     parent = parent or state.current_parent.get()
 
-    print("STARTING SPAN WITH", state, parent)
-
     if parent:
         components = SpanComponentsV3.from_str(parent)
         if components.row_id and components.span_id and components.root_span_id:

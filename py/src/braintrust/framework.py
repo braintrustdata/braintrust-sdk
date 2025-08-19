@@ -1289,16 +1289,19 @@ async def _run_evaluator_internal(
         exc_info = None
         scores = {}
 
+        event_dataset = (
+            experiment.dataset if experiment else evaluator.data if isinstance(evaluator.data, Dataset) else None
+        )
+
         origin = (
             {
                 "object_type": "dataset",
-                "object_id": experiment.dataset.id,
+                "object_id": event_dataset.id,
                 "id": datum.id,
                 "created": datum.created,
                 "_xact_id": datum._xact_id,
             }
-            # XXX Generalize this to look at evaluator.data too
-            if experiment and experiment.dataset and datum.id and datum._xact_id
+            if event_dataset and datum.id and datum._xact_id
             else None
         )
         base_event = dict(
