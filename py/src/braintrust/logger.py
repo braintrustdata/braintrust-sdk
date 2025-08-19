@@ -425,6 +425,10 @@ class BraintrustState:
     def login_replace_api_conn(self, api_conn: "HTTPConnection"):
         self._global_bg_logger.get().internal_replace_api_conn(api_conn)
 
+    def set_masking_function(self, masking_function: Optional[Callable[[Any], Any]]) -> None:
+        """Set the masking function on the background logger."""
+        self.global_bg_logger().set_masking_function(masking_function)
+
 
 _state: BraintrustState = None  # type: ignore
 
@@ -668,6 +672,7 @@ BACKGROUND_LOGGER_BASE_SLEEP_TIME_S = 1.0
 class _HTTPBackgroundLogger:
     def __init__(self, api_conn: LazyValue[HTTPConnection]):
         self.api_conn = api_conn
+        self.masking_function: Optional[Callable[[Any], Any]] = None
         self.outfile = sys.stderr
         self.flush_lock = threading.RLock()
 
@@ -827,6 +832,12 @@ class _HTTPBackgroundLogger:
                 unwrapped_items = [item.get() for item in wrapped_items]
                 batched_items = merge_row_batch(unwrapped_items)
 
+                # Apply masking after merging but before sending to backend
+                if self.masking_function:
+                    for batch_idx in range(len(batched_items)):
+                        for item_idx in range(len(batched_items[batch_idx])):
+                            batched_items[batch_idx][item_idx] = self.masking_function(batched_items[batch_idx][item_idx])
+
                 attachments: List["BaseAttachment"] = []
                 for batch in batched_items:
                     for item in batch:
@@ -936,6 +947,10 @@ class _HTTPBackgroundLogger:
     # Should only be called by BraintrustState.
     def internal_replace_api_conn(self, api_conn: HTTPConnection):
         self.api_conn = LazyValue(lambda: api_conn, use_mutex=False)
+
+    def set_masking_function(self, masking_function: Optional[Callable[[Any], Any]]):
+        """Set or update the masking function."""
+        self.masking_function = masking_function
 
 
 def _internal_reset_global_state() -> None:
@@ -1066,7 +1081,6 @@ def init(
     project_id: Optional[str] = None,
     base_experiment_id: Optional[str] = None,
     repo_info: Optional[RepoInfo] = None,
-    masking_function: Optional[Callable[[Any], Any]] = None,
 ) -> Union["Experiment", "ReadonlyExperiment"]:
     """
     Log in, and then initialize a new experiment in a specified project. If the project does not exist, it will be created.
@@ -1090,7 +1104,6 @@ def init(
     :param project_id: The id of the project to create the experiment in. This takes precedence over `project` if specified.
     :param base_experiment_id: An optional experiment id to use as a base. If specified, the new experiment will be summarized and compared to this. This takes precedence over `base_experiment` if specified.
     :param repo_info: (Optional) Explicitly specify the git metadata for this experiment. This takes precedence over `git_metadata_settings` if specified.
-    :param masking_function: (Optional) A function that takes a JSON-serializable object and returns a masked version. The function will be applied to all logged data before sending to Braintrust.
     :returns: The experiment object.
     """
 
@@ -1197,7 +1210,7 @@ def init(
         )
 
     ret = Experiment(
-        lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset, masking_function=masking_function
+        lazy_metadata=LazyValue(compute_metadata, use_mutex=True), dataset=dataset
     )
     if set_current:
         _state.current_experiment = ret
@@ -1222,7 +1235,6 @@ def init_dataset(
     metadata: Optional[Metadata] = None,
     use_output: bool = DEFAULT_IS_LEGACY_DATASET,
     _internal_btql: Optional[Dict[str, Any]] = None,
-    masking_function: Optional[Callable[[Any], Any]] = None,
 ) -> "Dataset":
     """
     Create a new dataset in a specified project. If the project does not exist, it will be created.
@@ -1238,7 +1250,6 @@ def init_dataset(
     :param project_id: The id of the project to create the dataset in. This takes precedence over `project` if specified.
     :param metadata: (Optional) a dictionary with additional data about the dataset. The values in `metadata` can be any JSON-serializable type, but its keys must be strings.
     :param use_output: (Deprecated) If True, records will be fetched from this dataset in the legacy format, with the "expected" field renamed to "output". This option will be removed in a future version of Braintrust.
-    :param masking_function: (Optional) A function that takes a JSON-serializable object and returns a masked version. The function will be applied to all logged data before sending to Braintrust.
     :returns: The dataset object.
     """
 
@@ -1263,7 +1274,6 @@ def init_dataset(
         version=version,
         legacy=use_output,
         _internal_btql=_internal_btql,
-        masking_function=masking_function,
     )
 
 
@@ -1303,7 +1313,6 @@ def init_logger(
     org_name: Optional[str] = None,
     force_login: bool = False,
     set_current: bool = True,
-    masking_function: Optional[Callable[[Any], Any]] = None,
 ) -> "Logger":
     """
     Create a new logger in a specified project. If the project does not exist, it will be created.
@@ -1317,7 +1326,6 @@ def init_logger(
     :param org_name: (Optional) The name of a specific organization to connect to. This is useful if you belong to multiple.
     :param force_login: Login again, even if you have already logged in (by default, the logger will not login if you are already logged in)
     :param set_current: If true (the default), set the global current-experiment to the newly-created one.
-    :param masking_function: (Optional) A function that takes a JSON-serializable object and returns a masked version. The function will be applied to all logged data before sending to Braintrust.
     :returns: The newly created Logger.
     """
 
@@ -1339,7 +1347,6 @@ def init_logger(
         async_flush=async_flush,
         compute_metadata_args=compute_metadata_args,
         link_args=link_args,
-        masking_function=masking_function,
     )
     if set_current:
         _state.current_logger = ret
@@ -1594,6 +1601,17 @@ def login(
 
         # Replace the global logger's api_conn with this one.
         _state.login_replace_api_conn(conn)
+
+
+def set_masking_function(masking_function: Optional[Callable[[Any], Any]]) -> None:
+    """
+    Set a global masking function that will be applied to all logged data before sending to Braintrust.
+    The masking function will be applied after records are merged but before they are sent to the backend.
+
+    :param masking_function: A function that takes a JSON-serializable object and returns a masked version.
+                           Set to None to disable masking.
+    """
+    _state.set_masking_function(masking_function)
 
 
 def log(**event: Any) -> str:
@@ -2952,14 +2970,12 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
         self,
         lazy_metadata: LazyValue[ProjectExperimentMetadata],
         dataset: Optional["Dataset"] = None,
-        masking_function: Optional[Callable[[Any], Any]] = None,
     ):
         self._lazy_metadata = lazy_metadata
         self.dataset = dataset
         self.last_start_time = time.time()
         self._lazy_id = LazyValue(lambda: self.id, use_mutex=False)
         self._called_start_span = False
-        self.masking_function = masking_function
 
         ObjectFetcher.__init__(
             self,
@@ -3253,7 +3269,6 @@ class Experiment(ObjectFetcher[ExperimentEvent], Exportable):
             start_time=start_time,
             set_current=set_current,
             event=event,
-            masking_function=self.masking_function,
         )
 
     def __enter__(self) -> "Experiment":
@@ -3327,7 +3342,6 @@ class SpanImpl(Span):
         propagated_event: Optional[Dict[str, Any]] = None,
         span_id: Optional[str] = None,
         root_span_id: Optional[str] = None,
-        masking_function: Optional[Callable[[Any], Any]] = None,
     ):
         if span_attributes is None:
             span_attributes = SpanAttributes()
@@ -3342,7 +3356,6 @@ class SpanImpl(Span):
         self.parent_object_type = parent_object_type
         self.parent_object_id = parent_object_id
         self.parent_compute_object_metadata_args = parent_compute_object_metadata_args
-        self.masking_function = masking_function
 
         # Merge propagated_event into event. The propagated_event data will get
         # propagated-and-merged into every subspan.
@@ -3449,9 +3462,6 @@ class SpanImpl(Span):
         _check_json_serializable(partial_record)
         partial_record = _deep_copy_event(partial_record)
 
-        if self.masking_function:
-            partial_record = self.masking_function(partial_record)
-
         if partial_record.get("metrics", {}).get("end") is not None:
             self._logged_end_time = partial_record["metrics"]["end"]
 
@@ -3461,10 +3471,6 @@ class SpanImpl(Span):
         def compute_record() -> Dict[str, Any]:
             # Get lazy values
             lazy_values = {k: v.get() for k, v in lazy_partial_record.items()}
-
-            # Apply masking to lazy values if needed
-            if self.masking_function and lazy_values:
-                lazy_values = self.masking_function(lazy_values)
 
             record = dict(
                 **partial_record,
@@ -3517,7 +3523,6 @@ class SpanImpl(Span):
             start_time=start_time,
             set_current=set_current,
             event=event,
-            masking_function=self.masking_function,  # Pass masking function to child spans
         )
 
     def end(self, end_time: Optional[float] = None) -> float:
@@ -3695,7 +3700,6 @@ class Dataset(ObjectFetcher[DatasetEvent]):
         version: Union[None, int, str] = None,
         legacy: bool = DEFAULT_IS_LEGACY_DATASET,
         _internal_btql: Optional[Dict[str, Any]] = None,
-        masking_function: Optional[Callable[[Any], Any]] = None,
     ):
         if legacy:
             eprint(
@@ -3708,7 +3712,6 @@ class Dataset(ObjectFetcher[DatasetEvent]):
 
         self._lazy_metadata = lazy_metadata
         self.new_records = 0
-        self.masking_function = masking_function
 
         ObjectFetcher.__init__(
             self,
@@ -3785,9 +3788,6 @@ class Dataset(ObjectFetcher[DatasetEvent]):
 
         _check_json_serializable(args)
         args = _deep_copy_event(args)
-
-        if self.masking_function:
-            args = self.masking_function(args)
 
         def compute_args() -> Dict[str, Any]:
             return dict(
@@ -4241,7 +4241,6 @@ class Logger(Exportable):
         async_flush: bool = True,
         compute_metadata_args: Optional[Dict] = None,
         link_args: Optional[Dict] = None,
-        masking_function: Optional[Callable[[Any], Any]] = None,
     ):
         self._lazy_metadata = lazy_metadata
         self.async_flush = async_flush
@@ -4252,7 +4251,6 @@ class Logger(Exportable):
         # unresolved args about the org / project. Use these as potential
         # fallbacks when generating links
         self._link_args = link_args
-        self.masking_function = masking_function
 
     @property
     def org_id(self) -> str:
@@ -4436,7 +4434,6 @@ class Logger(Exportable):
             event=event,
             span_id=span_id,
             root_span_id=root_span_id,
-            masking_function=self.masking_function,
         )
 
     def export(self) -> str:
