@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from threading import Lock
 from typing import Dict, List, Optional, Union
 
+from braintrust.devserver.server import run_dev_server
+
 from .. import login
 from ..framework import (
     BaseExperiment,
@@ -291,6 +293,17 @@ def run(args):
 
     handles = initialize_handles(args.files)
 
+    if args.dev:
+        objects = EvaluatorState()
+        update_evaluators(objects, handles, terminate_on_failure=evaluator_opts.terminate_on_failure)
+        evaluators = [e.evaluator for e in objects.evaluators]
+        run_dev_server(
+            evaluators,
+            host=args.dev_host,
+            port=args.dev_port,
+        )
+        sys.exit(0)
+
     if not evaluator_opts.no_send_logs:
         login(
             api_key=args.api_key,
@@ -360,6 +373,24 @@ def build_parser(subparsers, parent_parser):
         "--num-workers",
         type=int,
         help="Specify the number of concurrent worker threads to run evals over, if they are defined as synchronous functions. Async functions will be run in the single-threaded asyncio event loop. If not specified, defaults to the number of cores on the machine.",
+    )
+
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Run the evaluators in dev mode. This will start a dev server which you can connect to via the playground.",
+    )
+    parser.add_argument(
+        "--dev-host",
+        help="The host to bind the dev server to. Defaults to localhost. Set to 0.0.0.0 to bind to all interfaces.",
+        type=str,
+        default="localhost",
+    )
+    parser.add_argument(
+        "--dev-port",
+        help="The port to bind the dev server to. Defaults to 8300.",
+        type=int,
+        default=8300,
     )
     parser.add_argument(
         "files",
