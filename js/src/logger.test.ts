@@ -12,6 +12,9 @@ import {
 } from "./logger";
 import { LazyValue } from "./util";
 import { configureNode } from "./node";
+import { writeFile, unlink } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 configureNode();
 
@@ -747,4 +750,24 @@ test("attachment with unreadable path throws", () => {
         contentType: "text/plain",
       }),
   ).toThrow(/Failed to read file:/);
+});
+
+test("attachment with readable path returns data", async () => {
+  const tmpFile = join(
+    tmpdir(),
+    `bt-attach-${Date.now()}-${Math.random()}.txt`,
+  );
+  await writeFile(tmpFile, "hello world", "utf8");
+  try {
+    const a = new Attachment({
+      data: tmpFile,
+      filename: "file.txt",
+      contentType: "text/plain",
+    });
+    const blob = await a.data();
+    const text = await blob.text();
+    expect(text).toBe("hello world");
+  } finally {
+    await unlink(tmpFile).catch(() => {});
+  }
 });

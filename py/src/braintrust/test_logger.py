@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import tempfile
 import time
 from typing import AsyncGenerator, List
 from unittest import TestCase
@@ -1139,3 +1140,18 @@ def test_attachment_unreadable_path_raises_ioerror():
             filename="unreadable.txt",
             content_type="text/plain",
         )
+
+
+def test_attachment_readable_path_returns_data():
+    with tempfile.NamedTemporaryFile(mode="wb", delete=False) as tmp:
+        tmp.write(b"hello world")
+        tmp_path = tmp.name
+    try:
+        a = Attachment(
+            data=tmp_path,
+            filename="file.txt",
+            content_type="text/plain",
+        )
+        assert a.data == b"hello world"
+    finally:
+        os.unlink(tmp_path)
