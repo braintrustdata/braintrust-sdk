@@ -1132,8 +1132,8 @@ async def test_traced_async_generator_unlimited_with_minus_one(with_memory_logge
             os.environ["BRAINTRUST_MAX_GENERATOR_ITEMS"] = original
 
 
-def test_attachment_file_not_found_error(with_memory_logger, with_simulate_login):
-    """Test that Attachment constructor catches the 'Failed to read file' error."""
+def test_dataset_flush_file_not_found_error(with_memory_logger, with_simulate_login):
+    """Test that dataset flush throws errors from attachment upload."""
     dataset = init_test_dataset(__name__, __name__)
 
     file_path = os.path.join("files", "invoice.pdf")

@@ -754,7 +754,7 @@ function initTestDataset(projectName: string, datasetName?: string) {
   return new (Dataset as any)(state, lazyMetadata);
 }
 
-test("dataset flush surfaces file-not-found error", async () => {
+test("dataset flush throws file-not-found error", async () => {
   initDataset;
   await _exportsForTestingOnly.simulateLoginForTests();
   _exportsForTestingOnly.useTestBackgroundLogger(true);
