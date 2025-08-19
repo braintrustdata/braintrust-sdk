@@ -1325,13 +1325,16 @@ def test_masking_function_dataset(with_memory_logger, with_simulate_login):
             return [masking_function(item) if isinstance(item, (dict, list)) else item for item in data]
         return data
 
-    # Create test dataset with masking function
+    # Set masking function globally
+    braintrust.set_masking_function(masking_function)
+
+    # Create test dataset
     from braintrust.logger import Dataset, ObjectMetadata, ProjectDatasetMetadata
     project_metadata = ObjectMetadata(id="test_project", name="test_project", full_info=dict())
     dataset_metadata = ObjectMetadata(id="test_dataset", name="test_dataset", full_info=dict())
     metadata = ProjectDatasetMetadata(project=project_metadata, dataset=dataset_metadata)
     lazy_metadata = LazyValue(lambda: metadata, use_mutex=False)
-    dataset = Dataset(lazy_metadata=lazy_metadata, masking_function=masking_function)
+    dataset = Dataset(lazy_metadata=lazy_metadata)
 
     # Insert data with email addresses
     dataset.insert(
@@ -1351,3 +1354,6 @@ def test_masking_function_dataset(with_memory_logger, with_simulate_login):
     assert log["expected"]["status"] == "success"
     assert log["expected"]["email"] == "EMAIL_REDACTED"
     assert log["metadata"]["admin_email"] == "EMAIL_REDACTED"
+
+    # Clean up
+    braintrust.set_masking_function(None)
