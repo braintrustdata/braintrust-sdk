@@ -1317,7 +1317,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             input=datum.input,
             expected=datum.expected,
             metadata=metadata,
-            tags=tags,
+            tags=tags if tags else None,
             output=output,
             scores={
                 **(

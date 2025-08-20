@@ -968,7 +968,11 @@ async function runEvaluatorInternal(
               event: { input: datum.input },
             },
           );
-          rootSpan.log({ output, metadata, expected, tags });
+          if (tags.length) {
+            rootSpan.log({ output, metadata, expected, tags });
+          } else {
+            rootSpan.log({ output, metadata, expected });
+          }
 
           const scoringArgs = {
             input: datum.input,
@@ -1110,7 +1114,7 @@ async function runEvaluatorInternal(
           input: datum.input,
           ...("expected" in datum ? { expected: datum.expected } : {}),
           output,
-          tags,
+          tags: tags.length ? tags : undefined,
           metadata,
           scores: {
             ...(evaluator.errorScoreHandler && unhandledScores

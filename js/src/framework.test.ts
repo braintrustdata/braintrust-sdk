@@ -556,7 +556,7 @@ test("Eval with noSendLogs: true runs locally without creating experiment", asyn
   expect(await memoryLogger.drain()).toHaveLength(0);
 });
 
-test("hooks.tags can be appended and logged to root span", async () => {
+test("tags can be appended and logged to root span", async () => {
   await _exportsForTestingOnly.simulateLoginForTests();
   const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
   const experiment =
@@ -597,37 +597,68 @@ test("hooks.tags can be appended and logged to root span", async () => {
   expect((rootSpans[0] as any).tags).toEqual(expectedTags);
 });
 
-test.each<[string[]]>([[[]], [["chocolate", "vanilla", "strawberry"]]])(
-  "hooks.tags can be set to a list (%s)",
-  async (tags) => {
-    await _exportsForTestingOnly.simulateLoginForTests();
-    const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
-    const experiment =
-      _exportsForTestingOnly.initTestExperiment("js-tags-list");
+test("tags can be set to a list", async () => {
+  await _exportsForTestingOnly.simulateLoginForTests();
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+  const experiment = _exportsForTestingOnly.initTestExperiment("js-tags-list");
 
-    const result = await runEvaluator(
-      experiment,
-      {
-        projectName: "proj",
-        evalName: "js-tags-list",
-        data: [{ input: "hello", expected: "hello world" }],
-        task: (input, hooks) => {
-          hooks.tags = tags;
-          return input;
-        },
-        scores: [() => ({ name: "simple_scorer", score: 0.8 })],
-        summarizeScores: false,
+  const expectedTags = ["chocolate", "vanilla", "strawberry"];
+
+  const result = await runEvaluator(
+    experiment,
+    {
+      projectName: "proj",
+      evalName: "js-tags-list",
+      data: [{ input: "hello", expected: "hello world" }],
+      task: (input, hooks) => {
+        hooks.tags = expectedTags;
+        return input;
       },
-      new NoopProgressReporter(),
-      [],
-      undefined,
-    );
-    expect(result.results[0].tags).toEqual(tags);
+      scores: [() => ({ name: "simple_scorer", score: 0.8 })],
+      summarizeScores: false,
+    },
+    new NoopProgressReporter(),
+    [],
+    undefined,
+  );
+  expect(result.results[0].tags).toEqual(expectedTags);
 
-    await memoryLogger.flush();
-    const logs = await memoryLogger.drain();
-    const rootSpans = logs.filter((l: any) => !l["span_parents"]);
-    expect(rootSpans).toHaveLength(1);
-    expect((rootSpans[0] as any).tags ?? []).toEqual(tags);
-  },
-);
+  await memoryLogger.flush();
+  const logs = await memoryLogger.drain();
+  const rootSpans = logs.filter((l: any) => !l["span_parents"]);
+  expect(rootSpans).toHaveLength(1);
+  expect((rootSpans[0] as any).tags ?? []).toEqual(expectedTags);
+});
+
+test("empty list returns undefined for tags", async () => {
+  await _exportsForTestingOnly.simulateLoginForTests();
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+  const experiment = _exportsForTestingOnly.initTestExperiment("js-tags-list");
+
+  const expectedTags = [];
+
+  const result = await runEvaluator(
+    experiment,
+    {
+      projectName: "proj",
+      evalName: "js-tags-list",
+      data: [{ input: "hello", expected: "hello world" }],
+      task: (input, hooks) => {
+        hooks.tags = expectedTags;
+        return input;
+      },
+      scores: [() => ({ name: "simple_scorer", score: 0.8 })],
+      summarizeScores: false,
+    },
+    new NoopProgressReporter(),
+    [],
+    undefined,
+  );
+  expect(result.results[0].tags).toEqual(undefined);
+
+  await memoryLogger.flush();
+  const logs = await memoryLogger.drain();
+  const rootSpans = logs.filter((l: any) => !l["span_parents"]);
+  expect(rootSpans).toHaveLength(1);
+  expect((rootSpans[0] as any).tags ?? []).toEqual([]);
+});

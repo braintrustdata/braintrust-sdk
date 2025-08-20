@@ -322,9 +322,10 @@ async def test_hooks_tags_append(with_memory_logger, with_simulate_login):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("expected_tags", [[], ["chocolate", "vanilla", "strawberry"]])
-async def test_hooks_tags_list(with_memory_logger, with_simulate_login, expected_tags):
+async def test_hooks_tags_list(with_memory_logger, with_simulate_login):
     """ Test that hooks.tags can be set to a list. """
+
+    expected_tags = ["chocolate", "vanilla", "strawberry"]
 
     def task_with_hooks(input, hooks):
         hooks.tags = expected_tags
@@ -346,6 +347,41 @@ async def test_hooks_tags_list(with_memory_logger, with_simulate_login, expected
     exp = init_test_exp(__name__)
     result = await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
     assert result.results[0].tags == expected_tags
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 3
+
+    # assert root span contains tags
+    root_span = [log for log in logs if not log["span_parents"]]
+    assert len(root_span) == 1
+    assert root_span[0].get("tags") == expected_tags
+
+@pytest.mark.asyncio
+async def test_hooks_tags_empty_list(with_memory_logger, with_simulate_login):
+    """ Test that hooks.tags can be set to a list. """
+
+    expected_tags = []
+
+    def task_with_hooks(input, hooks):
+        hooks.tags = expected_tags
+        return input
+
+    def simple_scorer(input, output, expected):
+        return {"name": "simple_scorer", "score": 0.8}
+
+    evaluator = Evaluator(
+        project_name=__name__,
+        eval_name=__name__,
+        data=[EvalCase(input="hello", expected="hello world")],
+        task=task_with_hooks,
+        scores=[simple_scorer],
+        experiment_name=__name__,
+        metadata=None,
+        summarize_scores=False,
+    )
+    exp = init_test_exp(__name__)
+    result = await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
+    assert result.results[0].tags == None
 
     logs = with_memory_logger.pop()
     assert len(logs) == 3
