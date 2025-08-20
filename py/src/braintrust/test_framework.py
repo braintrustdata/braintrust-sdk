@@ -240,16 +240,18 @@ async def test_hooks_trial_index_multiple_inputs():
     assert sorted(input_1_trials) == [0, 1]
     assert sorted(input_2_trials) == [0, 1]
 
+@pytest.fixture
+def simple_scorer():
+    def simple_scorer_function(input, output, expected):
+        return {"name": "simple_scorer", "score": 0.8}
+    return simple_scorer_function
 
 @pytest.mark.asyncio
-async def test_eval_no_send_logs_true(with_memory_logger):
+async def test_eval_no_send_logs_true(with_memory_logger, simple_scorer):
     """Test that Eval with no_send_logs=True runs locally without creating experiment."""
 
     def exact_match(input, output, expected):
         return {"name": "exact_match", "score": 1.0 if output == expected else 0.0}
-
-    def simple_scorer(input, output, expected):
-        return {"name": "simple_scorer", "score": 0.8}
 
     result = await Eval(
         "test-no-logs",
@@ -283,7 +285,7 @@ async def test_eval_no_send_logs_true(with_memory_logger):
 
 
 @pytest.mark.asyncio
-async def test_hooks_tags_append(with_memory_logger, with_simulate_login):
+async def test_hooks_tags_append(with_memory_logger, with_simulate_login, simple_scorer):
     """ Test that hooks.tags can be appended to and logged. """
 
     initial_tags = ["cookies n cream"]
@@ -294,9 +296,6 @@ async def test_hooks_tags_append(with_memory_logger, with_simulate_login):
         for x in appended_tags:
             hooks.tags.append(x)
         return input
-
-    def simple_scorer(input, output, expected):
-        return {"name": "simple_scorer", "score": 0.8}
 
     evaluator = Evaluator(
         project_name=__name__,
@@ -322,17 +321,13 @@ async def test_hooks_tags_append(with_memory_logger, with_simulate_login):
 
 
 @pytest.mark.asyncio
-async def test_hooks_tags_list(with_memory_logger, with_simulate_login):
+@pytest.mark.parametrize(("tags", "expected_tags"), [([], None), (["chocolate", "vanilla", "strawberry"], ["chocolate", "vanilla", "strawberry"])])
+async def test_hooks_tags_list(with_memory_logger, with_simulate_login, simple_scorer, tags, expected_tags):
     """ Test that hooks.tags can be set to a list. """
 
-    expected_tags = ["chocolate", "vanilla", "strawberry"]
-
     def task_with_hooks(input, hooks):
-        hooks.tags = expected_tags
+        hooks.tags = tags
         return input
-
-    def simple_scorer(input, output, expected):
-        return {"name": "simple_scorer", "score": 0.8}
 
     evaluator = Evaluator(
         project_name=__name__,
@@ -357,36 +352,36 @@ async def test_hooks_tags_list(with_memory_logger, with_simulate_login):
     assert root_span[0].get("tags") == expected_tags
 
 @pytest.mark.asyncio
-async def test_hooks_tags_empty_list(with_memory_logger, with_simulate_login):
-    """ Test that hooks.tags can be set to an empty list. """
+async def test_hooks_tags_with_failing_scorer(with_memory_logger, with_simulate_login, simple_scorer):
+    """ Test that hooks.tags can be set to a list. """
 
-    expected_tags = []
+    expected_tags = ["chocolate", "vanilla", "strawberry"]
 
     def task_with_hooks(input, hooks):
         hooks.tags = expected_tags
         return input
 
-    def simple_scorer(input, output, expected):
-        return {"name": "simple_scorer", "score": 0.8}
+    def failing_scorer(input, output, expected):
+        raise Exception("test error")
 
     evaluator = Evaluator(
         project_name=__name__,
         eval_name=__name__,
         data=[EvalCase(input="hello", expected="hello world")],
         task=task_with_hooks,
-        scores=[simple_scorer],
+        scores=[simple_scorer, failing_scorer],
         experiment_name=__name__,
         metadata=None,
         summarize_scores=False,
     )
     exp = init_test_exp(__name__)
     result = await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
-    assert result.results[0].tags == None
+    assert result.results[0].tags == expected_tags
 
     logs = with_memory_logger.pop()
-    assert len(logs) == 3
+    assert len(logs) == 4
 
     # assert root span contains tags
     root_span = [log for log in logs if not log["span_parents"]]
     assert len(root_span) == 1
-    assert root_span[0].get("tags") == None
+    assert root_span[0].get("tags") == expected_tags

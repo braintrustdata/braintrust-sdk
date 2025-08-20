@@ -597,12 +597,21 @@ test("tags can be appended and logged to root span", async () => {
   expect((rootSpans[0] as any).tags).toEqual(expectedTags);
 });
 
-test("tags can be set to a list", async () => {
+test.each([
+  {
+    title: "empty list returns undefined for tags",
+    providedTags: [],
+    expectedTags: undefined,
+  },
+  {
+    title: "tags can be set to a list",
+    providedTags: ["chocolate", "vanilla", "strawberry"],
+    expectedTags: ["chocolate", "vanilla", "strawberry"],
+  },
+])("$title", async ({ providedTags, expectedTags }) => {
   await _exportsForTestingOnly.simulateLoginForTests();
   const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
   const experiment = _exportsForTestingOnly.initTestExperiment("js-tags-list");
-
-  const expectedTags = ["chocolate", "vanilla", "strawberry"];
 
   const result = await runEvaluator(
     experiment,
@@ -611,7 +620,7 @@ test("tags can be set to a list", async () => {
       evalName: "js-tags-list",
       data: [{ input: "hello", expected: "hello world" }],
       task: (input, hooks) => {
-        hooks.tags = expectedTags;
+        hooks.tags = providedTags;
         return input;
       },
       scores: [() => ({ name: "simple_scorer", score: 0.8 })],
@@ -630,12 +639,12 @@ test("tags can be set to a list", async () => {
   expect((rootSpans[0] as any).tags).toEqual(expectedTags);
 });
 
-test("empty list returns undefined for tags", async () => {
+test("tags are persisted with a failing scorer", async () => {
   await _exportsForTestingOnly.simulateLoginForTests();
   const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
   const experiment = _exportsForTestingOnly.initTestExperiment("js-tags-list");
 
-  const expectedTags = [];
+  const expectedTags = ["chocolate", "vanilla", "strawberry"];
 
   const result = await runEvaluator(
     experiment,
@@ -647,18 +656,23 @@ test("empty list returns undefined for tags", async () => {
         hooks.tags = expectedTags;
         return input;
       },
-      scores: [() => ({ name: "simple_scorer", score: 0.8 })],
+      scores: [
+        () => ({ name: "simple_scorer", score: 0.8 }),
+        () => {
+          throw new Error("test error");
+        },
+      ],
       summarizeScores: false,
     },
     new NoopProgressReporter(),
     [],
     undefined,
   );
-  expect(result.results[0].tags).toEqual(undefined);
+  expect(result.results[0].tags).toEqual(expectedTags);
 
   await memoryLogger.flush();
   const logs = await memoryLogger.drain();
   const rootSpans = logs.filter((l: any) => !l["span_parents"]);
   expect(rootSpans).toHaveLength(1);
-  expect((rootSpans[0] as any).tags).toEqual(undefined);
+  expect((rootSpans[0] as any).tags).toEqual(expectedTags);
 });
