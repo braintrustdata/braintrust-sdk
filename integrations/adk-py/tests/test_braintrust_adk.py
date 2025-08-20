@@ -2,6 +2,7 @@ import pytest
 from braintrust_adk import setup_braintrust
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 
 from tests.helpers import (
     force_tracer_provider,
@@ -16,7 +17,7 @@ async def test_unset_provider():
 
     force_tracer_provider(TracerProvider())
 
-    setup_result = setup_braintrust(batch_export=False)
+    setup_result = setup_braintrust(SpanProcessor=SimpleSpanProcessor)
     assert setup_result, "setup_braintrust() should succeed"
 
     assert isinstance(trace.get_tracer_provider(), trace.TracerProvider)
@@ -32,7 +33,7 @@ async def test_set_provider():
 
     force_tracer_provider(TracerProvider())
 
-    setup_result = setup_braintrust(batch_export=False)
+    setup_result = setup_braintrust(SpanProcessor=SimpleSpanProcessor)
     assert setup_result, "setup_braintrust() should succeed"
 
     assert isinstance(trace.get_tracer_provider(), TracerProvider)

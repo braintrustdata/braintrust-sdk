@@ -2,8 +2,6 @@ import logging
 import os
 from typing import Optional, cast
 
-from opentelemetry.sdk.trace import SpanProcessor
-
 logger = logging.getLogger(__name__)
 
 __all__ = ["setup_braintrust"]
@@ -13,7 +11,7 @@ def setup_braintrust(
     api_key: Optional[str] = None,
     project_id: Optional[str] = None,
     project_name: Optional[str] = None,
-    batch_export: bool = True,
+    SpanProcessor: Optional[type] = None,
 ) -> bool:
     try:
         from opentelemetry import trace
@@ -41,10 +39,8 @@ def setup_braintrust(
 
         parent = parent or os.environ.get("BRAINTRUST_PARENT") or "project_name:default-google-adk-py"
 
-        processor = cast(
-            SpanProcessor, BraintrustSpanProcessor(api_key=api_key, parent=parent, batch_export=batch_export)
-        )
-        provider.add_span_processor(processor)
+        processor = BraintrustSpanProcessor(api_key=api_key, parent=parent, SpanProcessor=SpanProcessor)
+        provider.add_span_processor(processor)  # type: ignore
         return True
     except Exception as e:
         print("Failed to setup Braintrust:", e)
