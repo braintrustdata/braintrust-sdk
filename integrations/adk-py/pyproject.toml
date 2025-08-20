@@ -40,9 +40,6 @@ where = ["src"]
 [tool.uv.workspace]
 members = ["examples"]
 
-[tool.uv.sources]
-braintrust = { path = "../../py" }
-
 [dependency-groups]
 dev = ["pytest>=8.3.5", "pytest-asyncio>=1.1.0", "pytest-vcr>=1.0.2"]
 

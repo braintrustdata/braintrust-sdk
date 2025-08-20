@@ -84,7 +84,7 @@ wheels = [
 [[package]]
 name = "braintrust"
 version = "0.2.4"
-source = { directory = "../../py" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "chevron" },
     { name = "exceptiongroup" },
@@ -96,6 +96,10 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/5a/c3/01db8b072d56b3bcebe443af7acc57466c87bf2f49612a444ea707f76a90/braintrust-0.2.4.tar.gz", hash = "sha256:b1866a646d2368bd4c2ccba305e5c1e1d97c7f8c715833d3fc69810644fdc66f", size = 159340, upload-time = "2025-08-20T21:15:18.8Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/31/32/4a48037e9956592f3a7cfae442ecf23c4ea6884950932126561916c089b4/braintrust-0.2.4-py3-none-any.whl", hash = "sha256:7dc30f32ec5e909b0b35e75ee6596090bdc15e4ed9f4d82eda52103b1aaaf721", size = 185252, upload-time = "2025-08-20T21:15:17.137Z" },
+]
 
 [package.optional-dependencies]
 otel = [
@@ -103,36 +107,6 @@ otel = [
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-sdk" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "boto3", marker = "extra == 'all'" },
-    { name = "boto3", marker = "extra == 'cli'" },
-    { name = "chevron" },
-    { name = "exceptiongroup", specifier = ">=1.2.0" },
-    { name = "gitpython" },
-    { name = "openai-agents", marker = "extra == 'all'" },
-    { name = "openai-agents", marker = "extra == 'openai-agents'" },
-    { name = "opentelemetry-api", marker = "extra == 'all'" },
-    { name = "opentelemetry-api", marker = "extra == 'otel'" },
-    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'all'" },
-    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'otel'" },
-    { name = "opentelemetry-sdk", marker = "extra == 'all'" },
-    { name = "opentelemetry-sdk", marker = "extra == 'otel'" },
-    { name = "psycopg2-binary", marker = "extra == 'all'" },
-    { name = "psycopg2-binary", marker = "extra == 'cli'" },
-    { name = "pydoc-markdown", marker = "extra == 'all'" },
-    { name = "pydoc-markdown", marker = "extra == 'doc'" },
-    { name = "python-dotenv" },
-    { name = "python-slugify" },
-    { name = "requests" },
-    { name = "sseclient-py" },
-    { name = "tqdm" },
-    { name = "typing-extensions", specifier = ">=4.1.0" },
-    { name = "uv", marker = "extra == 'all'" },
-    { name = "uv", marker = "extra == 'cli'" },
-]
-provides-extras = ["cli", "doc", "openai-agents", "otel", "all"]
 
 [[package]]
 name = "braintrust-adk"
@@ -158,7 +132,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "braintrust", extras = ["otel"], directory = "../../py" },
+    { name = "braintrust", extras = ["otel"], specifier = ">=0.2.4" },
     { name = "google-adk", specifier = ">=1.9.0" },
     { name = "opentelemetry-proto", specifier = ">=1.36.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
