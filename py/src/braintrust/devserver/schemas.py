@@ -217,7 +217,10 @@ def parse_eval_body(request_data: Union[str, bytes, dict]) -> ParsedEvalBody:
         parsed_scores = []
         for i, score in enumerate(scores_data):
             try:
-                parsed_scores.append(parse_function_id(score, f"scores[{i}]"))
+                parsed_scores.append({
+                    "name": score["name"],
+                    "function_id": parse_function_id(score["function_id"], f"scores[{i}]"),
+                })
             except ValidationError as e:
                 raise ValidationError(f"Invalid score at index {i}: {e}")
 

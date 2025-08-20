@@ -9,8 +9,9 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from starlette.routing import Route
 
-from ..framework import EvalAsync, Evaluator, ExperimentSummary, SSEProgressEvent
-from ..logger import bt_iscoroutinefunction, login_to_state
+from ..framework import EvalAsync, EvalScorer, Evaluator, ExperimentSummary, SSEProgressEvent
+from ..generated_types import FunctionId
+from ..logger import BraintrustState, bt_iscoroutinefunction, login_to_state
 from ..parameters import parameters_to_json_schema, validate_parameters
 from ..span_identifier_v3 import parse_parent
 from .auth import AuthorizationMiddleware
@@ -141,6 +142,11 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
                 **{
                     **eval_kwargs,
                     "state": state,
+                    "scores": evaluator.scores
+                    + [
+                        make_scorer(state, score["name"], score["function_id"])
+                        for score in eval_data.get("scores", [])
+                    ],
                     "stream": stream_fn,
                     "on_start": on_start_fn,
                     "data": dataset,
@@ -231,3 +237,22 @@ def snake_to_camel(snake_str: str) -> str:
     """Convert snake_case to camelCase."""
     components = snake_str.split("_")
     return components[0] + "".join(x.title() for x in components[1:]) if components else snake_str
+
+
+def make_scorer(state: BraintrustState, name: str, score: FunctionId) -> EvalScorer[Any, Any]:
+    def scorer_fn(input, output, expected, metadata):
+        request = {
+            **score,
+            "input": dict(input=input, output=output, expected=expected, metadata=metadata),
+            "parent": state.current_span.get().export(),
+            "steam": False,
+            "mode": "auto",
+            "strict": True,
+        }
+        result = state.proxy_conn().post("function/invoke", json=request, headers={"Accept": "application/json"})
+        result.raise_for_status()
+        data = result.json()
+        return data
+
+    scorer_fn.__name__ = name
+    return scorer_fn
