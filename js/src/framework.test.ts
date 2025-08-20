@@ -681,3 +681,34 @@ test("tags are persisted with a failing scorer", async () => {
   expect(rootSpans).toHaveLength(1);
   expect((rootSpans[0] as any).tags).toEqual(expectedTags);
 });
+
+test("tags remain empty when not set", async () => {
+  await _exportsForTestingOnly.simulateLoginForTests();
+  const memoryLogger = _exportsForTestingOnly.useTestBackgroundLogger();
+  const experiment =
+    _exportsForTestingOnly.initTestExperiment("js-tags-append");
+
+  const result = await runEvaluator(
+    experiment,
+    {
+      projectName: "proj",
+      evalName: "js-tags-append",
+      data: [{ input: "hello", expected: "hello world" }],
+      task: (input, hooks) => {
+        return input;
+      },
+      scores: [() => ({ name: "simple_scorer", score: 0.8 })],
+      summarizeScores: false,
+    },
+    new NoopProgressReporter(),
+    [],
+    undefined,
+  );
+  expect(result.results[0].tags).toEqual(undefined);
+
+  await memoryLogger.flush();
+  const logs = await memoryLogger.drain();
+  const rootSpans = logs.filter((l: any) => !l["span_parents"]);
+  expect(rootSpans).toHaveLength(1);
+  expect((rootSpans[0] as any).tags).toEqual(undefined);
+});

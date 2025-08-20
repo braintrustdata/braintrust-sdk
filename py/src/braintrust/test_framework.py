@@ -407,3 +407,32 @@ async def test_hooks_tags_with_invalid_type(with_memory_logger, with_simulate_lo
     result = await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
     assert len(result.results) == 1
     assert isinstance(result.results[0].error, TypeError)
+
+
+@pytest.mark.asyncio
+async def test_hooks_without_setting_tags(with_memory_logger, with_simulate_login, simple_scorer):
+    """ Test where hooks.tags is not set """
+    def task_with_hooks(input, hooks):
+        return input
+
+    evaluator = Evaluator(
+        project_name=__name__,
+        eval_name=__name__,
+        data=[EvalCase(input="hello", expected="hello world")],
+        task=task_with_hooks,
+        scores=[simple_scorer],
+        experiment_name=__name__,
+        metadata=None,
+        summarize_scores=False,
+    )
+    exp = init_test_exp(__name__)
+    result = await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
+    assert result.results[0].tags == None
+
+    logs = with_memory_logger.pop()
+    assert len(logs) == 3
+
+    # assert root span contains tags
+    root_span = [log for log in logs if not log["span_parents"]]
+    assert len(root_span) == 1
+    assert root_span[0].get("tags") == None
