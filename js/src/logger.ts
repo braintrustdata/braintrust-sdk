@@ -92,6 +92,16 @@ import {
 import { lintTemplate } from "./mustache-utils";
 import { prettifyXact } from "@braintrust/core";
 
+// Fields that should be passed to the masking function
+// Note: "tags" field is intentionally excluded, but can be added if needed
+const REDACTION_FIELDS = [
+  "input",
+  "output",
+  "expected",
+  "metadata",
+  "context",
+] as const;
+
 export type SetCurrentArg = { setCurrent?: boolean };
 
 type StartSpanEventArgs = ExperimentLogPartialArgs & Partial<IdField>;
@@ -1970,9 +1980,18 @@ export class TestBackgroundLogger implements BackgroundLogger {
 
     // Apply masking after merge, similar to HTTPBackgroundLogger
     if (this.maskingFunction) {
-      flatBatch = flatBatch.map(
-        (item) => this.maskingFunction!(item) as BackgroundLogEvent,
-      );
+      flatBatch = flatBatch.map((item) => {
+        const maskedItem = { ...item };
+
+        // Only mask specific fields if they exist
+        for (const field of REDACTION_FIELDS) {
+          if (item[field] !== undefined) {
+            maskedItem[field] = this.maskingFunction!(item[field]);
+          }
+        }
+
+        return maskedItem as BackgroundLogEvent;
+      });
     }
 
     return flatBatch;
@@ -2213,9 +2232,18 @@ class HTTPBackgroundLogger implements BackgroundLogger {
         // Apply masking after merge but before sending to backend
         if (this.maskingFunction) {
           mergedItems = mergedItems.map((batch) =>
-            batch.map(
-              (item) => this.maskingFunction!(item) as BackgroundLogEvent,
-            ),
+            batch.map((item) => {
+              const maskedItem = { ...item };
+
+              // Only mask specific fields if they exist
+              for (const field of REDACTION_FIELDS) {
+                if (item[field] !== undefined) {
+                  maskedItem[field] = this.maskingFunction!(item[field]);
+                }
+              }
+
+              return maskedItem as BackgroundLogEvent;
+            }),
           );
         }
 

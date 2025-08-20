@@ -1136,7 +1136,9 @@ def test_masking_function_logger(with_memory_logger, with_simulate_login):
 
     def masking_function(data):
         """Replace any occurrence of 'sensitive' with 'REDACTED'"""
-        if isinstance(data, dict):
+        if isinstance(data, str):
+            return data.replace('sensitive', 'REDACTED')
+        elif isinstance(data, dict):
             masked = {}
             for k, v in data.items():
                 if isinstance(v, str) and 'sensitive' in v:
@@ -1186,7 +1188,9 @@ def test_masking_function_experiment(with_memory_logger, with_simulate_login):
 
     def masking_function(data):
         """Replace any occurrence of 'password' with 'XXX'"""
-        if isinstance(data, dict):
+        if isinstance(data, str):
+            return data.replace('password', 'XXX')
+        elif isinstance(data, dict):
             masked = {}
             for k, v in data.items():
                 if k == "password":

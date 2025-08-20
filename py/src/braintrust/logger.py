@@ -98,6 +98,10 @@ from .util import (
     merge_dicts,
     response_raise_for_status,
 )
+
+# Fields that should be passed to the masking function
+# Note: "tags" field is intentionally excluded, but can be added if needed
+REDACTION_FIELDS = ["input", "output", "expected", "metadata", "context"]
 from .xact_ids import prettify_xact
 
 Metadata = Dict[str, Any]
@@ -668,7 +672,15 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
             # Apply masking after merge, similar to HTTPBackgroundLogger
             if self.masking_function:
                 for i in range(len(first)):
-                    first[i] = self.masking_function(first[i])
+                    item = first[i]
+                    masked_item = item.copy()
+
+                    # Only mask specific fields if they exist
+                    for field in REDACTION_FIELDS:
+                        if field in item:
+                            masked_item[field] = self.masking_function(item[field])
+
+                    first[i] = masked_item
 
             return first
 
@@ -847,7 +859,15 @@ class _HTTPBackgroundLogger:
                 if self.masking_function:
                     for batch_idx in range(len(batched_items)):
                         for item_idx in range(len(batched_items[batch_idx])):
-                            batched_items[batch_idx][item_idx] = self.masking_function(batched_items[batch_idx][item_idx])
+                            item = batched_items[batch_idx][item_idx]
+                            masked_item = item.copy()
+
+                            # Only mask specific fields if they exist
+                            for field in REDACTION_FIELDS:
+                                if field in item:
+                                    masked_item[field] = self.masking_function(item[field])
+
+                            batched_items[batch_idx][item_idx] = masked_item
 
                 attachments: List["BaseAttachment"] = []
                 for batch in batched_items:
