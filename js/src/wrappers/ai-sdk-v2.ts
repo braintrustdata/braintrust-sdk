@@ -1,5 +1,9 @@
 import { SpanTypeAttribute } from "@braintrust/core";
 import { startSpan } from "../logger";
+import {
+  finalizeAnthropicTokens,
+  extractAnthropicCacheTokens,
+} from "./anthropic-tokens-util";
 
 // Minimal interface definitions that are compatible with AI SDK v2
 // We use generic types to avoid conflicts with the actual AI SDK types
@@ -117,7 +121,11 @@ function getNumberProperty(obj: unknown, key: string): number | undefined {
   return typeof value === "number" ? value : undefined;
 }
 
-function normalizeUsageMetrics(usage: unknown): Record<string, number> {
+function normalizeUsageMetrics(
+  usage: unknown,
+  provider?: string,
+  providerMetadata?: Record<string, unknown>,
+): Record<string, number> {
   const metrics: Record<string, number> = {};
 
   // AI SDK provides these standard fields
@@ -145,6 +153,33 @@ function normalizeUsageMetrics(usage: unknown): Record<string, number> {
   const cachedInputTokens = getNumberProperty(usage, "cachedInputTokens");
   if (cachedInputTokens !== undefined) {
     metrics.prompt_cached_tokens = cachedInputTokens;
+  }
+
+  // For Anthropic providers, implement the same token aggregation logic as wrapAnthropic
+  if (provider === "anthropic") {
+    // Look for Anthropic-specific cache tokens in providerMetadata.anthropic
+    const anthropicMetadata = providerMetadata?.anthropic as any;
+
+    if (anthropicMetadata) {
+      const cacheReadTokens =
+        getNumberProperty(anthropicMetadata.usage, "cache_read_input_tokens") ||
+        0;
+      const cacheCreationTokens =
+        getNumberProperty(
+          anthropicMetadata.usage,
+          "cache_creation_input_tokens",
+        ) || 0;
+
+      // Add cache tokens to metrics
+      const cacheTokens = extractAnthropicCacheTokens(
+        cacheReadTokens,
+        cacheCreationTokens,
+      );
+      Object.assign(metrics, cacheTokens);
+
+      // Apply Anthropic token finalization logic
+      Object.assign(metrics, finalizeAnthropicTokens(metrics));
+    }
   }
 
   return metrics;
@@ -212,7 +247,11 @@ export function BraintrustMiddleware(
         span.log({
           output: result.content,
           metadata,
-          metrics: normalizeUsageMetrics(result.usage),
+          metrics: normalizeUsageMetrics(
+            result.usage,
+            provider,
+            result.providerMetadata,
+          ),
         });
 
         return result;
@@ -310,7 +349,11 @@ export function BraintrustMiddleware(
               span.log({
                 output,
                 metadata,
-                metrics: normalizeUsageMetrics(finalUsage),
+                metrics: normalizeUsageMetrics(
+                  finalUsage,
+                  provider,
+                  providerMetadata,
+                ),
               });
 
               span.end();

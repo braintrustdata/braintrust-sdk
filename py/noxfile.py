@@ -93,6 +93,9 @@ def test_openai(session, version):
 @nox.parametrize("version", LITELLM_VERSIONS, ids=LITELLM_VERSIONS)
 def test_litellm(session, version):
     _install_test_deps(session)
+    # Install a compatible version of openai (1.99.9 or lower) to avoid the ResponseTextConfig removal in 1.100.0
+    # https://github.com/BerriAI/litellm/issues/13711
+    session.install("openai<=1.99.9", "--force-reinstall")
     _install(session, "litellm", version)
     _run_tests(session, f"{WRAPPER_DIR}/test_litellm.py")
     _run_core_tests(session)
