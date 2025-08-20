@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional, TypedDict, Union
 
 from typing_extensions import NotRequired
 
+from .logger import Prompt
 from .prompt import PromptData
 
 
@@ -58,13 +59,15 @@ def validate_parameters(
         try:
             if isinstance(schema, dict) and schema.get("type") == "prompt":
                 # Handle prompt parameter
+                prompt_data = None
                 if value is not None:
                     # TODO: Validate that value is a valid PromptData
-                    result[name] = value
+                    prompt_data = value
                 elif schema.get("default") is not None:
-                    result[name] = schema["default"]
+                    prompt_data = schema["default"]
                 else:
                     raise ValueError(f"Parameter '{name}' is required")
+                result[name] = Prompt.from_prompt_data(schema.get("name"), PromptData.from_dict_deep(prompt_data))
             else:
                 # Assume it's a pydantic model
                 if value is None:

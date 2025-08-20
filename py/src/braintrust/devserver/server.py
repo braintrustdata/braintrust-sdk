@@ -9,9 +9,9 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from starlette.routing import Route
 
-from ..eval_parameters import parameters_to_json_schema, validate_parameters
 from ..framework import EvalAsync, Evaluator, ExperimentSummary, SSEProgressEvent
 from ..logger import bt_iscoroutinefunction, login_to_state
+from ..parameters import parameters_to_json_schema, validate_parameters
 from ..span_identifier_v3 import parse_parent
 from .auth import AuthorizationMiddleware
 from .cors import create_cors_middleware

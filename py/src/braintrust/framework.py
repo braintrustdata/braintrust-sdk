@@ -34,7 +34,6 @@ from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 from typing_extensions import NotRequired, Protocol, TypedDict
 
-from .eval_parameters import EvalParameters
 from .generated_types import FunctionFormat, FunctionOutputType, ObjectReference
 from .git_fields import GitMetadataSettings, RepoInfo
 from .logger import (
@@ -51,6 +50,7 @@ from .logger import (
     stringify_exception,
 )
 from .logger import init as _init_experiment
+from .parameters import EvalParameters
 from .resource_manager import ResourceManager
 from .score import Score, is_score, is_scorer
 from .serializable_data_class import SerializableDataClass

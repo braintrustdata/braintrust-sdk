@@ -75,7 +75,7 @@ from .git_fields import GitMetadataSettings, RepoInfo
 from .gitutil import get_past_n_ancestors, get_repo_info
 from .merge_row_batch import batch_items, merge_row_batch
 from .object import DEFAULT_IS_LEGACY_DATASET, ensure_dataset_record
-from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptMessage, PromptSchema, TextPart
+from .prompt import BRAINTRUST_PARAMS, ImagePart, PromptBlockData, PromptData, PromptMessage, PromptSchema, TextPart
 from .prompt_cache.disk_cache import DiskCache
 from .prompt_cache.lru_cache import LRUCache
 from .prompt_cache.prompt_cache import PromptCache
@@ -4155,6 +4155,28 @@ class Prompt:
         self._lazy_metadata = lazy_metadata
         self.defaults = defaults
         self.no_trace = no_trace
+
+    @classmethod
+    def from_prompt_data(
+        cls,
+        name: str,
+        prompt_data: PromptData,
+    ) -> "Prompt":
+        """
+        Create a `Prompt` object from the given `PromptSchema` data.
+        """
+        prompt_schema = PromptSchema(
+            name=name,
+            slug=name,
+            prompt_data=prompt_data,
+            id=None,
+            project_id=None,
+            _xact_id=None,
+            description=None,
+            tags=None,
+        )
+        lazy_metadata = LazyValue(lambda: prompt_schema, use_mutex=False)
+        return cls(lazy_metadata, {}, False)
 
     @property
     def id(self) -> str:
