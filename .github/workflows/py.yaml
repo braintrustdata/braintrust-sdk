@@ -54,7 +54,7 @@ jobs:
           make nox
 
   adk-py:
-    uses: ./integrations/adk-py/.github/workflows/test.yaml
+    uses: ./.github/workflows/adk-py-test.yaml
     strategy:
       fail-fast: false
       matrix:
