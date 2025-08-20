@@ -34,6 +34,7 @@ from tqdm.asyncio import tqdm as async_tqdm
 from tqdm.auto import tqdm as std_tqdm
 from typing_extensions import NotRequired, Protocol, TypedDict
 
+from .eval_parameters import EvalParameters
 from .generated_types import FunctionFormat, FunctionOutputType, ObjectReference
 from .git_fields import GitMetadataSettings, RepoInfo
 from .logger import (
@@ -211,6 +212,14 @@ class EvalHooks(abc.ABC, Generic[Output]):
         as keyword arguments, e.g. `hooks.meta(foo="bar")`.
         """
         ...
+
+    @property
+    @abc.abstractmethod
+    def parameters(self) -> Optional[Dict[str, Any]]:
+        """
+        The parameters for the current evaluation. These are the validated parameter values
+        that were passed to the evaluator.
+        """
 
 
 class EvalScorerArgs(SerializableDataClass, Generic[Input, Output]):
@@ -425,6 +434,12 @@ class Evaluator(Generic[Input, Output]):
     summarize_scores: bool = True
     """
     Whether to summarize the scores of the experiment after it has run.
+    """
+
+    parameters: Optional[EvalParameters] = None
+    """
+    A set of parameters that will be passed to the evaluator.
+    Can be used to define prompts or other configurable values.
     """
 
 
@@ -658,6 +673,7 @@ def _EvalCommon(
     summarize_scores: bool,
     no_send_logs: bool,
     error_score_handler: Optional[ErrorScoreHandler] = None,
+    parameters: Optional[EvalParameters] = None,
     on_start: Optional[Callable[[ExperimentSummary], None]] = None,
     stream: Optional[Callable[[SSEProgressEvent], None]] = None,
     parent: Optional[str] = None,
@@ -695,6 +711,7 @@ def _EvalCommon(
         error_score_handler=error_score_handler,
         description=description,
         summarize_scores=summarize_scores,
+        parameters=parameters,
     )
 
     if _lazy_load:
@@ -781,6 +798,7 @@ async def EvalAsync(
     description: Optional[str] = None,
     summarize_scores: bool = True,
     no_send_logs: bool = False,
+    parameters: Optional[EvalParameters] = None,
     on_start: Optional[Callable[[ExperimentSummary], None]] = None,
     stream: Optional[Callable[[SSEProgressEvent], None]] = None,
     parent: Optional[str] = None,
@@ -834,6 +852,7 @@ async def EvalAsync(
     :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
     :param no_send_logs: Do not send logs to Braintrust. When True, the evaluation runs locally
     and builds a local summary instead of creating an experiment. Defaults to False.
+    :param parameters: A set of parameters that will be passed to the evaluator.
     :param on_start: An optional callback that will be called when the evaluation starts. It receives the
     `ExperimentSummary` object, which can be used to display metadata about the experiment.
     :param stream: A function that will be called with progress events, which can be used to
@@ -864,6 +883,7 @@ async def EvalAsync(
         description=description,
         summarize_scores=summarize_scores,
         no_send_logs=no_send_logs,
+        parameters=parameters,
         on_start=on_start,
         stream=stream,
         parent=parent,
@@ -898,6 +918,7 @@ def Eval(
     description: Optional[str] = None,
     summarize_scores: bool = True,
     no_send_logs: bool = False,
+    parameters: Optional[EvalParameters] = None,
     on_start: Optional[Callable[[ExperimentSummary], None]] = None,
     stream: Optional[Callable[[SSEProgressEvent], None]] = None,
     parent: Optional[str] = None,
@@ -951,6 +972,7 @@ def Eval(
     :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
     :param no_send_logs: Do not send logs to Braintrust. When True, the evaluation runs locally
     and builds a local summary instead of creating an experiment. Defaults to False.
+    :param parameters: A set of parameters that will be passed to the evaluator.
     :param on_start: An optional callback that will be called when the evaluation starts. It receives the
     `ExperimentSummary` object, which can be used to display metadata about the experiment.
     :param stream: A function that will be called with progress events, which can be used to
@@ -983,6 +1005,7 @@ def Eval(
         description=description,
         summarize_scores=summarize_scores,
         no_send_logs=no_send_logs,
+        parameters=parameters,
         on_start=on_start,
         stream=stream,
         parent=parent,
@@ -1110,6 +1133,7 @@ class DictEvalHooks(Dict[str, Any]):
         expected: Optional[Any] = None,
         trial_index: int = 0,
         report_progress: Callable[TaskProgressEvent, None] = None,
+        parameters: Optional[Dict[str, Any]] = None,
     ):
         if metadata is not None:
             self.update({"metadata": metadata})
@@ -1118,6 +1142,7 @@ class DictEvalHooks(Dict[str, Any]):
         self.update({"trial_index": trial_index})
         self._span = None
         self._report_progress = report_progress
+        self._parameters = parameters
 
     @property
     def metadata(self):
@@ -1151,6 +1176,10 @@ class DictEvalHooks(Dict[str, Any]):
     def report_progress(self, event: TaskProgressEvent):
         if self._report_progress:
             return self._report_progress(event)
+
+    @property
+    def parameters(self) -> Optional[Dict[str, Any]]:
+        return self._parameters
 
 
 def init_experiment(
@@ -1344,7 +1373,11 @@ async def _run_evaluator_internal(
                     )
 
                 hooks = DictEvalHooks(
-                    metadata, expected=datum.expected, trial_index=trial_index, report_progress=report_progress
+                    metadata,
+                    expected=datum.expected,
+                    trial_index=trial_index,
+                    report_progress=report_progress,
+                    parameters=evaluator.parameters,
                 )
 
                 # Check if the task takes a hooks argument

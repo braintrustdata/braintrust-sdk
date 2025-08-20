@@ -9,6 +9,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from starlette.routing import Route
 
+from ..eval_parameters import parameters_to_json_schema, validate_parameters
 from ..framework import EvalAsync, Evaluator, ExperimentSummary, SSEProgressEvent
 from ..logger import bt_iscoroutinefunction, login_to_state
 from ..span_identifier_v3 import parse_parent
@@ -29,14 +30,12 @@ async def list_evaluators(request: Request) -> JSONResponse:
     # Access the context if needed
     ctx = getattr(request.state, "ctx", None)
 
-    evaluator_list = {
-        k: {
-            # XXX Fill this in :)
-            "parameters": {},
-            "scores": [],
+    evaluator_list = {}
+    for name, evaluator in _all_evaluators.items():
+        evaluator_list[name] = {
+            "parameters": parameters_to_json_schema(evaluator.parameters) if evaluator.parameters else {},
+            "scores": [{"name": getattr(score, "name", f"score_{i}")} for i, score in enumerate(evaluator.scores)],
         }
-        for k in _all_evaluators.keys()
-    }
 
     print(f"Available evaluators: {evaluator_list}")
 
@@ -86,6 +85,15 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
         print(traceback.format_exc())
         return JSONResponse({"error": f"Failed to process dataset: {str(e)}"}, status_code=400)
 
+    # Validate parameters if provided
+    validated_parameters = None
+    if evaluator.parameters:
+        request_parameters = eval_data.get("parameters", {})
+        try:
+            validated_parameters = validate_parameters(request_parameters, evaluator.parameters)
+        except ValueError as e:
+            return JSONResponse({"error": f"Invalid parameters: {str(e)}"}, status_code=400)
+
     # Check if streaming is requested
     stream = eval_data.get("stream", False)
 
@@ -122,12 +130,17 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
     if parent:
         parent = parse_parent(parent)
 
+    # Override evaluator parameters with validated ones if provided
+    eval_kwargs = {k: v for (k, v) in evaluator.__dict__.items() if k not in ["eval_name", "project_name"]}
+    if validated_parameters is not None:
+        eval_kwargs["parameters"] = validated_parameters
+
     try:
         eval_task = asyncio.create_task(
             EvalAsync(
                 name="worker thead",
                 **{
-                    **{k: v for (k, v) in evaluator.__dict__.items() if k not in ["eval_name", "project_name"]},
+                    **eval_kwargs,
                     "state": state,
                     "stream": stream_fn,
                     "on_start": on_start_fn,
