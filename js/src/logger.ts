@@ -644,6 +644,26 @@ function clearTestBackgroundLogger() {
   _internalGetGlobalState()?.setOverrideBgLogger(null);
 }
 
+// Initialize a test Experiment without making network calls by injecting fake metadata.
+// Useful for unit tests that need an Experiment instance.
+function initTestExperiment(
+  experimentName: string,
+  projectName?: string,
+): Experiment {
+  setInitialTestState();
+  const state = _internalGetGlobalState();
+  const project = projectName ?? experimentName;
+
+  const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(
+    async () => ({
+      project: { id: project, name: project, fullInfo: {} },
+      experiment: { id: experimentName, name: experimentName, fullInfo: {} },
+    }),
+  );
+
+  return new Experiment(state, lazyMetadata);
+}
+
 /**
  * This function should be invoked exactly once after configuring the `iso`
  * object based on the platform. See js/src/node.ts for an example.
@@ -6277,6 +6297,7 @@ export const _exportsForTestingOnly = {
   simulateLoginForTests,
   simulateLogoutForTests,
   setInitialTestState,
+  initTestExperiment,
   isGeneratorFunction,
   isAsyncGeneratorFunction,
 };
