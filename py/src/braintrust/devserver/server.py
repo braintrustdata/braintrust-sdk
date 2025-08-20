@@ -72,7 +72,6 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
         return JSONResponse({"error": f"Evaluator '{eval_data['name']}' not found"}, status_code=404)
 
     # Get the dataset if data is provided
-    print("DATASET DATA", eval_data.get("data"))
     try:
         dataset = await get_dataset(state, eval_data["data"])
     except Exception as e:
