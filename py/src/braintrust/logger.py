@@ -1348,6 +1348,7 @@ def init_logger(
     org_name: Optional[str] = None,
     force_login: bool = False,
     set_current: bool = True,
+    state: Optional[BraintrustState] = None,
 ) -> "Logger":
     """
     Create a new logger in a specified project. If the project does not exist, it will be created.
@@ -1364,6 +1365,7 @@ def init_logger(
     :returns: The newly created Logger.
     """
 
+    state = state or _state
     compute_metadata_args = dict(project_name=project, project_id=project_id)
 
     link_args = {
@@ -1374,7 +1376,7 @@ def init_logger(
     }
 
     def compute_metadata():
-        login(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login)
+        state.login(org_name=org_name, api_key=api_key, app_url=app_url, force_login=force_login)
         return _compute_logger_metadata(**compute_metadata_args)
 
     ret = Logger(
@@ -1382,6 +1384,7 @@ def init_logger(
         async_flush=async_flush,
         compute_metadata_args=compute_metadata_args,
         link_args=link_args,
+        state=state,
     )
     if set_current:
         if _state is None:
