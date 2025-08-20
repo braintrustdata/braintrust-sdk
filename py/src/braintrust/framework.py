@@ -1259,7 +1259,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                     output = await await_or_run(event_loop, evaluator.task, *task_args)
                     span.log(input=task_args[0], output=output)
                 tags = hooks.tags
-                root_span.log(output=output, metadata=metadata, tags=tags)
+                root_span.log(output=output, metadata=metadata, tags=tags if tags else None)
 
                 score_promises = [
                     asyncio.create_task(

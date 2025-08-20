@@ -627,7 +627,7 @@ test("tags can be set to a list", async () => {
   const logs = await memoryLogger.drain();
   const rootSpans = logs.filter((l: any) => !l["span_parents"]);
   expect(rootSpans).toHaveLength(1);
-  expect((rootSpans[0] as any).tags ?? []).toEqual(expectedTags);
+  expect((rootSpans[0] as any).tags).toEqual(expectedTags);
 });
 
 test("empty list returns undefined for tags", async () => {
@@ -660,5 +660,5 @@ test("empty list returns undefined for tags", async () => {
   const logs = await memoryLogger.drain();
   const rootSpans = logs.filter((l: any) => !l["span_parents"]);
   expect(rootSpans).toHaveLength(1);
-  expect((rootSpans[0] as any).tags ?? []).toEqual([]);
+  expect((rootSpans[0] as any).tags).toEqual(undefined);
 });

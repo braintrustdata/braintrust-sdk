@@ -358,7 +358,7 @@ async def test_hooks_tags_list(with_memory_logger, with_simulate_login):
 
 @pytest.mark.asyncio
 async def test_hooks_tags_empty_list(with_memory_logger, with_simulate_login):
-    """ Test that hooks.tags can be set to a list. """
+    """ Test that hooks.tags can be set to an empty list. """
 
     expected_tags = []
 
@@ -389,4 +389,4 @@ async def test_hooks_tags_empty_list(with_memory_logger, with_simulate_login):
     # assert root span contains tags
     root_span = [log for log in logs if not log["span_parents"]]
     assert len(root_span) == 1
-    assert root_span[0].get("tags") == expected_tags
+    assert root_span[0].get("tags") == None
