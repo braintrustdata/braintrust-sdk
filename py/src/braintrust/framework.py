@@ -196,6 +196,13 @@ class EvalHooks(abc.ABC, Generic[Output]):
         The index of the current trial (0-based). This is useful when trial_count > 1.
         """
 
+    @property
+    @abc.abstractmethod
+    def tags(self) -> Sequence[str]:
+        """
+        The tags for the current evaluation. You can mutate this object to add or remove tags.
+        """
+
     @abc.abstractmethod
     def report_progress(self, progress: TaskProgressEvent) -> None:
         """
@@ -1132,6 +1139,7 @@ class DictEvalHooks(Dict[str, Any]):
         metadata: Optional[Any] = None,
         expected: Optional[Any] = None,
         trial_index: int = 0,
+        tags: Optional[Sequence[str]] = None,
         report_progress: Callable[TaskProgressEvent, None] = None,
         parameters: Optional[Dict[str, Any]] = None,
     ):
@@ -1141,6 +1149,11 @@ class DictEvalHooks(Dict[str, Any]):
             self.update({"expected": expected})
         self.update({"trial_index": trial_index})
         self._span = None
+        if tags is not None:
+            self.update({"tags": tags})
+        else:
+            self.update({"tags": []})
+
         self._report_progress = report_progress
         self._parameters = parameters
 
@@ -1162,6 +1175,14 @@ class DictEvalHooks(Dict[str, Any]):
 
     def set_span(self, span: Optional[Span]):
         self._span = span
+
+    @property
+    def tags(self) -> Sequence[str]:
+        return self["tags"]
+
+    @tags.setter
+    def tags(self, tags: Optional[Sequence[str]]) -> None:
+        self["tags"] =  [] if tags is None else list(tags)
 
     def meta(self, **info: Any):
         warnings.warn(
@@ -1329,6 +1350,7 @@ async def _run_evaluator_internal(
         error = None
         exc_info = None
         scores = {}
+        tags = datum.tags
 
         event_dataset = (
             experiment.dataset if experiment else evaluator.data if isinstance(evaluator.data, Dataset) else None
@@ -1350,7 +1372,7 @@ async def _run_evaluator_internal(
             span_attributes={"type": SpanTypeAttribute.EVAL},
             input=datum.input,
             expected=datum.expected,
-            tags=datum.tags,
+            tags=tags,
             origin=origin,
         )
 
@@ -1376,6 +1398,7 @@ async def _run_evaluator_internal(
                     metadata,
                     expected=datum.expected,
                     trial_index=trial_index,
+                    tags=tags,
                     report_progress=report_progress,
                     parameters=evaluator.parameters,
                 )
@@ -1392,7 +1415,8 @@ async def _run_evaluator_internal(
                     hooks.set_span(span)
                     output = await await_or_run(event_loop, evaluator.task, *task_args)
                     span.log(input=task_args[0], output=output)
-                root_span.log(output=output, metadata=metadata)
+                tags = hooks.tags if hooks.tags else None
+                root_span.log(output=output, metadata=metadata, tags=tags)
 
                 score_promises = [
                     asyncio.create_task(
@@ -1429,7 +1453,7 @@ async def _run_evaluator_internal(
                         scorer_name: exc_info for scorer_name, _, exc_info in failing_scorers_and_exceptions
                     }
                     metadata["scorer_errors"] = scorer_errors
-                    root_span.log(metadata=metadata)
+                    root_span.log(metadata=metadata, tags=tags)
                     names = ", ".join(scorer_errors.keys())
                     exceptions = [x[1] for x in failing_scorers_and_exceptions]
                     unhandled_scores = list(scorer_errors.keys())
@@ -1450,7 +1474,7 @@ async def _run_evaluator_internal(
             input=datum.input,
             expected=datum.expected,
             metadata=metadata,
-            tags=list(datum.tags) if datum.tags else None,
+            tags=tags,
             output=output,
             scores={
                 **(

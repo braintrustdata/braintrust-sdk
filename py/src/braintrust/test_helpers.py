@@ -1,7 +1,7 @@
 import pytest
 
 from braintrust import logger
-from braintrust.logger import ObjectMetadata, OrgProjectMetadata
+from braintrust.logger import ObjectMetadata, OrgProjectMetadata, ProjectExperimentMetadata
 from braintrust.util import LazyValue
 
 # Fake API key for testing only - this will not work with actual API calls
@@ -71,6 +71,31 @@ def init_test_logger(project_name: str):
     l = logger.init_logger(project=project_name)
     l._lazy_metadata = lazy_metadata  # Skip actual login by setting fake metadata directly
     return l
+
+def init_test_exp(experiment_name: str, project_name: str = None):
+    """
+    Initialize an experiment for testing with fake project and experiment metadata.
+
+    This sets up an experiment with fake metadata to avoid requiring actual
+    API calls. This is useful for testing experiment validation behavior.
+
+    Args:
+        experiment_name: The name to use for the test experiment.
+        project_name: The name to use for the test project. Defaults to experiment_name.
+    """
+    if project_name is None:
+        project_name = experiment_name
+
+    import braintrust
+
+    project_metadata = ObjectMetadata(id=project_name, name=project_name, full_info=dict())
+    experiment_metadata = ObjectMetadata(id=experiment_name, name=experiment_name, full_info=dict())
+    metadata = ProjectExperimentMetadata(project=project_metadata, experiment=experiment_metadata)
+    lazy_metadata = LazyValue(lambda: metadata, use_mutex=False)
+
+    exp = braintrust.init(project=project_name, experiment=experiment_name)
+    exp._lazy_metadata = lazy_metadata  # Skip actual login by setting fake metadata directly
+    return exp
 
 
 # ----------------------------------------------------------------------
