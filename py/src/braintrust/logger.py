@@ -1598,7 +1598,7 @@ def login_to_state(
         _check_org_info(state, test_org_info, org_name)
         state.login_token = TEST_API_KEY
         state.logged_in = True
-        return
+        return state
     elif api_key is not None:
         app_conn = HTTPConnection(state.app_url, adapter=_http_adapter)
         app_conn.set_token(api_key)
