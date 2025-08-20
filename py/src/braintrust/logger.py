@@ -1384,6 +1384,8 @@ def init_logger(
         link_args=link_args,
     )
     if set_current:
+        if _state is None:
+            raise RuntimeError("_state is None in init_logger. This should never happen.")
         _state.current_logger = ret
     return ret
 
@@ -1947,8 +1949,11 @@ def start_span(
     See `Span.start_span` for full details.
     """
 
-    state = state or _state
-    parent = parent or state.current_parent.get()
+    if not state:
+        state = _state
+
+    if not parent and state:
+        parent = state.current_parent.get()
 
     if parent:
         components = SpanComponentsV3.from_str(parent)
