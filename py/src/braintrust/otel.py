@@ -227,7 +227,7 @@ class BraintrustSpanProcessor:
             filter_ai_spans: Whether to enable AI span filtering. Defaults to False.
             custom_filter: Optional custom filter function for filtering.
             headers: Additional headers to include in requests.
-            SpanProcessor: Optional span processor class (BatchSpanProcessor or SimpleSpanProcessor). Defaults to BatchSpanProcessor.True. Used for testing.
+            SpanProcessor: Optional span processor class (BatchSpanProcessor or SimpleSpanProcessor). Defaults to BatchSpanProcessor.
         """
         # Create the exporter
         # Convert api_url to the full endpoint URL that OtelExporter expects
