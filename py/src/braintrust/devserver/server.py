@@ -9,13 +9,13 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from starlette.routing import Route
 
-from ..framework import EvalAsync, Evaluator, SSEProgressEvent
+from ..framework import EvalAsync, Evaluator, ExperimentSummary, SSEProgressEvent
 from ..logger import bt_iscoroutinefunction, login_to_state
 from ..span_identifier_v3 import parse_parent
 from .auth import AuthorizationMiddleware
 from .cors import create_cors_middleware
 from .dataset import get_dataset
-from .eval_hooks import SSEQueue
+from .eval_hooks import SSEQueue, serialize_sse_event
 from .schemas import ValidationError, parse_eval_body
 
 _all_evaluators: dict[str, Evaluator[Any, Any]] = {}
@@ -28,8 +28,6 @@ async def index(request: Request) -> PlainTextResponse:
 async def list_evaluators(request: Request) -> JSONResponse:
     # Access the context if needed
     ctx = getattr(request.state, "ctx", None)
-    if ctx:
-        print(f"Request from origin: {ctx.app_origin}, token: {ctx.token}")
 
     evaluator_list = {
         k: {
@@ -95,7 +93,6 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
     sse_queue = SSEQueue()
 
     async def task(input, hooks):
-        print("TASK", evaluator.task)
         if bt_iscoroutinefunction(evaluator.task):
             result = await evaluator.task(input, hooks)
         else:
@@ -108,17 +105,23 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
         })
         return result
 
-    async def stream_fn(event: SSEProgressEvent):
-        print("STREAMING EVENT", event)
-        # if stream:
-        #    # Serialize the event and put it in the SSE queue
-        #    await sse_queue.put_event("progress", event)
+    def on_start_fn(summary: ExperimentSummary):
+        """Synchronous stream function that schedules async writes."""
+        if stream:
+            summary_json = {snake_to_camel(k): v for (k, v) in summary.as_dict().items()}
+            # Use create_task to schedule the async write without blocking
+            asyncio.create_task(sse_queue.put_event("start", json.dumps(summary_json)))
+
+    def stream_fn(event: SSEProgressEvent):
+        """Synchronous stream function that schedules async writes."""
+        if stream:
+            # Use create_task to schedule the async write without blocking
+            asyncio.create_task(sse_queue.put_event("progress", event))
 
     parent = eval_data.get("parent")
     if parent:
         parent = parse_parent(parent)
 
-    print("STATE", state)
     try:
         eval_task = asyncio.create_task(
             EvalAsync(
@@ -127,12 +130,12 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
                     **{k: v for (k, v) in evaluator.__dict__.items() if k not in ["eval_name", "project_name"]},
                     "state": state,
                     "stream": stream_fn,
+                    "on_start": on_start_fn,
                     "data": dataset,
                     "task": task,
                     "experiment_name": eval_data.get("experiment_name"),
                     "parent": parent,
-                    # XXX Need to propagate this variable
-                    # "project_id": eval_data.get("project_id"),
+                    "project_id": eval_data.get("project_id"),
                 },
             )
         )
@@ -141,16 +144,37 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
 
             async def event_generator():
                 """Generate SSE events from the queue."""
-                # Stream events from the queue
-                #                while True:
-                #                    event = await sse_queue.get()
-                #                    if event is None:  # End of stream
-                #                        break
-                #                    yield event
-                yield f"data: {json.dumps({'status': 'started'})}\n\n"
+                # Start event
+                yield serialize_sse_event(
+                    "start",
+                    {
+                        "experiment_name": evaluator.experiment_name,
+                        "project_id": getattr(evaluator, "project_id", None),
+                    },
+                )
 
-                # Wait for eval to complete
-                await eval_task
+                # Create a task to run the eval and signal completion
+                async def run_and_complete():
+                    try:
+                        result = await eval_task
+                        # Send summary event
+                        await sse_queue.put_event("summary", result.summary)
+                    except Exception as e:
+                        await sse_queue.put_event("error", str(e))
+                    finally:
+                        # Send done event and close the queue
+                        await sse_queue.put_event("done", "")
+                        await sse_queue.close()
+
+                # Start the eval task
+                asyncio.create_task(run_and_complete())
+
+                # Stream events from the queue
+                while True:
+                    event = await sse_queue.get()
+                    if event is None:  # End of stream
+                        break
+                    yield event
 
             return StreamingResponse(
                 event_generator(),
@@ -161,16 +185,10 @@ async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
                 },
             )
         else:
-            await eval_task
-            # Return regular JSON response
-            return JSONResponse({
-                "success": True,
-                "evaluator": eval_data["name"],
-                "parameters": eval_data.get("parameters"),
-                "stream": stream,
-                "dataset_loaded": dataset is not None,
-                "message": "Eval execution not yet implemented",
-            })
+            # Wait for the evaluation to complete
+            result = await eval_task
+            # Return the summary as JSON
+            return JSONResponse(result.summary)
     except Exception as e:
         print(traceback.format_exc())
         return JSONResponse({"error": f"Failed to run evaluation: {str(e)}"}, status_code=500)
@@ -195,3 +213,9 @@ def run_dev_server(evaluators: list[Evaluator[Any, Any]], host: str = "localhost
     app.add_middleware(create_cors_middleware())
 
     uvicorn.run(app, host=host, port=port)
+
+
+def snake_to_camel(snake_str: str) -> str:
+    """Convert snake_case to camelCase."""
+    components = snake_str.split("_")
+    return components[0] + "".join(x.title() for x in components[1:]) if components else snake_str

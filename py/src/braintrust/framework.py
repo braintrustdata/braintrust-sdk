@@ -658,6 +658,7 @@ def _EvalCommon(
     summarize_scores: bool,
     no_send_logs: bool,
     error_score_handler: Optional[ErrorScoreHandler] = None,
+    on_start: Optional[Callable[[ExperimentSummary], None]] = None,
     stream: Optional[Callable[[SSEProgressEvent], None]] = None,
     parent: Optional[str] = None,
     state: Optional[BraintrustState] = None,
@@ -739,8 +740,11 @@ def _EvalCommon(
                 state=state,
             )
 
+            if on_start:
+                summary = experiment.summarize(summarize_scores=False)
+                on_start(summary)
+
         async def run_to_completion():
-            print("PARENT", parent)
             with parent_context(parent, state):
                 try:
                     ret = await run_evaluator(experiment, evaluator, 0, [], stream, state)
@@ -777,6 +781,7 @@ async def EvalAsync(
     description: Optional[str] = None,
     summarize_scores: bool = True,
     no_send_logs: bool = False,
+    on_start: Optional[Callable[[ExperimentSummary], None]] = None,
     stream: Optional[Callable[[SSEProgressEvent], None]] = None,
     parent: Optional[str] = None,
     state: Optional[BraintrustState] = None,
@@ -829,6 +834,8 @@ async def EvalAsync(
     :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
     :param no_send_logs: Do not send logs to Braintrust. When True, the evaluation runs locally
     and builds a local summary instead of creating an experiment. Defaults to False.
+    :param on_start: An optional callback that will be called when the evaluation starts. It receives the
+    `ExperimentSummary` object, which can be used to display metadata about the experiment.
     :param stream: A function that will be called with progress events, which can be used to
     display intermediate progress.
     :param parent: If specified, instead of creating a new experiment object, the Eval() will populate
@@ -857,6 +864,7 @@ async def EvalAsync(
         description=description,
         summarize_scores=summarize_scores,
         no_send_logs=no_send_logs,
+        on_start=on_start,
         stream=stream,
         parent=parent,
         state=state,
@@ -890,6 +898,7 @@ def Eval(
     description: Optional[str] = None,
     summarize_scores: bool = True,
     no_send_logs: bool = False,
+    on_start: Optional[Callable[[ExperimentSummary], None]] = None,
     stream: Optional[Callable[[SSEProgressEvent], None]] = None,
     parent: Optional[str] = None,
     state: Optional[BraintrustState] = None,
@@ -942,6 +951,8 @@ def Eval(
     :param summarize_scores: Whether to summarize the scores of the experiment after it has run.
     :param no_send_logs: Do not send logs to Braintrust. When True, the evaluation runs locally
     and builds a local summary instead of creating an experiment. Defaults to False.
+    :param on_start: An optional callback that will be called when the evaluation starts. It receives the
+    `ExperimentSummary` object, which can be used to display metadata about the experiment.
     :param stream: A function that will be called with progress events, which can be used to
     display intermediate progress.
     :param parent: If specified, instead of creating a new experiment object, the Eval() will populate
@@ -972,6 +983,7 @@ def Eval(
         description=description,
         summarize_scores=summarize_scores,
         no_send_logs=no_send_logs,
+        on_start=on_start,
         stream=stream,
         parent=parent,
         state=state,
@@ -1313,7 +1325,6 @@ async def _run_evaluator_internal(
             origin=origin,
         )
 
-        print("HERE!")
         if experiment:
             root_span = experiment.start_span(**base_event)
         else:

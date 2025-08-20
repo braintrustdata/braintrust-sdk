@@ -1149,7 +1149,7 @@ def init(
             raise ValueError(f"Cannot open an experiment without specifying its name")
 
         def compute_metadata():
-            login(org_name=org_name, api_key=api_key, app_url=app_url)
+            state.login(org_name=org_name, api_key=api_key, app_url=app_url)
             args = {
                 "experiment_name": experiment,
                 "project_name": project,
@@ -1176,7 +1176,7 @@ def init(
 
     # pylint: disable=function-redefined
     def compute_metadata():
-        login(org_name=org_name, api_key=api_key, app_url=app_url)
+        state.login(org_name=org_name, api_key=api_key, app_url=app_url)
         args = {
             "project_name": project,
             "project_id": project_id,
