@@ -1119,7 +1119,7 @@ with a Blob/ArrayBuffer, or run the program on Node.js.`,
     try {
       statSync(data);
     } catch (e) {
-      throw new Error(`Failed to read file: ${String(e)}`);
+      throw new Error(`Failed to read file: ${e}`);
     }
   }
 }
