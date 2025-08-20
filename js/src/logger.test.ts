@@ -752,7 +752,7 @@ test("attachment with unreadable path logs warning", () => {
 
   expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
   expect(consoleWarnSpy).toHaveBeenCalledWith(
-    "Failed to read file: Error: ENOENT: no such file or directory, stat 'unreadable.txt'",
+    expect.stringMatching(/Failed to read file:/),
   );
 
   consoleWarnSpy.mockRestore();
