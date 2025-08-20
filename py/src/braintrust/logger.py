@@ -8,6 +8,7 @@ import datetime
 import inspect
 import json
 import logging
+import math
 import os
 import sys
 import textwrap
@@ -54,12 +55,9 @@ from braintrust.functions.stream import BraintrustStream
 
 from .bt_json import bt_dumps
 from .db_fields import (
-    ASYNC_SCORING_CONTROL_FIELD,
     AUDIT_METADATA_FIELD,
     AUDIT_SOURCE_FIELD,
     IS_MERGE_FIELD,
-    MERGE_PATHS_FIELD,
-    SKIP_ASYNC_SCORING_FIELD,
     TRANSACTION_ID_FIELD,
     VALID_SOURCES,
 )
@@ -1941,14 +1939,14 @@ def _filter_none_args(args):
 def validate_tags(tags: Sequence[str]) -> None:
     # Tag should be a list, set, or tuple, not a dict or string
     if not isinstance(tags, (list, set, tuple)):
-        raise ValueError("tags must be a list, set, or tuple of strings")
+        return  # Don't raise error, just return
 
     seen = set()
     for tag in tags:
         if not isinstance(tag, str):
-            raise ValueError("tags must be strings")
+            return  # Don't raise error, just return
         if tag in seen:
-            raise ValueError(f"duplicate tag: {tag}")
+            return  # Don't raise error, just return
         seen.add(tag)
 
 
@@ -2020,35 +2018,22 @@ def _enrich_attachments(event: TMutableMapping) -> TMutableMapping:
     return event
 
 
-def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any]) -> Dict[str, Any]:
-    # Make sure only certain keys are specified.
-    forbidden_keys = set(event.keys()) - {
-        "input",
-        "output",
-        "expected",
-        "tags",
-        "scores",
-        "metadata",
-        "metrics",
-        "error",
-        "dataset_record_id",
-        "origin",
-        "inputs",
-        "span_attributes",
-        ASYNC_SCORING_CONTROL_FIELD,
-        MERGE_PATHS_FIELD,
-        SKIP_ASYNC_SCORING_FIELD,
-        "span_id",
-        "root_span_id",
-    }
-    if forbidden_keys:
-        raise ValueError(f"The following keys are not permitted: {forbidden_keys}")
-
+def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any], raise_errors: bool = True) -> Dict[str, Any]:
     scores = event.get("scores")
-    if scores:
+    if scores is not None:
+        if not isinstance(scores, dict):
+            if raise_errors:
+                raise ValueError("scores must be a dictionary of names with scores")
+            scores = {}
+            event["scores"] = scores
+
+        invalid_score_keys = []
         for name, score in scores.items():
             if not isinstance(name, str):
-                raise ValueError("score names must be strings")
+                if raise_errors:
+                    raise ValueError("scores must be a dictionary of names with scores")
+                invalid_score_keys.append(name)
+                continue
 
             if score is None:
                 continue
@@ -2057,47 +2042,93 @@ def _validate_and_sanitize_experiment_log_partial_args(event: Mapping[str, Any])
                 score = 1 if score else 0
                 scores[name] = score
 
-            if not isinstance(score, (int, float)):
-                raise ValueError("score values must be numbers")
-            if score < 0 or score > 1:
-                raise ValueError("score values must be between 0 and 1")
+            if not isinstance(score, (int, float)) or not (0 <= score <= 1):
+                if raise_errors:
+                    raise ValueError("scores must be a number between 0 and 1")
+                invalid_score_keys.append(name)
+                continue
+
+        for k in invalid_score_keys:
+            del scores[k]
 
     metadata = event.get("metadata")
-    if metadata:
+    if metadata is not None:
         if not isinstance(metadata, dict):
-            raise ValueError("metadata must be a dictionary")
+            if raise_errors:
+                raise ValueError("metadata must be a dictionary")
+            metadata = {}
+            event["metadata"] = metadata
+
+        invalid_metadata_keys = []
         for key in metadata.keys():
             if not isinstance(key, str):
-                raise ValueError("metadata keys must be strings")
+                if raise_errors:
+                    raise ValueError("metadata keys must be strings")
+                invalid_metadata_keys.append(key)
+
+        for key in invalid_metadata_keys:
+            del metadata[key]
 
     metrics = event.get("metrics")
     if metrics:
         if not isinstance(metrics, dict):
-            raise ValueError("metrics must be a dictionary")
-        for key in metrics.keys():
-            if not isinstance(key, str):
-                raise ValueError("metric keys must be strings")
+            metrics = {}
+            event["metrics"] = metrics
 
-        for value in metrics.values():
-            if not isinstance(value, (int, float)):
-                raise ValueError("metric values must be numbers")
+        invalid_metric_keys = []
+        for k, v in metrics.items():
+            if not isinstance(k, str):
+                invalid_metric_keys.append(k)
+            elif not isinstance(v, (int, float)) or not math.isfinite(v):
+                invalid_metric_keys.append(k)
+
+        for k in invalid_metric_keys:
+            del metrics[k]
 
     tags = event.get("tags")
-    if tags:
-        validate_tags(tags)
+    if tags is not None:
+        if not isinstance(tags, (list, set, tuple)):
+            if raise_errors:
+                raise ValueError("tags must be a list, set, or tuple")
+            tags = []
+            event["tags"] = tags
+        else:
+            # Create a cleaned list of valid string tags, removing duplicates
+            valid_tags = []
+            seen = set()
+            for tag in tags:
+                if isinstance(tag, str) and tag not in seen:
+                    valid_tags.append(tag)
+                    seen.add(tag)
+                elif not isinstance(tag, str) and raise_errors:
+                    raise ValueError("tag values must be strings")
+            event["tags"] = valid_tags
 
     span_attributes = event.get("span_attributes")
-    if span_attributes:
+    if span_attributes is not None:
         if not isinstance(span_attributes, dict):
-            raise ValueError("span_attributes must be a dictionary")
+            if raise_errors:
+                raise ValueError("span_attributes must be a dictionary")
+            span_attributes = {}
+            event["span_attributes"] = span_attributes
+
+        invalid_span_attributes_keys = []
         for key in span_attributes.keys():
             if not isinstance(key, str):
-                raise ValueError("span_attributes keys must be strings")
+                if raise_errors:
+                    raise ValueError("span_attributes keys must be strings")
+                invalid_span_attributes_keys.append(key)
+
+        for key in invalid_span_attributes_keys:
+            del span_attributes[key]
 
     input = event.get("input")
     inputs = event.get("inputs")
     if input is not None and inputs is not None:
-        raise ValueError("Only one of input or inputs (deprecated) can be specified. Prefer input.")
+        # Prefer input over inputs (deprecated) - remove inputs from event
+        event = dict(event)
+        del event["inputs"]
+        return event
     if inputs is not None:
         return dict(**{k: v for k, v in event.items() if k not in ["input", "inputs"]}, input=inputs)
     else:
@@ -3413,7 +3444,19 @@ class SpanImpl(Span):
     def log_internal(
         self, event: Optional[Dict[str, Any]] = None, internal_data: Optional[Dict[str, Any]] = None
     ) -> None:
-        serializable_partial_record, lazy_partial_record = split_logging_data(event, internal_data)
+
+        # We'll raise errors on validation if we're running an experiment (e.g. in CI / on a dev machine)
+        # but not if we're in a project (e.g. likely running in a customer prod app)
+        raise_errors = self.parent_object_type == SpanObjectTypeV3.EXPERIMENT
+
+        # Validate BEFORE deep copying, since deep copy converts all keys to strings
+        if event and raise_errors:
+            _validate_and_sanitize_experiment_log_partial_args(event, raise_errors=True)
+
+        event = _deep_copy_event(event)
+
+        serializable_partial_record, lazy_partial_record = split_logging_data(
+            event, internal_data, raise_errors=raise_errors)
 
         # We both check for serializability and round-trip `partial_record`
         # through JSON in order to create a "deep copy". This has the benefit of
@@ -3430,12 +3473,14 @@ class SpanImpl(Span):
         )
 
         _check_json_serializable(partial_record)
-        serializable_partial_record = _deep_copy_event(partial_record)
+        serializable_partial_record = partial_record
         if serializable_partial_record.get("metrics", {}).get("end") is not None:
             self._logged_end_time = serializable_partial_record["metrics"]["end"]
 
         if len(serializable_partial_record.get("tags", [])) > 0 and self.span_parents:
-            raise Exception("Tags can only be logged to the root span")
+            # Remove tags when logging to non-root spans instead of throwing error
+            serializable_partial_record = dict(serializable_partial_record)
+            del serializable_partial_record["tags"]
 
         def compute_record() -> Dict[str, Any]:
             return dict(
@@ -3624,12 +3669,12 @@ def _strip_nones(d: T, deep: bool) -> T:
 
 
 def split_logging_data(
-    event: Optional[Dict[str, Any]], internal_data: Optional[Dict[str, Any]]
+    event: Optional[Dict[str, Any]], internal_data: Optional[Dict[str, Any]], raise_errors: bool
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     # There should be no overlap between the dictionaries being merged,
     # except for `sanitized` and `internal_data`, where the former overrides
     # the latter.
-    sanitized = _validate_and_sanitize_experiment_log_partial_args(event or {})
+    sanitized = _validate_and_sanitize_experiment_log_partial_args(event or {}, raise_errors=raise_errors)
     sanitized_and_internal_data = _strip_nones(internal_data or {}, deep=True)
     merge_dicts(sanitized_and_internal_data, _strip_nones(sanitized, deep=False))
 
