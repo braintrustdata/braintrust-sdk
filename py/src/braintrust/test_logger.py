@@ -1132,13 +1132,17 @@ async def test_traced_async_generator_unlimited_with_minus_one(with_memory_logge
 
 
 
-def test_attachment_unreadable_path_raises_ioerror():
-    with pytest.raises(IOError, match="Failed to read file:"):
+def test_attachment_unreadable_path_logs_warning(caplog):
+    with caplog.at_level(logging.WARNING, logger="braintrust"):
         Attachment(
             data="unreadable.txt",
             filename="unreadable.txt",
             content_type="text/plain",
         )
+
+    assert len(caplog.records) == 1
+    assert caplog.records[0].levelname == "WARNING"
+    assert caplog.records[0].message == "Failed to read file: [Errno 2] No such file or directory: 'unreadable.txt'"
 
 
 def test_attachment_readable_path_returns_data(tmp_path):

@@ -2480,7 +2480,7 @@ class Attachment(BaseAttachment):
         try:
             os.stat(data)
         except Exception as e:
-            raise IOError(f"Failed to read file: {e}") from e
+            _logger.warning(f"Failed to read file: {e}")
 
 
 class ExternalAttachment(BaseAttachment):

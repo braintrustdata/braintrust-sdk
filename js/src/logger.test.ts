@@ -741,15 +741,21 @@ describe("wrapTraced generator support", () => {
   });
 });
 
-test("attachment with unreadable path throws", () => {
-  expect(
-    () =>
-      new Attachment({
-        data: "unreadable.txt",
-        filename: "unreadable.txt",
-        contentType: "text/plain",
-      }),
-  ).toThrow(/Failed to read file:/);
+test("attachment with unreadable path logs warning", () => {
+  const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+  new Attachment({
+    data: "unreadable.txt",
+    filename: "unreadable.txt",
+    contentType: "text/plain",
+  });
+
+  expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
+  expect(consoleWarnSpy).toHaveBeenCalledWith(
+    "Failed to read file: Error: ENOENT: no such file or directory, stat 'unreadable.txt'",
+  );
+
+  consoleWarnSpy.mockRestore();
 });
 
 test("attachment with readable path returns data", async () => {
