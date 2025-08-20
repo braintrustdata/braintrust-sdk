@@ -1985,8 +1985,12 @@ export class TestBackgroundLogger implements BackgroundLogger {
 
         // Only mask specific fields if they exist
         for (const field of REDACTION_FIELDS) {
-          if (item[field] !== undefined) {
-            maskedItem[field] = this.maskingFunction!(item[field]);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if ((item as any)[field] !== undefined) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (maskedItem as any)[field] = this.maskingFunction!(
+              (item as any)[field],
+            );
           }
         }
 
@@ -2237,8 +2241,12 @@ class HTTPBackgroundLogger implements BackgroundLogger {
 
               // Only mask specific fields if they exist
               for (const field of REDACTION_FIELDS) {
-                if (item[field] !== undefined) {
-                  maskedItem[field] = this.maskingFunction!(item[field]);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                if ((item as any)[field] !== undefined) {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  (maskedItem as any)[field] = this.maskingFunction!(
+                    (item as any)[field],
+                  );
                 }
               }
 
