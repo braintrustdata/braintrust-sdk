@@ -1564,7 +1564,8 @@ def login(
             check_updated_param("api_key", sanitized_api_key, _state.login_token)
             check_updated_param("org_name", org_name, _state.org_name)
             return
-        _state = login_to_state(app_url=app_url, api_key=api_key, org_name=org_name)
+        new_state = login_to_state(app_url=app_url, api_key=api_key, org_name=org_name)
+        _state.copy_login_info(new_state)
 
 
 def login_to_state(
