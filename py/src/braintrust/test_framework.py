@@ -388,7 +388,7 @@ async def test_hooks_tags_with_failing_scorer(with_memory_logger, with_simulate_
 
 @pytest.mark.asyncio
 async def test_hooks_tags_with_invalid_type(with_memory_logger, with_simulate_login, simple_scorer):
-    """ Test that hooks.tags can be set to a list. """
+    """ Test that result contains an error for cases where hooks.tags is set to an invalid type. """
     def task_with_hooks(input, hooks):
         hooks.tags = 123
         return input
@@ -405,4 +405,5 @@ async def test_hooks_tags_with_invalid_type(with_memory_logger, with_simulate_lo
     )
     exp = init_test_exp(__name__)
     result = await run_evaluator(experiment=exp, evaluator=evaluator, position=None, filters=[])
+    assert len(result.results) == 1
     assert isinstance(result.results[0].error, TypeError)
