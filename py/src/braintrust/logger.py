@@ -1984,7 +1984,6 @@ def start_span(
             set_current=set_current,
             parent=parent,
             propagated_event=propagated_event,
-            state=state,
             **event,
         )
 
