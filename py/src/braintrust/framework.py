@@ -1258,8 +1258,8 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                     hooks.set_span(span)
                     output = await await_or_run(event_loop, evaluator.task, *task_args)
                     span.log(input=task_args[0], output=output)
-                tags = hooks.tags
-                root_span.log(output=output, metadata=metadata, tags=tags if tags else None)
+                tags = hooks.tags if hooks.tags else None
+                root_span.log(output=output, metadata=metadata, tags=tags)
 
                 score_promises = [
                     asyncio.create_task(
@@ -1296,7 +1296,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
                         scorer_name: exc_info for scorer_name, _, exc_info in failing_scorers_and_exceptions
                     }
                     metadata["scorer_errors"] = scorer_errors
-                    root_span.log(metadata=metadata, tags=hooks.tags)
+                    root_span.log(metadata=metadata, tags=tags)
                     names = ", ".join(scorer_errors.keys())
                     exceptions = [x[1] for x in failing_scorers_and_exceptions]
                     unhandled_scores = list(scorer_errors.keys())
@@ -1317,7 +1317,7 @@ async def _run_evaluator_internal(experiment, evaluator: Evaluator, position: Op
             input=datum.input,
             expected=datum.expected,
             metadata=metadata,
-            tags=tags if tags else None,
+            tags=tags,
             output=output,
             scores={
                 **(
