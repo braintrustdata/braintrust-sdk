@@ -1069,8 +1069,8 @@ class DictEvalHooks(Dict[str, Any]):
         return self["tags"]
 
     @tags.setter
-    def tags(self, tags: Sequence[str]) -> None:
-        self["tags"] = tags
+    def tags(self, tags: Optional[Sequence[str]]) -> None:
+        self["tags"] =  [] if tags is None else list(tags)
 
     def meta(self, **info: Any):
         warnings.warn(

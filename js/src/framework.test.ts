@@ -599,6 +599,11 @@ test("tags can be appended and logged to root span", async () => {
 
 test.each([
   {
+    title: "undefined list returns undefined for tags",
+    providedTags: undefined,
+    expectedTags: undefined,
+  },
+  {
     title: "empty list returns undefined for tags",
     providedTags: [],
     expectedTags: undefined,

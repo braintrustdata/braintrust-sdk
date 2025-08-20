@@ -150,7 +150,7 @@ export interface EvalHooks<
   /**
    * The tags for the current evaluation.
    */
-  tags: string[];
+  tags: string[] | undefined;
 }
 
 // This happens to be compatible with ScorerArgs defined in @braintrust/core.
@@ -959,7 +959,8 @@ async function runEvaluatorInternal(
                 output = outputResult;
               }
 
-              tags = hooksForTask.tags;
+              tags = hooksForTask.tags ?? [];
+
               span.log({ output });
             },
             {
