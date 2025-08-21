@@ -100,7 +100,7 @@ def validate_value(value: Any, expected_type: type, path: str) -> Any:
         raise ValidationError(f"{path} does not match any of the expected types")
 
     # Handle Optional (which is Union[T, None])
-    if origin is type(Optional[str]):  # This is a bit hacky but works
+    if origin is Union and type(None) in get_args(expected_type):  # Check for Optional[T] which is Union[T, None]
         inner_type = get_args(expected_type)[0]
         if value is None:
             return None
