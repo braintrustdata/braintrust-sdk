@@ -180,12 +180,57 @@ interface BraintrustSpanProcessorOptions {
   headers?: Record<string, string>;
 }
 
+// Cache for loaded OpenTelemetry modules
+let otelModulesCache: {
+  OTLPTraceExporter?: any;
+  BatchSpanProcessor?: any;
+  loaded?: boolean;
+  error?: Error;
+} = {};
+
+/**
+ * Dynamically load OpenTelemetry dependencies
+ */
+async function loadOtelDependencies() {
+  if (otelModulesCache.loaded) {
+    return otelModulesCache;
+  }
+
+  if (otelModulesCache.error) {
+    throw otelModulesCache.error;
+  }
+
+  try {
+    const [exporterModule, traceModule] = await Promise.all([
+      import("@opentelemetry/exporter-trace-otlp-http"),
+      import("@opentelemetry/sdk-trace-base"),
+    ]);
+
+    otelModulesCache = {
+      OTLPTraceExporter: exporterModule.OTLPTraceExporter,
+      BatchSpanProcessor: traceModule.BatchSpanProcessor,
+      loaded: true,
+    };
+
+    return otelModulesCache;
+  } catch (error) {
+    const err = new Error(
+      "OpenTelemetry dependencies are not installed. Please install @opentelemetry/exporter-trace-otlp-http and @opentelemetry/sdk-trace-base to use BraintrustSpanProcessor.",
+    );
+    otelModulesCache.error = err;
+    throw err;
+  }
+}
+
 /**
  * A span processor that sends OpenTelemetry spans to Braintrust.
  *
  * This processor uses a BatchSpanProcessor and an OTLP exporter configured
  * to send data to Braintrust's telemetry endpoint. Span filtering is disabled
  * by default but can be enabled with the filterAISpans option.
+ *
+ * Note: This class requires @opentelemetry/exporter-trace-otlp-http and
+ * @opentelemetry/sdk-trace-base to be installed as peer dependencies.
  *
  * Environment Variables:
  * - BRAINTRUST_API_KEY: Your Braintrust API key
@@ -220,12 +265,20 @@ interface BraintrustSpanProcessorOptions {
  * ```
  */
 export class BraintrustSpanProcessor {
-  private readonly processor: SpanProcessor;
-  private readonly aiSpanProcessor: SpanProcessor;
+  private processor?: SpanProcessor;
+  private aiSpanProcessor?: SpanProcessor;
+  private initPromise?: Promise<void>;
+  private options: BraintrustSpanProcessorOptions;
 
   constructor(options: BraintrustSpanProcessorOptions = {}) {
+    this.options = options;
+    // Start initialization but don't wait for it
+    this.initPromise = this.initialize();
+  }
+
+  private async initialize(): Promise<void> {
     // Get API key from options or environment
-    const apiKey = options.apiKey || process.env.BRAINTRUST_API_KEY;
+    const apiKey = this.options.apiKey || process.env.BRAINTRUST_API_KEY;
     if (!apiKey) {
       throw new Error(
         "Braintrust API key is required. Set BRAINTRUST_API_KEY environment variable or pass apiKey option.",
@@ -234,7 +287,7 @@ export class BraintrustSpanProcessor {
 
     // Get API URL from options or environment
     let apiUrl =
-      options.apiUrl ||
+      this.options.apiUrl ||
       process.env.BRAINTRUST_API_URL ||
       "https://api.braintrust.dev";
 
@@ -244,7 +297,7 @@ export class BraintrustSpanProcessor {
     }
 
     // Get parent from options or environment
-    let parent = options.parent || process.env.BRAINTRUST_PARENT;
+    let parent = this.options.parent || process.env.BRAINTRUST_PARENT;
 
     // Default parent if not provided
     if (!parent) {
@@ -255,56 +308,95 @@ export class BraintrustSpanProcessor {
       );
     }
 
-    const { OTLPTraceExporter } = requireOrFail(
-      "@opentelemetry/exporter-trace-otlp-http",
-      "Make sure @opentelemetry/exporter-trace-otlp-http is installed.",
-    );
+    try {
+      const { OTLPTraceExporter, BatchSpanProcessor } =
+        await loadOtelDependencies();
 
-    const headers = {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "x-bt-parent": parent,
-      ...options.headers,
-    };
+      const headers = {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "x-bt-parent": parent,
+        ...this.options.headers,
+      };
 
-    const exporter = new OTLPTraceExporter({
-      url: new URL("otel/v1/traces", apiUrl).href,
-      headers,
-    });
+      const exporter = new OTLPTraceExporter({
+        url: new URL("otel/v1/traces", apiUrl).href,
+        headers,
+      });
 
-    const { BatchSpanProcessor } = requireOrFail(
-      "@opentelemetry/sdk-trace-base",
-      "Make sure @opentelemetry/sdk-trace-base is installed.",
-    );
-    this.processor = new BatchSpanProcessor(exporter);
+      const processor = new BatchSpanProcessor(exporter);
+      this.processor = processor;
 
-    // Conditionally wrap with filtering based on filterAISpans flag
-    if (options.filterAISpans === true) {
-      // Only enable filtering if explicitly requested
-      this.aiSpanProcessor = new AISpanProcessor(
-        this.processor,
-        options.customFilter,
+      // Conditionally wrap with filtering based on filterAISpans flag
+      if (this.options.filterAISpans === true) {
+        // Only enable filtering if explicitly requested
+        this.aiSpanProcessor = new AISpanProcessor(
+          processor,
+          this.options.customFilter,
+        );
+      } else {
+        // Use the batch processor directly without filtering (default behavior)
+        this.aiSpanProcessor = processor;
+      }
+    } catch (error) {
+      console.warn(
+        "Failed to initialize BraintrustSpanProcessor:",
+        error instanceof Error ? error.message : error,
       );
-    } else {
-      // Use the batch processor directly without filtering (default behavior)
-      this.aiSpanProcessor = this.processor;
+      // Create a no-op processor that doesn't do anything
+      this.aiSpanProcessor = {
+        onStart: () => {},
+        onEnd: () => {},
+        shutdown: () => Promise.resolve(),
+        forceFlush: () => Promise.resolve(),
+      };
+    }
+  }
+
+  private async ensureInitialized(): Promise<void> {
+    if (this.initPromise) {
+      await this.initPromise;
     }
   }
 
   onStart(span: Span, parentContext: Context): void {
-    this.aiSpanProcessor.onStart(span, parentContext);
+    if (this.aiSpanProcessor) {
+      this.aiSpanProcessor.onStart(span, parentContext);
+    } else {
+      // Queue the operation to run after initialization
+      this.ensureInitialized().then(() => {
+        if (this.aiSpanProcessor) {
+          this.aiSpanProcessor.onStart(span, parentContext);
+        }
+      });
+    }
   }
 
   onEnd(span: ReadableSpan): void {
-    this.aiSpanProcessor.onEnd(span);
+    if (this.aiSpanProcessor) {
+      this.aiSpanProcessor.onEnd(span);
+    } else {
+      // Queue the operation to run after initialization
+      this.ensureInitialized().then(() => {
+        if (this.aiSpanProcessor) {
+          this.aiSpanProcessor.onEnd(span);
+        }
+      });
+    }
   }
 
-  shutdown(): Promise<void> {
-    return this.aiSpanProcessor.shutdown();
+  async shutdown(): Promise<void> {
+    await this.ensureInitialized();
+    if (this.aiSpanProcessor) {
+      return this.aiSpanProcessor.shutdown();
+    }
   }
 
-  forceFlush(): Promise<void> {
-    return this.aiSpanProcessor.forceFlush();
+  async forceFlush(): Promise<void> {
+    await this.ensureInitialized();
+    if (this.aiSpanProcessor) {
+      return this.aiSpanProcessor.forceFlush();
+    }
   }
 }
 
@@ -315,6 +407,9 @@ export class BraintrustSpanProcessor {
  * any OpenTelemetry setup, including @vercel/otel's registerOTel function,
  * NodeSDK, or custom tracer providers. It can optionally filter spans to
  * only send AI-related telemetry.
+ *
+ * Note: This class requires @opentelemetry/exporter-trace-otlp-http and
+ * @opentelemetry/sdk-trace-base to be installed as peer dependencies.
  *
  * Environment Variables:
  * - BRAINTRUST_API_KEY: Your Braintrust API key
@@ -354,8 +449,6 @@ export class BraintrustSpanProcessor {
  */
 export class BraintrustExporter {
   private readonly processor: BraintrustSpanProcessor;
-  private readonly spans: ReadableSpan[] = [];
-  private readonly callbacks: Array<(result: unknown) => void> = [];
 
   constructor(options: BraintrustSpanProcessorOptions = {}) {
     this.processor = new BraintrustSpanProcessor(options);
@@ -402,12 +495,3 @@ export class BraintrustExporter {
     return this.processor.forceFlush();
   }
 }
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const requireOrFail = (module: string, error: string): any => {
-  try {
-    return require(module);
-  } catch {
-    throw new Error(error);
-  }
-};
