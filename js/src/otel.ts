@@ -339,6 +339,7 @@ export class BraintrustSpanProcessor {
         },
       });
     } catch (error) {
+      console.error(error);
       throw new Error(
         "Failed to create OTLP exporter. Make sure @opentelemetry/exporter-trace-otlp-http is installed.",
       );
