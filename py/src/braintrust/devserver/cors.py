@@ -80,7 +80,7 @@ def create_cors_middleware() -> type:
                 # Handle OPTIONS requests
                 if scope["method"] == "OPTIONS":
 
-                    async def send_wrapper(message: Dict[str, Any]) -> None:
+                    async def send_options_wrapper(message: Dict[str, Any]) -> None:
                         if message["type"] == "http.response.start":
                             headers_dict = dict(message.get("headers", []))
 
@@ -103,7 +103,7 @@ def create_cors_middleware() -> type:
                         await send(message)
 
                     # Send empty response for OPTIONS
-                    await send_wrapper(
+                    await send_options_wrapper(
                         {
                             "type": "http.response.start",
                             "status": 200,
