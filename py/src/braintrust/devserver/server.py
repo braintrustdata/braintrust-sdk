@@ -1,7 +1,7 @@
 import asyncio
 import json
 import traceback
-from typing import Any, Dict, Union
+from typing import Any, Union
 
 import uvicorn
 from starlette.applications import Starlette
@@ -11,59 +11,17 @@ from starlette.routing import Route
 
 from ..framework import EvalAsync, EvalScorer, Evaluator, ExperimentSummary, SSEProgressEvent
 from ..generated_types import FunctionId
-from ..logger import BraintrustState, bt_iscoroutinefunction, login_to_state
+from ..logger import BraintrustState, bt_iscoroutinefunction
 from ..parameters import parameters_to_json_schema, validate_parameters
 from ..span_identifier_v3 import parse_parent
 from .auth import AuthorizationMiddleware
+from .cache import cached_login
 from .cors import create_cors_middleware
 from .dataset import get_dataset
 from .eval_hooks import SSEQueue, serialize_sse_event
 from .schemas import ValidationError, parse_eval_body
 
 _all_evaluators: dict[str, Evaluator[Any, Any]] = {}
-
-# Simple LRU cache implementation
-class LRUCache:
-    def __init__(self, max_size: int = 32):
-        self.max_size = max_size
-        self.cache: Dict[str, BraintrustState] = {}
-        self.access_order: list[str] = []
-
-    def get(self, key: str) -> BraintrustState | None:
-        if key in self.cache:
-            # Move to end to mark as recently used
-            self.access_order.remove(key)
-            self.access_order.append(key)
-            return self.cache[key]
-        return None
-
-    def set(self, key: str, value: BraintrustState) -> None:
-        if key in self.cache:
-            # Update existing and move to end
-            self.access_order.remove(key)
-        elif len(self.cache) >= self.max_size:
-            # Remove least recently used
-            lru_key = self.access_order.pop(0)
-            del self.cache[lru_key]
-
-        self.cache[key] = value
-        self.access_order.append(key)
-
-# Global login cache
-_login_cache = LRUCache(max_size=32)  # TODO: Make this configurable
-
-
-async def cached_login(api_key: str, app_url: str, org_name: str | None = None) -> BraintrustState:
-    """Login with caching to avoid repeated API calls."""
-    cache_key = json.dumps({"api_key": api_key, "app_url": app_url, "org_name": org_name})
-
-    cached = _login_cache.get(cache_key)
-    if cached:
-        return cached
-
-    state = login_to_state(api_key=api_key, app_url=app_url, org_name=org_name)
-    _login_cache.set(cache_key, state)
-    return state
 
 
 async def index(request: Request) -> PlainTextResponse:

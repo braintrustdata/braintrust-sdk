@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 
-from braintrust.devserver.server import LRUCache
+from braintrust.devserver.cache import LRUCache
 
 
 class TestDevServerLRUCache(unittest.TestCase):
