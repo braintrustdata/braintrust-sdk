@@ -95,8 +95,8 @@ importers:
         specifier: workspace:*
         version: link:../../core/js
       '@openai/agents-core':
-        specifier: ^0.0.14
-        version: 0.0.14(ws@8.18.3)(zod@3.25.67)
+        specifier: '>=0.0.14 <1.0.0'
+        version: 0.0.15(ws@8.18.3)(zod@3.25.67)
       braintrust:
         specifier: workspace:^
         version: link:../../js
@@ -2563,6 +2563,7 @@ packages:
     transitivePeerDependencies:
       - supports-color
       - ws
+    dev: true
 
   /@openai/agents-core@0.0.15(ws@8.18.3)(zod@3.25.67):
     resolution: {integrity: sha512-ODTqttjW0s0ejBe5PKnYRlFbJSZH2IO6OtUlRhIKmWiWrX6pGRxvpKjTSOXy8DEtpRHBj6Nhky0UoSlO6eOkDQ==}
@@ -2581,7 +2582,6 @@ packages:
     transitivePeerDependencies:
       - supports-color
       - ws
-    dev: true
 
   /@openai/agents-openai@0.0.14(zod@3.25.67):
     resolution: {integrity: sha512-qSGBictwfJ3dMhC3QvqOLMm8RVZ/eIYNcFNLHps7hWeB1xeDGJFDZ/X7dDicejOeEXbi/nGe1ry6LbXDYSo3uQ==}
