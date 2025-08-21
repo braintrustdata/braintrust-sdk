@@ -1,4 +1,3 @@
-
 import pytest
 from braintrust import init_logger, os  # type:ignore
 
@@ -7,6 +6,7 @@ from tests.helpers import force_tracer_provider
 
 @pytest.fixture(autouse=True, scope="function")
 def setup():
+    os.environ.setdefault("BRAINTRUST_API_KEY", "test")
     os.environ["BRAINTRUST_APP_URL"] = "https://www.braintrust.dev/"
     os.environ["BRAINTRUST_API_URL"] = "https://api.braintrust.dev/"
     force_tracer_provider()
