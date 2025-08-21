@@ -1,7 +1,7 @@
 import asyncio
 import json
 import traceback
-from typing import Any
+from typing import Any, Union
 
 import uvicorn
 from starlette.applications import Starlette
@@ -44,7 +44,7 @@ async def list_evaluators(request: Request) -> JSONResponse:
     return JSONResponse(evaluator_list)
 
 
-async def run_eval(request: Request) -> JSONResponse | StreamingResponse:
+async def run_eval(request: Request) -> Union[JSONResponse, StreamingResponse]:
     """Handle eval execution requests."""
     try:
         # Get request body
