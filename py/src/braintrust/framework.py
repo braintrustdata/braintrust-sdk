@@ -1140,7 +1140,7 @@ class DictEvalHooks(Dict[str, Any]):
         expected: Optional[Any] = None,
         trial_index: int = 0,
         tags: Optional[Sequence[str]] = None,
-        report_progress: Callable[TaskProgressEvent, None] = None,
+        report_progress: Callable[[TaskProgressEvent], None] = None,
         parameters: Optional[Dict[str, Any]] = None,
     ):
         if metadata is not None:
