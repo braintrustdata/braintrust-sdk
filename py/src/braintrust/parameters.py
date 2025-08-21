@@ -68,20 +68,48 @@ def validate_parameters(
                 else:
                     raise ValueError(f"Parameter '{name}' is required")
                 result[name] = Prompt.from_prompt_data(schema.get("name"), PromptData.from_dict_deep(prompt_data))
+            elif schema is None:
+                # No schema defined, pass through the value
+                result[name] = value
             else:
-                # Assume it's a pydantic model
-                if value is None:
-                    # No value provided, try to create default instance
-                    if hasattr(schema, "__call__"):
-                        result[name] = schema()
+                # Check if it's a pydantic model
+                if hasattr(schema, "parse_obj") or hasattr(schema, "model_validate"):
+                    # Check if this is a single-field validator model
+                    # Support both Pydantic v1 (__fields__) and v2 (model_fields)
+                    fields = getattr(schema, "__fields__", None) or getattr(schema, "model_fields", {})
+                    if len(fields) == 1 and "value" in fields:
+                        # This is a single-field validator, validate the value directly
+                        if value is None:
+                            # Try to get default value
+                            try:
+                                if hasattr(schema, "__call__"):
+                                    default_instance = schema()
+                                    result[name] = default_instance.value
+                                else:
+                                    raise ValueError(f"Parameter '{name}' is required")
+                            except Exception:
+                                raise ValueError(f"Parameter '{name}' is required")
+                        else:
+                            # Validate by creating a model instance with the value
+                            if hasattr(schema, "parse_obj"):
+                                validated = schema.parse_obj({"value": value})
+                            else:
+                                validated = schema.model_validate({"value": value})
+                            result[name] = validated.value
                     else:
-                        raise ValueError(f"Parameter '{name}' is required")
-                elif hasattr(schema, "parse_obj"):
-                    # pydantic v1
-                    result[name] = schema.parse_obj(value)
-                elif hasattr(schema, "model_validate"):
-                    # pydantic v2
-                    result[name] = schema.model_validate(value)
+                        # Regular pydantic model
+                        if value is None:
+                            # No value provided, try to create default instance
+                            if hasattr(schema, "__call__"):
+                                result[name] = schema()
+                            else:
+                                raise ValueError(f"Parameter '{name}' is required")
+                        elif hasattr(schema, "parse_obj"):
+                            # pydantic v1
+                            result[name] = schema.parse_obj(value)
+                        elif hasattr(schema, "model_validate"):
+                            # pydantic v2
+                            result[name] = schema.model_validate(value)
                 else:
                     # Not a pydantic model, just pass through
                     result[name] = value
