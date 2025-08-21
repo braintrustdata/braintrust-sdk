@@ -1,12 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { SpanTypeAttribute } from "@braintrust/core";
-import {
-  CompiledPrompt,
-  Span,
-  StartSpanArgs,
-  startSpan,
-  traced,
-} from "../logger";
+import { CompiledPrompt, Span, StartSpanArgs, startSpan } from "../logger";
 import { getCurrentUnixTimestamp, isEmpty } from "../util";
 import { mergeDicts } from "@braintrust/core";
 import { responsesProxy, parseMetricsFromUsage } from "./oai_responses";
@@ -322,15 +316,12 @@ function parseBaseParams<T extends Record<string, any>>(
   return mergeDicts(ret, { event: { input, metadata: paramsRest } });
 }
 
-function createApiWrapper<
-  T extends { stream?: boolean | null },
-  R extends { iterator?: any },
->(
+// A generic type for the OpenAI methods we are wrapping (e.g., `chat.completions.create`)
+type OpenAIAsyncMethod<T, R> = (params: T, options?: unknown) => APIPromise<R>;
+
+function createApiWrapper<T, R>(
   name: string,
-  create: (
-    params: Omit<T & SpanInfo, "span_info">,
-    options?: unknown,
-  ) => APIPromise<R>,
+  create: OpenAIAsyncMethod<T, R>,
   processResponse: (
     startTime: number,
     result: R,
@@ -338,8 +329,11 @@ function createApiWrapper<
     allParams: T & SpanInfo,
   ) => void,
   parseParams: (params: T & SpanInfo) => StartSpanArgs,
-): (params: T & SpanInfo, options?: unknown) => APIPromise<R> {
-  return (allParams: T & SpanInfo, options?: unknown): APIPromise<R> => {
+): OpenAIAsyncMethod<T, R> {
+  const wrappedFn = (
+    allParams: T & SpanInfo,
+    options?: unknown,
+  ): APIPromise<R> => {
     const { span_info: _, ...params } = allParams;
 
     // Cache the execution promise to ensure we only execute once
@@ -361,10 +355,10 @@ function createApiWrapper<
           );
           const startTime = getCurrentUnixTimestamp();
 
-          if (params.stream) {
+          if ("stream" in params && params.stream) {
             const { data: ret, response } = await create(
               // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-              params as Omit<T & SpanInfo, "span_info">,
+              params as T,
               options,
             ).withResponse();
             logHeaders(response, span);
@@ -382,7 +376,7 @@ function createApiWrapper<
             try {
               const { data: result, response } = await create(
                 // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-                params as Omit<T & SpanInfo, "span_info">,
+                params as T,
                 options,
               ).withResponse();
               logHeaders(response, span);
@@ -423,14 +417,16 @@ function createApiWrapper<
       },
     }) as APIPromise<R>;
   };
+
+  // We cast our implementation to the original method's signature.
+  // This hides `SpanInfo` from the public API.
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return wrappedFn as OpenAIAsyncMethod<T, R>;
 }
 
 function createEndpointProxy<T, R>(
   target: any,
-  wrapperFn: (
-    create: (params: T, options?: unknown) => APIPromise<R>,
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-  ) => Function,
+  wrapperFn: (create: OpenAIAsyncMethod<T, R>) => OpenAIAsyncMethod<T, R>,
 ) {
   return new Proxy(target, {
     get(target, name, receiver) {
@@ -495,11 +491,7 @@ const wrapChatCompletions = (
     "Chat Completion",
     create,
     (startTime, result, span) => {
-      logCompletionResponse(
-        startTime,
-        result as NonStreamingChatResponse,
-        span,
-      );
+      logCompletionResponse(startTime, result, span);
     },
     (params) => parseChatCompletionParams(params),
   );
@@ -510,7 +502,7 @@ const wrapEmbeddings = (
     options?: unknown,
   ) => APIPromise<CreateEmbeddingResponse>,
 ) =>
-  createApiWrapper<EmbeddingCreateParams, CreateEmbeddingResponse>(
+  createApiWrapper(
     "Embedding",
     create,
     (_startTime, result, span) => processEmbeddingResponse(result, span),
@@ -523,7 +515,7 @@ const wrapModerations = (
     options?: unknown,
   ) => APIPromise<CreateModerationResponse>,
 ) =>
-  createApiWrapper<ModerationCreateParams, CreateModerationResponse>(
+  createApiWrapper(
     "Moderation",
     create,
     (_startTime, result, span) => processModerationResponse(result, span),
