@@ -309,57 +309,102 @@ function wrapChatCompletion<
   C extends NonStreamingChatResponse | StreamingChatResponse,
 >(
   completion: (params: P, options?: unknown) => APIPromise<C>,
-): (params: P, options?: unknown) => Promise<any> {
-  return async (allParams: P & SpanInfo, options?: unknown) => {
+): (params: P, options?: unknown) => APIPromise<C> {
+  return (allParams: P & SpanInfo, options?: unknown): APIPromise<C> => {
     const { span_info: _, ...params } = allParams;
-    const span = startSpan(
-      mergeDicts(
-        {
-          name: "Chat Completion",
-          spanAttributes: {
-            type: SpanTypeAttribute.LLM,
-          },
-        },
-        parseChatCompletionParams(allParams),
-      ),
-    );
-    const startTime = getCurrentUnixTimestamp();
-    if (params.stream) {
-      const { data: ret, response } = await completion(
-        // We could get rid of this type coercion if we could somehow enforce
-        // that `P extends ChatParams` BUT does not have the property
-        // `span_info`.
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        params as P,
-        options,
-      ).withResponse();
-      logHeaders(response, span);
-      const wrapperStream = new WrapperStream(span, startTime, ret.iterator());
-      ret.iterator = () => wrapperStream[Symbol.asyncIterator]();
-      return ret;
-    } else {
-      try {
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-        const completionResponse = completion(
-          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-          params as P,
-          options,
-        ) as APIPromise<NonStreamingChatResponse>;
-        const { data: ret, response } = await completionResponse.withResponse();
-        logHeaders(response, span);
-        const { messages, ...rest } = params;
-        span.log({
-          input: messages,
-          metadata: {
-            ...rest,
-          },
-        });
-        logCompletionResponse(startTime, ret, span);
-        return ret;
-      } finally {
-        span.end();
+
+    // Cache the execution promise to ensure we only execute once
+    let executionPromise: Promise<EnhancedResponse> | null = null;
+
+    const executeWrapped = (): Promise<EnhancedResponse> => {
+      if (!executionPromise) {
+        executionPromise = (async () => {
+          const span = startSpan(
+            mergeDicts(
+              {
+                name: "Chat Completion",
+                spanAttributes: {
+                  type: SpanTypeAttribute.LLM,
+                },
+              },
+              parseChatCompletionParams(allParams),
+            ),
+          );
+          const startTime = getCurrentUnixTimestamp();
+
+          if (params.stream) {
+            const { data: ret, response } = await completion(
+              // We could get rid of this type coercion if we could somehow enforce
+              // that `P extends ChatParams` BUT does not have the property
+              // `span_info`.
+              // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+              params as P,
+              options,
+            ).withResponse();
+            logHeaders(response, span);
+            const wrapperStream = new WrapperStream(
+              span,
+              startTime,
+              ret.iterator(),
+            );
+            ret.iterator = () => wrapperStream[Symbol.asyncIterator]();
+            // Note: span is not ended for streaming - it will be ended by WrapperStream
+            // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+            return { data: ret as C, response };
+          } else {
+            try {
+              // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+              const completionResponse = completion(
+                // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+                params as P,
+                options,
+              ) as APIPromise<NonStreamingChatResponse>;
+              const { data: ret, response } =
+                await completionResponse.withResponse();
+              logHeaders(response, span);
+              const { messages, ...rest } = params;
+              span.log({
+                input: messages,
+                metadata: {
+                  ...rest,
+                },
+              });
+              logCompletionResponse(startTime, ret, span);
+              // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+              return { data: ret as C, response };
+            } finally {
+              span.end();
+            }
+          }
+        })();
       }
-    }
+      return executionPromise;
+    };
+
+    // Create a Promise that resolves to just the data
+    const dataPromise = executeWrapped().then((result) => result.data);
+
+    // Create an APIPromise using a Proxy pattern:
+    // - The base object is a Promise<C> that resolves to the completion data
+    // - The Proxy intercepts property access to add the withResponse() method
+    // - This maintains full Promise compatibility while extending the API
+    // - The withResponse() method returns the same cached promise for both data and response
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+    return new Proxy(dataPromise, {
+      get(target, prop, receiver) {
+        // Special handling for withResponse method
+        if (prop === "withResponse") {
+          return executeWrapped;
+        }
+        // Forward all other properties to the underlying Promise
+        const value = Reflect.get(target, prop, receiver);
+        // If it's a function, bind it to maintain correct `this` context
+        if (typeof value === "function") {
+          return value.bind(target);
+        }
+        return value;
+      },
+    }) as APIPromise<C>;
   };
 }
 
