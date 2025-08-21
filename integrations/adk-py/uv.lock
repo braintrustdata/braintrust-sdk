@@ -118,11 +118,6 @@ dependencies = [
     { name = "opentelemetry-proto" },
 ]
 
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-]
-
 [package.dev-dependencies]
 dev = [
     { name = "pytest" },
@@ -136,9 +131,7 @@ requires-dist = [
     { name = "braintrust", extras = ["otel"], specifier = ">=0.2.4" },
     { name = "google-adk", specifier = ">=1.9.0" },
     { name = "opentelemetry-proto", specifier = ">=1.36.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
 ]
-provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
 dev = [
