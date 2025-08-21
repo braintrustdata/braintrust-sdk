@@ -52,7 +52,7 @@ from urllib3.util.retry import Retry
 
 from braintrust.functions.stream import BraintrustStream
 
-from .bt_json import bt_dumps
+from .bt_json import bt_dumps, iter_to_bt_json, to_bt_json
 from .db_fields import (
     ASYNC_SCORING_CONTROL_FIELD,
     AUDIT_METADATA_FIELD,
@@ -641,7 +641,7 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
     def flush(self, batch_size: Optional[int] = None):
         pass
 
-    def pop(self):
+    def pop(self, raise_json_errors: bool = True):
         with self.lock:
             logs = [l.get() for l in self.logs]  # unwrap the LazyValues
             self.logs = []
@@ -655,7 +655,39 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
             first = merged[0]
             for other in merged[1:]:
                 first.extend(other)
-            return first
+
+            # serialize all the items to make the behavirou more like the HTTPBackgroundLogger
+            # so we can test it with the same exceptions
+            out = []
+            for item in first:
+                try:
+                    to_bt_json(item)
+                    out.append(item)
+                except Exception as e:
+                    if raise_json_errors:
+                        raise
+                    else:
+                        pass
+
+            # return the spans
+            return out
+
+
+class _NoOpBackgroundLogger(_BackgroundLogger):
+    """A no-op logger that discards all logs - useful for profiling span creation overhead"""
+
+    def __init__(self):
+        pass
+
+    def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
+        # Complete no-op - don't even evaluate the lazy values
+        pass
+
+    def flush(self, batch_size: Optional[int] = None):
+        pass
+
+    def pop(self):
+        return []
 
 
 BACKGROUND_LOGGER_BASE_SLEEP_TIME_S = 1.0
@@ -778,7 +810,7 @@ class _HTTPBackgroundLogger:
                 return
 
             # Construct batches of records to flush in parallel and in sequence.
-            all_items_str = [[bt_dumps(item) for item in bucket] for bucket in all_items]
+            all_items_str = [iter_to_bt_json(bucket, raise_on_error=False) for bucket in all_items]
             batch_sets = batch_items(
                 items=all_items_str, batch_max_num_items=batch_size, batch_max_num_bytes=self.max_request_size // 2
             )
@@ -894,7 +926,7 @@ class _HTTPBackgroundLogger:
             return
         try:
             all_items, attachments = self._unwrap_lazy_values(wrapped_items)
-            dataStr = construct_logs3_data([bt_dumps(item) for item in all_items])
+            dataStr = construct_logs3_data(iter_to_bt_json(all_items, raise_on_error=False))
             attachment_str = bt_dumps([a.debug_info() for a in attachments])
             payload = "{" + f""""data": {dataStr}, "attachments": {attachment_str}""" + "}"
             for output_dir in publish_payloads_dir:
@@ -967,6 +999,17 @@ def _internal_with_memory_background_logger():
     _state._override_bg_logger.logger = memory_logger
     try:
         yield memory_logger
+    finally:
+        _state._override_bg_logger.logger = None
+
+
+@contextlib.contextmanager
+def _internal_with_noop_background_logger():
+    """Context manager that uses a no-op logger for profiling span creation overhead"""
+    noop_logger = _NoOpBackgroundLogger()
+    _state._override_bg_logger.logger = noop_logger
+    try:
+        yield noop_logger
     finally:
         _state._override_bg_logger.logger = None
 
@@ -2131,12 +2174,35 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
     """
 
     def _deep_copy_object(v: Any) -> Any:
+        # Use direct type checks instead of isinstance for performance
+        v_type = type(v)
+
+        # Check for None first (most common case)
+        if v is None:
+            return v
+
+        # Primitive types - direct type comparison is faster
+        if v_type in (int, float, str, bool):
+            return v
+
+        # Dict - most common mapping type
+        if v_type is dict:
+            return {str(k): _deep_copy_object(val) for k, val in v.items()}
+
+        # List - most common sequence type
+        if v_type is list:
+            return [_deep_copy_object(x) for x in v]
+
+        # Tuple
+        if v_type is tuple:
+            return [_deep_copy_object(x) for x in v]
+
+        # Set
+        if v_type is set:
+            return [_deep_copy_object(x) for x in v]
+
+        # For complex types, fall back to isinstance for safety with inheritance
         if isinstance(v, Mapping):
-            # Prevent dict keys from holding references to user data. Note that
-            # `bt_json` already coerces keys to string, a behavior that comes from
-            # `json.dumps`. However, that runs at log upload time, while we want to
-            # cut out all the references to user objects synchronously in this
-            # function.
             return {str(k): _deep_copy_object(v[k]) for k in v}
         elif isinstance(v, (List, Tuple, Set)):
             return [_deep_copy_object(x) for x in v]
@@ -2152,15 +2218,8 @@ def _deep_copy_event(event: Mapping[str, Any]) -> Dict[str, Any]:
             return v
         elif isinstance(v, ReadonlyAttachment):
             return v.reference
-        elif isinstance(v, (int, float, str, bool)) or v is None:
-            # Skip roundtrip for primitive types.
-            return v
         else:
-            # Note: we avoid using copy.deepcopy, because it's difficult to
-            # guarantee the independence of such copied types from their origin.
-            # E.g. the original type could have a `__del__` method that alters
-            # some shared internal state, and we need this deep copy to be
-            # fully-independent from the original.
+            # Everything else gets JSON round-trip
             return json.loads(bt_dumps(v))
 
     return _deep_copy_object(event)
@@ -3420,39 +3479,98 @@ class SpanImpl(Span):
     def log_internal(
         self, event: Optional[Dict[str, Any]] = None, internal_data: Optional[Dict[str, Any]] = None
     ) -> None:
-        serializable_partial_record, lazy_partial_record = split_logging_data(event, internal_data)
+        # Build complete record with span metadata and all input data
+        event = event or {}
+        final_record: Dict[str, Any] = {
+            "id": self.id,
+            "span_id": self.span_id,
+            "root_span_id": self.root_span_id,
+            "span_parents": self.span_parents,
+            IS_MERGE_FIELD: self._is_merge,
+        }
 
-        # We both check for serializability and round-trip `partial_record`
-        # through JSON in order to create a "deep copy". This has the benefit of
-        # cutting out any reference to user objects when the object is logged
-        # asynchronously, so that in case the objects are modified, the logging
-        # is unaffected.
-        partial_record: Dict[str, Any] = dict(
-            id=self.id,
-            span_id=self.span_id,
-            root_span_id=self.root_span_id,
-            span_parents=self.span_parents,
-            **serializable_partial_record,
-            **{IS_MERGE_FIELD: self._is_merge},
-        )
+        # Add internal_data first (gets overridden by event data)
+        lazy_values = {}
+        if internal_data:
+            for k, v in internal_data.items():
+                if v is not None:
+                    if isinstance(v, BraintrustStream):
+                        lazy_values[k] = LazyValue(lambda stream=v: stream.copy().final_value(), use_mutex=False)
+                    elif k == "span_attributes" and isinstance(v, dict):
+                        # Filter None values from span_attributes
+                        final_record[k] = {sk: sv for sk, sv in v.items() if sv is not None}
+                    else:
+                        final_record[k] = v
 
-        _check_json_serializable(partial_record)
-        serializable_partial_record = _deep_copy_event(partial_record)
-        if serializable_partial_record.get("metrics", {}).get("end") is not None:
-            self._logged_end_time = serializable_partial_record["metrics"]["end"]
+        # Add event data
+        for k, v in event.items():
+            if v is not None:
+                if isinstance(v, BraintrustStream):
+                    lazy_values[k] = LazyValue(lambda stream=v: stream.copy().final_value(), use_mutex=False)
+                elif k == "inputs":
+                    final_record["input"] = v  # Handle deprecated field
+                else:
+                    final_record[k] = v
 
-        if len(serializable_partial_record.get("tags", [])) > 0 and self.span_parents:
-            raise Exception("Tags can only be logged to the root span")
+        # Ensure ID cannot be overridden by user
+        final_record["id"] = self.id
 
+        # Do deep copy once at the beginning - this isolates from user object mutations
+        final_record_copy = _deep_copy_event(final_record)
+
+        # Now mutate the deep copied data in place for special processing
+        for k, v in event.items():
+            if v is None:
+                continue
+
+            if k == "scores" and type(v) is dict:
+                # Ensure scores dict exists and mutate in place
+                if "scores" not in final_record_copy:
+                    final_record_copy["scores"] = {}
+                scores_dict = final_record_copy["scores"]
+                for score_name, score_value in v.items():
+                    if score_value is None:
+                        scores_dict[score_name] = None  # Preserve None values
+                    elif type(score_value) is bool:
+                        scores_dict[score_name] = 1 if score_value else 0
+                    else:
+                        scores_dict[score_name] = score_value
+
+            elif k == "metadata" and type(v) is dict:
+                # Ensure metadata dict exists and mutate in place
+                if "metadata" not in final_record_copy:
+                    final_record_copy["metadata"] = {}
+                metadata_dict = final_record_copy["metadata"]
+                for mk, mv in v.items():
+                    if mv is None:
+                        metadata_dict.pop(mk, None)
+                    else:
+                        metadata_dict[mk] = mv
+
+            elif k == "tags" and type(v) in (list, set, tuple):
+                final_record_copy["tags"] = list(v)
+
+            elif k == "span_attributes" and type(v) is dict:
+                final_record_copy["span_attributes"] = {k: v for k, v in v.items() if v is not None}
+
+        # Handle end time tracking
+        if final_record_copy.get("metrics", {}).get("end") is not None:
+            self._logged_end_time = final_record_copy["metrics"]["end"]
+
+        # Create compute function that adds lazy values and span components
         def compute_record() -> Dict[str, Any]:
-            return dict(
-                **serializable_partial_record,
-                **{k: v.get() for k, v in lazy_partial_record.items()},
-                **SpanComponentsV3(
+            record = final_record_copy.copy()
+            # Add lazy values
+            for k, lazy_val in lazy_values.items():
+                record[k] = lazy_val.get()
+            # Add span component fields
+            record.update(
+                SpanComponentsV3(
                     object_type=self.parent_object_type,
                     object_id=self.parent_object_id.get(),
-                ).object_id_fields(),
+                ).object_id_fields()
             )
+            return record
 
         _state.global_bg_logger().log(LazyValue(compute_record, use_mutex=False))
 
