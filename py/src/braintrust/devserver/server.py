@@ -138,7 +138,7 @@ async def run_eval(request: Request) -> Union[JSONResponse, StreamingResponse]:
     try:
         eval_task = asyncio.create_task(
             EvalAsync(
-                name="worker thead",
+                name="worker thread",
                 **{
                     **eval_kwargs,
                     "state": state,
