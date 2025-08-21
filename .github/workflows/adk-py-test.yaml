@@ -45,5 +45,5 @@ jobs:
 
       - name: Test import
         run: |
-          python -c "import braintrust_adk; print('braintrust_adk imported successfully')"
-          python -c "from braintrust_adk import setup_braintrust; print('trace_adk imported successfully')"
+          uv run python -c "import braintrust_adk; print('braintrust_adk imported successfully')"
+          uv run python -c "from braintrust_adk import setup_braintrust; print('setup_braintrust imported successfully')"
