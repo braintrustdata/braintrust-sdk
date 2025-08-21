@@ -480,4 +480,86 @@ describe("masking functionality", () => {
     expect(event.input.normal_string).toBe("unchanged");
     expect(event.input.normal_number).toBe(123);
   });
+
+  test("masking function with error", async () => {
+    const brokenMaskingFunction = (data: any): any => {
+      if (typeof data === "object" && data !== null) {
+        if (data.password) {
+          // Simulate an error when trying to mask a sensitive field
+          throw new Error(
+            "Cannot mask sensitive field 'password' - internal masking error",
+          );
+        }
+
+        const masked: any = Array.isArray(data) ? [] : {};
+        for (const [key, value] of Object.entries(data)) {
+          if (key === "secret" && typeof value === "string") {
+            // Another type of error
+            const result = 1 / 0; // This will be Infinity, not an error
+            throw new Error("Division by zero error");
+          } else if (key === "complex" && Array.isArray(value)) {
+            // Try to access non-existent index
+            const item = value[100];
+            if (!item) {
+              throw new RangeError("Index out of bounds");
+            }
+          } else if (typeof value === "object") {
+            masked[key] = brokenMaskingFunction(value);
+          } else {
+            masked[key] = value;
+          }
+        }
+        return masked;
+      }
+      return data;
+    };
+
+    setMaskingFunction(brokenMaskingFunction);
+
+    const logger = initLogger({
+      projectName: "test",
+      projectId: "test-project-id",
+    });
+
+    // Test various error scenarios
+    logger.log({
+      input: { query: "login", password: "secret123" },
+      output: { status: "success" },
+      metadata: { safe: "no-error" },
+    });
+
+    logger.log({
+      input: { data: "safe", secret: "will-cause-error" },
+      output: { result: "ok" },
+    });
+
+    logger.log({
+      input: { complex: ["a", "b"], other: "data" },
+      expected: { values: ["x", "y", "z"] },
+    });
+
+    await memoryLogger.flush();
+    const events = await memoryLogger.drain();
+
+    expect(events).toHaveLength(3);
+
+    // First event - error when masking input.password
+    const event1 = events[0];
+    expect(event1.input).toMatch(/ERROR: Failed to mask data:/);
+    expect(event1.input).toMatch(/Cannot mask sensitive field 'password'/);
+    expect(event1.output).toEqual({ status: "success" });
+    expect(event1.metadata).toEqual({ safe: "no-error" });
+
+    // Second event - error when masking input.secret
+    const event2 = events[1];
+    expect(event2.input).toMatch(/ERROR: Failed to mask data:/);
+    expect(event2.input).toMatch(/Division by zero error/);
+    expect(event2.output).toEqual({ result: "ok" });
+
+    // Third event - error when masking input.complex
+    const event3 = events[2];
+    expect(event3.input).toMatch(/ERROR: Failed to mask data:/);
+    expect(event3.input).toMatch(/Index out of bounds/);
+    expect(event3.expected).toEqual({ values: ["x", "y", "z"] });
+  });
 });

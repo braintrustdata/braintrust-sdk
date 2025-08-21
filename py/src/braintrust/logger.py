@@ -627,6 +627,19 @@ def _check_json_serializable(event):
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
 
+def _apply_masking_to_field(masking_function: Callable[[Any], Any], data: Any, field_name: str) -> Any:
+    """Apply masking function to data and handle errors gracefully.
+
+    If the masking function raises an exception, returns an error message with stack trace.
+    """
+    try:
+        return masking_function(data)
+    except Exception as mask_error:
+        # Get the full stack trace
+        tb_lines = traceback.format_exception(type(mask_error), mask_error, mask_error.__traceback__)
+        return f"ERROR: Failed to mask data: {''.join(tb_lines)}"
+
+
 class _BackgroundLogger(ABC):
     @abstractmethod
     def log(self, *args: LazyValue[Dict[str, Any]]) -> None:
@@ -678,7 +691,7 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
                     # Only mask specific fields if they exist
                     for field in REDACTION_FIELDS:
                         if field in item:
-                            masked_item[field] = self.masking_function(item[field])
+                            masked_item[field] = _apply_masking_to_field(self.masking_function, item[field], field)
 
                     first[i] = masked_item
 
@@ -865,7 +878,7 @@ class _HTTPBackgroundLogger:
                             # Only mask specific fields if they exist
                             for field in REDACTION_FIELDS:
                                 if field in item:
-                                    masked_item[field] = self.masking_function(item[field])
+                                    masked_item[field] = _apply_masking_to_field(self.masking_function, item[field], field)
 
                             batched_items[batch_idx][item_idx] = masked_item
 

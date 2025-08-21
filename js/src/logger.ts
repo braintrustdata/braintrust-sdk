@@ -102,6 +102,24 @@ const REDACTION_FIELDS = [
   "context",
 ] as const;
 
+/**
+ * Apply masking function to data and handle errors gracefully.
+ * If the masking function raises an exception, returns an error message with stack trace.
+ */
+function applyMaskingToField(
+  maskingFunction: (value: unknown) => unknown,
+  data: unknown,
+  fieldName: string,
+): unknown {
+  try {
+    return maskingFunction(data);
+  } catch (error) {
+    // Get the stack trace
+    const stack = error instanceof Error ? error.stack : String(error);
+    return `ERROR: Failed to mask data: ${stack}`;
+  }
+}
+
 export type SetCurrentArg = { setCurrent?: boolean };
 
 type StartSpanEventArgs = ExperimentLogPartialArgs & Partial<IdField>;
@@ -1988,8 +2006,10 @@ export class TestBackgroundLogger implements BackgroundLogger {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           if ((item as any)[field] !== undefined) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (maskedItem as any)[field] = this.maskingFunction!(
+            (maskedItem as any)[field] = applyMaskingToField(
+              this.maskingFunction!,
               (item as any)[field],
+              field,
             );
           }
         }

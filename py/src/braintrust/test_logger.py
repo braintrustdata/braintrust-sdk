@@ -1361,3 +1361,114 @@ def test_masking_function_dataset(with_memory_logger, with_simulate_login):
 
     # Clean up
     braintrust.set_masking_function(None)
+
+
+
+def test_masking_function_with_error(with_memory_logger, with_simulate_login):
+    """Test that masking errors are handled gracefully and stack traces are captured."""
+
+    def broken_masking_function(data):
+        """A masking function that throws errors for certain data types."""
+        if isinstance(data, dict):
+            # This will throw an error when trying to iterate
+            for key in data:
+                if key == "password":
+                    # Simulate a complex error
+                    raise ValueError(f"Cannot mask sensitive field '{key}' - internal masking error")
+            return data
+        elif isinstance(data, str):
+            if "secret" in data.lower():
+                # Another type of error
+                result = 1 / 0  # ZeroDivisionError
+            return data
+        elif isinstance(data, list):
+            # Try to access non-existent index
+            if len(data) > 0:
+                _ = data[100]  # IndexError
+            return data
+        return data
+
+    # Set the broken masking function
+    braintrust.set_masking_function(broken_masking_function)
+
+    # Create test experiment
+    from braintrust.logger import Experiment, ObjectMetadata, ProjectExperimentMetadata
+    project_metadata = ObjectMetadata(id="test_project", name="test_project", full_info=dict())
+    experiment_metadata = ObjectMetadata(id="test_experiment", name="test_experiment", full_info=dict())
+    metadata = ProjectExperimentMetadata(project=project_metadata, experiment=experiment_metadata)
+    lazy_metadata = LazyValue(lambda: metadata, use_mutex=False)
+    experiment = Experiment(lazy_metadata=lazy_metadata)
+
+    # Log data that will trigger various errors
+    experiment.log(
+        input={"password": "my-password", "user": "test"},
+        output="This contains SECRET information",
+        expected=["item1", "item2"],
+        metadata={"safe": "data"},
+        scores={"accuracy": 0.9}
+    )
+
+    experiment.flush()
+
+    # Check the logged data
+    logs = with_memory_logger.pop()
+    assert len(logs) == 1
+    log = logs[0]
+
+    # Verify error handling
+    # The input should have an error message because of the password field
+    assert "ERROR: Failed to mask data:" in log["input"]
+    assert "ValueError: Cannot mask sensitive field 'password'" in log["input"]
+    assert "broken_masking_function" in log["input"]
+
+    # The output should have an error message because of division by zero
+    assert "ERROR: Failed to mask data:" in log["output"]
+    assert "ZeroDivisionError: division by zero" in log["output"]
+
+    # The expected should have an error message because of index error
+    assert "ERROR: Failed to mask data:" in log["expected"]
+    assert "IndexError: list index out of range" in log["expected"]
+
+    # Metadata should be fine since it doesn't trigger any errors
+    assert log["metadata"] == {"safe": "data"}
+
+    # Scores should be unaffected
+    assert log["scores"]["accuracy"] == 0.9
+
+    # Test with logger and nested spans
+    test_logger = init_test_logger("test_masking_errors_logger")
+
+    with test_logger.start_span("parent") as parent:
+        parent.log(
+            input={"api_key": "key123", "password": "secret"},
+            metadata={"request_id": "req-123"}
+        )
+
+        with parent.start_span("child") as child:
+            child.log(
+                output="Result with secret data",
+                expected=[1, 2, 3]
+            )
+
+    test_logger.flush()
+
+    # Check nested span logs
+    logs = with_memory_logger.pop()
+    assert len(logs) == 2  # parent and child
+
+    # Find parent and child by span_attributes
+    parent_log = next(log for log in logs if log.get("span_attributes", {}).get("name") == "parent")
+    child_log = next(log for log in logs if log.get("span_attributes", {}).get("name") == "child")
+
+    # Parent should have error in input
+    assert "ERROR: Failed to mask data:" in parent_log["input"]
+    assert "ValueError: Cannot mask sensitive field 'password'" in parent_log["input"]
+
+    # Child should have errors in output and expected
+    assert "ERROR: Failed to mask data:" in child_log["output"]
+    assert "ZeroDivisionError" in child_log["output"]
+    assert "ERROR: Failed to mask data:" in child_log["expected"]
+    assert "IndexError" in child_log["expected"]
+
+    # Clean up
+    braintrust.set_masking_function(None)
