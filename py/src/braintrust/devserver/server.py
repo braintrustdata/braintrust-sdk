@@ -245,7 +245,7 @@ def make_scorer(state: BraintrustState, name: str, score: FunctionId) -> EvalSco
             **score,
             "input": dict(input=input, output=output, expected=expected, metadata=metadata),
             "parent": state.current_span.get().export(),
-            "steam": False,
+            "stream": False,
             "mode": "auto",
             "strict": True,
         }
