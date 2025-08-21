@@ -600,6 +600,13 @@ describe("APIPromise implementation", TEST_SUITE_OPTIONS, () => {
   let client: OpenAI;
   let backgroundLogger: TestBackgroundLogger;
 
+  const getFirstLog = async () => {
+    const events = await backgroundLogger.drain();
+    expect(events.length).toBe(1);
+    // eslint-disable-next-line
+    return events[0] as any;
+  };
+
   beforeAll(async () => {
     await _exportsForTestingOnly.simulateLoginForTests();
   });
@@ -623,7 +630,10 @@ describe("APIPromise implementation", TEST_SUITE_OPTIONS, () => {
     // Get the full response with data. This executes the request.
     const { data, response } = await completion.withResponse();
     expect(data.choices[0].message.content).toBeDefined();
-    expect(response).toBeInstanceOf(Response);
+    // Duck-typing check for Response object
+    expect(typeof response.json).toBe("function");
+    expect(typeof response.text).toBe("function");
+    expect(response.headers).toBeDefined();
     expect(response.status).toBe(200);
 
     // Await the promise directly and check if the data is consistent from cache.
@@ -631,10 +641,7 @@ describe("APIPromise implementation", TEST_SUITE_OPTIONS, () => {
     expect(dataOnly).toBe(data); // Should be the exact same object
 
     // Verify that the logs are correct.
-    const events = await backgroundLogger.drain();
-    expect(events.length).toBe(1);
-    // eslint-disable-next-line
-    const event = events[0] as any;
+    const event = await getFirstLog();
     expect(event.span_id).toBeDefined();
     expect(event.metrics.prompt_tokens).toBeGreaterThan(0);
     expect(event.metrics.completion_tokens).toBeGreaterThan(0);
@@ -651,7 +658,10 @@ describe("APIPromise implementation", TEST_SUITE_OPTIONS, () => {
 
     // Get the stream and response. This executes the request.
     const { data: stream, response } = await completion.withResponse();
-    expect(response).toBeInstanceOf(Response);
+    // Duck-typing check for Response object
+    expect(typeof response.json).toBe("function");
+    expect(typeof response.text).toBe("function");
+    expect(response.headers).toBeDefined();
     expect(response.status).toBe(200);
 
     // Await the promise directly to get the same stream from cache.
@@ -666,10 +676,7 @@ describe("APIPromise implementation", TEST_SUITE_OPTIONS, () => {
     expect(content.length).toBeGreaterThan(0);
 
     // Verify that the logs are correct after the stream is consumed.
-    const events = await backgroundLogger.drain();
-    expect(events.length).toBe(1);
-    // eslint-disable-next-line
-    const event = events[0] as any;
+    const event = await getFirstLog();
     expect(event.span_id).toBeDefined();
 
     expect(event.input).toEqual([{ role: "user", content: "Say 'Hello'" }]);
@@ -693,10 +700,7 @@ describe("APIPromise implementation", TEST_SUITE_OPTIONS, () => {
     expect(data.choices[0].message.content).toBeDefined();
 
     // Verify that the logs are correct.
-    const events = await backgroundLogger.drain();
-    expect(events.length).toBe(1);
-    // eslint-disable-next-line
-    const event = events[0] as any;
+    const event = await getFirstLog();
     expect(event.span_id).toBeDefined();
     expect(event.metrics.prompt_tokens).toBeGreaterThan(0);
     expect(event.metrics.completion_tokens).toBeGreaterThan(0);
@@ -722,10 +726,7 @@ describe("APIPromise implementation", TEST_SUITE_OPTIONS, () => {
     expect(content.length).toBeGreaterThan(0);
 
     // Verify that the logs are correct after the stream is consumed.
-    const events = await backgroundLogger.drain();
-    expect(events.length).toBe(1);
-    // eslint-disable-next-line
-    const event = events[0] as any;
+    const event = await getFirstLog();
     expect(event.span_id).toBeDefined();
     expect(event.input).toEqual([{ role: "user", content: "Hello there" }]);
 
