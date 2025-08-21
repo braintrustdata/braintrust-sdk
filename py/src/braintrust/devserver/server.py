@@ -116,7 +116,7 @@ async def run_eval(request: Request) -> Union[JSONResponse, StreamingResponse]:
     def on_start_fn(summary: ExperimentSummary):
         """Synchronous stream function that schedules async writes."""
         if stream:
-            summary_json = {snake_to_camel(k): v for (k, v) in summary.as_dict().items()}
+            summary_json = format_summary(summary)
             # Use create_task to schedule the async write without blocking
             asyncio.create_task(sse_queue.put_event("start", json.dumps(summary_json)))
 
@@ -206,7 +206,7 @@ async def run_eval(request: Request) -> Union[JSONResponse, StreamingResponse]:
             # Wait for the evaluation to complete
             result = await eval_task
             # Return the summary as JSON
-            return JSONResponse(result.summary)
+            return JSONResponse(format_summary(result.summary))
     except Exception as e:
         print(traceback.format_exc())
         return JSONResponse({"error": f"Failed to run evaluation: {str(e)}"}, status_code=500)
@@ -256,3 +256,8 @@ def make_scorer(state: BraintrustState, name: str, score: FunctionId) -> EvalSco
 
     scorer_fn.__name__ = name
     return scorer_fn
+
+
+def format_summary(summary: ExperimentSummary) -> dict:
+    """Format the summary for JSON serialization."""
+    return {snake_to_camel(k): v for (k, v) in summary.as_dict().items()}

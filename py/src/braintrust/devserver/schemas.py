@@ -16,11 +16,12 @@ class ValidationError(Exception):
 class ParsedFunctionId(TypedDict, total=False):
     """Parsed function identifier."""
 
-    function_id: str
+    function_id: Optional[str]
     version: Optional[str]
-    name: str
-    prompt_session_id: str
-    inline_code: str
+    name: Optional[str]
+    prompt_session_id: Optional[str]
+    inline_code: Optional[str]
+    global_function: Optional[str]
 
 
 class ParsedParent(TypedDict):
@@ -164,6 +165,9 @@ def parse_function_id(data: Any, path: str = "function") -> ParsedFunctionId:
             return result
         elif "inline_code" in data:
             result["inline_code"] = data["inline_code"]
+            return result
+        elif "global_function" in data:
+            result["global_function"] = data["global_function"]
             return result
     raise ValidationError(f"{path} must specify function_id, name, prompt_session_id, or inline_code")
 
