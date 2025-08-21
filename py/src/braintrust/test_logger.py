@@ -1472,3 +1472,24 @@ def test_masking_function_with_error(with_memory_logger, with_simulate_login):
 
     # Clean up
     braintrust.set_masking_function(None)
+
+def test_attachment_unreadable_path_logs_warning(caplog):
+    with caplog.at_level(logging.WARNING, logger="braintrust"):
+        Attachment(
+            data="unreadable.txt",
+            filename="unreadable.txt",
+            content_type="text/plain",
+        )
+
+    assert len(caplog.records) == 1
+    assert caplog.records[0].levelname == "WARNING"
+    assert "Failed to read file" in caplog.records[0].message
+
+
+def test_attachment_readable_path_returns_data(tmp_path):
+    file_path = tmp_path / "attachments" / "hello.txt"
+    file_path.parent.mkdir(parents=True)
+    file_path.write_bytes(b"hello world")
+
+    a = Attachment(data=str(file_path), filename="hello.txt", content_type="text/plain")
+    assert a.data == b"hello world"

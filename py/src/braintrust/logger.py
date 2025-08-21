@@ -2540,6 +2540,7 @@ class Attachment(BaseAttachment):
 
     def _init_data(self, data: Union[str, bytes, bytearray]) -> LazyValue[bytes]:
         if isinstance(data, str):
+            self._ensure_file_readable(data)
 
             def read_file() -> bytes:
                 with open(data, "rb") as f:
@@ -2548,6 +2549,12 @@ class Attachment(BaseAttachment):
             return LazyValue(read_file, use_mutex=True)
         else:
             return LazyValue(lambda: bytes(data), use_mutex=False)
+
+    def _ensure_file_readable(self, data: str) -> None:
+        try:
+            os.stat(data)
+        except Exception as e:
+            _logger.warning(f"Failed to read file: {e}")
 
 
 class ExternalAttachment(BaseAttachment):

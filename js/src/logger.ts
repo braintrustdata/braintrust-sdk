@@ -678,6 +678,26 @@ function clearTestBackgroundLogger() {
   _internalGetGlobalState()?.setOverrideBgLogger(null);
 }
 
+// Initialize a test Experiment without making network calls by injecting fake metadata.
+// Useful for unit tests that need an Experiment instance.
+function initTestExperiment(
+  experimentName: string,
+  projectName?: string,
+): Experiment {
+  setInitialTestState();
+  const state = _internalGetGlobalState();
+  const project = projectName ?? experimentName;
+
+  const lazyMetadata: LazyValue<ProjectExperimentMetadata> = new LazyValue(
+    async () => ({
+      project: { id: project, name: project, fullInfo: {} },
+      experiment: { id: experimentName, name: experimentName, fullInfo: {} },
+    }),
+  );
+
+  return new Experiment(state, lazyMetadata);
+}
+
 /**
  * This function should be invoked exactly once after configuring the `iso`
  * object based on the platform. See js/src/node.ts for an example.
@@ -1125,6 +1145,8 @@ export class Attachment extends BaseAttachment {
 
   private initData(data: string | Blob | ArrayBuffer): LazyValue<Blob> {
     if (typeof data === "string") {
+      this.ensureFileReadable(data);
+
       const readFile = iso.readFile;
       if (!readFile) {
         throw new Error(
@@ -1136,6 +1158,22 @@ with a Blob/ArrayBuffer, or run the program on Node.js.`,
       return new LazyValue(async () => new Blob([await readFile(data)]));
     } else {
       return new LazyValue(async () => new Blob([data]));
+    }
+  }
+
+  private ensureFileReadable(data: string) {
+    const statSync = iso.statSync;
+    if (!statSync) {
+      throw new Error(
+        `This platform does not support reading the filesystem. Construct the Attachment
+with a Blob/ArrayBuffer, or run the program on Node.js.`,
+      );
+    }
+
+    try {
+      statSync(data);
+    } catch (e) {
+      console.warn(`Failed to read file: ${e}`);
     }
   }
 }
@@ -6371,6 +6409,7 @@ export const _exportsForTestingOnly = {
   simulateLoginForTests,
   simulateLogoutForTests,
   setInitialTestState,
+  initTestExperiment,
   isGeneratorFunction,
   isAsyncGeneratorFunction,
 };
