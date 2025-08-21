@@ -55,6 +55,7 @@ export interface Common {
   utimes?: (path: string, atime: Date, mtime: Date) => Promise<void>;
   unlink?: (path: string) => Promise<void>;
   stat?: (path: string) => Promise<any>; // type-erased
+  statSync?: (path: string) => any; // type-erased
   homedir?: () => string;
 
   // zlib (promisified and type-erased).
