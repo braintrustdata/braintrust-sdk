@@ -1111,6 +1111,8 @@ export class Attachment extends BaseAttachment {
 
   private initData(data: string | Blob | ArrayBuffer): LazyValue<Blob> {
     if (typeof data === "string") {
+      this.ensureFileReadable(data);
+
       const readFile = iso.readFile;
       if (!readFile) {
         throw new Error(
@@ -1122,6 +1124,22 @@ with a Blob/ArrayBuffer, or run the program on Node.js.`,
       return new LazyValue(async () => new Blob([await readFile(data)]));
     } else {
       return new LazyValue(async () => new Blob([data]));
+    }
+  }
+
+  private ensureFileReadable(data: string) {
+    const statSync = iso.statSync;
+    if (!statSync) {
+      throw new Error(
+        `This platform does not support reading the filesystem. Construct the Attachment
+with a Blob/ArrayBuffer, or run the program on Node.js.`,
+      );
+    }
+
+    try {
+      statSync(data);
+    } catch (e) {
+      console.warn(`Failed to read file: ${e}`);
     }
   }
 }

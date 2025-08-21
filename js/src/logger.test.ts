@@ -8,9 +8,13 @@ import {
   BraintrustState,
   wrapTraced,
   currentSpan,
+  Attachment,
 } from "./logger";
 import { LazyValue } from "./util";
 import { configureNode } from "./node";
+import { writeFile, unlink } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 configureNode();
 
@@ -735,4 +739,41 @@ describe("wrapTraced generator support", () => {
     expect(log.span_attributes?.name).toBe("main");
     expect(log.metadata).toEqual({ a: "b", total: 6 });
   });
+});
+
+test("attachment with unreadable path logs warning", () => {
+  const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+  new Attachment({
+    data: "unreadable.txt",
+    filename: "unreadable.txt",
+    contentType: "text/plain",
+  });
+
+  expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
+  expect(consoleWarnSpy).toHaveBeenCalledWith(
+    expect.stringMatching(/Failed to read file:/),
+  );
+
+  consoleWarnSpy.mockRestore();
+});
+
+test("attachment with readable path returns data", async () => {
+  const tmpFile = join(
+    tmpdir(),
+    `bt-attach-${Date.now()}-${Math.random()}.txt`,
+  );
+  await writeFile(tmpFile, "hello world", "utf8");
+  try {
+    const a = new Attachment({
+      data: tmpFile,
+      filename: "file.txt",
+      contentType: "text/plain",
+    });
+    const blob = await a.data();
+    const text = await blob.text();
+    expect(text).toBe("hello world");
+  } finally {
+    await unlink(tmpFile).catch(() => {});
+  }
 });

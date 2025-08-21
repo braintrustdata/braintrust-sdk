@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
+import * as fsSync from "node:fs";
 import * as crypto from "node:crypto";
 
 import iso from "./isomorph";
@@ -27,6 +28,7 @@ export function configureNode() {
   iso.readFile = fs.readFile;
   iso.readdir = fs.readdir;
   iso.stat = fs.stat;
+  iso.statSync = fsSync.statSync;
   iso.utimes = fs.utimes;
   iso.unlink = fs.unlink;
   iso.homedir = os.homedir;
