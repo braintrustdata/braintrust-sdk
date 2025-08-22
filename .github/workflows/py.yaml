@@ -43,14 +43,26 @@ jobs:
         # lint everything other than the SDK (that's linted in make nox)
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
-          pylint --errors-only $(git ls-files '**/*.py' | grep -v '^py\/' | grep -v 'integrations/adk-py/examples/')
+          pylint --errors-only $(git ls-files '**/*.py' | grep -v '^py\/' | grep -v 'integrations/adk-py/')
       - name: Run tests
         run: |
           python -m unittest discover ./core/py/src
           pytest ./integrations/langchain-py/src
+
       - name: Run nox tests
         run: |
           make nox
+
+  adk-py:
+    uses: ./.github/workflows/adk-py-test.yaml
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        os: [ubuntu-latest, windows-latest]
+    with:
+      python-version: ${{ matrix.python-version }}
+      os: ${{ matrix.os }}
 
   upload-wheel:
     needs: build

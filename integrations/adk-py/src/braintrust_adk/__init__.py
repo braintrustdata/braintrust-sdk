@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Optional
+from typing import Optional, cast
 
 logger = logging.getLogger(__name__)
 
@@ -11,11 +11,19 @@ def setup_braintrust(
     api_key: Optional[str] = None,
     project_id: Optional[str] = None,
     project_name: Optional[str] = None,
+    SpanProcessor: Optional[type] = None,
 ) -> bool:
     try:
         from opentelemetry import trace
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.trace import ProxyTracerProvider
 
-        provider = trace.get_tracer_provider()
+        provider = cast(TracerProvider, trace.get_tracer_provider())
+
+        # the user doesn't have a tracer setup
+        if isinstance(provider, ProxyTracerProvider):
+            provider = TracerProvider()
+            trace.set_tracer_provider(provider)
 
         api_key = api_key or os.environ.get("BRAINTRUST_API_KEY")
         if not api_key:
@@ -31,7 +39,7 @@ def setup_braintrust(
 
         parent = parent or os.environ.get("BRAINTRUST_PARENT") or "project_name:default-google-adk-py"
 
-        processor = BraintrustSpanProcessor(api_key=api_key, parent=parent)
+        processor = BraintrustSpanProcessor(api_key=api_key, parent=parent, SpanProcessor=SpanProcessor)
         provider.add_span_processor(processor)  # type: ignore
         return True
     except Exception as e:
