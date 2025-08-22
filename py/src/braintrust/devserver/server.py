@@ -61,8 +61,6 @@ async def list_evaluators(request: Request) -> JSONResponse:
             "scores": [{"name": getattr(score, "name", f"score_{i}")} for i, score in enumerate(evaluator.scores)],
         }
 
-    print(f"Available evaluators: {evaluator_list}")
-
     return JSONResponse(evaluator_list)
 
 

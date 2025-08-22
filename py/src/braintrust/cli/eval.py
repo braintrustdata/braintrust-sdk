@@ -295,7 +295,7 @@ def run(args):
         from braintrust.devserver.server import run_dev_server
 
         objects = EvaluatorState()
-        update_evaluators(objects, handles, terminate_on_failure=evaluator_opts.terminate_on_failure)
+        update_evaluators(objects, handles, terminate_on_failure=True)
         evaluators = [e.evaluator for e in objects.evaluators]
         run_dev_server(
             evaluators,
