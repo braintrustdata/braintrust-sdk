@@ -41,6 +41,7 @@ export async function makeSourceMapContext({
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 function isNative(fn: Function): boolean {
   return /\{\s*\[native code\]\s*\}/.test(Function.prototype.toString.call(fn));
 }
@@ -60,6 +61,7 @@ export async function findCodeDefinition({
   location: CodeBundle["location"];
   ctx: SourceMapContext;
 }): Promise<string | undefined> {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   let fn: Function | undefined = undefined;
 
   if (location.type === "experiment") {
@@ -67,7 +69,7 @@ export async function findCodeDefinition({
     if (!evaluator) {
       console.warn(
         warning(
-          `Failed to find evaluator for ${location.eval_name}. Will not display preview.`,
+          `Warning: failed to find evaluator for ${location.eval_name}. Will not display preview.`,
         ),
       );
       return undefined;
@@ -84,7 +86,7 @@ export async function findCodeDefinition({
   if (!fn) {
     console.warn(
       warning(
-        `Failed to find ${locationToString(location)}. Will not display preview.`,
+        `Warning: failed to find ${locationToString(location)}. Will not display preview.`,
       ),
     );
     return undefined;
@@ -106,7 +108,11 @@ export async function findCodeDefinition({
   }
 
   if (columnNumber === -1) {
-    console.warn(warning(`Failed to find code definition for ${fn.name}`));
+    console.warn(
+      warning(
+        `Warning: failed to find code definition for ${fn.name}. Will not display preview.`,
+      ),
+    );
     return undefined;
   }
   const originalPosition = sourceMap.originalPositionFor({
@@ -178,7 +184,7 @@ async function getTsModule() {
   if (!tsModule) {
     try {
       tsModule = require("typescript");
-    } catch (e) {
+    } catch {
       console.warn(
         warning(
           "Failed to load TypeScript module. Will not use TypeScript to derive preview.",
