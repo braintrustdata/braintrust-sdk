@@ -92,6 +92,63 @@ import {
 import { lintTemplate } from "./mustache-utils";
 import { prettifyXact } from "@braintrust/core";
 
+// Fields that should be passed to the masking function
+// Note: "tags" field is intentionally excluded, but can be added if needed
+const REDACTION_FIELDS = [
+  "input",
+  "output",
+  "expected",
+  "metadata",
+  "context",
+  "scores",
+  "metrics",
+] as const;
+
+class MaskingError {
+  constructor(
+    public readonly fieldName: string,
+    public readonly errorType: string,
+  ) {}
+
+  get errorMsg(): string {
+    return `ERROR: Failed to mask field '${this.fieldName}' - ${this.errorType}`;
+  }
+}
+
+/**
+ * Apply masking function to data and handle errors gracefully.
+ * If the masking function raises an exception, returns an error message.
+ * Returns MaskingError for scores/metrics fields to signal they should be dropped.
+ */
+function applyMaskingToField(
+  maskingFunction: (value: unknown) => unknown,
+  data: unknown,
+  fieldName: string,
+): unknown {
+  try {
+    return maskingFunction(data);
+  } catch (error) {
+    // Return a generic error message without the stack trace to avoid leaking PII
+    const errorType = error instanceof Error ? error.constructor.name : "Error";
+
+    // For scores and metrics fields, return a special error object
+    // to signal the field should be dropped and error logged
+    if (fieldName === "scores" || fieldName === "metrics") {
+      return new MaskingError(fieldName, errorType);
+    }
+
+    // For metadata field that expects object type, return an object with error key
+    if (fieldName === "metadata") {
+      return {
+        error: `ERROR: Failed to mask field '${fieldName}' - ${errorType}`,
+      };
+    }
+
+    // For other fields, return the error message as a string
+    return `ERROR: Failed to mask field '${fieldName}' - ${errorType}`;
+  }
+}
+
 export type SetCurrentArg = { setCurrent?: boolean };
 
 type StartSpanEventArgs = ExperimentLogPartialArgs & Partial<IdField>;
@@ -546,6 +603,12 @@ export class BraintrustState {
     this.fetch = fetch;
     this._apiConn?.setFetch(fetch);
     this._appConn?.setFetch(fetch);
+  }
+
+  public setMaskingFunction(
+    maskingFunction: ((value: unknown) => unknown) | null,
+  ): void {
+    this.bgLogger().setMaskingFunction(maskingFunction);
   }
 
   public async login(loginParams: LoginOptions & { forceLogin?: boolean }) {
@@ -1962,13 +2025,23 @@ export interface BackgroundLoggerOpts {
 interface BackgroundLogger {
   log(items: LazyValue<BackgroundLogEvent>[]): void;
   flush(): Promise<void>;
+  setMaskingFunction(
+    maskingFunction: ((value: unknown) => unknown) | null,
+  ): void;
 }
 
 export class TestBackgroundLogger implements BackgroundLogger {
   private items: LazyValue<BackgroundLogEvent>[][] = [];
+  private maskingFunction: ((value: unknown) => unknown) | null = null;
 
   log(items: LazyValue<BackgroundLogEvent>[]): void {
     this.items.push(items);
+  }
+
+  setMaskingFunction(
+    maskingFunction: ((value: unknown) => unknown) | null,
+  ): void {
+    this.maskingFunction = maskingFunction;
   }
 
   async flush(): Promise<void> {
@@ -1988,7 +2061,48 @@ export class TestBackgroundLogger implements BackgroundLogger {
     }
 
     const batch = mergeRowBatch(events);
-    return batch.flat();
+    let flatBatch = batch.flat();
+
+    // Apply masking after merge, similar to HTTPBackgroundLogger
+    if (this.maskingFunction) {
+      flatBatch = flatBatch.map((item) => {
+        const maskedItem = { ...item };
+
+        // Only mask specific fields if they exist
+        for (const field of REDACTION_FIELDS) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if ((item as any)[field] !== undefined) {
+            const maskedValue = applyMaskingToField(
+              this.maskingFunction!,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (item as any)[field],
+              field,
+            );
+            if (maskedValue instanceof MaskingError) {
+              // Drop the field and add error message
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              delete (maskedItem as any)[field];
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              if ((maskedItem as any).error) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (maskedItem as any).error =
+                  `${(maskedItem as any).error}; ${maskedValue.errorMsg}`;
+              } else {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (maskedItem as any).error = maskedValue.errorMsg;
+              }
+            } else {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (maskedItem as any)[field] = maskedValue;
+            }
+          }
+        }
+
+        return maskedItem as BackgroundLogEvent;
+      });
+    }
+
+    return flatBatch;
   }
 }
 
@@ -2005,6 +2119,7 @@ class HTTPBackgroundLogger implements BackgroundLogger {
   private activeFlushResolved = true;
   private activeFlushError: unknown = undefined;
   private onFlushError?: (error: unknown) => void;
+  private maskingFunction: ((value: unknown) => unknown) | null = null;
 
   public syncFlush: boolean = false;
   // 6 MB for the AWS lambda gateway (from our own testing).
@@ -2088,6 +2203,12 @@ class HTTPBackgroundLogger implements BackgroundLogger {
       });
     }
     this.onFlushError = opts.onFlushError;
+  }
+
+  setMaskingFunction(
+    maskingFunction: ((value: unknown) => unknown) | null,
+  ): void {
+    this.maskingFunction = maskingFunction;
   }
 
   log(items: LazyValue<BackgroundLogEvent>[]) {
@@ -2214,7 +2335,50 @@ class HTTPBackgroundLogger implements BackgroundLogger {
         const attachments: Attachment[] = [];
         items.forEach((item) => extractAttachments(item, attachments));
 
-        return [mergeRowBatch(items), attachments];
+        let mergedItems = mergeRowBatch(items);
+
+        // Apply masking after merge but before sending to backend
+        if (this.maskingFunction) {
+          mergedItems = mergedItems.map((batch) =>
+            batch.map((item) => {
+              const maskedItem = { ...item };
+
+              // Only mask specific fields if they exist
+              for (const field of REDACTION_FIELDS) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                if ((item as any)[field] !== undefined) {
+                  const maskedValue = applyMaskingToField(
+                    this.maskingFunction!,
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (item as any)[field],
+                    field,
+                  );
+                  if (maskedValue instanceof MaskingError) {
+                    // Drop the field and add error message
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    delete (maskedItem as any)[field];
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    if ((maskedItem as any).error) {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      (maskedItem as any).error =
+                        `${(maskedItem as any).error}; ${maskedValue.errorMsg}`;
+                    } else {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      (maskedItem as any).error = maskedValue.errorMsg;
+                    }
+                  } else {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (maskedItem as any)[field] = maskedValue;
+                  }
+                }
+              }
+
+              return maskedItem as BackgroundLogEvent;
+            }),
+          );
+        }
+
+        return [mergedItems, attachments];
       } catch (e) {
         let errmsg = "Encountered error when constructing records to flush";
         const isRetrying = i + 1 < this.numTries;
@@ -3263,6 +3427,19 @@ export interface LoginOptions {
 export type FullLoginOptions = LoginOptions & {
   forceLogin?: boolean;
 };
+
+/**
+ * Set a global masking function that will be applied to all logged data before sending to Braintrust.
+ * The masking function will be applied after records are merged but before they are sent to the backend.
+ *
+ * @param maskingFunction A function that takes a JSON-serializable object and returns a masked version.
+ *                        Set to null to disable masking.
+ */
+export function setMaskingFunction(
+  maskingFunction: ((value: unknown) => unknown) | null,
+): void {
+  _globalState.setMaskingFunction(maskingFunction);
+}
 
 /**
  * Log into Braintrust. This will prompt you for your API token, which you can find at
