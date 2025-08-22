@@ -1375,6 +1375,9 @@ def test_masking_function_with_error(with_memory_logger, with_simulate_login):
                 if key == "password":
                     # Simulate a complex error
                     raise ValueError(f"Cannot mask sensitive field '{key}' - internal masking error")
+                elif key == "accuracy":
+                    # Trigger error for scores field
+                    raise TypeError("Cannot process numeric score")
             return data
         elif isinstance(data, str):
             if "secret" in data.lower():
@@ -1405,7 +1408,7 @@ def test_masking_function_with_error(with_memory_logger, with_simulate_login):
         output="This contains SECRET information",
         expected=["item1", "item2"],
         metadata={"safe": "data"},
-        scores={"accuracy": 0.9}
+        scores={"score": 1.0}  # Add a safe score that won't trigger error
     )
 
     experiment.flush()
@@ -1428,8 +1431,58 @@ def test_masking_function_with_error(with_memory_logger, with_simulate_login):
     # Metadata should be fine since it doesn't trigger any errors
     assert log["metadata"] == {"safe": "data"}
 
-    # Scores should be unaffected
-    assert log["scores"]["accuracy"] == 0.9
+    # Test with scores that triggers an error
+    experiment.log(
+        input={"data": "test"},
+        output="result",
+        scores={"accuracy": 0.95},  # This will trigger an error
+    )
+
+    logs2 = with_memory_logger.pop()
+    assert len(logs2) == 1
+    log2 = logs2[0]
+
+    # Scores should be dropped and error should be logged
+    assert "scores" not in log2
+    assert "error" in log2
+    assert log2["error"] == "ERROR: Failed to mask field 'scores' - TypeError"
+
+    # Test with metrics that triggers an error
+    experiment.log(
+        input={"data": "test2"},
+        output="result2",
+        scores={"score": 1.0},  # Safe score
+        metrics={"accuracy": 0.95},  # This will trigger an error
+    )
+
+    logs3 = with_memory_logger.pop()
+    assert len(logs3) == 1
+    log3 = logs3[0]
+
+    # Metrics should be dropped and error should be logged
+    assert "metrics" not in log3
+    assert "error" in log3
+    assert log3["error"] == "ERROR: Failed to mask field 'metrics' - TypeError"
+
+    # Test with both scores and metrics failing
+    experiment.log(
+        input={"data": "test3"},
+        output="result3",
+        scores={"accuracy": 0.85},  # This will trigger an error
+        metrics={"accuracy": 0.95},  # This will also trigger an error
+    )
+
+    logs4 = with_memory_logger.pop()
+    assert len(logs4) == 1
+    log4 = logs4[0]
+
+    # Both should be dropped and errors should be concatenated
+    assert "scores" not in log4
+    assert "metrics" not in log4
+    assert "error" in log4
+    assert "ERROR: Failed to mask field 'scores' - TypeError" in log4["error"]
+    assert "ERROR: Failed to mask field 'metrics' - TypeError" in log4["error"]
+    assert "; " in log4["error"]  # Check that errors are joined with semicolon
 
     # Test with logger and nested spans
     test_logger = init_test_logger("test_masking_errors_logger")

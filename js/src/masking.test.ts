@@ -490,6 +490,10 @@ describe("masking functionality", () => {
             "Cannot mask sensitive field 'password' - internal masking error",
           );
         }
+        if (data.accuracy !== undefined) {
+          // Trigger error for scores field
+          throw new TypeError("Cannot process numeric score");
+        }
 
         const masked: any = Array.isArray(data) ? [] : {};
         for (const [key, value] of Object.entries(data)) {
@@ -560,5 +564,68 @@ describe("masking functionality", () => {
       "ERROR: Failed to mask field 'input' - RangeError",
     );
     expect(event3.expected).toEqual({ values: ["x", "y", "z"] });
+
+    // Test with a score that triggers an error
+    logger.log({
+      input: { data: "test" },
+      scores: { accuracy: 0.95 }, // Will trigger error
+    });
+
+    await memoryLogger.flush();
+    const events2 = await memoryLogger.drain();
+
+    // Should include the new event
+    expect(events2).toHaveLength(1);
+    const scoreEvent = events2[0];
+
+    // Scores should be dropped and error should be logged
+    expect(scoreEvent.scores).toBeUndefined();
+    expect(scoreEvent.error).toBe(
+      "ERROR: Failed to mask field 'scores' - TypeError",
+    );
+
+    // Test with metrics that triggers an error
+    logger.log({
+      input: { data: "test2" },
+      output: "result2",
+      metrics: { accuracy: 0.95 }, // Will trigger error
+    });
+
+    await memoryLogger.flush();
+    const events3 = await memoryLogger.drain();
+
+    expect(events3).toHaveLength(1);
+    const metricsEvent = events3[0];
+
+    // Metrics should be dropped and error should be logged
+    expect(metricsEvent.metrics).toBeUndefined();
+    expect(metricsEvent.error).toBe(
+      "ERROR: Failed to mask field 'metrics' - TypeError",
+    );
+
+    // Test with both scores and metrics failing
+    logger.log({
+      input: { data: "test3" },
+      output: "result3",
+      scores: { accuracy: 0.85 }, // Will trigger error
+      metrics: { accuracy: 0.95 }, // Will also trigger error
+    });
+
+    await memoryLogger.flush();
+    const events4 = await memoryLogger.drain();
+
+    expect(events4).toHaveLength(1);
+    const bothEvent = events4[0];
+
+    // Both should be dropped and errors should be concatenated
+    expect(bothEvent.scores).toBeUndefined();
+    expect(bothEvent.metrics).toBeUndefined();
+    expect(bothEvent.error).toContain(
+      "ERROR: Failed to mask field 'scores' - TypeError",
+    );
+    expect(bothEvent.error).toContain(
+      "ERROR: Failed to mask field 'metrics' - TypeError",
+    );
+    expect(bothEvent.error).toContain("; "); // Check that errors are joined
   });
 });

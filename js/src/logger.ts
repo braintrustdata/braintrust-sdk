@@ -100,11 +100,25 @@ const REDACTION_FIELDS = [
   "expected",
   "metadata",
   "context",
+  "scores",
+  "metrics",
 ] as const;
+
+class MaskingError {
+  constructor(
+    public readonly fieldName: string,
+    public readonly errorType: string,
+  ) {}
+
+  get errorMsg(): string {
+    return `ERROR: Failed to mask field '${this.fieldName}' - ${this.errorType}`;
+  }
+}
 
 /**
  * Apply masking function to data and handle errors gracefully.
  * If the masking function raises an exception, returns an error message.
+ * Returns MaskingError for scores/metrics fields to signal they should be dropped.
  */
 function applyMaskingToField(
   maskingFunction: (value: unknown) => unknown,
@@ -116,6 +130,21 @@ function applyMaskingToField(
   } catch (error) {
     // Return a generic error message without the stack trace to avoid leaking PII
     const errorType = error instanceof Error ? error.constructor.name : "Error";
+
+    // For scores and metrics fields, return a special error object
+    // to signal the field should be dropped and error logged
+    if (fieldName === "scores" || fieldName === "metrics") {
+      return new MaskingError(fieldName, errorType);
+    }
+
+    // For metadata field that expects object type, return an object with error key
+    if (fieldName === "metadata") {
+      return {
+        error: `ERROR: Failed to mask field '${fieldName}' - ${errorType}`,
+      };
+    }
+
+    // For other fields, return the error message as a string
     return `ERROR: Failed to mask field '${fieldName}' - ${errorType}`;
   }
 }
@@ -2043,12 +2072,29 @@ export class TestBackgroundLogger implements BackgroundLogger {
         for (const field of REDACTION_FIELDS) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           if ((item as any)[field] !== undefined) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (maskedItem as any)[field] = applyMaskingToField(
+            const maskedValue = applyMaskingToField(
               this.maskingFunction!,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (item as any)[field],
               field,
             );
+            if (maskedValue instanceof MaskingError) {
+              // Drop the field and add error message
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              delete (maskedItem as any)[field];
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              if ((maskedItem as any).error) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (maskedItem as any).error =
+                  `${(maskedItem as any).error}; ${maskedValue.errorMsg}`;
+              } else {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (maskedItem as any).error = maskedValue.errorMsg;
+              }
+            } else {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (maskedItem as any)[field] = maskedValue;
+            }
           }
         }
 
@@ -2301,10 +2347,29 @@ class HTTPBackgroundLogger implements BackgroundLogger {
               for (const field of REDACTION_FIELDS) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 if ((item as any)[field] !== undefined) {
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  (maskedItem as any)[field] = this.maskingFunction!(
+                  const maskedValue = applyMaskingToField(
+                    this.maskingFunction!,
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     (item as any)[field],
+                    field,
                   );
+                  if (maskedValue instanceof MaskingError) {
+                    // Drop the field and add error message
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    delete (maskedItem as any)[field];
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    if ((maskedItem as any).error) {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      (maskedItem as any).error =
+                        `${(maskedItem as any).error}; ${maskedValue.errorMsg}`;
+                    } else {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      (maskedItem as any).error = maskedValue.errorMsg;
+                    }
+                  } else {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (maskedItem as any)[field] = maskedValue;
+                  }
                 }
               }
 

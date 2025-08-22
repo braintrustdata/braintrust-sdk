@@ -101,7 +101,7 @@ from .util import (
 
 # Fields that should be passed to the masking function
 # Note: "tags" field is intentionally excluded, but can be added if needed
-REDACTION_FIELDS = ["input", "output", "expected", "metadata", "context"]
+REDACTION_FIELDS = ["input", "output", "expected", "metadata", "context", "scores", "metrics"]
 from .xact_ids import prettify_xact
 
 Metadata = Dict[str, Any]
@@ -627,16 +627,37 @@ def _check_json_serializable(event):
         raise Exception(f"All logged values must be JSON-serializable: {event}") from e
 
 
+class _MaskingError:
+    """Internal class to signal masking errors that need special handling."""
+    def __init__(self, field_name: str, error_type: str):
+        self.field_name = field_name
+        self.error_type = error_type
+        self.error_msg = f"ERROR: Failed to mask field '{field_name}' - {error_type}"
+
+
 def _apply_masking_to_field(masking_function: Callable[[Any], Any], data: Any, field_name: str) -> Any:
     """Apply masking function to data and handle errors gracefully.
 
     If the masking function raises an exception, returns an error message.
+    Returns _MaskingError for scores/metrics fields to signal they should be dropped.
     """
     try:
         return masking_function(data)
     except Exception as mask_error:
         # Return a generic error message without the stack trace to avoid leaking PII
-        return f"ERROR: Failed to mask field '{field_name}' - {type(mask_error).__name__}"
+        error_type = type(mask_error).__name__
+
+        # For scores and metrics fields, return a special error object
+        # to signal the field should be dropped and error logged
+        if field_name in ["scores", "metrics"]:
+            return _MaskingError(field_name, error_type)
+
+        # For metadata field that expects dict type, return a dict with error key
+        if field_name == "metadata":
+            return {"error": f"ERROR: Failed to mask field '{field_name}' - {error_type}"}
+
+        # For other fields, return the error message as a string
+        return f"ERROR: Failed to mask field '{field_name}' - {error_type}"
 
 
 class _BackgroundLogger(ABC):
@@ -690,7 +711,17 @@ class _MemoryBackgroundLogger(_BackgroundLogger):
                     # Only mask specific fields if they exist
                     for field in REDACTION_FIELDS:
                         if field in item:
-                            masked_item[field] = _apply_masking_to_field(self.masking_function, item[field], field)
+                            masked_value = _apply_masking_to_field(self.masking_function, item[field], field)
+                            if isinstance(masked_value, _MaskingError):
+                                # Drop the field and add error message
+                                if field in masked_item:
+                                    del masked_item[field]
+                                if "error" in masked_item:
+                                    masked_item["error"] = f"{masked_item['error']}; {masked_value.error_msg}"
+                                else:
+                                    masked_item["error"] = masked_value.error_msg
+                            else:
+                                masked_item[field] = masked_value
 
                     first[i] = masked_item
 
@@ -877,7 +908,17 @@ class _HTTPBackgroundLogger:
                             # Only mask specific fields if they exist
                             for field in REDACTION_FIELDS:
                                 if field in item:
-                                    masked_item[field] = _apply_masking_to_field(self.masking_function, item[field], field)
+                                    masked_value = _apply_masking_to_field(self.masking_function, item[field], field)
+                                    if isinstance(masked_value, _MaskingError):
+                                        # Drop the field and add error message
+                                        if field in masked_item:
+                                            del masked_item[field]
+                                        if "error" in masked_item:
+                                            masked_item["error"] = f"{masked_item['error']}; {masked_value.error_msg}"
+                                        else:
+                                            masked_item["error"] = masked_value.error_msg
+                                    else:
+                                        masked_item[field] = masked_value
 
                             batched_items[batch_idx][item_idx] = masked_item
 
